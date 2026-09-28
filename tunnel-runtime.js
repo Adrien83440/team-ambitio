@@ -155,6 +155,14 @@
       }
       window.fbq('init', String(C.pixelId));
       window.fbq('track', 'PageView');
+      /* Événement supplémentaire au chargement (réglage de l'étape) : un
+         événement standard passe par track, tout autre nom par trackCustom. */
+      if (C.pixelEvent) {
+        var STD = ['ViewContent', 'Lead', 'Schedule', 'Contact', 'CompleteRegistration', 'SubmitApplication',
+                   'Purchase', 'InitiateCheckout', 'AddToCart', 'Search', 'StartTrial', 'Subscribe',
+                   'CustomizeProduct', 'Donate', 'FindLocation', 'AddPaymentInfo', 'AddToWishlist'];
+        window.fbq(STD.indexOf(C.pixelEvent) >= 0 ? 'track' : 'trackCustom', C.pixelEvent, { content_name: C.page });
+      }
     } catch (e) {}
   }
   pixelInit();

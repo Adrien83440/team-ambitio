@@ -162,7 +162,12 @@ var storage = firebase.storage();
 var TUNNELS = [];            // liste chargée (non archivés)
 var CUR = null;              // tunnel en cours d'édition (copie de travail)
 var TAB = 'steps';
-var CFG = { primaryHost: 'go.adrienemily.com', hosts: ['go.adrienemily.com'] };
+var CFG = { primaryHost: 'www.adrienemily.com', hosts: ['www.adrienemily.com', 'go.adrienemily.com'] };
+/* Événement Meta envoyé au chargement d'une étape, en plus de PageView. */
+var PIXEL_EVENTS = [
+  ['', 'Aucun — PageView seul'], ['ViewContent', 'ViewContent'], ['Lead', 'Lead'], ['Schedule', 'Schedule'],
+  ['Contact', 'Contact'], ['CompleteRegistration', 'CompleteRegistration'], ['__custom', 'Personnalisé…']
+];
 var BOOKING_TYPES = [];
 var TYPE_MAP = {};
 var STATS = null;            // dernier calcul de stats
@@ -287,7 +292,7 @@ function renderList() {
   $('btnBack').style.display = 'none';
   $('btnNew').style.display = '';
   $('domainBanner').innerHTML = '<div>🌐 <strong>Domaine des tunnels :</strong> <code>' + esc(CFG.primaryHost) + '</code> — chaque étape répond sur <code>https://' + esc(CFG.primaryHost) + '/&lt;chemin&gt;</code>. '
-    + 'Aperçu interne avant DNS : <code>team.alteore.com/t/&lt;chemin&gt;</code>. Le jour où System.io s\'arrête, <code>www.adrienemily.com</code> bascule sans changement ici.</div>';
+    + 'Aperçu interne : <code>team.alteore.com/t/&lt;chemin&gt;</code>. Tant que le DNS de <code>www</code> pointe sur System.io, tout ce qui est en ligne répond déjà sur <code>go.adrienemily.com</code> — mêmes pages, même mesure.</div>';
   var grid = $('tunnelGrid');
   if (!TUNNELS.length) {
     grid.innerHTML = '<div class="tn-empty" style="grid-column:1/-1">Aucun tunnel. Crée le premier : un tunnel = un groupe ordonné de pages (opt-in → VSL → RDV → merci), chacune avec ses variantes A/B.</div>';
@@ -323,7 +328,7 @@ function createTunnel() {
   while (TUNNELS.some(function (t) { return t.slug === slug; })) slug = base + '-' + (n++);
   var doc = {
     name: name.trim(), slug: slug, status: 'draft', archived: false, homeStepId: '',
-    settings: { host: CFG.primaryHost, pixelId: '', leadType: 'vsl_elite', defaultChannel: '', bookingType: '', noindex: false, faviconUrl: '', notes: '' },
+    settings: { host: CFG.primaryHost, pixelId: '', leadType: 'vsl_elite', defaultChannel: '', bookingType: '', noindex: false, faviconUrl: '', ogImage: '', headHtml: '', notes: '' },
     steps: [], assets: [],
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -453,7 +458,7 @@ function renderSteps() {
 }
 function findStep(id) { return CUR.steps.filter(function (s) { return s.id === id; })[0]; }
 function addStep() {
-  var s = { id: uid('st_'), name: 'Nouvelle étape', slug: '', type: 'page', status: 'draft', next: { mode: 'auto' }, variants: [{ id: 'a', label: 'Variante A', weight: 100, status: 'live', html: null }] };
+  var s = { id: uid('st_'), name: 'Nouvelle étape', slug: '', type: 'page', status: 'draft', next: { mode: 'auto' }, seo: { title: '', description: '', ogImage: '' }, pixelEvent: '', noindex: false, headHtml: '', variants: [{ id: 'a', label: 'Variante A', weight: 100, status: 'live', html: null }] };
   var n = CUR.steps.length + 1;
   s.name = ['Opt-in', 'VSL', 'Prise de RDV', 'Merci'][n - 1] || ('Étape ' + n);
   s.type = ['optin', 'vsl', 'booking', 'merci'][n - 1] || 'page';
@@ -508,6 +513,18 @@ function openStep(id) {
     + '<div id="stNextUrlWrap" style="' + (nx.mode === 'url' ? '' : 'display:none') + '"><span class="lbl">URL</span><input class="bi" id="stNextUrl" value="' + escAttr(nx.url || '') + '" placeholder="https://…"/></div>'
     + '<div><label class="chk"><input type="checkbox" id="stHome"' + (t.homeStepId === s.id ? ' checked' : '') + '/> Page d\'accueil du domaine (répond sur <code style="font-family:var(--font-m)">/</code>)</label></div>'
     + '</div>';
+  var seo = s.seo || {};
+  var _pe = String(s.pixelEvent || '');
+  var _peStd = PIXEL_EVENTS.some(function (x) { return x[0] === _pe; });
+  var _peCustom = !!_pe && !_peStd;
+  h += '<div class="sec" style="margin-top:6px"><h2>SEO, partage et pixel</h2><div class="sub">Vide = la page garde ses propres balises. Renseigné = remplace ce que la page déclare.</div>'
+    + '<div class="row"><div><span class="lbl">Titre (onglet, Google, partage)</span><input class="bi" id="stSeoTitle" value="' + escAttr(seo.title || '') + '"/></div>'
+    + '<div><span class="lbl">Image de partage (og:image)</span><input class="bi" id="stSeoImage" value="' + escAttr(seo.ogImage || '') + '" placeholder="vide = image par défaut du tunnel"/></div></div>'
+    + '<span class="lbl">Description (Google, partage)</span><textarea class="bi" id="stSeoDesc" style="min-height:56px;font-family:\'Figtree\',sans-serif;font-size:13px">' + esc(seo.description || '') + '</textarea>'
+    + '<div class="row" style="margin-top:10px"><div><span class="lbl">Événement Meta au chargement</span><select class="bs" id="stPixelEvent">' + PIXEL_EVENTS.map(function (x) { var sel = _peCustom ? x[0] === '__custom' : x[0] === _pe; return '<option value="' + x[0] + '"' + (sel ? ' selected' : '') + '>' + esc(x[1]) + '</option>'; }).join('') + '</select><div class="help">En plus de PageView, toujours envoyé. Lead à l\'opt-in et Schedule au RDV restent automatiques.</div></div>'
+    + '<div id="stPixelCustomWrap" style="' + (_peCustom ? '' : 'display:none') + '"><span class="lbl">Nom de l\'événement personnalisé</span><input class="bi" id="stPixelCustom" value="' + escAttr(_peCustom ? _pe : '') + '" placeholder="ex : QuizStarted"/></div>'
+    + '<div><label class="chk" style="margin-top:22px"><input type="checkbox" id="stNoindex"' + (s.noindex ? ' checked' : '') + '/> noindex sur cette page</label></div></div>'
+    + '<span class="lbl" style="margin-top:10px">Code &lt;head&gt; de cette page</span><textarea class="bi" id="stHeadHtml" style="min-height:70px" placeholder="<!-- scripts propres à cette page, ajoutés après ceux du tunnel -->">' + esc(s.headHtml || '') + '</textarea></div>';
   h += '<div class="sec" style="margin-top:6px"><h2>Variantes A/B</h2><div class="sub">Une variante = une page HTML. Le serveur répartit les visiteurs selon les poids (cookie collant 30 jours). Une variante sans page publiée n\'est jamais servie. Aperçu d\'une variante : <code>/t/' + esc(s.slug) + '?v=a</code>.</div><div id="varList"></div>'
     + '<button class="bb bb-o bb-s" data-action="addVariant">+ Variante</button></div>';
   h += '<div class="modal-foot"><button class="bb bb-o" data-action="stepCancel">Fermer</button><button class="bb bb-p" data-action="stepSave">Enregistrer</button></div>';
@@ -522,6 +539,9 @@ function openStep(id) {
   $('stNextMode').addEventListener('change', function () {
     $('stNextStepWrap').style.display = this.value === 'step' ? '' : 'none';
     $('stNextUrlWrap').style.display = this.value === 'url' ? '' : 'none';
+  });
+  $('stPixelEvent').addEventListener('change', function () {
+    $('stPixelCustomWrap').style.display = this.value === '__custom' ? '' : 'none';
   });
   renderVariants(s);
 }
@@ -557,6 +577,11 @@ function readStepForm(s) {
   if (mode === 'step') s.next.stepId = $('stNextStep').value;
   if (mode === 'url') s.next.url = $('stNextUrl').value.trim();
   if ($('stHome').checked) CUR.homeStepId = s.id; else if (CUR.homeStepId === s.id) CUR.homeStepId = '';
+  s.seo = { title: $('stSeoTitle').value.trim(), description: $('stSeoDesc').value.trim(), ogImage: $('stSeoImage').value.trim() };
+  var _peVal = $('stPixelEvent').value;
+  s.pixelEvent = _peVal === '__custom' ? $('stPixelCustom').value.replace(/[^A-Za-z0-9_]/g, '').slice(0, 40) : _peVal;
+  s.noindex = $('stNoindex').checked === true;
+  s.headHtml = $('stHeadHtml').value;
   var rows = $('varList').querySelectorAll('.var');
   for (var i = 0; i < rows.length; i++) {
     var vid = rows[i].getAttribute('data-variant');
@@ -644,6 +669,9 @@ function renderSettings() {
     + '<div class="row"><div><span class="lbl">Type de lead</span><select class="bs" id="setLeadType">' + LEAD_TYPES.map(function (x) { return '<option value="' + x.id + '"' + ((st.leadType || 'vsl_elite') === x.id ? ' selected' : '') + '>' + esc(x.label) + '</option>'; }).join('') + '</select><div class="help">Badge affiché dans Leads Live et règle Élite / Business du funnel.</div></div>'
     + '<div><span class="lbl">Canal par défaut (sans UTM)</span><input class="bi" id="setChannel" value="' + escAttr(st.defaultChannel || '')+ '" placeholder="ex : Bio Instagram, Skool, Recommandation"/><div class="help">Posé comme origine déclarée quand l\'URL ne porte aucun UTM. Une pub Meta avec UTM garde sa créative.</div></div>'
     + '<div><span class="lbl">Type de RDV lié (booking)</span><select class="bs" id="setBooking"><option value="">— aucun —</option>' + BOOKING_TYPES.map(function (b) { return '<option value="' + escAttr(b.id) + '"' + (st.bookingType === b.id ? ' selected' : '') + '>' + esc(b.label || b.id) + '</option>'; }).join('') + '</select><div class="help">Exposé aux pages via <code>ALTEO.config.bookingUrl</code> ; les liens et iframes vers booking.html reçoivent la provenance automatiquement.</div></div></div></div>';
+  h += '<div class="sec"><h2>Partage et code &lt;head&gt; — tout le tunnel</h2><div class="sub">Appliqué à toutes les pages du tunnel ; chaque étape peut le surcharger dans sa fenêtre (SEO, partage et pixel).</div>'
+    + '<div class="row"><div><span class="lbl">Image de partage par défaut (og:image)</span><input class="bi" id="setOgImage" value="' + escAttr(st.ogImage || '') + '" placeholder="https://… (1200 × 630, déposée dans Médias)"/><div class="help">Aperçu affiché quand un lien du tunnel est partagé sur Facebook, WhatsApp, LinkedIn. Une étape sans image propre prend celle-ci.</div></div></div>'
+    + '<span class="lbl" style="margin-top:10px">Code &lt;head&gt; personnalisé</span><textarea class="bi" id="setHeadHtml" style="min-height:90px" placeholder="<!-- balise de vérification Meta, Google Tag Manager, pixel TikTok… -->">' + esc(st.headHtml || '') + '</textarea><div class="help">Injecté tel quel dans le &lt;head&gt; de chaque page, après le runtime Alteore. Jamais en aperçu. Le pixel Meta du tunnel est déjà géré au-dessus : ne pas le remettre ici.</div></div>';
   h += '<div class="sec"><h2>Médias et fichiers</h2><div class="sub">Images, polices, CSS ou JS référencés par tes pages. Dépose, puis copie l\'URL dans ton HTML. Les vidéos lourdes restent sur Vimeo / YouTube / Bunny.</div>'
     + '<label class="bb bb-p bb-s">⬆ Déposer des fichiers<input type="file" multiple data-action="uploadAssets" style="display:none"/></label>'
     + '<div id="assetList" style="margin-top:10px">' + renderAssets() + '</div></div>';
@@ -658,6 +686,8 @@ function renderSettings() {
   bind('setChannel', function (el) { CUR.settings.defaultChannel = el.value.trim(); });
   bind('setBooking', function (el) { CUR.settings.bookingType = el.value; });
   bind('setNotes', function (el) { CUR.settings.notes = el.value; });
+  bind('setOgImage', function (el) { CUR.settings.ogImage = el.value.trim(); });
+  bind('setHeadHtml', function (el) { CUR.settings.headHtml = el.value; });
 }
 function renderAssets() {
   var list = CUR.assets || [];
@@ -721,6 +751,8 @@ function renderGuide() {
     + '<div class="help">Avec <code>data-alteo-src</code>, le runtime pose l\'adresse complète avec lp, v, UTM et leadId. Une iframe AlteoForms (<code>https://team.alteore.com/f/&lt;slug&gt;</code>) fonctionne de la même manière.</div>'
     + '<span class="lbl" style="margin-top:14px">Depuis ton JavaScript</span>'
     + '<pre class="guide">' + esc('ALTEO.next();                 // aller à l\'étape suivante avec la provenance\nALTEO.track(\'cta\');           // compter un clic CTA (bouton custom)\nALTEO.decorate(url);          // ajouter la provenance à une URL\nALTEO.config                  // { tunnelSlug, stepSlug, variant, page, nextUrl, bookingUrl… }\nwindow.alteoOnOptin = function (r) { /* après un opt-in réussi, r.leadId */ };') + '</pre>'
+    + '<span class="lbl" style="margin-top:14px">Titre, description, image de partage, pixel, code &lt;head&gt;</span>'
+    + '<div class="help">Se règlent dans la fenêtre de l\'étape (SEO, partage et pixel) et dans les Réglages du tunnel (image par défaut, code &lt;head&gt; commun). Une page n\'a pas besoin de porter ses propres balises &lt;title&gt; / og:* : si elle en a, elles servent de repli quand le réglage est vide.</div>'
     + '<span class="lbl" style="margin-top:14px">Règles pour une page rapide et sans bug</span>'
     + '<div class="help" style="font-size:12px;line-height:1.7">• Balise <code>&lt;meta name="viewport"&gt;</code> présente (ajoutée sinon), CSS mobile-first, pas de largeur fixe.<br>• Images en WebP/JPG compressées, déposées dans « Médias » et référencées par URL absolue ; vidéos sur Vimeo / YouTube / Bunny, jamais dans Storage.<br>• Pas de pixel Meta ni de tracking dans la page : le tunnel le porte (réglages). Un second <code>fbq(\'init\')</code> doublerait les événements.<br>• Pas de <code>&lt;base&gt;</code>, pas de lien relatif vers des fichiers de team.alteore.com.<br>• Avant de publier : aperçu sur <code>/t/&lt;chemin&gt;?v=a</code> en desktop et mobile, formulaire testé (la fiche apparaît dans Leads Live avec 🧭 ' + esc(t.name) + ').</div>'
     + '</div>';

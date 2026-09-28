@@ -100,6 +100,20 @@ function jsonForScript(obj) {
   return JSON.stringify(obj).replace(/<\//g, '<\\/').replace(/<!--/g, '<\\!--');
 }
 
+/* URL publique équivalente (chemin + querystring sans les paramètres de
+   routage __p / __t) — pour les redirections apex → www et anciennes URL. */
+function publicUrlOf(url, rawPath) {
+  const qs = [];
+  url.searchParams.forEach(function (v, k) {
+    if (k !== '__p' && k !== '__t') qs.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
+  });
+  return '/' + String(rawPath || '').replace(/^\/+/, '') + (qs.length ? '?' + qs.join('&') : '');
+}
+
+function cleanEventName(v) {
+  return String(v || '').trim().replace(/[^A-Za-z0-9_]/g, '').slice(0, 40);
+}
+
 function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -108,8 +122,9 @@ function escapeHtml(s) {
 
 /* Injection dans le <head>. Ordre : charset (si absent), viewport (si
    absent), config + runtime. Sans <head> on crée le strict nécessaire. */
-function inject(html, config) {
+function inject(html, config, extra) {
   const runtime = runtimeSource();
+  const seo = (extra && extra.seo) || {};
   let block = '';
   if (!/<meta[^>]+charset/i.test(html)) block += '<meta charset="utf-8">';
   if (!/<meta[^>]+name=["']?viewport/i.test(html)) block += '<meta name="viewport" content="width=device-width,initial-scale=1">';
@@ -123,6 +138,28 @@ function inject(html, config) {
     block += '<link rel="icon" href="' + fav + '">';
     if (/\.(png|jpe?g|webp)(\?|$)/i.test(config.faviconUrl)) block += '<link rel="apple-touch-icon" href="' + fav + '">';
   }
+  /* SEO & partage (réglages de l'étape, image par défaut du tunnel). Une
+     valeur posée REMPLACE celle de la page (la première balise gagne chez
+     les navigateurs comme chez Facebook, on retire donc celle de la page) ;
+     une valeur vide laisse la page telle quelle. */
+  if (seo.title) {
+    html = html.replace(/<title>[\s\S]*?<\/title>/gi, '');
+    block += '<title>' + escapeHtml(seo.title) + '</title>';
+  }
+  if (seo.description) {
+    html = html.replace(/<meta[^>]+name=["']description["'][^>]*>/gi, '');
+    block += '<meta name="description" content="' + escapeHtml(seo.description) + '">';
+  }
+  if (seo.title || seo.description || seo.image) {
+    html = html.replace(/<meta[^>]+(?:property|name)=["'](?:og:(?:title|description|image|url|type)|twitter:(?:card|title|description|image))["'][^>]*>/gi, '');
+    block += '<meta property="og:type" content="website">';
+    if (seo.url) block += '<meta property="og:url" content="' + escapeHtml(seo.url) + '">';
+    if (seo.title) block += '<meta property="og:title" content="' + escapeHtml(seo.title) + '"><meta name="twitter:title" content="' + escapeHtml(seo.title) + '">';
+    if (seo.description) block += '<meta property="og:description" content="' + escapeHtml(seo.description) + '"><meta name="twitter:description" content="' + escapeHtml(seo.description) + '">';
+    if (seo.image) block += '<meta property="og:image" content="' + escapeHtml(seo.image) + '"><meta name="twitter:image" content="' + escapeHtml(seo.image) + '"><meta name="twitter:card" content="summary_large_image">';
+  }
+  /* Code <head> personnalisé : tunnel puis étape, tel quel (admin seulement). */
+  if (extra && extra.headHtml) block += extra.headHtml;
 
   const headOpen = html.match(/<head(\s[^>]*)?>/i);
   if (headOpen) {
@@ -164,6 +201,17 @@ module.exports = async (req, res) => {
   const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim().toLowerCase();
   const p = Reg.cleanPath(rawPath);
 
+  /* Apex → www (308). Vercel le fait aussi au niveau du domaine (réglage
+     « redirect » du domaine dans le projet) ; ceinture et bretelles pour le
+     cas où l'apex serait rattaché sans redirection. */
+  if (host === 'adrienemily.com' && !previewRoute) {
+    res.status(308);
+    res.setHeader('Location', 'https://www.adrienemily.com' + publicUrlOf(url, rawPath));
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.end();
+    return;
+  }
+
   if (p === 'favicon.ico') { res.status(204).end(); return; }
   if (p === 'robots.txt') {
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -171,21 +219,36 @@ module.exports = async (req, res) => {
     res.end(previewRoute ? 'User-agent: *\nDisallow: /\n' : 'User-agent: *\nAllow: /\n');
     return;
   }
-  if (p.indexOf('/') >= 0) {
-    // Les chemins de tunnel n'ont qu'un segment ; tout le reste est inconnu.
-    page(res, 404, 'Page introuvable', 'Cette adresse ne correspond à aucune page.');
-    return;
-  }
-
-  let hit;
-  try {
-    hit = await Reg.findByPath(p, { allowDraft: preview });
-  } catch (e) {
-    console.error('[tunnel-render] registre indisponible :', e && e.message);
-    page(res, 503, 'Un instant…', 'La page arrive. Rechargez dans quelques secondes.', { 'Retry-After': '5' });
-    return;
+  /* Les chemins de tunnel n'ont qu'un segment ; un chemin à plusieurs
+     segments ne peut être qu'une ancienne URL (blog System.io…) → redirections. */
+  let hit = null;
+  if (p.indexOf('/') < 0) {
+    try {
+      hit = await Reg.findByPath(p, { allowDraft: preview });
+    } catch (e) {
+      console.error('[tunnel-render] registre indisponible :', e && e.message);
+      page(res, 503, 'Un instant…', 'La page arrive. Rechargez dans quelques secondes.', { 'Retry-After': '5' });
+      return;
+    }
   }
   if (!hit) {
+    /* Redirections des anciennes URL (_config/tunnels.redirects, page
+       « Site & pages » → Domaines & migration). Une étape en ligne au même
+       chemin prime toujours : on n'arrive ici que sans étape. */
+    if (!previewRoute && p) {
+      let rule = null;
+      try { rule = await Reg.findRedirect(p); } catch (e) { rule = null; }
+      if (rule) {
+        let target = /^https?:\/\//i.test(rule.to) ? rule.to : ('https://' + (host || 'www.adrienemily.com') + rule.to);
+        const qs = publicUrlOf(url, '').split('?')[1];
+        if (qs) target += (target.indexOf('?') >= 0 ? '&' : '?') + qs;
+        res.status(rule.code);
+        res.setHeader('Location', target);
+        res.setHeader('Cache-Control', rule.code === 301 ? 'public, max-age=3600' : 'private, no-store');
+        res.end();
+        return;
+      }
+    }
     page(res, 404, 'Page introuvable', 'Cette adresse ne correspond à aucune page.');
     return;
   }
@@ -228,12 +291,26 @@ module.exports = async (req, res) => {
     bookingUrl: settings.bookingType ? 'https://team.alteore.com/booking.html?type=' + encodeURIComponent(String(settings.bookingType)) : '',
     hosts: PROPAGATE_HOSTS,
     preview: preview,
-    noindex: preview || settings.noindex === true,
+    pixelEvent: cleanEventName(step.pixelEvent),
+    noindex: preview || settings.noindex === true || step.noindex === true,
     eventEndpoint: '/api/tunnel-event',
     optinEndpoint: '/api/tunnel-optin'
   };
 
-  const out = inject(html, config);
+  /* SEO / partage / head : hors de window.ALTEO_TUNNEL, injectés directement. */
+  const stepSeo = (step.seo && typeof step.seo === 'object') ? step.seo : {};
+  const seo = {
+    title: String(stepSeo.title || '').trim().slice(0, 200),
+    description: String(stepSeo.description || '').trim().slice(0, 500),
+    image: String(stepSeo.ogImage || settings.ogImage || '').trim().slice(0, 600),
+    url: 'https://' + ((settings.host && String(settings.host)) || 'www.adrienemily.com') + Reg.stepPath(tunnel, step)
+  };
+  if (!/^https:\/\//i.test(seo.image)) seo.image = '';
+  const extra = {
+    seo: seo,
+    headHtml: (preview ? '' : String(settings.headHtml || '')) + String(step.headHtml || '')
+  };
+  const out = inject(html, config, extra);
   res.status(200);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('X-Content-Type-Options', 'nosniff');

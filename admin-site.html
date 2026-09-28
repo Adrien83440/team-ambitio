@@ -108,6 +108,14 @@ textarea.sw-in{min-height:110px;resize:vertical;line-height:1.6}
 .sw-dns button{color:rgba(255,255,255,.55);font-size:11px;cursor:pointer;background:none;border:none;font-family:'Figtree',sans-serif;font-weight:700}
 .sw-dns button:hover{color:#fff}
 
+/* Redirections */
+.sw-redir{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 84px 34px;gap:6px;align-items:center;margin-bottom:6px}
+.sw-redir .sw-in{font-family:var(--font-m,monospace);font-size:12px;padding:7px 10px}
+.sw-redir select.sw-in{font-family:'Figtree',sans-serif}
+.sw-redir button{width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:0;color:rgba(255,255,255,.5);cursor:pointer;font-size:14px}
+.sw-redir button:hover{color:#fff;border-color:rgba(248,113,113,.5)}
+.sw-redir-head{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.4);margin-bottom:4px}
+
 /* Checklist */
 .sw-check-top{display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
 .sw-check-top .bar{flex:1;min-width:160px;height:7px;border-radius:7px;background:rgba(255,255,255,.07);overflow:hidden}
@@ -229,6 +237,18 @@ textarea.sw-in{min-height:110px;resize:vertical;line-height:1.6}
   <!-- ═══ ONGLET DOMAINES & MIGRATION ═══ -->
   <div id="tab-migration" style="display:none">
     <div class="sw-doms" id="domains"></div>
+    <div class="sw-card" style="margin-top:14px">
+      <h2>↪️ Redirections des anciennes URL</h2>
+      <div class="sub">Une adresse System.io qui n'existe plus comme étape est renvoyée vers la cible indiquée (301 = définitif, 302 = temporaire). Une étape en ligne au même chemin prime toujours sur une règle. <code>plan-action/*</code> couvre tout un préfixe. Appliqué sur www et go, jamais en aperçu.</div>
+      <div id="redirList"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="swb swb-o swb-s" data-action="redirAdd">+ Règle</button>
+        <button class="swb swb-o swb-s" data-action="redirImport">Importer l'inventaire System.io (→ /optin-a)</button>
+        <span style="flex:1"></span>
+        <button class="swb swb-p swb-s" data-action="redirSave">💾 Enregistrer les redirections</button>
+      </div>
+      <div class="sub" id="redirState" style="margin-top:8px"></div>
+    </div>
     <div class="sw-card" style="margin-top:14px">
       <h2>✅ Checklist migration Systeme.io → Vercel</h2>
       <div class="sub">Cochée ici, mémorisée sur ce navigateur.</div>
@@ -383,7 +403,7 @@ function saveConfig() {
 
 /* ─── Pages du site (tunnel « site » dans le Funnel) ─── */
 var SITE_SLUGS = { '': 'Accueil', 'about': 'À propos', 'product': 'Programmes', 'contacts-page': 'Contact' };
-var PRIMARY_HOST = 'go.adrienemily.com';
+var PRIMARY_HOST = 'www.adrienemily.com';
 
 function loadPages() {
   var pConf = db.collection('_config').doc('tunnels').get().then(function (doc) {
@@ -447,8 +467,8 @@ function renderPages(site) {
 /* ─── Domaines & checklist ─── */
 var DOMAINS = [
   { host: 'go.adrienemily.com', dot: 'ok', label: 'En ligne — Vercel', p: 'Domaine des tunnels et du site hébergés. Tout ce qui est publié répond ici dès maintenant.', open: 'https://go.adrienemily.com', dns: null },
-  { host: 'www.adrienemily.com', dot: 'warn', label: 'Systeme.io — à migrer', p: 'Site vitrine actuel. Le jour J, le CNAME bascule vers Vercel : les mêmes chemins répondront depuis le tunnel du site.', open: 'https://www.adrienemily.com', dns: ['CNAME www → cname.vercel-dns.com', 'cname.vercel-dns.com'] },
-  { host: 'adrienemily.com', dot: 'off', label: 'Apex — à créer', p: 'Ne répond pas aujourd\'hui (aucun enregistrement A). À brancher sur Vercel en même temps que www. Les MX Gmail ne bougent pas.', open: null, dns: ['A @ → 76.76.21.21', '76.76.21.21'] },
+  { host: 'www.adrienemily.com', dot: 'warn', label: 'Systeme.io — à migrer', p: 'Domaine principal : site vitrine et tunnels (<code>/optin-a</code> reste l\'adresse des pubs). Le jour J, le CNAME bascule vers Vercel : les étapes en ligne répondent aux mêmes chemins, les anciennes adresses suivent la table de redirections ci-dessous.', open: 'https://www.adrienemily.com', dns: ['CNAME www → cname.vercel-dns.com', 'cname.vercel-dns.com'] },
+  { host: 'adrienemily.com', dot: 'warn', label: 'Apex — redirigera vers www', p: 'Pointe aujourd\'hui sur Systeme.io. Sur Vercel il redirige en 308 vers www (réglage « redirect » du domaine dans le projet, doublé côté serveur). Les MX et SPF Gmail ne bougent pas.', open: null, dns: ['A @ → 76.76.21.21', '76.76.21.21'] },
   { host: 'team.alteore.com/t/…', dot: 'ok', label: 'Aperçus internes', p: 'Mode aperçu des pages : brouillons visibles, aucune mesure, noindex. Pour valider desktop + mobile avant publication.', open: null, dns: null }
 ];
 function renderDomains() {
@@ -470,13 +490,19 @@ var CK_ITEMS = [
   { k: 'favicon', t: 'Déposer le favicon dans les réglages du tunnel', s: 'L\'actuel vit sur le CDN Systeme.io et disparaîtra avec la résiliation.' },
   { k: 'apercu', t: 'Valider chaque page en aperçu, desktop + mobile', s: 'Navigation, vidéos, animations, contenu de l\'onglet Contenu bien appliqué.' },
   { k: 'form', t: 'Tester le formulaire de contact', s: 'La fiche doit apparaître dans Leads Live avec le message.' },
-  { k: 'live', t: 'Passer le tunnel en ligne', s: 'Le site répond alors sur go.adrienemily.com — sans toucher au domaine actuel.' },
+  { k: 'optina', t: 'Étape optin-a en ligne : quiz (A) et VSL (B), poids 50 / 50', s: 'C\'est l\'adresse des pubs, elle ne change jamais. Pixel du tunnel renseigné (1341581597802071).' },
+  { k: 'merci', t: 'Étape merci publiée, RDV test qui y atterrit', s: 'Les types « Audit Stratégique » redirigent déjà vers www.adrienemily.com/merci : même chemin, rien à changer dans Booking. Iframe du quiz en embed=1 pour que la page entière bascule.' },
+  { k: 'live', t: 'Passer les tunnels en ligne', s: 'Site et funnel répondent alors sur go.adrienemily.com — sans toucher au domaine actuel.' },
+  { k: 'redir', t: 'Table de redirections remplie et enregistrée', s: 'Importer l\'inventaire System.io ci-dessus, corriger les cibles des adresses encore dans des pubs ou des emails.' },
+  { k: 'metaverif', t: 'Meta : vérification du domaine adrienemily.com par enregistrement TXT chez OVH', s: 'Si le domaine est vérifié aujourd\'hui par une balise dans les pages Systeme.io, la vérification tombe avec elles. Le TXT DNS survit à la bascule.' },
+  { k: 'vercel', t: 'Vercel : ajouter www.adrienemily.com (production) et adrienemily.com (redirection 308 vers www) au projet', s: 'Réglages du projet team-ambitio → Domains. Sans effet tant que le DNS pointe sur Systeme.io. vercel.json route déjà ces hôtes.' },
+  { k: 'ttl', t: 'OVH : TTL de www et de @ à 300 s, une heure avant la bascule', s: 'Un retour arrière se propage alors en 5 minutes au lieu d\'une heure.' },
   { k: 'cname', t: 'OVH : CNAME www → cname.vercel-dns.com', s: 'La bascule. Retour arrière possible en repointant le CNAME vers Systeme.io.' },
-  { k: 'apex', t: 'OVH : A @ → 76.76.21.21', s: 'L\'apex adrienemily.com se met à répondre. Les MX Gmail ne bougent pas.' },
-  { k: 'vercel', t: 'Vercel : ajouter www.adrienemily.com + adrienemily.com au projet', s: 'vercel.json route déjà ces hôtes vers les pages hébergées.' },
-  { k: 'fb', t: 'Vérifier les liens Facebook', s: 'Les URLs des pubs (mêmes chemins) doivent répondre à l\'identique.' },
-  { k: 'pixel', t: 'Vérifier le pixel Meta', s: 'Événements visibles dans le gestionnaire — le runtime des pages le porte.' },
-  { k: 'sio', t: 'Résilier Systeme.io', s: 'Après quelques jours de recul, une fois tout validé.' }
+  { k: 'apex', t: 'OVH : A @ → 76.76.21.21', s: 'L\'apex adrienemily.com se met à rediriger vers www. Les MX et SPF Gmail ne bougent pas.' },
+  { k: 'fb', t: 'Vérifier les liens des pubs', s: 'www.adrienemily.com/optin-a doit servir le quiz ou la VSL, et un opt-in doit créer la fiche dans Leads Live.' },
+  { k: 'pixel', t: 'Vérifier le pixel Meta', s: 'PageView, Lead et Schedule visibles dans le gestionnaire d\'événements, sur le domaine vérifié.' },
+  { k: 'keep', t: 'Laisser Systeme.io allumé 72 h', s: 'Les résolveurs DNS en cache continuent d\'y envoyer des visiteurs : les deux hébergeurs répondent en parallèle, aucun lead perdu.' },
+  { k: 'sio', t: 'Résilier Systeme.io', s: 'Après une semaine de recul, une fois tout validé — rien à récupérer côté pages, tout est dans le repo et les tunnels.' }
 ];
 function ckState() { try { return JSON.parse(localStorage.getItem(CK_KEY) || '{}') || {}; } catch (e) { return {}; } }
 function renderChecklist() {
@@ -488,6 +514,66 @@ function renderChecklist() {
   $('checklist').innerHTML = h;
   $('ckCount').textContent = done + ' / ' + CK_ITEMS.length;
   $('ckBar').style.width = Math.round(done / CK_ITEMS.length * 100) + '%';
+}
+
+/* ─── Redirections des anciennes URL (_config/tunnels.redirects) ───
+   Lues côté serveur par api/_tunnelRegistry.js (cache 20 s) et appliquées
+   par api/tunnel-render.js quand aucune étape en ligne ne répond au chemin. */
+var REDIR = [];
+var REDIR_SAVED = '[]';
+/* Inventaire des sitemaps Systeme.io relevé le 28/09/2026, hors pages
+   recréées comme étapes (/, about, product, contacts-page, optin-a, merci). */
+var SIO_LEGACY = ['funnelquizz', 'optin-a2', 'vsl-ac', '18c6cc64', '18c6cc64-e06304a1', 'optin-z', 'optin-x', 'optin-y', 'vsl-acstop', 'optin-afin', 'optin-d', 'optin-c', 'optin-cbis-5e64984b', 'call-ok', 'optin-cbis',
+  'vsl-a', 'vsl-b', 'appel-decouverte', 'vsl-b-off', 'vsl-bb', 'vsl-a-c4f95d6d', 'vsl-a22', 'vsl-alose', 'vsl-bloose',
+  'vsl1', 'call-strat', 'call-strat4', 'call-ok-vsl1', 'inscription-conference-cw-f016473f', 'bravo-ad90a270', 'vsl',
+  'acces-offert7-a', 'acces-offert7-b', 'thankyou',
+  'rdv-commercants', 'inscription-conference-wednesday-6321f8ac', 'inscription-conference-v3-79462a71-2d2e29a8', 'inscription-confirmee-rdvcomm', 'abo-acflix', 'call-ok-dee94ef2-becc234c', 'bravo-a5c52e28-1fa08b42', 'cgv-passvip-e89c3f8f', 'inscription-conference-cw-f56dba53-cb5a27a0', 'inscription-conference-wednesday-v2-a44092ad',
+  'pilotage-avance', 'bravo-pilotage', 'temps-energie', 'bravo-temps', 'mindset-dirigeant', 'bravo-mindset', 'recruter-juste', 'bravo-recrute', 'coaching-supp', 'bravo-coaching',
+  'plan-action/*'];
+function loadRedirects() {
+  return db.collection('_config').doc('tunnels').get().then(function (doc) {
+    var d = doc.exists ? (doc.data() || {}) : {};
+    REDIR = (Array.isArray(d.redirects) ? d.redirects : []).map(function (r) {
+      return { from: String(r.from || ''), to: String(r.to || ''), code: Number(r.code) === 302 ? 302 : 301 };
+    });
+    REDIR_SAVED = JSON.stringify(REDIR);
+    renderRedirects();
+  })['catch'](function (e) { $('redirState').textContent = 'Lecture impossible : ' + (e && e.message); });
+}
+function renderRedirects() {
+  var h = '';
+  if (REDIR.length) h += '<div class="sw-redir sw-redir-head"><span>Ancienne adresse (chemin)</span><span>Cible</span><span>Code</span><span></span></div>';
+  REDIR.forEach(function (r, i) {
+    h += '<div class="sw-redir">'
+      + '<input class="sw-in" data-rf="from" data-i="' + i + '" value="' + esc(r.from).replace(/"/g, '&quot;') + '" placeholder="ancien-chemin ou prefixe/*"/>'
+      + '<input class="sw-in" data-rf="to" data-i="' + i + '" value="' + esc(r.to).replace(/"/g, '&quot;') + '" placeholder="/optin-a ou https://…"/>'
+      + '<select class="sw-in" data-rf="code" data-i="' + i + '"><option value="301"' + (r.code !== 302 ? ' selected' : '') + '>301</option><option value="302"' + (r.code === 302 ? ' selected' : '') + '>302</option></select>'
+      + '<button type="button" data-action="redirDel" data-i="' + i + '" title="Retirer">✕</button></div>';
+  });
+  if (!REDIR.length) h = '<div class="sub">Aucune règle. « Importer l\'inventaire » ajoute toutes les adresses System.io connues vers /optin-a ; ajuste ensuite les cibles.</div>';
+  $('redirList').innerHTML = h;
+  redirState();
+}
+function redirState() {
+  var dirty = JSON.stringify(REDIR) !== REDIR_SAVED;
+  $('redirState').textContent = REDIR.length + ' règle(s)' + (dirty ? ' — modifications non enregistrées' : ' — enregistrées, actives sous 20 s');
+}
+function readRedirect(el) {
+  var i = Number(el.getAttribute('data-i')), r = REDIR[i]; if (!r) return;
+  var f = el.getAttribute('data-rf');
+  r[f] = f === 'code' ? (Number(el.value) === 302 ? 302 : 301) : el.value.trim();
+  redirState();
+}
+function saveRedirects() {
+  var clean = REDIR.filter(function (r) { return r.from; }).map(function (r) {
+    var from = r.from.replace(/^https?:\/\/[^\/]+/i, '').replace(/^\/+|\/+$/g, '');
+    var to = r.to || '/';
+    if (!/^https?:\/\//i.test(to) && to.charAt(0) !== '/') to = '/' + to;
+    return { from: from, to: to, code: r.code === 302 ? 302 : 301 };
+  });
+  return db.collection('_config').doc('tunnels').set({ redirects: clean, redirectsUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }).then(function () {
+    REDIR = clean; REDIR_SAVED = JSON.stringify(REDIR); renderRedirects(); toast('✅ Redirections enregistrées');
+  })['catch'](function (e) { toast('❌ ' + (e && e.message), true); });
 }
 
 /* ─── Événements (délégation) ─── */
@@ -503,6 +589,7 @@ document.addEventListener('input', function (ev) {
     refreshDirty();
     return;
   }
+  if (el.hasAttribute && el.hasAttribute('data-rf')) { readRedirect(el); return; }
   if (el.hasAttribute && el.hasAttribute('data-tem-f')) {
     var i = Number(el.getAttribute('data-i'));
     var t = (CFG.temoignages || [])[i];
@@ -511,6 +598,7 @@ document.addEventListener('input', function (ev) {
 });
 document.addEventListener('change', function (ev) {
   var el = ev.target;
+  if (el.hasAttribute && el.hasAttribute('data-rf')) { readRedirect(el); return; }
   if (el.hasAttribute && el.hasAttribute('data-cfg') && el.type === 'checkbox') { readField(el); refreshDirty(); }
   if (el.hasAttribute && el.hasAttribute('data-tem-f') && el.tagName === 'SELECT') {
     var i = Number(el.getAttribute('data-i'));
@@ -550,6 +638,15 @@ document.addEventListener('click', function (ev) {
     var tmp = CFG.temoignages[mi]; CFG.temoignages[mi] = CFG.temoignages[to]; CFG.temoignages[to] = tmp;
     renderTems(); refreshDirty(); return;
   }
+  if (act === 'redirAdd') { REDIR.push({ from: '', to: '/optin-a', code: 301 }); renderRedirects(); return; }
+  if (act === 'redirDel') { REDIR.splice(Number(el.getAttribute('data-i')), 1); renderRedirects(); return; }
+  if (act === 'redirImport') {
+    var have = {}; REDIR.forEach(function (r) { have[r.from] = 1; });
+    var added = 0;
+    SIO_LEGACY.forEach(function (f) { if (!have[f]) { REDIR.push({ from: f, to: '/optin-a', code: 301 }); added++; } });
+    renderRedirects(); toast(added + ' adresse(s) ajoutée(s) — vérifie les cibles puis enregistre'); return;
+  }
+  if (act === 'redirSave') { saveRedirects(); return; }
   if (act === 'copy') {
     var val = el.getAttribute('data-copy') || '';
     try { navigator.clipboard.writeText(val).then(function () { el.textContent = 'Copié ✓'; setTimeout(function () { el.textContent = 'Copier'; }, 1400); }); } catch (e) {}
@@ -589,6 +686,7 @@ firebase.auth().onAuthStateChanged(function (u) {
   renderChecklist();
   loadConfig()['catch'](function (e) { toast('❌ Config illisible : ' + (e && e.message), true); });
   loadPages();
+  loadRedirects();
 });
 })();
 </script>

@@ -116,7 +116,63 @@ function getTunnels() {
   return _cache.promise;
 }
 
-function invalidate() { _cache = { at: 0, list: null, promise: null }; }
+function invalidate() { _cache = { at: 0, list: null, promise: null }; _cfg = { at: 0, data: null, promise: null }; }
+
+/* ── Config globale des tunnels (_config/tunnels) ─────────────────────────
+   { primaryHost, redirects: [{ from, to, code }] } — même cache que le
+   registre. Les redirections servent à ne pas casser les anciennes URL
+   System.io le jour de la bascule de www.adrienemily.com : une règle ne
+   s'applique QUE si aucune étape en ligne ne répond au chemin (tunnel-render).
+   « from » = chemin sans slash de bord ; « from » terminé par * = préfixe. */
+let _cfg = { at: 0, data: null, promise: null };
+function normalizeRedirect(r) {
+  if (!r || !r.from) return null;
+  const raw = String(r.from).trim();
+  const wild = /\*\s*$/.test(raw);
+  const from = cleanPath(raw.replace(/\*\s*$/, ''));
+  if (!from) return null;
+  let to = String(r.to || '').trim().slice(0, 500);
+  if (!to) to = '/';
+  if (!/^https?:\/\//i.test(to) && to.charAt(0) !== '/') to = '/' + to;
+  return { from: from, wild: wild, to: to, code: Number(r.code) === 302 ? 302 : 301 };
+}
+function loadConfigDoc() {
+  return db.collection('_config').doc('tunnels').get().then(function (snap) {
+    const d = snap.exists ? (snap.data() || {}) : {};
+    const out = { primaryHost: String(d.primaryHost || ''), redirects: [] };
+    (Array.isArray(d.redirects) ? d.redirects : []).forEach(function (r) {
+      const n = normalizeRedirect(r);
+      if (n) out.redirects.push(n);
+    });
+    return out;
+  });
+}
+function getConfig() {
+  const now = Date.now();
+  if (_cfg.data && now - _cfg.at < CACHE_MS) return Promise.resolve(_cfg.data);
+  if (_cfg.promise) return _cfg.promise;
+  _cfg.promise = loadConfigDoc().then(function (data) {
+    _cfg = { at: Date.now(), data: data, promise: null };
+    return data;
+  }, function (e) {
+    _cfg.promise = null;
+    if (_cfg.data) return _cfg.data;
+    throw e;
+  });
+  return _cfg.promise;
+}
+/* Chemin demandé → règle de redirection ou null. Exacte d'abord, préfixe ensuite. */
+async function findRedirect(path) {
+  const p = cleanPath(path);
+  if (!p) return null;
+  const cfg = await getConfig();
+  let prefix = null;
+  for (const r of cfg.redirects) {
+    if (p === r.from) return r;
+    if (r.wild && p.indexOf(r.from + '/') === 0 && (!prefix || r.from.length > prefix.from.length)) prefix = r;
+  }
+  return prefix;
+}
 
 function isServable(tunnel, step, allowDraft) {
   if (!tunnel || !step) return false;
@@ -187,5 +243,6 @@ function nextUrlOf(tunnel, step) {
 
 module.exports = {
   cleanSlug, cleanPath, pageKey, isTunnelPageKey, pageLabel, stepPath,
-  getTunnels, invalidate, findByPath, findByPage, findByIds, isKnownPage, nextUrlOf
+  getTunnels, invalidate, findByPath, findByPage, findByIds, isKnownPage, nextUrlOf,
+  getConfig, findRedirect
 };
