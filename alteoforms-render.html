@@ -400,6 +400,7 @@ if(!doc||!doc.exists){showError('Formulaire introuvable.');return;}
 FORM=doc.data();FORM._id=doc.id;
 if(FORM.status!=='live'&&!params.get('preview')){showError('Ce formulaire n\'est pas encore publié.');return;}
 document.title=FORM.title||'Formulaire';
+afPixelInit();
 if(FORM.color)document.documentElement.style.setProperty('--accent',FORM.color);
 FIELDS=(FORM.fields||[]).filter(function(f){return f.label||f.type==='info';});
 if(!FIELDS.length){showError('Ce formulaire ne contient aucun champ.');return;}
@@ -1003,7 +1004,9 @@ answers:ansArr,
 answersMap:answers,
 submittedAt:firebase.firestore.FieldValue.serverTimestamp(),
 userAgent:navigator.userAgent
-}).then(function(){
+}).then(function(_afResp){
+// Id de la réponse → eventID du pixel Lead (dédoublonnage Meta)
+_afResponseId=(_afResp&&_afResp.id)||'';
 // Increment response count (fire & forget)
 db.collection('alteo_forms').doc(FORM._id).update({
 responseCount:firebase.firestore.FieldValue.increment(1)
@@ -1047,6 +1050,57 @@ doPostActions(settings,contact,leadData);
 }else{
 doPostActions(settings,contact,null);
 }
+}
+
+/* ═══ PIXEL META « Ambitio Elite » (30/09/2026) ═══
+   Même modèle que booking.html : la variante B du quiz Élite et le CTA
+   « Réserver mon diagnostic » du site font saisir les coordonnées ICI —
+   sans pixel, aucun événement Lead ne remontait à Meta sur ces parcours.
+   Chargé pour un VISITEUR PUBLIC seulement (jamais en aperçu builder :
+   ?preview / ?typreview / ?tytpl). PageView seulement hors iframe (en
+   iframe, la page hôte du tunnel l'envoie déjà). L'événement `Lead` part
+   à la validation du formulaire, UNIQUEMENT quand l'enchaînement mène à
+   booking.html (formulaires d'acquisition — pas les formulaires internes),
+   avec eventID = id de la réponse pour le dédoublonnage Meta. Le
+   `Schedule` reste envoyé par booking.html à la confirmation du RDV. */
+var AF_META_PIXEL_ID='1341581597802071';
+var _afPixelReady=false;
+var _afResponseId='';
+function afPixelInit(){
+if(_afPixelReady)return;
+var qp=new URLSearchParams(window.location.search);
+if(qp.get('preview')||qp.get('typreview')||qp.get('tytpl'))return;
+_afPixelReady=true;
+try{
+/* Base code Meta, forme officielle en ES5. */
+(function(f,b,e,v,n,t,sc){
+if(f.fbq)return;
+n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments);};
+if(!f._fbq)f._fbq=n;
+n.push=n;n.loaded=true;n.version='2.0';n.queue=[];
+t=b.createElement(e);t.async=true;t.src=v;
+sc=b.getElementsByTagName(e)[0];sc.parentNode.insertBefore(t,sc);
+})(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+window.fbq('init',AF_META_PIXEL_ID);
+var inIframe=false;
+try{inIframe=!!(window.parent&&window.parent!==window);}catch(e){inIframe=true;}
+if(!inIframe)window.fbq('track','PageView');
+}catch(e){if(window.console)console.warn('[alteoform] pixel Meta non chargé:',e&&e.message);}
+}
+function afPixelLead(){
+if(!_afPixelReady||!window.fbq)return false;
+try{
+var data={content_name:(FORM&&FORM.title)||'AlteoForm'};
+if(_afResponseId)window.fbq('track','Lead',data,{eventID:'af_'+_afResponseId});
+else window.fbq('track','Lead',data);
+return true;
+}catch(e){return false;}
+}
+/* Redirection vers booking : Lead d'abord, navigation 300 ms après pour
+   laisser partir la requête pixel (une navigation immédiate la couperait). */
+function afGoBooking(url){
+if(afPixelLead()){setTimeout(function(){window.location.href=url;},300);}
+else{window.location.href=url;}
 }
 
 function doPostActions(settings,contact,leadData){
@@ -1106,10 +1160,11 @@ if(match){matchedRule=rule;break;}
 // Execute matched rule action
 if(matchedRule){
 if(matchedRule.action==='redirect'&&matchedRule.actionValue){
+if(matchedRule.actionValue.indexOf('booking.html')>=0){afGoBooking(matchedRule.actionValue);return;}
 window.location.href=matchedRule.actionValue;return;
 }
 if(matchedRule.action==='booking'&&matchedRule.actionValue){
-window.location.href='/booking.html?type='+matchedRule.actionValue+_bkParams;return;
+afGoBooking('/booking.html?type='+matchedRule.actionValue+_bkParams);return;
 }
 if(matchedRule.action==='message'&&matchedRule.actionValue){
 showThankYou(matchedRule.actionValue);return;
@@ -1118,10 +1173,11 @@ showThankYou(matchedRule.actionValue);return;
 
 // Default: settings-based behavior
 if(settings.linkedBookingType){
-window.location.href='/booking.html?type='+settings.linkedBookingType+_bkParams;
+afGoBooking('/booking.html?type='+settings.linkedBookingType+_bkParams);
 return;
 }
 if(settings.redirectUrl){
+if(settings.redirectUrl.indexOf('booking.html')>=0){afGoBooking(settings.redirectUrl);return;}
 window.location.href=settings.redirectUrl;
 return;
 }
