@@ -98,6 +98,10 @@
     { id: 'admin-numbers',     icon: '📞', label: 'Numéros',      href: 'admin-numbers.html',     section: 'Admin', perm: '_admin' },
     { id: 'admin-billing',     icon: '🧾', label: 'Facturation',  href: 'admin-facturation.html', section: 'Admin', perm: '_admin' },
     { id: 'admin-dedup',       icon: '🔄', label: 'Dédup Clients', href: 'clients-dedup.html',    section: 'Admin', perm: '_admin' },
+    // Replay closing : les appels de closing (Meet) chapitrés par l'IA, avec
+    // le client rattaché — vidéo + transcription cliquable. Données servies
+    // par api/replay-closing.js, admin uniquement.
+    { id: 'admin-replay-closing', icon: '🎬', label: 'Replay closing', href: 'admin-replay-closing.html', section: 'Admin', perm: '_admin' },
     { id: 'alteoforms',        icon: '📝', label: 'AlteoForms',   href: 'alteoforms.html',        section: 'Outils', perm: 'alteoforms' },
     { id: 'payments',          icon: '💳', label: 'Paiements',    href: 'payments.html',          section: 'Outils', perm: 'payments' },
     // Formations internes (Setting LAB / Closing LAB / Coach LAB) : accès

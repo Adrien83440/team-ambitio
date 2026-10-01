@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Replay closing</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}
+</script>
+<link rel="stylesheet" href="sales.css"/>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   admin-replay-closing.html — Replay des appels de closing (10/2026)
+   Liste des closings avec le client rattaché ; lecteur chapitré : vidéo
+   Meet + chapitres IA éditables + transcription cliquable. Admin only.
+   Toutes les données passent par api/replay-closing.js (Admin SDK).
+   ═══════════════════════════════════════════════════════════════════════ */
+.rc{padding:20px 24px 80px;max-width:1280px;margin:0 auto;font-family:'Figtree',sans-serif}
+.rc-top{display:flex;align-items:center;gap:14px;margin-bottom:20px;flex-wrap:wrap}
+.rc-top h1{font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:800;letter-spacing:-.3px}
+.rc-top small{font-size:12px;color:rgba(255,255,255,.48);display:block;margin-top:2px}
+.rc-top .sp{flex:1}
+.rc-ic{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#f472b6,#be185d);display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 3px 12px rgba(244,114,182,.3);flex-shrink:0}
+.bb{padding:8px 16px;border:none;border-radius:8px;font-family:'Figtree',sans-serif;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .15s;text-decoration:none;line-height:1.3}
+.bb-p{background:#f472b6;color:#000}.bb-p:hover{background:#ec4899}
+.bb-o{background:0;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.62)}.bb-o:hover{color:#fff;border-color:rgba(255,255,255,.25)}
+.bb-r{background:rgba(239,68,68,.08);color:#fca5a5;border:1px solid rgba(239,68,68,.2)}
+.bb-s{padding:5px 10px;font-size:11px}
+.bb[disabled]{opacity:.4;cursor:not-allowed}
+.bi{padding:8px 12px;background:var(--bg3,#141420);border:1.5px solid rgba(255,255,255,.07);border-radius:8px;color:#fff;font-family:'Figtree',sans-serif;font-size:13px;outline:0;box-sizing:border-box}
+.bi:focus{border-color:#f472b6}
+.bi option{background:var(--bg3,#141420)}
+
+.rc-banner{padding:12px 16px;border-radius:10px;font-size:12.5px;line-height:1.55;margin-bottom:16px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25);color:#fcd34d}
+.rc-banner a{color:#fde68a;font-weight:700}
+.rc-filters{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.rc-filters .bi{min-width:0}
+.rc-filters #fQ{flex:1;min-width:180px}
+.rc-count{font-size:12px;color:rgba(255,255,255,.42)}
+
+.rc-list{display:flex;flex-direction:column;gap:8px}
+.rc-row{display:flex;align-items:center;gap:14px;padding:12px 16px;background:var(--bg2,#0f0f1a);border:1px solid rgba(255,255,255,.07);border-radius:12px;cursor:pointer;transition:all .15s}
+.rc-row:hover{border-color:rgba(244,114,182,.4);background:rgba(244,114,182,.04)}
+.rc-av{width:38px;height:38px;border-radius:10px;background:rgba(244,114,182,.14);color:#f9a8d4;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex-shrink:0}
+.rc-main{flex:1;min-width:0}
+.rc-nm{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rc-meta{font-size:11.5px;color:rgba(255,255,255,.48);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rc-tags{display:flex;gap:6px;align-items:center;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+.tag{font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap;border:1px solid transparent}
+.tag-ready{background:rgba(52,211,153,.1);color:#34d399;border-color:rgba(52,211,153,.25)}
+.tag-video{background:rgba(96,165,250,.1);color:#93c5fd;border-color:rgba(96,165,250,.25)}
+.tag-wait{background:rgba(251,191,36,.1);color:#fbbf24;border-color:rgba(251,191,36,.25)}
+.tag-none{background:rgba(255,255,255,.04);color:rgba(255,255,255,.45);border-color:rgba(255,255,255,.1)}
+.tag-out{background:rgba(255,255,255,.05);color:rgba(255,255,255,.75);border-color:rgba(255,255,255,.12)}
+.rc-empty{text-align:center;padding:60px 20px;color:rgba(255,255,255,.4);font-size:13px;line-height:1.7}
+
+/* ── Lecteur ── */
+.rp-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.rp-head .rc-av{width:44px;height:44px;font-size:17px}
+.rp-title{font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:800;letter-spacing:-.2px}
+.rp-sub{font-size:12px;color:rgba(255,255,255,.5);margin-top:3px}
+.rp-acts{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+.rp-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px;align-items:start}
+.rp-video{position:relative;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:16/9;border:1px solid rgba(255,255,255,.07)}
+.rp-video video,.rp-video iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
+.rp-novideo{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;color:rgba(255,255,255,.45);font-size:13px;line-height:1.6}
+.rp-vbar{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;font-size:11.5px;color:rgba(255,255,255,.45)}
+.rp-vbar .sp{flex:1}
+.card{background:var(--bg2,#0f0f1a);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px 16px}
+.card h2{font-size:12px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.card h2 .sp{flex:1}
+.rp-summary{font-size:13px;line-height:1.65;color:rgba(255,255,255,.82);white-space:pre-wrap}
+.rp-side{display:flex;flex-direction:column;gap:16px;min-width:0}
+.rp-left{display:flex;flex-direction:column;gap:16px;min-width:0}
+
+.ch-list{display:flex;flex-direction:column;gap:4px;max-height:420px;overflow-y:auto}
+.ch{display:flex;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;border:1px solid transparent;transition:all .12s}
+.ch:hover{background:rgba(255,255,255,.04)}
+.ch.on{background:rgba(244,114,182,.1);border-color:rgba(244,114,182,.3)}
+.ch-t{font-family:var(--font-m,monospace);font-size:11.5px;color:#f9a8d4;font-weight:700;flex-shrink:0;padding-top:1px;min-width:52px}
+.ch-b{min-width:0}
+.ch-ti{font-size:13px;font-weight:700;line-height:1.35}
+.ch-su{font-size:11.5px;color:rgba(255,255,255,.5);line-height:1.45;margin-top:2px}
+.che{display:grid;grid-template-columns:78px minmax(0,1fr) auto;gap:6px;margin-bottom:8px;align-items:start}
+.che .bi{width:100%;padding:6px 9px;font-size:12px}
+.che .che-su{grid-column:2 / 3}
+.che-foot{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+
+.tr-tools{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.tr-tools .bi{flex:1;min-width:140px;padding:6px 10px;font-size:12px}
+.tr-tools label{font-size:11.5px;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap}
+.tr-list{max-height:560px;overflow-y:auto;display:flex;flex-direction:column;gap:1px}
+.tr{display:flex;gap:10px;padding:6px 8px;border-radius:7px;cursor:pointer;font-size:12.5px;line-height:1.5}
+.tr:hover{background:rgba(255,255,255,.04)}
+.tr.on{background:rgba(244,114,182,.1)}
+.tr-t{font-family:var(--font-m,monospace);font-size:11px;color:rgba(255,255,255,.4);flex-shrink:0;min-width:52px;padding-top:1px}
+.tr-sp{font-weight:700;color:#93c5fd}
+.tr-sp.s1{color:#f9a8d4}.tr-sp.s2{color:#6ee7b7}.tr-sp.s3{color:#fcd34d}
+.tr-x{color:rgba(255,255,255,.82)}
+.tr mark{background:rgba(251,191,36,.3);color:#fff;border-radius:3px;padding:0 1px}
+.rp-note{font-size:12px;color:rgba(255,255,255,.45);line-height:1.6}
+
+.rc-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2e1a;border:1px solid rgba(16,185,129,.3);color:#6ee7b7;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none;max-width:90vw}
+.rc-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.rc-toast.err{background:#2e1a1a;border-color:rgba(239,68,68,.35);color:#fca5a5}
+.locked{text-align:center;padding:80px 20px;color:rgba(255,255,255,.35)}
+@media (max-width:980px){.rp-grid{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:640px){.rc{padding:14px 14px 80px}.rc-row{flex-wrap:wrap}.rc-tags{width:100%;justify-content:flex-start}.rp-acts{margin-left:0;width:100%}}
+</style>
+</head>
+<body>
+<div class="rc" id="mainView" style="display:none">
+  <div class="rc-top">
+    <div class="rc-ic">🎬</div>
+    <div><h1>Replay closing</h1><small>Les appels de closing, chapitrés : clique un sujet, la vidéo saute au bon passage</small></div>
+    <div class="sp"></div>
+    <a class="bb bb-o" id="btnBack" style="display:none" data-action="back">← Tous les appels</a>
+  </div>
+
+  <div id="viewList">
+    <div class="rc-banner" id="connBanner" style="display:none"></div>
+    <div class="rc-filters">
+      <input class="bi" id="fQ" type="search" placeholder="Rechercher un client, un closer…"/>
+      <select class="bi" id="fStatus">
+        <option value="">Tous les appels</option>
+        <option value="ready">Chapitrés / transcrits</option>
+        <option value="video">Vidéo seule</option>
+        <option value="todo">À importer</option>
+      </select>
+      <select class="bi" id="fDays">
+        <option value="30">30 derniers jours</option>
+        <option value="60" selected>60 derniers jours</option>
+        <option value="120">4 derniers mois</option>
+        <option value="365">12 derniers mois</option>
+      </select>
+      <span class="rc-count" id="rcCount"></span>
+    </div>
+    <div class="rc-list" id="rcList"></div>
+  </div>
+
+  <div id="viewPlayer" style="display:none"></div>
+</div>
+
+<div class="locked" id="lockedView" style="display:none"><div style="font-size:48px;margin-bottom:12px">🔒</div><div>Module réservé aux administrateurs.</div></div>
+<div class="rc-toast" id="rcToast"></div>
+
+<script>
+(function () {
+'use strict';
+
+var API = '/api/replay-closing';
+var ITEMS = [];          // liste des appels
+var CUR = null;          // replay ouvert : { booking, replay, entries, video }
+var MODE = 'native';     // 'native' (flux, saut instantané) | 'drive' (lecteur intégré)
+var EDIT = null;         // copie de travail des chapitres en cours d'édition
+var FOLLOW = true;       // la transcription suit la lecture
+var lastLine = -1, lastChap = -1;
+
+var OUTCOMES = {
+  close: '🏆 Close', non_close: '❌ Non close', offre: '💬 Offre', disqualifie: '🚫 Disqua',
+  no_show: '👻 No-show', annule: '🔴 Annulé', replanifie: '📅 Replanifié'
+};
+var REASONS = {
+  no_meet_link: 'Ce RDV n\'a pas de lien Google Meet.',
+  conference_not_found: 'Aucune réunion Meet trouvée pour ce RDV sur le compte connecté (réunion non tenue, ou hébergée par un autre compte Google).',
+  no_transcript: 'La transcription n\'a pas été activée pendant cet appel, ou Google ne la conserve plus (30 jours).',
+  no_recording: 'La réunion a eu lieu mais n\'a été ni enregistrée ni transcrite.'
+};
+
+function $(id) { return document.getElementById(id); }
+function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+function escAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
+var toastTimer = null;
+function toast(msg, isErr) {
+  var t = $('rcToast');
+  t.textContent = msg;
+  t.className = 'rc-toast show' + (isErr ? ' err' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { t.className = 'rc-toast' + (isErr ? ' err' : ''); }, isErr ? 6000 : 3200);
+}
+
+function clock(sec) {
+  sec = Math.max(0, Math.floor(Number(sec) || 0));
+  var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return (h ? h + ':' + (m < 10 ? '0' : '') : '') + m + ':' + (s < 10 ? '0' : '') + s;
+}
+function parseClock(v) {
+  var parts = String(v || '').trim().split(':'), sec = 0, i, n;
+  if (!parts.length || parts.length > 3) return NaN;
+  for (i = 0; i < parts.length; i++) {
+    n = parseInt(parts[i], 10);
+    if (isNaN(n) || n < 0) return NaN;
+    sec = sec * 60 + n;
+  }
+  return sec;
+}
+function dateFr(iso) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+  if (!m) return iso || '';
+  var d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12));
+  return d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+function durLabel(sec) {
+  if (!sec) return '';
+  var m = Math.round(sec / 60);
+  if (m < 1) return sec + ' s';
+  return m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60 < 10 ? '0' : '') + (m % 60) : m + ' min';
+}
+
+/* ═══ API ═══ */
+function api(method, params, body) {
+  var u = firebase.auth().currentUser;
+  if (!u) return Promise.reject(new Error('Session expirée'));
+  return u.getIdToken().then(function (tok) {
+    var qs = [];
+    Object.keys(params || {}).forEach(function (k) { qs.push(encodeURIComponent(k) + '=' + encodeURIComponent(params[k])); });
+    var opt = { method: method, headers: { Authorization: 'Bearer ' + tok } };
+    if (body) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+    return fetch(API + (qs.length ? '?' + qs.join('&') : ''), opt);
+  }).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      if (!r.ok || j.ok === false) throw new Error(j.error || ('Erreur ' + r.status));
+      return j;
+    });
+  });
+}
+
+/* ═══ LISTE ═══ */
+function statusTag(it) {
+  if (it.replayStatus === 'ready') {
+    return it.chaptersCount
+      ? '<span class="tag tag-ready">✓ ' + it.chaptersCount + ' chapitres</span>'
+      : '<span class="tag tag-ready">✓ Transcrit</span>';
+  }
+  if (it.replayStatus === 'pending') return '<span class="tag tag-wait">⏳ En attente de Google</span>';
+  if (it.hasVideo) return '<span class="tag tag-video">🎥 Vidéo seule</span>';
+  if (it.replayStatus === 'none') return '<span class="tag tag-none">Pas d\'enregistrement</span>';
+  return '<span class="tag tag-wait">À importer</span>';
+}
+function statusGroup(it) {
+  if (it.replayStatus === 'ready') return 'ready';
+  if (it.hasVideo) return 'video';
+  return 'todo';
+}
+
+function renderList() {
+  var q = $('fQ').value.trim().toLowerCase(), fs = $('fStatus').value, h = '', n = 0;
+  ITEMS.forEach(function (it) {
+    if (fs && statusGroup(it) !== fs) return;
+    if (q) {
+      var hay = ((it.clientName || '') + ' ' + (it.clientEmail || '') + ' ' + (it.closer || '') + ' ' + (it.typeLabel || '')).toLowerCase();
+      if (hay.indexOf(q) < 0) return;
+    }
+    n++;
+    var meta = [dateFr(it.date) + (it.time ? ' · ' + it.time : '')];
+    if (it.closer) meta.push('avec ' + it.closer);
+    if (it.typeLabel) meta.push(it.typeLabel);
+    if (it.durationSec) meta.push(durLabel(it.durationSec));
+    h += '<div class="rc-row" data-action="open" data-id="' + escAttr(it.id) + '">'
+      + '<div class="rc-av">' + esc((it.clientName || '?').charAt(0).toUpperCase()) + '</div>'
+      + '<div class="rc-main"><div class="rc-nm">' + esc(it.clientName) + '</div>'
+      + '<div class="rc-meta">' + esc(meta.join(' · ')) + '</div></div>'
+      + '<div class="rc-tags">'
+      + (it.outcome ? '<span class="tag tag-out">' + esc(OUTCOMES[it.outcome] || it.outcome) + '</span>' : '')
+      + statusTag(it) + '</div></div>';
+  });
+  $('rcList').innerHTML = h || '<div class="rc-empty">Aucun appel de closing sur cette période.<br/>Les replays apparaissent ici le lendemain de l\'appel (import chaque nuit).</div>';
+  $('rcCount').textContent = n + ' appel' + (n > 1 ? 's' : '');
+}
+
+function loadList() {
+  $('rcList').innerHTML = '<div class="rc-empty">Chargement…</div>';
+  return api('GET', { action: 'list', days: $('fDays').value }).then(function (j) {
+    ITEMS = j.items || [];
+    var b = $('connBanner'), msgs = [];
+    if (j.google && !j.google.connected) {
+      msgs.push('Le compte Google qui héberge les Meet de closing n\'est pas connecté : aucune transcription ne peut être importée. '
+        + '<a href="admin-email-auth.html">Connecter « Meet Closing »</a> avec strategie@adrienemily.com.');
+    }
+    if (j.aiReady === false) msgs.push('Clé IA absente côté serveur : les chapitres ne seront pas générés.');
+    if (j.truncated) msgs.push('Période trop large : la liste est tronquée. Réduis la fenêtre.');
+    b.innerHTML = msgs.join('<br/>');
+    b.style.display = msgs.length ? '' : 'none';
+    renderList();
+  }).catch(function (e) {
+    $('rcList').innerHTML = '<div class="rc-empty">Chargement impossible : ' + esc(e.message) + '</div>';
+  });
+}
+
+/* ═══ LECTEUR ═══ */
+function showView(player) {
+  $('viewList').style.display = player ? 'none' : '';
+  $('viewPlayer').style.display = player ? '' : 'none';
+  $('btnBack').style.display = player ? '' : 'none';
+}
+
+function openReplay(id, push) {
+  showView(true);
+  $('viewPlayer').innerHTML = '<div class="rc-empty">Chargement du replay…</div>';
+  if (push !== false) { try { history.pushState({ id: id }, '', '?id=' + encodeURIComponent(id)); } catch (e) {} }
+  return api('GET', { action: 'get', id: id }).then(function (j) {
+    CUR = j;
+    EDIT = null;
+    lastLine = -1; lastChap = -1;
+    MODE = j.video && j.video.streamUrl ? 'native' : 'drive';
+    renderPlayer();
+  }).catch(function (e) {
+    $('viewPlayer').innerHTML = '<div class="rc-empty">Replay introuvable : ' + esc(e.message) + '</div>';
+  });
+}
+
+function backToList(push) {
+  var v = $('rpVideo');
+  if (v && v.pause) { try { v.pause(); } catch (e) {} }
+  CUR = null;
+  $('viewPlayer').innerHTML = '';
+  showView(false);
+  if (push !== false) { try { history.pushState({}, '', window.location.pathname); } catch (e) {} }
+}
+
+function videoHtml() {
+  var v = CUR.video || {};
+  if (!v.fileId) return '<div class="rp-novideo">Aucun enregistrement vidéo rattaché à cet appel.</div>';
+  if (MODE === 'native' && v.streamUrl) {
+    return '<video id="rpVideo" controls preload="metadata" playsinline src="' + escAttr(v.streamUrl) + '"></video>';
+  }
+  return '<iframe id="rpFrame" allow="autoplay; fullscreen" allowfullscreen src="https://drive.google.com/file/d/' + escAttr(v.fileId) + '/preview"></iframe>';
+}
+
+function chaptersHtml() {
+  var list = CUR.replay.chapters || [], h = '';
+  if (EDIT) {
+    EDIT.forEach(function (c, i) {
+      h += '<div class="che" data-i="' + i + '">'
+        + '<input class="bi" data-f="t" value="' + escAttr(clock(c.t)) + '" placeholder="mm:ss"/>'
+        + '<input class="bi" data-f="title" value="' + escAttr(c.title) + '" placeholder="Titre du chapitre"/>'
+        + '<button class="bb bb-r bb-s" data-action="chDel" data-i="' + i + '" title="Retirer ce chapitre">✕</button>'
+        + '<input class="bi che-su" data-f="summary" value="' + escAttr(c.summary || '') + '" placeholder="Résumé (facultatif)"/>'
+        + '</div>';
+    });
+    h += '<div class="che-foot">'
+      + '<button class="bb bb-o bb-s" data-action="chAdd">+ Chapitre à l\'instant en cours</button>'
+      + '<span style="flex:1"></span>'
+      + '<button class="bb bb-o bb-s" data-action="chCancel">Annuler</button>'
+      + '<button class="bb bb-p bb-s" data-action="chSave">Enregistrer</button></div>';
+    return h;
+  }
+  if (!list.length) {
+    return '<div class="rp-note">' + (CUR.replay.status === 'ready'
+      ? 'Pas encore de chapitres' + (CUR.replay.chaptersError ? ' (' + esc(CUR.replay.chaptersError) + ')' : '') + '. Lance « Régénérer (IA) » ou ajoute-les à la main.'
+      : 'Les chapitres demandent une transcription.') + '</div>';
+  }
+  h += '<div class="ch-list" id="chList">';
+  list.forEach(function (c, i) {
+    h += '<div class="ch" data-action="seek" data-t="' + c.t + '" data-ch="' + i + '">'
+      + '<div class="ch-t">' + clock(c.t) + '</div>'
+      + '<div class="ch-b"><div class="ch-ti">' + esc(c.title) + '</div>'
+      + (c.summary ? '<div class="ch-su">' + esc(c.summary) + '</div>' : '') + '</div></div>';
+  });
+  return h + '</div>';
+}
+
+function highlight(text, q) {
+  if (!q) return esc(text);
+  // On découpe le texte BRUT puis on échappe chaque morceau : surligner après
+  // échappement casserait les entités (&amp; …).
+  var parts = String(text).split(new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig')), i, out = '';
+  for (i = 0; i < parts.length; i++) out += i % 2 ? '<mark>' + esc(parts[i]) + '</mark>' : esc(parts[i]);
+  return out;
+}
+
+function transcriptRows() {
+  var q = ($('trQ') ? $('trQ').value : '').trim(), ql = q.toLowerCase();
+  var sp = CUR.replay.speakers || [], h = '', n = 0;
+  (CUR.entries || []).forEach(function (e, i) {
+    if (ql && e.t.toLowerCase().indexOf(ql) < 0) return;
+    n++;
+    h += '<div class="tr" data-action="seek" data-t="' + e.s + '" data-ln="' + i + '">'
+      + '<div class="tr-t">' + clock(e.s) + '</div>'
+      + '<div><span class="tr-sp s' + (e.p % 4) + '">' + esc(sp[e.p] || 'Participant') + '</span> '
+      + '<span class="tr-x">' + highlight(e.t, q) + '</span></div></div>';
+  });
+  if ($('trCount')) $('trCount').textContent = q ? n + ' résultat' + (n > 1 ? 's' : '') : '';
+  return h || '<div class="rp-note">Aucun passage ne correspond.</div>';
+}
+
+function renderChapters() {
+  $('chBox').innerHTML = chaptersHtml();
+  $('chBtns').style.display = EDIT ? 'none' : '';
+  lastChap = -1;
+}
+
+function renderPlayer() {
+  var b = CUR.booking, rp = CUR.replay, v = CUR.video || {}, h = '';
+  var sub = [dateFr(b.date) + (b.time ? ' · ' + b.time : '')];
+  if (b.closer) sub.push('avec ' + b.closer);
+  if (b.typeLabel) sub.push(b.typeLabel);
+  if (rp.durationSec) sub.push(durLabel(rp.durationSec));
+  if (b.outcome) sub.push(OUTCOMES[b.outcome] || b.outcome);
+
+  h += '<div class="rp-head"><div class="rc-av">' + esc((b.clientName || '?').charAt(0).toUpperCase()) + '</div>'
+    + '<div style="min-width:0"><div class="rp-title">' + esc(b.clientName) + '</div><div class="rp-sub">' + esc(sub.join(' · ')) + '</div></div>'
+    + '<div class="rp-acts">'
+    + (b.leadId ? '<a class="bb bb-o bb-s" href="sales-contact.html?id=' + encodeURIComponent(b.leadId) + '" target="_blank" rel="noopener">👤 Fiche prospect</a>' : '')
+    + (v.driveUrl ? '<a class="bb bb-o bb-s" href="' + escAttr(v.driveUrl) + '" target="_blank" rel="noopener">↗ Ouvrir dans Drive</a>' : '')
+    + '<button class="bb bb-o bb-s" data-action="import">' + (rp.status === 'ready' ? '↻ Réimporter' : '⬇ Importer maintenant') + '</button>'
+    + '</div></div>';
+
+  h += '<div class="rp-grid"><div class="rp-left">';
+  h += '<div><div class="rp-video" id="rpVideoBox">' + videoHtml() + '</div>'
+    + '<div class="rp-vbar"><span id="rpModeNote"></span><span class="sp"></span>'
+    + (v.fileId && v.streamUrl ? '<button class="bb bb-o bb-s" data-action="mode" id="btnMode"></button>' : '')
+    + '</div></div>';
+  if (rp.summary) h += '<div class="card"><h2>Résumé de l\'appel</h2><div class="rp-summary">' + esc(rp.summary) + '</div></div>';
+
+  h += '<div class="card"><h2>Transcription <span class="sp"></span><span class="rc-count" id="trCount"></span></h2>';
+  if (rp.status === 'ready' && (CUR.entries || []).length) {
+    h += '<div class="tr-tools"><input class="bi" id="trQ" type="search" placeholder="Chercher dans l\'appel…"/>'
+      + '<label><input type="checkbox" id="trFollow"' + (FOLLOW ? ' checked' : '') + '/> Suivre la lecture</label></div>'
+      + '<div class="tr-list" id="trList"></div>';
+  } else {
+    h += '<div class="rp-note">' + esc(REASONS[rp.reason] || 'Cet appel n\'a pas encore été importé.')
+      + (rp.status === 'pending' ? ' Google met parfois quelques heures à publier la transcription : l\'import nocturne réessaiera.' : '')
+      + '</div>';
+  }
+  h += '</div></div>';
+
+  h += '<div class="rp-side"><div class="card"><h2>Sujets <span class="sp"></span>'
+    + '<span id="chBtns">'
+    + (rp.status === 'ready' ? '<button class="bb bb-o bb-s" data-action="regen">✨ Régénérer (IA)</button> ' : '')
+    + (rp.status === 'ready' || v.fileId ? '<button class="bb bb-o bb-s" data-action="chEdit">✏️ Modifier</button>' : '')
+    + '</span></h2><div id="chBox"></div></div></div>';
+  h += '</div>';
+
+  $('viewPlayer').innerHTML = h;
+  renderChapters();
+  if ($('trList')) $('trList').innerHTML = transcriptRows();
+  wireVideo();
+}
+
+function wireVideo() {
+  var v = $('rpVideo'), note = $('rpModeNote'), btn = $('btnMode');
+  if (btn) btn.textContent = MODE === 'native' ? 'Passer au lecteur Drive' : 'Revenir au lecteur rapide';
+  if (note) {
+    note.textContent = !CUR.video.fileId ? ''
+      : (MODE === 'native' ? 'Lecture directe depuis le Drive — rien n\'est copié.'
+        : 'Lecteur Drive : il faut être connecté à un compte Google qui a accès au fichier. Un clic sur un sujet recharge la vidéo à cet instant.');
+  }
+  if (!v) return;
+  v.addEventListener('timeupdate', onTime);
+  v.addEventListener('error', function () {
+    // Flux indisponible (fichier déplacé, droits retirés…) : repli sur le
+    // lecteur Drive intégré plutôt qu'un écran noir.
+    if (MODE !== 'native') return;
+    MODE = 'drive';
+    $('rpVideoBox').innerHTML = videoHtml();
+    wireVideo();
+    toast('Lecture directe impossible — bascule sur le lecteur Drive', true);
+  });
+}
+
+function currentTime() {
+  var v = $('rpVideo');
+  return v ? (v.currentTime || 0) : 0;
+}
+
+function seek(t) {
+  t = Math.max(0, Number(t) || 0);
+  var v = $('rpVideo'), f = $('rpFrame');
+  if (v) {
+    v.currentTime = t;
+    var p = v.play();
+    if (p && p.catch) p.catch(function () {});
+  } else if (f && CUR.video.fileId) {
+    f.src = 'https://drive.google.com/file/d/' + encodeURIComponent(CUR.video.fileId) + '/preview?t=' + Math.floor(t) + '&autoplay=1';
+    markActive(t);
+  }
+}
+
+// Dernier index dont le temps de début est ≤ t (listes triées).
+function indexAt(list, key, t) {
+  var lo = 0, hi = list.length - 1, r = -1, mid;
+  while (lo <= hi) {
+    mid = (lo + hi) >> 1;
+    if (list[mid][key] <= t) { r = mid; lo = mid + 1; } else { hi = mid - 1; }
+  }
+  return r;
+}
+
+function markActive(t) {
+  var ci = indexAt(CUR.replay.chapters || [], 't', t), box, el, prev;
+  if (ci !== lastChap && !EDIT) {
+    box = $('chList');
+    if (box) {
+      prev = box.querySelector('.ch.on'); if (prev) prev.classList.remove('on');
+      el = box.querySelector('[data-ch="' + ci + '"]'); if (el) el.classList.add('on');
+    }
+    lastChap = ci;
+  }
+  var li = indexAt(CUR.entries || [], 's', t + 0.3);
+  if (li !== lastLine) {
+    box = $('trList');
+    if (box) {
+      prev = box.querySelector('.tr.on'); if (prev) prev.classList.remove('on');
+      el = box.querySelector('[data-ln="' + li + '"]');
+      if (el) {
+        el.classList.add('on');
+        if (FOLLOW) box.scrollTop = el.offsetTop - box.offsetTop - box.clientHeight / 3;
+      }
+    }
+    lastLine = li;
+  }
+}
+function onTime() { if (CUR) markActive(currentTime()); }
+
+/* ═══ Chapitres : édition ═══ */
+function readEdit() {
+  var rows = $('chBox').querySelectorAll('.che'), i, r, out = [];
+  for (i = 0; i < rows.length; i++) {
+    r = rows[i];
+    out.push({
+      t: r.querySelector('[data-f="t"]').value,
+      title: r.querySelector('[data-f="title"]').value,
+      summary: r.querySelector('[data-f="summary"]').value
+    });
+  }
+  return out;
+}
+function editToChapters(strict) {
+  var raw = readEdit(), out = [], i, t;
+  for (i = 0; i < raw.length; i++) {
+    t = parseClock(raw[i].t);
+    if (isNaN(t)) {
+      if (strict) { toast('Horodatage invalide : « ' + raw[i].t + ' » (attendu mm:ss ou h:mm:ss)', true); return null; }
+      t = 0;
+    }
+    if (strict && !raw[i].title.trim()) { toast('Un chapitre n\'a pas de titre', true); return null; }
+    out.push({ t: t, title: raw[i].title.trim(), summary: raw[i].summary.trim() });
+  }
+  return out;
+}
+
+function busy(btn, on, label) {
+  if (!btn) return;
+  if (on) { btn.setAttribute('data-label', btn.textContent); btn.textContent = label; btn.disabled = true; }
+  else { btn.textContent = btn.getAttribute('data-label') || btn.textContent; btn.disabled = false; }
+}
+
+function doImport(btn) {
+  if (!CUR) return;
+  var id = CUR.booking.id;
+  busy(btn, true, 'Import en cours…');
+  api('POST', {}, { action: 'import', id: id }).then(function (j) {
+    var r = j.result || {};
+    if (r.status === 'ready') toast('✓ ' + (r.kept ? 'Replay déjà à jour' : (r.entries || 0) + ' segments importés' + (r.chapters ? ', ' + r.chapters + ' chapitres' : '')));
+    else toast(REASONS[r.reason] || 'Rien à importer pour l\'instant', true);
+    return openReplay(id, false);
+  }).catch(function (e) { busy(btn, false); toast('Import impossible : ' + e.message, true); });
+}
+
+function doRegen(btn) {
+  if (!CUR) return;
+  if (CUR.replay.chaptersEdited && !confirm('Les chapitres ont été retouchés à la main. Les remplacer par une nouvelle proposition de l\'IA ?')) return;
+  busy(btn, true, 'Analyse de l\'appel…');
+  api('POST', {}, { action: 'regen', id: CUR.booking.id }).then(function (j) {
+    CUR.replay.chapters = j.chapters || [];
+    CUR.replay.summary = j.summary || '';
+    CUR.replay.chaptersEdited = false;
+    CUR.replay.chaptersError = null;
+    var t = currentTime();
+    renderPlayer();
+    if (t > 1 && $('rpVideo')) $('rpVideo').currentTime = t;
+    toast('✓ ' + CUR.replay.chapters.length + ' chapitres générés');
+  }).catch(function (e) { busy(btn, false); toast('Génération impossible : ' + e.message, true); });
+}
+
+function saveChapters(btn) {
+  var list = editToChapters(true);
+  if (!list) return;
+  busy(btn, true, 'Enregistrement…');
+  api('POST', {}, { action: 'chapters', id: CUR.booking.id, chapters: list }).then(function (j) {
+    CUR.replay.chapters = j.chapters || [];
+    CUR.replay.chaptersEdited = true;
+    EDIT = null;
+    renderChapters();
+    markActive(currentTime());
+    toast('✓ Chapitres enregistrés');
+  }).catch(function (e) { busy(btn, false); toast('Enregistrement impossible : ' + e.message, true); });
+}
+
+/* ═══ Événements (délégation) ═══ */
+document.addEventListener('click', function (ev) {
+  var el = ev.target.closest('[data-action]');
+  if (!el) return;
+  var act = el.getAttribute('data-action');
+  if (act === 'open') { openReplay(el.getAttribute('data-id')); return; }
+  if (act === 'back') { ev.preventDefault(); backToList(); loadList(); return; }
+  if (!CUR) return;
+  if (act === 'seek') { seek(el.getAttribute('data-t')); return; }
+  if (act === 'import') { doImport(el); return; }
+  if (act === 'regen') { doRegen(el); return; }
+  if (act === 'mode') {
+    var t = currentTime();
+    MODE = MODE === 'native' ? 'drive' : 'native';
+    $('rpVideoBox').innerHTML = videoHtml();
+    wireVideo();
+    if (t > 1) seek(t);
+    return;
+  }
+  if (act === 'chEdit') {
+    EDIT = (CUR.replay.chapters || []).map(function (c) { return { t: c.t, title: c.title, summary: c.summary || '' }; });
+    renderChapters();
+    return;
+  }
+  if (act === 'chCancel') { EDIT = null; renderChapters(); markActive(currentTime()); return; }
+  if (act === 'chAdd') {
+    EDIT = editToChapters(false) || [];
+    EDIT.push({ t: Math.floor(currentTime()), title: '', summary: '' });
+    EDIT.sort(function (a, b) { return a.t - b.t; });
+    renderChapters();
+    return;
+  }
+  if (act === 'chDel') {
+    EDIT = editToChapters(false) || [];
+    EDIT.splice(parseInt(el.getAttribute('data-i'), 10), 1);
+    renderChapters();
+    return;
+  }
+  if (act === 'chSave') { saveChapters(el); return; }
+});
+document.addEventListener('input', function (ev) {
+  var id = ev.target.id;
+  if (id === 'fQ') renderList();
+  else if (id === 'trQ') { $('trList').innerHTML = transcriptRows(); lastLine = -1; }
+});
+document.addEventListener('change', function (ev) {
+  var id = ev.target.id;
+  if (id === 'fStatus') renderList();
+  else if (id === 'fDays') loadList();
+  else if (id === 'trFollow') FOLLOW = ev.target.checked;
+});
+window.addEventListener('popstate', function () {
+  var id = new URLSearchParams(window.location.search).get('id');
+  if (id) openReplay(id, false); else { backToList(false); }
+});
+
+/* ═══ BOOT ═══ */
+firebase.auth().onAuthStateChanged(function (u) {
+  if (!u) return;
+  var role = localStorage.getItem('ambitio_role') || 'coach';
+  if (role !== 'admin') { $('lockedView').style.display = ''; return; }
+  $('mainView').style.display = '';
+  var id = new URLSearchParams(window.location.search).get('id');
+  loadList();
+  if (id) openReplay(id, false);
+});
+})();
+</script>
+<script src="nav.js"></script>
+</body>
+</html>

@@ -57,6 +57,9 @@ var GMAIL_SCOPES='openid email https://www.googleapis.com/auth/gmail.send https:
 // fonctionner, mais les vidéos de plus de 100 Mo devront être partagées à la
 // main (« Tous ceux qui ont le lien ») pour s'afficher sur le mur.
 var DRIVE_SCOPES='openid email https://www.googleapis.com/auth/drive';
+// Replay closing : lecture seule des réunions Meet (segments de transcription
+// horodatés) et des fichiers Drive (l'enregistrement vidéo). Aucune écriture.
+var MEET_SCOPES='openid email https://www.googleapis.com/auth/meetings.space.readonly https://www.googleapis.com/auth/drive.readonly';
 
 var ACCOUNTS=[
   {key:'strategie',label:'Stratégie',email:'strategie@adrienemily.com',icon:'📊',cls:'strategie',scopes:GMAIL_SCOPES},
@@ -66,7 +69,11 @@ var ACCOUNTS=[
   // Formations internes : parcours du Drive depuis formations-admin.html
   // (import de dossiers en modules / leçons) et partage en lecture des
   // vidéos importées — même scope Drive complet que le mur.
-  {key:'drive_formations',label:'Drive Formations',email:'Accès au Drive des formations internes (Setting / Closing / Coach LAB)',icon:'🎓',cls:'temo',scopes:DRIVE_SCOPES}
+  {key:'drive_formations',label:'Drive Formations',email:'Accès au Drive des formations internes (Setting / Closing / Coach LAB)',icon:'🎓',cls:'temo',scopes:DRIVE_SCOPES},
+  // Replay closing : à connecter avec le compte qui HÉBERGE les Meet de
+  // closing (strategie@). Entrée distincte de « Stratégie » pour ne pas
+  // toucher au token Gmail qui envoie les mails.
+  {key:'meet_closing',label:'Meet Closing',email:'Transcriptions et enregistrements des appels de closing — à connecter avec strategie@adrienemily.com',icon:'🎬',cls:'temo',scopes:MEET_SCOPES}
 ];
 
 function scopesFor(key){
