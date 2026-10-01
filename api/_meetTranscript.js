@@ -137,15 +137,16 @@ function bookingEndMs(b) {
 }
 
 // ─── Périmètre : RDV de CLOSING uniquement ───────────────────────────────
-// Miroir de bkScope() + bkScopeBadge() de booking-admin.html : hors coaching /
-// clients, et « SB » (pas un RDV de setting).
+// Miroir de bkScope() de booking-admin.html : tout RDV du périmètre
+// Setting & Sales, c'est-à-dire hors coaching / clients. Un RDV posé par un
+// setter (source 'setter_booking', type isSetterOnly « … (Élodie) ») EST un
+// appel de closing : le setter le réserve, la closeuse le tient en visio.
+// Le setting lui-même se fait au téléphone, il n'a pas de RDV Meet.
 function isClosingBooking(b, typeMap) {
   const t = (b.type && typeMap && typeMap[b.type]) || null;
   if (b.isCoaching === true) return false;
   if (b.source === 'csm_manual' || b.skipLeadCreation === true || b.clientId) return false;
   if (t && t.isCoaching === true) return false;
-  if (b.source === 'setter_booking') return false;
-  if (!b.source && t && t.isSetterOnly === true) return false;
   return true;
 }
 
@@ -175,8 +176,26 @@ function driveFileIdFromUrl(url) {
 
 // ─── API Meet v2 (REST direct : absente du paquet googleapis installé) ───
 async function meetGet(auth, path, params) {
-  const r = await auth.request({ url: MEET_API + path, params: params || {} });
-  return r.data || {};
+  try {
+    const r = await auth.request({ url: MEET_API + path, params: params || {} });
+    return r.data || {};
+  } catch (e) {
+    const status = e && (e.code || (e.response && e.response.status));
+    const msg = String((e && e.message) || '');
+    // API jamais activée sur le projet Google Cloud du client OAuth : erreur
+    // de configuration, pas un « appel introuvable » — on la remonte telle
+    // quelle pour ne PAS marquer les RDV comme traités.
+    if (Number(status) === 403 && /has not been used|is disabled|SERVICE_DISABLED/i.test(msg)) {
+      const m = /project[= ](\d+)/.exec(msg);
+      const err = new Error('L\'API Google Meet n\'est pas activée sur le projet Google Cloud' +
+        (m ? ' ' + m[1] : '') + '. Active « Google Meet REST API » dans la console Google Cloud, attends 2-3 minutes, puis relance.');
+      err.statusCode = 503;
+      err.code = 'meet_api_disabled';
+      if (m) err.enableUrl = 'https://console.developers.google.com/apis/api/meet.googleapis.com/overview?project=' + m[1];
+      throw err;
+    }
+    throw e;
+  }
 }
 async function meetListAll(auth, path, field, params) {
   const out = [];
@@ -207,6 +226,36 @@ async function findConferenceRecord(auth, code, startMs) {
   });
   if (!best || bestGap > MATCH_WINDOW_MS) return null;
   return best;
+}
+
+// Repli vidéo : l'enregistrement retrouvé dans le Drive du compte hôte par sa
+// date de création, quand l'API Meet ne connaît plus la réunion (plus de
+// 30 jours). Meet nomme le fichier « <titre de l'événement> - <date> -
+// Recording » ; le titre contient le nom du prospect.
+async function findDriveRecording(drive, b) {
+  const start = bookingStartMs(b), end = bookingEndMs(b);
+  if (!start) return null;
+  const q = "mimeType contains 'video/' and trashed = false" +
+    " and createdTime > '" + new Date(start - 3600000).toISOString() + "'" +
+    " and createdTime < '" + new Date(end + 4 * 3600000).toISOString() + "'";
+  const r = await drive.files.list({
+    q: q, pageSize: 20, fields: 'files(id,name,createdTime)',
+    supportsAllDrives: true, includeItemsFromAllDrives: true,
+  });
+  const files = (r.data && r.data.files) || [];
+  if (!files.length) return null;
+  const norm = function (x) { return String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); };
+  const pr = b.prospect || {};
+  const keys = [norm(pr.prenom), norm(pr.nom)].filter(function (k) { return k.length >= 3; });
+  const named = files.filter(function (f) {
+    const n = norm(f.name);
+    return keys.some(function (k) { return n.indexOf(k) >= 0; });
+  });
+  // Sans nom reconnu, on n'accepte le fichier que s'il est seul sur le créneau.
+  const pool = named.length ? named : (files.length === 1 ? files : []);
+  if (!pool.length) return null;
+  pool.sort(function (x, y) { return Math.abs(Date.parse(x.createdTime) - end) - Math.abs(Date.parse(y.createdTime) - end); });
+  return pool[0].id;
 }
 
 function participantLabel(p) {
@@ -453,6 +502,11 @@ async function importBooking(bookingId, b, opts) {
         participants = await meetListAll(g.auth, record.name + '/participants', 'participants');
       }
     }
+  }
+
+  if (!fileId) {
+    try { fileId = await findDriveRecording(g.drive, b); }
+    catch (e) { console.warn('[replay] recherche Drive', bookingId, e.message); }
   }
 
   // 2. Métadonnées vidéo (taille / type pour le flux, durée pour les bornes)

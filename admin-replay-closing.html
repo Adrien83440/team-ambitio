@@ -137,6 +137,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
         <option value="120">4 derniers mois</option>
         <option value="365">12 derniers mois</option>
       </select>
+      <button class="bb bb-p" id="btnSync" data-action="syncAll">⟳ Tout synchroniser</button>
       <span class="rc-count" id="rcCount"></span>
     </div>
     <div class="rc-list" id="rcList"></div>
@@ -159,6 +160,7 @@ var MODE = 'native';     // 'native' (flux, saut instantané) | 'drive' (lecteur
 var EDIT = null;         // copie de travail des chapitres en cours d'édition
 var FOLLOW = true;       // la transcription suit la lecture
 var lastLine = -1, lastChap = -1;
+var CFG_ERR = null;      // dernière erreur de configuration remontée par le serveur
 
 var OUTCOMES = {
   close: '🏆 Close', non_close: '❌ Non close', offre: '💬 Offre', disqualifie: '🚫 Disqua',
@@ -223,7 +225,11 @@ function api(method, params, body) {
     return fetch(API + (qs.length ? '?' + qs.join('&') : ''), opt);
   }).then(function (r) {
     return r.json().catch(function () { return {}; }).then(function (j) {
-      if (!r.ok || j.ok === false) throw new Error(j.error || ('Erreur ' + r.status));
+      if (!r.ok || j.ok === false) {
+        var err = new Error(j.error || ('Erreur ' + r.status));
+        err.data = j;
+        throw err;
+      }
       return j;
     });
   });
@@ -281,6 +287,9 @@ function loadList() {
       msgs.push('Le compte Google qui héberge les Meet de closing n\'est pas connecté : aucune transcription ne peut être importée. '
         + '<a href="admin-email-auth.html">Connecter « Meet Closing »</a> avec strategie@adrienemily.com.');
     }
+    if (CFG_ERR) {
+      msgs.push(esc(CFG_ERR.message) + (CFG_ERR.data.enableUrl ? ' <a href="' + escAttr(CFG_ERR.data.enableUrl) + '" target="_blank" rel="noopener">Ouvrir la console Google Cloud</a>' : ''));
+    }
     if (j.aiReady === false) msgs.push('Clé IA absente côté serveur : les chapitres ne seront pas générés.');
     if (j.truncated) msgs.push('Période trop large : la liste est tronquée. Réduis la fenêtre.');
     b.innerHTML = msgs.join('<br/>');
@@ -289,6 +298,49 @@ function loadList() {
   }).catch(function (e) {
     $('rcList').innerHTML = '<div class="rc-empty">Chargement impossible : ' + esc(e.message) + '</div>';
   });
+}
+
+/* ═══ SYNCHRONISATION ═══
+   Importe tous les appels de la période pas encore traités, par lots de 3
+   (chaque appel = lecture Meet + découpage IA, ~1 min). La page rappelle le
+   serveur tant qu'il en reste. */
+var SYNCING = false;
+function syncAll() {
+  if (SYNCING) return;
+  SYNCING = true;
+  var btn = $('btnSync'), done = [], stats = { ready: 0, video: 0, wait: 0, none: 0, errors: 0 };
+  btn.disabled = true;
+  CFG_ERR = null;
+  function finish(msg, isErr) {
+    SYNCING = false;
+    btn.disabled = false;
+    btn.textContent = '⟳ Tout synchroniser';
+    toast(msg, isErr);
+    loadList();
+  }
+  function step() {
+    btn.textContent = done.length ? 'Synchronisation… ' + done.length + ' traité' + (done.length > 1 ? 's' : '') : 'Synchronisation…';
+    api('POST', {}, { action: 'sync', days: $('fDays').value, max: 3, skip: done }).then(function (j) {
+      (j.items || []).forEach(function (it) { done.push(it.id); });
+      (j.errors || []).forEach(function (er) { if (done.indexOf(er.id) < 0) done.push(er.id); });
+      stats.ready += j.ready || 0; stats.video += j.videoOnly || 0; stats.wait += j.pending || 0;
+      stats.none += j.none || 0; stats.errors += (j.errors || []).length;
+      if (j.processed > 0 && j.remaining > 0) { step(); return; }
+      if (!done.length) { finish('Tout est déjà à jour'); return; }
+      var parts = [stats.ready + ' chapitré' + (stats.ready > 1 ? 's' : '')];
+      if (stats.video) parts.push(stats.video + ' vidéo seule');
+      if (stats.wait) parts.push(stats.wait + ' en attente de Google');
+      if (stats.none) parts.push(stats.none + ' sans enregistrement');
+      if (stats.errors) parts.push(stats.errors + ' en erreur');
+      finish('✓ Synchronisation terminée : ' + parts.join(', '), stats.errors > 0 && !stats.ready);
+    }).catch(function (e) {
+      // Erreur de configuration (API Google non activée…) : elle reste
+      // affichée en bandeau, avec le lien pour la corriger.
+      CFG_ERR = e.data && e.data.code ? e : null;
+      finish('Synchronisation interrompue : ' + e.message, true);
+    });
+  }
+  step();
 }
 
 /* ═══ LECTEUR ═══ */
@@ -562,6 +614,7 @@ function doImport(btn) {
   }).catch(function (e) { busy(btn, false); toast('Import impossible : ' + e.message, true); });
 }
 
+
 function doRegen(btn) {
   if (!CUR) return;
   if (CUR.replay.chaptersEdited && !confirm('Les chapitres ont été retouchés à la main. Les remplacer par une nouvelle proposition de l\'IA ?')) return;
@@ -599,6 +652,7 @@ document.addEventListener('click', function (ev) {
   var act = el.getAttribute('data-action');
   if (act === 'open') { openReplay(el.getAttribute('data-id')); return; }
   if (act === 'back') { ev.preventDefault(); backToList(); loadList(); return; }
+  if (act === 'syncAll') { syncAll(); return; }
   if (!CUR) return;
   if (act === 'seek') { seek(el.getAttribute('data-t')); return; }
   if (act === 'import') { doImport(el); return; }

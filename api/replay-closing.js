@@ -17,6 +17,9 @@
 //   POST { action:'import', id }             importe / réimporte un appel
 //   POST { action:'chapters', id, chapters } enregistre les chapitres édités
 //   POST { action:'regen', id }              régénère les chapitres par l'IA
+//   POST { action:'sync', days, max }        importe les appels pas encore
+//                                            traités (bouton « Tout synchroniser »,
+//                                            la page rappelle tant qu'il en reste)
 //
 // ─── CRON (CRON_SECRET) ───────────────────────────────────────────────────
 //   GET  (sans action, ou action=sync)   importe les appels pas encore traités
@@ -230,10 +233,13 @@ async function actionRegen(req, res, body) {
 }
 
 // ─── Cron : import des appels pas encore traités ─────────────────────────
-async function actionSync(req, res) {
-  const q = req.query || {};
-  const days = Math.min(Math.max(parseInt(q.days, 10) || 7, 1), 30);
-  const dry = q.dry === '1' || q.dry === 'true';
+// `q` = query string (cron) ou corps JSON (bouton de la page). La page peut
+// remonter plus loin que 30 jours : au-delà, Google n'a plus les segments et
+// l'appel ressort en « vidéo seule » (retrouvée dans le Drive) ou « rien ».
+async function actionSync(req, res, q, maxDays) {
+  q = q || {};
+  const days = Math.min(Math.max(parseInt(q.days, 10) || 7, 1), maxDays || 30);
+  const dry = q.dry === '1' || q.dry === 'true' || q.dry === true;
   const max = Math.min(Math.max(parseInt(q.max, 10) || 6, 1), 25);
   const started = Date.now();
 
@@ -244,8 +250,15 @@ async function actionSync(req, res) {
     ready: 0, videoOnly: 0, pending: 0, none: 0, remaining: 0, errors: [], items: [],
   };
 
+  // Appels déjà tentés pendant cette synchronisation (envoyés par la page) :
+  // un appel « en attente de Google » reste éligible, il ne doit pas
+  // repasser en boucle.
+  const skip = {};
+  (Array.isArray(q.skip) ? q.skip : []).forEach(function (id) { skip[String(id)] = true; });
+
   const todo = r.list.filter(function (x) {
     const b = x.b;
+    if (skip[x.id]) return false;
     const st = b.status || 'confirmed';
     if (st !== 'confirmed' && st !== 'completed') return false;
     const rp = b.replay || {};
@@ -281,6 +294,12 @@ async function actionSync(req, res) {
       if (x.chaptersError) out.errors.push({ id: item.id, error: 'chapitres: ' + x.chaptersError });
     } catch (e) {
       console.error('[replay-sync]', item.id, e.message);
+      // Erreur de configuration : inutile d'insister sur les appels suivants.
+      if (e.code === 'meet_api_disabled') {
+        out.ok = false; out.error = e.message; out.code = e.code; out.enableUrl = e.enableUrl || null;
+        out.processed--;
+        break;
+      }
       out.errors.push({ id: item.id, error: e.message });
     }
   }
@@ -304,7 +323,7 @@ module.exports = async (req, res) => {
   try {
     if (isCron) {
       if (action && action !== 'sync') { res.status(400).json({ ok: false, error: 'cron_sync_only' }); return; }
-      await actionSync(req, res);
+      await actionSync(req, res, req.query);
       return;
     }
 
@@ -316,10 +335,11 @@ module.exports = async (req, res) => {
     if (req.method === 'POST' && action === 'import') { await actionImport(req, res, body); return; }
     if (req.method === 'POST' && action === 'chapters') { await actionChapters(req, res, body, auth); return; }
     if (req.method === 'POST' && action === 'regen') { await actionRegen(req, res, body); return; }
+    if (req.method === 'POST' && action === 'sync') { await actionSync(req, res, body, 365); return; }
     res.status(400).json({ ok: false, error: 'unknown_action' });
   } catch (e) {
     console.error('[replay-closing]', action, e);
-    res.status(e.statusCode || 500).json({ ok: false, error: e.message || String(e), code: e.code || null });
+    res.status(e.statusCode || 500).json({ ok: false, error: e.message || String(e), code: e.code || null, enableUrl: e.enableUrl || null });
   }
 };
 
