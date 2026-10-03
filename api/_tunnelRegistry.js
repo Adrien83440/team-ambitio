@@ -84,6 +84,7 @@ function normalizeTunnel(id, d) {
       v.id = cleanSlug(v.id, 20) || 'a';
       v.status = v.status === 'live' ? 'live' : 'draft';
       v.weight = Math.max(0, Number(v.weight) || 0);
+      v.archived = v.archived === true;   // test A/B terminé : jamais servie, stats conservées
     });
   });
   return t;
@@ -242,7 +243,7 @@ function nextUrlOf(tunnel, step) {
 }
 
 module.exports = {
-  cleanSlug, cleanPath, pageKey, isTunnelPageKey, pageLabel, stepPath,
+  cleanSlug, cleanPath, pageKey, isTunnelPageKey, pageLabel, stepPath, normalizeTunnel,
   getTunnels, invalidate, findByPath, findByPage, findByIds, isKnownPage, nextUrlOf,
   getConfig, findRedirect
 };

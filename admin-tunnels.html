@@ -91,6 +91,28 @@ textarea.bi{min-height:120px;resize:vertical;font-family:var(--font-m);font-size
 .var-file.ok{color:#34d399}
 .var-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center}
 .var-acts input[type=file]{display:none}
+.var.arch{opacity:.6}
+.var-stats{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;font-size:11.5px;color:rgba(255,255,255,.6)}
+.var-stats b{color:#fff;font-family:var(--font-m);font-weight:600}
+.var-stats .vs-rate{color:#67e8f9}
+.var-stats .vs-win{color:#34d399;font-weight:700}.var-stats .vs-lose{color:#fca5a5;font-weight:700}
+.arch-list summary{cursor:pointer;font-size:12px;color:rgba(255,255,255,.5);padding:6px 0;list-style:none}
+.arch-list summary::-webkit-details-marker{display:none}
+/* Éditeur de code (plein écran, aperçu rendu par le serveur) */
+.code-modal{position:fixed;inset:0;background:#0a0a14;z-index:1600;display:none;flex-direction:column}   /* au-dessus de la cloche Infos (1300) et de sa modale (1400), sous le toast (2000) */
+.code-modal.open{display:flex}
+.code-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.1);flex-wrap:wrap;background:#0f0f1a}
+.code-bar .ttl{font-weight:700;font-size:13px;margin-right:6px}
+.code-bar .ttl small{font-family:var(--font-m);font-weight:400;color:rgba(255,255,255,.45);font-size:11px;margin-left:6px}
+.code-bar .st{font-size:11.5px;color:rgba(255,255,255,.45);margin-left:auto}
+.code-bar .st.dirty{color:#fbbf24}
+.code-bar .bb.on{border-color:#22d3ee;color:#22d3ee}
+.code-body{flex:1;display:flex;min-height:0}
+.code-ta{flex:0 0 46%;min-width:280px;border:0;border-right:1px solid rgba(255,255,255,.1);background:#0b0b16;color:#e5e7eb;font-family:var(--font-m);font-size:12px;line-height:1.5;padding:12px 14px;resize:none;outline:0;white-space:pre;overflow:auto;tab-size:2;box-sizing:border-box}
+.code-prev{flex:1;display:flex;justify-content:center;background:#1a1a26;overflow:auto;min-width:0}
+.code-prev iframe{border:0;width:100%;height:100%;background:#fff;flex:none}
+.code-prev.mobile iframe{width:390px;margin:12px auto;height:calc(100% - 24px);border-radius:18px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+@media (max-width:900px){.code-body{flex-direction:column}.code-ta{flex:0 0 45%;min-width:0;border-right:0;border-bottom:1px solid rgba(255,255,255,.1)}}
 /* Modale */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;display:none;align-items:flex-start;justify-content:center;padding:30px 16px;overflow-y:auto}
 .modal.open{display:flex}
@@ -152,6 +174,24 @@ pre.guide{background:var(--bg3,#14141f);border:1px solid var(--border);border-ra
   <div class="modal-foot"><button class="bb bb-o" data-action="pasteCancel">Annuler</button><button class="bb bb-p" data-action="pasteSave">Enregistrer cette version</button></div>
 </div></div>
 
+<div class="code-modal" id="codeModal">
+  <div class="code-bar">
+    <div class="ttl" id="codeTitle"></div>
+    <button class="bb bb-o bb-s on" data-action="codeView" data-view="desktop" id="codeViewDesktop">🖥 Desktop</button>
+    <button class="bb bb-o bb-s" data-action="codeView" data-view="mobile" id="codeViewMobile">📱 Mobile</button>
+    <label class="chk" style="font-size:12px"><input type="checkbox" id="codeAuto" checked/> Aperçu automatique</label>
+    <button class="bb bb-o bb-s" data-action="codeRefresh">↻ Actualiser</button>
+    <button class="bb bb-o bb-s" data-action="codeDownload">⬇ Télécharger</button>
+    <span class="st" id="codeStatus"></span>
+    <button class="bb bb-p bb-s" data-action="codePublish">Publier</button>
+    <button class="bb bb-o bb-s" data-action="codeClose">Fermer</button>
+  </div>
+  <div class="code-body">
+    <textarea class="code-ta" id="codeTa" spellcheck="false" autocomplete="off" autocapitalize="off" wrap="off"></textarea>
+    <div class="code-prev" id="codePrev"><iframe id="codeFrame" title="Aperçu de la page"></iframe></div>
+  </div>
+</div>
+
 <div class="tn-toast" id="tnToast"></div>
 
 <script>
@@ -176,6 +216,8 @@ var STATS = null;            // dernier calcul de stats
 var PERIOD = { mode: '7', start: null, end: null };
 var _pasteCtx = null;        // { stepId, variantId } pour la modale « coller »
 var _saveTimer = null;
+var _statsCache = {};        // clé tunnel|début|fin → Promise des stats (onglet Stats + modale étape)
+var _code = null;            // éditeur de code ouvert : { stepId, variantId, html0, dirty, timer, seq, fileName }
 
 var LEAD_TYPES = [
   { id: 'vsl_elite', label: 'VSL Élite' },
@@ -244,6 +286,42 @@ function abSignif(vRef, oRef, vChal, oChal) {
 }
 
 /* ═══ CHARGEMENT ═══ */
+/* Appels aux endpoints admin (api/tunnel-source, api/tunnel-preview) : jeton
+   Firebase en Bearer, erreur lisible (message JSON du serveur sinon statut). */
+function apiFetch(url, opts) {
+  var u = firebase.auth().currentUser;
+  if (!u) return Promise.reject(new Error('Session expirée : recharge la page'));
+  return u.getIdToken().then(function (tok) {
+    var o = opts || {}; o.headers = o.headers || {};
+    o.headers['Authorization'] = 'Bearer ' + tok;
+    return fetch(url, o);
+  }).then(function (r) {
+    if (r.ok) return r;
+    return r.text().then(function (txt) {
+      var msg = 'HTTP ' + r.status;
+      try { var j = JSON.parse(txt); if (j && j.error) msg = j.error; } catch (e) {}
+      throw new Error(msg);
+    });
+  });
+}
+function fetchSource(stepId, variantId) {
+  return apiFetch('/api/tunnel-source?t=' + encodeURIComponent(CUR.id) + '&s=' + encodeURIComponent(stepId) + '&v=' + encodeURIComponent(variantId))
+    .then(function (r) { return r.text(); });
+}
+function saveTextFile(text, name) {
+  var blob = new Blob([text], { type: 'text/html;charset=utf-8' });
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+}
+function variantFileName(s, v) { return slugify(CUR.slug) + '-' + slugify(s.slug || s.name) + '-' + v.id + '.html'; }
+function downloadVariant(stepId, variantId) {
+  var s = findStep(stepId); if (!s) return;
+  var v = (s.variants || []).filter(function (x) { return x.id === variantId; })[0]; if (!v) return;
+  toast('Téléchargement…');
+  fetchSource(stepId, variantId).then(function (html) { saveTextFile(html, variantFileName(s, v)); toast('Fichier téléchargé'); })
+    .catch(function (e) { toast('Téléchargement impossible : ' + e.message, true); });
+}
 function loadConfig() {
   return db.collection('_config').doc('tunnels').get().then(function (doc) {
     if (doc.exists) {
@@ -414,7 +492,7 @@ function openTunnel(id) {
   if (!t) return;
   CUR = JSON.parse(JSON.stringify(t));
   CUR.assets = CUR.assets || [];
-  TAB = 'steps'; STATS = null;
+  TAB = 'steps'; STATS = null; _statsCache = {};
   try { history.replaceState(null, '', 'admin-tunnels.html?id=' + encodeURIComponent(id)); } catch (e) {}
   renderEditor();
 }
@@ -456,7 +534,7 @@ function renderEditor() {
 
 /* ─── Étapes ─── */
 function variantSummary(s) {
-  var vs = s.variants || [];
+  var vs = (s.variants || []).filter(function (v) { return v.archived !== true; });
   if (!vs.length) return '<span style="color:#fbbf24">Aucune variante</span>';
   var total = vs.reduce(function (a, v) { return a + (Number(v.weight) || 0); }, 0);
   return vs.map(function (v) {
@@ -562,7 +640,9 @@ function openStep(id) {
     + '<div id="stPixelCustomWrap" style="' + (_peCustom ? '' : 'display:none') + '"><span class="lbl">Nom de l\'événement personnalisé</span><input class="bi" id="stPixelCustom" value="' + escAttr(_peCustom ? _pe : '') + '" placeholder="ex : QuizStarted"/></div>'
     + '<div><label class="chk" style="margin-top:22px"><input type="checkbox" id="stNoindex"' + (s.noindex ? ' checked' : '') + '/> noindex sur cette page</label></div></div>'
     + '<span class="lbl" style="margin-top:10px">Code &lt;head&gt; de cette page</span><textarea class="bi" id="stHeadHtml" style="min-height:70px" placeholder="<!-- scripts propres à cette page, ajoutés après ceux du tunnel -->">' + esc(s.headHtml || '') + '</textarea></div>';
-  h += '<div class="sec" style="margin-top:6px"><h2>Variantes A/B</h2><div class="sub">Une variante = une page HTML. Le serveur répartit les visiteurs selon les poids (cookie collant 30 jours). Une variante sans page publiée n\'est jamais servie. Aperçu d\'une variante : <code>/t/' + esc(s.slug) + '?v=a</code>.</div><div id="varList"></div>'
+  h += '<div class="sec" style="margin-top:6px"><h2>Variantes A/B</h2><div class="sub">Une variante = une page HTML. Le serveur répartit les visiteurs selon les poids (cookie collant 30 jours). Une variante sans page publiée n\'est jamais servie. Aperçu d\'une variante : <code>/t/' + esc(s.slug) + '?v=a</code>. Quand une variante a gagné : « Garder celle-ci » lui donne 100 % du trafic et archive les autres (page et stats conservées).</div>'
+    + '<div class="period" id="stepPeriod" style="margin:0 0 10px"><span class="lbl" style="margin:0 6px 0 0">Stats</span>' + stepPeriodButtons() + '<span class="help" id="stepStatsTotal" style="margin:0 0 0 8px"></span></div>'
+    + '<div id="varList"></div>'
     + '<button class="bb bb-o bb-s" data-action="addVariant">+ Variante</button></div>';
   h += '<div class="modal-foot"><button class="bb bb-o" data-action="stepCancel">Fermer</button><button class="bb bb-p" data-action="stepSave">Enregistrer</button></div>';
   $('stepModalBox').innerHTML = h;
@@ -582,10 +662,16 @@ function openStep(id) {
   });
   renderVariants(s);
 }
+function stepPeriodButtons() {
+  return ['7|7 jours', '30|30 jours', 'month|Ce mois', 'prev|Mois dernier'].map(function (x) { var p = x.split('|'); return '<button class="bb ' + (PERIOD.mode === p[0] ? 'bb-p' : 'bb-o') + ' bb-s" data-action="stepPeriod" data-mode="' + p[0] + '">' + p[1] + '</button>'; }).join('');
+}
+function activeVariants(s) { return (s.variants || []).filter(function (v) { return v.archived !== true; }); }
 function renderVariants(s) {
   var t = CUR;
   var h = '';
-  (s.variants || []).forEach(function (v) {
+  var active = activeVariants(s);
+  var published = active.filter(function (v) { return v.html && v.html.path; });
+  active.forEach(function (v) {
     var ok = v.html && v.html.path;
     h += '<div class="var" data-variant="' + escAttr(v.id) + '">'
       + '<div class="var-head"><div class="vid">' + esc(v.id.toUpperCase()) + '</div>'
@@ -593,14 +679,19 @@ function renderVariants(s) {
       + '<label style="font-size:12px;color:rgba(255,255,255,.5)">Poids <input class="bi" type="number" min="0" max="100" data-vfield="weight" value="' + escAttr(v.weight == null ? 100 : v.weight) + '" style="width:70px;display:inline-block"/></label>'
       + '<select class="bs" data-vfield="status" style="width:auto"><option value="live"' + (v.status === 'live' ? ' selected' : '') + '>Publiée</option><option value="draft"' + (v.status !== 'live' ? ' selected' : '') + '>En pause</option></select>'
       + '<div style="flex:1"></div>'
-      + '<button class="bb bb-r bb-s" data-action="delVariant" data-id="' + escAttr(v.id) + '"' + (s.variants.length <= 1 ? ' disabled' : '') + '>Retirer</button></div>'
+      + (ok && published.length > 1 ? '<button class="bb bb-g bb-s" data-action="keepVariant" data-id="' + escAttr(v.id) + '" title="Terminer le test : 100 % du trafic ici, les autres variantes archivées">🏁 Garder celle-ci</button>' : '')
+      + (ok ? '<button class="bb bb-o bb-s" data-action="archiveVariant" data-id="' + escAttr(v.id) + '"' + (active.length <= 1 ? ' disabled' : '') + '>📦 Archiver</button>'
+            : '<button class="bb bb-r bb-s" data-action="delVariant" data-id="' + escAttr(v.id) + '"' + (active.length <= 1 ? ' disabled' : '') + '>Retirer</button>')
+      + '</div>'
       + '<div class="var-file' + (ok ? ' ok' : '') + '">' + (ok ? '✔ ' + fmtSize(v.html.size) + ' · publiée le ' + esc(fmtDateFR(v.html.updatedAt)) + (v.html.fileName ? ' · ' + esc(v.html.fileName) : '') : '∅ Aucune page — dépose un fichier .html ou colle le code') + '</div>'
+      + (ok ? '<div class="var-stats" data-vstats="' + escAttr(v.id) + '">Stats…</div>' : '')
       + '<div class="var-acts">'
       + '<label class="bb bb-p bb-s">📄 Déposer un .html<input type="file" accept=".html,.htm,text/html" data-action="uploadHtml" data-id="' + escAttr(v.id) + '"/></label>'
       + '<button class="bb bb-o bb-s" data-action="pasteOpen" data-id="' + escAttr(v.id) + '">📋 Coller le HTML</button>'
+      + (ok ? '<button class="bb bb-o bb-s" data-action="openCode" data-id="' + escAttr(v.id) + '">✏️ Modifier le code</button>' : '')
       + (ok ? '<a class="bb bb-o bb-s" href="' + escAttr(previewUrl(t, s, v.id)) + '" target="_blank" rel="noopener">👁 Aperçu</a>' : '')
       + (ok ? (v.previews || []).map(function (pv) { return '<a class="bb bb-o bb-s" href="' + escAttr(previewUrl(t, s, v.id) + '&' + pv.query) + '" target="_blank" rel="noopener">👁 ' + esc(pv.label) + '</a>'; }).join('') : '')
-      + (ok ? '<a class="bb bb-o bb-s" href="' + escAttr(v.html.url || '#') + '" target="_blank" rel="noopener" download>⬇ Source</a>' : '')
+      + (ok ? '<button class="bb bb-o bb-s" data-action="dlHtml" data-id="' + escAttr(v.id) + '">⬇ Télécharger le HTML</button>' : '')
       + '</div>'
       /* Écrans d'aperçu : la page lit un paramètre d'URL et affiche directement
          un écran interne (ex. les résultats du quiz sans refaire le parcours). */
@@ -609,7 +700,61 @@ function renderVariants(s) {
       + '<div class="help">Ajoute un lien 👁 par ligne, ouvert sur <code>/t/' + esc(s.slug) + '?v=' + esc(v.id) + '&amp;param=valeur</code>. La page doit gérer ce paramètre elle-même (et seulement en aperçu).</div>'
       + '</div>';
   });
+  /* Variantes archivées : test terminé, jamais servies, page et stats
+     conservées. Toujours consultables en aperçu (?v=<id>), restaurables. */
+  var arch = (s.variants || []).filter(function (v) { return v.archived === true; });
+  if (arch.length) {
+    h += '<details class="arch-list"><summary>📦 ' + arch.length + ' variante' + (arch.length > 1 ? 's' : '') + ' archivée' + (arch.length > 1 ? 's' : '') + ' — afficher</summary>';
+    arch.forEach(function (v) {
+      var ok = v.html && v.html.path;
+      h += '<div class="var arch"><div class="var-head"><div class="vid">' + esc(v.id.toUpperCase()) + '</div><span style="font-size:13px">' + esc(v.label || 'Variante ' + v.id.toUpperCase()) + '</span>'
+        + '<span class="var-file" style="margin:0">archivée le ' + esc(fmtDateFR(v.archivedAt || '')) + (ok ? ' · ' + fmtSize(v.html.size) : ' · aucune page') + '</span><div style="flex:1"></div>'
+        + (ok ? '<a class="bb bb-o bb-s" href="' + escAttr(previewUrl(t, s, v.id)) + '" target="_blank" rel="noopener">👁 Aperçu</a>' : '')
+        + (ok ? '<button class="bb bb-o bb-s" data-action="dlHtml" data-id="' + escAttr(v.id) + '">⬇ HTML</button>' : '')
+        + '<button class="bb bb-o bb-s" data-action="restoreVariant" data-id="' + escAttr(v.id) + '">↩ Restaurer</button>'
+        + '</div><div class="var-stats" data-vstats="' + escAttr(v.id) + '">Stats…</div></div>';
+    });
+    h += '</details>';
+  }
   $('varList').innerHTML = h;
+  fillVariantStats(s);
+}
+/* Stats de la période (PERIOD) pour chaque variante de l'étape : vues,
+   clics, opt-ins, RDV, et verdict A/B entre variantes actives publiées. */
+function fillVariantStats(s) {
+  var t = CUR;
+  fetchStats(t).then(function (S) {
+    if (!$('varList') || currentModalStep() !== s) return;
+    var st = S.steps[s.id] || { views: 0, ctas: 0, optins: 0, bookings: 0, variants: {} };
+    var tot = $('stepStatsTotal');
+    if (tot) tot.textContent = 'Page : ' + fmtNum(st.views) + ' vues · ' + fmtNum(st.ctas) + ' clics · ' + fmtNum(st.optins) + ' opt-ins · ' + fmtNum(st.bookings) + ' RDV';
+    var active = activeVariants(s).filter(function (v) { return v.html && v.html.path; });
+    var ref = active[0] ? (st.variants[active[0].id] || null) : null;
+    var cells = $('varList').querySelectorAll('[data-vstats]');
+    for (var i = 0; i < cells.length; i++) {
+      var vid = cells[i].getAttribute('data-vstats');
+      var c = st.variants[vid] || { id: vid, views: 0, ctas: 0, optins: 0, bookings: 0 };
+      var conv = convOf(s, c);
+      var h = '<span>👁 <b>' + fmtNum(c.views) + '</b> vues</span>'
+        + '<span>🖱 <b>' + fmtNum(c.ctas) + '</b> clics <span class="vs-rate">' + fmtPct(pct(c.ctas, c.views)) + '</span></span>'
+        + '<span>✉️ <b>' + fmtNum(c.optins) + '</b> opt-ins <span class="vs-rate">' + fmtPct(pct(c.optins, c.views)) + '</span></span>'
+        + '<span>📅 <b>' + fmtNum(c.bookings) + '</b> RDV <span class="vs-rate">' + fmtPct(pct(c.bookings, c.views)) + '</span></span>';
+      var isActive = active.some(function (v) { return v.id === vid; });
+      if (isActive && active.length > 1 && ref) {
+        if (ref.id === vid) h += '<span style="color:rgba(255,255,255,.4)">référence A/B</span>';
+        else {
+          var sig = abSignif(ref.views, convOf(s, ref), c.views, conv);
+          h += !sig ? '<span style="color:rgba(255,255,255,.4)">A/B : pas assez de données</span>'
+            : sig.p < 0.05 ? '<span class="' + (sig.z > 0 ? 'vs-win' : 'vs-lose') + '">' + (sig.z > 0 ? '✔ gagnante' : '✘ perdante') + ' (p = ' + sig.p.toFixed(3) + ')</span>'
+            : '<span style="color:rgba(255,255,255,.4)">A/B non significatif (p = ' + sig.p.toFixed(2) + ')</span>';
+        }
+      }
+      cells[i].innerHTML = h;
+    }
+  }).catch(function (e) {
+    var cells = $('varList') ? $('varList').querySelectorAll('[data-vstats]') : [];
+    for (var i = 0; i < cells.length; i++) cells[i].textContent = 'Stats indisponibles : ' + e.message;
+  });
 }
 function readStepForm(s) {
   s.name = $('stName').value.trim() || s.name;
@@ -667,29 +812,73 @@ function addVariant() {
   renderVariants(s);
 }
 function delVariant(id) {
-  var s = currentModalStep(); if (!s || s.variants.length <= 1) return;
+  var s = currentModalStep(); if (!s || activeVariants(s).length <= 1) return;
   readStepForm(s);
-  if (!window.confirm('Retirer la variante ' + id.toUpperCase() + ' ? Ses stats restent dans l\'historique.')) return;
-  s.variants = s.variants.filter(function (v) { return v.id !== id; });
+  var v = s.variants.filter(function (x) { return x.id === id; })[0]; if (!v) return;
+  if (v.html && v.html.path) { archiveVariant(id); return; }   // jamais de suppression d'une page publiée
+  if (!window.confirm('Retirer la variante ' + id.toUpperCase() + ' (jamais publiée) ?')) return;
+  s.variants = s.variants.filter(function (x) { return x.id !== id; });
   renderVariants(s);
+}
+/* Archiver = sortir du test sans rien perdre : plus servie, poids 0, page
+   Storage et stats conservées, consultable en aperçu, restaurable. */
+function archiveVariant(id) {
+  var s = currentModalStep(); if (!s) return;
+  readStepForm(s);
+  var v = s.variants.filter(function (x) { return x.id === id; })[0]; if (!v || v.archived) return;
+  if (activeVariants(s).length <= 1) { toast('Impossible d\'archiver la dernière variante', true); return; }
+  if (!window.confirm('Archiver la variante ' + id.toUpperCase() + ' ? Elle ne sera plus servie ; sa page et ses stats restent.')) return;
+  v.archived = true; v.archivedAt = new Date().toISOString(); v.status = 'draft'; v.weight = 0;
+  saveTunnel(true).then(function () { renderVariants(s); toast('Variante ' + id.toUpperCase() + ' archivée'); }, function () { v.archived = false; renderVariants(s); });
+}
+function restoreVariant(id) {
+  var s = currentModalStep(); if (!s) return;
+  readStepForm(s);
+  var v = s.variants.filter(function (x) { return x.id === id; })[0]; if (!v || !v.archived) return;
+  v.archived = false; v.status = 'draft'; v.weight = 0;
+  saveTunnel(true).then(function () { renderVariants(s); toast('Variante ' + id.toUpperCase() + ' restaurée — en pause, poids 0 : règle-la puis enregistre'); }, function () { v.archived = true; renderVariants(s); });
+}
+/* Fin de test A/B : la gagnante prend 100 % du trafic, les autres variantes
+   actives sont archivées. */
+function keepVariant(id) {
+  var s = currentModalStep(); if (!s) return;
+  readStepForm(s);
+  var win = s.variants.filter(function (x) { return x.id === id && !x.archived; })[0]; if (!win) return;
+  var losers = activeVariants(s).filter(function (x) { return x.id !== id && x.html && x.html.path; });
+  var others = activeVariants(s).filter(function (x) { return x.id !== id; });
+  if (!others.length) return;
+  var names = others.map(function (x) { return x.id.toUpperCase(); }).join(', ');
+  if (!window.confirm('Terminer le test : garder ' + id.toUpperCase() + ' à 100 % du trafic et archiver ' + names + ' ? Les pages et les stats des variantes archivées sont conservées.')) return;
+  var now = new Date().toISOString();
+  var prev = JSON.stringify(s.variants);
+  win.weight = 100; win.status = 'live';
+  others.forEach(function (x) {
+    if (x.html && x.html.path) { x.archived = true; x.archivedAt = now; x.status = 'draft'; x.weight = 0; }
+  });
+  s.variants = s.variants.filter(function (x) { return x.archived || x.id === id || (x.html && x.html.path); });   // variantes jamais publiées : retirées
+  saveTunnel(true).then(function () {
+    renderVariants(s);
+    toast('Test terminé : ' + id.toUpperCase() + ' reçoit 100 % du trafic' + (losers.length ? ', ' + losers.map(function (x) { return x.id.toUpperCase(); }).join(', ') + ' archivée' + (losers.length > 1 ? 's' : '') : ''));
+  }, function () { s.variants = JSON.parse(prev); renderVariants(s); });
 }
 /* Dépôt d'une page (fichier ou texte collé) dans Storage, puis référence
    sur la variante. Version = horodatage : le rendu recharge la page dès
    qu'elle change et sert la précédente sinon (cache mémoire). */
 function publishHtml(variantId, html, fileName) {
-  var s = currentModalStep(); if (!s) return;
+  var s = currentModalStep(); if (!s) return Promise.reject(new Error('étape fermée'));
   readStepForm(s);
-  var v = s.variants.filter(function (x) { return x.id === variantId; })[0]; if (!v) return;
+  var v = s.variants.filter(function (x) { return x.id === variantId; })[0]; if (!v) return Promise.reject(new Error('variante inconnue'));
   html = String(html || '');
-  if (html.length < 40 || html.indexOf('<') < 0) { toast('Ce contenu ne ressemble pas à une page HTML', true); return; }
-  if (html.length > 4 * 1024 * 1024) { toast('Page trop lourde (4 Mo max) : externalise les images / vidéos', true); return; }
-  if (/window\.ALTEO_TUNNEL|tunnel-runtime\.js/.test(html)) { toast('La page contient déjà le runtime Alteore : retire-le, il est injecté à la publication', true); return; }
+  var bad = html.length < 40 || html.indexOf('<') < 0 ? 'Ce contenu ne ressemble pas à une page HTML'
+    : html.length > 4 * 1024 * 1024 ? 'Page trop lourde (4 Mo max) : externalise les images / vidéos'
+    : /window\.ALTEO_TUNNEL\s*=\s*\{|__alteoRuntime|tunnel-runtime\.js/.test(html) ? 'La page contient déjà le runtime Alteore (config injectée) : retire-le, il est ajouté à la publication' : '';   // lire window.ALTEO_TUNNEL dans la page reste permis
+  if (bad) { toast(bad, true); return Promise.reject(new Error(bad)); }
   var version = Date.now();
   var path = 'tunnels/' + CUR.id + '/' + s.id + '/' + v.id + '/index.html';
   var blob = new Blob([html], { type: 'text/html; charset=utf-8' });
   toast('Publication…');
   var task = storage.ref(path).put(blob, { contentType: 'text/html; charset=utf-8', cacheControl: 'no-cache', customMetadata: { version: String(version) } });
-  task.then(function (snap) {
+  return task.then(function (snap) {
     return snap.ref.getDownloadURL().then(function (url) {
       v.html = { path: path, url: url, version: version, size: html.length, updatedAt: new Date().toISOString(), fileName: fileName || '' };
       return saveTunnel(true);
@@ -697,14 +886,77 @@ function publishHtml(variantId, html, fileName) {
   }).then(function () {
     renderVariants(s);
     toast('Page publiée' + (s.status === 'live' && CUR.status === 'live' ? ' — en ligne sous 20 s' : ' (étape ou tunnel en brouillon : aperçu seulement)'));
-  }).catch(function (e) { toast('Publication impossible : ' + e.message, true); });
+    return true;
+  }).catch(function (e) { toast('Publication impossible : ' + e.message, true); throw e; });
 }
 function uploadHtmlFile(variantId, file) {
   if (!file) return;
   var reader = new FileReader();
-  reader.onload = function () { publishHtml(variantId, reader.result, file.name); };
+  reader.onload = function () { publishHtml(variantId, reader.result, file.name).catch(function () {}); };
   reader.onerror = function () { toast('Lecture du fichier impossible', true); };
   reader.readAsText(file, 'utf-8');
+}
+
+/* ─── Éditeur de code (aperçu rendu par api/tunnel-preview, même injection
+   que la page servie : runtime, SEO, head — en mode aperçu, sans mesure) ─── */
+function codeStatus(txt, dirty) { var st = $('codeStatus'); st.textContent = txt; st.className = 'st' + (dirty ? ' dirty' : ''); }
+function openCode(variantId) {
+  var s = currentModalStep(); if (!s) return;
+  readStepForm(s);
+  var v = s.variants.filter(function (x) { return x.id === variantId; })[0];
+  if (!v || !v.html || !v.html.path) { toast('Aucune page publiée pour cette variante', true); return; }
+  _code = { stepId: s.id, variantId: v.id, html0: '', dirty: false, timer: null, seq: 0, fileName: v.html.fileName || variantFileName(s, v) };
+  $('codeTitle').innerHTML = esc(s.name) + ' · variante ' + esc(v.id.toUpperCase()) + '<small>' + esc(stepPath(CUR, s)) + '</small>';
+  $('codeTa').value = ''; $('codeFrame').srcdoc = '';
+  codeStatus('Chargement du code…', false);
+  $('codeModal').classList.add('open');
+  fetchSource(s.id, v.id).then(function (html) {
+    if (!_code || _code.variantId !== v.id) return;
+    _code.html0 = html;
+    $('codeTa').value = html;
+    codeStatus('Code chargé · ' + fmtSize(html.length), false);
+    codeRender();
+  }).catch(function (e) { codeStatus('Code illisible : ' + e.message, true); toast('Lecture impossible : ' + e.message, true); });
+}
+function codeRender() {
+  if (!_code) return;
+  var html = $('codeTa').value;
+  var seq = ++_code.seq;
+  codeStatus((_code.dirty ? 'Modifié, non publié · ' : '') + 'rendu de l\'aperçu…', _code.dirty);
+  apiFetch('/api/tunnel-preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tunnelId: CUR.id, stepId: _code.stepId, variantId: _code.variantId, html: html }) })
+    .then(function (r) { return r.text(); })
+    .then(function (out) {
+      if (!_code || seq !== _code.seq) return;
+      $('codeFrame').srcdoc = out;
+      codeStatus(_code.dirty ? 'Modifié, non publié · aperçu à jour' : 'Aperçu à jour', _code.dirty);
+    }).catch(function (e) { if (_code && seq === _code.seq) codeStatus('Aperçu impossible : ' + e.message, true); });
+}
+function codeChanged() {
+  if (!_code) return;
+  _code.dirty = $('codeTa').value !== _code.html0;
+  codeStatus(_code.dirty ? 'Modifié, non publié' : 'Aperçu à jour', _code.dirty);
+  clearTimeout(_code.timer);
+  if ($('codeAuto').checked) _code.timer = setTimeout(codeRender, 900);
+}
+function codePublish() {
+  if (!_code) return;
+  var html = $('codeTa').value, vid = _code.variantId;
+  publishHtml(vid, html, _code.fileName).then(function () {
+    if (_code && _code.variantId === vid) { _code.html0 = html; _code.dirty = false; codeStatus('Publié · ' + fmtSize(html.length), false); }
+  }).catch(function () {});
+}
+function codeClose() {
+  if (!_code) return;
+  if (_code.dirty && !window.confirm('Des modifications ne sont pas publiées. Fermer quand même ?')) return;
+  clearTimeout(_code.timer);
+  _code = null;
+  $('codeModal').classList.remove('open');
+  $('codeFrame').srcdoc = ''; $('codeTa').value = '';
+}
+function codeView(view) {
+  $('codePrev').className = 'code-prev' + (view === 'mobile' ? ' mobile' : '');
+  $('codeViewDesktop').className = 'bb bb-o bb-s' + (view === 'mobile' ? '' : ' on');
+  $('codeViewMobile').className = 'bb bb-o bb-s' + (view === 'mobile' ? ' on' : '');
 }
 
 /* ─── Réglages ─── */
@@ -847,16 +1099,25 @@ function renderStats() {
   loadStats();
 }
 function loadStats() {
-  var t = CUR;
+  fetchStats(CUR).then(function (S) { STATS = S; renderStatsBody(S); }).catch(function (e) {
+    $('statsBody').innerHTML = '<div class="tn-empty">Stats indisponibles : ' + esc(e.message) + (/index/i.test(e.message) ? '<br><small>Un index Firestore est demandé — le lien est dans la console du navigateur.</small>' : '') + '</div>';
+    if (window.console) console.error('[tunnels] stats', e);
+  });
+}
+/* Stats d'un tunnel sur la période courante (PERIOD), mises en cache par
+   période : partagées entre l'onglet Stats et la modale étape. */
+function fetchStats(t) {
   var R = periodRange();
   var sIso = isoDate(R.start), eIso = isoDate(R.end);
+  var ck = t.id + '|' + sIso + '|' + eIso;
+  if (_statsCache[ck]) return _statsCache[ck];
   var keys = {};
   t.steps.forEach(function (s) { keys[pageKey(t, s)] = s.id; });
   var qDaily = db.collection('tunnel_stats_daily').where('date', '>=', sIso).where('date', '<=', eIso).get();
   var qViews = db.collection('page_views_daily').where('date', '>=', sIso).where('date', '<=', eIso).get();
   var qBook = db.collection('bookings').where('createdAt', '>=', R.start).where('createdAt', '<=', R.end).get();
   var qLeads = db.collection('leads').where('createdAt', '>=', R.start).where('createdAt', '<=', R.end).limit(5000).get();
-  Promise.all([qDaily, qViews, qBook, qLeads]).then(function (res) {
+  var pr = Promise.all([qDaily, qViews, qBook, qLeads]).then(function (res) {
     var S = { visits: 0, views: 0, ctas: 0, optins: 0, bookings: 0, leads: 0, closes: 0, steps: {}, sources: {}, days: {} };
     t.steps.forEach(function (s) { S.steps[s.id] = { step: s, views: 0, ctas: 0, optins: 0, bookings: 0, variants: {} }; });
     res[0].forEach(function (doc) {
@@ -905,12 +1166,11 @@ function loadStats() {
       S.leads++;
       if (l.stage === 'closed_won_setting' || l.stage === 'closed_won_self' || l.isClient === true) S.closes++;
     });
-    STATS = S;
-    renderStatsBody(S);
-  }).catch(function (e) {
-    $('statsBody').innerHTML = '<div class="tn-empty">Stats indisponibles : ' + esc(e.message) + (/index/i.test(e.message) ? '<br><small>Un index Firestore est demandé — le lien est dans la console du navigateur.</small>' : '') + '</div>';
-    if (window.console) console.error('[tunnels] stats', e);
+    return S;
   });
+  pr.catch(function () { delete _statsCache[ck]; });
+  _statsCache[ck] = pr;
+  return pr;
 }
 function convOf(step, cell) { return step.type === 'optin' ? cell.optins : (step.type === 'booking' || step.type === 'vsl') ? cell.bookings : Math.max(cell.optins, cell.bookings, cell.ctas); }
 function convLabel(step) { return step.type === 'optin' ? 'opt-ins' : (step.type === 'booking' || step.type === 'vsl') ? 'RDV' : 'conversions'; }
@@ -1032,12 +1292,28 @@ document.addEventListener('click', function (ev) {
   if (act === 'stepSave') { stepSave(false); return; }
   if (act === 'addVariant') { addVariant(); return; }
   if (act === 'delVariant') { delVariant(el.getAttribute('data-id')); return; }
+  if (act === 'archiveVariant') { archiveVariant(el.getAttribute('data-id')); return; }
+  if (act === 'restoreVariant') { restoreVariant(el.getAttribute('data-id')); return; }
+  if (act === 'keepVariant') { keepVariant(el.getAttribute('data-id')); return; }
+  if (act === 'dlHtml') { var _ms = currentModalStep(); if (_ms) downloadVariant(_ms.id, el.getAttribute('data-id')); return; }
+  if (act === 'openCode') { openCode(el.getAttribute('data-id')); return; }
+  if (act === 'codeView') { codeView(el.getAttribute('data-view')); return; }
+  if (act === 'codeRefresh') { codeRender(); return; }
+  if (act === 'codeDownload') { if (_code) saveTextFile($('codeTa').value, _code.fileName); return; }
+  if (act === 'codePublish') { codePublish(); return; }
+  if (act === 'codeClose') { codeClose(); return; }
+  if (act === 'stepPeriod') {
+    PERIOD.mode = el.getAttribute('data-mode');
+    var _sp = $('stepPeriod'); if (_sp) { var _bt = _sp.querySelectorAll('[data-action=stepPeriod]'); for (var _i = 0; _i < _bt.length; _i++) _bt[_i].className = 'bb ' + (_bt[_i].getAttribute('data-mode') === PERIOD.mode ? 'bb-p' : 'bb-o') + ' bb-s'; }
+    var _st = currentModalStep(); if (_st) fillVariantStats(_st);
+    return;
+  }
   if (act === 'pasteOpen') { _pasteCtx = { variantId: el.getAttribute('data-id') }; $('pasteHtml').value = ''; $('pasteModal').classList.add('open'); return; }
   if (act === 'pasteCancel') { $('pasteModal').classList.remove('open'); return; }
-  if (act === 'pasteSave') { if (_pasteCtx) publishHtml(_pasteCtx.variantId, $('pasteHtml').value, ''); $('pasteModal').classList.remove('open'); return; }
+  if (act === 'pasteSave') { if (_pasteCtx) publishHtml(_pasteCtx.variantId, $('pasteHtml').value, '').catch(function () {}); $('pasteModal').classList.remove('open'); return; }
   if (act === 'period') { PERIOD.mode = el.getAttribute('data-mode'); renderStats(); return; }
   if (act === 'periodApply') { PERIOD.start = $('pStart').value; PERIOD.end = $('pEnd').value; if (PERIOD.start && PERIOD.end) renderStats(); return; }
-  if (act === 'reloadStats') { renderStats(); return; }
+  if (act === 'reloadStats') { _statsCache = {}; renderStats(); return; }
   if (act === 'exportCsv') { exportCsv(); return; }
   if (act === 'removeFavicon') { CUR.settings.faviconUrl = ''; saveTunnel(true).then(function () { renderSettings(); toast('Favicon retiré'); }); return; }
 });
@@ -1050,8 +1326,20 @@ document.addEventListener('change', function (ev) {
   if (act === 'uploadFavicon') { uploadFavicon(el.files[0]); el.value = ''; }
 });
 document.addEventListener('keydown', function (ev) {
-  if (ev.key === 'Escape') { $('pasteModal').classList.remove('open'); }
+  if (ev.key === 'Escape') { if (_code) codeClose(); else $('pasteModal').classList.remove('open'); }
+  /* Éditeur de code : Cmd/Ctrl+S publie, Tab insère deux espaces. */
+  if (_code && (ev.metaKey || ev.ctrlKey) && (ev.key === 's' || ev.key === 'S')) { ev.preventDefault(); codePublish(); }
 });
+$('codeTa').addEventListener('input', codeChanged);
+$('codeTa').addEventListener('keydown', function (ev) {
+  if (ev.key !== 'Tab') return;
+  ev.preventDefault();
+  var ta = this, a = ta.selectionStart, b = ta.selectionEnd;
+  ta.value = ta.value.slice(0, a) + '  ' + ta.value.slice(b);
+  ta.selectionStart = ta.selectionEnd = a + 2;
+  codeChanged();
+});
+$('codeAuto').addEventListener('change', function () { if (this.checked && _code && _code.dirty) codeRender(); });
 
 /* ═══ BOOT ═══ */
 firebase.auth().onAuthStateChanged(function (u) {

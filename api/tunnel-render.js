@@ -174,6 +174,44 @@ function inject(html, config, extra) {
   return '<!DOCTYPE html><html lang="fr"><head>' + block + '</head><body>' + html + '</body></html>';
 }
 
+/* Config `window.ALTEO_TUNNEL` d'une page (partagée avec api/tunnel-preview.js). */
+function buildConfig(tunnel, step, variant, preview) {
+  const settings = tunnel.settings || {};
+  return {
+    tunnelId: tunnel.id, tunnelSlug: tunnel.slug, tunnelName: tunnel.name,
+    stepId: step.id, stepSlug: step.slug, stepName: step.name || step.slug, stepType: step.type || 'page',
+    variant: variant.id,
+    page: Reg.pageKey(tunnel, step),
+    pixelId: settings.pixelId ? String(settings.pixelId).replace(/[^\d]/g, '') : '',
+    faviconUrl: /^https:\/\//i.test(String(settings.faviconUrl || '')) ? String(settings.faviconUrl).slice(0, 600) : '',
+    nextUrl: Reg.nextUrlOf(tunnel, step),
+    bookingUrl: settings.bookingType ? 'https://team.alteore.com/booking.html?type=' + encodeURIComponent(String(settings.bookingType)) : '',
+    hosts: PROPAGATE_HOSTS,
+    preview: preview,
+    pixelEvent: cleanEventName(step.pixelEvent),
+    noindex: preview || settings.noindex === true || step.noindex === true,
+    eventEndpoint: '/api/tunnel-event',
+    optinEndpoint: '/api/tunnel-optin'
+  };
+}
+
+/* SEO / partage / head : hors de window.ALTEO_TUNNEL, injectés directement. */
+function buildExtra(tunnel, step, preview) {
+  const settings = tunnel.settings || {};
+  const stepSeo = (step.seo && typeof step.seo === 'object') ? step.seo : {};
+  const seo = {
+    title: String(stepSeo.title || '').trim().slice(0, 200),
+    description: String(stepSeo.description || '').trim().slice(0, 500),
+    image: String(stepSeo.ogImage || settings.ogImage || '').trim().slice(0, 600),
+    url: 'https://' + ((settings.host && String(settings.host)) || 'www.adrienemily.com') + Reg.stepPath(tunnel, step)
+  };
+  if (!/^https:\/\//i.test(seo.image)) seo.image = '';
+  return {
+    seo: seo,
+    headHtml: (preview ? '' : String(settings.headHtml || '')) + String(step.headHtml || '')
+  };
+}
+
 function page(res, status, title, text, extraHeaders) {
   res.status(status);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -253,8 +291,13 @@ module.exports = async (req, res) => {
     return;
   }
   const tunnel = hit.tunnel, step = hit.step;
+  const forced = Reg.cleanSlug(url.searchParams.get('v'), 20);
+  /* Une variante archivée (test A/B terminé) n'est jamais servie au public ;
+     en aperçu, seul `?v=<id>` explicite permet encore de la revoir. */
   const variants = step.variants.filter(function (v) {
-    return v.html && v.html.path && (preview || v.status === 'live');
+    if (!(v.html && v.html.path)) return false;
+    if (v.archived) return preview && forced === v.id;
+    return preview || v.status === 'live';
   });
   if (!variants.length) {
     page(res, 404, 'Page en préparation', 'Cette page n’a pas encore de contenu publié.');
@@ -263,7 +306,6 @@ module.exports = async (req, res) => {
 
   const cookies = parseCookies(req.headers.cookie);
   const cookieName = 'alt_ab_' + step.id;
-  const forced = Reg.cleanSlug(url.searchParams.get('v'), 20);
   const variant = pickVariant(variants, forced, cookies[cookieName]);
   const multi = variants.length > 1;
   if (multi && !previewRoute && cookies[cookieName] !== variant.id) {
@@ -279,37 +321,8 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const settings = tunnel.settings || {};
-  const config = {
-    tunnelId: tunnel.id, tunnelSlug: tunnel.slug, tunnelName: tunnel.name,
-    stepId: step.id, stepSlug: step.slug, stepName: step.name || step.slug, stepType: step.type || 'page',
-    variant: variant.id,
-    page: Reg.pageKey(tunnel, step),
-    pixelId: settings.pixelId ? String(settings.pixelId).replace(/[^\d]/g, '') : '',
-    faviconUrl: /^https:\/\//i.test(String(settings.faviconUrl || '')) ? String(settings.faviconUrl).slice(0, 600) : '',
-    nextUrl: Reg.nextUrlOf(tunnel, step),
-    bookingUrl: settings.bookingType ? 'https://team.alteore.com/booking.html?type=' + encodeURIComponent(String(settings.bookingType)) : '',
-    hosts: PROPAGATE_HOSTS,
-    preview: preview,
-    pixelEvent: cleanEventName(step.pixelEvent),
-    noindex: preview || settings.noindex === true || step.noindex === true,
-    eventEndpoint: '/api/tunnel-event',
-    optinEndpoint: '/api/tunnel-optin'
-  };
-
-  /* SEO / partage / head : hors de window.ALTEO_TUNNEL, injectés directement. */
-  const stepSeo = (step.seo && typeof step.seo === 'object') ? step.seo : {};
-  const seo = {
-    title: String(stepSeo.title || '').trim().slice(0, 200),
-    description: String(stepSeo.description || '').trim().slice(0, 500),
-    image: String(stepSeo.ogImage || settings.ogImage || '').trim().slice(0, 600),
-    url: 'https://' + ((settings.host && String(settings.host)) || 'www.adrienemily.com') + Reg.stepPath(tunnel, step)
-  };
-  if (!/^https:\/\//i.test(seo.image)) seo.image = '';
-  const extra = {
-    seo: seo,
-    headHtml: (preview ? '' : String(settings.headHtml || '')) + String(step.headHtml || '')
-  };
+  const config = buildConfig(tunnel, step, variant, preview);
+  const extra = buildExtra(tunnel, step, preview);
   const out = inject(html, config, extra);
   res.status(200);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -321,3 +334,9 @@ module.exports = async (req, res) => {
   if (host && host !== 'team.alteore.com') res.setHeader('Vary', 'Cookie');
   res.end(req.method === 'HEAD' ? '' : out);
 };
+
+/* Réutilisés par api/tunnel-preview.js (aperçu d'un HTML non publié, même
+   injection que la page servie). */
+module.exports.inject = inject;
+module.exports.buildConfig = buildConfig;
+module.exports.buildExtra = buildExtra;
