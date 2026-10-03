@@ -112,15 +112,25 @@ function requiredFieldsOf(tunnel) {
   return out;
 }
 
-function buildAttribution(body, pageUrl, tunnel) {
+/* Tunnel « YouTube » : utm_source=youtube garanti côté serveur aussi (un
+   runtime en cache, ou un envoi sans attribution, ne doit pas faire passer
+   un lead YouTube pour un lead sans source). Un utm_source explicite gagne. */
+function buildAttribution(body, pageUrl, tunnel, step) {
+  const youtube = Reg.trackingSourceOf(tunnel, step) === 'youtube';
   const attr = Core.parseAttribution(body && typeof body.attribution === 'object' ? body.attribution : null)
     || Core.parseAttribution(pageUrl);
   if (attr) {
     const out = Object.assign({}, attr);
+    if (youtube && !out.utm_source) out.utm_source = 'youtube';
     out.via = 'tunnel';
     out.capturedAt = new Date().toISOString();
     if (pageUrl) out.landingPage = pageUrl;
     return out;
+  }
+  if (youtube) {
+    const yt = { utm_source: 'youtube', via: 'tunnel', capturedAt: new Date().toISOString() };
+    if (pageUrl) yt.landingPage = pageUrl;
+    return yt;
   }
   const channel = str(tunnel.settings && tunnel.settings.defaultChannel, 120);
   if (!channel) return null;
@@ -188,6 +198,7 @@ module.exports = async (req, res) => {
   if (!hit) { res.status(404).json({ ok: false, error: 'tunnel_not_found' }); return; }
   const tunnel = hit.tunnel, step = hit.step;
   if (tunnel.status !== 'live' || step.status !== 'live') { res.status(403).json({ ok: false, error: 'tunnel_not_live' }); return; }
+  if (!src.utm_source && Reg.trackingSourceOf(tunnel, step) === 'youtube') src.utm_source = 'youtube';
 
   const prenom = str(fields.prenom, 80);
   const nomIn = str(fields.nom, 80);
@@ -223,7 +234,7 @@ module.exports = async (req, res) => {
   const label = Reg.pageLabel(tunnel, step);
   const pageK = Reg.pageKey(tunnel, step);
   const type = leadTypeOf(tunnel);
-  const attribution = buildAttribution(body, pageUrl, tunnel);
+  const attribution = buildAttribution(body, pageUrl, tunnel, step);
   const landing = { page: pageK, variant: variant, tunnelId: tunnel.id, stepId: step.id, label: label, capturedAt: new Date().toISOString() };
   if (pageUrl) landing.pageUrl = pageUrl;
 

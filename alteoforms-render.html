@@ -1070,6 +1070,11 @@ function afPixelInit(){
 if(_afPixelReady)return;
 var qp=new URLSearchParams(window.location.search);
 if(qp.get('preview')||qp.get('typreview')||qp.get('tytpl'))return;
+/* Visiteur venu de YouTube (utm_source relayé par un tunnel réglé
+   « YouTube ») : aucun pixel Meta — ses conversions ne nourrissent pas les
+   pubs Facebook. Sans pixel, afGoBooking navigue directement (10/2026). */
+var _afSrc=String((typeof ATTR_CAPTURED!=='undefined'&&ATTR_CAPTURED&&ATTR_CAPTURED.attribution&&ATTR_CAPTURED.attribution.utm_source)||'').toLowerCase();
+if(_afSrc.indexOf('youtube')>=0||_afSrc==='yt')return;
 _afPixelReady=true;
 try{
 /* Base code Meta, forme officielle en ES5. */

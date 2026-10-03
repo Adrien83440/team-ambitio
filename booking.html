@@ -667,6 +667,32 @@ function bkCaptureLanding() {
 }
 var _landing = bkCaptureLanding();
 
+/* Visiteur venu de YouTube (tunnel réglé « YouTube » : utm_source=youtube
+   relayé par le runtime ou par AlteoForms) — aucun pixel Meta (10/2026). */
+function bkIsYoutube() {
+  var s = String((_landing && _landing.attribution && _landing.attribution.utm_source) || '').toLowerCase();
+  return s.indexOf('youtube') >= 0 || s === 'yt';
+}
+/* Page de confirmation hébergée sur le domaine des tunnels : on lui relaie
+   l'attribution (utm_*…) pour qu'elle applique le bon tracking — sans pixel
+   Meta pour un visiteur YouTube — même si ce navigateur n'est jamais passé
+   par une page du tunnel. Les paramètres déjà présents ne sont pas touchés. */
+function bkRedirectWithAttribution(url) {
+  var a = _landing && _landing.attribution;
+  if (!url || !a || !/^https:\/\/(www\.)?adrienemily\.com(\/|\?|#|$)/i.test(url)) return url;
+  var hash = '';
+  var hi = url.indexOf('#');
+  if (hi >= 0) { hash = url.slice(hi); url = url.slice(0, hi); }
+  var add = [];
+  for (var i = 0; i < BK_ATTR_KEYS.length; i++) {
+    var k = BK_ATTR_KEYS[i];
+    if (!a[k] || new RegExp('[?&]' + k + '=').test(url)) continue;
+    add.push(encodeURIComponent(k) + '=' + encodeURIComponent(a[k]));
+  }
+  if (!add.length) return url + hash;
+  return url + (url.indexOf('?') >= 0 ? '&' : '?') + add.join('&') + hash;
+}
+
 /* ═══ PIXEL META « Ambitio Elite » (23/09/2026) ═══
    L'opt-in system.io disparaissant, Meta n'a plus d'événement Lead à
    optimiser : le RDV confirmé devient la conversion (événement standard
@@ -680,6 +706,7 @@ var _bkPixelReady = false;
 function bkPixelInit() {
   if (_bkPixelReady || !_bkPixelPublic) return;
   if (S.selType && S.selType.isCoaching === true) return;
+  if (bkIsYoutube()) return;
   _bkPixelReady = true;
   try {
     /* Base code Meta, forme officielle en ES5. */
@@ -2475,7 +2502,7 @@ async function submitBooking() {
        l'email de confirmation et l'invitation calendrier.
     ─────────────────────────────────────────────────────────────────────── */
     var _redirectUrl = (S.selType && S.selType.confirmationRedirect === true && S.selType.confirmationRedirectUrl && !_rescheduleOld)
-      ? String(S.selType.confirmationRedirectUrl).trim()
+      ? bkRedirectWithAttribution(String(S.selType.confirmationRedirectUrl).trim())
       : '';
     if (_redirectUrl) {
       // Compteur round-robin mis à jour avant de quitter la page

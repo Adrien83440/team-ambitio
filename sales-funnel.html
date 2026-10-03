@@ -275,6 +275,11 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
       <option value="elite">Élite</option>
       <option value="business">Business</option>
     </select>
+    <select class="fn-sel" id="fnSource" title="Les tunnels réglés « YouTube » marquent leurs visiteurs utm_source=youtube, jusqu'au RDV">
+      <option value="all">Toutes les sources</option>
+      <option value="youtube">▶ YouTube</option>
+      <option value="other">Hors YouTube (Meta &amp; autres)</option>
+    </select>
     <div style="flex:1"></div>
     <button class="fn-btn" id="fnAgencyBtn" title="Lien de consultation en lecture seule pour l'agence pub">🔗 Agence</button>
     <button class="fn-btn" id="fnCostsBtn">💶 Coûts</button>
@@ -447,6 +452,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
      ════════════════════════════════════════════════════════════════ */
   var P = { mode: 'month', y: 0, m: 0, start: null, end: null };  // end inclusif (23:59:59.999)
   var tunnelFilter = 'all';
+  var sourceFilter = 'all';    // all | youtube | other (funnel-core.leadSource)
   var activeTab = 'funnel';
   var utmAxis = 'creative';    // section 🎨 : creative | adset | campaign
   var sioShow = false;         // étape pages du tunnel : historique System.io déplié
@@ -825,6 +831,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
       DATA: DATA,
       P: P,
       tunnelFilter: tunnelFilter,
+      sourceFilter: sourceFilter,
       teamMembers: window.TEAM_MEMBERS_LIST || []
     });
   }
@@ -1773,6 +1780,10 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     var q = leadsSearch.trim().toLowerCase();
     return DATA.leads.filter(function (l) {
       if (!tunnelMatch(l._tunnel)) return false;
+      if (sourceFilter !== 'all') {
+        var src = l._source != null ? l._source : FC.leadSource(l, DATA.tunnelsMeta);
+        if (sourceFilter === 'youtube' ? src !== 'youtube' : src === 'youtube') return false;
+      }
       var bk = leadRdvInfo(l);
       if (leadsRdvFilter === 'with' && !bk) return false;
       if (leadsRdvFilter === 'without' && bk) return false;
@@ -1853,7 +1864,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     var blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'funnel-leads-' + isoDate(P.start) + '_' + isoDate(P.end) + (tunnelFilter !== 'all' ? '-' + tunnelFilter : '') + '.csv';
+    a.download = 'funnel-leads-' + isoDate(P.start) + '_' + isoDate(P.end) + (tunnelFilter !== 'all' ? '-' + tunnelFilter : '') + (sourceFilter !== 'all' ? '-' + sourceFilter : '') + '.csv';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     toast('⬇ Export CSV (' + list.length + ' leads)');
   }
@@ -3287,6 +3298,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
       applyCustom(a, b); refresh();
     };
     $('#fnTunnel').onchange = function () { tunnelFilter = this.value; compute(); renderActiveTab(); };
+    $('#fnSource').onchange = function () { sourceFilter = this.value; compute(); renderActiveTab(); };
     /* Section 🎨 — délégation sur le conteneur de l'onglet : renderFunnel()
        réécrit tout l'innerHTML, un binding direct sur les boutons ne
        survivrait pas au premier rendu. Les trois axes sont déjà calculés

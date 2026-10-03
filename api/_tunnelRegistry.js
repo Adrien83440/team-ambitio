@@ -242,8 +242,18 @@ function nextUrlOf(tunnel, step) {
   return following ? stepPath(tunnel, following) : null;
 }
 
+/* Source de tracking d'une étape (10/2026) : réglage de l'étape, sinon du
+   tunnel, sinon 'meta'. 'youtube' = trafic organique des liens placés dans
+   les vidéos : aucun pixel Meta chargé, utm_source=youtube posé d'office
+   (tunnel-runtime.js, api/tunnel-optin.js) pour séparer YouTube de Meta
+   jusqu'au Funnel Sales. */
+function trackingSourceOf(tunnel, step) {
+  const raw = (step && step.trackingSource) || (tunnel && tunnel.settings && tunnel.settings.trackingSource) || '';
+  return String(raw).toLowerCase() === 'youtube' ? 'youtube' : 'meta';
+}
+
 module.exports = {
   cleanSlug, cleanPath, pageKey, isTunnelPageKey, pageLabel, stepPath, normalizeTunnel,
   getTunnels, invalidate, findByPath, findByPage, findByIds, isKnownPage, nextUrlOf,
-  getConfig, findRedirect
+  getConfig, findRedirect, trackingSourceOf
 };

@@ -10,7 +10,9 @@
         et la garde 30 jours (premier touch) ;
      2. envoie les événements de mesure (visite, vue, clic CTA) au beacon
         /api/tunnel-event — une seule fois par session et par page ;
-     3. charge le pixel Meta du tunnel (PageView, puis Lead à l'opt-in) ;
+     3. charge le pixel Meta du tunnel (PageView, puis Lead à l'opt-in) —
+        jamais pour un visiteur venu de YouTube (tunnel réglé « YouTube » :
+        utm_source=youtube posé d'office, cf. §1) ;
      4. propage la provenance (lp, v, utm_*, leadId) sur tous les liens vers
         le tunnel ou vers team.alteore.com (booking, AlteoForms) et sur les
         iframes qui les embarquent — c'est ce qui relie la page au RDV et à
@@ -90,6 +92,15 @@
     return a;
   }
   var attr = attrFromQuery(Q);
+  /* Tunnel « YouTube » (liens des descriptions de vidéos, trafic organique) :
+     la page n'est atteignable que depuis YouTube, l'arrivée vaut donc un
+     touch frais même sans UTM — utm_source=youtube posé d'office (un
+     utm_source explicite dans le lien reste prioritaire). Il suit le
+     visiteur jusqu'au RDV, à AlteoForms et à la fiche Leads Live. */
+  if (C.trackingSource === 'youtube') {
+    if (!attr) attr = {};
+    if (!attr.utm_source) attr.utm_source = 'youtube';
+  }
   if (attr) {
     lsSet(LS_ATTR, JSON.stringify({ at: Date.now(), a: attr }));
   } else {
@@ -140,8 +151,15 @@
   track('view');
 
   /* ── 3. Pixel Meta ──────────────────────────────────────────────────── */
+  /* Visiteur venu de YouTube (tunnel YouTube, ou page commune — merci après
+     RDV — atteinte depuis un parcours YouTube) : jamais de pixel Meta, ses
+     conversions ne doivent pas nourrir l'optimisation des pubs Facebook. */
+  function isYoutubeVisitor() {
+    var s = String((attr && attr.utm_source) || '').toLowerCase();
+    return s.indexOf('youtube') >= 0 || s === 'yt';
+  }
   function pixelInit() {
-    if (!C.pixelId || C.preview) return;
+    if (!C.pixelId || C.preview || isYoutubeVisitor()) return;
     try {
       if (!window.fbq) {
         (function (f, b, e, v, n, t, sc) {
@@ -167,7 +185,7 @@
   }
   pixelInit();
   function pixelLead() {
-    if (!C.pixelId || C.preview || !window.fbq) return;
+    if (!C.pixelId || C.preview || !window.fbq || isYoutubeVisitor()) return;
     try { window.fbq('track', 'Lead', { content_name: C.page }); } catch (e) {}
   }
 

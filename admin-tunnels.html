@@ -205,6 +205,11 @@ var TUNNELS = [];            // liste chargée (non archivés)
 var CUR = null;              // tunnel en cours d'édition (copie de travail)
 var TAB = 'steps';
 var CFG = { primaryHost: 'www.adrienemily.com', hosts: ['www.adrienemily.com'] };
+/* Source de tracking (10/2026) : Meta = pixel Facebook ; YouTube = liens
+   des vidéos, sans pixel, visiteurs marqués utm_source=youtube jusqu'au RDV
+   (api/_tunnelRegistry.js → trackingSourceOf). */
+var TRACKING_SOURCES = [['meta', 'Meta — pixel Facebook'], ['youtube', 'YouTube — liens des vidéos (sans pixel)']];
+function trackingLabel(v) { return v === 'youtube' ? 'YouTube' : 'Meta'; }
 /* Événement Meta envoyé au chargement d'une étape, en plus de PageView. */
 var PIXEL_EVENTS = [
   ['', 'Aucun — PageView seul'], ['ViewContent', 'ViewContent'], ['Lead', 'Lead'], ['Schedule', 'Schedule'],
@@ -390,7 +395,7 @@ function renderList() {
       h += '<div class="tn-card" data-action="open" data-id="' + escAttr(t.id) + '">'
         + '<span class="pill ' + (t.status === 'live' ? 'pill-live' : 'pill-draft') + '">' + (t.status === 'live' ? '● En ligne' : 'Brouillon') + '</span>'
         + '<h3>' + esc(t.name || t.slug) + '</h3>'
-        + '<div class="url">' + esc((t.settings.host || CFG.primaryHost) + '/' + (t.slug || '')) + '</div>'
+        + '<div class="url">' + esc((t.settings.host || CFG.primaryHost) + '/' + (t.slug || '')) + (t.settings.trackingSource === 'youtube' ? ' · ▶ YouTube' : '') + '</div>'
         + '<div class="meta"><div><b>' + t.steps.length + '</b>étape' + (t.steps.length > 1 ? 's' : '') + (liveSteps < t.steps.length ? ' <span style="opacity:.6">(' + liveSteps + ' en ligne)</span>' : '') + '</div>'
         + '<div><b>' + fmtNum(st.visits) + '</b>visites 7 j</div>'
         + '<div><b>' + fmtNum(st.optins) + '</b>opt-ins 7 j</div>'
@@ -420,7 +425,7 @@ function createTunnel() {
   while (TUNNELS.some(function (t) { return t.slug === slug; })) slug = base + '-' + (n++);
   var doc = {
     name: name.trim(), slug: slug, kind: 'funnel', status: 'draft', archived: false, homeStepId: '',
-    settings: { host: CFG.primaryHost, pixelId: '', leadType: 'vsl_elite', defaultChannel: '', bookingType: '', requiredFields: '', noindex: false, faviconUrl: '', ogImage: '', headHtml: '', notes: '' },
+    settings: { host: CFG.primaryHost, trackingSource: 'meta', pixelId: '', leadType: 'vsl_elite', defaultChannel: '', bookingType: '', requiredFields: '', noindex: false, faviconUrl: '', ogImage: '', headHtml: '', notes: '' },
     steps: [], assets: [],
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -437,7 +442,7 @@ function createPagesDoc() {
   while (TUNNELS.some(function (t) { return t.slug === slug; })) slug = 'pages-' + (n++);
   var doc = {
     name: 'Pages communes', slug: slug, kind: 'pages', status: 'live', archived: false, homeStepId: '',
-    settings: { host: CFG.primaryHost, pixelId: '', leadType: 'vsl_elite', defaultChannel: '', bookingType: '', requiredFields: '', noindex: false, faviconUrl: '', ogImage: '', headHtml: '', notes: 'Pages hors tunnel : merci après RDV, pages utilitaires.' },
+    settings: { host: CFG.primaryHost, trackingSource: 'meta', pixelId: '', leadType: 'vsl_elite', defaultChannel: '', bookingType: '', requiredFields: '', noindex: false, faviconUrl: '', ogImage: '', headHtml: '', notes: 'Pages hors tunnel : merci après RDV, pages utilitaires.' },
     steps: [], assets: [],
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -636,6 +641,10 @@ function openStep(id) {
     + '<div class="row"><div><span class="lbl">Titre (onglet, Google, partage)</span><input class="bi" id="stSeoTitle" value="' + escAttr(seo.title || '') + '"/></div>'
     + '<div><span class="lbl">Image de partage (og:image)</span><input class="bi" id="stSeoImage" value="' + escAttr(seo.ogImage || '') + '" placeholder="vide = image par défaut du tunnel"/></div></div>'
     + '<span class="lbl">Description (Google, partage)</span><textarea class="bi" id="stSeoDesc" style="min-height:56px;font-family:\'Figtree\',sans-serif;font-size:13px">' + esc(seo.description || '') + '</textarea>'
+    + '<div class="row" style="margin-top:10px"><div><span class="lbl">Source de tracking de cette page</span><select class="bs" id="stTracking">'
+    + '<option value=""' + (!s.trackingSource ? ' selected' : '') + '>Comme le tunnel (' + esc(trackingLabel(t.settings.trackingSource)) + ')</option>'
+    + TRACKING_SOURCES.map(function (x) { return '<option value="' + x[0] + '"' + (s.trackingSource === x[0] ? ' selected' : '') + '>' + esc(x[1]) + '</option>'; }).join('')
+    + '</select><div class="help">YouTube : aucun pixel Meta sur cette page, visiteurs marqués <code>utm_source=youtube</code>. Une page commune (merci après RDV) laissée sur Meta coupe d\'elle-même le pixel pour un visiteur venu de YouTube.</div></div></div>'
     + '<div class="row" style="margin-top:10px"><div><span class="lbl">Événement Meta au chargement</span><select class="bs" id="stPixelEvent">' + PIXEL_EVENTS.map(function (x) { var sel = _peCustom ? x[0] === '__custom' : x[0] === _pe; return '<option value="' + x[0] + '"' + (sel ? ' selected' : '') + '>' + esc(x[1]) + '</option>'; }).join('') + '</select><div class="help">En plus de PageView, toujours envoyé. Lead à l\'opt-in et Schedule au RDV restent automatiques.</div></div>'
     + '<div id="stPixelCustomWrap" style="' + (_peCustom ? '' : 'display:none') + '"><span class="lbl">Nom de l\'événement personnalisé</span><input class="bi" id="stPixelCustom" value="' + escAttr(_peCustom ? _pe : '') + '" placeholder="ex : QuizStarted"/></div>'
     + '<div><label class="chk" style="margin-top:22px"><input type="checkbox" id="stNoindex"' + (s.noindex ? ' checked' : '') + '/> noindex sur cette page</label></div></div>'
@@ -770,6 +779,8 @@ function readStepForm(s) {
   var _peVal = $('stPixelEvent').value;
   s.pixelEvent = _peVal === '__custom' ? $('stPixelCustom').value.replace(/[^A-Za-z0-9_]/g, '').slice(0, 40) : _peVal;
   s.noindex = $('stNoindex').checked === true;
+  var _trk = $('stTracking').value;
+  s.trackingSource = (_trk === 'youtube' || _trk === 'meta') ? _trk : '';
   s.headHtml = $('stHeadHtml').value;
   var rows = $('varList').querySelectorAll('.var');
   for (var i = 0; i < rows.length; i++) {
@@ -972,7 +983,8 @@ function renderSettings() {
     + (st.faviconUrl ? '<button class="bb bb-o bb-s" data-action="removeFavicon">Retirer</button><span class="u" style="font-family:var(--font-m);font-size:10.5px;color:rgba(255,255,255,.4)">' + esc(st.faviconUrl) + '</span>' : '')
     + '</div></div>';
   h += '<div class="sec"><h2>Mesure et pixel</h2>'
-    + '<div class="row"><div><span class="lbl">ID pixel Meta</span><input class="bi" id="setPixel" value="' + escAttr(st.pixelId || '') + '" placeholder="1341581597802071" style="font-family:var(--font-m)"/><div class="help">PageView sur chaque page, Lead à l\'opt-in. Le RDV (Schedule) est envoyé par booking.html. Laisse vide pour ne rien charger.</div></div></div></div>';
+    + '<div class="row"><div><span class="lbl">Source de tracking</span><select class="bs" id="setTracking">' + TRACKING_SOURCES.map(function (x) { return '<option value="' + x[0] + '"' + ((st.trackingSource === 'youtube' ? 'youtube' : 'meta') === x[0] ? ' selected' : '') + '>' + esc(x[1]) + '</option>'; }).join('') + '</select><div class="help">YouTube : aucun pixel Meta chargé (l\'ID ci-contre est ignoré) ; chaque visiteur est marqué <code>utm_source=youtube</code> jusqu\'au RDV, à AlteoForms et à la fiche Leads Live — filtre « Source » du Funnel Sales. Ajoute <code>?utm_campaign=nom-de-la-video</code> au lien de chaque vidéo pour savoir laquelle convertit.</div></div>'
+    + '<div><span class="lbl">ID pixel Meta</span><input class="bi" id="setPixel" value="' + escAttr(st.pixelId || '') + '" placeholder="1341581597802071" style="font-family:var(--font-m)"/><div class="help">PageView sur chaque page, Lead à l\'opt-in. Le RDV (Schedule) est envoyé par booking.html. Laisse vide pour ne rien charger.</div></div></div></div>';
   h += '<div class="sec"><h2>CRM — fiches Leads Live</h2><div class="sub">Un opt-in crée ou réveille une fiche (email puis téléphone, jamais de doublon). Un RDV pris depuis le tunnel est attribué de la même façon.</div>'
     + '<div class="row"><div><span class="lbl">Type de lead</span><select class="bs" id="setLeadType">' + LEAD_TYPES.map(function (x) { return '<option value="' + x.id + '"' + ((st.leadType || 'vsl_elite') === x.id ? ' selected' : '') + '>' + esc(x.label) + '</option>'; }).join('') + '</select><div class="help">Badge affiché dans Leads Live et règle Élite / Business du funnel.</div></div>'
     + '<div><span class="lbl">Canal par défaut (sans UTM)</span><input class="bi" id="setChannel" value="' + escAttr(st.defaultChannel || '')+ '" placeholder="ex : Bio Instagram, Skool, Recommandation"/><div class="help">Posé comme origine déclarée quand l\'URL ne porte aucun UTM. Une pub Meta avec UTM garde sa créative.</div></div>'
@@ -990,6 +1002,7 @@ function renderSettings() {
   bind('setSlug', function (el) { var v = slugify(el.value); if (v) { CUR.slug = v; el.value = v; } else el.value = CUR.slug; });
   bind('setHost', function (el) { CUR.settings.host = el.value; });
   bind('setNoindex', function (el) { CUR.settings.noindex = el.checked; });
+  bind('setTracking', function (el) { CUR.settings.trackingSource = el.value === 'youtube' ? 'youtube' : 'meta'; });
   bind('setPixel', function (el) { CUR.settings.pixelId = el.value.replace(/[^\d]/g, ''); el.value = CUR.settings.pixelId; });
   bind('setLeadType', function (el) { CUR.settings.leadType = el.value; });
   bind('setChannel', function (el) { CUR.settings.defaultChannel = el.value.trim(); });

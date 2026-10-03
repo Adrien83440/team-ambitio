@@ -748,6 +748,45 @@
     return 'elite';
   }
 
+  /* ── Source de trafic : YouTube vs le reste (10/2026) ──
+     Les tunnels réglés « YouTube » (liens placés dans les vidéos) posent
+     utm_source=youtube sur toute la chaîne : runtime → RDV → AlteoForms →
+     fiche. Lecture d'une fiche, dans l'ordre : attribution premier touch,
+     dernier touch, champ utm legacy, canal déclaré, puis la page d'entrée
+     (réglage du tunnel, DATA.tunnelsMeta). Tout ce qui n'est pas YouTube
+     vaut 'other' (pub Meta, organique, setting…). */
+  function isYoutubeSource(v) {
+    var s = String(v == null ? '' : v).toLowerCase();
+    return s.indexOf('youtube') >= 0 || s === 'yt';
+  }
+  /* Clé de page de tunnel → 'youtube' | 'other' ; '' si tunnel inconnu. */
+  function pageSource(page, meta) {
+    var m = String(page || '').match(/^([a-z0-9-]+)__([a-z0-9-]+)$/);
+    if (!m || !meta || !meta[m[1]]) return '';
+    var t = meta[m[1]], st = t.steps ? t.steps[m[2]] : null;
+    return ((st && st.source) || t.source || '') === 'youtube' ? 'youtube' : 'other';
+  }
+  function attrSourceOf(a) {
+    if (!a || typeof a !== 'object') return '';
+    if (attrHasSignal(a)) return isYoutubeSource(a.utm_source) ? 'youtube' : 'other';
+    if (a.channel) return isYoutubeSource(a.channel) ? 'youtube' : 'other';
+    return '';
+  }
+  function leadSource(l, meta) {
+    if (!l) return 'other';
+    var s = attrSourceOf(l.attributionFirst) || attrSourceOf(l.attributionLast)
+      || attrSourceOf(parseAttribution(l.utm || ''));
+    if (s) return s;
+    var LF = l.landingFirst;
+    return (LF && pageSource(LF.page, meta)) || 'other';
+  }
+  /* RDV sans fiche rattachable : provenance posée par booking.html. */
+  function bookingSource(b, meta) {
+    var L = b && b.landing;
+    if (!L) return 'other';
+    return attrSourceOf(L.attribution) || pageSource(L.page, meta) || 'other';
+  }
+
   /* Date FR 'DD/MM/YYYY' → ms (deals Commissions). */
   function frDateMs(v) {
     var m = String(v || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
@@ -1144,7 +1183,7 @@
         if (isWon && (since == null || since < ps || since > pe)) {
           p._payClose = { kind: 'other', name: l.nom || name };
         } else {
-          p._payClose = { kind: 'count', name: l.nom || name, sb: l.stage === 'closed_won_self', tunnel: leadTunnel(l), noLead: false };
+          p._payClose = { kind: 'count', name: l.nom || name, sb: l.stage === 'closed_won_self', tunnel: leadTunnel(l), noLead: false, lead: l };
         }
       }).catch(function () { p._payClose = null; });
     }
@@ -1190,6 +1229,17 @@
     var DATA = ctx.DATA, P = ctx.P, tunnelFilter = ctx.tunnelFilter;
     var TEAM = ctx.teamMembers || [];
     function tunnelMatch(t) { return tunnelFilter === 'all' || t === tunnelFilter; }
+    /* Filtre Source (10/2026) : 'all' | 'youtube' | 'other' — se cumule au
+       filtre tunnel partout où celui-ci s'applique. Absent (API agence) =
+       'all' : calcul strictement inchangé. La dépense Ads est de la pub
+       Meta : elle n'entre jamais dans la vue YouTube. */
+    var sourceFilter = (ctx.sourceFilter === 'youtube' || ctx.sourceFilter === 'other') ? ctx.sourceFilter : 'all';
+    var TMETA = DATA.tunnelsMeta || {};
+    function srcMatch(s) { return sourceFilter === 'all' || (sourceFilter === 'youtube' ? s === 'youtube' : s !== 'youtube'); }
+    function leadSrc(l) { if (l._source == null) l._source = leadSource(l, TMETA); return l._source; }
+    function leadMatch(l) { return tunnelMatch(l._tunnel) && srcMatch(leadSrc(l)); }
+    function pageMatch(p) { return tunnelMatch(pageTunnel(p)) && srcMatch(pageSource(p, TMETA) || 'other'); }
+    var adsInSource = sourceFilter !== 'youtube';
     function lookaheadEndMs() { return lookaheadEndMsFor(P); }
 
     var k = {};
@@ -1208,16 +1258,16 @@
     DATA.leads.forEach(function (l) { idxLead(l, true); });
     DATA.reoptins.forEach(function (l) { idxLead(l, false); });
 
-    var cohort = DATA.leads.filter(function (l) { return tunnelMatch(l._tunnel); });
-    var reopt  = DATA.reoptins.filter(function (l) { return tunnelMatch(l._tunnel); });
+    var cohort = DATA.leads.filter(function (l) { return leadMatch(l); });
+    var reopt  = DATA.reoptins.filter(function (l) { return leadMatch(l); });
 
     k.leads = cohort.length;
     k.reoptins = reopt.length;
     k.leadsByTunnel = { elite: 0, business: 0 };
-    DATA.leads.forEach(function (l) { k.leadsByTunnel[l._tunnel]++; });
+    DATA.leads.forEach(function (l) { if (srcMatch(leadSrc(l))) k.leadsByTunnel[l._tunnel]++; });
 
     /* ── Ads ── */
-    var ads = DATA.ads.filter(function (a) { return tunnelMatch(a.tunnel === 'business' ? 'business' : 'elite'); });
+    var ads = DATA.ads.filter(function (a) { return adsInSource && tunnelMatch(a.tunnel === 'business' ? 'business' : 'elite'); });
     k.spend = 0; k.impressions = 0; k.clicks = 0; k.leadsFb = 0; k.adsDays = 0;
     ads.forEach(function (a) {
       k.spend += Number(a.spend) || 0;
@@ -1235,7 +1285,7 @@
     /* ── Vues opt-in (beacon) ── */
     var views = DATA.views.filter(function (v) {
       if (isVslPage(v.page)) return false;   // VSL : étape dédiée, pas d'opt-in
-      return tunnelMatch(pageTunnel(v.page));
+      return pageMatch(v.page);
     });
     k.views = 0;
     views.forEach(function (v) { k.views += Number(v.views) || 0; });
@@ -1247,7 +1297,7 @@
     var abByPage = {};
     DATA.views.forEach(function (v) {
       if (!v.variant || isVslPage(v.page)) return;
-      if (!tunnelMatch(pageTunnel(v.page))) return;
+      if (!pageMatch(v.page)) return;
       var pg = v.page || 'other';
       if (!abByPage[pg]) abByPage[pg] = {};
       if (!abByPage[pg][v.variant]) abByPage[pg][v.variant] = { variant: v.variant, views: 0, optins: 0 };
@@ -1271,9 +1321,13 @@
       return null;
     }
     function bookingMatches(b) {
-      if (tunnelFilter === 'all') return true;
+      if (tunnelFilter === 'all' && sourceFilter === 'all') return true;
       var l = bookingLead(b);
-      return !!(l && l._tunnel === tunnelFilter);
+      if (l) return leadMatch(l);
+      /* RDV sans fiche rattachable : exclu par le filtre tunnel (inchangé) ;
+         le filtre Source lit la provenance posée sur le RDV lui-même. */
+      if (tunnelFilter !== 'all') return false;
+      return srcMatch(bookingSource(b, TMETA));
     }
 
     var created = DATA.bookings.filter(function (b) { return b._inCreated && b._class !== 'excluded' && bookingMatches(b); });
@@ -1294,7 +1348,7 @@
       if (!b._inCreated || b.rescheduledFromId) return;
       if (b._class !== 'self' && b._class !== 'setter') return;
       var lbt = bookingLead(b);
-      if (lbt && k.bookedByTunnel[lbt._tunnel] != null) k.bookedByTunnel[lbt._tunnel]++;
+      if (lbt && k.bookedByTunnel[lbt._tunnel] != null && srcMatch(leadSrc(lbt))) k.bookedByTunnel[lbt._tunnel]++;
     });
     /* ── VSL à prise de RDV directe (23/09/2026) ──
        Vues et clics « Réserver » : beacon (page_views_daily, pages vsl_*).
@@ -1331,14 +1385,14 @@
        ré-opt-ins : dernière page. */
     function countVslLead(L) {
       if (!L || !L.page || L.via !== 'optin') return;
-      if (!isVslPage(L.page) || !tunnelMatch(pageTunnel(L.page))) return;
+      if (!isVslPage(L.page) || !pageMatch(L.page)) return;
       vslCell(L.page, L.variant || '_').leads++;
       k.vslLeads++;
     }
     cohort.forEach(function (l) { countVslLead(l.landingFirst); });
     reopt.forEach(function (l) { countVslLead(l.landingLast); });
     DATA.views.forEach(function (v) {
-      if (!isVslPage(v.page) || !tunnelMatch(pageTunnel(v.page))) return;
+      if (!isVslPage(v.page) || !pageMatch(v.page)) return;
       var c = vslCell(v.page, v.variant || '_');
       if (v.pageLabel && !k.vslLabels[v.page]) k.vslLabels[v.page] = String(v.pageLabel);
       if (v.variant && v.variantLabel) { if (!k.vslVarLabels[v.page]) k.vslVarLabels[v.page] = {}; k.vslVarLabels[v.page][String(v.variant)] = String(v.variantLabel); }
@@ -1351,7 +1405,7 @@
       if (!b._inCreated || b.rescheduledFromId) return;
       if (b._class !== 'self' && b._class !== 'setter') return;
       var L = bookingLanding(b);
-      if (!L || !isVslPage(L.page) || !tunnelMatch(pageTunnel(L.page))) return;
+      if (!L || !isVslPage(L.page) || !pageMatch(L.page)) return;
       var cell = vslCell(L.page, L.variant || '_');
       cell.bookings++;
       k.vslBookings++;
@@ -1654,9 +1708,9 @@
 
     /* ── Téléphonie (call_logs) ── */
     function callMatches(c) {
-      if (tunnelFilter === 'all') return true;
+      if (tunnelFilter === 'all' && sourceFilter === 'all') return true;
       var l = c._p9 ? leadsByP9[c._p9] : null;
-      return !!(l && l._tunnel === tunnelFilter);
+      return !!(l && leadMatch(l));
     }
     /* Activité de la PÉRIODE (cartes appels sortants / décrochés / durée /
        par closer) : strictement bornée à [start, end] — les appels chargés
@@ -1779,7 +1833,7 @@
           (règle Adrien 14/07 : un paiement = un close commercial, sauf
           rattrapage d'un client gagné dans une autre période — résolu au
           chargement par resolvePaymentLeads). ── */
-    var closedLeads = (DATA.closedLeads || []).filter(function (l) { return tunnelMatch(leadTunnel(l)); });
+    var closedLeads = (DATA.closedLeads || []).filter(function (l) { return tunnelMatch(leadTunnel(l)) && srcMatch(leadSource(l, TMETA)); });
     var closesNoLeadSB = 0, closesNoLeadNB = 0;
     due.forEach(function (b) {
       if (b.outcome !== 'close' || b.leadId) return;
@@ -1894,9 +1948,10 @@
     (DATA.payments || []).forEach(function (p) {
       if (!p || !p._payClose || p._matched) return;
       var pc = p._payClose;
-      if (pc.kind === 'other') { if (tunnelFilter === 'all') k.payCloseOther.push(pc.name); return; }
+      if (pc.kind === 'other') { if (tunnelFilter === 'all' && sourceFilter === 'all') k.payCloseOther.push(pc.name); return; }
       if (pc.tunnel && !tunnelMatch(pc.tunnel)) return;
       if (!pc.tunnel && tunnelFilter !== 'all') return;
+      if (!srcMatch(pc.lead ? leadSource(pc.lead, TMETA) : 'other')) return;
       p._matched = true;
       var m3 = payMoney(p);
       mandatSum += m3.mandat;
@@ -1952,6 +2007,7 @@
       /* tunnel absent = Make n'a pas su le déduire : on garde la dépense
          plutôt que de la ranger d'office en Élite (ce qui la ferait
          disparaître du filtre Business et gonfler l'Élite). */
+      if (!adsInSource) return;
       if (a.tunnel && !tunnelMatch(a.tunnel === 'business' ? 'business' : 'elite')) return;
       var id = String(a.ad_id);
       if (!spendByAd[id]) spendByAd[id] = { spend: 0, impressions: 0, clicks: 0 };
@@ -2277,9 +2333,10 @@
           (s.variants || []).forEach(function (v) {
             if (v && v.id) vars[String(v.id)] = { label: v.label || '', weight: Number(v.weight) || 0, status: v.status || '' };
           });
-          steps[String(s.slug)] = { name: s.name || s.slug, type: s.type || 'page', variants: vars };
+          steps[String(s.slug)] = { name: s.name || s.slug, type: s.type || 'page', variants: vars, source: s.trackingSource || '' };
         });
-        DATA.tunnelsMeta[String(t.slug)] = { name: t.name || t.slug, kind: t.kind || 'funnel', steps: steps };
+        DATA.tunnelsMeta[String(t.slug)] = { name: t.name || t.slug, kind: t.kind || 'funnel', steps: steps,
+          source: (t.settings && t.settings.trackingSource) || '' };
       });
     }).catch(function () { DATA.tunnelsMeta = {}; });
   }
@@ -2371,6 +2428,8 @@
     classifyLegacyLabel: classifyLegacyLabel,
     realEntryMs: realEntryMs, pad2: pad2, isoDate: isoDate, median: median,
     phone9: phone9, leadTunnel: leadTunnel, frDateMs: frDateMs,
+    isYoutubeSource: isYoutubeSource, leadSource: leadSource,
+    bookingSource: bookingSource, pageSource: pageSource,
     effectiveCosts: effectiveCosts, classifyBooking: classifyBooking,
     /* Périodes */
     periodMonth: periodMonth, periodDay: periodDay, periodPreset: periodPreset,

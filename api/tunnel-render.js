@@ -177,12 +177,15 @@ function inject(html, config, extra) {
 /* Config `window.ALTEO_TUNNEL` d'une page (partagée avec api/tunnel-preview.js). */
 function buildConfig(tunnel, step, variant, preview) {
   const settings = tunnel.settings || {};
+  /* Source « youtube » : le pixel Meta n'est jamais transmis à la page. */
+  const source = Reg.trackingSourceOf(tunnel, step);
   return {
     tunnelId: tunnel.id, tunnelSlug: tunnel.slug, tunnelName: tunnel.name,
     stepId: step.id, stepSlug: step.slug, stepName: step.name || step.slug, stepType: step.type || 'page',
     variant: variant.id,
     page: Reg.pageKey(tunnel, step),
-    pixelId: settings.pixelId ? String(settings.pixelId).replace(/[^\d]/g, '') : '',
+    trackingSource: source,
+    pixelId: (source === 'meta' && settings.pixelId) ? String(settings.pixelId).replace(/[^\d]/g, '') : '',
     faviconUrl: /^https:\/\//i.test(String(settings.faviconUrl || '')) ? String(settings.faviconUrl).slice(0, 600) : '',
     nextUrl: Reg.nextUrlOf(tunnel, step),
     bookingUrl: settings.bookingType ? 'https://team.alteore.com/booking.html?type=' + encodeURIComponent(String(settings.bookingType)) : '',
