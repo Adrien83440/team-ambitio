@@ -78,6 +78,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
 .fb-row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .fb-prev{position:relative;width:100%;padding-top:56.25%;background:#000;border-radius:12px;overflow:hidden;border:1px solid var(--border);margin-top:8px}
 .fb-prev iframe,.fb-prev video,.fb-prev img{position:absolute;inset:0;width:100%;height:100%;border:0;object-fit:cover}
+.fb-prev.doc{padding-top:0;height:300px;background:#fff}
 .fb-thumbprev{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:10px;border:1px solid var(--border);background:var(--bg3);display:block;margin-bottom:8px}
 .fb-upl{display:flex;gap:6px;align-items:center}
 .fb-upl input{flex:1}
@@ -231,7 +232,7 @@ table.fb-stats{width:100%;border-collapse:collapse;font-size:12.5px}
   var F = null;                 // formation ouverte dans le builder
   var VIEW = 'list';            // list | builder | lesson | binder
   var DIRTY = false, SAVE_T = null, FORM_T = null;
-  var UPLOAD = null;            // { kind:'thumbnail'|'image'|'audio'|'resource'|'file', idx, sec }
+  var UPLOAD = null;            // { kind:'thumbnail'|'image'|'audio'|'html'|'resource'|'file', idx, sec }
   var DRIVE = { target: null, stack: [], node: null, connected: null, email: '', tokenKey: '' };
   var STATS = null;             // lessonId → { views:[…], reactions:[…] } pour F (admin)
   var NAMES = null;             // uid → nom affiché (admin)
@@ -311,14 +312,20 @@ table.fb-stats{width:100%;border-collapse:collapse;font-size:12.5px}
   });
 
   /* ─── Upload Storage ────────────────────────────────────────────────── */
-  function uploadFile(file) {
-    var ext = (file.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 6) || 'bin';
+  // file : File ou Blob ; name : nom à utiliser quand c'est un Blob (code collé).
+  // Un .html part toujours en text/html UTF-8 pour que le navigateur l'affiche
+  // dans l'iframe de la leçon (et avec les bons accents).
+  function uploadFile(file, name) {
+    var fname = name || file.name || 'fichier.bin';
+    var ext = (fname.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 6) || 'bin';
     var path = 'formations/' + F.id + '/' + Date.now() + '-' + Math.random().toString(36).slice(2, 7) + '.' + ext;
-    var task = storage.ref(path).put(file, { contentType: file.type || 'application/octet-stream' });
+    var ct = file.type || 'application/octet-stream';
+    if (ext === 'html' || ext === 'htm') ct = 'text/html; charset=utf-8';
+    var task = storage.ref(path).put(file, { contentType: ct });
     return new Promise(function (resolve, reject) {
       task.on('state_changed', function (s) {
         var pct = s.totalBytes ? Math.round(s.bytesTransferred / s.totalBytes * 100) : 0;
-        toast('⤒ Envoi ' + file.name + ' — ' + pct + ' %');
+        toast('⤒ Envoi ' + fname + ' — ' + pct + ' %');
       }, reject, function () { task.snapshot.ref.getDownloadURL().then(resolve, reject); });
     });
   }
@@ -668,6 +675,11 @@ table.fb-stats{width:100%;border-collapse:collapse;font-size:12.5px}
     if (C.isDirectVideo(url)) return '<div class="fb-prev"><video src="' + esc(url) + '" controls preload="metadata"></video></div>';
     return '<div class="hint" style="color:var(--gold)">⚠ Lien non reconnu : il s\'ouvrira dans un nouvel onglet côté membre.</div>';
   }
+  function htmlPreviewHtml(url) {
+    if (!url) return '';
+    return '<div class="fb-prev doc"><iframe src="' + esc(url) + '" sandbox="allow-scripts allow-same-origin allow-popups allow-forms" loading="lazy"></iframe></div>' +
+      (C.isHtmlDoc(url) ? '' : '<div class="hint" style="color:var(--gold)">⚠ Ce lien ne finit pas par .html : il s\'affichera seulement si le site autorise l\'intégration dans une autre page.</div>');
+  }
   function resourcesHtml(list) {
     var h = '';
     (list || []).forEach(function (r, i) {
@@ -690,6 +702,12 @@ table.fb-stats{width:100%;border-collapse:collapse;font-size:12.5px}
       fieldHtml('edDuration', 'Durée affichée', l.duration, 'Ex. 12 min') + '</div>';
     h += '<div class="fb-f"><label for="edVideo">Vidéo</label><input type="url" id="edVideo" value="' + esc(l.video || '') + '" placeholder="Lien YouTube, Vimeo, Loom, Tella, Fathom ou Google Drive (fichier)"><div id="edVideoPrev">' + videoPreviewHtml(l.video) + '</div>' +
       '<div class="hint">Pour Drive, colle le lien du <b>fichier</b> (…/file/d/…/view), partagé « tous ceux qui ont le lien ». Pour Fathom, colle le lien de <b>partage</b> (fathom.video/share/…), pas le lien interne /calls/… qui exige une connexion Fathom.</div></div>';
+    h += '<div class="fb-f"><label for="edHtml">Document HTML</label><div class="fb-upl"><input type="url" id="edHtml" value="' + esc(l.html || '') + '" placeholder="https://… (page .html autonome)"><button type="button" class="au-btn" data-upload="html" title="Envoyer un fichier .html">⤒</button><button type="button" class="au-btn" data-act="html-paste" title="Coller le code HTML">&lt;/&gt;</button></div>' +
+      '<div id="edHtmlPaste" style="display:none;margin-top:8px"><textarea id="edHtmlCode" rows="9" spellcheck="false" placeholder="Colle ici le code complet de la page (&lt;!doctype html&gt; …)" style="font-family:var(--fm);font-size:12px;line-height:1.45"></textarea>' +
+      '<div style="display:flex;gap:6px;margin-top:6px"><button type="button" class="au-btn primary" data-act="html-paste-save">Enregistrer comme fichier</button><button type="button" class="au-btn ghost" data-act="html-paste-cancel">Annuler</button></div></div>' +
+      '<input type="text" id="edHtmlTitle" value="' + esc(l.htmlTitle || '') + '" placeholder="Titre affiché au-dessus du document (optionnel)" style="margin-top:8px">' +
+      '<div id="edHtmlPrev">' + htmlPreviewHtml(l.html) + '</div>' +
+      '<div class="hint">Une page HTML autonome (guide interactif, simulateur, support de cours…) affichée dans la leçon, entre la vidéo et le texte. Envoie le fichier avec ⤒ ou colle son code avec &lt;/&gt; : il est hébergé sur le Storage du projet. Un lien externe fonctionne si le site autorise l\'intégration.</div></div>';
     h += '<div class="fb-f"><label>Contenu de la leçon</label>' + rteHtml('edBody', C.sanitizeHtml(C.plainToHtml(l.body)), 220) +
       '<div class="hint">Colle du texte, mets en forme avec la barre. Le HTML est stocké tel quel (compatible avec les leçons migrées d\'Academy).</div></div>';
     h += '<div class="fb-f"><label>Ressources téléchargeables</label><div id="edRes">' + resourcesHtml(l.resources) + '</div><div class="hint">Titre + lien, ou envoie un fichier (PDF, doc…) avec ⤒ — il est hébergé sur le Storage du projet.</div></div>';
@@ -710,6 +728,7 @@ table.fb-stats{width:100%;border-collapse:collapse;font-size:12.5px}
     l.title = g('edTitle'); l.status = g('edStatus') || 'draft'; l.duration = g('edDuration');
     l.video = g('edVideo'); l.thumbnail = g('edThumb'); l.image = g('edImage'); l.audio = g('edAudio');
     l.body = rteValue('edBody');
+    l.html = g('edHtml'); l.htmlTitle = g('edHtmlTitle');
     var res = [];
     document.querySelectorAll('#edRes .fb-res').forEach(function (row) {
       var t = row.querySelector('[data-rf="title"]').value.trim(), u = row.querySelector('[data-rf="url"]').value.trim();
@@ -725,6 +744,8 @@ table.fb-stats{width:100%;border-collapse:collapse;font-size:12.5px}
   function refreshPreviews() {
     var v = document.getElementById('edVideo'), pv = document.getElementById('edVideoPrev');
     if (v && pv && pv.getAttribute('data-for') !== v.value) { pv.setAttribute('data-for', v.value); pv.innerHTML = videoPreviewHtml(v.value.trim()); }
+    var hd = document.getElementById('edHtml'), hp = document.getElementById('edHtmlPrev');
+    if (hd && hp && hp.getAttribute('data-for') !== hd.value) { hp.setAttribute('data-for', hd.value); hp.innerHTML = htmlPreviewHtml(hd.value.trim()); }
     ['edThumb', 'edImage'].forEach(function (id) {
       var i = document.getElementById(id), img = document.getElementById(id + 'Prev');
       if (i && img) { img.src = i.value.trim(); img.style.display = i.value.trim() ? '' : 'none'; }
@@ -1035,7 +1056,9 @@ table.fb-stats{width:100%;border-collapse:collapse;font-size:12.5px}
     var up = t.closest('[data-upload]');
     if (up) {
       UPLOAD = { kind: up.getAttribute('data-upload'), idx: parseInt(up.getAttribute('data-idx') || '-1', 10), sec: parseInt(up.getAttribute('data-sec') || '-1', 10) };
-      document.getElementById('fileInput').click();
+      var fi = document.getElementById('fileInput');
+      if (UPLOAD.kind === 'html') fi.setAttribute('accept', '.html,.htm,text/html'); else fi.removeAttribute('accept');
+      fi.click();
       return;
     }
     var cmd = t.closest('[data-cmd]');
@@ -1062,6 +1085,23 @@ table.fb-stats{width:100%;border-collapse:collapse;font-size:12.5px}
       return;
     }
     if (act === 'w-add' || act === 'w-del' || act === 'w-up' || act === 'w-down') { widgetAct(act, parseInt(btn.getAttribute('data-idx') || '-1', 10)); return; }
+    if (act === 'html-paste') { var pz = document.getElementById('edHtmlPaste'); if (pz) { pz.style.display = ''; var tc = document.getElementById('edHtmlCode'); if (tc) tc.focus(); } return; }
+    if (act === 'html-paste-cancel') { var pz2 = document.getElementById('edHtmlPaste'); if (pz2) pz2.style.display = 'none'; return; }
+    if (act === 'html-paste-save') {
+      var codeEl = document.getElementById('edHtmlCode');
+      var code = codeEl ? codeEl.value : '';
+      if (!code.trim()) { toast('Colle d\'abord le code HTML de la page', true); return; }
+      btn.disabled = true;
+      uploadFile(new Blob([code], { type: 'text/html; charset=utf-8' }), 'document.html').then(function (url) {
+        document.getElementById('edHtml').value = url;
+        var hT2 = document.getElementById('edHtmlTitle');
+        if (hT2 && !hT2.value) { var tm = code.match(/<title[^>]*>([^<]*)<\/title>/i); if (tm) hT2.value = tm[1].trim(); }
+        codeEl.value = ''; document.getElementById('edHtmlPaste').style.display = 'none';
+        toast('✓ Document HTML enregistré');
+        refreshPreviews(); readLessonForm(); markDirty();
+      }).catch(function (e2) { toast('Envoi impossible : ' + e2.message, true); }).then(function () { btn.disabled = false; });
+      return;
+    }
     if (act === 'res-add') { readLessonForm(); var lc = C.locate(F.modules, parseHash().l); lc.node.resources.push({ title: '', url: '' }); document.getElementById('edRes').innerHTML = resourcesHtml(lc.node.resources); return; }
     if (act === 'res-del') { var row = btn.closest('.fb-res'); row.parentNode.removeChild(row); scheduleFormRead(readLessonForm); return; }
     if (act === 'sec-add') { readBinderForm(); var lb = C.locate(F.modules, parseHash().b); lb.node.sections.push({ id: C.uid(), title: '', files: [] }); document.getElementById('bdSecs').innerHTML = sectionsHtml(lb.node.sections); markDirty(); return; }
@@ -1088,6 +1128,7 @@ table.fb-stats{width:100%;border-collapse:collapse;font-size:12.5px}
       return;
     }
     if (!t.closest('#edForm')) return;
+    if (t.id === 'edHtmlCode') return;
     if (VIEW === 'apparence') { readThemeForm(); scheduleThemeSave(); return; }
     if (VIEW === 'lesson') { refreshPreviews(); scheduleFormRead(readLessonForm); }
     if (VIEW === 'binder') scheduleFormRead(readBinderForm);
@@ -1102,6 +1143,7 @@ table.fb-stats{width:100%;border-collapse:collapse;font-size:12.5px}
         if (u.kind === 'thumbnail') document.getElementById('edThumb').value = url;
         else if (u.kind === 'image') document.getElementById('edImage').value = url;
         else if (u.kind === 'audio') document.getElementById('edAudio').value = url;
+        else if (u.kind === 'html') { document.getElementById('edHtml').value = url; var hT = document.getElementById('edHtmlTitle'); if (hT && !hT.value) hT.value = file.name.replace(/\.html?$/i, ''); }
         else if (u.kind === 'heroImage') document.getElementById('thImage').value = url;
         else if (u.kind === 'wImage') { var wi = document.getElementById('wImage_' + u.idx); if (wi) wi.value = url; var wc = wi && wi.closest('.fb-wdg'); var ws = wc && wc.querySelector('[data-wf="showImage"]'); if (ws) ws.checked = true; }
         else if (u.kind === 'resource') {

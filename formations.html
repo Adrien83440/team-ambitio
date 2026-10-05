@@ -96,6 +96,16 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
 .fm-image{width:100%;border-radius:14px;border:1px solid var(--border);display:block;cursor:zoom-in}
 .fm-audio{width:100%;margin-top:14px}
 .fm-nomedia{padding:26px;border:1px dashed var(--border2);border-radius:14px;color:var(--muted);font-size:13px;text-align:center}
+/* Document HTML de la leçon : page autonome dans un iframe sandboxé */
+.fm-htmldoc{margin-top:16px;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--bg2);box-shadow:var(--shadow)}
+.fm-htmldoc-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border)}
+.fm-htmldoc-bar .k{font-family:var(--fm);font-size:10px;font-weight:700;color:var(--muted);background:var(--bg3);border-radius:6px;padding:3px 7px}
+.fm-htmldoc-bar .t{flex:1;font-size:12.5px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fm-htmldoc-bar .au-btn{padding:4px 10px;font-size:11.5px}
+.fm-htmldoc iframe{display:block;width:100%;height:70vh;min-height:460px;border:0;background:#fff}
+.fm-htmldoc.is-full{position:fixed;inset:0;z-index:10000;margin:0;border-radius:0;border:0}
+.fm-htmldoc.is-full iframe{height:calc(100vh - 44px);min-height:0}
+body.fm-noscroll{overflow:hidden}
 .fm-body{margin-top:22px;font-size:14.5px;line-height:1.7;color:var(--text)}
 .fm-body p{margin:0 0 12px}
 .fm-body h1,.fm-body h2,.fm-body h3{font-family:var(--fh);letter-spacing:-.2px;margin:22px 0 10px;line-height:1.25}
@@ -447,8 +457,25 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
       h += '<a href="' + esc(l.image) + '" target="_blank" rel="noopener"><img class="fm-image" src="' + esc(l.image) + '" alt=""></a>';
     }
     if (l.audio) h += '<audio class="fm-audio" controls preload="metadata" src="' + esc(l.audio) + '"></audio>';
-    if (!h) h = '<div class="fm-nomedia">Cette leçon n\'a pas de média : le contenu est ci-dessous.</div>';
+    if (!h && !l.html) h = '<div class="fm-nomedia">Cette leçon n\'a pas de média : le contenu est ci-dessous.</div>';
     return h;
+  }
+
+  // Page HTML autonome de la leçon. Elle vient du Storage (autre origine que
+  // team.alteore.com) ou d'un site externe : l'iframe sandboxé l'isole de la
+  // page, sans passer par sanitizeHtml, qui retirerait ses scripts et styles.
+  function htmlDocHtml(l) {
+    var title = l.htmlTitle || 'Document';
+    return '<div class="fm-htmldoc"><div class="fm-htmldoc-bar"><span class="k">HTML</span><span class="t">' + esc(title) + '</span>' +
+      '<button type="button" class="au-btn" data-act="html-full" title="Afficher en plein écran">⛶ Plein écran</button>' +
+      '<a class="au-btn" href="' + esc(l.html) + '" target="_blank" rel="noopener" title="Ouvrir dans un nouvel onglet">↗</a></div>' +
+      '<iframe src="' + esc(l.html) + '" title="' + esc(title) + '" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms allow-downloads allow-modals"></iframe></div>';
+  }
+  function setHtmlFull(box, on) {
+    if (on) { box.classList.add('is-full'); document.body.classList.add('fm-noscroll'); }
+    else { box.classList.remove('is-full'); document.body.classList.remove('fm-noscroll'); }
+    var b = box.querySelector('[data-act="html-full"]');
+    if (b) b.textContent = on ? '✕ Quitter le plein écran' : '⛶ Plein écran';
   }
 
   function renderLesson(f, lid) {
@@ -477,6 +504,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
     h += '<div style="display:flex;align-items:flex-start;gap:12px"><h1 class="fm-ltitle" style="flex:1">' + esc(l.title || 'Sans titre') + '</h1>' +
       (CAN_EDIT ? '<a class="fm-edit-link" href="formations-admin.html' + hashFor({ f: fid, l: lid }) + '">✏️ Modifier</a>' : '') + '</div>';
     h += mediaHtml(l);
+    if (l.html) h += htmlDocHtml(l);
     if (l.body) h += '<div class="fm-body">' + C.sanitizeHtml(C.plainToHtml(l.body)) + '</div>';
     if (l.resources && l.resources.length) {
       h += '<div class="fm-res-h">Ressources</div>';
@@ -573,7 +601,15 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
     } else if (act === 'react') {
       e.preventDefault();
       react(btn.getAttribute('data-fid'), btn.getAttribute('data-lid'), btn.getAttribute('data-emoji'));
+    } else if (act === 'html-full') {
+      var box = btn.closest('.fm-htmldoc');
+      if (box) setHtmlFull(box, !box.classList.contains('is-full'));
     }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    var full = document.querySelector('.fm-htmldoc.is-full');
+    if (full) setHtmlFull(full, false);
   });
   window.addEventListener('hashchange', render);
 

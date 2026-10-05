@@ -12,7 +12,11 @@
      module  = { id, title, status:'draft'|'published', children:[…] }
      child   = sub    { kind:'sub',    id, title, lessons:[lesson|binder] }
              | lesson { kind:'lesson', id, title, status, video, image,
-                        audio, body, duration, thumbnail, resources:[{title,url}] }
+                        audio, body, duration, thumbnail, resources:[{title,url}],
+                        html, htmlTitle }
+               html = URL d'une page HTML autonome (fichier .html envoyé sur le
+               Storage, ou page externe) affichée dans un iframe sandboxé, entre
+               la vidéo et le texte de la leçon.
              | binder { kind:'binder', id, title, status, intro,
                         sections:[{ id, title, files:[{id,title,url,note}] }] }
    Un sous-module n'a pas de statut : il disparaît quand toutes ses leçons
@@ -96,6 +100,8 @@
     x.body = x.body || '';
     x.duration = x.duration || '';
     x.thumbnail = x.thumbnail || '';
+    x.html = x.html || '';
+    x.htmlTitle = x.htmlTitle || '';
     x.resources = (x.resources || []).map(normalizeResource);
     return x;
   }
@@ -396,6 +402,13 @@
     return /\.(mp4|webm|m4v|ogv)(\?|#|$)/i.test(String(url || ''));
   }
 
+  // Fichier HTML (Storage « …/xxx.html?alt=media&token=… » ou lien direct).
+  // Sert au builder pour avertir quand un lien externe n'est pas un .html :
+  // il s'affichera quand même si le site autorise l'intégration.
+  function isHtmlDoc(url) {
+    return /\.html?(\?|#|$)/i.test(String(url || ''));
+  }
+
   function driveFileId(url) {
     var u = String(url || '');
     var m = u.match(/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)/);
@@ -424,6 +437,7 @@
   function fileKind(url, title) {
     var s = (String(url || '') + ' ' + String(title || '')).toLowerCase();
     if (/\.pdf(\?|#|$| )/.test(s)) return 'PDF';
+    if (/\.html?(\?|#|$| )/.test(s)) return 'HTML';
     if (/\.(png|jpe?g|gif|webp|avif)(\?|#|$| )/.test(s)) return 'Image';
     if (/\.(docx?|odt)(\?|#|$| )|docs\.google\.com\/document/.test(s)) return 'DOC';
     if (/\.(xlsx?|ods|csv)(\?|#|$| )|docs\.google\.com\/spreadsheets/.test(s)) return 'XLS';
@@ -648,7 +662,7 @@
     flattenLessons: flattenLessons, findLesson: findLesson, findBinder: findBinder, locate: locate,
     studentModules: studentModules, progressStats: progressStats, panelScope: panelScope, countTree: countTree,
     moveNodeInTree: moveNodeInTree, moveInList: moveInList, regenIds: regenIds,
-    toEmbed: toEmbed, isDirectVideo: isDirectVideo, driveFileId: driveFileId, lessonThumbUrl: lessonThumbUrl,
+    toEmbed: toEmbed, isDirectVideo: isDirectVideo, isHtmlDoc: isHtmlDoc, driveFileId: driveFileId, lessonThumbUrl: lessonThumbUrl,
     driveFileUrl: driveFileUrl, fileKind: fileKind,
     plainToHtml: plainToHtml, sanitizeHtml: sanitizeHtml, looksLikeHtml: looksLikeHtml,
     cleanFileTitle: cleanFileTitle, driveNodeToModules: driveNodeToModules, driveNodeToChildren: driveNodeToChildren,
