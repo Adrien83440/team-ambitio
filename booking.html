@@ -369,6 +369,57 @@ body.bk-embed .bk-progress{position:relative}
 
 var db = firebase.firestore();
 
+/* ── FUSEAU DE RÉFÉRENCE : Europe/Paris (05/10/2026) ──
+   Les horaires des experts (schedule, dateOverrides, availabilityRules) sont
+   des « HH:MM » en heure de Paris, et le serveur (onBookingCreated) crée
+   l'événement Google en Europe/Paris à partir de date + time. Toute la grille
+   se calcule donc en heure de Paris, QUEL QUE SOIT le fuseau du navigateur :
+   un setter à l'étranger (Asia/Bangkok) voyait les blocages Google décalés de
+   plusieurs heures par rapport aux horaires → créneaux fantômes et RDV posés
+   dans des plages bloquées. Repli sur l'heure locale si Intl.formatToParts
+   est indisponible (très vieux navigateurs : comportement historique). */
+var SITE_TZ = 'Europe/Paris';
+var _parisFmt = null;
+try {
+  _parisFmt = new Intl.DateTimeFormat('en-GB', {
+    timeZone: SITE_TZ, hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+  });
+  if (typeof _parisFmt.formatToParts !== 'function') _parisFmt = null;
+} catch (e) { _parisFmt = null; }
+
+/* Décompose un instant en heure murale de Paris :
+   { date:'YYYY-MM-DD', min:(h*60+m), y, mo(1-12), d, h, mi } */
+function parisParts(dt) {
+  var y, mo, d, h, mi;
+  if (_parisFmt) {
+    var parts = _parisFmt.formatToParts(dt);
+    var get = function(type) { for (var i = 0; i < parts.length; i++) { if (parts[i].type === type) return parseInt(parts[i].value, 10); } return 0; };
+    y = get('year'); mo = get('month'); d = get('day'); h = get('hour'); mi = get('minute');
+    if (h === 24) h = 0;
+  } else {
+    y = dt.getFullYear(); mo = dt.getMonth() + 1; d = dt.getDate(); h = dt.getHours(); mi = dt.getMinutes();
+  }
+  var pad2 = function(n) { return String(n).padStart(2, '0'); };
+  return { date: y + '-' + pad2(mo) + '-' + pad2(d), min: h * 60 + mi, y: y, mo: mo, d: d, h: h, mi: mi };
+}
+/* Décalage Paris − UTC (minutes) à un instant donné (60 en hiver, 120 en été). */
+function parisOffsetMin(ms) {
+  var pp = parisParts(new Date(ms));
+  return Math.round((Date.UTC(pp.y, pp.mo - 1, pp.d, pp.h, pp.mi) - ms) / 60000);
+}
+/* Heure murale de Paris ('YYYY-MM-DD', 'HH:MM') → timestamp ms absolu. */
+function parisWallToMs(dateStr, time) {
+  var p = dateStr.split('-'), t = (time || '00:00').split(':');
+  var guess = Date.UTC(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10), parseInt(t[0], 10), parseInt(t[1], 10));
+  var off = parisOffsetMin(guess);
+  var ms = guess - off * 60000;
+  var off2 = parisOffsetMin(ms);
+  if (off2 !== off) ms = guess - off2 * 60000;
+  return ms;
+}
+function parisToday() { return parisParts(new Date()).date; }
+
 /* ── STATE ── */
 var S = {
   types: [],
@@ -383,9 +434,9 @@ var S = {
   lockPerson: null,
   selDate: null,
   selTime: null,
-  calMonth: new Date().getMonth(),
-  calYear: new Date().getFullYear(),
-  userTz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Paris',
+  calMonth: parisParts(new Date()).mo - 1,
+  calYear: parisParts(new Date()).y,
+  userTz: SITE_TZ,   // fuseau de la grille ET du booking enregistré (jamais celui du navigateur)
   currentStep: 1,
   busyTimes: {},
   busyLoading: false,
@@ -455,14 +506,13 @@ function getBusyForDate(dateStr, person) {
   var result = [];
   for (var i = 0; i < busyList.length; i++) {
     var b = busyList[i];
-    var bStart = new Date(b.start);
-    var bEnd = new Date(b.end);
-    var dayStart = new Date(dateStr + 'T00:00:00');
-    var dayEnd = new Date(dateStr + 'T23:59:59');
-    if (bStart <= dayEnd && bEnd >= dayStart) {
-      var sMin = fmtDate(bStart) === dateStr ? bStart.getHours() * 60 + bStart.getMinutes() : 0;
-      var eMin = fmtDate(bEnd) === dateStr ? bEnd.getHours() * 60 + bEnd.getMinutes() : 1440;
-      result.push({ start: sMin, end: eMin });
+    // Bornes converties en heure murale de Paris (jamais celle du navigateur)
+    var bs = parisParts(new Date(b.start));
+    var be = parisParts(new Date(b.end));
+    if (bs.date <= dateStr && be.date >= dateStr) {
+      var sMin = bs.date === dateStr ? bs.min : 0;
+      var eMin = be.date === dateStr ? be.min : 1440;
+      if (eMin > sMin) result.push({ start: sMin, end: eMin });
     }
   }
   return result;
@@ -794,7 +844,7 @@ db.collection('booking_config').get().then(function(snap) {
   });
 
   // Try loading existing bookings (may fail for unauthenticated users)
-  var today = fmtDate(new Date());
+  var today = parisToday();
   db.collection('bookings').where('date', '>=', today).get().then(function(bSnap) {
     bSnap.forEach(function(doc) {
       var d = doc.data();
@@ -824,7 +874,11 @@ function initBooking() {
   setTimeout(bkPixelInit, 0);
 
   // Timezone
-  document.getElementById('tzLabel').textContent = S.userTz.replace(/_/g, ' ');
+  // Grille en heure de Paris ; on le dit explicitement si l'appareil est ailleurs.
+  var _browserTz = '';
+  try { _browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+  document.getElementById('tzLabel').textContent = S.userTz.replace(/_/g, ' ')
+    + ((_browserTz && _browserTz !== S.userTz) ? ' — heure de Paris (votre appareil : ' + _browserTz.replace(/_/g, ' ') + ')' : '');
 
   // Presets
   if (presetType) {
@@ -962,7 +1016,7 @@ function renderCalendar() {
   var first = new Date(S.calYear, S.calMonth, 1);
   var lastDay = new Date(S.calYear, S.calMonth + 1, 0).getDate();
   var startDay = first.getDay();
-  var today = new Date(); today.setHours(0,0,0,0);
+  var todayDs = parisToday();
 
   var h = '<div class="bk-cal">';
   h += '<div class="bk-cal-header">';
@@ -977,8 +1031,8 @@ function renderCalendar() {
   for (var day = 1; day <= lastDay; day++) {
     var dateObj = new Date(S.calYear, S.calMonth, day);
     var ds = fmtDate(dateObj);
-    var isPast = dateObj < today;
-    var isToday = dateObj.getTime() === today.getTime();
+    var isPast = ds < todayDs;
+    var isToday = ds === todayDs;
     var isAvail = !isPast && hasAvailableSlots(ds);
     var isSel = S.selDate === ds;
     var cls = 'bk-cal-day';
@@ -1178,10 +1232,9 @@ function hasAvailableSlotsFor(_p, dateStr) {
   // Min notice check (Consultation > Expert > 0)
   var minNotice = (S.selType && S.selType.rules && S.selType.rules.minNoticeHours) || _p.minNoticeHours || 0;
   if (minNotice > 0) {
-    var now = new Date();
-    var earliest = new Date(now.getTime() + minNotice * 3600000);
-    var dayEnd = new Date(dateStr + 'T23:59:59');
-    if (dayEnd < earliest) return false;
+    var earliestMs = Date.now() + minNotice * 3600000;
+    var dayEndMs = parisWallToMs(dateStr, '23:59') + 59000;
+    if (dayEndMs < earliestMs) return false;
   }
 
   // Max booking window check — borne haute « dans le futur ».
@@ -1189,7 +1242,7 @@ function hasAvailableSlotsFor(_p, dateStr) {
   // créneau de ce jour n'est réservable → jour non disponible (non cliquable).
   var maxTs = getMaxBookingTs(_p);
   if (maxTs) {
-    var dayStart = new Date(dateStr + 'T00:00:00').getTime();
+    var dayStart = parisWallToMs(dateStr, '00:00');
     if (dayStart > maxTs) return false;
   }
 
@@ -1286,15 +1339,14 @@ function computeSlotsFor(person, dateStr) {
 
   // Passe / preavis minimum
   var now = new Date();
-  if (dateStr === fmtDate(now)) {
-    var nowMin = now.getHours() * 60 + now.getMinutes();
-    var noticeMin = nowMin + (minNotice * 60);
+  var nowP = parisParts(now);
+  if (dateStr === nowP.date) {
+    var noticeMin = nowP.min + (minNotice * 60);
     available = available.filter(function(t) { return timeToMin(t) > noticeMin; });
   } else if (minNotice > 0) {
-    var earliest = new Date(now.getTime() + minNotice * 3600000);
-    if (dateStr === fmtDate(earliest)) {
-      var eMin = earliest.getHours() * 60 + earliest.getMinutes();
-      available = available.filter(function(t) { return timeToMin(t) >= eMin; });
+    var eP = parisParts(new Date(now.getTime() + minNotice * 3600000));
+    if (dateStr === eP.date) {
+      available = available.filter(function(t) { return timeToMin(t) >= eP.min; });
     }
   }
 
@@ -1302,7 +1354,7 @@ function computeSlotsFor(person, dateStr) {
   var maxTsSlots = getMaxBookingTs(person);
   if (maxTsSlots) {
     available = available.filter(function(t) {
-      return new Date(dateStr + 'T' + t + ':00').getTime() <= maxTsSlots;
+      return parisWallToMs(dateStr, t) <= maxTsSlots;
     });
   }
 
@@ -2124,7 +2176,7 @@ async function submitBooking() {
   // sortir de la fenêtre avant la confirmation).
   var _maxTs = getMaxBookingTs();
   if (_maxTs && S.selDate && S.selTime) {
-    if (new Date(S.selDate + 'T' + S.selTime + ':00').getTime() > _maxTs) {
+    if (parisWallToMs(S.selDate, S.selTime) > _maxTs) {
       alert('Ce créneau dépasse la période de réservation autorisée. Merci de choisir une date plus proche.');
       return;
     }
@@ -2466,12 +2518,12 @@ async function submitBooking() {
       }).then(function () {
         // Trace sur la fiche prospect
         if (booking.leadId) {
-          var _d2 = new Date();
+          var _d2 = parisParts(new Date());
           var _pad = function (n) { return String(n).padStart(2, '0'); };
           db.collection('leads').doc(booking.leadId).update({
             timeline_history: firebase.firestore.FieldValue.arrayUnion({
               text: '📅 RDV replanifié → ' + S.selDate.split('-').reverse().join('/') + ' à ' + S.selTime,
-              date: _pad(_d2.getDate()) + '/' + _pad(_d2.getMonth() + 1) + '/' + _d2.getFullYear() + ' ' + _pad(_d2.getHours()) + ':' + _pad(_d2.getMinutes()),
+              date: _pad(_d2.d) + '/' + _pad(_d2.mo) + '/' + _d2.y + ' ' + _pad(_d2.h) + ':' + _pad(_d2.mi),
               color: '#a78bfa'
             }),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
