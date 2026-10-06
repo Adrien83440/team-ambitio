@@ -83,11 +83,6 @@
     { id: 'booking',           icon: '📅', label: 'Booking',     href: 'booking-admin.html',     section: 'Sales', perm: 'booking' },
     { id: 'sales-rdv',         icon: '🗓️', label: 'Rendez-vous',  href: 'sales-rdv.html',         section: 'Sales', perm: 'booking' },
     { id: 'sales-dialer',      icon: '☎️', label: 'Dialer',      href: 'sales-dialer.html',      section: 'Sales', perm: 'sales_dialer' },
-    // Réécoutes : tous les appels Ringover avec enregistrement, transcription
-    // par locuteur et résumé IA. Chaque sales ne voit que ses appels ; les
-    // admins (et users/{uid}.canListenCalls) voient toute l'équipe et filtrent
-    // par personne. Données servies par api/calls-list + api/call-detail.
-    { id: 'sales-appels',      icon: '🎧', label: 'Réécoutes',   href: 'sales-appels.html',      section: 'Sales', perm: 'sales_dialer' },
     { id: 'sales-whatsapp',    icon: '💬', label: 'WhatsApp',    href: 'whatsapp.html',          section: 'Sales', perm: 'sales_whatsapp' },
     { id: 'signatures',        icon: '✍️', label: 'Signatures',  href: 'sales-signatures.html',  section: 'Sales', perm: 'signatures' },
     // ─── FUNNEL & SITE — admin uniquement ───
@@ -107,6 +102,12 @@
     // le client rattaché — vidéo + transcription cliquable. Données servies
     // par api/replay-closing.js, admin uniquement.
     { id: 'admin-replay-closing', icon: '🎬', label: 'Replay closing', href: 'admin-replay-closing.html', section: 'Admin', perm: '_admin' },
+    // Réécoutes : tous les appels Ringover avec enregistrement, transcription
+    // par locuteur et résumé IA. Rangé sous Replay closing pour les admins
+    // (demande Adrien 06/10/2026) ; les sales gardent l'accès à LEURS appels,
+    // l'entrée reste alors dans la section Sales (sectionNonAdmin). Données
+    // servies par api/calls-list + api/call-detail.
+    { id: 'sales-appels',      icon: '🎧', label: 'Réécoutes',   href: 'sales-appels.html',      section: 'Admin', sectionNonAdmin: 'Sales', perm: 'sales_dialer' },
     { id: 'alteoforms',        icon: '📝', label: 'AlteoForms',   href: 'alteoforms.html',        section: 'Outils', perm: 'alteoforms' },
     { id: 'payments',          icon: '💳', label: 'Paiements',    href: 'payments.html',          section: 'Outils', perm: 'payments' },
     // Formations internes (Setting LAB / Closing LAB / Coach LAB) : accès
@@ -691,7 +692,7 @@
 
     const groups = [];
     modulesTree.forEach(m => {
-      const secName = m.section || 'Autres';
+      const secName = (role !== 'admin' && m.sectionNonAdmin) || m.section || 'Autres';
       let g = groups.find(x => x.name === secName);
       if (!g) { g = { name: secName, items: [] }; groups.push(g); }
       g.items.push(m);
