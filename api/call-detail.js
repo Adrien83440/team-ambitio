@@ -1,4 +1,4 @@
-// api/call-detail.js  — v2 Ringover support
+// api/call-detail.js  — v3 : + transcriptSpeeches, durées détaillées, amd
 // ----------------------------------------------------------------------------
 // Retourne le détail complet d'un appel (call_logs/{callSid}) avec :
 //   - URL signée du .mp3 Firebase Storage (TTL 1h)  [Twilio]
@@ -12,6 +12,27 @@ const { requireAuth } = require('./_verifyFirebaseAuth');
 const parseBody = require('./_parseBody');
 
 const SIGNED_URL_TTL_MS = 60 * 60 * 1000;
+
+/* Segments de transcription Ringover allégés : { channelId, start, end, text }.
+   Les segments vides sont ignorés ; un tableau vide devient null. */
+function compactSpeeches(list) {
+  if (!Array.isArray(list) || !list.length) return null;
+  const out = [];
+  for (const s of list) {
+    if (!s || typeof s !== 'object') continue;
+    const text = typeof s.text === 'string' ? s.text.trim() : '';
+    if (!text) continue;
+    const start = Number(s.start);
+    const end = Number(s.end);
+    out.push({
+      channelId: (s.channelId === 0 || s.channelId === 1 || typeof s.channelId === 'number') ? s.channelId : 0,
+      start: isFinite(start) ? start : 0,
+      end: isFinite(end) ? end : (isFinite(start) ? start : 0),
+      text,
+    });
+  }
+  return out.length ? out : null;
+}
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -111,8 +132,15 @@ module.exports = async (req, res) => {
       answeredAt:       toIso(log.answeredAt),
       endedAt:          toIso(log.endedAt),
       durationSec:      log.durationSec || null,
+      totalDurationSec:   typeof log.totalDurationSec   === 'number' ? log.totalDurationSec   : null,
+      ringingDurationSec: typeof log.ringingDurationSec === 'number' ? log.ringingDurationSec : null,
+      amd:              log.amd === true ? true : (log.amd === false ? false : null),
+      hangupBy:         log.hangupBy   || null,
+      campaignId:       log.campaignId || null,
+      provider:         log.provider   || null,
       userId:           log.userId     || null,
       userName,
+      ringoverUserName: log.ringoverUserName || null,
 
       // ── Enregistrement ──────────────────────────────────────────────────
       // Twilio  : recordingSignedUrl  (URL signée Firebase Storage, TTL 1h)
@@ -131,6 +159,11 @@ module.exports = async (req, res) => {
       transcriptionText:     log.transcriptionText    || null,
       transcriptText:        log.transcriptText       || null,
       transcriptionLanguage: log.transcriptionLanguage || null,
+      // Ringover ne pose PAS transcriptText : la transcription vit dans
+      // transcriptSpeeches (segments par canal, avec le mot à mot). On renvoie
+      // les segments sans le découpage mot à mot (words), inutile à l'écran et
+      // 10× plus lourd que le texte. channelId distingue les deux locuteurs.
+      transcriptSpeeches:    compactSpeeches(log.transcriptSpeeches),
 
       // ── Analyse IA ───────────────────────────────────────────────────────
       // Twilio  : aiAnalysis  (objet structuré : interestLevel, objections…)

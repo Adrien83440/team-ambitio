@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Réécoutes · Alteore</title>
+<link rel="stylesheet" href="sales.css">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}</script>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   sales-appels.html — Réécoutes des appels Ringover (10/2026)
+   Liste des appels en cartes, filtres (personne, période, sens, résultat,
+   contenu, durée), KPI, et un lecteur : audio + transcription par locuteur
+   synchronisée + résumé IA. Chaque sales voit ses appels ; admin et
+   users/{uid}.canListenCalls voient toute l'équipe (filtre par personne).
+   Données : api/calls-list (liste allégée) + api/call-detail (détail).
+   ═══════════════════════════════════════════════════════════════════════ */
+.ca{padding:20px 26px 80px;max-width:1500px;margin:0 auto}
+.ca .sp{flex:1}
+.ca-top{display:flex;align-items:center;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+.ca-ic{width:44px;height:44px;border-radius:13px;background:linear-gradient(135deg,#0ea5e9,#6366f1);display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 14px rgba(99,102,241,.35);flex-shrink:0}
+.ca-top h1{font-family:var(--font-d);font-size:21px;font-weight:800;letter-spacing:-.4px;line-height:1.2}
+.ca-top small{display:block;font-size:12px;color:var(--muted);margin-top:3px}
+.ca-btn{padding:8px 14px;border:none;border-radius:9px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s;text-decoration:none;line-height:1.3;white-space:nowrap}
+.ca-btn-p{background:linear-gradient(135deg,#991b1b,#ef4444);color:#fff;box-shadow:0 3px 12px rgba(185,28,28,.35)}
+.ca-btn-p:hover{opacity:.9}
+.ca-btn-o{background:var(--bg3);border:1px solid var(--border);color:var(--muted)}
+.ca-btn-o:hover{color:var(--text);border-color:var(--border2)}
+.ca-btn-s{padding:5px 10px;font-size:11.5px}
+.ca-btn[disabled]{opacity:.4;cursor:not-allowed}
+
+/* ── Filtres ── */
+.ca-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.ca-in{padding:8px 11px;background:var(--bg3);border:1.5px solid var(--border);border-radius:9px;color:var(--text);font-family:inherit;font-size:13px;outline:0;box-sizing:border-box;min-width:0}
+.ca-in:focus{border-color:#60a5fa}
+.ca-in option{background:#14141f}
+body:not(.light-theme) .ca-in[type=date]{color-scheme:dark}
+#fQ{flex:1;min-width:200px}
+#fWho{font-weight:700;border-color:rgba(96,165,250,.35)}
+.ca-custom{display:none;gap:6px;align-items:center}
+.ca-custom.on{display:inline-flex}
+.ca-banner{padding:10px 14px;border-radius:10px;font-size:12.5px;line-height:1.55;margin-bottom:12px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25);color:#fcd34d}
+
+/* ── KPI ── */
+.ca-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px}
+.ca-kpi{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:11px 14px}
+.ca-kpi span{display:block;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+.ca-kpi b{display:block;font-family:var(--font-d);font-size:22px;font-weight:800;letter-spacing:-.5px;margin-top:2px;line-height:1.15}
+.ca-kpi em{font-style:normal;font-size:12px;color:var(--muted);margin-left:6px;font-weight:600;letter-spacing:0}
+
+/* ── Personnes (chips) ── */
+.ca-people{display:none;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.ca-people.on{display:flex}
+.ca-people-l{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-right:4px}
+.ca-chip{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:999px;background:var(--bg3);border:1px solid var(--border);font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;transition:all .15s;font-family:inherit}
+.ca-chip i{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.ca-chip b{font-weight:800;color:var(--text)}
+.ca-chip:hover{border-color:var(--border2);color:var(--text)}
+.ca-chip.on{color:var(--text);border-color:rgba(96,165,250,.6);background:rgba(96,165,250,.12)}
+
+/* ── Liste ── */
+.ca-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:start}
+.ca-list{display:flex;flex-direction:column;gap:6px;min-width:0}
+.ca-day{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);padding:12px 4px 4px;display:flex;align-items:center;gap:8px}
+.ca-day em{font-style:normal;font-weight:600;color:var(--muted2);letter-spacing:0;text-transform:none}
+.ca-card{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;padding:11px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;cursor:pointer;transition:border-color .15s,background .15s;align-items:center}
+.ca-card:hover{border-color:var(--border2);background:var(--bg3)}
+.ca-card.on{border-color:#60a5fa;background:rgba(96,165,250,.07)}
+.ca-av{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;background:rgba(96,165,250,.14);color:#93c5fd;flex-shrink:0}
+.ca-av.miss{background:rgba(239,68,68,.12);color:#fca5a5}
+.ca-av.vm{background:rgba(251,191,36,.12);color:#fcd34d}
+.ca-av.live{background:rgba(52,211,153,.12);color:#6ee7b7}
+.ca-main{min-width:0}
+.ca-nm{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:8px}
+.ca-nm .ca-dirico{font-size:12px;opacity:.6;flex-shrink:0}
+.ca-meta{font-size:11.5px;color:var(--muted);margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.ca-meta .dot{opacity:.35}
+.ca-sum{font-size:12px;color:rgba(255,255,255,.58);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ca-who{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;background:rgba(255,255,255,.06);color:var(--text);white-space:nowrap}
+.ca-who i{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}
+.ca-side{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0}
+.ca-dur{font-family:var(--font-m);font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap}
+.ca-badges{display:flex;gap:4px}
+.ca-b{width:22px;height:22px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;background:rgba(255,255,255,.05);border:1px solid var(--border)}
+.ca-b.off{opacity:.22}
+.pill{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid transparent;white-space:nowrap;display:inline-block}
+.pill-ok{background:rgba(52,211,153,.1);color:#34d399;border-color:rgba(52,211,153,.25)}
+.pill-miss{background:rgba(239,68,68,.1);color:#fca5a5;border-color:rgba(239,68,68,.25)}
+.pill-vm{background:rgba(251,191,36,.1);color:#fcd34d;border-color:rgba(251,191,36,.25)}
+.pill-live{background:rgba(96,165,250,.1);color:#93c5fd;border-color:rgba(96,165,250,.25)}
+.pill-dir{background:rgba(255,255,255,.05);color:rgba(255,255,255,.7);border-color:var(--border)}
+.ca-empty{text-align:center;padding:50px 20px;color:var(--muted);font-size:13px;line-height:1.7;background:var(--bg2);border:1px dashed var(--border2);border-radius:12px}
+.ca-more{margin-top:8px;align-self:center}
+
+/* ── Détail ── */
+.ca-detail{position:sticky;top:20px;background:var(--bg2);border:1px solid var(--border);border-radius:14px;min-height:320px;max-height:calc(100vh - 40px);overflow-y:auto;display:flex;flex-direction:column;min-width:0}
+.ca-dhead{display:flex;gap:12px;align-items:flex-start;padding:16px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg2);z-index:3}
+.ca-dhead .ca-av{width:46px;height:46px;font-size:18px;border-radius:13px}
+.ca-dmain{flex:1;min-width:0}
+.ca-dtitle{font-family:var(--font-d);font-size:18px;font-weight:800;letter-spacing:-.3px;line-height:1.2;word-break:break-word}
+.ca-dsub{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.6;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center}
+.ca-dacts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.ca-dbody{padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+.ca-card2{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.ca-card2 h2{font-size:11.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.ca-card2 h2 .sp{flex:1}
+.ca-audio audio{width:100%;display:block;height:40px}
+.ca-speed{display:flex;gap:4px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.ca-speed span{font-size:11px;color:var(--muted);margin-right:4px;font-weight:700}
+.ca-speed button{padding:4px 9px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:var(--font-m);font-size:11px;cursor:pointer;font-weight:600}
+.ca-speed button:hover{color:var(--text);border-color:var(--border2)}
+.ca-speed button.on{background:#60a5fa;color:#000;border-color:#60a5fa}
+.ca-speed .sp{flex:1}
+.ca-summary{font-size:13.5px;line-height:1.65;color:rgba(255,255,255,.88);white-space:pre-wrap;word-break:break-word}
+.ca-state{padding:14px;background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.14);border-radius:10px;color:rgba(255,255,255,.45);font-size:12.5px;text-align:center;line-height:1.6}
+.ca-tr-tools{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.ca-tr-tools .ca-in{flex:1;min-width:140px;padding:6px 10px;font-size:12px}
+.ca-tr-tools label{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap}
+.ca-legend{display:flex;gap:12px;font-size:11.5px;color:var(--muted);margin-bottom:8px;align-items:center;flex-wrap:wrap}
+.ca-legend i{width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:middle}
+.ca-legend i.agent{background:#60a5fa}.ca-legend i.lead{background:#34d399}
+.ca-legend .sp{flex:1}
+.tr-list{display:flex;flex-direction:column;gap:2px}
+.tr{display:grid;grid-template-columns:38px 74px minmax(0,1fr);gap:8px;padding:6px 8px;border-radius:8px;cursor:pointer;font-size:13px;line-height:1.5;border:1px solid transparent}
+.tr:hover{background:rgba(255,255,255,.04)}
+.tr.on{background:rgba(96,165,250,.1);border-color:rgba(96,165,250,.3)}
+.tr.dim{opacity:.35}
+.tr-t{font-family:var(--font-m);font-size:11px;color:rgba(255,255,255,.4);padding-top:2px}
+.tr-sp{font-weight:800;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-top:1px}
+.tr-sp.agent{color:#93c5fd}.tr-sp.lead{color:#6ee7b7}
+.tr-x{color:rgba(255,255,255,.85);word-break:break-word}
+.tr mark{background:rgba(251,191,36,.35);color:var(--text);border-radius:3px;padding:0 1px}
+.ca-note{font-size:12px;color:var(--muted);line-height:1.6}
+.ca-dempty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:60px 24px;color:var(--muted);font-size:13px;line-height:1.7}
+.ca-dempty b{font-size:34px;display:block;margin-bottom:8px;opacity:.6}
+.ca-back{display:none}
+.ca-locked{text-align:center;padding:80px 20px;color:rgba(255,255,255,.35)}
+.ca-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2e1a;border:1px solid rgba(16,185,129,.3);color:#6ee7b7;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none;max-width:90vw}
+.ca-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.ca-toast.err{background:#2e1a1a;border-color:rgba(239,68,68,.35);color:#fca5a5}
+
+@media (max-width:1100px){
+  .ca-body{grid-template-columns:minmax(0,1fr)}
+  .ca-detail{position:fixed;left:0;top:0;right:0;bottom:0;z-index:1500;border-radius:0;max-height:none;display:none;border:none}
+  .ca-detail.open{display:flex}
+  .ca-back{display:inline-flex}
+}
+@media (max-width:640px){
+  .ca{padding:14px 14px 80px}
+  .ca-card{grid-template-columns:36px minmax(0,1fr)}
+  .ca-side{grid-column:2;flex-direction:row;align-items:center;justify-content:flex-start}
+  .tr{grid-template-columns:38px minmax(0,1fr)}
+  .tr-sp{grid-column:2}
+  .tr-x{grid-column:2}
+  .ca-kpi b{font-size:18px}
+}
+</style>
+</head>
+<body>
+<div id="nav-container"></div>
+
+<main class="ca" id="mainView" style="display:none">
+  <header class="ca-top">
+    <div class="ca-ic">🎧</div>
+    <div>
+      <h1>Réécoutes</h1>
+      <small id="caSub">Chargement…</small>
+    </div>
+    <div class="sp"></div>
+    <button class="ca-btn ca-btn-o" id="btnRefresh" data-action="refresh">↻ Actualiser</button>
+  </header>
+
+  <section class="ca-filters">
+    <input class="ca-in" id="fQ" type="search" placeholder="Nom, numéro, résumé…" autocomplete="off">
+    <select class="ca-in" id="fWho" style="display:none" title="Personne">
+      <option value="">Toute l'équipe</option>
+    </select>
+    <select class="ca-in" id="fPeriod" title="Période">
+      <option value="7">7 derniers jours</option>
+      <option value="30">30 derniers jours</option>
+      <option value="90">3 derniers mois</option>
+      <option value="custom">Dates précises…</option>
+    </select>
+    <span class="ca-custom" id="fCustom">
+      <input class="ca-in" id="fFrom" type="date" title="Du">
+      <span style="color:var(--muted);font-size:12px">→</span>
+      <input class="ca-in" id="fTo" type="date" title="Au">
+    </span>
+    <select class="ca-in" id="fDir" title="Sens">
+      <option value="">Sortants + entrants</option>
+      <option value="outbound">Sortants</option>
+      <option value="inbound">Entrants</option>
+    </select>
+    <select class="ca-in" id="fRes" title="Résultat">
+      <option value="">Tous les résultats</option>
+      <option value="ok">Décrochés</option>
+      <option value="miss">Non décrochés</option>
+      <option value="vm">Répondeur</option>
+    </select>
+    <select class="ca-in" id="fHas" title="Contenu">
+      <option value="">Tout contenu</option>
+      <option value="rec">Avec enregistrement</option>
+      <option value="tr">Avec transcription</option>
+      <option value="ai">Avec résumé IA</option>
+    </select>
+    <select class="ca-in" id="fMin" title="Durée minimale">
+      <option value="0">Toutes durées</option>
+      <option value="60">≥ 1 min</option>
+      <option value="180">≥ 3 min</option>
+      <option value="600">≥ 10 min</option>
+    </select>
+  </section>
+
+  <div class="ca-banner" id="caBanner" style="display:none"></div>
+
+  <section class="ca-kpis" id="caKpis"></section>
+
+  <section class="ca-people" id="caPeople"></section>
+
+  <div class="ca-body">
+    <div class="ca-list" id="caList"><div class="ca-empty">Chargement des appels…</div></div>
+    <aside class="ca-detail" id="caDetail">
+      <div class="ca-dempty" id="caDetailEmpty"><b>🎧</b>Sélectionne un appel pour l'écouter,<br>lire la transcription et le résumé.</div>
+    </aside>
+  </div>
+</main>
+
+<div class="ca-locked" id="lockedView" style="display:none"><div style="font-size:48px;margin-bottom:12px">🔒</div><div id="lockedMsg">Module réservé à l'équipe Sales.</div></div>
+<div class="ca-toast" id="caToast"></div>
+
+<script src="nav.js"></script>
+<script src="dialer-bridge.js" defer></script>
+<script>
+(function () {
+'use strict';
+
+var LIST_API   = '/api/calls-list';
+var DETAIL_API = '/api/call-detail';
+
+/* Seuils identiques à funnel-core.js (isAnsweredCall) : un appel est
+   « décroché » à partir de 5 s de conversation ; une sonnerie longue suivie
+   d'une conversation courte est la signature d'un répondeur. */
+var ANSWERED_MIN_SEC = 5;
+var VOICEMAIL_MIN_RING_SEC = 15;
+var VOICEMAIL_MAX_TALK_SEC = 15;
+
+var PALETTE = ['#60a5fa', '#f472b6', '#34d399', '#fbbf24', '#a78bfa', '#fb923c', '#22d3ee', '#f87171'];
+var PAGE_SIZE = 120;
+
+var currentUser = null;
+var SCOPE = 'own';          // 'all' (admin / canListenCalls) | 'own'
+var CALLS = [];             // appels de la fenêtre chargée (lignes serveur)
+var FILTERED = [];
+var SHOWN = PAGE_SIZE;      // nombre de cartes rendues (pagination locale)
+var CUR = null;             // id de l'appel ouvert
+var DETAILS = {};           // cache id → détail serveur
+var PEOPLE = {};            // key → { key, label, color, count }
+var SWAP = {};              // id → true si les locuteurs ont été inversés à la main
+var FOLLOW = true;          // la transcription suit la lecture
+var truncated = false;
+var loading = false;
+var qTimer = null;
+var lastSeg = -1;
+var prefs = { period: '30', who: '', dir: '', res: '', has: '', min: '0', from: '', to: '' };
+
+function $(id) { return document.getElementById(id); }
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function pad2(n) { n = Math.floor(n); return (n < 10 ? '0' : '') + n; }
+function fmtClock(sec) {
+  sec = Math.max(0, Math.floor(Number(sec) || 0));
+  return Math.floor(sec / 60) + ':' + pad2(sec % 60);
+}
+function fmtDur(sec) {
+  sec = Math.max(0, Math.round(Number(sec) || 0));
+  if (sec < 60) return sec + ' s';
+  var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  if (h) return h + ' h ' + pad2(m);
+  return m + ' min' + (s ? ' ' + pad2(s) + ' s' : '');
+}
+function fmtTotal(sec) {
+  sec = Math.max(0, Math.round(Number(sec) || 0));
+  var h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60);
+  if (h) return h + ' h ' + pad2(m);
+  return m + ' min';
+}
+function dayKey(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+function fmtDay(d) {
+  var now = new Date();
+  var today = dayKey(now);
+  var y = new Date(now.getTime() - 86400000);
+  var k = dayKey(d);
+  if (k === today) return 'Aujourd\'hui';
+  if (k === dayKey(y)) return 'Hier';
+  var s = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+function fmtTime(d) { return pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
+function fmtFull(d) {
+  return d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) + ' · ' + fmtTime(d);
+}
+function norm(s) {
+  s = String(s == null ? '' : s).toLowerCase().replace(/[’‘`]/g, '\'');
+  if (s.normalize) s = s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return s;
+}
+function firstName(name) {
+  var n = String(name || '').trim();
+  if (!n) return '';
+  return n.split(/\s+/)[0];
+}
+function hashColor(key) {
+  var h = 0;
+  for (var i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
+  return PALETTE[Math.abs(h) % PALETTE.length];
+}
+function toast(msg, isErr) {
+  var t = $('caToast');
+  t.textContent = msg;
+  t.className = 'ca-toast show' + (isErr ? ' err' : '');
+  clearTimeout(t._tm);
+  t._tm = setTimeout(function () { t.className = 'ca-toast'; }, 3200);
+}
+
+/* ── Préférences (filtres persistés par utilisateur) ───────────────────── */
+function prefsKey() { return 'ca_prefs_' + (currentUser ? currentUser.uid : 'anon'); }
+function loadPrefs() {
+  try {
+    var raw = localStorage.getItem(prefsKey());
+    if (raw) {
+      var p = JSON.parse(raw);
+      for (var k in prefs) if (p && typeof p[k] === 'string') prefs[k] = p[k];
+    }
+  } catch (e) { /* ignore */ }
+  $('fPeriod').value = prefs.period;
+  $('fDir').value = prefs.dir;
+  $('fRes').value = prefs.res;
+  $('fHas').value = prefs.has;
+  $('fMin').value = prefs.min;
+  $('fFrom').value = prefs.from;
+  $('fTo').value = prefs.to;
+  $('fCustom').className = 'ca-custom' + (prefs.period === 'custom' ? ' on' : '');
+}
+function savePrefs() {
+  try { localStorage.setItem(prefsKey(), JSON.stringify(prefs)); } catch (e) { /* ignore */ }
+}
+
+/* ── Auth ──────────────────────────────────────────────────────────────── */
+function idToken() {
+  var u = firebase.auth().currentUser;
+  if (!u) return Promise.reject(new Error('Non connecté'));
+  return u.getIdToken(false);
+}
+function api(url, body) {
+  return idToken().then(function (tok) {
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+      body: JSON.stringify(body || {})
+    });
+  }).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      if (!r.ok) {
+        var e = new Error((j && j.error) || ('HTTP ' + r.status));
+        e.status = r.status;
+        throw e;
+      }
+      return j;
+    });
+  });
+}
+
+/* ── Personnes ─────────────────────────────────────────────────────────── */
+function roster() { return (window.TEAM_MEMBERS_LIST && window.TEAM_MEMBERS_LIST.length) ? window.TEAM_MEMBERS_LIST : []; }
+function memberByUid(uid) {
+  if (!uid) return null;
+  var list = roster();
+  for (var i = 0; i < list.length; i++) if (list[i].firebaseUid === uid) return list[i];
+  /* Membre parti : TEAM_MEMBERS garde l'historique */
+  var map = window.TEAM_MEMBERS || {};
+  for (var k in map) if (map[k] && map[k].firebaseUid === uid) return map[k];
+  return null;
+}
+function memberByName(name) {
+  var n = norm(firstName(name));
+  if (!n) return null;
+  var map = window.TEAM_MEMBERS || {};
+  for (var k in map) {
+    var m = map[k];
+    if (!m) continue;
+    var cands = [m.shortName, m.displayName, m.slug];
+    for (var i = 0; i < cands.length; i++) {
+      if (cands[i] && norm(firstName(cands[i])) === n) return m;
+    }
+  }
+  return null;
+}
+/* Résout la personne d'un appel. Les appels synchronisés depuis Ringover
+   n'ont pas toujours de userId mais portent userName : on les rattache au
+   membre du roster par prénom pour qu'un filtre « Élodie » les inclue. */
+function personOf(c) {
+  var m = memberByUid(c.userId);
+  var rawName = c.userName || firstName(c.ringoverUserName) || '';
+  if (!m && rawName) m = memberByName(rawName);
+  var key, label;
+  if (m && m.firebaseUid) key = 'uid:' + m.firebaseUid;
+  else if (c.userId) key = 'uid:' + c.userId;
+  else if (rawName) key = 'name:' + norm(rawName);
+  else key = 'none';
+  if (m) label = m.shortName || m.displayName || m.slug;
+  else label = rawName || (c.userId ? 'Compte ' + c.userId.substring(0, 6) : 'Inconnu');
+  var color = (m && m.color) || hashColor(key);
+  return { key: key, label: label, color: color, member: m };
+}
+function buildPeople() {
+  PEOPLE = {};
+  CALLS.forEach(function (c) {
+    var p = personOf(c);
+    c._person = p;
+    if (!PEOPLE[p.key]) PEOPLE[p.key] = { key: p.key, label: p.label, color: p.color, count: 0 };
+    PEOPLE[p.key].count++;
+  });
+  var sel = $('fWho');
+  var keys = Object.keys(PEOPLE).sort(function (a, b) { return PEOPLE[b].count - PEOPLE[a].count; });
+  var h = '<option value="">Toute l\'équipe</option>';
+  keys.forEach(function (k) {
+    h += '<option value="' + esc(k) + '">' + esc(PEOPLE[k].label) + ' (' + PEOPLE[k].count + ')</option>';
+  });
+  sel.innerHTML = h;
+  if (prefs.who && !PEOPLE[prefs.who]) { /* personne absente de la fenêtre : on garde le filtre, liste vide explicite */
+    sel.innerHTML += '<option value="' + esc(prefs.who) + '">(aucun appel sur la période)</option>';
+  }
+  sel.value = prefs.who;
+  sel.style.display = SCOPE === 'all' ? '' : 'none';
+}
+
+/* ── Classification d'un appel ─────────────────────────────────────────── */
+function resultOf(c) {
+  if (c.status === 'ringing' || c.status === 'initiated' || c.status === 'in-progress') return 'live';
+  if (c.amd === true) return 'vm';
+  var talk = Number(c.durationSec) || 0;
+  if (talk < ANSWERED_MIN_SEC) return 'miss';
+  var ring = (typeof c.ringingDurationSec === 'number') ? c.ringingDurationSec
+    : ((typeof c.totalDurationSec === 'number') ? Math.max(0, c.totalDurationSec - talk) : null);
+  if (ring != null && ring >= VOICEMAIL_MIN_RING_SEC && talk < VOICEMAIL_MAX_TALK_SEC) return 'vm';
+  return 'ok';
+}
+var RESULT_LABEL = { ok: 'Décroché', miss: 'Non décroché', vm: 'Répondeur', live: 'En cours' };
+function otherPhone(c) { return c.direction === 'inbound' ? (c.fromNumber || '') : (c.toNumber || ''); }
+function displayName(c) { return c.leadName || otherPhone(c) || 'Inconnu'; }
+function initialOf(c) {
+  var n = String(c.leadName || '').trim();
+  if (n) return n.charAt(0).toUpperCase();
+  return c.direction === 'inbound' ? '↙' : '↗';
+}
+
+/* ── Chargement ────────────────────────────────────────────────────────── */
+function windowFromPrefs() {
+  var to = new Date();
+  var from;
+  if (prefs.period === 'custom' && prefs.from) {
+    from = new Date(prefs.from + 'T00:00:00');
+    if (prefs.to) { to = new Date(prefs.to + 'T23:59:59.999'); }
+  } else {
+    var days = parseInt(prefs.period, 10);
+    if (!(days > 0)) days = 30;
+    from = new Date(to.getTime() - days * 86400000);
+    from.setHours(0, 0, 0, 0);
+  }
+  if (from.getTime() > to.getTime()) { var t = from; from = to; to = t; }
+  return { from: from, to: to };
+}
+function loadCalls() {
+  if (loading) return;
+  loading = true;
+  var w = windowFromPrefs();
+  $('btnRefresh').disabled = true;
+  $('caList').innerHTML = '<div class="ca-empty">Chargement des appels…</div>';
+  api(LIST_API, { from: w.from.toISOString(), to: w.to.toISOString(), limit: 500 }).then(function (j) {
+    SCOPE = j.scope === 'all' ? 'all' : 'own';
+    CALLS = (j.calls || []).map(function (c) {
+      c._date = c.initiatedAt ? new Date(c.initiatedAt) : null;
+      c._result = resultOf(c);
+      return c;
+    }).filter(function (c) { return c._date && !isNaN(c._date.getTime()); });
+    truncated = !!j.truncated;
+    $('caSub').textContent = SCOPE === 'all'
+      ? 'Tous les appels Ringover de l\'équipe : enregistrement, transcription par locuteur et résumé IA.'
+      : 'Tes appels Ringover : enregistrement, transcription et résumé IA.';
+    $('caBanner').style.display = truncated ? '' : 'none';
+    $('caBanner').textContent = truncated
+      ? 'Fenêtre limitée aux 500 appels les plus récents : réduis la période pour tout voir.'
+      : '';
+    buildPeople();
+    SHOWN = PAGE_SIZE;
+    applyFilters();
+  }).catch(function (e) {
+    if (e && e.status === 403) {
+      $('mainView').style.display = 'none';
+      $('lockedView').style.display = '';
+      $('lockedMsg').textContent = e.message || 'Accès refusé.';
+      return;
+    }
+    $('caList').innerHTML = '<div class="ca-empty">Impossible de charger les appels.<br>' + esc(e && e.message) + '</div>';
+    toast(e && e.message ? e.message : 'Erreur de chargement', true);
+  }).then(function () {
+    loading = false;
+    $('btnRefresh').disabled = false;
+  });
+}
+
+/* ── Filtres ───────────────────────────────────────────────────────────── */
+function matchesExceptWho(c, q) {
+  if (prefs.dir && c.direction !== prefs.dir) return false;
+  if (prefs.res && c._result !== prefs.res) return false;
+  if (prefs.has === 'rec' && !c.hasRecording) return false;
+  if (prefs.has === 'tr' && !c.hasTranscript) return false;
+  if (prefs.has === 'ai' && !c.hasSummary) return false;
+  var min = parseInt(prefs.min, 10) || 0;
+  if (min && (Number(c.durationSec) || 0) < min) return false;
+  if (q) {
+    var hay = norm([c.leadName, c.fromNumber, c.toNumber, c.aiSummary, c._person && c._person.label].join(' '));
+    var qq = q.replace(/\s+/g, ' ').trim();
+    if (qq.charAt(0) === '+' || /^\d[\d .]+$/.test(qq)) {
+      var digits = qq.replace(/[^\d]/g, '');
+      if (digits && hay.replace(/[^\d]/g, '').indexOf(digits) < 0) return false;
+    } else if (hay.indexOf(qq) < 0) return false;
+  }
+  return true;
+}
+function applyFilters() {
+  var q = norm($('fQ').value);
+  var base = CALLS.filter(function (c) { return matchesExceptWho(c, q); });
+  renderPeople(base);
+  FILTERED = prefs.who ? base.filter(function (c) { return c._person.key === prefs.who; }) : base;
+  renderKpis();
+  renderList();
+}
+function renderPeople(base) {
+  var box = $('caPeople');
+  if (SCOPE !== 'all') { box.className = 'ca-people'; box.innerHTML = ''; return; }
+  var counts = {};
+  base.forEach(function (c) { counts[c._person.key] = (counts[c._person.key] || 0) + 1; });
+  var keys = Object.keys(PEOPLE).sort(function (a, b) { return (counts[b] || 0) - (counts[a] || 0) || PEOPLE[a].label.localeCompare(PEOPLE[b].label); });
+  if (!keys.length) { box.className = 'ca-people'; box.innerHTML = ''; return; }
+  var h = '<span class="ca-people-l">Par personne</span>';
+  h += '<button class="ca-chip' + (!prefs.who ? ' on' : '') + '" data-action="who" data-key="">Toute l\'équipe <b>' + base.length + '</b></button>';
+  keys.forEach(function (k) {
+    var p = PEOPLE[k];
+    h += '<button class="ca-chip' + (prefs.who === k ? ' on' : '') + '" data-action="who" data-key="' + esc(k) + '">'
+      + '<i style="background:' + esc(p.color) + '"></i>' + esc(p.label) + ' <b>' + (counts[k] || 0) + '</b></button>';
+  });
+  box.className = 'ca-people on';
+  box.innerHTML = h;
+}
+function renderKpis() {
+  var n = FILTERED.length, ok = 0, talk = 0, rec = 0, tr = 0, ai = 0;
+  FILTERED.forEach(function (c) {
+    if (c._result === 'ok') { ok++; talk += Number(c.durationSec) || 0; }
+    if (c.hasRecording) rec++;
+    if (c.hasTranscript) tr++;
+    if (c.hasSummary) ai++;
+  });
+  var pct = n ? Math.round(ok * 100 / n) : 0;
+  $('caKpis').innerHTML =
+    '<div class="ca-kpi"><span>Appels</span><b>' + n + '</b></div>' +
+    '<div class="ca-kpi"><span>Décrochés</span><b>' + ok + '<em>' + pct + ' %</em></b></div>' +
+    '<div class="ca-kpi"><span>Conversation</span><b>' + fmtTotal(talk) + '</b></div>' +
+    '<div class="ca-kpi"><span>Enregistrés</span><b>' + rec + '</b></div>' +
+    '<div class="ca-kpi"><span>Transcrits</span><b>' + tr + '<em>' + ai + ' résumés</em></b></div>';
+}
+function cardHtml(c) {
+  var r = c._result;
+  var avCls = r === 'ok' ? '' : (r === 'live' ? ' live' : (r === 'vm' ? ' vm' : ' miss'));
+  var p = c._person;
+  var who = SCOPE === 'all'
+    ? '<span class="ca-who"><i style="background:' + esc(p.color) + '"></i>' + esc(p.label) + '</span>'
+    : '';
+  var dur = (Number(c.durationSec) || 0) > 0 ? fmtDur(c.durationSec) : '—';
+  var sub = c.aiSummary ? '<div class="ca-sum">' + esc(c.aiSummary) + '</div>' : '';
+  var phone = otherPhone(c);
+  return '<div class="ca-card' + (CUR === c.id ? ' on' : '') + '" data-action="open" data-id="' + esc(c.id) + '">'
+    + '<div class="ca-av' + avCls + '">' + esc(initialOf(c)) + '</div>'
+    + '<div class="ca-main">'
+    +   '<div class="ca-nm"><span class="ca-dirico" title="' + (c.direction === 'inbound' ? 'Entrant' : 'Sortant') + '">' + (c.direction === 'inbound' ? '↙' : '↗') + '</span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis">' + esc(displayName(c)) + '</span></div>'
+    +   '<div class="ca-meta"><span>' + fmtTime(c._date) + '</span>'
+    +     (c.leadName && phone ? '<span class="dot">·</span><span>' + esc(phone) + '</span>' : '')
+    +     '<span class="dot">·</span><span class="pill pill-' + r + '">' + RESULT_LABEL[r] + '</span>'
+    +     (who ? who : '')
+    +   '</div>'
+    +   sub
+    + '</div>'
+    + '<div class="ca-side"><div class="ca-dur">' + esc(dur) + '</div>'
+    +   '<div class="ca-badges">'
+    +     '<span class="ca-b' + (c.hasRecording ? '' : ' off') + '" title="Enregistrement">🎙</span>'
+    +     '<span class="ca-b' + (c.hasTranscript ? '' : ' off') + '" title="Transcription">📝</span>'
+    +     '<span class="ca-b' + (c.hasSummary ? '' : ' off') + '" title="Résumé IA">✨</span>'
+    +   '</div>'
+    + '</div>'
+    + '</div>';
+}
+function renderList() {
+  var list = $('caList');
+  if (!FILTERED.length) {
+    list.innerHTML = '<div class="ca-empty">Aucun appel ne correspond à ces filtres.<br>Élargis la période ou retire un filtre.</div>';
+    return;
+  }
+  var h = '', lastDay = null, dayCount = 0;
+  var max = Math.min(SHOWN, FILTERED.length);
+  var counts = {};
+  FILTERED.forEach(function (c) { var k = dayKey(c._date); counts[k] = (counts[k] || 0) + 1; });
+  for (var i = 0; i < max; i++) {
+    var c = FILTERED[i];
+    var k = dayKey(c._date);
+    if (k !== lastDay) {
+      lastDay = k;
+      dayCount = counts[k];
+      h += '<div class="ca-day">' + esc(fmtDay(c._date)) + '<em>' + dayCount + ' appel' + (dayCount > 1 ? 's' : '') + '</em></div>';
+    }
+    h += cardHtml(c);
+  }
+  if (max < FILTERED.length) {
+    h += '<button class="ca-btn ca-btn-o ca-more" data-action="more">Afficher les ' + Math.min(PAGE_SIZE, FILTERED.length - max) + ' suivants (' + (FILTERED.length - max) + ' restants)</button>';
+  }
+  list.innerHTML = h;
+}
+function markCurrentCard() {
+  var cards = document.querySelectorAll('.ca-card');
+  for (var i = 0; i < cards.length; i++) {
+    cards[i].className = 'ca-card' + (cards[i].getAttribute('data-id') === CUR ? ' on' : '');
+  }
+}
+
+/* ── Détail ────────────────────────────────────────────────────────────── */
+function rowById(id) {
+  for (var i = 0; i < CALLS.length; i++) if (CALLS[i].id === id) return CALLS[i];
+  return null;
+}
+function openCall(id) {
+  var row = rowById(id);
+  if (!row) return;
+  CUR = id;
+  lastSeg = -1;
+  markCurrentCard();
+  var panel = $('caDetail');
+  panel.className = 'ca-detail open';
+  renderDetail(row, DETAILS[id] || null, !DETAILS[id]);
+  if (window.innerWidth <= 1100) { try { window.scrollTo(0, 0); } catch (e) { /* ignore */ } }
+  if (DETAILS[id]) return;
+  api(DETAIL_API, { callLogId: id }).then(function (d) {
+    DETAILS[id] = d;
+    if (CUR !== id) return;
+    renderDetail(row, d, false);
+  }).catch(function (e) {
+    if (CUR !== id) return;
+    renderDetail(row, null, false, e && e.message ? e.message : 'Erreur de chargement');
+  });
+}
+function closeDetail() {
+  CUR = null;
+  var panel = $('caDetail');
+  var a = panel.querySelector('audio');
+  if (a) { try { a.pause(); } catch (e) { /* ignore */ } }
+  panel.className = 'ca-detail';
+  panel.innerHTML = '<div class="ca-dempty" id="caDetailEmpty"><b>🎧</b>Sélectionne un appel pour l\'écouter,<br>lire la transcription et le résumé.</div>';
+  markCurrentCard();
+}
+
+/* Devine le canal (channelId 0/1) de l'agent. Ringover n'indique pas quel
+   canal est le poste interne et l'observation des appels réels montre que
+   ce n'est pas constant. On score chaque canal sur des marqueurs de
+   discours : l'agent se présente « de l'équipe d'Adrien et Émilie », parle
+   du questionnaire, s'adresse au lead par son prénom ; le lead dit « vous
+   avez essayé de me joindre ». À égalité : sortant → celui qui décroche
+   (parle en premier) est le lead ; entrant → c'est l'agent. Le bouton
+   « Inverser » corrige à la main si la devinette est fausse. */
+var AGENT_RX = [/equipe d ?'?adrien/, /adrien et/, /emilie/, /je me permet/, /questionnaire/, /formulaire/, /notre equipe/, /je vous appel/, /je me presente/, /suite a votre/, /vous aviez demande/, /je reviens vers vous/];
+var LEAD_RX  = [/vous avez essaye de me joindre/, /vous m'avez appel/, /qui est a l'appareil/, /c'est a quel sujet/, /c'est pour quoi/];
+function guessAgentChannel(speeches, row) {
+  var score = [0, 0];
+  var first = speeches.length ? (speeches[0].channelId === 1 ? 1 : 0) : 0;
+  var agentName = norm(row._person && row._person.member ? firstName(row._person.label) : (row.userName || ''));
+  var leadFirst = norm(firstName(row.leadName));
+  if (leadFirst.length < 3) leadFirst = '';
+  if (agentName.length < 3) agentName = '';
+  speeches.forEach(function (s) {
+    var t = norm(s.text), c = s.channelId === 1 ? 1 : 0, i;
+    for (i = 0; i < AGENT_RX.length; i++) if (AGENT_RX[i].test(t)) score[c] += 2;
+    for (i = 0; i < LEAD_RX.length; i++) if (LEAD_RX[i].test(t)) score[c] -= 2;
+    if (agentName && t.indexOf(agentName) >= 0) score[c] += 1;
+    if (leadFirst) {
+      if (new RegExp('(c\'est|je suis|ici) ' + leadFirst).test(t) || new RegExp(leadFirst + ' a l\'appareil').test(t)) score[c] -= 2;
+      else if (t.indexOf(leadFirst) >= 0) score[c] += 1;
+    }
+  });
+  if (score[0] !== score[1]) return score[0] > score[1] ? 0 : 1;
+  return row.direction === 'inbound' ? first : (first === 0 ? 1 : 0);
+}
+function speakerLabels(row, detail) {
+  var agent = row._person ? row._person.label : (detail && detail.userName) || 'Agent';
+  var lead = firstName(row.leadName) || 'Lead';
+  return { agent: agent, lead: lead };
+}
+function renderDetail(row, detail, isLoading, errMsg) {
+  var panel = $('caDetail');
+  var r = row._result;
+  var avCls = r === 'ok' ? '' : (r === 'live' ? ' live' : (r === 'vm' ? ' vm' : ' miss'));
+  var phone = otherPhone(row);
+  var p = row._person;
+  var sub = '<span>' + esc(fmtFull(row._date)) + '</span>'
+    + '<span class="pill pill-dir">' + (row.direction === 'inbound' ? '↙ Entrant' : '↗ Sortant') + '</span>'
+    + '<span class="pill pill-' + r + '">' + RESULT_LABEL[r] + '</span>'
+    + ((Number(row.durationSec) || 0) > 0 ? '<span>' + esc(fmtDur(row.durationSec)) + ' de conversation</span>' : '')
+    + (typeof row.ringingDurationSec === 'number' && row.ringingDurationSec > 0 ? '<span style="opacity:.7">sonnerie ' + row.ringingDurationSec + ' s</span>' : '')
+    + '<span class="ca-who"><i style="background:' + esc(p.color) + '"></i>' + esc(p.label) + '</span>'
+    + (phone ? '<span style="font-family:var(--font-m)">' + esc(phone) + '</span>' : '');
+  var acts = '<button class="ca-btn ca-btn-o ca-btn-s ca-back" data-action="close">← Retour</button>';
+  if (row.leadId) acts += '<a class="ca-btn ca-btn-o ca-btn-s" href="sales-contact.html?id=' + encodeURIComponent(row.leadId) + '" target="_blank" rel="noopener">👤 Fiche lead</a>';
+  if (phone) acts += '<button class="ca-btn ca-btn-o ca-btn-s" data-action="call" data-phone="' + esc(phone) + '" data-lead="' + esc(row.leadId || '') + '" data-name="' + esc(row.leadName || '') + '">📞 Rappeler</button>';
+
+  var h = '<div class="ca-dhead">'
+    + '<div class="ca-av' + avCls + '">' + esc(initialOf(row)) + '</div>'
+    + '<div class="ca-dmain"><div class="ca-dtitle">' + esc(displayName(row)) + '</div>'
+    + '<div class="ca-dsub">' + sub + '</div>'
+    + '<div class="ca-dacts">' + acts + '</div></div>'
+    + '</div>';
+
+  h += '<div class="ca-dbody">';
+
+  if (errMsg) {
+    h += '<div class="ca-state">❌ ' + esc(errMsg) + '</div>';
+  } else if (isLoading) {
+    h += '<div class="ca-state">Chargement de l\'enregistrement…</div>';
+    if (row.aiSummary) h += '<div class="ca-card2"><h2>✨ Résumé IA</h2><div class="ca-summary">' + esc(row.aiSummary) + '</div></div>';
+  } else {
+    /* Lecteur */
+    var recUrl = detail && (detail.recordingSignedUrl || detail.ringoverRecordingUrl);
+    h += '<div class="ca-card2 ca-audio"><h2>🎙 Enregistrement<span class="sp"></span>'
+      + (recUrl ? '<a class="ca-btn ca-btn-o ca-btn-s" href="' + esc(recUrl) + '" download target="_blank" rel="noopener">⬇ Audio</a>' : '')
+      + '</h2>';
+    if (recUrl) {
+      h += '<audio id="caAudio" controls preload="metadata" src="' + esc(recUrl) + '"></audio>'
+        + '<div class="ca-speed"><span>Vitesse</span>'
+        + '<button data-action="speed" data-v="1" class="on">1×</button>'
+        + '<button data-action="speed" data-v="1.25">1.25×</button>'
+        + '<button data-action="speed" data-v="1.5">1.5×</button>'
+        + '<button data-action="speed" data-v="2">2×</button>'
+        + '<span class="sp"></span>'
+        + '<button data-action="seek" data-d="-10">−10 s</button>'
+        + '<button data-action="seek" data-d="10">+10 s</button>'
+        + '</div>';
+    } else if (detail && detail.recordingStatus === 'processing') {
+      h += '<div class="ca-state">Enregistrement en cours de traitement chez Ringover…</div>';
+    } else if (r === 'miss' || r === 'vm') {
+      h += '<div class="ca-state">Pas d\'enregistrement : l\'appel n\'a pas été décroché.</div>';
+    } else {
+      h += '<div class="ca-state">Pas d\'enregistrement disponible pour cet appel.</div>';
+    }
+    h += '</div>';
+
+    /* Résumé IA */
+    var ai = detail ? (detail.aiAnalysis || null) : null;
+    var summary = (detail && detail.aiSummary) || (ai && ai.summary) || row.aiSummary || null;
+    h += '<div class="ca-card2"><h2>✨ Résumé IA</h2>';
+    if (summary) {
+      h += '<div class="ca-summary">' + esc(summary) + '</div>';
+      if (ai && typeof ai.interestLevel === 'number') h += '<div class="ca-note" style="margin-top:8px">Niveau d\'intérêt estimé : <b>' + ai.interestLevel + '/10</b></div>';
+      if (ai && ai.objections && ai.objections.length) h += '<div class="ca-note" style="margin-top:8px"><b>Objections :</b> ' + esc(ai.objections.join(' · ')) + '</div>';
+      if (ai && ai.nextSteps && ai.nextSteps.length) h += '<div class="ca-note" style="margin-top:4px"><b>Prochaines étapes :</b> ' + esc(ai.nextSteps.join(' · ')) + '</div>';
+    } else if (detail && detail.aiAnalysisStatus === 'processing') {
+      h += '<div class="ca-state">Résumé en cours de génération…</div>';
+    } else {
+      h += '<div class="ca-state">Pas de résumé pour cet appel' + (recUrl ? ' (Ringover ne résume que les conversations assez longues).' : '.') + '</div>';
+    }
+    h += '</div>';
+
+    /* Transcription */
+    var speeches = detail && detail.transcriptSpeeches ? detail.transcriptSpeeches : null;
+    var plain = detail ? (detail.transcriptText || detail.transcriptionText) : null;
+    h += '<div class="ca-card2" id="caTrCard"><h2>📝 Transcription<span class="sp"></span>'
+      + (speeches ? '<span class="ca-note" id="caTrCount">' + speeches.length + ' répliques</span>' : '')
+      + '</h2>';
+    if (speeches && speeches.length) {
+      var lab = speakerLabels(row, detail);
+      h += '<div class="ca-tr-tools">'
+        + '<input class="ca-in" id="caTrQ" type="search" placeholder="Chercher dans la transcription…" autocomplete="off">'
+        + '<label><input type="checkbox" id="caFollow"' + (FOLLOW ? ' checked' : '') + '> Suivre la lecture</label>'
+        + '<button class="ca-btn ca-btn-o ca-btn-s" data-action="swap" title="Les locuteurs sont devinés : inverse-les si c\'est faux">⇄ Inverser</button>'
+        + '</div>'
+        + '<div class="ca-legend"><span><i class="agent"></i>' + esc(lab.agent) + '</span><span><i class="lead"></i>' + esc(lab.lead) + '</span><span class="sp"></span><span>Clique une réplique pour y aller</span></div>'
+        + '<div class="tr-list" id="caTrList">' + transcriptHtml(row, speeches, lab) + '</div>';
+    } else if (plain) {
+      h += '<div class="ca-summary">' + esc(plain) + '</div>';
+    } else if (detail && detail.transcriptionStatus === 'processing') {
+      h += '<div class="ca-state">Transcription en cours…</div>';
+    } else if (recUrl) {
+      h += '<div class="ca-state">Pas encore de transcription pour cet appel.</div>';
+    } else {
+      h += '<div class="ca-state">Pas de transcription (pas d\'enregistrement).</div>';
+    }
+    h += '</div>';
+  }
+  h += '</div>';
+  panel.innerHTML = h;
+  bindAudio();
+}
+function transcriptHtml(row, speeches, lab, query) {
+  var agentCh = guessAgentChannel(speeches, row);
+  if (SWAP[row.id]) agentCh = agentCh === 1 ? 0 : 1;
+  var q = query ? norm(query) : '';
+  var h = '';
+  speeches.forEach(function (s, i) {
+    var ch = s.channelId === 1 ? 1 : 0;
+    var isAgent = ch === agentCh;
+    var text = esc(s.text);
+    var hit = false;
+    if (q) {
+      var idx = norm(s.text).indexOf(q);
+      if (idx >= 0) {
+        hit = true;
+        /* surlignage approximatif sur le texte original (même longueur après norm pour les lettres accentuées) */
+        var raw = String(s.text);
+        text = esc(raw.slice(0, idx)) + '<mark>' + esc(raw.slice(idx, idx + q.length)) + '</mark>' + esc(raw.slice(idx + q.length));
+      }
+    }
+    h += '<div class="tr' + (q && !hit ? ' dim' : '') + '" data-action="seek-to" data-i="' + i + '" data-t="' + (Number(s.start) || 0) + '">'
+      + '<span class="tr-t">' + fmtClock(s.start) + '</span>'
+      + '<span class="tr-sp ' + (isAgent ? 'agent' : 'lead') + '">' + esc(isAgent ? lab.agent : lab.lead) + '</span>'
+      + '<span class="tr-x">' + text + '</span></div>';
+  });
+  return h;
+}
+function rerenderTranscript() {
+  var row = CUR ? rowById(CUR) : null;
+  var d = CUR ? DETAILS[CUR] : null;
+  var list = $('caTrList');
+  if (!row || !d || !d.transcriptSpeeches || !list) return;
+  var q = $('caTrQ') ? $('caTrQ').value : '';
+  list.innerHTML = transcriptHtml(row, d.transcriptSpeeches, speakerLabels(row, d), q);
+  lastSeg = -1;
+  if (q) {
+    var first = list.querySelector('.tr:not(.dim)');
+    if (first) { try { first.scrollIntoView({ block: 'center' }); } catch (e) { /* ignore */ } }
+  }
+}
+function bindAudio() {
+  var a = $('caAudio');
+  if (!a) return;
+  a.addEventListener('timeupdate', function () {
+    var d = CUR ? DETAILS[CUR] : null;
+    if (!d || !d.transcriptSpeeches) return;
+    var t = a.currentTime, sp = d.transcriptSpeeches, idx = -1;
+    for (var i = 0; i < sp.length; i++) {
+      var next = (i + 1 < sp.length) ? Number(sp[i + 1].start) : Infinity;
+      if (t >= (Number(sp[i].start) || 0) && t < Math.max(Number(sp[i].end) || 0, next)) { idx = i; break; }
+    }
+    if (idx === lastSeg) return;
+    lastSeg = idx;
+    var list = $('caTrList');
+    if (!list) return;
+    var rows = list.querySelectorAll('.tr');
+    for (var j = 0; j < rows.length; j++) {
+      var on = parseInt(rows[j].getAttribute('data-i'), 10) === idx;
+      if (on && rows[j].className.indexOf(' on') < 0) rows[j].className += ' on';
+      else if (!on) rows[j].className = rows[j].className.replace(' on', '');
+      if (on && FOLLOW) { try { rows[j].scrollIntoView({ block: 'nearest' }); } catch (e) { /* ignore */ } }
+    }
+  });
+}
+
+/* ── Événements ────────────────────────────────────────────────────────── */
+document.addEventListener('click', function (e) {
+  var el = e.target.closest ? e.target.closest('[data-action]') : null;
+  if (!el) return;
+  var act = el.getAttribute('data-action');
+  if (act === 'open') { openCall(el.getAttribute('data-id')); return; }
+  if (act === 'close') { closeDetail(); return; }
+  if (act === 'more') { SHOWN += PAGE_SIZE; renderList(); return; }
+  if (act === 'refresh') { DETAILS = {}; loadCalls(); return; }
+  if (act === 'who') {
+    prefs.who = el.getAttribute('data-key') || '';
+    $('fWho').value = prefs.who;
+    savePrefs(); SHOWN = PAGE_SIZE; applyFilters();
+    return;
+  }
+  if (act === 'speed') {
+    var a = $('caAudio'); if (!a) return;
+    a.playbackRate = parseFloat(el.getAttribute('data-v')) || 1;
+    var btns = el.parentNode.querySelectorAll('[data-action="speed"]');
+    for (var i = 0; i < btns.length; i++) btns[i].className = btns[i] === el ? 'on' : '';
+    return;
+  }
+  if (act === 'seek') {
+    var a2 = $('caAudio'); if (!a2) return;
+    a2.currentTime = Math.max(0, a2.currentTime + (parseFloat(el.getAttribute('data-d')) || 0));
+    return;
+  }
+  if (act === 'seek-to') {
+    var a3 = $('caAudio');
+    if (!a3) { toast('Pas d\'enregistrement à lire pour cet appel', true); return; }
+    a3.currentTime = Math.max(0, parseFloat(el.getAttribute('data-t')) || 0);
+    var pr = a3.play(); if (pr && pr.catch) pr.catch(function () { /* autoplay bloqué : l'utilisateur relance */ });
+    return;
+  }
+  if (act === 'swap') {
+    if (!CUR) return;
+    SWAP[CUR] = !SWAP[CUR];
+    rerenderTranscript();
+    return;
+  }
+  if (act === 'call') {
+    var phone = el.getAttribute('data-phone');
+    if (!phone) return;
+    if (window.DialerBridge && window.DialerBridge.callLead) {
+      window.DialerBridge.callLead(el.getAttribute('data-lead') || null, phone, el.getAttribute('data-name') || null);
+    } else {
+      toast('Le Dialer n\'est pas disponible sur cette page', true);
+    }
+  }
+});
+document.addEventListener('change', function (e) {
+  var id = e.target && e.target.id;
+  if (id === 'fWho') { prefs.who = e.target.value; savePrefs(); SHOWN = PAGE_SIZE; applyFilters(); return; }
+  if (id === 'fDir') { prefs.dir = e.target.value; savePrefs(); SHOWN = PAGE_SIZE; applyFilters(); return; }
+  if (id === 'fRes') { prefs.res = e.target.value; savePrefs(); SHOWN = PAGE_SIZE; applyFilters(); return; }
+  if (id === 'fHas') { prefs.has = e.target.value; savePrefs(); SHOWN = PAGE_SIZE; applyFilters(); return; }
+  if (id === 'fMin') { prefs.min = e.target.value; savePrefs(); SHOWN = PAGE_SIZE; applyFilters(); return; }
+  if (id === 'fPeriod') {
+    prefs.period = e.target.value;
+    $('fCustom').className = 'ca-custom' + (prefs.period === 'custom' ? ' on' : '');
+    savePrefs();
+    if (prefs.period !== 'custom' || prefs.from) loadCalls();
+    return;
+  }
+  if (id === 'fFrom' || id === 'fTo') {
+    prefs.from = $('fFrom').value; prefs.to = $('fTo').value;
+    savePrefs();
+    if (prefs.from) loadCalls();
+    return;
+  }
+  if (id === 'caFollow') { FOLLOW = !!e.target.checked; return; }
+});
+document.addEventListener('input', function (e) {
+  var id = e.target && e.target.id;
+  if (id === 'fQ') {
+    clearTimeout(qTimer);
+    qTimer = setTimeout(function () { SHOWN = PAGE_SIZE; applyFilters(); }, 160);
+  } else if (id === 'caTrQ') {
+    clearTimeout(qTimer);
+    qTimer = setTimeout(rerenderTranscript, 160);
+  }
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape' && CUR && window.innerWidth <= 1100) closeDetail();
+});
+window.addEventListener('team-members-loaded', function () {
+  if (!CALLS.length) return;
+  buildPeople();
+  applyFilters();
+  if (CUR) { var row = rowById(CUR); if (row) renderDetail(row, DETAILS[CUR] || null, !DETAILS[CUR]); }
+});
+
+/* ── Démarrage ─────────────────────────────────────────────────────────── */
+firebase.auth().onAuthStateChanged(function (user) {
+  if (!user) { window.location.href = 'login.html'; return; }
+  currentUser = user;
+  var role = localStorage.getItem('ambitio_role') || '';
+  if (role === 'coach' || role === 'csm') {
+    $('lockedView').style.display = '';
+    return;
+  }
+  $('mainView').style.display = '';
+  loadPrefs();
+  loadCalls();
+});
+})();
+</script>
+</body>
+</html>

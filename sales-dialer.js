@@ -354,13 +354,14 @@
       if (hasTransc) badges += '📄';
       if (hasAI)     badges += '🤖';
       const playBtn = hasDetail
-        ? `<button class="sd-history-play" data-cid="${c.id}" title="Écouter / Voir détail" style="background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);color:#34d399;border-radius:8px;padding:4px 8px;font-size:12px;cursor:pointer;margin-left:8px">${badges}</button>`
+        ? `<button class="sd-history-play" data-cid="${c.id}" title="Écouter / Voir détail">${badges}</button>`
         : '';
+      const durLabel = dur ? (dur >= 60 ? Math.floor(dur / 60) + ' min ' + String(dur % 60).padStart(2, '0') : dur + ' s') : '';
       return `<div class="sd-history-item" data-lead="${c.leadId || ''}" data-phone="${otherPhone}" data-cid="${c.id}">
         <div class="sd-history-icon ${cls}">${ic}</div>
         <div class="sd-history-meta">
-          <div class="sd-history-name">${name}${closerLabel ? ` <span style="font-size:10px;color:rgba(255,255,255,0.4);font-weight:500">· ${closerLabel}</span>` : ''}</div>
-          <div class="sd-history-sub">${sub}${dur ? ' · ' + dur + 's' : ''}</div>
+          <div class="sd-history-name">${escapeHtml(name)}${closerLabel ? ` <span class="sd-history-who">${escapeHtml(closerLabel)}</span>` : ''}</div>
+          <div class="sd-history-sub">${sub}${durLabel ? ' · ' + durLabel : ''}</div>
         </div>
         ${playBtn}
       </div>`;

@@ -83,6 +83,11 @@
     { id: 'booking',           icon: '📅', label: 'Booking',     href: 'booking-admin.html',     section: 'Sales', perm: 'booking' },
     { id: 'sales-rdv',         icon: '🗓️', label: 'Rendez-vous',  href: 'sales-rdv.html',         section: 'Sales', perm: 'booking' },
     { id: 'sales-dialer',      icon: '☎️', label: 'Dialer',      href: 'sales-dialer.html',      section: 'Sales', perm: 'sales_dialer' },
+    // Réécoutes : tous les appels Ringover avec enregistrement, transcription
+    // par locuteur et résumé IA. Chaque sales ne voit que ses appels ; les
+    // admins (et users/{uid}.canListenCalls) voient toute l'équipe et filtrent
+    // par personne. Données servies par api/calls-list + api/call-detail.
+    { id: 'sales-appels',      icon: '🎧', label: 'Réécoutes',   href: 'sales-appels.html',      section: 'Sales', perm: 'sales_dialer' },
     { id: 'sales-whatsapp',    icon: '💬', label: 'WhatsApp',    href: 'whatsapp.html',          section: 'Sales', perm: 'sales_whatsapp' },
     { id: 'signatures',        icon: '✍️', label: 'Signatures',  href: 'sales-signatures.html',  section: 'Sales', perm: 'signatures' },
     // ─── FUNNEL & SITE — admin uniquement ───
@@ -193,7 +198,7 @@
     'alteoforms.html', 'booking-admin.html', 'clients-dedup.html',
     'csm-diagnostic.html', 'csm-import.html', 'formations.html',
     'formations-admin.html', 'payments.html',
-    'sales-clients.html', 'sales-closing.html', 'sales-commissions.html',
+    'sales-appels.html', 'sales-clients.html', 'sales-closing.html', 'sales-commissions.html',
     'sales-contact.html', 'sales-crm.html', 'sales-dashboard.html',
     'sales-dialer.html', 'sales-eod.html', 'sales-equipe.html',
     'sales-funnel.html', 'sales-leads.html', 'sales-projections.html',

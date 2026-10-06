@@ -196,8 +196,22 @@
     h += '<div class="cdm-section">';
     h += '<div class="cdm-section-title">📄 Transcription ' + statusPill(detail.transcriptionStatus) + '</div>';
     const transcText = detail.transcriptionText || detail.transcriptText;
+    const speeches = Array.isArray(detail.transcriptSpeeches) ? detail.transcriptSpeeches : null;
     if (transcText) {
       h += '<div class="cdm-transcript">' + escHtml(transcText) + '</div>';
+    } else if (speeches && speeches.length) {
+      // Ringover : pas de texte brut, uniquement des segments par canal
+      // (channelId 0/1). On les affiche ligne par ligne, horodatés.
+      h += '<div class="cdm-transcript">';
+      speeches.forEach(function (s) {
+        const t = Math.max(0, Math.floor(Number(s.start) || 0));
+        const clock = Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+        const who = s.channelId === 1 ? 'B' : 'A';
+        h += '<div class="cdm-transcript-line"><span class="cdm-transcript-t">' + clock + '</span>'
+          + '<span class="cdm-transcript-sp ch' + (s.channelId === 1 ? '1' : '0') + '">' + who + '</span>'
+          + '<span>' + escHtml(s.text) + '</span></div>';
+      });
+      h += '</div>';
     } else if (detail.transcriptionStatus === 'processing') {
       h += '<div class="cdm-audio-empty">Transcription en cours (Whisper)…</div>';
     } else if (detail.transcriptionStatus === 'failed') {
