@@ -744,7 +744,8 @@
 
   /* Retrouve les commissions AUTO générées par un RDV (dealKey = id_closing /
      id_setting), en balayant les mois où elles ont pu être rangées : le
-     Setting est versé sur M+1 et peut avoir été déplacé à la main. */
+     Setting a pu être versé sur M+1 (règle du 26/07, réactivable dans
+     _config/commissions) ou déplacé à la main. */
   function findAutoDealsForBooking(b) {
     var _db = db();
     var cd = b.closeData || {};
@@ -830,7 +831,78 @@
     });
   }
 
+  /* ═══ MOIS DE VERSEMENT DU SETTING (07/10/2026) ═══════════════════════
+     _config/commissions.settingPayMonth :
+       'same' (défaut) → la commission de setting est rangée sur le mois du
+                          close, comme le closing (décision Adrien 07/10/2026 :
+                          la trésorerie le permet, plus simple pour tous) ;
+       'next'          → ancienne règle du 26/07 : versée avec la paie de M+1.
+     Interrupteur réservé aux admins dans le module Commissions. Lu à CHAQUE
+     close (pas de cache : un changement d'admin s'applique sans recharger).
+     Lecture impossible (rules pas encore à jour, hors ligne…) → défaut 'same'. */
+  var SETTING_PAY_DEFAULT = 'same';
+  function loadCommissionsConfig() {
+    return db().collection('_config').doc('commissions').get().then(function (s) {
+      var d = s.exists ? (s.data() || {}) : {};
+      return { settingPayMonth: d.settingPayMonth === 'next' ? 'next' : SETTING_PAY_DEFAULT };
+    }).catch(function (e) {
+      console.warn('[AlteoreFlow] _config/commissions illisible, défaut « ' + SETTING_PAY_DEFAULT + ' » :', e && e.message);
+      return { settingPayMonth: SETTING_PAY_DEFAULT };
+    });
+  }
+
+  /* ═══ FÉLICITATIONS AU SETTER (07/10/2026) ════════════════════════════
+     Une commission de setting NOUVELLEMENT créée (jamais sur un re-close)
+     dépose sale_celebrations/{dealKey} : alteore-celebration.js (injecté
+     par nav.js) l'affiche en pop-up au setter à sa prochaine page, puis
+     pose seenAt. Pas de pop-up quand le setter est aussi le closer : c'est
+     lui qui vient de cliquer Close. Fire-and-forget : un échec ici ne doit
+     jamais faire croire que la commission n'est pas créée. */
+  var OFFRE_LABELS = { 'BP 12': 'Business Phénix', 'Elite': 'Élite Phénix', 'Titan': 'Titan', 'BP 6': 'BP 6' };
+  function createSaleCelebration(res, closeData, closeMonth, payMonth) {
+    if (!res || !res.created || !res.deal || !res.deal.dealKey) return Promise.resolve(null);
+    if (closeData.closerSlug && closeData.closerSlug === closeData.setterSlug) return Promise.resolve(null);
+    var target = memberBySlug(closeData.setterSlug);
+    if (!target || !target.firebaseUid) {
+      console.warn('[AlteoreFlow] félicitations : firebaseUid introuvable pour', closeData.setterSlug);
+      return Promise.resolve(null);
+    }
+    var closer = closeData.closerSlug ? memberBySlug(closeData.closerSlug) : null;
+    var m = me() || {};
+    var deal = res.deal;
+    return db().collection('sale_celebrations').doc(deal.dealKey).set({
+      kind: 'setting',
+      targetUid: target.firebaseUid,
+      targetSlug: closeData.setterSlug,
+      targetName: target.shortName || target.displayName || target.fullName || closeData.setterSlug,
+      client: deal.client || 'Client',
+      offre: deal.offre || null,
+      offreLabel: OFFRE_LABELS[deal.offre] || deal.offre || '',
+      comm: Number(deal.comm) || 0,
+      closerSlug: closeData.closerSlug || null,
+      closerName: closer ? (closer.shortName || closer.displayName || closer.fullName || closeData.closerSlug) : null,
+      closeMonth: closeMonth,
+      payMonth: payMonth,
+      bookingId: deal.bookingId || null,
+      leadId: deal.leadId || null,
+      dealKey: deal.dealKey,
+      createdAt: ts(),
+      createdBy: m.uid || null,
+      createdByName: m.name || null,
+      seenAt: null
+    }).catch(function (e) {
+      console.warn('[AlteoreFlow] félicitations non créées (' + closeData.setterSlug + '):', e && e.message);
+      return null;
+    });
+  }
+
   function createCommissionDeals(booking, closeData, lead) {
+    return loadCommissionsConfig().then(function (cfg) {
+      return createCommissionDealsWith(booking, closeData, lead, cfg);
+    });
+  }
+
+  function createCommissionDealsWith(booking, closeData, lead, cfg) {
     var prospect = booking.prospect || {};
     var clientName = ((prospect.prenom || '') + ' ' + (prospect.nom || '')).trim() || (lead && lead.nom) || 'Client';
     var email = prospect.email || (lead && lead.email) || '';
@@ -866,14 +938,17 @@
       }));
     }
     if (closeData.setterSlug) {
-      /* ⚠ DÉCALAGE SETTING (règle Adrien 26/07) — la commission de setting
-         d'un close du mois M est versée avec la paie de M+1, alors que le
-         closing reste sur M. Seul le DOCUMENT MENSUEL qui héberge le deal
-         change : sa date reste celle du close, et le funnel continue de le
-         compter sur le mois du close (il filtre sur `date`, pas sur le doc).
-         Décision réversible : le module Commissions permet de déplacer le
-         deal d'un mois (bouton ⇄), c'est l'équipe qui tranche. */
-      var mkSetting = shiftMonthKey(mk, 1);
+      /* MOIS DE VERSEMENT DU SETTING — piloté par _config/commissions
+         (loadCommissionsConfig) : mois du close par défaut depuis le
+         07/10/2026, M+1 si un admin réactive l'ancienne règle du 26/07.
+         Seul le DOCUMENT MENSUEL qui héberge le deal change : sa date reste
+         celle du close, et le funnel le compte sur le mois du close (il
+         filtre sur `date`, pas sur le doc). Le module Commissions permet
+         toujours de déplacer un deal d'un mois (◀ ▶). */
+      var payNext = cfg && cfg.settingPayMonth === 'next';
+      var mkSetting = payNext ? shiftMonthKey(mk, 1) : mk;
+      /* Anti-doublon : on cherche le dealKey dans les mois voisins — un deal
+         posé en M+1 avant la bascule, ou déplacé à la main, n'est jamais recréé. */
       jobs.push(appendDealIfAbsent(closeData.setterSlug, mkSetting, {
         client: clientName, email: email,
         offre: closeData.offre, type: 'Setting',
@@ -883,15 +958,17 @@
         comm: calcSettingComm(closeData.offre, sb, closeData.setterSlug),
         bonus: 0,
         notes: 'AUTO — Setting ' + (sb ? 'Self Booking' : 'No-Booking') + ' du close de ' + clientName
-             + ' (close ' + mk + ', versé ' + mkSetting + ')',
+             + (payNext ? ' (close ' + mk + ', versé ' + mkSetting + ')' : ''),
         ok: false,
         auto: true,
-        closeMonth: mk,          // mois du close — trace du décalage
-        shifted: true,           // posé par la règle M+1 (≠ déplacement manuel)
+        closeMonth: mk,          // mois du close — trace d'un éventuel décalage
+        shifted: payNext,        // true = posé par la règle M+1 (≠ déplacement manuel)
         bookingId: booking.id,
         leadId: booking.leadId || null,
         dealKey: booking.id + '_setting'
-      }, [mk, shiftMonthKey(mk, 2), shiftMonthKey(mk, -1)]));
+      }, [mk, shiftMonthKey(mk, 1), shiftMonthKey(mk, 2), shiftMonthKey(mk, -1)]).then(function (res) {
+        return createSaleCelebration(res, closeData, mk, mkSetting).then(function () { return res; });
+      }));
     }
     return Promise.all(jobs); // chaque job catch ses erreurs et les remonte ({error})
   }
@@ -1182,6 +1259,7 @@
     resolveClosingActors: resolveClosingActors,
     applyFicheClose: applyFicheClose,
     createCommissionDeals: createCommissionDeals,
+    loadCommissionsConfig: loadCommissionsConfig,
     calcClosingComm: calcClosingComm,
     calcClosingBonus: calcClosingBonus,
     calcSettingComm: calcSettingComm,

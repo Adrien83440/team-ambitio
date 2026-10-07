@@ -317,6 +317,20 @@ service cloud.firestore {
       allow write: if isSelfOrAdmin(userId);
     }
 
+    // ═══ FÉLICITATIONS AU SETTER (07/10/2026) ═══
+    // sale_celebrations/{dealKey} : déposé au close par le navigateur du
+    // closer (sales/admin) quand une commission de setting est créée ;
+    // lu UNIQUEMENT par le setter destinataire (targetUid) qui pose seenAt
+    // après le pop-up (alteore-celebration.js). Jamais supprimé.
+    match /sale_celebrations/{celebId} {
+      allow read:   if isAdmin() || (isAuth() && resource.data.targetUid == request.auth.uid);
+      allow create: if isSalesOrAdmin();
+      allow update: if isAdmin()
+                    || (isAuth() && resource.data.targetUid == request.auth.uid
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seenAt']));
+      allow delete: if false;
+    }
+
     // ═══ EOD (End of Day) ═══
     match /eod/{userId}/jours/{dateKey} {
       allow read:           if isSalesOrAdmin();
@@ -477,6 +491,17 @@ service cloud.firestore {
     // ═══ INTERNAL CONFIG ═══
     match /_config/oauth_calendar {
       allow read:  if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // _config/commissions (07/10/2026) : { settingPayMonth: 'same' | 'next' }
+    // — mois de versement des commissions de setting. Lu par le navigateur
+    // du CLOSER (sales) au moment du close (alteore-flow.js), donc lisible
+    // par sales ; seul un admin bascule l'interrupteur (module Commissions).
+    // Les rules s'additionnent : ce bloc ouvre la lecture que le joker
+    // /_config/{docId} ci-dessous réserve aux admins.
+    match /_config/commissions {
+      allow read:  if isSalesOrAdmin();
       allow write: if isAdmin();
     }
 

@@ -90,6 +90,27 @@ body {
 .topbar-title { font-family: var(--font-head); font-size: 22px; font-weight: 800; }
 .topbar-sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
 
+/* Interrupteur admin : mois de versement des commissions de setting */
+.topbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.pay-toggle {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 5px 6px 5px 12px;
+  font-size: 11.5px; color: var(--muted);
+}
+.pay-toggle-btns { display: flex; gap: 3px; background: rgba(255,255,255,0.04); border-radius: 9px; padding: 2px; }
+.pay-toggle button {
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); font-size: 11.5px; font-weight: 700; font-family: inherit;
+  padding: 5px 10px; border-radius: 7px;
+  transition: background 0.15s, color 0.15s;
+}
+.pay-toggle button:hover { color: var(--text); }
+.pay-toggle button.on { background: rgba(245,158,11,0.18); color: var(--gold); }
+.pay-toggle button:disabled { opacity: .5; cursor: wait; }
+
 /* Month nav */
 .month-nav {
   display: flex; align-items: center; gap: 10px;
@@ -1305,7 +1326,7 @@ function renderDealsTable(deals) {
           /* Commission de setting versée sur un autre mois que son close :
              on l'écrit, sinon la ligne semble mal datée. */
           d.closeMonth && d.closeMonth !== _mToFs(cmk())
-            ? `<div style="font-size:9.5px;color:var(--gold);margin-top:3px" title="La commission de setting est versée le mois suivant le close (modifiable avec ⇄)">↷ close ${_fsToM(d.closeMonth)}</div>`
+            ? `<div style="font-size:9.5px;color:var(--gold);margin-top:3px" title="Commission de setting rangée sur un autre mois que son close (règle M+1 ou déplacement ◀ ▶)">↷ close ${_fsToM(d.closeMonth)}</div>`
             : ''
         }</td>
         <td>
@@ -1443,9 +1464,10 @@ function deleteDeal(i) {
 /* ══════════════════════════════════════════════════════════
    DÉPLACER UN DEAL D'UN MOIS
    ─────────────────────────────────────────────────────────
-   Les commissions de Setting sont posées automatiquement sur le mois
-   SUIVANT le close (versement M+1). C'est un défaut, pas une fatalité :
-   ici on remet le deal sur le mois qu'on veut. Le champ `date` (date du
+   Les commissions de Setting sont posées automatiquement sur le mois du
+   close, ou sur le mois SUIVANT si un admin a choisi « Mois suivant »
+   (_config/commissions, interrupteur en haut de page). Ici on remet un
+   deal sur le mois qu'on veut. Le champ `date` (date du
    close) n'est jamais touché — le funnel continue donc de rattacher la
    commission au mois du close, quel que soit le mois de versement.
 ══════════════════════════════════════════════════════════ */
@@ -1677,6 +1699,63 @@ async function migrateCommToFirestore() {
   if (migrated > 0) console.log('[Comm] Migration: ' + migrated + ' mois écrits dans Firestore');
 }
 
+/* ══════════════════════════════════════════════════════════
+   MOIS DE VERSEMENT DU SETTING — interrupteur admin (07/10/2026)
+   ─────────────────────────────────────────────────────────
+   _config/commissions.settingPayMonth : 'same' (défaut, mois du close)
+   ou 'next' (M+1). Lu par AlteoreFlow au moment du close — ne change que
+   les PROCHAINES commissions, jamais celles déjà posées (◀ ▶ pour ça).
+══════════════════════════════════════════════════════════ */
+let _settingPayMode = 'same';
+function _renderPayToggle() {
+  const box = document.getElementById('setting-pay-toggle');
+  if (!box) return;
+  box.querySelectorAll('button[data-pay-mode]').forEach(function(b) {
+    b.classList.toggle('on', b.getAttribute('data-pay-mode') === _settingPayMode);
+  });
+}
+async function initPayToggle() {
+  const box = document.getElementById('setting-pay-toggle');
+  if (!box || !_fsDb || !_isAdminView()) return;
+  try {
+    const snap = await _fsDb.collection('_config').doc('commissions').get();
+    const d = snap.exists ? (snap.data() || {}) : {};
+    _settingPayMode = d.settingPayMonth === 'next' ? 'next' : 'same';
+  } catch (e) {
+    console.warn('[Comm] _config/commissions :', e && e.message);
+  }
+  _renderPayToggle();
+  box.style.display = '';
+  if (box.dataset.bound) return;
+  box.dataset.bound = '1';
+  box.addEventListener('click', async function(e) {
+    const btn = e.target.closest('button[data-pay-mode]');
+    if (!btn) return;
+    const mode = btn.getAttribute('data-pay-mode');
+    if (mode === _settingPayMode) return;
+    const msg = mode === 'next'
+      ? 'Les PROCHAINES commissions de setting seront posées sur le mois SUIVANT le close (paie M+1).\n\nLes commissions déjà posées ne bougent pas. Continuer ?'
+      : 'Les PROCHAINES commissions de setting seront posées sur le MOIS DU CLOSE, comme le closing.\n\nLes commissions déjà posées ne bougent pas. Continuer ?';
+    if (!confirm(msg)) return;
+    const btns = box.querySelectorAll('button');
+    btns.forEach(function(b) { b.disabled = true; });
+    try {
+      const u = firebase.auth().currentUser;
+      await _fsDb.collection('_config').doc('commissions').set({
+        settingPayMonth: mode,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: u ? u.uid : null,
+        updatedByName: window._currentUserName || (u && u.email) || null
+      }, { merge: true });
+      _settingPayMode = mode;
+      _renderPayToggle();
+    } catch (err) {
+      alert('Réglage non enregistré : ' + (err && err.message ? err.message : err));
+    }
+    btns.forEach(function(b) { b.disabled = false; });
+  });
+}
+
 document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('month-lbl').textContent = cmk();
   renderListe();
@@ -1692,6 +1771,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // le mois courant est inclus.
       await loadAllCommFromFirestore();
       renderAll();
+      initPayToggle();
 
       // Migration en arrière-plan
       setTimeout(function() { migrateCommToFirestore().catch(function(e) { console.warn('[Comm] Migration err:', e); }); }, 1000);
@@ -1711,10 +1791,19 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="topbar-sub">Suivi des rémunérations par commercial</div>
       </div>
     </div>
-    <div class="month-nav">
-      <button onclick="prevMonth()">&#9664;</button>
-      <span id="month-lbl">Février 2026</span>
-      <button onclick="nextMonth()">&#9654;</button>
+    <div class="topbar-right">
+      <div class="pay-toggle" id="setting-pay-toggle" style="display:none" title="Mois sur lequel la commission de setting est posée automatiquement au close">
+        <span>💸 Setting versé</span>
+        <div class="pay-toggle-btns">
+          <button type="button" data-pay-mode="same">Mois du close</button>
+          <button type="button" data-pay-mode="next">Mois suivant</button>
+        </div>
+      </div>
+      <div class="month-nav">
+        <button onclick="prevMonth()">&#9664;</button>
+        <span id="month-lbl">Février 2026</span>
+        <button onclick="nextMonth()">&#9654;</button>
+      </div>
     </div>
   </div>
 

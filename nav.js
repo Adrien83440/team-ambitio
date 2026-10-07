@@ -1488,6 +1488,24 @@
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // FÉLICITATIONS AU SETTER — pop-up « une vente vient d'être conclue grâce à
+  // toi » (07/10/2026). alteore-celebration.js lit sale_celebrations (API REST
+  // + jeton de l'utilisateur, aucun SDK) : seul le setter destinataire voit
+  // le sien, il ne s'affiche qu'une fois.
+  // ─────────────────────────────────────────────────────────────────────────
+  function injectCelebrationWidget() {
+    if (window.__celebrationWidgetInjected) return;
+    window.__celebrationWidgetInjected = true;
+    if (!document.querySelector('script[data-celebration-widget]')) {
+      var script = document.createElement('script');
+      script.src = 'alteore-celebration.js';
+      script.defer = true;
+      script.setAttribute('data-celebration-widget', '1');
+      document.head.appendChild(script);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // ACTIVITY TRACKER — connexions et temps d'activité par utilisateur
   // Alimente user_activity/* via POST /api/user-activity { action:'beat' }.
   // Lu par admin-users.html (section « Activité de connexion »).
@@ -1611,10 +1629,11 @@
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { injectInboxWidget(); injectInfosWidget(); initActivityTracker(); });
+    document.addEventListener('DOMContentLoaded', function () { injectInboxWidget(); injectInfosWidget(); injectCelebrationWidget(); initActivityTracker(); });
   } else {
     injectInboxWidget();
     injectInfosWidget();
+    injectCelebrationWidget();
     initActivityTracker();
   }
 })();
