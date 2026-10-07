@@ -2288,6 +2288,47 @@ async function _abGetTypeNotif(typeId) {
   return t ? (t.notifications || {}) : null;
 }
 
+/* ═══ SELF-BOOKING → PORTEUR DU DRAPEAU ROSTER (07/10/2026) ═══
+   Règle Adrien : un RDV pris PAR LE PROSPECT LUI-MÊME est toujours travaillé
+   par le membre du roster qui porte `selfBookingOwner: true` (Élodie), même
+   si le round-robin de Leads Live avait déjà donné la fiche à un setter pur
+   (Valentin ne fait pas le setting des self-bookings). Le setterSlug
+   verrouillé n'est jamais touché : une commission acquise le reste.
+   Classement « self » = même règle que AlteoreFlow.classifyBooking :
+   ni setter_booking / admin_manual / csm_manual, ni lien setter attribué,
+   ni type isSetterOnly / coaching. */
+async function _abIsSelfBooked(booking) {
+  if (!booking || booking.isCoaching === true) return false;
+  const src = booking.source || '';
+  if (src === 'setter_booking' || src === 'admin_manual' || src === 'csm_manual') return false;
+  if (booking.skipLeadCreation === true || booking.clientId || booking.setterLinkSlug) return false;
+  try {
+    const snap = await db.collection('booking_config').doc('_types').get();
+    const t = ((snap.data() || {}).list || []).find(x => x.id === booking.type);
+    if (t && (t.isSetterOnly === true || t.isCoaching === true || t.attributedSetterSlug)) return false;
+  } catch (e) {
+    console.warn('[onBookingCreated] lecture _types impossible, RDV considéré self :', e.message);
+  }
+  return true;
+}
+async function _abSelfBookingOwner() {
+  try {
+    const snap = await db.collection('_meta').doc('team_members').get();
+    const raw = (snap.data() || {}).members;
+    const arr = Array.isArray(raw) ? raw : Object.keys(raw || {}).map(k => raw[k]);
+    const nameOf = (slug) => {
+      if (!slug) return 'Non attribué';
+      const m = arr.find(x => x && x.slug === slug);
+      return m ? (m.shortName || m.fullName || m.slug) : slug;
+    };
+    const owner = arr.find(x => x && x.selfBookingOwner === true && x.active !== false && !x.archivedAt && x.slug);
+    return owner ? { slug: owner.slug, name: nameOf(owner.slug), nameOf } : null;
+  } catch (e) {
+    console.warn('[onBookingCreated] roster illisible, pas de réattribution self-booking :', e.message);
+    return null;
+  }
+}
+
 async function _abGetExpertEmail(personId) {
   if (!personId) return null;
   try {
@@ -2712,6 +2753,9 @@ exports.onBookingCreated = functions.firestore
           createdAt: fmtNow()
         };
 
+        // Self-booking → fiche au porteur du drapeau roster (cf. _abIsSelfBooked).
+        const sbOwner = (await _abIsSelfBooked(booking)) ? await _abSelfBookingOwner() : null;
+
         if (leadDoc) {
           const existing = leadDoc.data || {};
           const isResurrected = existing.stage && TERMINAL_STAGES.indexOf(existing.stage) >= 0;
@@ -2721,6 +2765,15 @@ exports.onBookingCreated = functions.firestore
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             bookingsHistory: admin.firestore.FieldValue.arrayUnion(bookingHistEntry)
           };
+          const tlEntries = [];
+          if (sbOwner && (existing.assignedTo || '') !== sbOwner.slug) {
+            update.assignedTo = sbOwner.slug;
+            update.assignedVia = 'self_booking_owner';
+            tlEntries.push({
+              text: '📥 Attribution : ' + sbOwner.nameOf(existing.assignedTo) + ' → ' + sbOwner.name + ' (self-booking)',
+              date: fmtNow(), color: '#22d3ee'
+            });
+          }
 
           if (existing.type !== 'self_booking') update.type = 'self_booking';
 
@@ -2738,9 +2791,8 @@ exports.onBookingCreated = functions.firestore
           } else {
             tlText = '📅 RDV pris · ' + typeLabel + ' avec ' + expertName + ' le ' + _abFmtDate(booking.date) + ' ' + time;
           }
-          update.timeline_history = admin.firestore.FieldValue.arrayUnion({
-            text: tlText, date: fmtNow(), color: '#34d399'
-          });
+          tlEntries.unshift({ text: tlText, date: fmtNow(), color: '#34d399' });
+          update.timeline_history = admin.firestore.FieldValue.arrayUnion(...tlEntries);
 
           const mergeFields = ['nom', 'email', 'telephone', 'secteur'];
           mergeFields.forEach((f) => {
@@ -2765,7 +2817,7 @@ exports.onBookingCreated = functions.firestore
             utm: booking.formId ? ('Form ' + booking.formId) : (booking.typeLabel || 'Booking direct'),
             stage: 'rdv_self_booking',
             status: 'rdv_pose',
-            assignedTo: '',
+            assignedTo: sbOwner ? sbOwner.slug : '',
             notesHistory: [],
             timeline_history: [{
               text: '✨ Lead créé via booking · ' + typeLabel + ' avec ' + expertName + ' le ' + _abFmtDate(booking.date) + ' ' + time,
@@ -2778,6 +2830,10 @@ exports.onBookingCreated = functions.firestore
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp()
           };
+          if (sbOwner) {
+            lead.assignedVia = 'self_booking_owner';
+            lead.timeline_history.push({ text: '📥 Attribution : ' + sbOwner.name + ' (self-booking)', date: fmtNow(), color: '#22d3ee' });
+          }
           await db.collection('leads').doc(newLeadId).set(lead);
           await snap.ref.update({ leadId: newLeadId, leadLinkType: 'created' });
           console.log('[onBookingCreated] Lead ' + newLeadId + ' créé (booking sans lead matché)');
@@ -3403,7 +3459,7 @@ const _TM_PALETTE = [
 const _TM_PRESERVED_FIELDS = [
   'color', 'slug', 'active', 'archivedAt',
   'canPassCalls', 'signaturesAccess', 'dialerEnabled',
-  'inLeadsModule',
+  'inLeadsModule', 'eligibleForLeads', 'selfBookingOwner',
   'shortName', 'initials',
   'createdAt'
 ];

@@ -5755,7 +5755,36 @@ function getRoundRobinPool() {
   });
 }
 
-function assignLeadRoundRobin(leadId, callback) {
+/* ═══ SELF-BOOKING → PORTEUR DU DRAPEAU (07/10/2026) ═══
+   Règle Adrien : une fiche née d'un RDV pris par le prospect lui-même va
+   directement au membre du roster qui porte `selfBookingOwner: true`
+   (Élodie), jamais au round-robin — Valentin (setter pur) ne fait pas le
+   setting des self-bookings. La Cloud Function onBookingCreated applique la
+   même règle côté serveur sur TOUT RDV self (y compris une fiche déjà
+   attribuée après un opt-in) ; ici on évite seulement que le navigateur
+   gagne la course et pose un setter avant elle. */
+function selfBookingOwnerSlug() {
+  var src = window.TEAM_MEMBERS_LIST || [];
+  for (var i = 0; i < src.length; i++) {
+    var m = src[i];
+    if (m && m.selfBookingOwner === true && m.active !== false && !m.archivedAt && m.slug) return m.slug;
+  }
+  return null;
+}
+function isSelfBookingBornLead(l) {
+  if (!l) return false;
+  if (l.stage === 'rdv_self_booking' || l.status === 'rdv_self_booking') return true;
+  return l.source === 'booking_direct' || l.source === 'forms_self_booking';
+}
+
+function assignLeadRoundRobin(leadId, callback, leadData) {
+  var owner = isSelfBookingBornLead(leadData) ? selfBookingOwnerSlug() : null;
+  if (owner) {
+    db.collection('leads').doc(leadId).update({ assignedTo: owner, assignedVia: 'self_booking_owner' })
+      .then(function() { if (callback) callback(owner); })
+      .catch(function(err) { console.error('[leads] self-booking owner assign error:', err); });
+    return;
+  }
   var pool = getRoundRobinPool();
   if (pool.length === 0) {
     console.warn('[leads] roundrobin: aucun membre éligible, abandon');
@@ -5816,7 +5845,7 @@ function maybeAutoAssignResurrect(d) {
   if (_resurrectAssignAttempted[d.id]) return;
   if (getRoundRobinPool().length === 0) return; // pool pas prêt → retry au prochain tick
   _resurrectAssignAttempted[d.id] = true;
-  assignLeadRoundRobin(d.id);
+  assignLeadRoundRobin(d.id, null, d);
 }
 
 /* ═══ FIRESTORE LISTENER ═══ */
@@ -6190,7 +6219,7 @@ function startListening() {
 
           // Auto-assign if no assignedTo
           if (!newLead.assignedTo) {
-            assignLeadRoundRobin(change.doc.id);
+            assignLeadRoundRobin(change.doc.id, null, newLead);
           }
 
           newLeads.push(newLead);
@@ -6261,7 +6290,7 @@ function startListening() {
           var isImport = l.source === 'bigin_import' || l.source === 'webinar_import' || l.source === 'migration_suivi_client';
           var hasReoptin = !!l.lastOptinAt;
           if (!isImport || hasReoptin) {
-            assignLeadRoundRobin(l.id);
+            assignLeadRoundRobin(l.id, null, l);
           }
         });
       }

@@ -1132,7 +1132,7 @@
         /* Partis : hors LIST / ACTIVE, conservés dans la map (historique). */
         var roster = list.filter(function (m) {
           if (!window.isDepartedMember(m)) return true;
-          m.departed = true; m.active = false; m.inLeadsModule = false; m.eligibleForLeads = false;
+          m.departed = true; m.active = false; m.inLeadsModule = false; m.eligibleForLeads = false; m.selfBookingOwner = false;
           return false;
         });
         window.TEAM_MEMBERS = map;

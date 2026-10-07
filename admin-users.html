@@ -1789,6 +1789,7 @@ function openEditModal(u){
     var inLM = tmMember.inLeadsModule !== false; // true par défaut
     var eligibleLeads = tmMember.eligibleForLeads === true; // false par défaut (sécurité)
     var canCalls = tmMember.canPassCalls === true; // false par défaut (sécurité)
+    var sbOwner = tmMember.selfBookingOwner === true; // un seul membre dans tout le roster
     var tmColor = tmMember.color || '#6b7280';
     var tmRole = tmMember.role || '';
     var tmShortName = tmMember.shortName || '';
@@ -1810,6 +1811,13 @@ function openEditModal(u){
     h+='<input type="checkbox" id="eEligibleForLeads"'+(eligibleLeads?' checked':'')+' style="width:16px;height:16px;accent-color:#22d3ee"/>';
     h+='<div><div style="font-size:13px;font-weight:700;color:rgba(255,255,255,.85)">🎯 Reçoit des leads en round-robin</div>';
     h+='<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:1px">Inclus dans la rotation automatique d\'attribution des leads entrants. ⚠️ Réservé aux <b>setters actifs</b> — jamais les Heads of Sales ni les admins. Un closer qui ne fait que du Self Booking reste hors rotation.</div></div>';
+    h+='</label>';
+
+    // Toggle selfBookingOwner — porteur unique des self-bookings (règle 07/10/2026)
+    h+='<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.18);border-radius:8px;margin-bottom:10px">';
+    h+='<input type="checkbox" id="eSelfBookingOwner"'+(sbOwner?' checked':'')+' style="width:16px;height:16px;accent-color:#fbbf24"/>';
+    h+='<div><div style="font-size:13px;font-weight:700;color:rgba(255,255,255,.85)">📆 Reçoit les self-bookings</div>';
+    h+='<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:1px">Toute fiche dont le prospect prend lui-même son RDV (lien public VSL / quiz) lui est attribuée automatiquement, même si le round-robin l\'avait donnée à un setter. <b>Un seul membre</b> peut porter ce rôle : cocher ici le retire aux autres.</div></div>';
     h+='</label>';
 
     // Toggle canPassCalls — conditionne l'attribution d'un numéro de ligne
@@ -2052,6 +2060,19 @@ async function handleSave(uid){
       };
       var callsEl = document.getElementById('eCanPassCalls');
       if (callsEl) tmPatch.canPassCalls = callsEl.checked;
+      var sboEl = document.getElementById('eSelfBookingOwner');
+      if (sboEl) {
+        tmPatch.selfBookingOwner = sboEl.checked;
+        /* Exclusivité : un seul porteur dans le roster → on retire le drapeau
+           à tous les autres membres avant d'appliquer le patch courant. */
+        if (sboEl.checked) {
+          var _others = Array.isArray(TEAM_MEMBERS_RAW_DATA) ? TEAM_MEMBERS_RAW_DATA : Object.keys(TEAM_MEMBERS_RAW_DATA || {}).map(function(k){ return TEAM_MEMBERS_RAW_DATA[k]; });
+          _others.forEach(function(om, oi) {
+            var isCurrent = Array.isArray(TEAM_MEMBERS_RAW_DATA) ? (oi === tmRawKey) : (Object.keys(TEAM_MEMBERS_RAW_DATA)[oi] === tmRawKey);
+            if (om && !isCurrent && om.selfBookingOwner === true) om.selfBookingOwner = false;
+          });
+        }
+      }
       var roleVal = (document.getElementById('eTmRole') || {}).value;
       /* undefined = le select n'est pas dans le DOM → on ne touche pas au
          champ. Chaîne vide = choix explicite « non commercial » → on écrit ''
