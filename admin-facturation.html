@@ -3974,6 +3974,10 @@ function renderInvoicesList() {
     if (inv.qontoSyncStatus === 'sent') {
       html += ' <button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();refreshEinvoicingStatus(\'' + inv.id + '\')"'
         + ' title="Relire le statut réseau chez Qonto">🔄</button>';
+      if (inv.qonto && isEinvUndelivered(inv.qonto)) {
+        html += ' <button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();resendEinvoice(\'' + inv.id + '\')"'
+          + ' title="Renvoyer sur le réseau (Qonto n\'a pas pu la remettre)" style="color:#ef4444">📨</button>';
+      }
     }
     const _needsPaidRetry = !!(inv.qonto && inv.qonto.paidSyncError);
     if (inv.status !== 'draft'
@@ -4036,6 +4040,19 @@ function qontoBadgeOf(inv) {
       return '<div><span style="' + base + 'background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.3)"'
         + ' title="' + escapeAttr(depot + evTxt) + '">⚡ ' + lbl + '</span></div>';
     }
+    if (isEinvUndelivered(q)) {
+      return '<div><span style="' + base + 'background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.3)"'
+        + ' title="' + escapeAttr(depot + ' · Qonto n\'a pas pu la remettre au destinataire — bouton 📨 pour la renvoyer' + evTxt)
+        + '">⚡ Non remise</span></div>';
+    }
+    if (q.resentByEinvoiceAt) {
+      const rd = q.resentByEinvoiceAt.toDate ? q.resentByEinvoiceAt.toDate() : null;
+      if (!net || net === 'pending' || net === 'submitted') {
+        return '<div><span style="' + base + 'background:rgba(96,165,250,.12);color:#60a5fa;border:1px solid rgba(96,165,250,.3)"'
+          + ' title="' + escapeAttr('Renvoyée sur le réseau' + (rd ? ' le ' + rd.toLocaleDateString('fr-FR') : '') + ' · relis le statut (🔄)' + evTxt)
+          + '">⚡ Renvoyée</span></div>';
+      }
+    }
     /* Relue, mais Qonto ne connaît aucun statut réseau : la demande d'envoi a
        été acceptée, rien ne dit que la facture a été acheminée (L'ATELIER 2C,
        F2026-00115 : client absent de l'Annuaire le jour de l'envoi). */
@@ -4082,7 +4099,54 @@ function einvoicingEventText(ev) {
   const code = ev.statusCode != null ? ev.statusCode : '?';
   const d = ev.timestamp ? new Date(ev.timestamp) : null;
   const when = (d && !isNaN(d.getTime())) ? d.toLocaleDateString('fr-FR') : '';
-  return code + ' ' + (ev.label || '') + (when ? ' (' + when + ')' : '') + (ev.reason ? ' — ' + ev.reason : '');
+  return code + ' ' + (ev.label || '') + (when ? ' (' + when + ')' : '')
+    + (ev.reason ? ' — ' + ev.reason : '') + (ev.reasonMessage ? ' : ' + ev.reasonMessage : '');
+}
+
+/* Le journal Qonto dit-il que la facture n'a pas été remise ? Le motif passe
+   par le texte de l'événement, pas par einvoicing_status (resté vide sur
+   F2026-00115). Même test que api/invoice-einvoice-resend.js. Un renvoi
+   postérieur à la dernière relecture suspend le signal jusqu'à la suivante. */
+function isEinvUndelivered(q) {
+  const resent = (q.resentByEinvoiceAt && q.resentByEinvoiceAt.toMillis) ? q.resentByEinvoiceAt.toMillis() : 0;
+  const checked = (q.einvoicingCheckedAt && q.einvoicingCheckedAt.toMillis) ? q.einvoicingCheckedAt.toMillis() : 0;
+  if (resent && resent > checked) return false;
+  /* L'ancien « non transmise » reste dans le journal après un renvoi :
+     seuls les événements postérieurs au dernier renvoi comptent. */
+  const list = (Array.isArray(q.einvoicingEvents) ? q.einvoicingEvents : []).filter(function (ev) {
+    const t = ev && ev.timestamp ? Date.parse(ev.timestamp) : NaN;
+    return !resent || (!isNaN(t) && t > resent);
+  });
+  return list.some(function (ev) {
+    const txt = String(ev.reason || '') + ' ' + String(ev.reasonMessage || '');
+    return /non transmise/i.test(txt) || /ligne active dans l.Annuaire/i.test(txt);
+  }) || q.einvoicingStatus === 'not_delivered';
+}
+
+/* Renvoi réseau d'une facture que Qonto n'a pas pu remettre. Le serveur
+   revérifie tout à l'instant (journal, statut, joignabilité du client). */
+async function resendEinvoice(invoiceId) {
+  const inv = invoicesCache.filter(function (x) { return x.id === invoiceId; })[0];
+  if (!inv) return toast('Facture introuvable', true);
+  if (!confirm('Renvoyer ' + (inv.number || 'cette facture') + ' sur le réseau de facturation électronique ?\n\n'
+      + 'Qonto indique qu\'elle n\'a pas été remise au destinataire. Le serveur vérifie d\'abord que le client '
+      + 'est désormais joignable. Une transmission réseau ne s\'annule pas.')) return;
+  toast('⏳ Renvoi sur le réseau…');
+  try {
+    const idToken = await firebase.auth().currentUser.getIdToken();
+    const response = await fetch('/api/invoice-einvoice-resend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({ invoiceId: invoiceId })
+    });
+    let data = {};
+    try { data = await response.json(); } catch (e) {}
+    if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
+    toast('📨 Renvoyée sur le réseau — relis le statut (🔄) dans quelques minutes');
+  } catch (err) {
+    console.error('[einvoice-resend]', err);
+    toast('Erreur : ' + err.message, true);
+  }
 }
 
 function einvoicingJournalText(q) {
