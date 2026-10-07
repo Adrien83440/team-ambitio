@@ -1,0 +1,1425 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><title>Le langage des dirigeants</title><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=DM+Mono:wght@400;500&family=Instrument+Sans:wght@400..700&display=swap">
+<style>
+/* Mise en page : une colonne de lecture (760px max). Par chapitre : la scène, le sous-titre, le lecteur, puis les exercices. */
+:root{
+  --page:#F2E9D5; --surface:#FBF6E9; --raised:#FFFCF3;
+  --ink:#1F1A12; --ink-2:#5A5142; --ink-3:#6F6554;
+  --line:#DDD0B3; --line-2:#CDBE9B; --mute:#CFC4AB;
+  --gold:#B4861B; --gold-ink:#7A5A0E; --gold-wash:#F0E2B8;
+  --c1:#A77BC6; --c2:#885DA6; --c3:#6A4682;
+  --good:#1F8A4C; --good-ink:#176B3A; --good-wash:#DDEEDD;
+  --bad:#C6453D; --bad-ink:#A8322B; --bad-wash:#F6DDD6;
+  --water:#2F7FC1; --water-wash:#D6E6F2;
+  --btn:#1F1A12; --btn-ink:#FBF6E9;
+  --display:"Bricolage Grotesque","Avenir Next","Segoe UI",system-ui,sans-serif;
+  --body:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"DM Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --page:#14110D; --surface:#1D1A15; --raised:#26221B;
+    --ink:#F3EBDA; --ink-2:#BFB39C; --ink-3:#968B77;
+    --line:#3A342A; --line-2:#4A4336; --mute:#4F4739;
+    --gold:#B98B21; --gold-ink:#E0BC62; --gold-wash:#3A2F14;
+    --c1:#7457A3; --c2:#8D66CA; --c3:#A776F1;
+    --good:#33A367; --good-ink:#5FCB8C; --good-wash:#16301F;
+    --bad:#E0635A; --bad-ink:#F08A80; --bad-wash:#3A1B18;
+    --water:#4C97D8; --water-wash:#162A3A;
+    --btn:#F3EBDA; --btn-ink:#14110D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --page:#14110D; --surface:#1D1A15; --raised:#26221B;
+  --ink:#F3EBDA; --ink-2:#BFB39C; --ink-3:#968B77;
+  --line:#3A342A; --line-2:#4A4336; --mute:#4F4739;
+  --gold:#B98B21; --gold-ink:#E0BC62; --gold-wash:#3A2F14;
+  --c1:#7457A3; --c2:#8D66CA; --c3:#A776F1;
+  --good:#33A367; --good-ink:#5FCB8C; --good-wash:#16301F;
+  --bad:#E0635A; --bad-ink:#F08A80; --bad-wash:#3A1B18;
+  --water:#4C97D8; --water-wash:#162A3A;
+  --btn:#F3EBDA; --btn-ink:#14110D;
+  color-scheme:dark;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font:16px/1.5 var(--body);-webkit-text-size-adjust:100%;overflow-wrap:break-word}
+p,h1,h2,h3,ul,ol,dl,dd,figure,blockquote{margin:0}
+ul,ol{padding:0;list-style:none}
+button{font:inherit;color:inherit}
+button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* ---------- barre du haut ---------- */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--page);border-bottom:1px solid var(--line)}
+.top-in{max-width:760px;margin-inline:auto;padding:8px 16px;display:flex;align-items:center;gap:12px}
+.navbtn{flex:none;font:600 14px/1 var(--body);background:none;border:1px solid var(--line-2);border-radius:999px;padding:9px 13px;cursor:pointer}
+.prog{flex:1;min-width:0;display:flex;gap:3px}
+.prog button{flex:1;min-width:0;height:30px;padding:12px 0;background:none;border:0;cursor:pointer}
+.prog button::before{content:"";display:block;height:6px;border-radius:3px;background:var(--line)}
+.prog button.done::before{background:var(--gold)}
+.prog button.cur::before{background:var(--ink)}
+
+.wrap{max-width:760px;margin-inline:auto;padding-inline:16px;padding-block:0 64px}
+.screen{display:grid;gap:22px;padding-block:26px 0;grid-template-columns:minmax(0,1fr)}
+.eyebrow{font:600 12px/1.2 var(--body);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+h1{font:800 clamp(36px,10vw,58px)/1 var(--display);letter-spacing:-.03em;text-wrap:balance}
+h2{font:700 clamp(27px,7vw,36px)/1.06 var(--display);letter-spacing:-.02em;text-wrap:balance}
+h3{font:700 20px/1.2 var(--display);letter-spacing:-.01em}
+.lead{font-size:18px;line-height:1.45;color:var(--ink-2);max-width:33em}
+.lead.sm{font-size:16.5px}
+.lh{display:grid;gap:8px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;font:600 16px/1.1 var(--body);border-radius:999px;padding:15px 22px;border:1px solid var(--btn);background:var(--btn);color:var(--btn-ink);cursor:pointer;text-align:center}
+.btn.ghost{background:none;color:var(--ink);border-color:var(--line-2)}
+.btn.sm{font-size:14px;padding:10px 14px}
+.btn[disabled]{opacity:.45;cursor:default}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.meta{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--ink-2);font-size:15px}
+.meta b{font-weight:600;color:var(--ink)}
+
+/* ---------- ticket (sommaire, charges) ---------- */
+.rc-wrap{max-width:520px;filter:drop-shadow(0 1px 0 var(--line-2)) drop-shadow(0 8px 16px rgba(0,0,0,.07))}
+.receipt{--z:7px;background:var(--raised);padding:16px 16px calc(16px + var(--z));font:400 14px/1.4 var(--mono);display:grid;gap:9px;
+  -webkit-mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/calc(2*var(--z)) 100%;
+          mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/calc(2*var(--z)) 100%}
+.rc-head{font-weight:500;letter-spacing:.06em;text-transform:uppercase;font-size:12px;color:var(--ink-3);padding-bottom:8px;border-bottom:1px solid var(--line)}
+.rc-row{display:flex;align-items:baseline;gap:8px;width:100%;background:none;border:0;padding:0;text-align:left;font:inherit;color:inherit}
+button.rc-row{cursor:pointer;padding:5px 0}
+.rc-row>span:first-child{flex:0 1 auto;min-width:0}
+.rc-row .dots{flex:1 1 12px;min-width:12px;border-bottom:1px dotted var(--line-2);transform:translateY(-4px)}
+.rc-row b{flex:none;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
+.rc-row .num{display:inline-block;min-width:1.4em;color:var(--ink-3)}
+.rc-row .state{flex:none;width:18px;text-align:right;color:var(--good-ink);font-family:var(--body);font-weight:700}
+.rc-sec{display:flex;align-items:center;gap:8px;font:600 13px/1.3 var(--body);color:var(--ink-2);padding-top:4px}
+.rc-total{display:flex;align-items:baseline;gap:8px;padding-top:9px;border-top:1px solid var(--ink);font-weight:500}
+.rc-total .dots{flex:1}
+.rc-total b{font-weight:500;font-size:16px;white-space:nowrap}
+
+/* ---------- scène ---------- */
+.stage{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:24px 18px;display:grid;grid-template-columns:minmax(0,1fr);min-height:330px}
+.st{display:grid;grid-template-columns:minmax(0,1fr)}
+.scene{grid-area:1/1;display:flex;flex-direction:column;justify-content:center;gap:14px;min-width:0;visibility:hidden;opacity:0;transition:opacity .3s ease,visibility 0s .3s}
+.scene.cur{visibility:visible;opacity:1;transition:opacity .35s ease}
+[data-s]{opacity:0;transform:translateY(8px);transition:opacity .4s ease,transform .4s ease}
+[data-s].on{opacity:1;transform:none}
+svg [data-s]{transform:none}
+.lab{font:600 12px/1.2 var(--body);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+.term{font:800 clamp(34px,10vw,52px)/1 var(--display);letter-spacing:-.03em}
+.term small{display:block;font:500 17px/1.3 var(--body);letter-spacing:0;color:var(--ink-2);margin-top:8px}
+.def{font-size:19px;line-height:1.4;color:var(--ink-2);max-width:26em}
+.hello{font:800 clamp(32px,9vw,46px)/1.04 var(--display);letter-spacing:-.03em;text-wrap:balance}
+.punch{font:700 clamp(27px,7.6vw,38px)/1.1 var(--display);letter-spacing:-.02em;text-wrap:balance}
+.punch.sm{font-size:clamp(23px,6.2vw,30px)}
+.punch em{font-style:normal;color:var(--gold-ink)}
+.note{font-size:17px;line-height:1.4;color:var(--ink-2)}
+.note b{color:var(--ink)}
+.formula{font:500 16px/1.4 var(--mono);padding:11px 14px;border-radius:10px;background:var(--gold-wash);color:var(--ink);align-self:flex-start}
+.grp{display:grid;gap:8px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips li{border:1px solid var(--line-2);border-radius:999px;padding:6px 12px;font-size:15px}
+.chips.strong li{border-color:var(--ink);font-weight:600}
+.pillars{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.pillars li{border-top:3px solid var(--gold);padding-top:10px;display:grid;gap:3px}
+.pillars b{font:700 clamp(18px,5vw,23px)/1.1 var(--display)}
+.pillars span{font-size:13px;color:var(--ink-3)}
+.ribbon{display:grid;gap:4px;padding:14px 16px;border-radius:12px;background:var(--gold-wash)}
+.ribbon b{font:700 22px/1.15 var(--display)}
+
+.eq{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.eq>i{font:500 26px/1 var(--mono);font-style:normal;color:var(--ink-3)}
+.tile{display:grid;gap:2px;padding:12px 14px;border:1px solid var(--line-2);border-radius:12px;background:var(--raised)}
+.tile b{font:700 clamp(24px,7vw,32px)/1 var(--body);letter-spacing:-.01em}
+.tile span{font-size:13.5px;color:var(--ink-2)}
+.tiles{display:flex;flex-wrap:wrap;gap:10px}
+.result{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 10px}
+.result>span:first-child{font:500 26px/1 var(--mono);color:var(--ink-3)}
+.result b{font:700 clamp(36px,11vw,52px)/1 var(--body);letter-spacing:-.02em;border-bottom:5px solid var(--gold)}
+.result span{font-size:15px;color:var(--ink-2)}
+
+.fact{display:grid;gap:4px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--raised);min-width:0}
+.fact>b{font:700 17px/1.2 var(--display)}
+.fact p{font-size:15.5px;line-height:1.4;color:var(--ink-2)}
+.fact .calc{font:400 15px/1.4 var(--mono);color:var(--ink)}
+.fact .calc b{font-weight:500}
+.fact .tagline{font:600 12px/1.2 var(--body);letter-spacing:.06em;text-transform:uppercase;margin-top:4px}
+.fact.neg{border-color:var(--bad)}
+.fact.neg .tagline{color:var(--bad-ink)}
+.fact.lead-fact{border-color:var(--gold)}
+.duo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.mini{display:grid;gap:3px;font-size:14.5px;color:var(--ink-2);margin-top:4px}
+.mini li::before{content:"· "}
+.okline{font-weight:600;color:var(--good-ink)}
+.neq{align-self:flex-start;font:700 16px/1 var(--display);padding:8px 12px;border-radius:999px;border:2px solid var(--ink)}
+.quote{font:600 clamp(21px,6vw,27px)/1.2 var(--display);letter-spacing:-.01em;padding:14px 16px;border-radius:4px 16px 16px 16px;background:var(--btn);color:var(--btn-ink);align-self:flex-start;max-width:100%}
+.quote::before{content:"« "}.quote::after{content:" »"}
+.quote.small{font-size:16px;padding:10px 12px}
+
+/* barres : fines, 2px de vide entre segments, extrémité arrondie */
+.bar{display:flex;gap:2px;height:22px}
+.bar .seg{min-width:0;height:100%}
+.bar .seg:last-child{border-radius:0 4px 4px 0}
+.gold{background:var(--gold)}.c1{background:var(--c1)}.c2{background:var(--c2)}.c3{background:var(--c3)}
+.good{background:var(--good)}.bad{background:var(--bad)}.mute{background:var(--mute)}.water{background:var(--water)}
+.key{display:grid;gap:5px;font-size:15px}
+.key>*{display:flex;align-items:baseline;gap:8px}
+.key b{margin-left:auto;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;padding-left:8px}
+.sw{flex:none;display:inline-block;width:11px;height:11px;border-radius:3px;transform:translateY(1px)}
+.barcap{font-size:14px;color:var(--ink-2)}
+.fam{display:flex;flex-wrap:wrap;gap:8px 18px;font-weight:600}
+.fam li{display:flex;align-items:baseline;gap:8px}
+.shift{display:grid;gap:8px;font-size:16.5px}
+.shift li{display:flex;align-items:baseline;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--raised)}
+.shift .ar{font:500 18px/1 var(--mono);width:1.2em;flex:none}
+.shift b{margin-left:auto;font-weight:600;white-space:nowrap;padding-left:8px}
+
+.s3{display:grid;gap:12px}
+.s3row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;align-items:baseline}
+.s3row .nm{font-size:14.5px;color:var(--ink-2)}
+.s3row .nm b{color:var(--ink);font-weight:700;margin-right:4px}
+.s3row .val{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.s3row .bar{grid-column:1/-1;height:18px}
+.rule{font:700 19px/1.25 var(--display);padding:10px 14px;border-radius:10px;background:var(--gold-wash);align-self:flex-start}
+
+.tl{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;font-size:14.5px}
+.tl .pt{padding:7px 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--raised);font-weight:600}
+.tl .gap{position:relative;text-align:center;color:var(--ink-2);font-size:13.5px;padding-bottom:6px;border-bottom:2px solid var(--ink)}
+.tl .gap::after{content:"";position:absolute;right:-2px;bottom:-6px;border:5px solid transparent;border-left-color:var(--ink)}
+.axis{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:end;gap:0}
+.axis .side{padding:8px 10px 10px;font-weight:600;font-size:15px;border-bottom:6px solid var(--mute)}
+.axis .side.l{border-color:var(--bad);text-align:right}
+.axis .side.r{border-color:var(--good)}
+.axis .mk{display:grid;justify-items:center;gap:4px;padding:0 4px;text-align:center;font:600 12.5px/1.2 var(--body);max-width:9.5em}
+.axis .mk::after{content:"";width:3px;height:30px;background:var(--ink);border-radius:2px}
+.keys{display:grid;gap:10px}
+.keys li{display:grid;gap:1px;padding-left:14px;border-left:3px solid var(--gold)}
+.keys b{font:700 19px/1.2 var(--display)}
+.keys span{color:var(--ink-2)}
+.loop{display:grid;grid-template-columns:minmax(0,1fr) 22px minmax(0,1fr);grid-template-rows:auto 22px auto;align-items:center;justify-items:center;gap:4px}
+.loop .n{width:100%;padding:11px 8px;text-align:center;border:1px solid var(--ink);border-radius:10px;background:var(--raised);font:600 14.5px/1.25 var(--body)}
+.loop .a{font:500 18px/1 var(--mono);color:var(--ink-2)}
+figure svg{display:block;width:100%;height:auto;max-width:440px;margin-inline:auto}
+figcaption{font-size:14.5px;color:var(--ink-2);margin-top:8px}
+.d-stroke{stroke:currentColor;fill:none}
+.d-fill{fill:currentColor}
+.d-text{fill:currentColor;font:600 13px var(--body)}
+.d-sub{fill:var(--ink-2);font:500 12px var(--body)}
+.f-water{fill:var(--water)}
+.f-surface{fill:var(--surface)}
+.s-in{stroke:var(--gold);fill:none}
+.s-out{stroke:var(--water);fill:none}
+.s-bad{stroke:var(--bad)}
+
+/* ---------- sous-titre et lecteur ---------- */
+.caption{font-size:17px;line-height:1.45;color:var(--ink);min-height:2.9em}
+.caption.idle{color:var(--ink-3)}
+.player{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;align-items:center;position:sticky;bottom:0;z-index:5;
+  background:var(--page);border-top:1px solid var(--line);padding-block:10px calc(10px + env(safe-area-inset-bottom,0px))}
+.pp{width:56px;height:56px;border-radius:50%;border:0;background:var(--btn);color:var(--btn-ink);cursor:pointer;display:grid;place-items:center}
+.pp svg{width:26px;height:26px;fill:currentColor}
+.pmid{display:grid;gap:6px;min-width:0}
+.track{height:22px;display:flex;align-items:center;cursor:pointer;touch-action:none}
+.track .rail{position:relative;flex:1;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.track .fill{position:absolute;inset:0 auto 0 0;width:0;background:var(--gold);border-radius:3px}
+.pmeta{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13.5px;color:var(--ink-2)}
+.pbtns{display:flex;gap:6px}
+.pbtns button{font:500 13px/1 var(--mono);background:none;border:1px solid var(--line-2);border-radius:999px;padding:7px 10px;cursor:pointer}
+.notice{font-size:14.5px;padding:10px 12px;border-radius:10px;background:var(--gold-wash);color:var(--ink)}
+
+/* ---------- exercices ---------- */
+.exo{display:grid;gap:14px;padding-top:6px;border-top:1px solid var(--line)}
+.exo-head{display:grid;gap:4px;padding-top:16px}
+.exo-head p{color:var(--ink-2);font-size:15px}
+.exo-list{display:grid;gap:14px}
+.xc{display:grid;gap:12px;padding:18px 16px;border:1px solid var(--line);border-radius:16px;background:var(--raised);min-width:0}
+.xq{font-weight:600;font-size:17px;line-height:1.35}
+.xsub{font-size:14.5px;color:var(--ink-2)}
+.opts{display:grid;gap:8px}
+.opt{display:flex;align-items:baseline;gap:10px;width:100%;text-align:left;padding:13px 14px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface);cursor:pointer;line-height:1.35}
+.opt .mk{flex:none;width:1.1em;font-weight:700}
+.opt[disabled]{cursor:default;opacity:1}
+.opt.ok{border-color:var(--good);background:var(--good-wash)}
+.opt.ok .mk{color:var(--good-ink)}
+.opt.ko{border-color:var(--bad);background:var(--bad-wash)}
+.opt.ko .mk{color:var(--bad-ink)}
+.opt.dim{opacity:.55}
+.fb{font-size:15.5px;line-height:1.45;color:var(--ink-2)}
+.fb b{color:var(--good-ink)}
+.fb.no b{color:var(--bad-ink)}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.two .opt{justify-content:center;text-align:center;font-weight:600}
+.sitem{font:700 clamp(20px,5.6vw,25px)/1.2 var(--display);padding:16px 0 6px;text-wrap:balance}
+.recap{display:grid;gap:6px;font-size:15px}
+.recap li{display:flex;gap:10px;align-items:baseline;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.recap li span:first-child{flex:1;min-width:0}
+.recap li b{font-weight:600;white-space:nowrap}
+.xdone{display:flex;align-items:center;gap:10px;font-weight:600;color:var(--good-ink)}
+
+.sim{display:grid;gap:14px}
+.sim label{display:grid;gap:6px;font-weight:600;font-size:15px}
+.sim label span b{font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--gold);height:28px;margin:0}
+.simbars{display:grid;gap:9px}
+.simrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;font-size:14.5px;align-items:baseline}
+.simrow .bar{grid-column:1/-1;height:16px}
+.simrow .bar .seg{transition:flex-basis .15s linear}
+.simrow b{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.verdict{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;padding:12px 14px;border-radius:12px;background:var(--good-wash)}
+.verdict.neg{background:var(--bad-wash)}
+.verdict .big{font:700 26px/1 var(--body);letter-spacing:-.01em;font-variant-numeric:tabular-nums;color:var(--good-ink)}
+.verdict.neg .big{color:var(--bad-ink)}
+.verdict span{font-size:14.5px;color:var(--ink-2)}
+.verdict .nw{white-space:nowrap}
+.mission{display:grid;gap:8px;padding-top:12px;border-top:1px solid var(--line)}
+.mission p{font-size:15.5px}
+.mission .ans{color:var(--ink-2)}
+.mission .ans b{color:var(--good-ink)}
+
+/* ---------- cartes à décoder ---------- */
+.dbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.dbar .mono{margin-left:auto;font-size:14px;color:var(--ink-2)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:12px;align-items:start}
+.card{border:1px solid var(--line);border-radius:16px;background:var(--raised);min-width:0}
+.card.open{border-color:var(--ink)}
+.card-q{display:grid;gap:8px;width:100%;text-align:left;padding:16px;background:none;border:0;cursor:pointer}
+.tag{justify-self:start;font:600 11.5px/1 var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);border:1px solid var(--line-2);border-radius:999px;padding:5px 8px}
+.ph{font:700 clamp(20px,5.4vw,23px)/1.2 var(--display);letter-spacing:-.01em;text-wrap:balance}
+.hint{font-size:13.5px;color:var(--ink-3)}
+.card-a{display:grid;gap:10px;padding:0 16px 16px}
+.card-a p{font-size:16px;line-height:1.45;color:var(--ink-2);padding-top:12px;border-top:1px solid var(--line)}
+.linkbtn{justify-self:start;background:none;border:0;padding:4px 0;font:600 14px/1 var(--body);color:var(--gold-ink);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+
+/* ---------- quiz ---------- */
+.qhead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:14px;color:var(--ink-2)}
+.score{display:grid;gap:6px;padding:22px 18px;border-radius:20px;background:var(--surface);border:1px solid var(--line)}
+.score .n{font:800 clamp(56px,18vw,88px)/.95 var(--display);letter-spacing:-.04em}
+.score .n small{font-size:.42em;font-weight:600;color:var(--ink-3);letter-spacing:0}
+.miss{display:grid;gap:10px}
+.miss li{display:grid;gap:6px;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--raised)}
+.miss .mq{font-weight:600}
+.miss .ma{color:var(--ink-2);font-size:15px}
+
+.lnav{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding-top:8px}
+.lnav .btn{flex:1 1 150px}
+
+/* ---------- lexique ---------- */
+.sheet{position:fixed;inset:0;z-index:50;background:var(--page);overflow-y:auto;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.sheet-in{max-width:760px;margin-inline:auto;padding-inline:16px;padding-block:14px 60px;display:grid;gap:14px}
+.sheet-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.sheet-tools{position:sticky;top:0;display:grid;gap:10px;padding-block:8px;background:var(--page)}
+#lex-q{width:100%;font:inherit;padding:13px 14px;border-radius:12px;border:1px solid var(--line-2);background:var(--raised);color:var(--ink)}
+.filter{display:flex;flex-wrap:wrap;gap:6px}
+.filter button{font:600 13.5px/1 var(--body);padding:8px 12px;border-radius:999px;border:1px solid var(--line-2);background:none;cursor:pointer}
+.filter button[aria-pressed="true"]{background:var(--btn);color:var(--btn-ink);border-color:var(--btn)}
+.lex{display:grid;gap:0}
+.lex>div{display:grid;gap:4px;padding:14px 0;border-bottom:1px solid var(--line)}
+.lex dt{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;font:700 19px/1.2 var(--display)}
+.lex dt small{font:500 14px/1.2 var(--body);color:var(--ink-3)}
+.lex dd{color:var(--ink-2);line-height:1.45}
+.lex dd.ex{font-size:14.5px;color:var(--ink-3)}
+.lex dd.ex::before{content:"On te dira : « "}.lex dd.ex::after{content:" »"}
+
+@media (max-width:520px){
+  .screen{gap:14px;padding-block:16px 0}
+  .lh{gap:5px}
+  .stage{min-height:300px}
+  .scene{gap:12px}
+  .receipt{font-size:13px;gap:7px;padding:14px 14px calc(14px + var(--z))}
+  .keys{gap:8px}
+}
+@media (max-width:420px){
+  .duo{grid-template-columns:minmax(0,1fr)}
+  .duo.keep{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .duo.keep .fact{padding:10px 10px}
+  .duo.keep .mini{font-size:13.5px}
+  .stage{padding:18px 16px}
+}
+@media (min-width:700px){
+  .stage{padding:34px 34px;min-height:380px}
+  .caption{font-size:18px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{transition:none!important;animation:none!important}
+}
+</style>
+
+<div id="app">
+<header class="top">
+  <div class="top-in">
+    <button class="navbtn" id="nav-home" type="button">Sommaire</button>
+    <div class="prog" id="prog" role="group" aria-label="Progression dans le cours"></div>
+    <button class="navbtn" id="nav-lex" type="button">Lexique</button>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ================= ACCUEIL ================= -->
+<section class="screen" id="scr-home">
+  <p class="eyebrow">Ambitio Corp · formation de l'équipe commerciale</p>
+  <h1>Parler le langage des dirigeants</h1>
+  <p class="lead">Chiffre d'affaires, marge, trésorerie, masse salariale : en un quart d'heure, tu comprends ce qu'un dirigeant te dit vraiment.</p>
+  <p class="meta"><span><b id="home-min">12 min</b> de leçons</span><span><b>7</b> chapitres</span><span>avec le son</span><span>quiz à la fin</span></p>
+  <div class="row">
+    <button class="btn" id="home-start" type="button">Commencer</button>
+    <button class="btn ghost" id="home-lex" type="button">Ouvrir le lexique</button>
+  </div>
+  <div class="rc-wrap"><div class="receipt" id="toc"></div></div>
+  <button class="linkbtn" id="home-reset" type="button" hidden>Remettre le cours à zéro</button>
+</section>
+
+<!-- ================= LEÇON ================= -->
+<section class="screen" id="scr-lesson" hidden>
+  <header class="lh">
+    <p class="eyebrow" id="l-kicker"></p>
+    <h2 id="l-title"></h2>
+  </header>
+
+  <div class="stage" id="stage">
+
+    <!-- Bienvenue -->
+    <div class="st" data-lesson="intro" hidden>
+      <div class="scene" data-from="0" data-to="3">
+        <p class="hello" data-s="0">Bienvenue dans l'équipe.</p>
+        <div class="grp" data-s="1"><span class="lab">Tes interlocuteurs</span>
+          <ul class="chips"><li>Boulangers</li><li>Restaurateurs</li><li>Artisans</li><li>Gérants de boutique</li></ul></div>
+        <div class="grp" data-s="2"><span class="lab">Leurs mots</span>
+          <ul class="chips strong"><li>Chiffre d'affaires</li><li>Marge</li><li>Charges</li><li>Trésorerie</li></ul></div>
+        <p class="note" data-s="3">Les comprendre, c'est être à l'aise : savoir ce que tu dis, comprendre ce qu'on te répond.</p>
+      </div>
+      <div class="scene" data-from="4" data-to="7">
+        <p class="hello" data-s="4">Les bases, simplement.</p>
+        <ul class="pillars" data-s="5">
+          <li><b>L'argent</b><span>chapitres 1 à 4</span></li>
+          <li><b>L'équipe</b><span>chapitre 5</span></li>
+          <li><b>Le temps</b><span>chapitre 6</span></li>
+        </ul>
+        <p class="note" data-s="6">Les trois sujets qui empêchent un dirigeant de dormir.</p>
+        <div class="ribbon" data-s="7"><span class="lab">Notre fil rouge</span><b>La boulangerie de Sophie</b></div>
+      </div>
+    </div>
+
+    <!-- 1. Chiffre d'affaires -->
+    <div class="st" data-lesson="ca" hidden>
+      <div class="scene" data-from="0" data-to="1">
+        <p class="lab" data-s="0">Premier mot</p>
+        <p class="term" data-s="0">Chiffre d'affaires</p>
+        <p class="def" data-s="1">Le total des ventes. Tout ce que l'entreprise a vendu, sur une période.</p>
+      </div>
+      <div class="scene" data-from="2" data-to="4">
+        <p class="lab" data-s="2">Chez Sophie, chaque mois</p>
+        <div class="eq" data-s="2">
+          <div class="tile"><b>8 000</b><span>clients</span></div><i>×</i>
+          <div class="tile"><b>5 €</b><span>en moyenne</span></div>
+        </div>
+        <div class="result" data-s="3"><span>=</span><b>40 000 €</b><span>de chiffre d'affaires</span></div>
+        <p class="formula" data-s="4">nombre de ventes × prix moyen</p>
+      </div>
+      <div class="scene" data-from="5" data-to="7">
+        <p class="lab" data-s="5">Trois choses à savoir</p>
+        <div class="fact" data-s="6"><b>1. Les raccourcis</b><p>« mon CA » = mon chiffre d'affaires<br>« 40K » = 40 000 €</p></div>
+        <div class="fact" data-s="7"><b>2. La période</b><p>40 000 € par mois = 480 000 € par an.<br>Rien à voir avec 40 000 € par an.</p></div>
+      </div>
+      <div class="scene" data-from="8" data-to="9">
+        <div class="fact" data-s="8"><b>3. Hors taxes</b><p>Le chiffre d'affaires se compte sans la TVA. Les chiffres de Sophie sont donnés hors taxes.</p>
+          <div class="grp" data-s="9">
+            <p class="barcap">Un client paie 120 € dans une boutique de vêtements :</p>
+            <div class="bar" role="img" aria-label="Sur 120 euros payés par le client, 100 euros hors taxes restent à l'entreprise et 20 euros de TVA partent à l'État.">
+              <span class="seg gold" style="flex:100 1 0" title="Pour l'entreprise : 100 € HT"></span><span class="seg mute" style="flex:20 1 0" title="TVA reversée à l'État : 20 €"></span>
+            </div>
+            <div class="key">
+              <span><i class="sw gold"></i>pour l'entreprise<b>100 € HT</b></span>
+              <span><i class="sw mute"></i>TVA, reversée à l'État<b>20 €</b></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="scene" data-from="10" data-to="11">
+        <p class="punch" data-s="10">Ce qu'on vend <em>n'est pas</em> ce qu'on garde.</p>
+        <p class="note" data-s="11">Sophie vend pour 40 000 € par mois. Combien en garde-t-elle ?</p>
+      </div>
+    </div>
+
+    <!-- 2. Charges -->
+    <div class="st" data-lesson="charges" hidden>
+      <div class="scene" data-from="0" data-to="1">
+        <p class="lab" data-s="0">Deuxième mot</p>
+        <p class="term" data-s="0">Charges</p>
+        <p class="def" data-s="0">Tout ce que l'entreprise doit payer pour fonctionner.</p>
+        <ul class="fam" data-s="1"><li><i class="sw c1"></i>Charges variables</li><li><i class="sw c3"></i>Charges fixes</li></ul>
+      </div>
+      <div class="scene" data-from="2" data-to="9">
+        <div class="rc-wrap"><div class="receipt">
+          <p class="rc-head">Boulangerie de Sophie · charges du mois</p>
+          <p class="rc-sec" data-s="2"><i class="sw c1"></i>Variables : elles suivent les ventes</p>
+          <p class="rc-row" data-s="3"><span>Farine, beurre, emballages</span><i class="dots"></i><b>12 000 €</b></p>
+          <p class="rc-sec" data-s="4"><i class="sw c3"></i>Fixes : elles tombent tous les mois</p>
+          <p class="rc-row" data-s="5"><span>Salaires + cotisations</span><i class="dots"></i><b>16 000 €</b></p>
+          <p class="rc-row" data-s="6"><span>Loyer</span><i class="dots"></i><b>2 500 €</b></p>
+          <p class="rc-row" data-s="7"><span>Électricité des fours</span><i class="dots"></i><b>2 000 €</b></p>
+          <p class="rc-row" data-s="8"><span>Assurance, comptable…</span><i class="dots"></i><b>4 500 €</b></p>
+          <p class="rc-total" data-s="9"><span>Total des charges</span><i class="dots"></i><b>37 000 €</b></p>
+        </div></div>
+      </div>
+      <div class="scene" data-from="10" data-to="12">
+        <p class="lab" data-s="10">Un mois calme</p>
+        <ul class="shift" data-s="10">
+          <li><span class="ar">↓</span>Les ventes<b>baissent</b></li>
+          <li><span class="ar">=</span>Loyer, salaires<b>ne bougent pas</b></li>
+        </ul>
+        <blockquote class="quote" data-s="11">Mes charges m'étouffent.</blockquote>
+        <p class="punch sm" data-s="12">25 000 € à sortir chaque mois, avant d'avoir vendu une baguette.</p>
+      </div>
+    </div>
+
+    <!-- 3. Marge et bénéfice -->
+    <div class="st" data-lesson="benefice" hidden>
+      <div class="scene" data-from="0" data-to="4">
+        <p class="punch sm" data-s="0">Qu'est-ce qu'il reste ?</p>
+        <figure class="grp" data-s="1">
+          <div class="grp" role="img" aria-label="Sur 40 000 euros encaissés, 12 000 euros partent en charges variables, 25 000 euros en charges fixes, et il reste 3 000 euros.">
+            <div class="bar"><span class="seg gold" style="flex:40 1 0" title="Chiffre d'affaires : 40 000 €"></span></div>
+            <div class="bar"><span class="seg c1" style="flex:12 1 0" title="Charges variables : 12 000 €"></span><span class="seg c3" style="flex:25 1 0" title="Charges fixes : 25 000 €"></span><span class="seg good" style="flex:3 1 0" data-s="2" title="Bénéfice : 3 000 €"></span></div>
+          </div>
+          <div class="key">
+            <span><i class="sw gold"></i>Sophie encaisse<b>40 000 €</b></span>
+            <span><i class="sw c1"></i>Charges variables<b>− 12 000 €</b></span>
+            <span><i class="sw c3"></i>Charges fixes<b>− 25 000 €</b></span>
+            <span data-s="2"><i class="sw good"></i>Il reste<b>3 000 €</b></span>
+          </div>
+        </figure>
+        <p class="note" data-s="3">Ce reste s'appelle le <b>bénéfice</b>. On dit aussi le <b>résultat</b>.</p>
+        <p class="formula" data-s="4">bénéfice = chiffre d'affaires − toutes les charges</p>
+      </div>
+      <div class="scene" data-from="5" data-to="8">
+        <p class="lab" data-s="5">La marge : ce qu'il reste, mesuré à deux endroits</p>
+        <div class="fact" data-s="6"><b>Marge brute</b><p>Après la marchandise ou les matières premières.</p><p class="calc">40 000 − 12 000 = <b>28 000 €</b></p></div>
+        <div class="fact" data-s="7"><b>Marge nette</b><p>Après toutes les charges : c'est le bénéfice.</p><p class="calc">40 000 − 37 000 = <b>3 000 €</b><span data-s="8">, soit <b>7,5 %</b> des ventes</span></p></div>
+      </div>
+      <div class="scene" data-from="9" data-to="9">
+        <p class="lab" data-s="9">Autrement dit</p>
+        <p class="punch sm" data-s="9">Sur 100 € qui rentrent dans la caisse, Sophie garde 7,50 €.</p>
+        <figure class="grp" data-s="9">
+          <div class="bar" role="img" aria-label="Sur 100 euros encaissés, 92 euros 50 repartent en charges et Sophie garde 7 euros 50.">
+            <span class="seg mute" style="flex:92.5 1 0" title="Repart en charges : 92,50 €"></span><span class="seg good" style="flex:7.5 1 0" title="Reste à Sophie : 7,50 €"></span>
+          </div>
+          <div class="key">
+            <span><i class="sw mute"></i>Repart en charges<b>92,50 €</b></span>
+            <span><i class="sw good"></i>Reste à Sophie<b>7,50 €</b></span>
+          </div>
+        </figure>
+      </div>
+      <div class="scene" data-from="10" data-to="11">
+        <p class="lab" data-s="10">Le dirigeant se paie souvent sur le bénéfice</p>
+        <div class="tiles" data-s="10">
+          <div class="tile"><b>60 h</b><span>de travail par semaine</span></div>
+          <div class="tile"><b>3 000 €</b><span>pour se payer</span></div>
+        </div>
+        <p class="punch sm" data-s="11">Le chiffre d'affaires, tout seul, ne veut rien dire.</p>
+      </div>
+      <div class="scene" data-from="12" data-to="13">
+        <div class="fact neg" data-s="12"><b>Charges &gt; chiffre d'affaires</b><p>Le bénéfice devient négatif : c'est une perte, ou un déficit.</p></div>
+        <div class="grp" data-s="13">
+          <div class="axis" role="img" aria-label="En dessous du seuil de rentabilité l'entreprise perd de l'argent, au-dessus elle en gagne.">
+            <span class="side l">On perd</span><span class="mk">Seuil de rentabilité</span><span class="side r">On gagne</span>
+          </div>
+          <p class="barcap">Le seuil de rentabilité : le chiffre d'affaires qui paie tout juste toutes les charges.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Trésorerie -->
+    <div class="st" data-lesson="treso" hidden>
+      <div class="scene" data-from="0" data-to="4">
+        <p class="lab" data-s="0">Un mot piège</p>
+        <p class="term" data-s="0">Trésorerie<small>Les dirigeants disent « la tréso ».</small></p>
+        <p class="def" data-s="1">L'argent réellement disponible sur le compte de l'entreprise. Aujourd'hui.</p>
+        <p class="neq" data-s="2">≠ bénéfice</p>
+        <div class="duo keep">
+          <div class="fact" data-s="3"><b>Bénéfice</b><p>Un calcul : ventes − coûts.</p></div>
+          <div class="fact" data-s="4"><b>Trésorerie</b><p>Un constat : le solde du compte.</p></div>
+        </div>
+      </div>
+      <div class="scene" data-from="5" data-to="8">
+        <p class="lab" data-s="5">Marc, menuisier</p>
+        <div class="fact" data-s="5"><b>Chantier terminé en mars : 20 000 €</b><p class="okline">Sur le papier, bénéfice positif.</p></div>
+        <div class="tl" data-s="6"><span class="pt">Facture</span><span class="gap">45 jours d'attente</span><span class="pt">Paiement</span></div>
+        <p class="note" data-s="7">En attendant, il paie ses 2 salariés, son bois, son loyer. Son compte se vide.</p>
+        <p class="punch sm" data-s="8">Rentable, et pourtant sans trésorerie.</p>
+      </div>
+      <div class="scene" data-from="9" data-to="10">
+        <div class="fact" data-s="9"><b>L'inverse existe aussi</b><p>Un compte bien rempli grâce à un prêt ou à des clients qui paient d'avance, dans une entreprise qui perd de l'argent chaque mois.</p></div>
+        <blockquote class="quote" data-s="10">J'ai une trésorerie positive.</blockquote>
+        <p class="note" data-s="10">Il y a de l'argent sur le compte. Ça ne dit pas si l'entreprise en gagne.</p>
+      </div>
+      <div class="scene" data-from="11" data-to="16">
+        <figure>
+          <svg viewBox="0 0 320 182" role="img" aria-label="Une baignoire : le niveau d'eau est la trésorerie, le robinet représente l'argent qui rentre, le trou au fond l'argent qui sort.">
+            <defs><clipPath id="tubA"><path d="M43 52V118Q43 137 62 137H258Q277 137 277 118V52Z"/></clipPath></defs>
+            <rect data-s="12" class="f-water" x="40" y="88" width="240" height="60" clip-path="url(#tubA)"/>
+            <g data-s="11">
+              <path class="d-stroke" stroke-width="3" stroke-linecap="round" d="M40 50V118Q40 140 62 140H258Q280 140 280 118V50"/>
+              <path class="d-stroke" stroke-width="3" stroke-linecap="round" d="M30 50H50M270 50H290"/>
+            </g>
+            <g data-s="12"><text class="d-text" x="186" y="78" text-anchor="middle">Trésorerie : le niveau</text></g>
+            <g data-s="13">
+              <path class="d-stroke" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" d="M58 14H96V30"/>
+              <path class="s-in" stroke-width="4" stroke-linecap="round" d="M96 36V86"/>
+              <text class="d-text" x="110" y="19">Entrées</text>
+              <text class="d-sub" x="110" y="35">l'argent qui rentre</text>
+            </g>
+            <g data-s="14">
+              <path class="d-stroke" stroke-width="5" stroke-linecap="round" d="M232 142V152"/>
+              <path class="s-out" stroke-width="4" stroke-linecap="round" d="M232 158V174"/>
+              <text class="d-text" x="220" y="160" text-anchor="end">Sorties</text>
+              <text class="d-sub" x="220" y="176" text-anchor="end">l'argent qui sort</text>
+            </g>
+          </svg>
+        </figure>
+        <p class="formula" data-s="15">flux de trésorerie = entrées − sorties</p>
+        <p class="note" data-s="16">La trésorerie est un <b>niveau</b>. Le flux est un <b>mouvement</b>.</p>
+      </div>
+      <div class="scene" data-from="17" data-to="19">
+        <blockquote class="quote" data-s="17">Je suis en négatif.</blockquote>
+        <div class="duo">
+          <div class="fact neg" data-s="18"><b>Découvert</b><p>Le compte est passé sous zéro.</p><p class="tagline">Problème de trésorerie</p></div>
+          <div class="fact neg" data-s="19"><b>Perte</b><p>L'entreprise dépense plus qu'elle ne gagne.</p><p class="tagline">Problème de rentabilité</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. L'équipe -->
+    <div class="st" data-lesson="equipe" hidden>
+      <div class="scene" data-from="0" data-to="1">
+        <p class="lab" data-s="0">Deuxième grand sujet</p>
+        <p class="term" data-s="0">L'équipe</p>
+        <figure class="grp" data-s="1">
+          <div class="bar" role="img" aria-label="Chez Sophie, les salaires représentent 16 000 euros sur 37 000 euros de charges.">
+            <span class="seg c3" style="flex:16 1 0" title="Salaires et cotisations : 16 000 €"></span><span class="seg mute" style="flex:21 1 0" title="Autres charges : 21 000 €"></span>
+          </div>
+          <div class="key">
+            <span><i class="sw c3"></i>Salaires et cotisations<b>16 000 €</b></span>
+            <span><i class="sw mute"></i>Toutes les autres charges<b>21 000 €</b></span>
+          </div>
+        </figure>
+      </div>
+      <div class="scene" data-from="2" data-to="8">
+        <p class="lab" data-s="2">Un salarié coûte plus que ce qu'il touche</p>
+        <div class="s3">
+          <div class="s3row" data-s="3"><span class="nm"><b>Net</b>ce qu'il reçoit</span><span class="val" data-s="6">1 800 €</span>
+            <div class="bar" style="width:64.29%"><span class="seg c1" style="flex:1800 1 0"></span></div></div>
+          <div class="s3row" data-s="4"><span class="nm"><b>Brut</b>+ cotisations du salarié</span><span class="val" data-s="6">≈ 2 300 €</span>
+            <div class="bar" style="width:82.14%"><span class="seg c1" style="flex:1800 1 0"></span><span class="seg c2" style="flex:500 1 0"></span></div></div>
+          <div class="s3row" data-s="5"><span class="nm"><b>Coût total</b>+ cotisations de l'entreprise</span><span class="val" data-s="6">≈ 2 800 €</span>
+            <div class="bar"><span class="seg c1" style="flex:1800 1 0"></span><span class="seg c2" style="flex:500 1 0"></span><span class="seg c3" style="flex:500 1 0"></span></div></div>
+        </div>
+        <p class="rule" data-s="7">Repère : coût total ≈ 1,5 × le net</p>
+        <p class="note" data-s="8">Ce que coûte toute l'équipe réunie : la <b>masse salariale</b>.</p>
+      </div>
+      <div class="scene" data-from="9" data-to="11">
+        <div class="fact" data-s="9"><b>Embaucher</b><p>Une charge fixe de plus, même quand les ventes baissent.</p></div>
+        <div class="fact" data-s="10"><b>Turnover</b><p>Des départs à répétition : recruter, former, attendre.</p></div>
+        <div class="fact" data-s="11"><b>Déléguer</b><p>Confier une tâche, avec la responsabilité qui va avec.</p><blockquote class="quote small">Ça va plus vite si je le fais moi-même.</blockquote></div>
+      </div>
+    </div>
+
+    <!-- 6. Le temps -->
+    <div class="st" data-lesson="temps" hidden>
+      <div class="scene" data-from="0" data-to="1">
+        <p class="lab" data-s="0">Troisième grand sujet</p>
+        <p class="term" data-s="0">Le temps</p>
+        <div class="tiles" data-s="1"><div class="tile"><b>60 h</b><span>par semaine, pour Sophie</span></div></div>
+        <p class="note" data-s="1">À quoi passe ce temps ?</p>
+      </div>
+      <div class="scene" data-from="2" data-to="4">
+        <p class="lab" data-s="2">Deux sortes de travail</p>
+        <div class="duo keep">
+          <div class="fact" data-s="3"><b>Opérationnel</b><p>Faire tourner la boutique.</p>
+            <ul class="mini"><li>servir les clients</li><li>produire</li><li>répondre au téléphone</li><li>remplacer un absent</li><li>passer les commandes</li></ul></div>
+          <div class="fact lead-fact" data-s="4"><b>Pilotage</b><p>Diriger.</p>
+            <ul class="mini"><li>regarder ses chiffres</li><li>fixer ses prix</li><li>organiser l'équipe</li><li>décider où va l'entreprise</li></ul></div>
+        </div>
+      </div>
+      <div class="scene" data-from="5" data-to="6">
+        <p class="punch sm" data-s="5">Chez beaucoup de dirigeants, l'opérationnel mange tout.</p>
+        <ul class="chips" data-s="5"><li>au four</li><li>à la caisse</li><li>au téléphone</li></ul>
+        <blockquote class="quote" data-s="6">J'ai la tête dans le guidon.</blockquote>
+        <p class="note" data-s="6">On pédale très fort, mais on ne regarde plus la route.</p>
+      </div>
+      <div class="scene" data-from="7" data-to="8">
+        <figure data-s="7">
+          <svg viewBox="0 0 300 132" role="img" aria-label="Clients, équipe, commandes et décisions passent tous par le dirigeant.">
+            <defs><marker id="hubAh" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path class="d-fill" d="M0 0L8 4L0 8Z"/></marker></defs>
+            <rect class="d-stroke" stroke-width="2" x="92" y="47" width="116" height="38" rx="8"/>
+            <text class="d-text" x="150" y="71" text-anchor="middle">Le dirigeant</text>
+            <text class="d-text" x="46" y="20" text-anchor="middle">Clients</text>
+            <text class="d-text" x="254" y="20" text-anchor="middle">Équipe</text>
+            <text class="d-text" x="46" y="124" text-anchor="middle">Commandes</text>
+            <text class="d-text" x="254" y="124" text-anchor="middle">Décisions</text>
+            <path class="d-stroke" stroke-width="1.5" marker-end="url(#hubAh)" d="M62 28L96 46"/>
+            <path class="d-stroke" stroke-width="1.5" marker-end="url(#hubAh)" d="M238 28L204 46"/>
+            <path class="d-stroke" stroke-width="1.5" marker-end="url(#hubAh)" d="M62 106L96 86"/>
+            <path class="d-stroke" stroke-width="1.5" marker-end="url(#hubAh)" d="M238 106L204 86"/>
+          </svg>
+          <figcaption>Tout passe par lui. S'il s'arrête, tout s'arrête.</figcaption>
+        </figure>
+        <p class="punch sm" data-s="8">Il n'a pas une entreprise. Il a un emploi dont il ne peut pas démissionner.</p>
+      </div>
+      <div class="scene" data-from="9" data-to="13">
+        <p class="lab" data-s="9">Tout est lié</p>
+        <div class="loop" role="img" aria-label="Un cercle : une marge trop faible empêche d'embaucher, donc le dirigeant fait tout lui-même, donc il n'a plus le temps de piloter, donc la marge ne remonte pas.">
+          <span class="n" data-s="10" style="grid-area:1/1">Marge trop faible</span>
+          <span class="a" data-s="10" style="grid-area:1/2">→</span>
+          <span class="n" data-s="10" style="grid-area:1/3">Pas d'embauche</span>
+          <span class="a" data-s="11" style="grid-area:2/3">↓</span>
+          <span class="n" data-s="11" style="grid-area:3/3">Il fait tout lui-même</span>
+          <span class="a" data-s="12" style="grid-area:3/2">←</span>
+          <span class="n" data-s="12" style="grid-area:3/1">Plus le temps de piloter</span>
+          <span class="a" data-s="13" style="grid-area:2/1">↑</span>
+        </div>
+        <p class="note" data-s="13">L'argent, l'équipe, le temps : les trois sujets se tiennent.</p>
+      </div>
+    </div>
+
+    <!-- L'essentiel -->
+    <div class="st" data-lesson="bilan" hidden>
+      <div class="scene" data-from="0" data-to="6">
+        <p class="lab" data-s="0">À retenir</p>
+        <ul class="keys">
+          <li data-s="1"><b>Chiffre d'affaires</b><span>Ce qu'on vend.</span></li>
+          <li data-s="2"><b>Bénéfice</b><span>Ce qu'on garde.</span></li>
+          <li data-s="3"><b>Trésorerie</b><span>Ce qu'on a sur le compte.</span></li>
+          <li data-s="4"><b>Un salarié</b><span>Il coûte environ 1,5 fois ce qu'il touche.</span></li>
+          <li data-s="5"><b>Un dirigeant qui fait tout lui-même</b><span>Il n'a plus le temps de diriger.</span></li>
+        </ul>
+        <p class="note" data-s="6">Place au quiz final. Et garde le lexique sous la main.</p>
+      </div>
+    </div>
+  </div>
+
+  <p class="caption idle" id="cap" aria-live="off"></p>
+
+  <div class="player" role="group" aria-label="Lecteur de la leçon">
+    <button class="pp" id="pp" type="button" aria-label="Lire la leçon">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path id="pp-ico" d="M8 5v14l11-7z"/></svg>
+    </button>
+    <div class="pmid">
+      <div class="track" id="trk" role="slider" tabindex="0" aria-label="Position dans la leçon" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="rail"><span class="fill" id="trk-fill"></span></span></div>
+      <div class="pmeta"><span class="mono" id="ptime">0:00</span>
+        <span class="pbtns"><button type="button" id="back10" aria-label="Reculer de 10 secondes">− 10 s</button><button type="button" id="speed" aria-label="Changer la vitesse de lecture">× 1</button></span></div>
+    </div>
+  </div>
+  <p class="notice" id="silent-note" hidden>Le son n'a pas pu se charger. La leçon défile en sous-titres : appuie sur lecture.</p>
+
+  <div class="exo" id="exo" hidden>
+    <div class="exo-head"><h3>À toi</h3><p id="exo-hint"></p></div>
+    <div class="row" id="exo-gate"><button class="btn ghost sm" id="exo-open" type="button">Ouvrir les exercices maintenant</button></div>
+    <div class="exo-list" id="exo-list" hidden></div>
+  </div>
+
+  <nav class="lnav" aria-label="Navigation entre les chapitres">
+    <button class="btn ghost" id="prev" type="button">Précédent</button>
+    <button class="btn" id="next" type="button">Suivant</button>
+  </nav>
+</section>
+
+<!-- ================= DÉCODER ================= -->
+<section class="screen" id="scr-decoder" hidden>
+  <header class="lh">
+    <p class="eyebrow">Chapitre 7 · tout mettre ensemble</p>
+    <h2>Décoder le dirigeant</h2>
+    <p class="lead sm">Voici des phrases que tu vas vraiment entendre. Pour chacune, demande-toi d'abord ce qu'elle veut dire. Puis touche la carte pour vérifier.</p>
+  </header>
+  <div class="dbar">
+    <button class="btn ghost sm" id="dec-play" type="button">Écouter la consigne</button>
+    <button class="btn ghost sm" id="snd" type="button" aria-pressed="true">Son des cartes : activé</button>
+    <span class="mono" id="dec-count"></span>
+  </div>
+  <div class="cards" id="cards"></div>
+  <nav class="lnav" aria-label="Navigation entre les chapitres">
+    <button class="btn ghost" id="dec-prev" type="button">Précédent</button>
+    <button class="btn" id="dec-next" type="button">L'essentiel à retenir</button>
+  </nav>
+</section>
+
+<!-- ================= QUIZ ================= -->
+<section class="screen" id="scr-quiz" hidden>
+  <header class="lh">
+    <p class="eyebrow">Pour finir</p>
+    <h2>Quiz final</h2>
+  </header>
+  <div id="quiz-body" class="exo-list"></div>
+</section>
+
+</main>
+
+<!-- ================= LEXIQUE ================= -->
+<div class="sheet" id="lex" role="dialog" aria-modal="true" aria-labelledby="lex-h" hidden>
+  <div class="sheet-in">
+    <div class="sheet-top"><h2 id="lex-h">Lexique</h2><button class="btn ghost sm" id="lex-x" type="button">Fermer</button></div>
+    <div class="sheet-tools">
+      <label class="vh" for="lex-q">Chercher un mot</label>
+      <input id="lex-q" type="search" placeholder="Chercher un mot : tréso, marge, K…" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <div class="filter" id="lex-f" role="group" aria-label="Filtrer par thème"></div>
+    </div>
+    <dl class="lex" id="lex-list"></dl>
+    <p class="note" id="lex-none" hidden>Aucun mot ne correspond. Essaie une autre orthographe, ou efface la recherche.</p>
+  </div>
+</div>
+</div>
+
+<script>window.COURSE={"flow":["intro","ca","charges","benefice","treso","equipe","temps","decoder","bilan","quiz"],"lessons":{"intro":{"num":"","title":"Bienvenue","kicker":"Avant de commencer","duration":35.148,"cues":[{"t":0.2,"step":0,"show":"Salut, et bienvenue dans l'équipe."},{"t":2.14,"step":1,"show":"Tous les jours, tu vas parler à des dirigeants."},{"t":4.2,"step":1,"show":"Des boulangers, des restaurateurs, des artisans, des gérants de boutique."},{"t":7.87,"step":2,"show":"Et ces dirigeants ont leur vocabulaire : chiffre d'affaires, marge, charges, trésorerie."},{"t":13.45,"step":3,"show":"Quand tu comprends ces mots, tu es à l'aise : tu sais ce que tu dis, et tu comprends ce qu'on te répond."},{"t":18.33,"step":4,"show":"Dans ce cours, on pose les bases. Simplement."},{"t":21.96,"step":5,"show":"On va parler de trois choses : l'argent, l'équipe, et le temps."},{"t":25.83,"step":6,"show":"Ce sont les trois sujets qui empêchent un dirigeant de dormir."},{"t":29.17,"step":7,"show":"Et pour que ce soit concret, on va suivre une entreprise du début à la fin : la boulangerie de Sophie."},{"t":33.92,"step":7,"show":"C'est parti."}]},"ca":{"num":"1","title":"Le chiffre d'affaires","kicker":"Chapitre 1 · L'argent","duration":83.027,"cues":[{"t":0.2,"step":0,"show":"Premier mot : le chiffre d'affaires."},{"t":2.07,"step":0,"show":"C'est celui que tu entendras le plus souvent."},{"t":4.85,"step":1,"show":"Le chiffre d'affaires, c'est le total des ventes."},{"t":7.39,"step":1,"show":"Tout ce que l'entreprise a vendu, sur une période."},{"t":10.26,"step":2,"show":"Chez Sophie, 8 000 clients passent à la boulangerie chaque mois."},{"t":13.8,"step":2,"show":"Ils dépensent en moyenne 5 €."},{"t":16.33,"step":3,"show":"8 000 × 5 = 40 000 €. Son chiffre d'affaires du mois, c'est 40 000 €."},{"t":21.89,"step":4,"show":"C'est toujours le même calcul : le nombre de ventes, multiplié par le prix moyen."},{"t":26.5,"step":5,"show":"Maintenant, trois choses à savoir."},{"t":28.83,"step":6,"show":"Premièrement : les dirigeants utilisent des raccourcis."},{"t":32.14,"step":6,"show":"Ils disent « mon CA », pour chiffre d'affaires."},{"t":34.89,"step":6,"show":"Et ils comptent en K. La lettre K, ça veut dire mille."},{"t":38.4,"step":6,"show":"Quand un dirigeant dit « je fais 40K », ça veut dire 40 000 €."},{"t":43.03,"step":7,"show":"Deuxièmement : écoute toujours la période."},{"t":45.42,"step":7,"show":"40 000 € par mois, ça fait 480 000 € par an."},{"t":48.75,"step":7,"show":"Rien à voir avec une entreprise qui fait 40 000 € par an."},{"t":51.49,"step":8,"show":"Troisièmement : le chiffre d'affaires se compte hors taxes. La TVA n'est pas dedans."},{"t":56.4,"step":9,"show":"Quand un client paie 120 € dans une boutique de vêtements, il y a 20 € de TVA dedans."},{"t":61.89,"step":9,"show":"Cette TVA, l'entreprise la reverse à l'État. Elle ne lui appartient pas."},{"t":66.41,"step":9,"show":"Le vrai chiffre d'affaires, c'est 100 €."},{"t":68.54,"step":9,"show":"Dans ce cours, tous les chiffres de Sophie sont donnés hors taxes."},{"t":71.7,"step":10,"show":"Et le plus important : le chiffre d'affaires, ce n'est pas ce que le dirigeant gagne. C'est ce qu'il vend."},{"t":77.18,"step":10,"show":"Ce n'est pas ce qu'il garde."},{"t":78.71,"step":11,"show":"Sophie vend pour 40 000 € par mois."},{"t":81.22,"step":11,"show":"Tu vas voir ce qu'elle en garde."}]},"charges":{"num":"2","title":"Les charges","kicker":"Chapitre 2 · L'argent","duration":60.272,"cues":[{"t":0.2,"step":0,"show":"Deuxième mot : les charges."},{"t":2.16,"step":0,"show":"Les charges, c'est tout ce que l'entreprise doit payer pour fonctionner."},{"t":5.59,"step":1,"show":"Il y en a deux familles."},{"t":6.79,"step":2,"show":"D'abord, les charges variables."},{"t":8.45,"step":2,"show":"Elles montent et descendent avec les ventes."},{"t":10.84,"step":3,"show":"Chez Sophie, c'est la farine, le beurre, les emballages."},{"t":14.27,"step":3,"show":"Plus elle vend de pain, plus elle en achète. Ce mois-ci : 12 000 €."},{"t":18.24,"step":4,"show":"Ensuite, les charges fixes. Celles-là tombent tous les mois, qu'il y ait des clients ou pas."},{"t":23.7,"step":5,"show":"Les salaires de ses 5 employés, avec les cotisations : 16 000 €."},{"t":28.04,"step":6,"show":"Le loyer : 2 500 €."},{"t":30.24,"step":7,"show":"L'électricité des fours : 2 000 €."},{"t":32.55,"step":8,"show":"Et tout le reste. L'assurance, le comptable, l'entretien, la banque : 4 500 €."},{"t":38.73,"step":9,"show":"On additionne. 37 000 € de charges, chaque mois."},{"t":42.19,"step":10,"show":"Retiens bien ça : ce sont les charges fixes qui font peur à un dirigeant."},{"t":45.99,"step":10,"show":"Un mois calme, les ventes baissent."},{"t":47.93,"step":10,"show":"Le loyer et les salaires, eux, ne baissent pas."},{"t":51.12,"step":11,"show":"Quand un dirigeant te dit « mes charges m'étouffent », c'est de ça qu'il parle."},{"t":55.05,"step":12,"show":"Tous les mois, avant même d'avoir vendu une baguette, Sophie sait qu'elle doit sortir 25 000 €."}]},"benefice":{"num":"3","title":"Marge et bénéfice","kicker":"Chapitre 3 · L'argent","duration":88.414,"cues":[{"t":0.2,"step":0,"show":"Maintenant, la question qui compte : qu'est-ce qu'il reste ?"},{"t":3.33,"step":1,"show":"On reprend. Sophie encaisse 40 000 €. Elle a 37 000 € de charges."},{"t":9.09,"step":2,"show":"40 000 − 37 000 : il reste 3 000 €."},{"t":12.45,"step":3,"show":"Ça s'appelle le bénéfice. On dit aussi le résultat."},{"t":15.57,"step":4,"show":"Bénéfice = chiffre d'affaires − toutes les charges."},{"t":19.1,"step":4,"show":"C'est la formule la plus importante de ce cours."},{"t":21.52,"step":5,"show":"Tu entendras aussi le mot « marge »."},{"t":23.55,"step":5,"show":"La marge, c'est encore « ce qu'il reste »."},{"t":25.98,"step":5,"show":"Mais on peut la mesurer à deux endroits."},{"t":28.17,"step":6,"show":"La marge brute, c'est ce qu'il reste quand on a payé seulement la marchandise ou les matières premières."},{"t":33.11,"step":6,"show":"Chez Sophie, ça donne 40 000 − 12 000 = 28 000 €."},{"t":37.09,"step":7,"show":"La marge nette, c'est ce qu'il reste tout à la fin, après toutes les charges. C'est donc le bénéfice."},{"t":42.77,"step":8,"show":"On la donne souvent en pourcentage."},{"t":44.58,"step":8,"show":"3 000 sur 40 000, ça fait 7,5 %."},{"t":47.8,"step":9,"show":"Autrement dit : sur 100 € qui rentrent dans la caisse, Sophie en garde 7,50 €."},{"t":53.71,"step":10,"show":"Et ce n'est pas fini. Dans beaucoup de petites entreprises, c'est sur ce bénéfice que le dirigeant se paie."},{"t":59.28,"step":10,"show":"Sophie travaille 60 heures par semaine."},{"t":61.73,"step":10,"show":"Et pour se payer, elle n'a que ces 3 000 €."},{"t":64.54,"step":11,"show":"Voilà pourquoi le chiffre d'affaires, tout seul, ne veut rien dire."},{"t":67.96,"step":12,"show":"Dernier cas. Si les charges dépassent le chiffre d'affaires, le bénéfice devient négatif. C'est une perte. On parle aussi de déficit."},{"t":75.54,"step":12,"show":"L'entreprise perd de l'argent chaque mois."},{"t":78.08,"step":13,"show":"Et entre les deux, il y a le seuil de rentabilité : le chiffre d'affaires à partir duquel toutes les charges sont payées. En dessous, on perd."},{"t":85.97,"step":13,"show":"Au-dessus, on commence à gagner."}]},"treso":{"num":"4","title":"La trésorerie","kicker":"Chapitre 4 · L'argent","duration":107.64,"cues":[{"t":0.2,"step":0,"show":"On passe à un mot piège : la trésorerie."},{"t":2.71,"step":0,"show":"Les dirigeants l'appellent « la tréso »."},{"t":4.81,"step":1,"show":"La trésorerie, c'est l'argent réellement disponible sur le compte bancaire de l'entreprise. Aujourd'hui. Maintenant."},{"t":11.53,"step":2,"show":"Tu vas me dire : c'est pareil que le bénéfice. Eh bien non."},{"t":15.16,"step":2,"show":"Et c'est la confusion la plus fréquente."},{"t":16.99,"step":3,"show":"Le bénéfice, c'est un calcul : ce que j'ai vendu, moins ce que ça m'a coûté."},{"t":21.84,"step":4,"show":"La trésorerie, c'est un constat : l'argent qu'il y a sur le compte."},{"t":25.58,"step":5,"show":"Prends Marc, menuisier. En mars, il termine un chantier à 20 000 €."},{"t":30.04,"step":5,"show":"Sur le papier, il a gagné de l'argent : son bénéfice est positif."},{"t":33.76,"step":6,"show":"Sauf que son client le paiera dans 45 jours."},{"t":36.43,"step":7,"show":"En attendant, Marc doit payer ses deux salariés, son bois, son loyer. Son compte se vide."},{"t":42.09,"step":8,"show":"Marc est rentable. Et pourtant, il n'a plus de trésorerie."},{"t":45.54,"step":9,"show":"L'inverse existe aussi. Une entreprise peut avoir beaucoup d'argent sur son compte, parce qu'elle vient d'obtenir un prêt, ou parce que des clients ont payé d'avance."},{"t":54.27,"step":9,"show":"Et pourtant perdre de l'argent chaque mois."},{"t":56.91,"step":10,"show":"Donc, quand un dirigeant te dit « j'ai une trésorerie positive », ça veut dire qu'il y a de l'argent sur le compte."},{"t":62.94,"step":10,"show":"Ça ne dit pas si son entreprise gagne de l'argent."},{"t":65.41,"step":11,"show":"Autre mot : le flux de trésorerie. Imagine une baignoire."},{"t":68.79,"step":12,"show":"Le niveau de l'eau, c'est la trésorerie."},{"t":70.8,"step":13,"show":"Le robinet, c'est l'argent qui rentre."},{"t":72.63,"step":14,"show":"Le trou au fond, c'est l'argent qui sort."},{"t":74.86,"step":15,"show":"Le flux de trésorerie, c'est la différence entre les deux, sur une période."},{"t":79.29,"step":15,"show":"Si l'eau arrive plus vite qu'elle ne s'en va, le niveau monte : le flux est positif."},{"t":84.33,"step":16,"show":"Une trésorerie positive, c'est un niveau."},{"t":86.69,"step":16,"show":"Un flux de trésorerie, c'est un mouvement."},{"t":89.13,"step":17,"show":"Dernier point. « Je suis en négatif. » Cette phrase peut vouloir dire deux choses."},{"t":93.67,"step":18,"show":"Soit son compte bancaire est passé sous zéro : c'est le découvert. Un problème de trésorerie."},{"t":98.97,"step":19,"show":"Soit l'entreprise dépense plus qu'elle ne gagne : c'est la perte. Un problème de rentabilité."},{"t":104.05,"step":19,"show":"Ce n'est pas le même problème."},{"t":105.33,"step":19,"show":"Et maintenant, tu sais faire la différence."}]},"equipe":{"num":"5","title":"L'équipe","kicker":"Chapitre 5 · L'équipe","duration":73.997,"cues":[{"t":0.2,"step":0,"show":"On passe au deuxième grand sujet : l'équipe."},{"t":2.98,"step":1,"show":"Pour beaucoup de dirigeants, les salaires sont la plus grosse charge."},{"t":6.25,"step":1,"show":"Chez Sophie, c'est 16 000 € sur 37 000."},{"t":9.37,"step":2,"show":"Première chose à comprendre : un salarié coûte bien plus que ce qu'il touche."},{"t":13.2,"step":2,"show":"Il y a trois chiffres."},{"t":14.29,"step":3,"show":"Le net : ce que le salarié reçoit sur son compte."},{"t":17.56,"step":4,"show":"Le brut : le net, avec en plus les cotisations payées par le salarié."},{"t":20.78,"step":5,"show":"Et le coût total : le brut, avec en plus les cotisations payées par l'entreprise."},{"t":25.26,"step":6,"show":"Un exemple. Un vendeur touche 1 800 € net."},{"t":29.25,"step":6,"show":"Pour l'entreprise, il coûte environ 2 800 € par mois."},{"t":33.19,"step":7,"show":"Retiens l'ordre de grandeur : un salarié coûte à peu près une fois et demie ce qu'il touche."},{"t":37.78,"step":8,"show":"Ce que coûte toute l'équipe réunie, les dirigeants appellent ça la masse salariale."},{"t":41.92,"step":9,"show":"Deuxième chose : embaucher, c'est ajouter une charge fixe. Tous les mois."},{"t":45.98,"step":9,"show":"Même quand les ventes baissent."},{"t":47.59,"step":9,"show":"Voilà pourquoi un dirigeant hésite souvent à recruter, et finit par tout faire lui-même."},{"t":51.56,"step":10,"show":"Troisième chose : garder ses salariés."},{"t":53.77,"step":10,"show":"Quand quelqu'un part, il faut recruter, former, et attendre que le nouveau soit efficace."},{"t":58.02,"step":10,"show":"Les départs à répétition, on appelle ça le turnover."},{"t":60.7,"step":10,"show":"Ça coûte cher, en argent et en énergie."},{"t":62.89,"step":11,"show":"Et enfin, déléguer. Déléguer, c'est confier une tâche à quelqu'un, avec la responsabilité qui va avec."},{"t":68.68,"step":11,"show":"Beaucoup de dirigeants n'y arrivent pas."},{"t":70.55,"step":11,"show":"Tu entendras souvent : « ça va plus vite si je le fais moi-même »."}]},"temps":{"num":"6","title":"Le temps du dirigeant","kicker":"Chapitre 6 · Le temps","duration":70.86,"cues":[{"t":0.2,"step":0,"show":"On arrive au troisième grand sujet : le temps."},{"t":2.44,"step":1,"show":"Tu te souviens de Sophie ? 60 heures par semaine."},{"t":6.13,"step":1,"show":"Chez les dirigeants de petites entreprises, ce genre de semaine n'a rien d'exceptionnel."},{"t":10.32,"step":1,"show":"La vraie question, c'est : à quoi passe ce temps ?"},{"t":12.99,"step":2,"show":"Il y a deux sortes de travail."},{"t":14.7,"step":3,"show":"Le travail opérationnel. C'est faire tourner la boutique : servir les clients, produire, répondre au téléphone, remplacer un salarié absent, passer les commandes."},{"t":24.22,"step":4,"show":"Et le travail de pilotage. C'est diriger : regarder ses chiffres, fixer ses prix, organiser l'équipe, décider où va l'entreprise."},{"t":31.85,"step":5,"show":"Chez beaucoup de dirigeants, l'opérationnel mange tout."},{"t":34.58,"step":5,"show":"Ils sont au four, à la caisse, au téléphone."},{"t":37.35,"step":5,"show":"Il ne reste rien pour piloter."},{"t":39.24,"step":6,"show":"C'est ça, « avoir la tête dans le guidon » : on pédale très fort, mais on ne regarde plus la route."},{"t":44.44,"step":7,"show":"Et il y a une conséquence. Si tout passe par le dirigeant, l'entreprise dépend de lui."},{"t":49.05,"step":7,"show":"S'il tombe malade, s'il part en vacances, tout s'arrête."},{"t":51.88,"step":8,"show":"Il n'a pas une entreprise. Il a un emploi dont il ne peut pas démissionner."},{"t":55.6,"step":9,"show":"Et tu vois : tout est lié."},{"t":57.36,"step":10,"show":"Quand la marge est trop faible, on n'embauche pas."},{"t":59.57,"step":11,"show":"Quand on n'embauche pas, on fait tout soi-même."},{"t":61.65,"step":12,"show":"Quand on fait tout soi-même, on n'a plus le temps de piloter."},{"t":64.6,"step":13,"show":"Et quand on ne pilote plus, la marge ne remonte pas."},{"t":67.25,"step":13,"show":"L'argent, l'équipe, le temps : les trois sujets se tiennent."}]},"decoder":{"num":"7","title":"Décoder le dirigeant","kicker":"Chapitre 7","duration":9.141,"cues":[{"t":0.2,"step":0,"show":"Dernière étape : on met tout ensemble."},{"t":2.21,"step":1,"show":"Voici des phrases que tu vas vraiment entendre."},{"t":4.36,"step":1,"show":"Pour chacune, demande-toi d'abord ce qu'elle veut dire."},{"t":7.05,"step":1,"show":"Puis touche la carte pour vérifier."}]},"bilan":{"num":"","title":"L'essentiel","kicker":"Pour finir","duration":22.748,"cues":[{"t":0.2,"step":0,"show":"Voilà. Tu as les bases."},{"t":1.96,"step":1,"show":"Le chiffre d'affaires, c'est ce qu'on vend."},{"t":3.93,"step":2,"show":"Le bénéfice, c'est ce qu'on garde."},{"t":6.35,"step":3,"show":"La trésorerie, c'est ce qu'on a sur le compte."},{"t":8.67,"step":4,"show":"Un salarié coûte environ une fois et demie ce qu'il touche."},{"t":11.93,"step":5,"show":"Et un dirigeant qui fait tout lui-même n'a plus le temps de diriger."},{"t":15.28,"step":6,"show":"Il te reste le quiz final. Et garde le lexique sous la main : quand un mot t'échappe, tu le retrouves en quelques secondes."},{"t":21.39,"step":6,"show":"À toi de jouer."}]}},"cards":[{"id":"k01","theme":"argent","phrase":"Je fais 40K par mois.","sens":"Il parle de son chiffre d'affaires : 40 000 € de ventes par mois. Ce n'est pas ce qu'il gagne. Tu ne sais pas encore ce qu'il lui reste."},{"id":"k02","theme":"argent","phrase":"Je fais du chiffre, mais il ne reste rien.","sens":"Les ventes sont là, mais les charges mangent presque tout. Son bénéfice est faible. C'est un problème de rentabilité, pas un manque de clients."},{"id":"k03","theme":"argent","phrase":"Je ne marge pas assez.","sens":"Entre son prix de vente et ce que ça lui coûte, l'écart est trop petit. Soit ses prix sont trop bas, soit ses coûts sont trop hauts."},{"id":"k04","theme":"argent","phrase":"Je suis en négatif.","sens":"Deux sens possibles. Soit son compte est à découvert : c'est la trésorerie. Soit son entreprise perd de l'argent : c'est le bénéfice."},{"id":"k05","theme":"argent","phrase":"J'ai de la tréso.","sens":"Il y a de l'argent disponible sur le compte de l'entreprise. Ça ne dit pas si elle est rentable."},{"id":"k06","theme":"argent","phrase":"Je cours après la tréso.","sens":"L'argent rentre trop tard par rapport à ce qui doit sortir. Souvent des clients qui paient en retard, ou de grosses échéances qui tombent en même temps."},{"id":"k07","theme":"argent","phrase":"Je ne me verse pas de salaire.","sens":"Souvent, l'entreprise ne gagne pas assez pour le payer : il travaille sans revenu. Mais pas toujours : certains dirigeants se paient autrement, par exemple en dividendes."},{"id":"k08","theme":"argent","phrase":"Mes charges m'étouffent.","sens":"Ce qu'il doit payer chaque mois pèse trop lourd par rapport à ses ventes : loyer, salaires, crédits. Souvent, il pense surtout aux cotisations sociales."},{"id":"k09","theme":"argent","phrase":"Je suis tout juste à l'équilibre.","sens":"Il est à son seuil de rentabilité. Ses ventes couvrent ses charges, sans rien dégager. Ni perte, ni bénéfice."},{"id":"k10","theme":"equipe","phrase":"Je ne peux pas me permettre d'embaucher.","sens":"Un salarié, c'est une charge fixe de plus chaque mois. Avec sa marge actuelle, il pense ne pas pouvoir l'absorber."},{"id":"k11","theme":"equipe","phrase":"Je n'arrive pas à garder mes salariés.","sens":"Il a du turnover. À chaque départ, il doit recruter et former de nouveau. Ça lui coûte du temps et de l'argent."},{"id":"k12","theme":"equipe","phrase":"Je fais tout moi-même, ça va plus vite.","sens":"Il ne délègue pas. Résultat : il reste indispensable partout, et l'opérationnel mange tout son temps."},{"id":"k13","theme":"temps","phrase":"J'ai la tête dans le guidon.","sens":"Tout son temps part dans l'opérationnel. Il n'a plus le temps de piloter son entreprise."},{"id":"k14","theme":"temps","phrase":"Si je ne suis pas là, rien ne tourne.","sens":"L'entreprise dépend entièrement de lui. Rien n'est organisé pour fonctionner sans lui."}],"ex":{"ca":[{"type":"qcm","q":"Un restaurant sert 1 200 couverts dans le mois. Un client dépense en moyenne 25 €. Quel est le chiffre d'affaires du restaurant ce mois-là ?","opts":["3 000 €","12 000 €","30 000 €"],"ok":2,"fb":"1 200 × 25 = 30 000 €. Toujours le même calcul : le nombre de ventes multiplié par le prix moyen."},{"type":"qcm","q":"Un dirigeant te dit : « Je fais 30K par mois. » Qu'est-ce que tu sais ?","opts":["Il gagne 30 000 € par mois.","Son entreprise vend pour 30 000 € par mois.","Il a 30 000 € sur son compte."],"ok":1,"fb":"30K, c'est son chiffre d'affaires : ce qu'il vend. Tu ne sais pas encore ce qu'il garde."}],"charges":[{"type":"sort","q":"Charge fixe ou charge variable ?","cats":["Fixe","Variable"],"items":[{"t":"Le loyer de la boutique","c":0,"fb":"Il tombe tous les mois, clients ou pas."},{"t":"La farine","c":1,"fb":"Plus Sophie vend de pain, plus elle en achète."},{"t":"Le salaire de la vendeuse","c":0,"fb":"À payer chaque mois, même les mois calmes."},{"t":"Les sachets et emballages","c":1,"fb":"Ils suivent le nombre de ventes."},{"t":"L'assurance","c":0,"fb":"Le même montant, quel que soit le mois."},{"t":"La commission versée sur chaque vente","c":1,"fb":"Pas de vente, pas de commission."}]}],"benefice":[{"type":"sim"},{"type":"qcm","q":"Un artisan fait 50 000 € de chiffre d'affaires ce mois-ci. Ses charges : 52 000 €. Résultat ?","opts":["Un bénéfice de 2 000 €","Une perte de 2 000 €","Un bénéfice de 50 000 €"],"ok":1,"fb":"50 000 − 52 000 = −2 000 €. Les charges dépassent les ventes : il est en perte."}],"treso":[{"type":"tub"},{"type":"qcm","q":"Marc est rentable, mais son compte est presque vide. Pourquoi ?","opts":["Il ne vend pas assez.","Ses clients le paient après qu'il a dû régler ses propres dépenses.","Son bénéfice est négatif."],"ok":1,"fb":"L'argent sort avant de rentrer. C'est un problème de trésorerie, pas de rentabilité."},{"type":"qcm","q":"« J'ai 30 000 € sur le compte de la boîte. » Il te parle de…","opts":["son chiffre d'affaires","son bénéfice","sa trésorerie"],"ok":2,"fb":"L'argent disponible sur le compte, c'est la trésorerie. Ça ne dit ni combien il vend, ni combien il gagne."}],"equipe":[{"type":"qcm","q":"Une salariée touche 1 600 € net par mois. Pour l'entreprise, elle coûte à peu près…","opts":["1 600 €","2 400 €","4 000 €"],"ok":1,"fb":"Repère : environ une fois et demie le net. Le montant exact dépend du niveau de salaire, mais l'ordre de grandeur est là."},{"type":"qcm","q":"« Ma masse salariale a explosé. » De quoi parle-t-il ?","opts":["Du nombre de ses clients","Du coût total de tous ses salariés","De son propre salaire"],"ok":1,"fb":"Quand un dirigeant parle de masse salariale, il parle de ce que toute son équipe lui coûte : salaires et cotisations."}],"temps":[{"type":"sort","q":"Opérationnel ou pilotage ?","cats":["Opérationnel","Pilotage"],"items":[{"t":"Servir les clients au comptoir","c":0,"fb":"Il fait tourner la boutique."},{"t":"Analyser ses marges du mois","c":1,"fb":"Il regarde ses chiffres pour décider."},{"t":"Remplacer un salarié absent","c":0,"fb":"Il bouche un trou dans le quotidien."},{"t":"Fixer ses prix","c":1,"fb":"Une décision de dirigeant, qui pèse sur la marge."},{"t":"Passer les commandes de farine","c":0,"fb":"Une tâche du quotidien, qui peut se déléguer."},{"t":"Décider d'ouvrir une deuxième boutique","c":1,"fb":"Il choisit où va l'entreprise."}]}]},"quiz":[{"ch":"ca","q":"« Je fais 25K par mois. » Ça veut dire :","opts":["Il gagne 25 000 € par mois.","Son entreprise vend pour 25 000 € par mois.","Il a 25 000 € sur son compte."],"ok":1,"fb":"25K = 25 000 € de chiffre d'affaires mensuel. Ce qu'il vend, pas ce qu'il garde."},{"ch":"ca","q":"Un client paie 240 € TTC, avec une TVA à 20 %. Quel chiffre d'affaires hors taxes pour l'entreprise ?","opts":["192 €","200 €","240 €"],"ok":1,"fb":"240 € TTC = 200 € HT + 40 € de TVA. La TVA est reversée à l'État."},{"ch":"charges","q":"Laquelle de ces charges est une charge fixe ?","opts":["La farine","Les emballages","Le loyer"],"ok":2,"fb":"Le loyer tombe tous les mois, quel que soit le niveau des ventes."},{"ch":"benefice","q":"Chiffre d'affaires : 60 000 €. Charges : 54 000 €. Quel est le bénéfice ?","opts":["6 000 €","54 000 €","114 000 €"],"ok":0,"fb":"60 000 − 54 000 = 6 000 €. Bénéfice = chiffre d'affaires − toutes les charges."},{"ch":"benefice","q":"Avec ces mêmes chiffres (60 000 € de ventes, 6 000 € de bénéfice), la marge nette est de :","opts":["6 %","10 %","90 %"],"ok":1,"fb":"6 000 sur 60 000 = 10 %. Sur 100 € de ventes, l'entreprise en garde 10."},{"ch":"benefice","q":"Le seuil de rentabilité, c'est :","opts":["Le chiffre d'affaires maximum qu'une entreprise peut atteindre","Le chiffre d'affaires à partir duquel toutes les charges sont couvertes","Le montant du découvert autorisé par la banque"],"ok":1,"fb":"En dessous du seuil, l'entreprise perd de l'argent. Au-dessus, elle commence à en gagner."},{"ch":"treso","q":"Une entreprise rentable peut-elle manquer de trésorerie ?","opts":["Non : si elle est rentable, elle a forcément de l'argent.","Oui, par exemple si ses clients la paient tard.","Oui, mais seulement si elle n'a aucun client."],"ok":1,"fb":"Le bénéfice est un calcul, la trésorerie est un constat. L'argent peut sortir avant de rentrer."},{"ch":"treso","q":"« Je suis en négatif. » Que peut vouloir dire cette phrase ?","opts":["Toujours que son compte est à découvert","Toujours que son entreprise perd de l'argent","L'un ou l'autre : découvert bancaire, ou entreprise en perte"],"ok":2,"fb":"Deux problèmes différents : le découvert touche la trésorerie, la perte touche la rentabilité."},{"ch":"treso","q":"Le flux de trésorerie, c'est :","opts":["L'argent présent sur le compte aujourd'hui","La différence entre l'argent qui rentre et celui qui sort, sur une période","Le bénéfice de l'année"],"ok":1,"fb":"La trésorerie est un niveau. Le flux est un mouvement : ce qui rentre moins ce qui sort."},{"ch":"equipe","q":"Un salarié touche 1 800 € net. Pour l'entreprise, il coûte environ :","opts":["1 800 €","2 000 €","2 800 €"],"ok":2,"fb":"Au net s'ajoutent les cotisations du salarié, puis celles de l'entreprise. Repère : environ 1,5 fois le net."},{"ch":"temps","q":"Laquelle de ces tâches relève du pilotage ?","opts":["Servir les clients","Remplacer un salarié absent","Analyser ses marges du mois"],"ok":2,"fb":"Piloter, c'est regarder ses chiffres, décider et organiser. Le reste, c'est de l'opérationnel."},{"ch":"temps","q":"« Si je ne suis pas là, rien ne tourne. » Qu'est-ce que ça révèle ?","opts":["Il a trop de salariés.","Son chiffre d'affaires est trop bas.","L'entreprise dépend entièrement de lui."],"ok":2,"fb":"Rien n'est organisé pour fonctionner sans lui : il reste indispensable partout."}],"lex":[{"t":"Acompte","aka":"","cat":"argent","d":"Somme versée par le client avant la livraison ou la fin du travail.","ex":"J'ai pris 30 % d'acompte à la commande."},{"t":"Amortissement","aka":"","cat":"argent","d":"Façon comptable d'étaler le coût d'un gros achat (four, véhicule, machine) sur plusieurs années, au lieu de tout compter l'année de l'achat.","ex":""},{"t":"Bénéfice","aka":"résultat","cat":"argent","d":"Ce qu'il reste quand on a retiré toutes les charges du chiffre d'affaires.","ex":"Je sors 3 000 € de bénéfice par mois."},{"t":"BFR","aka":"besoin en fonds de roulement","cat":"argent","d":"L'argent que l'entreprise doit avancer pour tourner, entre le moment où elle paie (stock, fournisseurs, salaires) et le moment où ses clients la paient.","ex":"Mon BFR me plombe."},{"t":"Bilan","aka":"","cat":"argent","d":"La photo, à une date donnée, de ce que l'entreprise possède et de ce qu'elle doit. Il est établi en général une fois par an, avec le comptable.","ex":"J'attends mon bilan pour savoir où j'en suis."},{"t":"Brut","aka":"salaire brut","cat":"equipe","d":"Le salaire avant les cotisations payées par le salarié. C'est le montant écrit sur le contrat de travail.","ex":""},{"t":"Cessation des paiements","aka":"","cat":"argent","d":"L'entreprise ne peut plus payer ses dettes arrivées à échéance avec l'argent dont elle dispose.","ex":""},{"t":"Charges","aka":"","cat":"argent","d":"Tout ce que l'entreprise paie pour fonctionner.","ex":"Mes charges m'étouffent."},{"t":"Charges fixes","aka":"","cat":"argent","d":"Celles qui tombent chaque mois, quel que soit le niveau des ventes : loyer, salaires, assurances, abonnements.","ex":""},{"t":"Charges sociales","aka":"cotisations","cat":"equipe","d":"Les sommes versées sur les salaires pour financer la retraite, la santé, le chômage. Une part est payée par le salarié, une autre par l'entreprise.","ex":""},{"t":"Charges variables","aka":"","cat":"argent","d":"Celles qui montent et descendent avec les ventes : marchandises, matières premières, emballages, commissions.","ex":""},{"t":"Chiffre d'affaires","aka":"CA","cat":"argent","d":"Le total des ventes sur une période, compté hors taxes. Ce qu'on vend, pas ce qu'on garde.","ex":"Je fais 40K de CA par mois."},{"t":"Compte de résultat","aka":"","cat":"argent","d":"Le tableau qui additionne, sur l'année, tout le chiffre d'affaires et toutes les charges. Sa dernière ligne est le bénéfice ou la perte.","ex":""},{"t":"Coût total employeur","aka":"","cat":"equipe","d":"Ce qu'un salarié coûte vraiment à l'entreprise : son salaire brut, plus les cotisations payées par l'entreprise. Repère : environ 1,5 fois le net. Un peu moins près du SMIC, un peu plus pour un salaire élevé.","ex":""},{"t":"Découvert","aka":"","cat":"argent","d":"Le compte bancaire est passé sous zéro. La banque avance l'argent, et fait payer ce service.","ex":"Je suis à découvert tous les 15 du mois."},{"t":"Déficit","aka":"perte","cat":"argent","d":"Les charges dépassent le chiffre d'affaires : l'entreprise perd de l'argent.","ex":"J'ai fini l'année en déficit."},{"t":"Délai de paiement","aka":"","cat":"argent","d":"Le temps entre la facture et le paiement. Entre professionnels : 30 jours par défaut, 60 jours au maximum.","ex":"Mes clients me paient à 45 jours."},{"t":"Déléguer","aka":"","cat":"equipe","d":"Confier une tâche à quelqu'un, avec la responsabilité qui va avec.","ex":"Je n'arrive pas à déléguer."},{"t":"Dividendes","aka":"","cat":"argent","d":"La part du bénéfice qu'une société verse à ses associés.","ex":""},{"t":"EBE","aka":"excédent brut d'exploitation","cat":"argent","d":"Ce que l'activité dégage avant de compter les amortissements, les intérêts d'emprunt et l'impôt. Les dirigeants à l'aise avec leurs chiffres en parlent souvent.","ex":""},{"t":"Échéance","aka":"","cat":"argent","d":"La date à laquelle un paiement doit être fait : loyer, crédit, Urssaf, TVA.","ex":"J'ai une grosse échéance qui tombe le 15."},{"t":"Emprunt","aka":"crédit, prêt","cat":"argent","d":"De l'argent prêté par la banque, remboursé par mensualités.","ex":""},{"t":"Expert-comptable","aka":"le comptable","cat":"argent","d":"Le professionnel qui tient ou vérifie les comptes de l'entreprise.","ex":"Il faut que je voie ça avec mon comptable."},{"t":"Flux de trésorerie","aka":"cash-flow","cat":"argent","d":"La différence entre l'argent qui rentre et l'argent qui sort, sur une période. Un mouvement, pas un niveau.","ex":""},{"t":"HT / TTC","aka":"hors taxes, toutes taxes comprises","cat":"argent","d":"HT : sans la TVA. TTC : le prix payé par le client, TVA incluse. Le chiffre d'affaires se compte HT.","ex":""},{"t":"Impayé","aka":"","cat":"argent","d":"Une facture que le client n'a pas réglée à la date prévue.","ex":"J'ai 15 000 € d'impayés dehors."},{"t":"K","aka":"","cat":"argent","d":"Mille. « 40K » = 40 000 €.","ex":"Je fais 40K par mois."},{"t":"Liquidation judiciaire","aka":"","cat":"argent","d":"L'entreprise ne peut pas être sauvée : le tribunal fait cesser l'activité et vendre ses biens pour payer les dettes.","ex":""},{"t":"Marge brute","aka":"","cat":"argent","d":"Ce qu'il reste du chiffre d'affaires quand on a payé seulement la marchandise ou les matières premières.","ex":""},{"t":"Marge nette","aka":"","cat":"argent","d":"Ce qu'il reste tout à la fin, après toutes les charges : le bénéfice, souvent donné en pourcentage du chiffre d'affaires.","ex":"Je suis à 5 % de marge nette."},{"t":"Masse salariale","aka":"","cat":"equipe","d":"Le total des salaires de l'équipe. Quand un dirigeant en parle, il y ajoute presque toujours les cotisations : c'est ce que toute son équipe lui coûte.","ex":"Ma masse salariale pèse la moitié de mon chiffre."},{"t":"Micro-entreprise","aka":"auto-entrepreneur","cat":"argent","d":"Un régime simplifié pour les très petites activités, avec un plafond de chiffre d'affaires.","ex":""},{"t":"Net","aka":"salaire net","cat":"equipe","d":"Ce que le salarié reçoit réellement sur son compte.","ex":""},{"t":"Opérationnel","aka":"","cat":"temps","d":"Le travail qui fait tourner la boutique au quotidien : servir, produire, répondre, remplacer.","ex":"Je suis à 100 % dans l'opérationnel."},{"t":"Panier moyen","aka":"ticket moyen","cat":"argent","d":"Ce qu'un client dépense en moyenne à chaque achat.","ex":""},{"t":"Pilotage","aka":"","cat":"temps","d":"Le travail de direction : regarder ses chiffres, fixer ses prix, organiser l'équipe, décider du cap.","ex":"Je navigue à vue, je ne pilote rien."},{"t":"Prévisionnel","aka":"","cat":"argent","d":"L'estimation chiffrée des mois à venir : ventes, charges, trésorerie.","ex":""},{"t":"Redressement judiciaire","aka":"","cat":"argent","d":"Procédure devant le tribunal pour une entreprise en cessation des paiements. Le but : poursuivre l'activité et étaler les dettes.","ex":""},{"t":"Rentabilité","aka":"","cat":"argent","d":"La capacité de l'entreprise à dégager un bénéfice. Une entreprise rentable gagne plus qu'elle ne dépense.","ex":"Je fais du chiffre, mais je ne suis pas rentable."},{"t":"Seuil de rentabilité","aka":"","cat":"argent","d":"Le chiffre d'affaires à partir duquel toutes les charges sont couvertes. En dessous on perd, au-dessus on gagne. Tu entendras aussi « point mort » : beaucoup l'emploient comme synonyme. Au sens strict, c'est la date de l'année où ce seuil est atteint.","ex":"Je suis tout juste à l'équilibre."},{"t":"Statut juridique","aka":"EI, SARL, SAS…","cat":"argent","d":"La forme légale de l'entreprise. Elle change notamment la façon dont le dirigeant se paie.","ex":""},{"t":"Stock","aka":"","cat":"argent","d":"Les marchandises ou matières achetées mais pas encore vendues. C'est de l'argent immobilisé.","ex":"J'ai trop de stock qui dort."},{"t":"Trésorerie","aka":"tréso","cat":"argent","d":"L'argent réellement disponible sur le compte de l'entreprise, à un instant donné.","ex":"Je cours après la tréso."},{"t":"Turnover","aka":"","cat":"equipe","d":"Le rythme auquel les salariés partent et sont remplacés. Élevé, il coûte cher en recrutement et en formation.","ex":"J'ai un turnover de dingue."},{"t":"TVA","aka":"","cat":"argent","d":"Taxe ajoutée au prix de vente. L'entreprise la collecte auprès du client puis la reverse à l'État : ce n'est pas son argent. Taux normal : 20 %. Certains produits ont un taux plus bas : 5,5 % pour le pain, 10 % pour un repas au restaurant.","ex":""},{"t":"Urssaf","aka":"","cat":"equipe","d":"L'organisme qui collecte les cotisations sociales des entreprises et des indépendants.","ex":"J'ai l'Urssaf à payer ce mois-ci."}]};</script>
+<script>
+(function () {
+'use strict';
+
+var NB = '\u00a0', NN = '\u202f';
+var $ = function (s, r) { return (r || document).querySelector(s); };
+var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+
+/* ---------- typographie française ---------- */
+function fr(s) {
+  return String(s)
+    .replace(/'/g, '\u2019')
+    .replace(/ ([;!?])/g, NN + '$1')
+    .replace(/ :/g, NB + ':')
+    .replace(/« /g, '«' + NB).replace(/ »/g, NB + '»')
+    .replace(/(\d) (?=\d{3}(\D|$))/g, '$1' + NN)
+    .replace(/(\d) (€|%|h\b|K\b|min\b|s\b)/g, '$1' + NB + '$2')
+    .replace(/([×−=≈≠]) (?=[\d\wÀ-ÿ])/g, '$1' + NB);
+}
+function walkData(o) {
+  if (typeof o === 'string') return fr(o);
+  if (Array.isArray(o)) return o.map(walkData);
+  if (o && typeof o === 'object') { var r = {}; Object.keys(o).forEach(function (k) { r[k] = walkData(o[k]); }); return r; }
+  return o;
+}
+function typo(root) {
+  var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null), n, list = [];
+  while ((n = w.nextNode())) { if (n.nodeValue.trim() && !/^(SCRIPT|STYLE)$/.test(n.parentNode.nodeName)) list.push(n); }
+  list.forEach(function (t) { var v = fr(t.nodeValue); if (v !== t.nodeValue) t.nodeValue = v; });
+}
+
+var D = walkData(window.COURSE);
+var FLOW = D.flow;
+
+function el(tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = fr(txt); return e; }
+function tx(s) { return document.createTextNode(fr(s)); }
+function btn(cls, txt) { var b = el('button', cls, txt); b.type = 'button'; return b; }
+function mmss(t) { t = Math.max(0, Math.round(t)); return Math.floor(t / 60) + ':' + ('0' + (t % 60)).slice(-2); }
+function group(n) { return String(Math.abs(Math.round(n))).replace(/\B(?=(\d{3})+(?!\d))/g, NN); }
+function eur(n) { return (n < 0 ? '−' + NB : '') + group(n) + NB + '€'; }
+function signed(n) { return (n < 0 ? '−' : '+') + NB + group(n) + NB + '€'; }
+
+/* ---------- état (confort de reprise, par navigateur) ---------- */
+var KEY = 'langage-dirigeants-v1';
+var S = { done: {}, heard: {}, revealed: {}, speed: 1, best: null, sound: true };
+function load() { try { var j = JSON.parse(localStorage.getItem(KEY) || 'null'); if (j && typeof j === 'object') Object.keys(S).forEach(function (k) { if (j[k] != null) S[k] = j[k]; }); } catch (e) {} }
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+function markDone(id) { if (!S.done[id]) { S.done[id] = true; save(); } renderProg(); }
+
+var cur = 'home';
+function isLesson(id) { return !!D.lessons[id] && id !== 'decoder'; }
+function titleOf(id) { return id === 'quiz' ? 'Quiz final' : D.lessons[id].title; }
+
+/* ---------- audio : fichier direct, puis repli, puis sous-titres seuls ---------- */
+var audio = new Audio(); audio.preload = 'auto';
+var cardAudio = new Audio(); cardAudio.preload = 'none';
+var blobs = {}, directOK = null;
+function urlOf(name) { return 'audio/' + name + '.mp3'; }
+function useBlob(a, name) {
+  a._fb = 1;
+  var p = blobs[name] || (blobs[name] = fetch(urlOf(name)).then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.blob(); })
+    .then(function (b) { return URL.createObjectURL(new Blob([b], { type: 'audio/mpeg' })); }));
+  p.then(function (u) { if (a._name !== name) return; a.src = u; a.load(); if (a._want) { var pr = a.play(); if (pr && pr.catch) pr.catch(function () {}); } })
+   .catch(function () { blobs[name] = null; if (a._name === name) audioFailed(a); });
+}
+function setSource(a, name) {
+  a._name = name; a._fb = 0; a._want = false;
+  if (directOK === false) useBlob(a, name); else { a.src = urlOf(name); a.load(); }
+}
+function audioFailed(a) { if (a === audio) goSilent(); }
+function onAudioError(a) { if (!a._name) return; if (a._fb === 0) { directOK = false; useBlob(a, a._name); } else audioFailed(a); }
+audio.addEventListener('error', function () { onAudioError(audio); });
+cardAudio.addEventListener('error', function () { onAudioError(cardAudio); });
+
+/* ---------- lecteur de leçon ---------- */
+var P = { id: null, L: null, stage: null, silent: false, sPlaying: false, t: 0, last: 0, idx: -2, raf: 0, started: false, done: false, seekTo: null };
+var stages = {};
+function stageOf(id) {
+  if (stages[id]) return stages[id];
+  var st = $('#stage .st[data-lesson="' + id + '"]');
+  var o = { root: st, els: [], scenes: [] };
+  if (st) {
+    $$('[data-s]', st).forEach(function (e) { o.els.push({ el: e, s: +e.getAttribute('data-s') }); });
+    $$('.scene', st).forEach(function (e) { o.scenes.push({ el: e, from: +e.getAttribute('data-from'), to: +e.getAttribute('data-to') }); });
+  }
+  return (stages[id] = o);
+}
+function applyStep(step) {
+  if (!P.stage) return;
+  P.stage.els.forEach(function (o) { o.el.classList.toggle('on', step >= o.s); });
+  P.stage.scenes.forEach(function (o) { o.el.classList.toggle('cur', step >= o.from && step <= o.to); });
+}
+var ICO = { play: 'M8 5v14l11-7z', pause: 'M6 5h4v14H6zM14 5h4v14h-4z', replay: 'M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z' };
+function setPlayUI(playing) {
+  var b = $('#pp'), k = playing ? 'pause' : (P.done ? 'replay' : 'play');
+  $('#pp-ico').setAttribute('d', ICO[k]);
+  b.setAttribute('aria-label', playing ? 'Mettre en pause' : (P.done ? 'Réécouter la leçon' : 'Lire la leçon'));
+}
+function setCaption(txt, idle) { var c = $('#cap'); c.textContent = txt; c.classList.toggle('idle', !!idle); }
+function nowT() { return P.silent ? P.t : (audio.currentTime || 0); }
+function updateTime(t) {
+  var d = P.L.duration, f = Math.max(0, Math.min(1, t / d));
+  $('#trk-fill').style.width = (f * 100).toFixed(2) + '%';
+  $('#trk').setAttribute('aria-valuenow', Math.round(f * 100));
+  $('#ptime').textContent = mmss(Math.min(t, d)) + ' / ' + mmss(d);
+}
+function sync(at) {
+  if (!P.L) return;
+  var t = typeof at === 'number' ? at : nowT(), cues = P.L.cues, i = 0;
+  for (var k = 0; k < cues.length; k++) { if (t >= cues[k].t - 0.18) i = k; else break; }
+  if (i !== P.idx) { P.idx = i; applyStep(cues[i].step); if (P.started) setCaption(cues[i].show); }
+  updateTime(t);
+}
+function isPlaying() { return P.silent ? P.sPlaying : !audio.paused; }
+function loop() {
+  cancelAnimationFrame(P.raf);
+  var step = function () {
+    if (!isPlaying() || !P.L) return;
+    if (P.silent) {
+      var n = performance.now(); P.t += (n - P.last) / 1000 * S.speed; P.last = n;
+      if (P.t >= P.L.duration) { P.t = P.L.duration; P.sPlaying = false; sync(); finish(); return; }
+    }
+    sync();
+    P.raf = requestAnimationFrame(step);
+  };
+  P.raf = requestAnimationFrame(step);
+}
+function play() {
+  if (!P.L) return;
+  if (P.done) { P.done = false; seek(0); }
+  P.started = true; P.idx = -2; sync();
+  if (P.silent) { P.sPlaying = true; P.last = performance.now(); setPlayUI(true); loop(); return; }
+  audio._want = true; audio.playbackRate = S.speed;
+  var pr = audio.play();
+  if (pr && pr.catch) pr.catch(function (e) { if (e && e.name === 'NotAllowedError') { audio._want = false; setPlayUI(false); } });
+}
+function pause() { audio._want = false; if (P.silent) { P.sPlaying = false; setPlayUI(false); } else audio.pause(); }
+function seek(t) {
+  if (!P.L) return;
+  t = Math.max(0, Math.min(P.L.duration - 0.05, t));
+  if (P.silent) P.t = t;
+  else if (audio.readyState < 1) P.seekTo = t;
+  else if (canSeek(t)) { try { audio.currentTime = t; } catch (e) { P.seekTo = t; } }
+  else {
+    /* fichier servi sans accès partiel : on le recharge en mémoire, où tout saut est possible */
+    P.seekTo = t;
+    if (audio._fb === 0) { var keep = !audio.paused || audio._want; directOK = false; useBlob(audio, P.id); audio._want = keep; }
+  }
+  P.idx = -2;
+  sync(t);
+}
+function canSeek(t) {
+  try { var r = audio.seekable; for (var i = 0; i < r.length; i++) if (t >= r.start(i) - 0.5 && t <= r.end(i) + 0.5) return true; } catch (e) {}
+  return false;
+}
+function goSilent() {
+  if (P.silent || !P.L) return;
+  var wanted = audio._want;
+  P.silent = true; P.t = 0; $('#silent-note').hidden = false;
+  if (wanted) { P.sPlaying = true; P.last = performance.now(); setPlayUI(true); loop(); }
+}
+function finish() {
+  P.done = true; audio._want = false; setPlayUI(false);
+  S.heard[P.id] = true; save();
+  if (!(D.ex[P.id] || []).length) markDone(P.id); else openExercises(true);
+  renderNav();
+}
+audio.addEventListener('play', function () { setPlayUI(true); loop(); });
+audio.addEventListener('pause', function () { if (!P.done && !audio._want) setPlayUI(false); });
+audio.addEventListener('ended', function () { if (P.L) { sync(); finish(); } });
+audio.addEventListener('timeupdate', function () { if (!P.silent && !audio.seeking && P.seekTo == null) sync(); });
+audio.addEventListener('loadedmetadata', function () {
+  if (audio._fb === 0) directOK = true;
+  audio.playbackRate = S.speed;
+  if (P.seekTo != null) { try { audio.currentTime = P.seekTo; } catch (e) {} P.seekTo = null; }
+});
+cardAudio.addEventListener('loadedmetadata', function () { if (cardAudio._fb === 0) directOK = true; });
+
+function stopAll() {
+  cancelAnimationFrame(P.raf); P.sPlaying = false;
+  try { audio.pause(); } catch (e) {}
+  try { cardAudio.pause(); } catch (e) {}
+  audio._want = false; cardAudio._want = false;
+}
+function loadLesson(id) {
+  P.id = id; P.L = D.lessons[id]; P.stage = stageOf(id);
+  P.silent = false; P.sPlaying = false; P.t = 0; P.idx = -2; P.started = false; P.done = false; P.seekTo = null;
+  $('#silent-note').hidden = true;
+  setSource(audio, id);
+  applyStep(P.L.cues[0].step);
+  setCaption(fr('Lance la leçon : ' + spoken(P.L.duration) + " d'écoute. Les sous-titres s'affichent ici."), true);
+  updateTime(0); setPlayUI(false);
+  fitCaption();
+}
+function fitCaption() {
+  /* réserve la hauteur du plus long sous-titre : le lecteur ne bouge pas pendant la lecture */
+  if (!P.L) return;
+  var c = $('#cap'), keep = c.textContent, max = 0;
+  c.style.minHeight = '0';
+  P.L.cues.forEach(function (q) { c.textContent = q.show; if (c.offsetHeight > max) max = c.offsetHeight; });
+  c.textContent = keep;
+  c.style.minHeight = max ? max + 'px' : '';
+}
+function spoken(sec) { var m = Math.floor(sec / 60), s = Math.round(sec % 60); return m ? m + NB + 'min' + (s ? NB + ('0' + s).slice(-2) : '') : s + NB + 's'; }
+var SPEEDS = [1, 1.15, 1.3, 0.85];
+function speedLabel() { return '×' + NB + String(S.speed).replace('.', ','); }
+
+/* ---------- exercices ---------- */
+var X = { id: null, total: 0, done: 0 };
+function verdict(fb, good, text) {
+  fb.hidden = false; fb.className = 'fb' + (good ? '' : ' no'); fb.textContent = '';
+  fb.appendChild(el('b', '', good ? 'Juste. ' : 'Pas tout à fait. '));
+  fb.appendChild(tx(text));
+}
+function qcm(ex, onDone) {
+  var c = el('div', 'xc'), opts = el('div', 'opts'), fb = el('p', 'fb'), locked = false;
+  fb.hidden = true; fb.setAttribute('aria-live', 'polite');
+  c.appendChild(el('p', 'xq', ex.q));
+  var order = ex.opts.map(function (o, i) { return i; });
+  if (!ex.opts.every(function (o) { return /^\d/.test(o); })) {
+    for (var k = order.length - 1; k > 0; k--) { var r = Math.floor(Math.random() * (k + 1)), tmp = order[k]; order[k] = order[r]; order[r] = tmp; }
+  }
+  order.forEach(function (i) {
+    var o = ex.opts[i], b = btn('opt'), mk = el('span', 'mk'); mk.setAttribute('aria-hidden', 'true');
+    b.setAttribute('data-i', i);
+    b.appendChild(mk); b.appendChild(el('span', '', o));
+    b.addEventListener('click', function () {
+      if (locked) return; locked = true;
+      $$('.opt', opts).forEach(function (x) {
+        var j = +x.getAttribute('data-i');
+        x.disabled = true;
+        if (j === ex.ok) { x.classList.add('ok'); $('.mk', x).textContent = '✓'; }
+        else if (j === i) { x.classList.add('ko'); $('.mk', x).textContent = '✕'; }
+        else x.classList.add('dim');
+      });
+      verdict(fb, i === ex.ok, ex.fb);
+      onDone(i === ex.ok, i);
+    });
+    opts.appendChild(b);
+  });
+  c.appendChild(opts); c.appendChild(fb);
+  return c;
+}
+function sorter(ex, onDone) {
+  var c = el('div', 'xc'), i = 0, score = 0, n = ex.items.length;
+  function round() {
+    c.textContent = '';
+    var it = ex.items[i], two = el('div', 'two'), fb = el('p', 'fb'), nx = btn('btn sm', i === n - 1 ? 'Voir le récapitulatif' : 'Suivant'), locked = false;
+    fb.hidden = true; fb.setAttribute('aria-live', 'polite'); nx.hidden = true;
+    c.appendChild(el('p', 'xq', ex.q));
+    c.appendChild(el('p', 'xsub mono', (i + 1) + ' / ' + n));
+    c.appendChild(el('p', 'sitem', it.t));
+    ex.cats.forEach(function (cat, k) {
+      var b = btn('opt', cat);
+      b.addEventListener('click', function () {
+        if (locked) return; locked = true;
+        $$('.opt', two).forEach(function (x, j) { x.disabled = true; if (j === it.c) x.classList.add('ok'); else if (j === k) x.classList.add('ko'); else x.classList.add('dim'); });
+        if (k === it.c) score++;
+        verdict(fb, k === it.c, ex.cats[it.c] + '. ' + it.fb);
+        nx.hidden = false;
+      });
+      two.appendChild(b);
+    });
+    nx.addEventListener('click', function () { i++; if (i < n) round(); else recap(); });
+    c.appendChild(two); c.appendChild(fb); c.appendChild(el('div', 'row')).appendChild(nx);
+  }
+  function recap() {
+    c.textContent = '';
+    c.appendChild(el('p', 'xq', ex.q));
+    c.appendChild(el('p', 'xsub', score + ' sur ' + n + ' du premier coup. Le récapitulatif :'));
+    var ul = el('ul', 'recap');
+    ex.items.forEach(function (it) { var li = el('li'); li.appendChild(el('span', '', it.t)); li.appendChild(el('b', '', ex.cats[it.c])); ul.appendChild(li); });
+    c.appendChild(ul);
+    onDone(score === n);
+  }
+  round();
+  return c;
+}
+function rangeField(id, text, min, max, step, value) {
+  var lab = el('label'), sp = el('span', '', text + ' : '), val = el('b'), inp = el('input');
+  lab.setAttribute('for', id); sp.appendChild(val); lab.appendChild(sp);
+  inp.type = 'range'; inp.id = id; inp.min = min; inp.max = max; inp.step = step; inp.value = value;
+  lab.appendChild(inp);
+  return { lab: lab, inp: inp, val: val };
+}
+function simulator(ex, onDone) {
+  var FIX = 25000, VAR = 0.30, MAX = 60000, c = el('div', 'xc sim'), m1 = false, m2 = false, fired = false;
+  c.appendChild(el('p', 'xq', 'Le simulateur de Sophie'));
+  c.appendChild(el('p', 'xsub', 'Fais varier les ventes. Les charges fixes ne bougent pas : 25 000 €. Les charges variables suivent : 30 % des ventes.'));
+  var f = rangeField('sim-ca', 'Chiffre d\u2019affaires du mois', 20000, MAX, 100, 40000); c.appendChild(f.lab);
+  var bars = el('div', 'simbars');
+  function row(label) { var r = el('div', 'simrow'), l = el('span'), v = el('b'), b = el('div', 'bar'); l.appendChild(label); r.appendChild(l); r.appendChild(v); r.appendChild(b); bars.appendChild(r); return { v: v, bar: b }; }
+  var r1 = row(document.createTextNode('Chiffre d\u2019affaires')), g = el('span', 'seg gold'); r1.bar.appendChild(g);
+  var lab2 = document.createDocumentFragment();
+  lab2.appendChild(document.createTextNode('Charges : ')); lab2.appendChild(el('i', 'sw c1')); lab2.appendChild(document.createTextNode(' variables + ')); lab2.appendChild(el('i', 'sw c3')); lab2.appendChild(document.createTextNode(' fixes'));
+  var r2 = row(lab2), s1 = el('span', 'seg c1'), s3 = el('span', 'seg c3'); r2.bar.appendChild(s1); r2.bar.appendChild(s3);
+  r1.bar.setAttribute('aria-hidden', 'true'); r2.bar.setAttribute('aria-hidden', 'true');
+  c.appendChild(bars);
+  var vd = el('div', 'verdict'), big = el('span', 'big'), sub = el('span'); vd.setAttribute('aria-live', 'polite'); vd.appendChild(big); vd.appendChild(sub); c.appendChild(vd);
+  function mission(title, text, btnText, answer, act) {
+    var m = el('div', 'mission'), p = el('p'), b = btn('btn ghost sm', btnText), a = el('p', 'ans');
+    p.appendChild(el('b', '', title + ' ')); p.appendChild(tx(text));
+    a.hidden = true; a.appendChild(el('b', '', 'Réponse. ')); a.appendChild(tx(answer));
+    b.addEventListener('click', act);
+    m.appendChild(p); m.appendChild(el('div', 'row')).appendChild(b); m.appendChild(a); c.appendChild(m);
+    return a;
+  }
+  var a1 = mission('Mission 1.', 'Les ventes baissent de 10 %. Que devient le bénéfice ?', 'Simuler − 10 % de ventes',
+    'À 36 000 € de ventes, il reste 200 €. Les ventes ont baissé de 10 %, le bénéfice a été divisé par 15. Voilà pourquoi une petite baisse d\u2019activité inquiète autant un dirigeant.',
+    function () { f.inp.value = 36000; update(); });
+  var a2 = mission('Mission 2.', 'Trouve le seuil de rentabilité : déplace le curseur jusqu\u2019à ce que le bénéfice tombe à zéro.', 'Voir la réponse',
+    'Autour de 35 700 € de ventes par mois. En dessous, Sophie perd de l\u2019argent. Au-dessus, elle commence à en gagner.',
+    function () { f.inp.value = 35700; update(); });
+  function update() {
+    var ca = +f.inp.value, v = Math.round(ca * VAR), ch = v + FIX, b = ca - ch;
+    f.val.textContent = eur(ca); f.inp.setAttribute('aria-valuetext', eur(ca));
+    r1.v.textContent = eur(ca); r2.v.textContent = eur(ch);
+    g.style.flex = '0 0 ' + (ca / MAX * 100).toFixed(2) + '%';
+    s1.style.flex = '0 0 ' + (v / MAX * 100).toFixed(2) + '%';
+    s3.style.flex = '0 0 ' + (FIX / MAX * 100).toFixed(2) + '%';
+    g.title = fr('Chiffre d\u2019affaires : ') + eur(ca); s1.title = fr('Charges variables : ') + eur(v); s3.title = fr('Charges fixes : ') + eur(FIX);
+    var zero = Math.abs(b) <= 150;
+    vd.className = 'verdict' + (b < 0 && !zero ? ' neg' : '');
+    if (zero) { big.textContent = '≈' + NB + '0' + NB + '€'; sub.textContent = 'Ni bénéfice ni perte : c\u2019est le seuil de rentabilité.'; }
+    else if (b > 0) { big.textContent = signed(b); sub.textContent = 'de bénéfice · marge nette ' + (b / ca * 100).toFixed(1).replace('.', ',') + NB + '%'; }
+    else { big.textContent = signed(b); sub.textContent = 'Perte : les charges dépassent les ventes.'; }
+    if (ca === 36000) { m1 = true; a1.hidden = false; }
+    if (zero) { m2 = true; a2.hidden = false; }
+    if (m1 && m2 && !fired) { fired = true; onDone(true); }
+  }
+  f.inp.addEventListener('input', update);
+  update();
+  return c;
+}
+var SVGNS = 'http://www.w3.org/2000/svg';
+function svg(tag, attrs) { var e = document.createElementNS(SVGNS, tag); Object.keys(attrs || {}).forEach(function (k) { e.setAttribute(k, attrs[k]); }); return e; }
+function bathtub(ex, onDone) {
+  var START = 8000, CAP = 40000, c = el('div', 'xc sim'), fired = false;
+  c.appendChild(el('p', 'xq', 'La baignoire de Marc'));
+  c.appendChild(el('p', 'xsub', 'Au début du mois, Marc a 8 000 € sur son compte. Règle ce qui rentre et ce qui sort, puis regarde le niveau.'));
+  var fig = el('figure'), s = svg('svg', { viewBox: '0 0 320 166', role: 'img' }), defs = svg('defs'), cp = svg('clipPath', { id: 'tubB' });
+  cp.appendChild(svg('path', { d: 'M43 40V106Q43 125 62 125H258Q277 125 277 106V40Z' })); defs.appendChild(cp); s.appendChild(defs);
+  var water = svg('rect', { 'class': 'f-water', x: 40, y: 125, width: 240, height: 0, 'clip-path': 'url(#tubB)' }); s.appendChild(water);
+  var tub = svg('path', { 'class': 'd-stroke', 'stroke-width': 3, 'stroke-linecap': 'round', d: 'M40 38V106Q40 128 62 128H258Q280 128 280 106V38M30 38H50M270 38H290' }); s.appendChild(tub);
+  s.appendChild(svg('path', { 'class': 'd-stroke', 'stroke-width': 5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', d: 'M58 8H96V22' }));
+  var sin = svg('path', { 'class': 's-in', 'stroke-width': 4, 'stroke-linecap': 'round', d: 'M96 28V120' }); s.appendChild(sin);
+  s.appendChild(svg('path', { 'class': 'd-stroke', 'stroke-width': 5, 'stroke-linecap': 'round', d: 'M232 130V140' }));
+  var sout = svg('path', { 'class': 's-out', 'stroke-width': 4, 'stroke-linecap': 'round', d: 'M232 146V162' }); s.appendChild(sout);
+  var tIn = svg('text', { 'class': 'd-text', x: 50, y: 13, 'text-anchor': 'end' }); tIn.textContent = 'Entrées'; s.appendChild(tIn);
+  var tOut = svg('text', { 'class': 'd-text', x: 220, y: 158, 'text-anchor': 'end' }); tOut.textContent = 'Sorties'; s.appendChild(tOut);
+  var tLvl = svg('text', { 'class': 'd-text', x: 290, y: 13, 'text-anchor': 'end' }); s.appendChild(tLvl);
+  fig.appendChild(s); c.appendChild(fig);
+  var fi = rangeField('tub-in', 'Entrées du mois', 0, 30000, 1000, 0), fo = rangeField('tub-out', 'Sorties du mois', 0, 30000, 1000, 12000);
+  c.appendChild(fi.lab); c.appendChild(fo.lab);
+  var vd = el('div', 'verdict'), big = el('span', 'big'), sub = el('span'), fx = el('span', 'nw'); vd.appendChild(big); vd.appendChild(sub); vd.appendChild(fx); c.appendChild(vd);
+  var fb = el('p', 'fb'); fb.setAttribute('aria-live', 'polite'); c.appendChild(fb);
+  var row = el('div', 'row'), b1 = btn('btn ghost sm', 'Le client paie enfin ses 20 000 €'), b2 = btn('btn ghost sm', 'Revenir au début');
+  row.appendChild(b1); row.appendChild(b2); c.appendChild(row);
+  function update(user) {
+    var i = +fi.inp.value, o = +fo.inp.value, flux = i - o, end = START + flux;
+    fi.val.textContent = eur(i); fo.val.textContent = eur(o);
+    fi.inp.setAttribute('aria-valuetext', eur(i)); fo.inp.setAttribute('aria-valuetext', eur(o));
+    var h = Math.max(0, Math.min(CAP, end)) / CAP * 85, top = 125 - h;
+    water.setAttribute('y', top.toFixed(1)); water.setAttribute('height', (h + 6).toFixed(1));
+    if (end <= 0) water.setAttribute('height', 0);
+    sin.style.display = i > 0 ? '' : 'none'; sout.style.display = o > 0 ? '' : 'none';
+    sin.setAttribute('d', 'M96 28V' + Math.max(40, Math.min(120, top - 2)).toFixed(1));
+    tub.classList.toggle('s-bad', end < 0);
+    tLvl.textContent = fr(end < 0 ? 'À découvert : ' + eur(end) : 'Niveau : ' + eur(end));
+    s.setAttribute('aria-label', 'Baignoire de Marc. Entrées ' + eur(i) + ', sorties ' + eur(o) + ', trésorerie en fin de mois ' + eur(end) + '.');
+    vd.className = 'verdict' + (end < 0 ? ' neg' : '');
+    big.textContent = eur(end);
+    sub.textContent = 'sur le compte en fin de mois';
+    fx.textContent = fr('Flux du mois : ') + (flux === 0 ? '0' + NB + '€' : signed(flux));
+    var msg;
+    if (end < 0) msg = 'Le compte passe sous zéro : Marc est à découvert. Un problème de trésorerie, même si son chantier est rentable.';
+    else if (flux > 0) msg = 'Il rentre plus d\u2019argent qu\u2019il n\u2019en sort : le flux est positif, le niveau monte.';
+    else if (flux < 0) msg = 'Il sort plus d\u2019argent qu\u2019il n\u2019en rentre : le flux est négatif, le niveau baisse.';
+    else msg = 'Autant d\u2019entrées que de sorties : le flux est nul, le niveau ne bouge pas.';
+    fb.textContent = msg;
+    if (user && !fired) { fired = true; onDone(true); }
+  }
+  fi.inp.addEventListener('input', function () { update(true); });
+  fo.inp.addEventListener('input', function () { update(true); });
+  b1.addEventListener('click', function () { fi.inp.value = 20000; update(true); });
+  b2.addEventListener('click', function () { fi.inp.value = 0; fo.inp.value = 12000; update(true); });
+  update(false);
+  return c;
+}
+var BUILD = { qcm: qcm, sort: sorter, sim: simulator, tub: bathtub };
+function openExercises(open) {
+  $('#exo-list').hidden = !open; $('#exo-gate').hidden = !!open;
+  var n = (D.ex[P.id] || []).length;
+  $('#exo-hint').textContent = open ? (n > 1 ? n + ' exercices pour vérifier que c\u2019est clair.' : 'Un exercice pour vérifier que c\u2019est clair.')
+    : 'Écoute d\u2019abord la leçon. Les exercices s\u2019ouvrent à la fin.';
+}
+function buildExercises(id) {
+  var list = D.ex[id] || [], box = $('#exo'), listEl = $('#exo-list');
+  listEl.textContent = ''; box.hidden = !list.length;
+  X = { id: id, total: list.length, done: 0 };
+  if (!list.length) return;
+  list.forEach(function (ex) {
+    listEl.appendChild(BUILD[ex.type](ex, function () {
+      X.done++;
+      if (X.done >= X.total && X.id === id) { listEl.appendChild(el('p', 'xdone', '✓ Chapitre terminé.')); markDone(id); renderNav(); }
+    }));
+  });
+  openExercises(!!S.heard[id] || !!S.done[id]);
+}
+
+/* ---------- navigation ---------- */
+function renderProg() {
+  var box = $('#prog');
+  if (!box.firstChild) FLOW.forEach(function (id) { var b = btn(''); b.setAttribute('data-id', id); b.addEventListener('click', function () { go(id); }); box.appendChild(b); });
+  $$('button', box).forEach(function (b) {
+    var id = b.getAttribute('data-id');
+    b.className = (cur === id ? 'cur' : (S.done[id] ? 'done' : ''));
+    b.setAttribute('aria-label', titleOf(id) + (cur === id ? ' (en cours)' : (S.done[id] ? ' (terminé)' : '')));
+    if (cur === id) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+  });
+}
+function neighbor(id, d) { var i = FLOW.indexOf(id) + d; return i < 0 ? 'home' : (i >= FLOW.length ? 'home' : FLOW[i]); }
+function nextLabel(id) {
+  var n = neighbor(id, 1);
+  if (n === 'home') return 'Retour au sommaire';
+  if (n === 'quiz') return 'Passer au quiz final';
+  if (n === 'bilan') return 'L\u2019essentiel à retenir';
+  var num = D.lessons[n].num;
+  return num ? 'Chapitre ' + num + ' : ' + D.lessons[n].title : D.lessons[n].title;
+}
+function renderNav() {
+  if (!isLesson(cur)) return;
+  var p = neighbor(cur, -1);
+  $('#prev').textContent = p === 'home' ? 'Sommaire' : 'Précédent';
+  $('#next').textContent = nextLabel(cur);
+}
+function firstTodo() { for (var i = 0; i < FLOW.length; i++) if (!S.done[FLOW[i]]) return FLOW[i]; return FLOW[0]; }
+function renderHome() {
+  var total = 0, started = Object.keys(S.done).length > 0, toc = $('#toc');
+  FLOW.forEach(function (id) { if (D.lessons[id] && id !== 'decoder') total += D.lessons[id].duration; });
+  $('#home-min').textContent = Math.round(total / 60) + NB + 'min';
+  $('#home-start').textContent = started ? (FLOW.every(function (id) { return S.done[id]; }) ? 'Revoir le cours' : 'Reprendre : ' + titleOf(firstTodo())) : 'Commencer';
+  toc.textContent = '';
+  toc.appendChild(el('p', 'rc-head', 'Au programme'));
+  FLOW.forEach(function (id) {
+    var L = D.lessons[id], r = btn('rc-row'), name = el('span'), right;
+    name.appendChild(el('span', 'num', L && L.num ? L.num : '·')); name.appendChild(tx(titleOf(id)));
+    if (id === 'quiz') right = D.quiz.length + ' questions'; else if (id === 'decoder') right = D.cards.length + ' phrases'; else right = mmss(L.duration);
+    r.appendChild(name); r.appendChild(el('i', 'dots')); r.appendChild(el('b', '', right));
+    var st = el('span', 'state', S.done[id] ? '✓' : ''); st.setAttribute('aria-label', S.done[id] ? 'terminé' : ''); r.appendChild(st);
+    r.addEventListener('click', function () { go(id); });
+    toc.appendChild(r);
+  });
+  var tot = el('p', 'rc-total'); tot.appendChild(el('span', '', 'Leçons à écouter')); tot.appendChild(el('i', 'dots')); tot.appendChild(el('b', '', spoken(total)));
+  toc.appendChild(tot);
+  $('#home-reset').hidden = !started;
+}
+function enterLesson(id) {
+  var L = D.lessons[id];
+  $('#l-kicker').textContent = L.kicker; $('#l-title').textContent = L.title;
+  $$('#stage .st').forEach(function (st) { st.hidden = st.getAttribute('data-lesson') !== id; });
+  loadLesson(id);
+  buildExercises(id);
+  renderNav();
+}
+function go(id) {
+  if (id !== 'home' && FLOW.indexOf(id) < 0) id = 'home';
+  stopAll();
+  cur = id; P.L = null;
+  $('#scr-home').hidden = id !== 'home';
+  $('#scr-decoder').hidden = id !== 'decoder';
+  $('#scr-quiz').hidden = id !== 'quiz';
+  $('#scr-lesson').hidden = !isLesson(id);
+  if (id === 'home') renderHome(); else if (id === 'decoder') enterDecoder(); else if (id === 'quiz') enterQuiz(); else enterLesson(id);
+  renderProg();
+  try { window.scrollTo(0, 0); } catch (e) {}
+}
+
+/* ---------- cartes à décoder ---------- */
+var THEME = { argent: 'Argent', equipe: 'Équipe', temps: 'Temps' };
+var cardsBuilt = false;
+function playCard(id) { setSource(cardAudio, id); cardAudio._want = true; var pr = cardAudio.play(); if (pr && pr.catch) pr.catch(function () {}); }
+function decCount() {
+  var n = D.cards.filter(function (k) { return S.revealed[k.id]; }).length;
+  $('#dec-count').textContent = n + ' / ' + D.cards.length + ' décodées';
+  if (n >= D.cards.length) markDone('decoder');
+}
+function sndLabel() { var b = $('#snd'); b.textContent = 'Son des cartes : ' + (S.sound ? 'activé' : 'coupé'); b.setAttribute('aria-pressed', S.sound ? 'true' : 'false'); }
+function enterDecoder() {
+  var box = $('#cards');
+  if (!cardsBuilt) {
+    cardsBuilt = true;
+    D.cards.forEach(function (k) {
+      var a = el('article', 'card'), q = btn('card-q'), ans = el('div', 'card-a'), hint = el('span', 'hint', 'Toucher pour décoder'), rp = btn('linkbtn', 'Réécouter');
+      q.appendChild(el('span', 'tag', THEME[k.theme])); q.appendChild(el('span', 'ph', '«' + NB + k.phrase + NB + '»')); q.appendChild(hint);
+      q.setAttribute('aria-expanded', 'false');
+      ans.hidden = true; ans.appendChild(el('p', '', k.sens)); ans.appendChild(rp);
+      q.addEventListener('click', function () {
+        var open = ans.hidden;
+        ans.hidden = !open; a.classList.toggle('open', open); q.setAttribute('aria-expanded', open ? 'true' : 'false');
+        hint.textContent = open ? 'Toucher pour refermer' : 'Toucher pour revoir';
+        if (open) { S.revealed[k.id] = true; save(); decCount(); if (S.sound) playCard(k.id); } else { try { cardAudio.pause(); } catch (e) {} }
+      });
+      rp.addEventListener('click', function () { playCard(k.id); });
+      a.appendChild(q); a.appendChild(ans); box.appendChild(a);
+    });
+  }
+  sndLabel(); decCount();
+}
+
+/* ---------- quiz final ---------- */
+var Q = null;
+function enterQuiz() { if (!Q || Q.finished) Q = { i: 0, res: [], finished: false }; renderQuiz(); }
+function renderQuiz() {
+  var body = $('#quiz-body'), n = D.quiz.length;
+  body.textContent = '';
+  if (Q.finished) return renderScore(body);
+  var item = D.quiz[Q.i], head = el('p', 'qhead'), nx = btn('btn', Q.i === n - 1 ? 'Voir mon score' : 'Question suivante');
+  head.appendChild(el('span', 'mono', 'Question ' + (Q.i + 1) + ' sur ' + n));
+  if (S.best != null) head.appendChild(el('span', '', 'Meilleur score : ' + S.best + ' / ' + n));
+  nx.hidden = true;
+  body.appendChild(head);
+  body.appendChild(qcm(item, function (good, pick) { Q.res[Q.i] = { good: good, pick: pick }; nx.hidden = false; }));
+  nx.addEventListener('click', function () { Q.i++; if (Q.i >= n) { Q.finished = true; } renderQuiz(); try { window.scrollTo(0, 0); } catch (e) {} });
+  body.appendChild(el('div', 'row')).appendChild(nx);
+}
+function renderScore(body) {
+  var n = D.quiz.length, good = Q.res.filter(function (r) { return r && r.good; }).length;
+  if (S.best == null || good > S.best) S.best = good;
+  S.done.quiz = true; save(); renderProg();
+  // Intégrée dans une leçon de team.alteore.com (formations.html) : la page
+  // parente coche la leçon « Terminée » quand le quiz final est passé.
+  try { if (window.parent && window.parent !== window) window.parent.postMessage({ type: 'formation:complete', score: good, total: n }, '*'); } catch (e) {}
+  var sc = el('div', 'score'), num = el('p', 'n', String(good)), msg;
+  num.appendChild(el('small', '', NB + '/' + NB + n));
+  if (good >= n - 1) msg = 'Tu as les bases. Quand un dirigeant te parle de ses chiffres, tu sais de quoi il parle.';
+  else if (good >= n - 4) msg = 'C\u2019est presque acquis. Revois les points ci-dessous, puis retente le quiz.';
+  else msg = 'Reprends les chapitres indiqués ci-dessous, puis retente le quiz. S\u2019y reprendre à deux fois est normal.';
+  sc.appendChild(el('p', 'eyebrow', 'Ton score')); sc.appendChild(num); sc.appendChild(el('p', 'lead sm', msg));
+  sc.appendChild(el('p', 'xsub', 'Fais une capture de cet écran et envoie-la à ton responsable.'));
+  body.appendChild(sc);
+  var miss = el('ul', 'miss'), any = false;
+  D.quiz.forEach(function (item, i) {
+    if (Q.res[i] && Q.res[i].good) return;
+    any = true;
+    var li = el('li'), b = btn('linkbtn', 'Revoir : ' + titleOf(item.ch));
+    li.appendChild(el('p', 'mq', item.q));
+    var ok = el('p', 'ma', 'Bonne réponse : '); ok.appendChild(el('b', '', item.opts[item.ok])); li.appendChild(ok);
+    li.appendChild(el('p', 'ma', item.fb));
+    b.addEventListener('click', function () { go(item.ch); });
+    li.appendChild(b); miss.appendChild(li);
+  });
+  if (any) { body.appendChild(el('h3', '', 'À revoir')); body.appendChild(miss); }
+  var row = el('div', 'row'), again = btn('btn', 'Refaire le quiz'), lx = btn('btn ghost', 'Ouvrir le lexique'), hm = btn('btn ghost', 'Sommaire');
+  again.addEventListener('click', function () { Q = null; enterQuiz(); try { window.scrollTo(0, 0); } catch (e) {} });
+  lx.addEventListener('click', openLex); hm.addEventListener('click', function () { go('home'); });
+  row.appendChild(again); row.appendChild(lx); row.appendChild(hm); body.appendChild(row);
+}
+
+/* ---------- lexique ---------- */
+var lexFilter = 'tous', lexFocus = null;
+function plain(s) { return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\u2019']/g, ' ').replace(/[\u00a0\u202f]/g, ' '); }
+function renderLex() {
+  var q = plain($('#lex-q').value.trim()), list = $('#lex-list'), n = 0;
+  list.textContent = '';
+  D.lex.forEach(function (e) {
+    if (lexFilter !== 'tous' && e.cat !== lexFilter) return;
+    if (q && plain(e.t + ' ' + e.aka + ' ' + e.d).indexOf(q) < 0) return;
+    n++;
+    var w = el('div'), dt = el('dt', '', e.t);
+    if (e.aka) dt.appendChild(el('small', '', e.aka));
+    w.appendChild(dt); w.appendChild(el('dd', '', e.d));
+    if (e.ex) w.appendChild(el('dd', 'ex', e.ex));
+    list.appendChild(w);
+  });
+  $('#lex-none').hidden = n > 0;
+}
+function openLex() {
+  stopAll(); setPlayUI(false);
+  lexFocus = document.activeElement;
+  $('#lex').hidden = false; $('main').inert = true; $('.top').inert = true;
+  document.documentElement.style.overflow = 'hidden';
+  renderLex();
+  $('#lex').scrollTop = 0;
+}
+function closeLex() {
+  $('#lex').hidden = true; $('main').inert = false; $('.top').inert = false;
+  document.documentElement.style.overflow = '';
+  if (lexFocus && lexFocus.focus) { try { lexFocus.focus(); } catch (e) {} }
+}
+
+/* ---------- branchements ---------- */
+function bind() {
+  $('#nav-home').addEventListener('click', function () { go('home'); });
+  $('#nav-lex').addEventListener('click', openLex);
+  $('#home-lex').addEventListener('click', openLex);
+  $('#home-start').addEventListener('click', function () { go(Object.keys(S.done).length ? firstTodo() : FLOW[0]); });
+  $('#home-reset').addEventListener('click', function () { S.done = {}; S.heard = {}; S.revealed = {}; S.best = null; Q = null; cardsBuilt = false; $('#cards').textContent = ''; save(); renderHome(); renderProg(); });
+  $('#pp').addEventListener('click', function () { if (isPlaying()) pause(); else play(); });
+  $('#back10').addEventListener('click', function () { P.started = true; seek(nowT() - 10); });
+  $('#speed').addEventListener('click', function () {
+    S.speed = SPEEDS[(SPEEDS.indexOf(S.speed) + 1) % SPEEDS.length]; save();
+    audio.playbackRate = S.speed; $('#speed').textContent = speedLabel();
+  });
+  var trk = $('#trk'), drag = false;
+  function at(ev) { var r = $('.rail', trk).getBoundingClientRect(); P.started = true; seek((ev.clientX - r.left) / r.width * P.L.duration); }
+  trk.addEventListener('pointerdown', function (ev) { if (!P.L) return; drag = true; try { trk.setPointerCapture(ev.pointerId); } catch (e) {} at(ev); });
+  trk.addEventListener('pointermove', function (ev) { if (drag && P.L) at(ev); });
+  trk.addEventListener('pointerup', function () { drag = false; });
+  trk.addEventListener('pointercancel', function () { drag = false; });
+  trk.addEventListener('keydown', function (ev) {
+    if (!P.L) return;
+    if (ev.key === 'ArrowLeft') { ev.preventDefault(); P.started = true; seek(nowT() - 5); }
+    if (ev.key === 'ArrowRight') { ev.preventDefault(); P.started = true; seek(nowT() + 5); }
+  });
+  $('#exo-open').addEventListener('click', function () { openExercises(true); });
+  $('#prev').addEventListener('click', function () { go(neighbor(cur, -1)); });
+  $('#next').addEventListener('click', function () { go(neighbor(cur, 1)); });
+  $('#dec-prev').addEventListener('click', function () { go(neighbor('decoder', -1)); });
+  $('#dec-next').addEventListener('click', function () { go(neighbor('decoder', 1)); });
+  $('#dec-play').addEventListener('click', function () { playCard('decoder'); });
+  $('#snd').addEventListener('click', function () { S.sound = !S.sound; save(); sndLabel(); if (!S.sound) { try { cardAudio.pause(); } catch (e) {} } });
+  $('#lex-x').addEventListener('click', closeLex);
+  $('#lex-q').addEventListener('input', renderLex);
+  var f = $('#lex-f');
+  [['tous', 'Tous'], ['argent', 'Argent'], ['equipe', 'Équipe'], ['temps', 'Temps']].forEach(function (p) {
+    var b = btn('', p[1]); b.setAttribute('aria-pressed', p[0] === lexFilter ? 'true' : 'false');
+    b.addEventListener('click', function () { lexFilter = p[0]; $$('button', f).forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); }); renderLex(); });
+    f.appendChild(b);
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && !$('#lex').hidden) closeLex();
+    if (ev.key === ' ' && isLesson(cur) && (ev.target === document.body || ev.target === document.documentElement)) { ev.preventDefault(); if (isPlaying()) pause(); else play(); }
+  });
+}
+var fitTimer = 0;
+window.addEventListener('resize', function () { clearTimeout(fitTimer); fitTimer = setTimeout(function () { if (isLesson(cur)) fitCaption(); }, 180); });
+function boot(saved) {
+  load();
+  if (saved && saved.S && typeof saved.S === 'object') Object.keys(S).forEach(function (k) { if (saved.S[k] != null) S[k] = saved.S[k]; });
+  if (SPEEDS.indexOf(S.speed) < 0) S.speed = 1;
+  typo(document.getElementById('app'));
+  bind();
+  $('#speed').textContent = speedLabel();
+  go(saved && saved.cur ? saved.cur : 'home');
+  if (location.hash === '#lexique') openLex();
+}
+boot({});
+})();
+</script>
+
+</body></html>

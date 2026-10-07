@@ -306,6 +306,35 @@ body.fm-noscroll{overflow:hidden}
     });
   }
 
+  // Page HTML de leçon qui signale sa fin (postMessage { type: 'formation:complete' },
+  // ex. le quiz final de doc-langage-dirigeants) : on coche la leçon sans render(),
+  // qui rechargerait l'iframe et ferait perdre l'écran de score au membre.
+  function markDoneFromDoc(fid, lid) {
+    var p = PROGRESS[fid] || {};
+    var lessons = (p.lessons || []).slice();
+    if (lessons.indexOf(lid) >= 0) return;
+    var dates = C.assign({}, p.lessonDates || {});
+    lessons.push(lid); dates[lid] = Date.now();
+    PROGRESS[fid] = C.assign({}, p, { lessons: lessons, lessonDates: dates });
+    var b = document.querySelector('.fm-done[data-act="toggle-done"]');
+    if (b && b.getAttribute('data-fid') === fid && b.getAttribute('data-lid') === lid) {
+      b.classList.add('is-done'); b.textContent = '✓ Terminée';
+    }
+    writeProgress(fid, { lessons: lessons, lessonDates: dates }).then(function () {
+      toast('Leçon terminée ✓');
+    }).catch(function (e) {
+      console.error(e); toast('Progression non enregistrée : ' + e.message, true);
+    });
+  }
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (!d || typeof d !== 'object' || d.type !== 'formation:complete') return;
+    var frame = document.querySelector('.fm-htmldoc iframe');
+    if (!frame || e.source !== frame.contentWindow) return;
+    var p = parseHash();
+    if (p.f && p.l) markDoneFromDoc(p.f, p.l);
+  });
+
   // Trace de lecture : première ouverture, dernière ouverture, nombre
   // d'ouvertures — ce que l'admin voit dans le builder (👁).
   function rememberLesson(fid, lid) {
