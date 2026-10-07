@@ -8,6 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script>
 if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}
 </script>
@@ -20,6 +21,9 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
      Trustpilot, URL du CTA — enregistrés via POST /api/site-config
      (Bearer admin), lus par les pages du site au chargement.
    · Pages : les 4 pages du tunnel « site » (aperçu, en ligne, gérer).
+   · Pages simples : pages d'info clients servies TELLES QUELLES sur
+     www.adrienemily.com/<adresse> (tunnel kind:'raw', sans tracking ni
+     indexation — voir serveRaw dans api/tunnel-render.js).
    · Domaines & migration : DNS à brancher + checklist (localStorage).
    Préfixe sw- partout : sales.css possède déjà .fs, .tabs, .funnel…
    (l'ancien hub admin-funnel-site.html est mort d'une collision .fs).
@@ -160,9 +164,28 @@ textarea.sw-in{min-height:110px;resize:vertical;line-height:1.6}
 .sw-save-in .st{font-size:12px;color:rgba(255,255,255,.55);flex:1;min-width:200px}
 .sw-save-in .st b{color:#fbbf24}
 .sw-save .swb-g{padding:10px 22px;font-size:13px}
-.sw-toast{position:fixed;bottom:74px;right:22px;z-index:70;background:#101018;border:1px solid rgba(52,211,153,.4);color:#fff;font-family:'Figtree',sans-serif;font-size:13px;font-weight:600;padding:12px 18px;border-radius:11px;box-shadow:0 12px 40px rgba(0,0,0,.5);display:none}
+.sw-toast{position:fixed;bottom:74px;right:22px;z-index:90;background:#101018;border:1px solid rgba(52,211,153,.4);color:#fff;font-family:'Figtree',sans-serif;font-size:13px;font-weight:600;padding:12px 18px;border-radius:11px;box-shadow:0 12px 40px rgba(0,0,0,.5);display:none}
 .sw-toast.err{border-color:rgba(239,68,68,.5)}
 .sw-toast.show{display:block}
+
+/* Pages simples */
+.sw-page button{font-size:11px;font-weight:700;color:rgba(255,255,255,.6);background:none;padding:4px 9px;border:1px solid rgba(255,255,255,.1);border-radius:6px;cursor:pointer;font-family:'Figtree',sans-serif}
+.sw-page button:hover{color:#fff;border-color:rgba(255,255,255,.3)}
+.sw-page.arch{opacity:.55}
+.sw-pill.click{cursor:pointer;border:none;font-family:'Figtree',sans-serif}
+.sw-modal{position:fixed;top:0;left:0;right:0;bottom:0;z-index:80;background:rgba(0,0,0,.6);display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;box-sizing:border-box}
+.sw-modal.open{display:flex}
+.sw-modal-in{width:100%;max-width:780px;background:var(--bg2,#101018);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:20px 22px;box-sizing:border-box}
+.sw-modal-in h2{font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:800;margin-bottom:4px}
+.sw-slug{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sw-slug span{font-family:var(--font-m,monospace);font-size:12px;color:rgba(255,255,255,.45);white-space:nowrap}
+.sw-slug .sw-in{flex:1;min-width:160px;width:auto;font-family:var(--font-m,monospace)}
+.sw-hint{display:block;font-size:11.5px;color:rgba(255,255,255,.45);margin-top:6px;min-height:15px;line-height:1.5}
+.sw-hint.err{color:#fca5a5}
+.sw-code-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sw-code-h .sw-lbl{flex:1}
+textarea.sw-code{min-height:340px;font-family:var(--font-m,monospace);font-size:12px;line-height:1.5;white-space:pre;overflow:auto;tab-size:2}
+.sw-modal-f{display:flex;gap:8px;justify-content:flex-end;align-items:center;margin-top:16px;flex-wrap:wrap}
 
 .sw-locked{text-align:center;padding:120px 20px;color:rgba(255,255,255,.55);font-size:14px}
 .sw-empty{background:var(--bg2,#101018);border:1px dashed rgba(255,255,255,.14);border-radius:14px;padding:26px;text-align:center;color:rgba(255,255,255,.5);font-size:13px;line-height:1.7}
@@ -187,6 +210,7 @@ textarea.sw-in{min-height:110px;resize:vertical;line-height:1.6}
   <div class="sw-tabs">
     <button class="sw-tab on" data-action="tab" data-tab="contenu">🎨 Contenu du site</button>
     <button class="sw-tab" data-action="tab" data-tab="pages">📄 Pages du site</button>
+    <button class="sw-tab" data-action="tab" data-tab="raw">🔗 Pages simples</button>
     <button class="sw-tab" data-action="tab" data-tab="migration">🌐 Domaines &amp; migration</button>
   </div>
 
@@ -258,6 +282,15 @@ textarea.sw-in{min-height:110px;resize:vertical;line-height:1.6}
     <div class="sw-guide" style="margin-top:14px" id="pagesGuide"></div>
   </div>
 
+  <!-- ═══ ONGLET PAGES SIMPLES ═══ -->
+  <div id="tab-raw" style="display:none">
+    <div class="sw-card">
+      <h2>🔗 Pages simples <span style="flex:1"></span><button class="swb swb-p swb-s" data-action="rawNew">＋ Nouvelle page</button></h2>
+      <div class="sub">Pages d'information à envoyer aux clients (liens d'onboarding, ressources de l'accompagnement…), servies sur <code>www.adrienemily.com/&lt;adresse&gt;</code>. Le HTML part tel quel : aucun tracking, aucun pixel, aucun opt-in, jamais indexé par Google. Un bloc copié depuis Systeme.io (sans <code>&lt;html&gt;</code>) fonctionne directement.</div>
+      <div class="sw-pages" id="rawList"><div class="sw-empty">Chargement…</div></div>
+    </div>
+  </div>
+
   <!-- ═══ ONGLET DOMAINES & MIGRATION ═══ -->
   <div id="tab-migration" style="display:none">
     <div class="sw-doms" id="domains"></div>
@@ -305,6 +338,25 @@ textarea.sw-in{min-height:110px;resize:vertical;line-height:1.6}
   </div>
 </div>
 <div class="sw-toast" id="toast"></div>
+
+<!-- Éditeur d'une page simple -->
+<div class="sw-modal" id="rawModal">
+  <div class="sw-modal-in">
+    <h2 id="rawTitle">Nouvelle page</h2>
+    <span class="sw-lbl">Nom (titre de l'onglet du navigateur)</span>
+    <input class="sw-in" id="rawName" placeholder="Onboarding Elite Phénix">
+    <span class="sw-lbl">Adresse</span>
+    <div class="sw-slug"><span id="rawHost">www.adrienemily.com/</span><input class="sw-in" id="rawSlug" placeholder="onboarding-elite-phenix"><button type="button" class="swb swb-o swb-s" data-action="rawSuffix" title="Ajoute 4 caractères aléatoires : le lien devient impossible à deviner">🎲 Suffixe aléatoire</button></div>
+    <span class="sw-hint" id="rawHint"></span>
+    <label class="sw-chk"><input type="checkbox" id="rawLive"> En ligne (décoché : la page répond « introuvable », l'aperçu reste possible)</label>
+    <div class="sw-code-h"><span class="sw-lbl">Code HTML</span><label class="swb swb-o swb-s" style="margin-top:6px">📄 Déposer un .html<input type="file" id="rawFile" accept=".html,.htm,text/html" style="display:none"></label></div>
+    <textarea class="sw-in sw-code" id="rawHtml" spellcheck="false"></textarea>
+    <div class="sw-modal-f">
+      <button type="button" class="swb swb-o" data-action="rawCancel">Annuler</button>
+      <button type="button" class="swb swb-g" data-action="rawSave" id="rawSaveBtn">💾 Enregistrer et publier</button>
+    </div>
+  </div>
+</div>
 
 <script>
 (function () {
@@ -454,7 +506,7 @@ function loadPages() {
       var t = doc.data() || {};
       if (t.archived === true || site) return;
       var steps = Array.isArray(t.steps) ? t.steps : [];
-      if (t.kind === 'funnel' || t.kind === 'pages') return;
+      if (t.kind === 'funnel' || t.kind === 'pages' || t.kind === 'raw') return;
       var isSite = t.kind === 'site' || /site/i.test(String(t.slug || '')) || /site/i.test(String(t.name || ''))
         || steps.some(function (s) { return s && (s.slug === 'about' || s.slug === 'contacts-page'); });
       if (isSite) site = { id: doc.id, name: t.name, status: t.status, homeStepId: t.homeStepId || '', steps: steps.filter(function (s) { return s && s.id && s.archived !== true; }) };
@@ -501,6 +553,348 @@ function renderPages(site) {
       + '<a href="admin-tunnels.html?id=' + esc(site.id) + '">⚙️ Gérer</a></div>';
   });
   $('pagesList').innerHTML = h;
+}
+
+/* ─── Pages simples (tunnel kind:'raw') ───
+   Un document `tunnels` dédié (« Pages simples »), une étape = une page,
+   une seule variante `a`. Le HTML est déposé dans Storage au même endroit
+   que les pages de tunnel (tunnels/<id>/<étape>/a/index.html) et servi TEL
+   QUEL par api/tunnel-render.js (serveRaw) : pas de runtime, pas de pixel,
+   noindex. Les écritures passent par une transaction sur le tableau steps.
+   Une adresse doit être libre sur tout le domaine : étapes non archivées de
+   tous les tunnels, redirections des anciennes URL, chemins réservés. */
+var storage = firebase.storage();
+var RAW_DOC = null;      // { id, slug, name, kind, steps }
+var RAW_ALL = [];        // tunnels non archivés (slug du document à créer)
+var RAW_EDIT = null;     // { stepId, isNew, html0, snap, loading, saving, slugTouched, suffix, fileName }
+var RAW_RESERVED = { 'api': 1, 't': 1, 'f': 1, 'g': 1, 'index': 1 };
+
+function rawSlugify(s) {
+  var v = String(s || '');
+  try { v = v.normalize('NFD').replace(/[̀-ͯ]/g, ''); } catch (e) {}
+  return v.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+}
+function rawRand(n) {
+  var chars = 'abcdefghijkmnpqrstuvwxyz23456789', out = '', buf = null;
+  try { buf = new Uint8Array(n); window.crypto.getRandomValues(buf); } catch (e) { buf = null; }
+  for (var i = 0; i < n; i++) out += chars.charAt((buf ? buf[i] : Math.floor(Math.random() * 256)) % chars.length);
+  return out;
+}
+function rawUrl(slug) { return 'https://' + PRIMARY_HOST + '/' + slug; }
+function rawFind(id) {
+  var steps = RAW_DOC ? RAW_DOC.steps : [];
+  for (var i = 0; i < steps.length; i++) if (steps[i] && steps[i].id === id) return steps[i];
+  return null;
+}
+function rawHasHtml(s) {
+  return (s.variants || []).some(function (v) { return v && v.id === 'a' && v.html && v.html.path; });
+}
+
+function loadRaw() {
+  return db.collection('tunnels').get().then(function (snap) {
+    RAW_ALL = []; RAW_DOC = null;
+    snap.forEach(function (doc) {
+      var t = doc.data() || {};
+      if (t.archived === true) return;
+      var row = { id: doc.id, name: t.name || t.slug || '', slug: t.slug || '', kind: t.kind || 'funnel', steps: Array.isArray(t.steps) ? t.steps : [] };
+      RAW_ALL.push(row);
+      if (row.kind === 'raw' && !RAW_DOC) RAW_DOC = row;
+    });
+    renderRaw();
+  })['catch'](function (e) {
+    $('rawList').innerHTML = '<div class="sw-empty">Chargement impossible : ' + esc(e && e.message) + '</div>';
+  });
+}
+
+function rawRow(s, archived) {
+  var live = s.status === 'live';
+  var id = escA(s.id);
+  var h = '<div class="sw-page' + (archived ? ' arch' : '') + '"><span class="em">🔗</span><b>' + esc(s.name || s.slug) + '</b><span class="path">/' + esc(s.slug) + '</span>';
+  if (archived) h += '<span class="sw-pill draft">Archivée</span>';
+  else h += '<button type="button" class="sw-pill click ' + (live ? 'live' : 'draft') + '" data-action="rawToggle" data-id="' + id + '" title="Cliquer pour basculer">' + (live ? 'En ligne' : 'Hors ligne') + '</button>';
+  if (!archived && !rawHasHtml(s)) h += '<span class="sw-pill miss">Sans contenu</span>';
+  h += '<span class="sp"></span>';
+  if (archived) return h + '<button type="button" data-action="rawRestore" data-id="' + id + '">↺ Restaurer</button></div>';
+  if (live) {
+    h += '<button type="button" data-action="rawCopy" data-id="' + id + '">📋 Copier le lien</button>';
+    h += '<a href="' + escA(rawUrl(s.slug)) + '" target="_blank" rel="noopener">🌍 Ouvrir ↗</a>';
+  } else {
+    h += '<a href="/t/' + escA(s.slug) + '" target="_blank" rel="noopener">👁 Aperçu</a>';
+  }
+  h += '<button type="button" data-action="rawEdit" data-id="' + id + '">✏️ Modifier</button>';
+  h += '<button type="button" data-action="rawArchive" data-id="' + id + '">🗄 Archiver</button>';
+  return h + '</div>';
+}
+function renderRaw() {
+  var steps = RAW_DOC ? RAW_DOC.steps.filter(function (s) { return s && s.id; }) : [];
+  var act = steps.filter(function (s) { return s.archived !== true; });
+  var arch = steps.filter(function (s) { return s.archived === true; });
+  if (!steps.length) {
+    $('rawList').innerHTML = '<div class="sw-empty">Aucune page pour l\'instant.<br>« ＋ Nouvelle page », colle le HTML, choisis l\'adresse : le lien est prêt à envoyer.</div>';
+    return;
+  }
+  var h = '';
+  if (!act.length) h += '<div class="sw-empty">Aucune page active.</div>';
+  act.forEach(function (s) { h += rawRow(s, false); });
+  if (arch.length) {
+    h += '<span class="sw-lbl" style="margin-top:14px">Archivées</span>';
+    arch.forEach(function (s) { h += rawRow(s, true); });
+  }
+  $('rawList').innerHTML = h;
+}
+
+/* Adresse libre ? → message d'erreur ou null (lecture fraîche, pas le cache). */
+function rawCheckSlug(slug, stepId) {
+  if (!/^[a-z0-9-]{1,40}$/.test(slug)) return Promise.resolve('Adresse invalide : lettres minuscules, chiffres et tirets uniquement.');
+  if (RAW_RESERVED[slug]) return Promise.resolve('« /' + slug + ' » est réservé.');
+  return Promise.all([db.collection('tunnels').get(), db.collection('_config').doc('tunnels').get()]).then(function (res) {
+    var clash = null;
+    res[0].forEach(function (doc) {
+      var t = doc.data() || {};
+      if (clash || t.archived === true) return;
+      (Array.isArray(t.steps) ? t.steps : []).forEach(function (s) {
+        if (!clash && s && s.archived !== true && s.slug === slug && s.id !== stepId) clash = t.name || t.slug || 'un autre tunnel';
+      });
+    });
+    if (clash) return '« /' + slug + ' » est déjà utilisé par « ' + clash + ' ».';
+    var cfg = res[1].exists ? (res[1].data() || {}) : {};
+    var redir = (Array.isArray(cfg.redirects) ? cfg.redirects : []).filter(function (r) {
+      return r && String(r.from || '').replace(/^\/+|\/+$/g, '').toLowerCase() === slug;
+    })[0];
+    if (redir) return '« /' + slug + ' » est une ancienne adresse redirigée vers ' + redir.to + ' (Domaines & migration) : choisis une autre adresse.';
+    return null;
+  });
+}
+
+function ensureRawDoc() {
+  if (RAW_DOC) return Promise.resolve(RAW_DOC.id);
+  var slug = 'pages-simples', n = 2;
+  while (RAW_ALL.some(function (t) { return t.slug === slug; })) slug = 'pages-simples-' + (n++);
+  var doc = {
+    name: 'Pages simples', slug: slug, kind: 'raw', status: 'live', archived: false, homeStepId: '',
+    settings: { host: PRIMARY_HOST, trackingSource: 'meta', pixelId: '', leadType: '', defaultChannel: '', bookingType: '', requiredFields: '', noindex: true, faviconUrl: '', ogImage: '', headHtml: '', notes: 'Pages d\'information clients servies telles quelles (Site & pages → Pages simples) : aucun tracking, noindex.' },
+    steps: [], assets: [],
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    createdBy: (firebase.auth().currentUser || {}).uid || ''
+  };
+  return db.collection('tunnels').add(doc).then(function (ref) {
+    RAW_DOC = { id: ref.id, name: doc.name, slug: slug, kind: 'raw', steps: [] };
+    RAW_ALL.push(RAW_DOC);
+    return ref.id;
+  });
+}
+
+/* Modification du tableau steps en transaction. fn(steps) modifie le
+   tableau sur place et retourne un message d'erreur ou null. */
+function rawMutate(fn) {
+  return ensureRawDoc().then(function (docId) {
+    var ref = db.collection('tunnels').doc(docId);
+    return db.runTransaction(function (tx) {
+      return tx.get(ref).then(function (snap) {
+        var steps = (snap.exists && Array.isArray((snap.data() || {}).steps)) ? snap.data().steps : [];
+        var err = fn(steps);
+        if (err) throw new Error(err);
+        tx.update(ref, { steps: steps, status: 'live', updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        return steps;
+      });
+    });
+  }).then(function (steps) { RAW_DOC.steps = steps; renderRaw(); return steps; });
+}
+function rawStepIn(steps, id) {
+  for (var i = 0; i < steps.length; i++) if (steps[i] && steps[i].id === id) return steps[i];
+  return null;
+}
+
+/* ─── Éditeur ─── */
+function rawHint(msg, isErr) { var h = $('rawHint'); h.textContent = msg || ''; h.className = 'sw-hint' + (isErr ? ' err' : ''); }
+function rawSnapshot() { return JSON.stringify([$('rawName').value, $('rawSlug').value, $('rawLive').checked, $('rawHtml').value]); }
+function rawFetchSource(stepId) {
+  return firebase.auth().currentUser.getIdToken().then(function (tok) {
+    return fetch('/api/tunnel-source?t=' + encodeURIComponent(RAW_DOC.id) + '&s=' + encodeURIComponent(stepId) + '&v=a', { headers: { 'Authorization': 'Bearer ' + tok } });
+  }).then(function (r) {
+    return r.text().then(function (t) {
+      if (r.status !== 200) { var m = t; try { m = JSON.parse(t).error || t; } catch (e) {} throw new Error(m || ('HTTP ' + r.status)); }
+      return t;
+    });
+  });
+}
+function rawOpen(stepId) {
+  var s = stepId ? rawFind(stepId) : null;
+  if (stepId && !s) { toast('Page introuvable', true); return; }
+  var ed = { stepId: s ? s.id : 'st_' + Date.now().toString(36) + rawRand(5), isNew: !s, html0: '', snap: '', loading: false, saving: false, slugTouched: !!s, suffix: '', fileName: '' };
+  RAW_EDIT = ed;
+  $('rawTitle').textContent = s ? 'Modifier la page' : 'Nouvelle page';
+  $('rawHost').textContent = PRIMARY_HOST + '/';
+  $('rawName').value = s ? (s.name || '') : '';
+  $('rawSlug').value = s ? (s.slug || '') : '';
+  $('rawLive').checked = s ? s.status === 'live' : true;
+  $('rawHtml').value = '';
+  $('rawHtml').placeholder = 'Colle ici le code HTML : page complète ou bloc copié depuis Systeme.io.';
+  $('rawSaveBtn').disabled = false;
+  $('rawSaveBtn').textContent = '💾 Enregistrer et publier';
+  rawHint(s ? 'Lien : ' + rawUrl(s.slug) : '', false);
+  $('rawModal').className = 'sw-modal open';
+  ed.snap = rawSnapshot();
+  if (s && rawHasHtml(s)) {
+    ed.loading = true;
+    $('rawSaveBtn').disabled = true;
+    $('rawHtml').placeholder = 'Chargement du code…';
+    rawFetchSource(s.id).then(function (html) {
+      if (RAW_EDIT !== ed) return;
+      ed.html0 = html; ed.loading = false;
+      $('rawHtml').value = html;
+      $('rawSaveBtn').disabled = false;
+      ed.snap = rawSnapshot();
+    })['catch'](function (e) {
+      if (RAW_EDIT !== ed) return;
+      rawHint('Code illisible : ' + (e && e.message) + ' — ferme et réessaie.', true);
+    });
+  }
+  setTimeout(function () { try { $(s ? 'rawHtml' : 'rawName').focus(); } catch (e) {} }, 30);
+}
+function rawClose(force) {
+  var ed = RAW_EDIT;
+  if (!force && ed && !ed.loading && rawSnapshot() !== ed.snap && !window.confirm('Fermer sans enregistrer les modifications ?')) return;
+  RAW_EDIT = null;
+  $('rawModal').className = 'sw-modal';
+}
+function rawInput(el) {
+  var ed = RAW_EDIT; if (!ed) return;
+  if (el.id === 'rawName' && !ed.slugTouched) $('rawSlug').value = rawSlugify(el.value);
+  if (el.id === 'rawSlug') ed.slugTouched = true;
+  var slug = rawSlugify($('rawSlug').value);
+  rawHint(slug ? 'Lien : ' + rawUrl(slug) : '', false);
+}
+function rawSuffix() {
+  var ed = RAW_EDIT; if (!ed) return;
+  var slug = rawSlugify($('rawSlug').value || $('rawName').value);
+  if (ed.suffix && slug.slice(-(ed.suffix.length + 1)) === '-' + ed.suffix) slug = slug.slice(0, -(ed.suffix.length + 1));
+  ed.suffix = rawRand(4);
+  slug = (slug ? slug.slice(0, 35) + '-' : '') + ed.suffix;
+  $('rawSlug').value = slug;
+  ed.slugTouched = true;
+  rawHint('Lien : ' + rawUrl(slug), false);
+}
+function rawReadFile(input) {
+  var file = input.files && input.files[0];
+  if (!file || !RAW_EDIT) return;
+  var ed = RAW_EDIT;
+  var reader = new FileReader();
+  reader.onload = function () {
+    if (RAW_EDIT !== ed) return;
+    $('rawHtml').value = String(reader.result || '');
+    ed.fileName = file.name;
+    if (!$('rawName').value.trim()) {
+      var m = /<title>([\s\S]*?)<\/title>/i.exec($('rawHtml').value);
+      $('rawName').value = m ? m[1].trim() : file.name.replace(/\.html?$/i, '');
+      rawInput($('rawName'));
+    }
+    toast('Fichier chargé : ' + file.name + ' — vérifie puis enregistre');
+  };
+  reader.onerror = function () { toast('Lecture du fichier impossible', true); };
+  reader.readAsText(file, 'utf-8');
+  input.value = '';
+}
+function rawSave() {
+  var ed = RAW_EDIT; if (!ed || ed.loading || ed.saving) return;
+  var name = $('rawName').value.trim();
+  var slug = rawSlugify($('rawSlug').value);
+  var live = $('rawLive').checked;
+  var html = $('rawHtml').value;
+  $('rawSlug').value = slug;
+  if (!name) { rawHint('Donne un nom à la page.', true); return; }
+  if (!slug) { rawHint('Choisis une adresse.', true); return; }
+  if (!html.trim() || html.indexOf('<') < 0) { rawHint('Colle le code HTML de la page.', true); return; }
+  if (html.length > 4 * 1024 * 1024) { rawHint('Page trop lourde (4 Mo max) : héberge les images et vidéos ailleurs.', true); return; }
+  var s0 = ed.isNew ? null : rawFind(ed.stepId);
+  if (s0 && s0.slug && slug !== s0.slug && !window.confirm('Changer l\'adresse casse l\'ancien lien /' + s0.slug + ', peut-être déjà envoyé à des clients. Continuer ?')) return;
+  var htmlChanged = ed.isNew || html !== ed.html0;
+  var meta = null;
+  var uid = (firebase.auth().currentUser || {}).uid || '';
+  var btn = $('rawSaveBtn');
+  ed.saving = true; btn.disabled = true; btn.textContent = 'Enregistrement…';
+  rawHint('Vérification de l\'adresse…', false);
+  rawCheckSlug(slug, ed.stepId).then(function (err) {
+    if (err) throw new Error(err);
+    return ensureRawDoc();
+  }).then(function (docId) {
+    if (!htmlChanged) return null;
+    rawHint('Envoi du code…', false);
+    var version = Date.now();
+    var path = 'tunnels/' + docId + '/' + ed.stepId + '/a/index.html';
+    var blob = new Blob([html], { type: 'text/html; charset=utf-8' });
+    return storage.ref(path).put(blob, { contentType: 'text/html; charset=utf-8', cacheControl: 'no-cache', customMetadata: { version: String(version) } }).then(function (snap) {
+      return snap.ref.getDownloadURL().then(function (url) {
+        meta = { path: path, url: url, version: version, size: html.length, updatedAt: new Date().toISOString(), fileName: ed.fileName || '' };
+      });
+    });
+  }).then(function () {
+    return rawMutate(function (steps) {
+      var s = rawStepIn(steps, ed.stepId);
+      if (!s) {
+        if (!ed.isNew) return 'Page introuvable : recharge la page.';
+        s = { id: ed.stepId, name: '', slug: '', type: 'page', status: 'draft', next: { mode: 'none' }, seo: { title: '', description: '', ogImage: '' }, pixelEvent: '', noindex: true, headHtml: '', variants: [], createdAt: new Date().toISOString(), createdBy: uid };
+        steps.push(s);
+      }
+      s.name = name; s.slug = slug; s.status = live ? 'live' : 'draft';
+      if (meta) {
+        if (!Array.isArray(s.variants)) s.variants = [];
+        var v = s.variants.filter(function (x) { return x && x.id === 'a'; })[0];
+        if (!v) { v = { id: 'a', label: 'Variante A', weight: 100, status: 'live', previews: [], html: null }; s.variants.unshift(v); }
+        v.html = meta; v.status = 'live'; v.archived = false;
+      }
+      s.updatedAt = new Date().toISOString(); s.updatedBy = uid;
+      return null;
+    });
+  }).then(function () {
+    rawClose(true);
+    toast(live ? '✅ Page publiée — en ligne d\'ici une minute' : '✅ Page enregistrée, hors ligne');
+  })['catch'](function (e) {
+    ed.saving = false; btn.disabled = false; btn.textContent = '💾 Enregistrer et publier';
+    rawHint((e && e.message) || 'Erreur', true);
+  });
+}
+
+/* ─── Actions de la liste ─── */
+function rawCopy(el) {
+  var s = rawFind(el.getAttribute('data-id')); if (!s) return;
+  var url = rawUrl(s.slug);
+  function done() { el.textContent = 'Copié ✓'; setTimeout(function () { el.textContent = '📋 Copier le lien'; }, 1400); }
+  try { navigator.clipboard.writeText(url).then(done, function () { window.prompt('Lien de la page :', url); }); }
+  catch (e) { window.prompt('Lien de la page :', url); }
+}
+function rawToggle(id) {
+  var s = rawFind(id); if (!s) return;
+  var goLive = s.status !== 'live';
+  if (goLive && !rawHasHtml(s)) { toast('Ajoute d\'abord le contenu (✏️ Modifier)', true); return; }
+  if (!goLive && !window.confirm('Mettre « ' + (s.name || s.slug) + ' » hors ligne ? Le lien répondra « introuvable ».')) return;
+  rawMutate(function (steps) {
+    var x = rawStepIn(steps, id); if (!x) return 'Page introuvable : recharge la page.';
+    x.status = goLive ? 'live' : 'draft'; x.updatedAt = new Date().toISOString();
+    return null;
+  }).then(function () { toast(goLive ? '✅ En ligne d\'ici une minute' : 'Page hors ligne'); }, function (e) { toast('❌ ' + (e && e.message), true); });
+}
+function rawArchive(id) {
+  var s = rawFind(id); if (!s) return;
+  if (!window.confirm('Archiver « ' + (s.name || s.slug) + ' » ? Le lien cesse de fonctionner ; la page reste restaurable.')) return;
+  rawMutate(function (steps) {
+    var x = rawStepIn(steps, id); if (!x) return 'Page introuvable : recharge la page.';
+    x.archived = true; x.status = 'draft'; x.archivedAt = new Date().toISOString();
+    x.archivedBy = (firebase.auth().currentUser || {}).uid || '';
+    return null;
+  }).then(function () { toast('Page archivée'); }, function (e) { toast('❌ ' + (e && e.message), true); });
+}
+function rawRestore(id) {
+  var s = rawFind(id); if (!s) return;
+  rawCheckSlug(s.slug, s.id).then(function (err) {
+    if (err) throw new Error(err + ' Restauration impossible.');
+    return rawMutate(function (steps) {
+      var x = rawStepIn(steps, id); if (!x) return 'Page introuvable : recharge la page.';
+      x.archived = false; x.status = 'draft'; x.restoredAt = new Date().toISOString();
+      return null;
+    });
+  }).then(function () { toast('Page restaurée, hors ligne : bascule-la en ligne quand tu veux'); }, function (e) { toast('❌ ' + (e && e.message), true); });
 }
 
 /* ─── Domaines & checklist ─── */
@@ -739,6 +1133,7 @@ function saveRedirects() {
 /* ─── Événements (délégation) ─── */
 document.addEventListener('input', function (ev) {
   var el = ev.target;
+  if (el.id === 'rawName' || el.id === 'rawSlug') { rawInput(el); return; }
   if (el.hasAttribute && el.hasAttribute('data-cfg')) {
     readField(el);
     if (el.getAttribute('data-cfg') === 'ctaUrl' && $('ctaTest')) $('ctaTest').href = cfgGet('ctaUrl') || '#';
@@ -762,6 +1157,7 @@ document.addEventListener('change', function (ev) {
   if (el.hasAttribute && el.hasAttribute('data-rf')) { readRedirect(el); return; }
   if (el.hasAttribute && el.hasAttribute('data-inv')) { readInventory(el); return; }
   if (el.id === 'invFilter') { renderInventory(); return; }
+  if (el.id === 'rawFile') { rawReadFile(el); return; }
   if (el.hasAttribute && el.hasAttribute('data-cfg') && el.type === 'checkbox') { readField(el); refreshDirty(); }
   if (el.hasAttribute && el.hasAttribute('data-tem-f') && el.tagName === 'SELECT') {
     var i = Number(el.getAttribute('data-i'));
@@ -777,10 +1173,19 @@ document.addEventListener('click', function (ev) {
     var tabs = document.querySelectorAll('.sw-tab');
     for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('on');
     el.classList.add('on');
-    ['contenu', 'pages', 'migration'].forEach(function (k) { $('tab-' + k).style.display = k === el.getAttribute('data-tab') ? '' : 'none'; });
+    ['contenu', 'pages', 'raw', 'migration'].forEach(function (k) { $('tab-' + k).style.display = k === el.getAttribute('data-tab') ? '' : 'none'; });
     return;
   }
   if (act === 'save') { saveConfig(); return; }
+  if (act === 'rawNew') { rawOpen(null); return; }
+  if (act === 'rawEdit') { rawOpen(el.getAttribute('data-id')); return; }
+  if (act === 'rawCancel') { rawClose(false); return; }
+  if (act === 'rawSave') { rawSave(); return; }
+  if (act === 'rawSuffix') { rawSuffix(); return; }
+  if (act === 'rawCopy') { rawCopy(el); return; }
+  if (act === 'rawToggle') { rawToggle(el.getAttribute('data-id')); return; }
+  if (act === 'rawArchive') { rawArchive(el.getAttribute('data-id')); return; }
+  if (act === 'rawRestore') { rawRestore(el.getAttribute('data-id')); return; }
   if (act === 'revert') {
     if (!window.confirm('Annuler toutes les modifications non enregistrées ?')) return;
     CFG = JSON.parse(SAVED); fillForm(); refreshDirty(); return;
@@ -838,9 +1243,13 @@ document.addEventListener('error', function (ev) {
   if (el && el.tagName === 'IMG' && el.hasAttribute('data-th')) el.style.visibility = 'hidden';
 }, true);
 
+document.addEventListener('keydown', function (ev) {
+  if (ev.key === 'Escape' && RAW_EDIT) rawClose(false);
+});
+
 /* Garde-fou : modifications non enregistrées. */
 window.addEventListener('beforeunload', function (ev) {
-  if (CFG && JSON.stringify(CFG) !== SAVED) { ev.preventDefault(); ev.returnValue = ''; }
+  if ((CFG && JSON.stringify(CFG) !== SAVED) || (RAW_EDIT && !RAW_EDIT.loading && rawSnapshot() !== RAW_EDIT.snap)) { ev.preventDefault(); ev.returnValue = ''; }
 });
 
 /* ═══ BOOT ═══ */
@@ -853,6 +1262,7 @@ firebase.auth().onAuthStateChanged(function (u) {
   renderChecklist();
   loadConfig()['catch'](function (e) { toast('❌ Config illisible : ' + (e && e.message), true); });
   loadPages();
+  loadRaw();
   loadRedirects();
   loadInventory();
 });

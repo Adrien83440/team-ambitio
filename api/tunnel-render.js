@@ -19,6 +19,8 @@
 //   4. injecte dans le <head> : charset + viewport s'ils manquent, la
 //      config `window.ALTEO_TUNNEL` et tunnel-runtime.js EN LIGNE (aucune
 //      requête supplémentaire) — beacon, pixel, provenance, opt-in.
+//   Exception : les « Pages simples » (tunnel kind:'raw') sautent 2 et 4 —
+//   HTML servi tel quel, sans mesure, noindex (voir serveRaw).
 //
 // Cache CDN : une étape à variante unique est cachée 60 s à l'edge Vercel
 // (stale-while-revalidate 10 min) ; avec plusieurs variantes la réponse
@@ -228,6 +230,47 @@ function page(res, status, title, text, extraHeaders) {
     + '<body><div class="w"><div><h1>' + escapeHtml(title) + '</h1><p>' + escapeHtml(text) + '</p></div></div></body></html>');
 }
 
+/* ── Pages simples (tunnel `kind:'raw'`, onglet « Pages simples » de
+   admin-site.html, 10/2026) ───────────────────────────────────────────────
+   Pages d'information envoyées aux clients (liens d'onboarding…) : servies
+   TELLES QUELLES. Aucun runtime, aucun pixel, aucun A/B, aucun cookie, aucune
+   réécriture SEO — et jamais indexées (X-Robots-Tag). Seule la variante `a`
+   existe. Un fragment (bloc collé depuis Systeme.io, sans <html>) reçoit le
+   squelette minimal : doctype, charset, viewport, titre = nom de la page. */
+function wrapRaw(html, title) {
+  if (/<html[\s>]|<!doctype/i.test(html)) return html;
+  return '<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">'
+    + '<meta name="viewport" content="width=device-width,initial-scale=1">'
+    + '<meta name="robots" content="noindex,nofollow">'
+    + '<title>' + escapeHtml(title) + '</title>'
+    + '<style>html,body{margin:0;padding:0}body{overflow-x:hidden}</style>'
+    + '</head><body>' + html + '</body></html>';
+}
+
+async function serveRaw(req, res, step, preview) {
+  const variant = step.variants.filter(function (v) {
+    return v.id === 'a' && v.html && v.html.path && !v.archived;
+  })[0];
+  if (!variant) {
+    page(res, 404, 'Page en préparation', 'Cette page n’a pas encore de contenu publié.');
+    return;
+  }
+  let html;
+  try {
+    html = await loadHtml(variant.html.path, variant.html.version || 0);
+  } catch (e) {
+    console.error('[tunnel-render] lecture Storage (page simple) :', variant.html.path, e && e.message);
+    page(res, 503, 'Un instant…', 'La page arrive. Rechargez dans quelques secondes.', { 'Retry-After': '5' });
+    return;
+  }
+  res.status(200);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+  res.setHeader('Cache-Control', preview ? 'private, no-store' : 'public, max-age=0, s-maxage=60, stale-while-revalidate=600');
+  res.end(req.method === 'HEAD' ? '' : wrapRaw(html, step.name || step.slug));
+}
+
 module.exports = async (req, res) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.status(405).end();
@@ -294,6 +337,7 @@ module.exports = async (req, res) => {
     return;
   }
   const tunnel = hit.tunnel, step = hit.step;
+  if (tunnel.kind === 'raw') { await serveRaw(req, res, step, preview); return; }
   const forced = Reg.cleanSlug(url.searchParams.get('v'), 20);
   /* Une variante archivée (test A/B terminé) n'est jamais servie au public ;
      en aperçu, seul `?v=<id>` explicite permet encore de la revoir. */
