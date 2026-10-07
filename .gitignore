@@ -1,7 +1,14 @@
 # Dépendances installées localement — jamais versionnées.
 # Functions/ a besoin de ses node_modules sur la machine pour que le CLI
 # Firebase puisse lire les triggers avant de déployer.
+# Le repo vit dans ~/Documents, synchronisé par iCloud Drive : chaque lecture
+# d'un fichier synchronisé passe par fileproviderd (~120 ms par fichier), ce
+# qui faisait dépasser au CLI son délai d'analyse de 10 s. Les node_modules
+# réels sont donc dans `node_modules.nosync/` (suffixe ignoré par iCloud) et
+# `node_modules` n'est qu'un lien symbolique vers lui (07/10/2026).
 node_modules/
+node_modules
+node_modules.nosync/
 
 # Genere par l'installation locale. Non versionne volontairement : les
 # fonctions sont deployees depuis toujours sans lockfile, en ajouter un
