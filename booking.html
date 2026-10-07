@@ -260,6 +260,7 @@ body.bk-embed .bk-progress{position:relative}
 .bk-quota-btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
 .bk-quota-btn-ghost:hover{background:var(--primary-pale);color:var(--text)}
 </style>
+<script src="legal-footer.js"></script>
 </head>
 <body>
 
@@ -547,6 +548,22 @@ function goStep(n) {
   // renderForm() reconstruit le formulaire à chaque passage : recOnStep4()
   // vient après prefillFromForm() pour voir l'email éventuellement pré-rempli.
   if (n === 4) { renderSummary(); renderForm(); prefillFromForm(); recOnStep4(); }
+  bkLegalSync();
+}
+
+/* Ligne légale (legal-footer.js, liens réglés dans Site & pages) : pages
+   publiques de prise de RDV seulement — jamais en iframe (la page hôte a
+   déjà ses liens), jamais pour un RDV coaching (client en accompagnement). */
+function bkLegalSync() {
+  if (!window.AlteoLegalFooter) return;
+  var coaching = false;
+  if (S.selType) coaching = S.selType.isCoaching === true;
+  else if (S.lockPerson) {
+    var pt = (S.types || []).filter(function(t) { return (S.lockPerson.types || []).indexOf(t.id) >= 0; });
+    coaching = pt.length > 0 && pt.every(function(t) { return t.isCoaching === true; });
+  }
+  if (_embedMode || coaching) window.AlteoLegalFooter.hide();
+  else window.AlteoLegalFooter.mount();
 }
 
 /* ── INFO PANEL (left side) ── */
@@ -911,6 +928,7 @@ function initBooking() {
   }
   renderTypeCards();
   setProgress(1);
+  bkLegalSync();
 }
 
 /* ═══════════════════════════════════════════════════

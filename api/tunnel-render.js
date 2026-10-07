@@ -21,6 +21,10 @@
 //      requête supplémentaire) — beacon, pixel, provenance, opt-in.
 //   Exception : les « Pages simples » (tunnel kind:'raw') sautent 2 et 4 —
 //   HTML servi tel quel, sans mesure, noindex (voir serveRaw).
+//   5. liens légaux (api/_legal.js) : CGV / mentions / confidentialité
+//      pointent toujours vers les URL réglées dans Site & pages ; une page
+//      publique sans aucun lien légal reçoit une ligne en bas de page
+//      (jamais les Pages simples, qui sont des pages clients).
 //
 // Cache CDN : une étape à variante unique est cachée 60 s à l'edge Vercel
 // (stale-while-revalidate 10 min) ; avec plusieurs variantes la réponse
@@ -35,6 +39,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { storage } = require('./_firebaseAdmin');
 const Reg = require('./_tunnelRegistry');
+const Legal = require('./_legal');
 
 const PROPAGATE_HOSTS = ['www.adrienemily.com', 'adrienemily.com'];
 const COOKIE_DAYS = 30;
@@ -268,6 +273,9 @@ async function serveRaw(req, res, step, preview) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Robots-Tag', 'noindex, nofollow');
   res.setHeader('Cache-Control', preview ? 'private, no-store' : 'public, max-age=0, s-maxage=60, stale-while-revalidate=600');
+  /* Liens légaux à jour (réécriture seule : pas de pied de page ajouté
+     sur une page client). */
+  html = Legal.apply(html, await Legal.getLegal(), { footer: false });
   res.end(req.method === 'HEAD' ? '' : wrapRaw(html, step.name || step.slug));
 }
 
@@ -368,6 +376,7 @@ module.exports = async (req, res) => {
     return;
   }
 
+  html = Legal.apply(html, await Legal.getLegal(), { footer: true });
   const config = buildConfig(tunnel, step, variant, preview);
   const extra = buildExtra(tunnel, step, preview);
   const out = inject(html, config, extra);

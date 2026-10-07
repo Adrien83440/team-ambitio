@@ -19,6 +19,7 @@ const { requireAdmin } = require('./_verifyFirebaseAuth');
 const parseBody = require('./_parseBody');
 const Reg = require('./_tunnelRegistry');
 const Render = require('./tunnel-render');
+const Legal = require('./_legal');
 
 const MAX_HTML = 4 * 1024 * 1024;
 
@@ -47,7 +48,7 @@ module.exports = async (req, res) => {
 
   const config = Render.buildConfig(tunnel, step, variant, true);
   const extra = Render.buildExtra(tunnel, step, true);
-  const out = Render.inject(html, config, extra);
+  const out = Render.inject(Legal.apply(html, await Legal.getLegal(), { footer: tunnel.kind !== 'raw' }), config, extra);
 
   res.status(200);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');

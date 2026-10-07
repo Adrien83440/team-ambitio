@@ -29,6 +29,7 @@
 const { db, admin } = require('./_firebaseAdmin');
 const parseBody = require('./_parseBody');
 const { requireAdmin } = require('./_verifyFirebaseAuth');
+const Legal = require('./_legal');
 
 const DOC = () => db.collection('site_config').doc('public');
 
@@ -48,7 +49,10 @@ const DEFAULTS = {
     { nom: 'Margaux',   activite: 'Épicerie / Restaurant', resultat: '+20 % de CA/mois',        vimeoId: '1204547192', vimeoHash: 'd73c2ad778', format: 'portrait' },
     { nom: 'Sébastien', activite: 'Frigoriste',            resultat: '+30 % de devis acceptés', vimeoId: '1204547193', vimeoHash: '4b10e394b6', format: 'paysage' },
     { nom: 'Franck',    activite: 'Boulangerie',           resultat: '+7 K€/mois de bénéfice',  vimeoId: '1204547163', vimeoHash: '09b6c1202b', format: 'paysage' }
-  ]
+  ],
+  /* Liens légaux uniques (api/_legal.js) : réécrits dans toutes les pages
+     servies par tunnel-render, lus par booking.html / alteoforms-render.html. */
+  legal: Legal.DEFAULTS
 };
 
 // ─── Nettoyage strict : seuls les champs connus passent, tous bornés ───
@@ -108,6 +112,8 @@ function sanitize(raw) {
       format:    t.format === 'portrait' ? 'portrait' : 'paysage'
     });
   }
+
+  out.legal = Legal.sanitize(c.legal);
 
   return out;
 }
