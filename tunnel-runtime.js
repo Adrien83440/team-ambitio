@@ -12,7 +12,9 @@
         /api/tunnel-event — une seule fois par session et par page ;
      3. charge le pixel Meta du tunnel (PageView, puis Lead à l'opt-in) —
         jamais pour un visiteur venu de YouTube (tunnel réglé « YouTube » :
-        utm_source=youtube posé d'office, cf. §1) ;
+        utm_source=youtube posé d'office, cf. §1). Sur le SITE VITRINE
+        seulement (C.consent, posé par le serveur), le pixel attend
+        « Tout accepter » dans le bandeau cookies (§3 bis) ;
      4. propage la provenance (lp, v, utm_*, leadId) sur tous les liens vers
         le tunnel ou vers team.alteore.com (booking, AlteoForms) et sur les
         iframes qui les embarquent — c'est ce qui relie la page au RDV et à
@@ -160,6 +162,7 @@
   }
   function pixelInit() {
     if (!C.pixelId || C.preview || isYoutubeVisitor()) return;
+    if (C.consent && consentRead() !== 'accepted') return;   // site vitrine : consentement d'abord
     try {
       if (!window.fbq) {
         (function (f, b, e, v, n, t, sc) {
@@ -183,6 +186,82 @@
       }
     } catch (e) {}
   }
+  /* ── 3 bis. Bandeau cookies (site vitrine uniquement, 10/2026) ─────────
+     Activé par le serveur (C.consent = { privacyUrl }) pour les pages du
+     tunnel kind:'site' : les tunnels de vente n'en ont pas (choix Adrien).
+     Affiché seulement si un traceur serait chargé (pixel réglé, visiteur
+     non YouTube). Choix gardé 6 mois (localStorage `ac_cookie_consent`).
+     Refus après acceptation : rechargement, la page repart sans pixel.
+     Lien « Gérer mes cookies » : tout élément [data-alteo-cookies] (ajouté
+     par le serveur à côté du lien de confidentialité), ou
+     window.ambitioCookies.open(). */
+  var CONSENT_KEY = 'ac_cookie_consent';
+  var CONSENT_TTL = 183 * 86400000;
+  function consentRead() {
+    try {
+      var v = JSON.parse(lsGet(CONSENT_KEY) || 'null');
+      if (v && (v.choice === 'accepted' || v.choice === 'refused') && Date.now() - v.date < CONSENT_TTL) return v.choice;
+    } catch (e) {}
+    return null;
+  }
+  function consentWanted() { return !!(C.consent && C.pixelId && !isYoutubeVisitor()); }
+  var _banner = null;
+  function bannerBuild() {
+    if (_banner) return _banner;
+    var st = document.createElement('style');
+    st.textContent = '#ac-cookies{--ac-bg:#0f1b33;--ac-text:#ffffff;--ac-accent:#f28c28;position:fixed;left:16px;right:16px;bottom:16px;z-index:99999;max-width:560px;margin:0 auto;background:var(--ac-bg);color:var(--ac-text);border-radius:12px;padding:18px 20px;box-shadow:0 8px 30px rgba(0,0,0,.35);font:inherit;font-size:14px;line-height:1.5;display:none;box-sizing:border-box;text-align:left}'
+      + '#ac-cookies.ac-open{display:block}'
+      + '#ac-cookies p{margin:0 0 14px;color:inherit;font:inherit}'
+      + '#ac-cookies a{color:inherit;text-decoration:underline}'
+      + '#ac-cookies .ac-actions{display:flex;gap:10px;flex-wrap:wrap}'
+      + '#ac-cookies button{flex:1 1 140px;padding:10px 14px;border-radius:8px;border:1px solid var(--ac-accent);font:inherit;font-size:14px;font-weight:600;cursor:pointer;background:var(--ac-accent);color:#111}'
+      + '#ac-cookies button:focus-visible{outline:2px solid var(--ac-text);outline-offset:2px}';
+    (document.head || document.documentElement).appendChild(st);
+    var box = document.createElement('div');
+    box.id = 'ac-cookies';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-live', 'polite');
+    box.setAttribute('aria-label', 'Gestion des cookies');
+    var more = /^https:\/\//i.test(String((C.consent && C.consent.privacyUrl) || ''))
+      ? ' <a href="' + String(C.consent.privacyUrl).replace(/"/g, '&quot;') + '" target="_blank" rel="noopener">En savoir plus</a>' : '';
+    box.innerHTML = '<p>Avec votre accord, nous utilisons des cookies pour mesurer l\'audience de ce site et l\'efficacité de nos publicités (Meta). '
+      + 'Vous pouvez changer d\'avis à tout moment via « Gérer mes cookies » en bas de page.' + more + '</p>'
+      + '<div class="ac-actions"><button type="button" data-ac="refused">Tout refuser</button><button type="button" data-ac="accepted">Tout accepter</button></div>';
+    box.addEventListener('click', function (ev) {
+      var b = ev.target && ev.target.closest ? ev.target.closest('[data-ac]') : null;
+      if (b) consentChoose(b.getAttribute('data-ac'));
+    });
+    document.body.appendChild(box);
+    _banner = box;
+    return box;
+  }
+  function bannerOpen() {
+    if (!C.consent) return;
+    if (!document.body) { document.addEventListener('DOMContentLoaded', bannerOpen); return; }
+    bannerBuild().className = 'ac-open';
+  }
+  function consentChoose(choice) {
+    var previous = consentRead();
+    lsSet(CONSENT_KEY, JSON.stringify({ choice: choice, date: Date.now() }));
+    if (_banner) _banner.className = '';
+    if (choice === 'accepted') {
+      pixelInit();
+      try { document.dispatchEvent(new CustomEvent('ambitio:cookies-accepted')); } catch (e) {}
+    } else if (previous === 'accepted') {
+      window.location.reload();   // retrait du consentement : on repart sans traceurs
+    }
+  }
+  if (C.consent) {
+    window.ambitioCookies = { open: bannerOpen };
+    document.addEventListener('click', function (ev) {
+      var a = ev.target && ev.target.closest ? ev.target.closest('[data-alteo-cookies]') : null;
+      if (!a) return;
+      ev.preventDefault();
+      bannerOpen();
+    });
+    if (consentWanted() && consentRead() === null) bannerOpen();
+  }
+
   pixelInit();
   function pixelLead() {
     if (!C.pixelId || C.preview || !window.fbq || isYoutubeVisitor()) return;

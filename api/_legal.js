@@ -15,6 +15,10 @@
 //   · PIED DE PAGE — une page publique (tunnel, site, pages communes) qui ne
 //     contient AUCUN lien légal reçoit une ligne discrète avant </body>.
 //     Jamais sur les Pages simples (pages clients) : décidé par l'appelant.
+//   · « GÉRER MES COOKIES » (opts.cookies, site vitrine seulement) — copie du
+//     DERNIER lien de confidentialité de la page (mêmes classes, donc même
+//     style dans le pied de page), insérée juste après, marquée
+//     data-alteo-cookies : le bandeau de tunnel-runtime.js l'ouvre au clic.
 //
 // booking.html et alteoforms-render.html (team.alteore.com) lisent la même
 // config via GET /api/site-config (legal-footer.js).
@@ -112,21 +116,54 @@ function rewrite(html, legal) {
   return { html: parts.join(''), found: state.found };
 }
 
-function footerHtml(legal) {
+const COOKIES_LABEL = 'Gérer mes cookies';
+
+/* Ajoute « Gérer mes cookies » après le dernier lien de confidentialité
+   (hors <script>/<style>). Retourne null si la page n'en a aucun. */
+function addCookiesLink(html) {
+  const parts = String(html).split(/(<script\b[\s\S]*?<\/script>|<style\b[\s\S]*?<\/style>)/i);
+  for (let i = parts.length - 1 - ((parts.length - 1) % 2); i >= 0; i -= 2) {
+    const seg = parts[i];
+    const re = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
+    let m, last = null;
+    while ((m = re.exec(seg))) if (keyOf(m[1], m[2]) === 'confidentialite') last = m;
+    if (!last) continue;
+    const attrs = last[1]
+      .replace(/\s(?:href|target|rel|data-legal)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+    const link = '<a' + attrs + ' href="#" role="button" data-alteo-cookies>' + COOKIES_LABEL + '</a>';
+    const at = last.index + last[0].length;
+    parts[i] = seg.slice(0, at) + link + seg.slice(at);
+    return parts.join('');
+  }
+  return null;
+}
+
+function footerHtml(legal, withCookies) {
+  const style = 'color:inherit;text-decoration:underline;margin:0 8px;white-space:nowrap';
   const links = KEYS.filter(function (k) { return legal[k]; }).map(function (k) {
-    return '<a data-legal="' + k + '" href="' + escAttr(legal[k]) + '" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;margin:0 8px;white-space:nowrap">' + LABELS[k] + '</a>';
+    return '<a data-legal="' + k + '" href="' + escAttr(legal[k]) + '" target="_blank" rel="noopener" style="' + style + '">' + LABELS[k] + '</a>';
   });
+  if (withCookies) links.push('<a href="#" role="button" data-alteo-cookies style="' + style + '">' + COOKIES_LABEL + '</a>');
   if (!links.length) return '';
   return '<div data-alteo-legal style="display:block;box-sizing:border-box;width:100%;clear:both;margin:0;padding:18px 16px 22px;text-align:center;'
     + 'font:12px/1.8 -apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;color:#8a8f9c;background:transparent">'
     + links.join('') + '</div>';
 }
 
-/* Réécriture + pied de page si la page n'a aucun lien légal (opts.footer). */
+/* Réécriture + pied de page si la page n'a aucun lien légal (opts.footer)
+   + lien « Gérer mes cookies » (opts.cookies). */
 function apply(html, legal, opts) {
+  const o = opts || {};
   const r = rewrite(html, legal);
-  if (r.found || !(opts && opts.footer) || legal.footer === false) return r.html;
-  const foot = footerHtml(legal);
+  if (o.cookies && !/data-alteo-cookies/.test(r.html)) {
+    const withLink = addCookiesLink(r.html);
+    if (withLink) return withLink;
+  }
+  const needFooter = !r.found || (o.cookies && !/data-alteo-cookies/.test(r.html));
+  if (!needFooter || !(o.footer || o.cookies) || (legal.footer === false && !o.cookies)) return r.html;
+  const foot = r.found
+    ? '<div data-alteo-legal style="display:block;width:100%;margin:0;padding:12px 16px 18px;text-align:center;font:12px/1.8 -apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;color:#8a8f9c;background:transparent"><a href="#" role="button" data-alteo-cookies style="color:inherit;text-decoration:underline">' + COOKIES_LABEL + '</a></div>'
+    : footerHtml(legal, o.cookies);
   if (!foot) return r.html;
   const at = r.html.search(/<\/body>(?![\s\S]*<\/body>)/i);
   return at >= 0 ? r.html.slice(0, at) + foot + r.html.slice(at) : r.html + foot;

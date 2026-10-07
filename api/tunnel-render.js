@@ -376,8 +376,12 @@ module.exports = async (req, res) => {
     return;
   }
 
-  html = Legal.apply(html, await Legal.getLegal(), { footer: true });
+  const legal = await Legal.getLegal();
   const config = buildConfig(tunnel, step, variant, preview);
+  /* Bandeau cookies : site vitrine seulement (les tunnels de vente n'en ont
+     pas, choix Adrien 10/2026) — cf. tunnel-runtime.js §3 bis. */
+  if (tunnel.kind === 'site') config.consent = { privacyUrl: legal.confidentialite };
+  html = Legal.apply(html, legal, { footer: true, cookies: !!(config.consent && config.pixelId) });
   const extra = buildExtra(tunnel, step, preview);
   const out = inject(html, config, extra);
   res.status(200);

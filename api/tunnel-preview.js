@@ -48,7 +48,9 @@ module.exports = async (req, res) => {
 
   const config = Render.buildConfig(tunnel, step, variant, true);
   const extra = Render.buildExtra(tunnel, step, true);
-  const out = Render.inject(Legal.apply(html, await Legal.getLegal(), { footer: tunnel.kind !== 'raw' }), config, extra);
+  const legal = await Legal.getLegal();
+  if (tunnel.kind === 'site') config.consent = { privacyUrl: legal.confidentialite };
+  const out = Render.inject(Legal.apply(html, legal, { footer: tunnel.kind !== 'raw', cookies: !!(config.consent && config.pixelId) }), config, extra);
 
   res.status(200);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
