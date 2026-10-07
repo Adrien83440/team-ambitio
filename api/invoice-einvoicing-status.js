@@ -3,7 +3,7 @@
 // ----------------------------------------------------------------------------
 // POST /api/invoice-einvoicing-status   { invoiceId }
 //   Auth : Bearer admin
-//   → 200 { success, status, label, lastEvent, checkedAt }
+//   → 200 { success, status, label, lastEvent, events, checkedAt }
 //
 // Relit l'état réel de la facture chez Qonto. Nécessaire parce que le statut
 // capté à la création vaut toujours « pending » : le cheminement sur le réseau
@@ -35,24 +35,58 @@ const STATUS_LABELS = {
   submission_failed: 'Échec du dépôt',
 };
 
-function labelOf(status) {
-  return STATUS_LABELS[status] || String(status || 'inconnu');
+/* Codes du cycle de vie de la réforme (norme XP Z12-012). Qonto les renvoie
+   bruts dans einvoicing_lifecycle_events. Attention : 211/212 sont des
+   statuts que NOUS émettons (paiement transmis, encaissée) — ils ne disent
+   rien de l'acheminement vers le destinataire. */
+const CDV_LABELS = {
+  200: 'Déposée',
+  201: 'Émise par la plateforme',
+  202: 'Reçue par la plateforme',
+  203: 'Mise à disposition',
+  204: 'Prise en charge',
+  205: 'Approuvée',
+  206: 'Approuvée partiellement',
+  207: 'En litige',
+  208: 'Suspendue',
+  209: 'Complétée',
+  210: 'Refusée',
+  211: 'Paiement transmis',
+  212: 'Encaissée',
+  213: 'Rejetée',
+  214: 'Visée',
+};
+
+function cdvLabelOf(code) {
+  return CDV_LABELS[code] || ('code ' + code);
 }
 
-/* Le journal est chronologique : le dernier élément porte l'état courant et
-   son motif, c'est lui qui explique un refus. */
-function lastEventOf(invoice) {
-  const events = invoice && Array.isArray(invoice.einvoicing_lifecycle_events)
-    ? invoice.einvoicing_lifecycle_events
-    : [];
-  if (!events.length) return null;
-  const e = events[events.length - 1] || {};
+/* Jusqu'au 07/10/2026, un statut vide affichait « inconnu » : c'est pourtant
+   une information — Qonto ne connaît aucun dépôt réseau pour cette facture. */
+function labelOf(status) {
+  if (!status) return 'Aucun statut réseau chez Qonto';
+  return STATUS_LABELS[status] || String(status);
+}
+
+function mapEvent(e) {
+  e = e || {};
+  const code = e.status_code != null ? e.status_code : null;
   return {
-    statusCode: e.status_code != null ? e.status_code : null,
+    statusCode: code,
+    label: code != null ? cdvLabelOf(code) : null,
     reason: e.reason || null,
     reasonMessage: e.reason_message || null,
     timestamp: e.timestamp || null,
   };
+}
+
+/* Journal complet, chronologique. Plafonné : une facture n'en accumule que
+   quelques-uns, mais un document Firestore ne doit pas grossir sans borne. */
+function eventsOf(invoice) {
+  const events = invoice && Array.isArray(invoice.einvoicing_lifecycle_events)
+    ? invoice.einvoicing_lifecycle_events
+    : [];
+  return events.slice(-30).map(mapEvent);
 }
 
 module.exports = async function (req, res) {
@@ -95,12 +129,14 @@ module.exports = async function (req, res) {
     const qInv = (resp && resp.client_invoice) ? resp.client_invoice : resp;
 
     const status = (qInv && qInv.einvoicing_status) || null;
-    const lastEvent = lastEventOf(qInv);
+    const events = eventsOf(qInv);
+    const lastEvent = events.length ? events[events.length - 1] : null;
 
     /* Écrit AVANT la réponse : Vercel coupe la fonction dès res.end(). */
     await invRef.update({
       'qonto.einvoicingStatus': status,
       'qonto.einvoicingLastEvent': lastEvent,
+      'qonto.einvoicingEvents': events,
       'qonto.einvoicingCheckedAt': admin.firestore.FieldValue.serverTimestamp(),
       'qonto.status': (qInv && qInv.status) || null,
     });
@@ -110,6 +146,7 @@ module.exports = async function (req, res) {
       status: status,
       label: labelOf(status),
       lastEvent: lastEvent,
+      events: events,
       qontoStatus: (qInv && qInv.status) || null,
       checkedAt: new Date().toISOString(),
     });

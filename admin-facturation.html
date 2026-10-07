@@ -896,6 +896,7 @@
           <input type="date" class="bill-input" id="expTo" style="width:auto;padding:8px 10px" title="Exporter au"/>
           <button class="bill-btn" id="expZipBtn" onclick="exportInvoicesZip()" title="ZIP de tous les PDF + CSV récapitulatif sur la plage (brouillons exclus)">📦 Exporter ZIP</button>
         </span>
+        <button class="bill-btn" id="einvBulkBtn" onclick="relireToutLeReseau()" title="Relit chez Qonto le statut réseau de toutes les factures transmises (lecture seule)">📡 Relire le réseau</button>
         <button class="bill-btn bill-btn-primary bill-btn-lg" onclick="newInvoice()">➕ Nouvelle facture</button>
       </div>
 
@@ -4024,8 +4025,7 @@ function qontoBadgeOf(inv) {
        est tout ce qu'on peut honnêtement affirmer : notre appel a été accepté
        par Qonto, le cheminement vers le destinataire se joue après. */
     const net = q.einvoicingStatus || null;
-    const ev = q.einvoicingLastEvent || null;
-    const evTxt = ev ? (' · ' + (ev.reason || '') + (ev.timestamp ? ' (' + ev.timestamp + ')' : '')) : '';
+    const evTxt = einvoicingJournalText(q);
 
     if (net === 'approved') {
       return '<div><span style="' + base + 'background:rgba(16,185,129,.16);color:#10b981;border:1px solid rgba(16,185,129,.4)"'
@@ -4035,6 +4035,14 @@ function qontoBadgeOf(inv) {
       const lbl = net === 'declined' ? 'Refusée' : (net === 'not_delivered' ? 'Non délivrée' : 'Échec du dépôt');
       return '<div><span style="' + base + 'background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.3)"'
         + ' title="' + escapeAttr(depot + evTxt) + '">⚡ ' + lbl + '</span></div>';
+    }
+    /* Relue, mais Qonto ne connaît aucun statut réseau : la demande d'envoi a
+       été acceptée, rien ne dit que la facture a été acheminée (L'ATELIER 2C,
+       F2026-00115 : client absent de l'Annuaire le jour de l'envoi). */
+    if (!net && q.einvoicingCheckedAt) {
+      return '<div><span style="' + base + 'background:rgba(245,158,11,.12);color:#f59e0b;border:1px solid rgba(245,158,11,.3)"'
+        + ' title="' + escapeAttr(depot + ' · relue chez Qonto : aucun statut réseau — la facture n\'a probablement pas été acheminée' + evTxt)
+        + '">⚡ Non acheminée ?</span></div>';
     }
     /* pending, submitted, ou pas encore relu */
     return '<div><span style="' + base + 'background:rgba(96,165,250,.12);color:#60a5fa;border:1px solid rgba(96,165,250,.3)"'
@@ -4067,29 +4075,88 @@ function qontoPaidBadgeOf(inv) {
     + '. La facture y est encore marquée impayée ; le bouton ⚡ réessaie.">⚡ Paiement non reporté</span></div>';
 }
 
+/* Journal réseau en texte, pour les infobulles. Le journal complet n'est
+   stocké que depuis le 07/10/2026 ; avant, seul le dernier événement l'était. */
+function einvoicingEventText(ev) {
+  if (!ev) return '';
+  const code = ev.statusCode != null ? ev.statusCode : '?';
+  const d = ev.timestamp ? new Date(ev.timestamp) : null;
+  const when = (d && !isNaN(d.getTime())) ? d.toLocaleDateString('fr-FR') : '';
+  return code + ' ' + (ev.label || '') + (when ? ' (' + when + ')' : '') + (ev.reason ? ' — ' + ev.reason : '');
+}
+
+function einvoicingJournalText(q) {
+  const list = Array.isArray(q.einvoicingEvents) && q.einvoicingEvents.length
+    ? q.einvoicingEvents
+    : (q.einvoicingLastEvent ? [q.einvoicingLastEvent] : []);
+  if (!list.length) return '';
+  return ' · journal : ' + list.map(einvoicingEventText).join(' → ');
+}
+
+async function fetchEinvoicingStatus(invoiceId) {
+  const idToken = await firebase.auth().currentUser.getIdToken();
+  const response = await fetch('/api/invoice-einvoicing-status', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+    body: JSON.stringify({ invoiceId: invoiceId })
+  });
+  let data = {};
+  try { data = await response.json(); } catch (e) {}
+  if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
+  return data;
+}
+
 /* Relecture du statut réseau. Le statut capté à la création vaut toujours
    « pending » : le cheminement se joue après notre appel. Sans ce bouton, on
    afficherait indéfiniment une valeur périmée dès son écriture. */
 async function refreshEinvoicingStatus(invoiceId) {
   toast('⏳ Lecture du statut réseau…');
   try {
-    const idToken = await firebase.auth().currentUser.getIdToken();
-    const response = await fetch('/api/invoice-einvoicing-status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
-      body: JSON.stringify({ invoiceId: invoiceId })
-    });
-    let data = {};
-    try { data = await response.json(); } catch (e) {}
-    if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
-
-    let msg = '📡 ' + (data.label || data.status || 'statut inconnu');
-    if (data.lastEvent && data.lastEvent.reason) msg += ' — ' + data.lastEvent.reason;
+    const data = await fetchEinvoicingStatus(invoiceId);
+    let msg = '📡 ' + (data.label || 'Aucun statut réseau chez Qonto');
+    if (data.lastEvent) msg += ' · dernier événement : ' + einvoicingEventText(data.lastEvent);
     toast(msg);
   } catch (err) {
     console.error('[einvoicing-status]', err);
     toast('Erreur : ' + err.message, true);
   }
+}
+
+/* Relecture de toutes les factures transmises. Une par une, côté navigateur :
+   chaque appel est court, et on évite le délai maximal d'une fonction Vercel.
+   Lecture seule chez Qonto ; seul le résultat est écrit sur la facture. */
+let _einvBulkRunning = false;
+async function relireToutLeReseau() {
+  if (_einvBulkRunning) return;
+  const targets = invoicesCache.filter(function (x) { return x.qontoSyncStatus === 'sent' && x.qonto && x.qonto.invoiceId; });
+  if (!targets.length) return toast('Aucune facture transmise à relire');
+  if (!confirm('Relire le statut réseau de ' + targets.length + ' facture(s) chez Qonto ?\n\nLecture seule : rien n\'est envoyé ni modifié chez Qonto.')) return;
+
+  _einvBulkRunning = true;
+  const btn = document.getElementById('einvBulkBtn');
+  const counts = {};
+  const errors = [];
+  try {
+    for (let i = 0; i < targets.length; i++) {
+      if (btn) btn.textContent = '📡 ' + (i + 1) + '/' + targets.length + '…';
+      try {
+        const data = await fetchEinvoicingStatus(targets[i].id);
+        const key = data.label || 'Aucun statut réseau chez Qonto';
+        counts[key] = (counts[key] || 0) + 1;
+      } catch (err) {
+        errors.push((targets[i].number || targets[i].id) + ' : ' + err.message);
+      }
+    }
+  } finally {
+    _einvBulkRunning = false;
+    if (btn) btn.textContent = '📡 Relire le réseau';
+  }
+
+  const lines = Object.keys(counts).map(function (k) { return '• ' + k + ' : ' + counts[k]; });
+  if (errors.length) lines.push('• Erreurs : ' + errors.length + '\n  ' + errors.slice(0, 10).join('\n  '));
+  console.log('[einvoicing-bulk]', counts, errors);
+  alert('Statut réseau relu pour ' + targets.length + ' facture(s) :\n\n' + lines.join('\n')
+    + '\n\nLes badges « ⚡ Non acheminée ? » signalent les factures sans statut réseau chez Qonto.');
 }
 
 /* Rattrapage manuel. L'endpoint est idempotent : il vérifie chez Qonto avant
