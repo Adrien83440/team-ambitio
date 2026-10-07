@@ -93,7 +93,15 @@ async function upsertClient(ctx) {
   const hash = fieldsHash(payload);
   const existingId = client.qontoClientId || null;
 
-  if (existingId && client.qontoFieldsHash === hash) return existingId;
+  /* Le raccourci « fiche inchangée → rien à envoyer » figeait aussi la
+     joignabilité : un client inscrit dans l'Annuaire APRÈS notre dernier
+     appel restait « non joignable » indéfiniment (L'ATELIER 2C, mandat PA
+     signé 9 h après la vérification, 09/09/2026). On repasse donc par Qonto
+     quand on le demande explicitement (bouton Vérifier), ou quand le dernier
+     verdict connu est négatif — un PATCH de plus, pour ces clients seulement. */
+  const force = ctx.force === true || client.einvoicingReachable === false;
+
+  if (existingId && client.qontoFieldsHash === hash && !force) return existingId;
 
   let qontoClientId = existingId;
   /* Qonto renvoie le client à jour sur create comme sur patch : on en tire

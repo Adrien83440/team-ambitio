@@ -73,8 +73,10 @@ module.exports = async function (req, res) {
       e.status = 400; throw e;
     }
 
-    /* upsertClient écrit lui-même einvoicingReachable sur la fiche. */
-    await qontoFlow.upsertClient({ db: db, admin: admin, clientId: clientId });
+    /* upsertClient écrit lui-même einvoicingReachable sur la fiche. force :
+       sans lui, une fiche inchangée n'est pas renvoyée à Qonto et la réponse
+       resterait celle du premier appel. */
+    await qontoFlow.upsertClient({ db: db, admin: admin, clientId: clientId, force: true });
 
     const after = await ref.get();
     const data = after.data() || {};
