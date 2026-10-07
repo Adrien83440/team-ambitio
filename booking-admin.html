@@ -993,6 +993,20 @@ if(_tIsCoaching){_tIsCoaching.addEventListener('change',function(){
   setTimeout(function(){if(cdSection==='details')renderCdSection();},900);
 });}
 if(_tIsSetterOnly){_tIsSetterOnly.addEventListener('change',function(){
+  /* Garde-fou (07/10/2026) : activer ce drapeau bascule TOUS les RDV pris sur
+     la consultation en No Booking, y compris les self-bookings d'un lien
+     public. L'interrupteur sauvegarde au clic : on confirme avant d'activer
+     (la désactivation reste immédiate). Le listener autosave générique a
+     déjà programmé saveCdDetails sur un setTimeout : on remet la case à
+     zéro de façon synchrone, puis on relance l'autosave sur l'état annulé. */
+  if(_tIsSetterOnly.checked===true){
+    var _lbl=cdType?(cdType.label||cdType.id):'cette consultation';
+    if(!confirm('Marquer « '+_lbl+' » comme consultation setter ?\n\nTous les RDV pris sur ce lien seront classés NO BOOKING (RDV posé par l\'équipe), même quand c\'est le prospect qui réserve seul.\n\nÀ réserver aux liens internes des setters, jamais au lien public des VSL.')){
+      _tIsSetterOnly.checked=false;
+      autoSaveCd(true);
+      return;
+    }
+  }
   setTimeout(function(){if(cdSection==='details')renderCdSection();},900);
 });}
 // Lien setter attribué : la case ouvre/ferme le sélecteur (état d'écran),
@@ -1021,7 +1035,11 @@ var w=document.getElementById('cd-confirmRedirectUrl-wrap');
 if(w)w.style.display=checked?'block':'none';
 }
 function cleanType(t){var o={id:t.id,label:t.label||'',duration:t.duration||30,color:t.color||'#8b5cf6'};if(t.eventType)o.eventType=t.eventType;if(t.description)o.description=t.description;if(t.active===false)o.active=false;if(t.image)o.image=t.image;if(t.location)o.location=t.location;if(t.locationUrl)o.locationUrl=t.locationUrl;if(t.confirmationRedirect===true)o.confirmationRedirect=true;if(t.confirmationRedirectUrl)o.confirmationRedirectUrl=t.confirmationRedirectUrl;if(t.formPosition)o.formPosition=t.formPosition;if(t.isCoaching===true)o.isCoaching=true;if(t.isSetterOnly===true)o.isSetterOnly=true;if(t.attributedSetterSlug){o.attributedSetterSlug=t.attributedSetterSlug;if(t.attributedSetterName)o.attributedSetterName=t.attributedSetterName;}if(t.rules){o.rules={};for(var k in t.rules)if(t.rules[k]!==undefined&&t.rules[k]!==null)o.rules[k]=t.rules[k];}if(t.notifications){o.notifications={};for(var k2 in t.notifications)if(t.notifications[k2]!==undefined&&t.notifications[k2]!==null)o.notifications[k2]=t.notifications[k2];}if(t.formFields)o.formFields=t.formFields.map(function(f){var r={id:f.id,label:f.label,type:f.type,required:!!f.required};if(f.system)r.system=true;if(f.nameMode)r.nameMode=f.nameMode;if(f.options)r.options=f.options;if(f.scaleMax)r.scaleMax=f.scaleMax;if(f.condition)r.condition=f.condition;return r;});return o;}
-function saveTypes(){var clean=T.map(cleanType);return CR.doc('_types').set({list:clean});}
+/* Trace d'audit des sauvegardes de _types (07/10/2026) : le doc n'avait ni date ni
+   auteur, impossible de savoir qui avait coché « Consultation setter » sur le
+   type public (RDV self-booking classés No Booking du 04 au 07/10). */
+function _typesStamp(){var u=firebase.auth().currentUser;var nm=null;try{var tm=window.TEAM_MEMBERS_LIST||[];for(var i=0;i<tm.length;i++){if(u&&tm[i].firebaseUid===u.uid){nm=tm[i].shortName||tm[i].displayName||tm[i].name;break;}}}catch(e){}if(!nm&&u)nm=(u.email||'').split('@')[0]||null;return{updatedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedBy:u?u.uid:null,updatedByName:nm};}
+function saveTypes(){var clean=T.map(cleanType);var doc=_typesStamp();doc.list=clean;return CR.doc('_types').set(doc);}
 /* Suppression d'une consultation (admin) — 10/09/2026.
    Le type sort de la liste publiée (booking, sélecteurs, cartes) mais une
    copie datée part dans booking_config/_types_trash : rien n'est perdu, on
