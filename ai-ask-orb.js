@@ -114,8 +114,10 @@
     ['aioCanvas', 'aioState', 'aioQ', 'aioA', 'aioMic', 'aioIn', 'aioHist', 'aioVoice', 'aioMute'].forEach(function (id) { el[id] = document.getElementById(id); });
 
     document.getElementById('aioClose').addEventListener('click', closeUi);
+    o.addEventListener('pointerdown', unlockAudio, true);
+    o.addEventListener('keydown', unlockAudio, true);
     document.getElementById('aioHistBtn').addEventListener('click', function () { el.aioHist.classList.toggle('on'); renderHist(); });
-    el.aioMute.addEventListener('click', function () { S.muted = !S.muted; el.aioMute.textContent = S.muted ? '🔇' : '🔊'; if (S.muted && S.audio) S.audio.pause(); });
+    el.aioMute.addEventListener('click', function () { S.muted = !S.muted; S.userMuted = S.muted; el.aioMute.textContent = S.muted ? '🔇' : '🔊'; if (S.muted && S.audio) S.audio.pause(); });
     el.aioVoice.addEventListener('change', function () { S.voiceId = el.aioVoice.value; });
     el.aioIn.addEventListener('keydown', function (e) { if (e.key === 'Enter' && el.aioIn.value.trim()) { var q = el.aioIn.value.trim(); el.aioIn.value = ''; ask(q); } });
 
@@ -245,19 +247,81 @@
     fr.readAsDataURL(blob);
   }
 
+  /* ── Déblocage audio ──────────────────────────────────────────────────
+     Les navigateurs (Safari surtout, Chrome aussi pour l'AudioContext)
+     n'autorisent le son qu'à la suite d'un geste. La réponse arrive des
+     secondes après : on « amorce » donc le contexte audio ET le lecteur dès
+     le premier clic / la première touche dans le module. */
+  // Piste silencieuse générée à la volée (WAV 8 bits, 0,05 s) : sert à
+  // « amorcer » le lecteur pendant le geste de l'utilisateur.
+  var SILENT = (function () {
+    var n = 400, h = 'RIFF', le = function (v, b) { var o = ''; for (var i = 0; i < b; i++) { o += String.fromCharCode(v & 255); v >>= 8; } return o; };
+    h += le(36 + n, 4) + 'WAVEfmt ' + le(16, 4) + le(1, 2) + le(1, 2) + le(8000, 4) + le(8000, 4) + le(1, 2) + le(8, 2) + 'data' + le(n, 4);
+    for (var i = 0; i < n; i++) h += String.fromCharCode(128);
+    return 'data:audio/wav;base64,' + btoa(h);
+  })();
+  function ensurePlayer() {
+    if (S.audio) return S.audio;
+    S.audio = new Audio();
+    S.audio.preload = 'auto';
+    S.audio.addEventListener('ended', function () { setState('idle'); });
+    return S.audio;
+  }
+  function unlockAudio() {
+    if (S.unlocked) return;
+    S.unlocked = true;
+    var ctx = audioCtx();
+    var a = ensurePlayer();
+    // Le lecteur ne passe par l'analyseur (animation de l'orbe) QUE si le
+    // contexte tourne : un contexte suspendu rendrait la voix muette.
+    var wire = function () {
+      if (S.mediaNode || !ctx || ctx.state !== 'running' || S.audio !== a) return;
+      try { S.mediaNode = ctx.createMediaElementSource(a); S.mediaNode.connect(S.anOut); } catch (e) { S.mediaNode = null; }
+    };
+    if (ctx && ctx.state !== 'running' && ctx.resume) { try { ctx.resume().then(wire, function () {}); } catch (e) {} }
+    wire();
+    try { a.src = SILENT; var p = a.play(); if (p && p.catch) p.catch(function () { S.unlocked = false; }); } catch (e) { S.unlocked = false; }
+  }
+
+  function playAnswer(dataUrl) {
+    var a = ensurePlayer();
+    var ctx = S.ctx;
+    if (ctx && ctx.state === 'suspended') { try { ctx.resume(); } catch (e) {} }
+    // Si l'élément est relié au graphe Web Audio alors que le contexte n'est
+    // pas actif, on passe sur un lecteur neuf, non relié (son garanti,
+    // l'orbe respire simplement au lieu de suivre la voix).
+    if (S.mediaNode && (!ctx || ctx.state !== 'running')) {
+      S.audio = null; S.mediaNode = null;
+      a = ensurePlayer();
+    }
+    a.src = dataUrl;
+    setState('speaking');
+    var p = a.play();
+    if (p && p.catch) p.catch(function () {
+      setState('idle', '🔇 Le navigateur a bloqué le son');
+      showReplay(dataUrl);
+    });
+  }
+  function showReplay(dataUrl) {
+    var b = document.getElementById('aioReplay');
+    if (!b) {
+      b = document.createElement('button');
+      b.id = 'aioReplay';
+      b.type = 'button';
+      b.className = 'aio-b';
+      b.style.marginTop = '10px';
+      b.textContent = '🔊 Écouter la réponse';
+      el.aioA.parentNode.insertBefore(b, el.aioA.nextSibling);
+    }
+    b.style.display = '';
+    b.onclick = function () { b.style.display = 'none'; unlockAudio(); playAnswer(dataUrl); };
+  }
+
   function speak(text) {
     if (S.muted) { setState('idle'); return; }
+    var rb = document.getElementById('aioReplay'); if (rb) rb.style.display = 'none';
     post('/api/ai-voice', { action: 'tts', text: text, voiceId: S.voiceId }).then(function (j) {
-      var ctx = audioCtx();
-      if (!S.audio) {
-        S.audio = new Audio();
-        S.audio.crossOrigin = 'anonymous';
-        if (ctx) { S.mediaNode = ctx.createMediaElementSource(S.audio); S.mediaNode.connect(S.anOut); }
-        S.audio.addEventListener('ended', function () { setState('idle'); });
-      }
-      S.audio.src = 'data:' + (j.mime || 'audio/mpeg') + ';base64,' + j.audio;
-      setState('speaking');
-      S.audio.play().catch(function () { setState('idle'); });
+      playAnswer('data:' + (j.mime || 'audio/mpeg') + ';base64,' + j.audio);
     }).catch(function (e) {
       setState('idle', '🔇 Voix indisponible');
       // Après la fin de l'effet machine à écrire (sinon il écrase le message).
@@ -381,6 +445,7 @@
         S.voices = j.voices || []; S.voiceId = j.current;
         el.aioVoice.innerHTML = S.voices.map(function (v) { return '<option value="' + v.id + '"' + (v.id === j.current ? ' selected' : '') + '>🗣 ' + esc(v.name) + '</option>'; }).join('');
         if (!j.configured) { S.muted = true; el.aioMute.textContent = '🔇'; el.aioState.textContent = 'Voix indisponible (clé ElevenLabs) — mode texte'; }
+        else if (S.muted && !S.userMuted) { S.muted = false; el.aioMute.textContent = '🔊'; }
       }).catch(function () {});
     }
     setTimeout(function () { el.aioIn.focus(); }, 50);
