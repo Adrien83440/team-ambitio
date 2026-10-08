@@ -1153,15 +1153,10 @@ function submitSend(){
     createdAt:firebase.firestore.FieldValue.serverTimestamp()
   };
   db.collection('signature_requests').add(req).then(function(ref){
-    /* ⚠ Ce document webhook_inbox n'envoie PLUS rien : la Cloud Function qui
-       le traitait a ete redeployee sans ses handlers signature. Il est garde
-       comme trace (et reprise possible si la fonction revit), mais l'envoi
-       reel passe desormais par /api/signature-send-link. */
-    db.collection('webhook_inbox').add({
-      action:'signature_resend',
-      signatureRequestId:ref.id,
-      createdAt:firebase.firestore.FieldValue.serverTimestamp()
-    }).catch(function(e){console.warn('trace webhook_inbox:',e.message);});
+    /* 08/10/2026 — plus de document webhook_inbox { signature_resend } ici.
+       Depuis le redéploiement des Cloud Functions (26/09/2026), onWebhookInbox
+       traite de nouveau cette action et envoyait un SMS EN DOUBLE de celui
+       d'api/signature-send-link. Un seul expéditeur désormais : l'endpoint. */
     envoyerLien(ref.id,0,function(r){
       if(r&&r.ok)toast(messageEnvoi(r,name));
       else toast('⚠️ Contrat cree, mais ni email ni SMS n\'ont pu partir. Utilise « Renvoyer ».');
