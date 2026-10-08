@@ -257,7 +257,25 @@ async function stampContract(doc, fonts, fields, scale, signers, prefill) {
        la formule de paiement) : ils appartiennent au contrat, pas à un
        signataire — on les écrit quel que soit le rôle du champ. */
     if (f.fieldType === 'texte_libre' && prefill && prefill[f.id]) { drawFreeText(page, fonts, prefill[f.id], box); return; }
-    if (f.fieldType === 'case_cocher' && prefill && typeof prefill[f.id] === 'boolean') { drawCheckbox(page, prefill[f.id], box); return; }
+    if (f.fieldType === 'case_cocher' && prefill && typeof prefill[f.id] === 'boolean') {
+      /* Choix unique (formule de paiement) : le contrat ne parle QUE de
+         l'option retenue. L'autre est recouverte (zone `mask` du champ) et
+         aucune case n'est dessinée — le texte restant se lit seul. */
+      if (f.group) {
+        /* mask : zone effacée si l'option N'EST PAS retenue.
+           maskChosen : zone effacée si elle l'EST (ex. le « ou » de
+           « — ou 13 000 € », qui n'a plus de sens seul). */
+        const z = prefill[f.id] ? f.maskChosen : f.mask;
+        if (z) {
+          const mp = pages[(z.page || f.page || 1) - 1] || page;
+          const mh = mp.getHeight();
+          mp.drawRectangle({ x: z.x / scale, y: mh - z.y / scale - z.h / scale, width: z.w / scale, height: z.h / scale, color: rgb(1, 1, 1) });
+        }
+        return;
+      }
+      drawCheckbox(page, prefill[f.id], box);
+      return;
+    }
 
     const S = byRole[role];
     if (!S) return;
@@ -418,6 +436,7 @@ const EVENT_LABELS = {
   signature_validee: 'SIGNATURE VALIDÉE',
   document_genere: 'Contrat signé généré et scellé',
   copie_telechargee: 'Exemplaire signé téléchargé',
+  lecture_declaree: 'Déclaration : « J\'ai pris connaissance du document dans son intégralité »',
   copie_envoyee: 'Exemplaire signé envoyé par e-mail',
 };
 

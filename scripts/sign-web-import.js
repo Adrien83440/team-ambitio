@@ -71,7 +71,8 @@ function checkRefs(data, fieldIds) {
       const re = /field:([A-Za-z0-9_]+)/g;
       let m;
       while ((m = re.exec(b))) if (fieldIds.indexOf(m[1]) < 0) errs.push(s.id + ' → champ inconnu ' + m[1]);
-      if (!/^(p|h|li|ol|i|q|field):/.test(b)) errs.push(s.id + ' → bloc sans préfixe : ' + b.slice(0, 40));
+      const inner = b.replace(/^if:([A-Za-z0-9_]+):/, function (m, fid) { if (fieldIds.indexOf(fid) < 0) errs.push(s.id + ' → condition sur champ inconnu ' + fid); return ''; });
+      if (!/^(p|h|li|ol|i|q|field):/.test(inner)) errs.push(s.id + ' → bloc sans préfixe : ' + b.slice(0, 40));
     });
   });
   return errs;

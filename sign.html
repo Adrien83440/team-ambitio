@@ -109,6 +109,8 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:inherit;}
 .readbar-in{display:flex;align-items:center;gap:10px;font-size:12.5px;font-weight:700;color:var(--ink2);}
 .readbar-track{flex:1;height:6px;background:var(--line);border-radius:3px;overflow:hidden;}
 .readbar-fill{height:100%;width:0;background:linear-gradient(90deg,#6366f1,#22c55e);transition:width .3s;}
+.fastread{display:block;width:100%;margin-top:8px;padding:9px 12px;border-radius:10px;border:1.5px dashed #a5b4fc;background:#fff;color:var(--accent);font-weight:700;font-size:13px;cursor:pointer;text-align:center;}
+.fastread:hover{background:var(--accentSoft);}
 .endmark{text-align:center;padding:22px 0 6px;font-size:13px;color:var(--muted);font-weight:600;}
 .pdfpage{display:block;margin:0 auto 12px;box-shadow:0 1px 6px rgba(0,0,0,.12);border-radius:4px;max-width:100%;background:#fff;}
 /* Société */
@@ -248,7 +250,8 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:inherit;}
         <button class="btn btn-o" style="padding:10px 14px;min-height:0;font-size:13.5px" data-action="pdf-open" id="pdfBtn">📄 Voir le document PDF original</button>
       </div>
     </div>
-    <div class="readbar" id="readbar"><div class="readbar-in"><span id="readTxt">Lecture</span><div class="readbar-track"><div class="readbar-fill" id="readFill"></div></div></div></div>
+    <div class="readbar" id="readbar"><div class="readbar-in"><span id="readTxt">Lecture</span><div class="readbar-track"><div class="readbar-fill" id="readFill"></div></div></div>
+      <button type="button" class="fastread" data-action="fast-read" id="fastRead">⬇ J'ai pris connaissance du document dans son intégralité</button></div>
     <details class="card toc" id="toc" style="padding:14px 18px"><summary>📑 Sommaire <span class="sub" style="font-weight:500" id="tocCount"></span></summary><ol id="tocList"></ol></details>
     <div class="doc" id="doc"></div>
     <div class="endmark" id="endmark">— Fin du contrat —</div>
@@ -562,6 +565,7 @@ function inline(s){
     var t=findText(id),cd=findCond(id);
     if(cd)return '<span class="ph ok">'+(cd.value?'☑ retenu':'☐ non retenu')+'</span>';
     if(t&&t.value)return '<span class="ph ok">'+esc(t.value)+'</span>';
+    if(t&&t.locked)return '';
     if(isDateField(id))return '<span class="ph" data-ph="date">date de signature</span>';
     return '<span class="ph">'+esc(t?t.label:'à compléter')+'</span>';
   });
@@ -582,6 +586,11 @@ function buildRead(){
       h+='<section class="sec" id="sec_'+si+'" data-si="'+si+'"><div class="sec-t"><span class="seen">✓</span><span>'+esc(sec.title)+'</span></div>';
       var inUl=false;
       sec.blocks.forEach(function(b){
+        /* Bloc conditionnel « if:<champ>: » : n'existe que si l'option est
+           retenue par le conseiller (ex. formule de paiement). L'autre option
+           n'est jamais montrée au client. */
+        var ci=/^if:([A-Za-z0-9_]+):(.*)$/.exec(b);
+        if(ci){var cc=findCond(ci[1]);if(!cc||!cc.value)return;b=ci[2];}
         var m=/^(p|h|li|ol|i|q|field):(.*)$/.exec(b);if(!m)return;
         var k=m[1],t=m[2];
         if(k!=='li'&&inUl){h+='</ul>';inUl=false;}
@@ -594,7 +603,7 @@ function buildRead(){
           var c=findCheck(t),tx=findText(t),cd=findCond(t);
           if(cd)h+='<div class="fcall"><span>'+(cd.value?'☑':'☐')+'</span><span><b>'+(cd.value?'Retenu':'Non retenu')+'</b> — '+esc(cd.label)+' <i>(renseigné par votre conseiller)</i></span></div>';
           else if(c)h+='<div class="fcall"><span>☐</span><span><b>Case à cocher à l\'étape 4</b> — « '+esc(c.label)+' » ('+(c.required?'obligatoire':'facultative')+')</span></div>';
-          else if(tx)h+='<div class="fcall"><span>✎</span><span><b>'+esc(tx.label)+'</b>'+(tx.value?' : '+esc(tx.value):' — à compléter à l\'étape 4')+'</span></div>';
+          else if(tx&&!(tx.locked&&!tx.value))h+='<div class="fcall"><span>✎</span><span><b>'+esc(tx.label)+'</b>'+(tx.value?' : '+esc(tx.value):' — à compléter à l\'étape 4')+'</span></div>';
         }
       });
       if(inUl)h+='</ul>';
@@ -617,7 +626,7 @@ function buildRead(){
 }
 function markSeen(si,title){
   if(S.read.seen[si])return;
-  S.read.seen[si]=1;S.read.count++;
+  S.read.seen[si]=1;S.read.count++;S.read.realCount=(S.read.realCount||0)+1;
   var sec=$('sec_'+si);if(sec)sec.classList.add('vu');
   var a=document.querySelector('#tocList a[data-si="'+si+'"]');if(a)a.classList.add('vu');
   track('section_vue',{id:String(si),titre:title||''},'sec'+si);
@@ -657,6 +666,23 @@ function observeRead(){
     };
     window.addEventListener('scroll',onScroll,{passive:true});onScroll();
   }
+}
+/* Lecture rapide : le client déclare avoir pris connaissance du document.
+   Les articles qu'il n'a pas fait défiler sont validés SANS être journalisés
+   comme « lus » : le dossier de preuve distingue ce qui a été affiché et la
+   déclaration expresse. */
+function fastRead(){
+  var secs=document.querySelectorAll('#doc [data-si]');
+  for(var i=0;i<secs.length;i++){
+    var si=+secs[i].getAttribute('data-si');
+    if(!S.read.seen[si]){S.read.seen[si]=1;S.read.count++;secs[i].classList.add('vu');var a=document.querySelector('#tocList a[data-si="'+si+'"]');if(a)a.classList.add('vu');}
+  }
+  if(S.read.count<S.read.total)S.read.count=S.read.total;
+  S.read.declaree=true;S.read.end=true;
+  track('lecture_declaree',{vuesReelles:S.read.realCount!=null?S.read.realCount:0,total:S.read.total},'fastread');
+  hide('fastRead');
+  updateReadBar();
+  $('endmark').scrollIntoView({behavior:'smooth',block:'center'});
 }
 function fmtDur(ms){var s=Math.round(ms/1000),m=Math.floor(s/60);return (m?m+' min ':'')+(s%60)+' s';}
 
@@ -710,13 +736,15 @@ function buildForm(){
   }
   /* Conditions et textes : ce que le conseiller a renseigné avant l'envoi
      (lecture seule), puis les textes libres à remplir par le client. */
-  if(F.texts.length||(F.conditions&&F.conditions.length)){
+  var condsOn=(F.conditions||[]).filter(function(x){return x.value;});
+  var textsShown=F.texts.filter(function(x){return !(x.locked&&!x.value);});
+  if(textsShown.length||condsOn.length){
     var t='';
-    if(F.conditions&&F.conditions.length){
+    if(condsOn.length){
       t+='<p class="sub" style="margin-bottom:6px">Renseignées par votre conseiller — vérifiez qu\'elles correspondent à ce que vous avez convenu ensemble.</p>';
-      F.conditions.forEach(function(x){t+='<div class="cond"><span class="cond-i '+(x.value?'cond-y">✓':'cond-n">·')+'</span><span>'+esc(x.label)+'</span></div>';});
+      condsOn.forEach(function(x){t+='<div class="cond"><span class="cond-i cond-y">✓</span><span>'+esc(x.label)+'</span></div>';});
     }
-    F.texts.forEach(function(x){
+    textsShown.forEach(function(x){
       if(x.locked){t+='<div class="co" style="margin-top:10px"><div class="co-row"><span class="co-k">'+esc(x.label)+'</span><span class="co-v">'+(x.value?esc(x.value):'—')+'</span></div><div class="help">'+esc(x.help||'Renseigné par votre conseiller.')+'</div></div>';}
       else t+='<label class="lbl" for="tx_'+esc(x.id)+'">'+esc(x.label)+(x.required?'':' <small>(facultatif)</small>')+'</label><textarea class="inp" rows="2" id="tx_'+esc(x.id)+'" data-tx="'+esc(x.id)+'" maxlength="'+(x.maxLength||500)+'"></textarea>'+(x.help?'<div class="help">'+esc(x.help)+'</div>':'');
     });
@@ -858,7 +886,7 @@ function refreshBar(){
 function next(){
   var m=missing(S.step);if(m.length)return;
   if(S.step===2){
-    if(!S.read.done){S.read.done=true;track('lecture_terminee',{vues:S.read.count,total:S.read.total,duree:fmtDur(Date.now()-S.read.startedAt)});}
+    if(!S.read.done){S.read.done=true;track('lecture_terminee',{vues:S.read.count,vuesReelles:S.read.realCount||0,total:S.read.total,declaree:!!S.read.declaree,duree:fmtDur(Date.now()-S.read.startedAt)});}
     flush();go(3);return;
   }
   if(S.step===3){
@@ -1000,10 +1028,10 @@ function buildRecap(){
   row('Contrat',S.content.templateName);
   row('Société',c.name);row('SIRET',fmtSiret(c.siret));row('Siège social',c.addressLine||addrLine(c.address));
   row('Représentant',repFull()+(qualite()?', '+qualite():''));
-  (S.content.form.conditions||[]).forEach(function(x){row(x.value?'☑ Retenu':'☐ Non retenu',x.label);});
+  (S.content.form.conditions||[]).forEach(function(x){if(x.value)row('Condition',x.label);});
   S.content.form.checks.forEach(function(x){row(S.checks[x.id]?'☑ Coché':'☐ Non coché',x.label);
     if(x.kind==='renonciation')row('Démarrage',S.checks[x.id]?'Immédiat, dès la signature':'À partir du '+(S.content.form.startNoWaiver||''));});
-  S.content.form.texts.forEach(function(x){var e=$('tx_'+x.id);row(x.label,x.locked?x.value:(e&&e.value));});
+  S.content.form.texts.forEach(function(x){var e=$('tx_'+x.id);var v=x.locked?x.value:(e&&e.value);if(v||!x.locked)row(x.label,v);});
   row('Date',$('mDate').value);row('Mention',$('mLu').value.trim());
   if(S.content.form.paraphe)row('Paraphe',$('mPar').value.trim());
   $('recap').innerHTML=h;
@@ -1100,6 +1128,7 @@ document.addEventListener('click',function(e){
   else if(a==='pad-clear')padReset(false);
   else if(a==='preview')preview();
   else if(a==='pdf-open')openOriginal();
+  else if(a==='fast-read')fastRead();
   else if(a==='modal-close'){$('mPdf').classList.remove('on');document.body.style.overflow='';}
   else if(a==='download')download();
 });

@@ -1082,7 +1082,7 @@ function _equipeFields(tpl){
   }).map(function(f){
     var h=hints[f.id]||{};
     return {id:f.id,type:f.fieldType,label:h.label||f.label||'Champ',help:h.help||'',max:h.maxLength||200,
-      group:h.group||f.group||'',required:h.required===false?false:(f.required!==false)};
+      group:h.group||f.group||'',required:h.required===false?false:(f.required!==false),requiredIf:h.requiredIf||f.requiredIf||''};
   });
 }
 function openSendModal(){
@@ -1104,7 +1104,7 @@ function openSendModal(){
       }else if(f.type==='case_cocher'){
         h+='<label style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;font-size:12px;cursor:pointer"><input type="checkbox" data-prefill-check="'+esc(f.id)+'" style="margin-top:2px;accent-color:#0ea5e9"/><span>'+esc(f.label)+'</span></label>';
       }else{
-        h+='<div style="margin-bottom:8px"><div class="ep-label">'+esc(f.label)+(f.required?' *':'')+'</div><input class="ep-input" data-prefill="'+esc(f.id)+'" data-req="'+(f.required?'1':'')+'" data-label="'+esc(f.label)+'" maxlength="'+f.max+'"/>'
+        h+='<div style="margin-bottom:8px"><div class="ep-label">'+esc(f.label)+(f.required?' *':'')+'</div><input class="ep-input" data-prefill="'+esc(f.id)+'" data-req="'+(f.required?'1':'')+'" data-reqif="'+esc(f.requiredIf)+'" data-label="'+esc(f.label)+'" maxlength="'+f.max+'"/>'
           +(f.help?'<div style="font-size:10px;color:var(--muted);margin-top:3px">'+esc(f.help.replace(/ ?Rempli par votre conseiller\.?/,''))+'</div>':'')+'</div>';
       }
     });
@@ -1125,6 +1125,12 @@ function _collectPrefill(){
     var g=inp.getAttribute('data-group');if(g){groups[g]=groups[g]||inp.checked;}
   });
   Object.keys(groups).forEach(function(g){if(!groups[g])manque.push(g);});
+  /* Champ obligatoire selon l'option choisie (ex. mensualités si paiement
+     échelonné). */
+  [].slice.call(document.querySelectorAll('#sendPrefill [data-reqif]')).forEach(function(inp){
+    var c=inp.getAttribute('data-reqif');
+    if(c&&prefill[c]===true&&!inp.value.trim())manque.push(inp.getAttribute('data-label'));
+  });
   if(manque.length){alert('À renseigner avant l\'envoi :\n• '+manque.join('\n• '));return null;}
   return prefill;
 }
@@ -1151,7 +1157,7 @@ function submitSend(){
   var token2=twoSigners?(gid()+gid()):null;
   // Get template fields
   var tpl=_sendTpl();
-  var tplFields=(tpl.fields||[]).map(function(f){return{id:f.id,fieldType:f.fieldType,label:f.label,type:f.type,required:f.required!==false,signerRole:f.signerRole===2?2:1,page:f.page,x:f.x,y:f.y,w:f.w,h:f.h,filledBy:f.filledBy||'',group:f.group||''};});
+  var tplFields=(tpl.fields||[]).map(function(f){return{id:f.id,fieldType:f.fieldType,label:f.label,type:f.type,required:f.required!==false,signerRole:f.signerRole===2?2:1,page:f.page,x:f.x,y:f.y,w:f.w,h:f.h,filledBy:f.filledBy||'',group:f.group||'',mask:f.mask||null,maskChosen:f.maskChosen||null};});
   // Build signers array
   var signers=[{
     order:1,

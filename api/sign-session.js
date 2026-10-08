@@ -35,7 +35,7 @@ const { timestamp } = require('./_tsa');
 /* Événements que la page peut journaliser. Tout le reste est ignoré : le
    journal ne doit contenir que des actions qui ont un sens probatoire. */
 const CLIENT_EVENTS = {
-  section_vue: 1, lecture_terminee: 1, pdf_original_ouvert: 1, page_pdf_vue: 1,
+  section_vue: 1, lecture_terminee: 1, lecture_declaree: 1, pdf_original_ouvert: 1, page_pdf_vue: 1,
   etape: 1, entreprise_selectionnee: 1, entreprise_manuelle: 1, representant_saisi: 1,
   case_cochee: 1, case_decochee: 1, champ_rempli: 1, mention_saisie: 1, paraphe_saisi: 1,
   signature_tracee: 1, signature_effacee: 1, consentement: 1,
@@ -604,8 +604,10 @@ async function finalize(found, ctx, v, info, body) {
       }
       return { id: c.id, etat: v.checks[c.id] ? 'Coché' : 'Non coché', libelle: lib, at: lastAt(ty, function (e) { return e.data && e.data.id === c.id; }) };
     })),
-    lecture: (ctx.webMode ? sectionsVues + ' article(s) sur ' + (ctx.web.sections || []).length + ' affichés à l\'écran' : 'PDF original lu page par page')
-      + (rd.duree ? ' — durée de lecture ' + rd.duree : '') + ' — fin de lecture confirmée le ' + core.parisDateTime(new Date(readDone.at || nowIso)),
+    lecture: (rd.declaree
+      ? 'Déclaration expresse « J\'ai pris connaissance du document dans son intégralité » — ' + (rd.vuesReelles != null ? rd.vuesReelles : sectionsVues) + ' ' + (ctx.webMode ? 'article(s)' : 'page(s)') + ' sur ' + (rd.total || (ctx.webMode ? (ctx.web.sections || []).length : '?')) + ' effectivement affichés à l\'écran'
+      : (ctx.webMode ? sectionsVues + ' article(s) sur ' + (ctx.web.sections || []).length + ' affichés à l\'écran' : 'PDF original lu page par page'))
+      + (rd.duree ? ' — temps passé sur le contrat ' + rd.duree : '') + ' — confirmé le ' + core.parisDateTime(new Date(readDone.at || nowIso)),
     pdfConsulte: firstAt('pdf_original_ouvert') ? 'Oui, le ' + core.parisDateTime(new Date(firstAt('pdf_original_ouvert'))) : 'Non',
     apercu: firstAt('apercu_ouvert') ? 'Oui, le ' + core.parisDateTime(new Date(firstAt('apercu_ouvert'))) : 'Non consulté',
     otpLine: otp.atMs ? ('Code à usage unique envoyé par SMS au ' + (otp.phone || '') + ', validé le ' + core.parisDateTime(new Date(otp.atMs))) : 'Non vérifié',
@@ -665,8 +667,8 @@ async function finalize(found, ctx, v, info, body) {
      figurent au dossier de preuve, le client les a vues sans pouvoir les
      modifier. */
   const spec0 = formSpec(ctx.fields, 1, ctx.hints, ctx.prefill);
-  const conditions = spec0.conditions.map(function (c) { return (c.value ? 'Retenu : ' : 'Non retenu : ') + c.label; })
-    .concat(spec0.texts.filter(function (t) { return t.locked; }).map(function (t) { return t.label + ' : ' + (t.value || '—'); }));
+  const conditions = spec0.conditions.filter(function (c) { return c.value; }).map(function (c) { return 'Retenu : ' + c.label; })
+    .concat(spec0.texts.filter(function (t) { return t.locked && t.value; }).map(function (t) { return t.label + ' : ' + t.value; }));
   const renCheck = spec0.checks.find(function (c) { return c.kind === 'renonciation'; });
   const renonce = renCheck ? !!(all[0].checks || {})[renCheck.id] : null;
 

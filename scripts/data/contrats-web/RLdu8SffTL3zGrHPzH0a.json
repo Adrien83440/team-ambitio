@@ -11,10 +11,11 @@
       "required": false
     },
     "f_8uuhiy2d": {
-      "label": "Nombre de mensualités (si paiement échelonné)",
-      "help": "Laisser vide en cas de paiement intégral. Rempli par votre conseiller.",
+      "label": "Nombre de mensualités",
+      "help": "Obligatoire en paiement échelonné. Rempli par votre conseiller.",
       "filledBy": "equipe",
-      "maxLength": 3
+      "maxLength": 3,
+      "requiredIf": "f_formule_ech"
     },
     "f_formule_int": {
       "label": "Paiement intégral à la signature — 12 000 € HT (14 400 € TTC)",
@@ -92,9 +93,9 @@
       "blocks": [
         "h:4.1. Prix de l’accompagnement",
         "p:Le prix de l’accompagnement est fixé, au choix du CLIENT :",
-        "p:{{field:f_formule_int}} — **12 000 € HT** (soit 14 400 € TTC) en paiement intégral à la signature.",
-        "i:Dans ce cas, le CLIENT bénéficie de l’offre commerciale la plus avantageuse, accordée en raison du règlement intégral de l’accompagnement.",
-        "p:{{field:f_formule_ech}} — ou **13 000 € HT** (soit 15 600 € TTC) en paiement échelonné. Soit {{field:f_8uuhiy2d}} mensualités",
+        "if:f_formule_int:p:— **12 000 € HT** (soit 14 400 € TTC) en paiement intégral à la signature.",
+        "if:f_formule_int:i:Dans ce cas, le CLIENT bénéficie de l’offre commerciale la plus avantageuse, accordée en raison du règlement intégral de l’accompagnement.",
+        "if:f_formule_ech:p:— **13 000 € HT** (soit 15 600 € TTC) en paiement échelonné. Soit {{field:f_8uuhiy2d}} mensualités",
         "h:4.2. Modalités de règlement",
         "p:Les règlements sont encaissés par prélèvement SEPA. Le CLIENT signe le mandat de prélèvement le jour de la signature du contrat. Le premier prélèvement est lancé à cette même date ; les suivants, le cas échéant, à la même date des mois suivants.",
         "p:L’accompagnement démarre dès la signature du contrat, sans attendre la compensation bancaire du premier prélèvement.",
@@ -295,6 +296,31 @@
     },
     "f_8uuhiy2d": {
       "filledBy": "equipe"
+    },
+    "f_formule_int": {
+      "mask": {
+        "page": 3,
+        "x": 43.2,
+        "y": 312.8,
+        "w": 610.8,
+        "h": 48.8
+      }
+    },
+    "f_formule_ech": {
+      "mask": {
+        "page": 3,
+        "x": 43.2,
+        "y": 365.4,
+        "w": 610.8,
+        "h": 19.2
+      },
+      "maskChosen": {
+        "page": 3,
+        "x": 85.8,
+        "y": 369.0,
+        "w": 15.0,
+        "h": 14.4
+      }
     }
   },
   "fieldAdds": [
@@ -311,7 +337,14 @@
       "x": 50.4,
       "y": 314.0,
       "w": 14.4,
-      "h": 14.4
+      "h": 14.4,
+      "mask": {
+        "page": 3,
+        "x": 43.2,
+        "y": 312.8,
+        "w": 610.8,
+        "h": 48.8
+      }
     },
     {
       "id": "f_formule_ech",
@@ -326,7 +359,21 @@
       "x": 50.4,
       "y": 367.8,
       "w": 14.4,
-      "h": 14.4
+      "h": 14.4,
+      "mask": {
+        "page": 3,
+        "x": 43.2,
+        "y": 365.4,
+        "w": 610.8,
+        "h": 19.2
+      },
+      "maskChosen": {
+        "page": 3,
+        "x": 85.8,
+        "y": 369.0,
+        "w": 15.0,
+        "h": 14.4
+      }
     }
   ]
 }
