@@ -526,7 +526,7 @@ function renderCard(l){
   /* Probabilité de close estimée par l'IA (programme IA 10/2026) —
      leads.aiClose écrit par api/ai-close-proba.js (cron horaire). Discret :
      une petite pastille, raison au survol. */
-  if(isKanbanFieldVisible('aiClose')&&l.aiClose&&typeof l.aiClose.proba==='number'){var acp=l.aiClose.proba;h+='<span class="crm-card-ai '+(acp>=60?'hi':(acp>=30?'mid':'lo'))+'" title="'+escA('Probabilité de close (IA) : '+acp+' % — '+(l.aiClose.raison||''))+'">◔ '+acp+'%</span>';}
+  if(crmIsAdmin()&&isKanbanFieldVisible('aiClose')&&l.aiClose&&typeof l.aiClose.proba==='number'){var acp=l.aiClose.proba;h+='<span class="crm-card-ai '+(acp>=60?'hi':(acp>=30?'mid':'lo'))+'" title="'+escA('Probabilité de close (IA) : '+acp+' % — '+(l.aiClose.raison||''))+'">◔ '+acp+'%</span>';}
   if(hn)h+='<span class="crm-card-notes-dot"></span>';
   h+='</div>';
   if(isKanbanFieldVisible('tags')&&l.tags&&l.tags.length>0){h+='<div class="crm-card-tags">';l.tags.forEach(function(t){if(t)h+='<span class="crm-card-tag" style="background:'+tagColor(t)+'20;color:'+tagColor(t)+'">'+esc(t)+'</span>';});h+='</div>';}
@@ -1484,6 +1484,9 @@ var KANBAN_FIELDS=[
   {key:'aiClose',label:'Proba de close (IA)',icon:'◔',default:true}
 ];
 var visibleKanbanFields=null;
+/* Proba de close IA : visible des admins uniquement (demande Adrien 08/10/2026). */
+function crmIsAdmin(){try{return localStorage.getItem('ambitio_role')==='admin';}catch(e){return false;}}
+if(!crmIsAdmin())KANBAN_FIELDS=KANBAN_FIELDS.filter(function(f){return f.key!=='aiClose';});
 
 function loadKanbanConfig(){
   var saved=localStorage.getItem('crm_kanban_fields_v2');

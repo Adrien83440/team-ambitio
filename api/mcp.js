@@ -10,10 +10,13 @@
 // Méthodes : initialize, notifications/initialized, ping, tools/list,
 // tools/call.
 // Accès : secret partagé MCP_SECRET (variable Vercel, ≥ 32 caractères),
-//   - en en-tête  Authorization: Bearer <MCP_SECRET>   (Claude Desktop / Code)
-//   - ou dans l'URL https://team.alteore.com/api/mcp?key=<MCP_SECRET>
-//     (connecteur personnalisé claude.ai sans OAuth — l'URL EST le secret :
-//      ne jamais la partager ; la changer = changer MCP_SECRET).
+//   - URL à donner à claude.ai : https://team.alteore.com/mcp/<MCP_SECRET>
+//     (route vercel.json → /api/mcp?key=…). Connecteur SANS OAuth : l'URL
+//     EST le secret — ne jamais la partager ; la changer = changer MCP_SECRET.
+//   - ou en-tête Authorization: Bearer <MCP_SECRET> (Claude Desktop / Code).
+// Sans le bon secret on répond 404 et JAMAIS 401 : un 401 pousse claude.ai à
+// tenter une inscription OAuth (« Impossible de s'inscrire auprès du service
+// de connexion »), alors que ce serveur n'en a pas.
 // Les appels d'outils ne consomment PAS le budget API (ils lisent Firestore ;
 // c'est l'abonnement Claude d'Adrien qui fait tourner le modèle).
 // ============================================================================
@@ -77,7 +80,7 @@ async function handle(msg) {
 
 module.exports = async function (req, res) {
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
-  if (!authorized(req)) { res.status(401).json(err(null, -32001, 'Non autorisé')); return; }
+  if (!authorized(req)) { res.status(404).end(); return; }
   if (req.method === 'GET') { res.status(405).setHeader('Allow', 'POST'); res.end(); return; }
   if (req.method === 'DELETE') { res.status(204).end(); return; }
   if (req.method !== 'POST') { res.status(405).end(); return; }

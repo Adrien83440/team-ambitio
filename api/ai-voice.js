@@ -17,6 +17,22 @@ const parseBody = require('./_parseBody');
 const { getAiConfig } = require('./_ai');
 
 const XI = 'https://api.elevenlabs.io/v1';
+
+// Message lisible à partir d'une erreur ElevenLabs (clé sans la permission
+// demandée, quota épuisé, voix absente de « My Voices »…), journalisé pour
+// les logs Vercel.
+async function xiError(r, what) {
+  let raw = '';
+  try { raw = await r.text(); } catch (e) { /* vide */ }
+  let msg = raw;
+  try { const j = JSON.parse(raw); msg = (j.detail && (j.detail.message || j.detail.status || JSON.stringify(j.detail))) || j.message || raw; } catch (e) { /* texte brut */ }
+  console.error('[ai-voice] ' + what + ' HTTP ' + r.status + ' : ' + String(raw).slice(0, 500));
+  let hint = '';
+  if (r.status === 401) hint = ' — vérifie la clé ElevenLabs et ses permissions (« Text to Speech » et « Speech to Text » doivent être autorisées).';
+  else if (r.status === 404 && what === 'tts') hint = ' — ajoute la voix à « My Voices » dans ElevenLabs.';
+  else if (r.status === 429) hint = ' — quota ElevenLabs atteint.';
+  return what.toUpperCase() + ' ' + r.status + ' : ' + String(msg).slice(0, 220) + hint;
+}
 const VOICES = [
   { id: 'F1toM6PcP54s45kOOAyV', name: 'Koraly', desc: 'Féminine, parisienne, expressive et chaleureuse' },
   { id: 'kENkNtk0xyzG09WW40xE', name: 'Marcel', desc: 'Masculine, naturelle, « le gars d\'à côté »' },
@@ -45,7 +61,7 @@ module.exports = async function (req, res) {
         headers: { 'xi-api-key': key, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
         body: JSON.stringify({ text: text, model_id: 'eleven_flash_v2_5', language_code: 'fr', voice_settings: { stability: 0.45, similarity_boost: 0.8, style: 0.25, use_speaker_boost: true } }),
       });
-      if (!r.ok) { const t = await r.text().catch(function () { return ''; }); res.status(200).json({ ok: false, error: 'tts_' + r.status, message: 'Synthèse vocale impossible : ' + t.slice(0, 200) }); return; }
+      if (!r.ok) { res.status(200).json({ ok: false, error: 'tts_' + r.status, message: await xiError(r, 'tts') }); return; }
       const buf = Buffer.from(await r.arrayBuffer());
       res.status(200).json({ ok: true, audio: buf.toString('base64'), mime: 'audio/mpeg' });
       return;
@@ -55,14 +71,27 @@ module.exports = async function (req, res) {
       const b64 = String(body.audio || '');
       if (!b64 || b64.length > 6000000) { res.status(400).json({ ok: false, error: 'bad_audio' }); return; }
       const mime = /^audio\/[a-z0-9.+-]+/i.test(body.mime || '') ? String(body.mime).split(';')[0] : 'audio/webm';
-      const fd = new FormData();
-      fd.append('model_id', 'scribe_v1');
-      fd.append('language_code', 'fra');
-      fd.append('file', new Blob([Buffer.from(b64, 'base64')], { type: mime }), 'question.' + (mime.split('/')[1] || 'webm'));
-      const r = await fetch(XI + '/speech-to-text', { method: 'POST', headers: { 'xi-api-key': key }, body: fd });
-      const j = await r.json().catch(function () { return null; });
-      if (!r.ok || !j) { res.status(200).json({ ok: false, error: 'stt_' + r.status, message: 'Transcription impossible' }); return; }
-      res.status(200).json({ ok: true, text: String(j.text || '').trim() });
+      const bytes = Buffer.from(b64, 'base64');
+      const ext = ({ 'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/mpeg': 'mp3', 'audio/ogg': 'ogg', 'audio/wav': 'wav', 'audio/x-m4a': 'm4a' })[mime] || 'webm';
+      // Modèle de secours : si le premier identifiant de modèle est refusé
+      // (400 / 422), on retente avec le suivant.
+      const models = ['scribe_v1', 'scribe_v2'];
+      let lastErr = '';
+      for (let i = 0; i < models.length; i++) {
+        const fd = new FormData();
+        fd.append('model_id', models[i]);
+        fd.append('language_code', 'fra');
+        fd.append('file', new Blob([bytes], { type: mime }), 'question.' + ext);
+        const r = await fetch(XI + '/speech-to-text', { method: 'POST', headers: { 'xi-api-key': key }, body: fd });
+        if (r.ok) {
+          const j = await r.json().catch(function () { return null; });
+          res.status(200).json({ ok: true, text: String((j && j.text) || '').trim() });
+          return;
+        }
+        lastErr = await xiError(r, 'stt');
+        if (r.status !== 400 && r.status !== 422) break;
+      }
+      res.status(200).json({ ok: false, error: 'stt_failed', message: lastErr });
       return;
     }
 

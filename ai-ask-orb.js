@@ -169,6 +169,30 @@
   }
 
   var micSrc = null;
+  // Reconnaissance vocale du navigateur, lancée EN PARALLÈLE de
+  // l'enregistrement : filet de sécurité si la transcription ElevenLabs
+  // échoue (clé, quota, réseau). Chrome et Safari la proposent.
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var reco = null, recoText = '';
+  function startReco() {
+    recoText = '';
+    if (!SR) return;
+    try {
+      reco = new SR();
+      reco.lang = 'fr-FR';
+      reco.continuous = true;
+      reco.interimResults = true;
+      reco.onresult = function (ev) {
+        var t = '';
+        for (var i = 0; i < ev.results.length; i++) t += ev.results[i][0].transcript;
+        recoText = t.trim();
+      };
+      reco.onerror = function () {};
+      reco.start();
+    } catch (e) { reco = null; }
+  }
+  function stopReco() { if (reco) { try { reco.stop(); } catch (e) {} reco = null; } }
+
   function startRec() {
     if (S.holding || S.state === 'thinking') return;
     if (S.audio) { try { S.audio.pause(); } catch (e) {} }
@@ -185,6 +209,7 @@
       S.rec.ondataavailable = function (ev) { if (ev.data && ev.data.size) S.chunks.push(ev.data); };
       S.rec.onstop = onRecStop;
       S.rec.start();
+      startReco();
       setState('listening');
     }).catch(function () { S.holding = false; setState('idle', 'Micro refusé — écris ta question'); });
   }
@@ -195,18 +220,27 @@
     else setState('idle');
   }
   function onRecStop() {
+    stopReco();
     if (micSrc) { try { micSrc.disconnect(); } catch (e) {} micSrc = null; }
     if (S.micStream) { S.micStream.getTracks().forEach(function (t) { t.stop(); }); S.micStream = null; }
     var blob = new Blob(S.chunks, { type: (S.rec && S.rec.mimeType) || 'audio/webm' });
-    if (blob.size < 2500) { setState('idle', 'Trop court — maintiens le bouton en parlant'); return; }
+    if (blob.size < 2500 && !recoText) { setState('idle', 'Trop court — maintiens le bouton en parlant'); return; }
     setState('thinking', 'Je transcris…');
     var fr = new FileReader();
     fr.onload = function () {
       var b64 = String(fr.result).split(',')[1] || '';
+      // Petit délai : laisse la reconnaissance du navigateur livrer son dernier mot.
+      var fallback = function (why) {
+        setTimeout(function () {
+          if (recoText) { ask(recoText); return; }
+          setState('idle', 'Transcription impossible');
+          el.aioA.textContent = '⚠️ ' + why + (SR ? '' : '\n(Ce navigateur n\'a pas de reconnaissance vocale de secours : écris ta question.)');
+        }, 400);
+      };
       post('/api/ai-voice', { action: 'stt', audio: b64, mime: blob.type }).then(function (j) {
-        if (!j.text) { setState('idle', 'Je n\'ai rien entendu'); return; }
-        ask(j.text);
-      }).catch(function (e) { setState('idle', e.message); });
+        if (j.text) { ask(j.text); return; }
+        fallback('Je n\'ai rien entendu.');
+      }).catch(function (e) { fallback(e.message); });
     };
     fr.readAsDataURL(blob);
   }
@@ -224,7 +258,11 @@
       S.audio.src = 'data:' + (j.mime || 'audio/mpeg') + ';base64,' + j.audio;
       setState('speaking');
       S.audio.play().catch(function () { setState('idle'); });
-    }).catch(function (e) { setState('idle', '🔇 ' + e.message); });
+    }).catch(function (e) {
+      setState('idle', '🔇 Voix indisponible');
+      // Après la fin de l'effet machine à écrire (sinon il écrase le message).
+      setTimeout(function () { el.aioA.textContent = text + '\n\n🔇 ' + e.message; }, 2600);
+    });
   }
 
   /* ═══ Question → réponse ═══ */
