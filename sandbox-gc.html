@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="robots" content="noindex,nofollow"/>
+<title>[BAC À SABLE] Configurer votre prélèvement</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   sandbox-gc.html — BAC À SABLE : la page de mandat GoCardless, SIMULÉE
+   En production, « Générer le lien mandat » (payments.html → vrai
+   api/gocardless-billing-request.js) crée une billing request + un flow
+   GoCardless ; le client ouvre la page HÉBERGÉE par GoCardless
+   (pay.gocardless.com). Ici le même code tourne contre une API GoCardless
+   simulée (sandbox-server.js) et ce lien mène à cette page, qui en
+   reproduit le déroulé (identité pré-remplie → adresse → IBAN → mandat
+   SEPA → succès). Ouverte dans le téléphone simulé de sandbox-closer.html.
+   Aucun compte n'est débité : seule la fausse base est modifiée.
+   ═══════════════════════════════════════════════════════════════════════ */
+:root{--ink:#1c1c1c;--muted:#6b6b6b;--line:#dcdcdc;--bg:#f6f6f4;--accent:#1c1c1c;--ok:#0b7a43;--err:#c0392b}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,-apple-system,sans-serif;font-size:15px;line-height:1.5;min-height:100vh}
+button,input,select{font-family:inherit;font-size:16px;color:inherit}
+.rib{background:#f59e0b;color:#1a1407;font-size:11px;font-weight:800;text-align:center;padding:4px 8px}
+.top{background:#fff;border-bottom:1px solid var(--line);padding:14px 18px;display:flex;align-items:center;gap:10px}
+.mer{width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,#b91c1c,#ef4444);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center}
+.top b{font-size:15px}
+.top small{display:block;font-size:12px;color:var(--muted)}
+.wrap{max-width:520px;margin:0 auto;padding:20px 16px 60px}
+.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:14px}
+h1{font-size:21px;font-weight:700;margin-bottom:6px;letter-spacing:-.2px}
+.sub{color:var(--muted);font-size:14px}
+.prog{display:flex;gap:4px;margin:0 0 16px}
+.prog i{flex:1;height:3px;border-radius:2px;background:var(--line)}
+.prog i.on{background:var(--ink)}
+.sum{background:#fafaf8;border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:14px 0;font-size:14px}
+.sum-r{display:flex;justify-content:space-between;gap:10px;padding:3px 0}
+.sum-r span:first-child{color:var(--muted)}
+.sum-r span:last-child{font-weight:600;text-align:right}
+label{display:block;font-size:13px;font-weight:600;margin:14px 0 6px}
+.in{width:100%;padding:12px 13px;border:1px solid #b8b8b8;border-radius:6px;background:#fff;outline:none}
+.in:focus{border-color:var(--ink);box-shadow:0 0 0 2px rgba(28,28,28,.12)}
+.in.bad{border-color:var(--err)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.err{color:var(--err);font-size:13px;margin-top:5px;font-weight:600}
+.btn{width:100%;margin-top:18px;padding:14px 18px;border:none;border-radius:6px;background:var(--accent);color:#fff;font-weight:600;font-size:15px;cursor:pointer;min-height:48px}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.lnk{background:none;border:none;color:var(--ink);text-decoration:underline;font-size:14px;cursor:pointer;margin-top:12px}
+.test{background:#fff7e6;border:1px dashed #f59e0b;border-radius:8px;padding:10px 12px;font-size:13px;margin-top:12px;color:#7a4b00}
+.test code{font-family:ui-monospace,Menlo,monospace;font-weight:700}
+.test button{margin-top:6px;background:#f59e0b;border:none;border-radius:5px;padding:6px 10px;font-size:12.5px;font-weight:700;cursor:pointer;color:#1a1407}
+.legal{font-size:12.5px;color:var(--muted);line-height:1.55;margin-top:12px}
+.ok{text-align:center;padding:10px 0}
+.ok .ic{width:56px;height:56px;border-radius:50%;background:#e3f4ea;color:var(--ok);font-size:28px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
+.foot{text-align:center;font-size:12px;color:var(--muted);margin-top:18px}
+.foot b{color:var(--ink)}
+.view{display:none}.view.on{display:block}
+.spin{width:18px;height:18px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;display:inline-block;animation:sp .7s linear infinite;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media(max-width:420px){.row2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="rib">🧪 BAC À SABLE — fausse page GoCardless, aucun compte n'est débité</div>
+<div class="top"><div class="mer">A</div><div><b>Ambitio Corp</b><small>Prélèvement automatique sécurisé</small></div><div style="margin-left:auto;font-size:12px;color:var(--muted)">🔒</div></div>
+<div class="wrap">
+  <div class="view" id="vErr"><div class="card"><h1>Lien indisponible</h1><p class="sub" id="errMsg">Ce lien n'est plus valide. Contactez Ambitio Corp pour en recevoir un nouveau.</p></div></div>
+
+  <div class="view" id="v1"><div class="card">
+    <div class="prog"><i class="on"></i><i></i><i></i><i></i></div>
+    <h1>Configurer votre prélèvement</h1>
+    <p class="sub">Ambitio Corp vous demande d'autoriser des prélèvements automatiques sur votre compte bancaire, au moyen d'un mandat de prélèvement SEPA.</p>
+    <div class="row2"><div><label for="gFirst">Prénom</label><input class="in" id="gFirst" autocomplete="given-name"/></div><div><label for="gLast">Nom</label><input class="in" id="gLast" autocomplete="family-name"/></div></div>
+    <label for="gMail">Adresse e-mail</label><input class="in" id="gMail" type="email" autocomplete="email"/>
+    <label for="gCo">Nom de l'entreprise <span style="font-weight:400;color:var(--muted)">(facultatif)</span></label><input class="in" id="gCo" autocomplete="organization"/>
+    <div class="err" id="e1" style="display:none"></div>
+    <button class="btn" data-a="n1">Continuer</button>
+  </div></div>
+
+  <div class="view" id="v2"><div class="card">
+    <div class="prog"><i class="on"></i><i class="on"></i><i></i><i></i></div>
+    <h1>Votre adresse</h1>
+    <p class="sub">L'adresse associée à votre compte bancaire.</p>
+    <label for="gAddr">Adresse</label><input class="in" id="gAddr" autocomplete="address-line1"/>
+    <div class="row2"><div><label for="gCp">Code postal</label><input class="in" id="gCp" inputmode="numeric" maxlength="5" autocomplete="postal-code"/></div><div><label for="gCity">Ville</label><input class="in" id="gCity" autocomplete="address-level2"/></div></div>
+    <label for="gCountry">Pays</label><select class="in" id="gCountry"><option>France</option><option>Belgique</option><option>Luxembourg</option><option>Suisse</option></select>
+    <div class="err" id="e2" style="display:none"></div>
+    <button class="btn" data-a="n2">Continuer</button>
+    <button class="lnk" data-a="b1">← Retour</button>
+  </div></div>
+
+  <div class="view" id="v3"><div class="card">
+    <div class="prog"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div>
+    <h1>Vos coordonnées bancaires</h1>
+    <p class="sub">Vos données bancaires sont chiffrées et transmises de façon sécurisée.</p>
+    <label for="gHolder">Titulaire du compte</label><input class="in" id="gHolder" autocomplete="name"/>
+    <label for="gIban">IBAN</label><input class="in" id="gIban" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="FR76 XXXX XXXX XXXX XXXX XXXX XXX"/>
+    <div class="test">🧪 Bac à sable — IBAN de test :<br><code id="ibanTest"></code><br><button data-a="fillIban">Utiliser l'IBAN de test</button></div>
+    <div class="err" id="e3" style="display:none"></div>
+    <button class="btn" data-a="n3">Continuer</button>
+    <button class="lnk" data-a="b2">← Retour</button>
+  </div></div>
+
+  <div class="view" id="v4"><div class="card">
+    <div class="prog"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
+    <h1>Confirmez votre mandat</h1>
+    <p class="sub">Vérifiez les informations avant de configurer le prélèvement.</p>
+    <div class="sum" id="sum4"></div>
+    <p class="legal">En signant ce formulaire de mandat, vous autorisez (A) Ambitio Corp à envoyer des instructions à votre banque pour débiter votre compte, et (B) votre banque à débiter votre compte conformément aux instructions d'Ambitio Corp. Vous bénéficiez du droit d'être remboursé par votre banque selon les conditions décrites dans la convention que vous avez passée avec elle. Une demande de remboursement doit être présentée dans les 8 semaines suivant la date de débit de votre compte pour un prélèvement autorisé.</p>
+    <button class="btn" data-a="confirm" id="btnConfirm">Configurer le prélèvement</button>
+    <button class="lnk" data-a="b3">← Modifier</button>
+  </div></div>
+
+  <div class="view" id="vOk"><div class="card ok">
+    <div class="ic">✓</div>
+    <h1>Votre prélèvement automatique a été configuré</h1>
+    <p class="sub" id="okSub"></p>
+    <p class="legal" style="text-align:left">Vous pouvez fermer cette page. Ambitio Corp vous préviendra avant chaque prélèvement.</p>
+  </div></div>
+
+  <div class="view" id="vDone"><div class="card ok">
+    <div class="ic">✓</div>
+    <h1>Mandat déjà configuré</h1>
+    <p class="sub">Ce lien a déjà été utilisé : votre prélèvement automatique est en place. Aucune action n'est nécessaire.</p>
+  </div></div>
+
+  <div class="foot">Paiements sécurisés par <b>GoCardless</b> <span style="opacity:.7">(simulé)</span></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var T = null;
+  try { T = window.top; if (!T.__SBX_SERVER || !T.SBX) T = null; } catch (e) { T = null; }
+  var FLOW = (new URLSearchParams(location.search).get('flow') || '').replace(/[^A-Za-z0-9]/g, '');
+  function $(id) { return document.getElementById(id); }
+  function view(id) { var v = document.querySelectorAll('.view'); for (var i = 0; i < v.length; i++) v[i].classList.toggle('on', v[i].id === id); window.scrollTo(0, 0); }
+  function err(id, msg) { var e = $(id); if (!msg) { e.style.display = 'none'; return; } e.textContent = msg; e.style.display = ''; }
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+  function maskIban(v) { v = String(v || '').replace(/\s+/g, '').toUpperCase(); return v.slice(0, 4) + ' •••• •••• ' + v.slice(-4); }
+  if (!T || !FLOW) { view('vErr'); return; }
+  var X = T.SBX, GC = T.__SBX_SERVER.gc, flow = null;
+
+  GC.get(FLOW).then(function (f) {
+    if (!f || !f.links || !f.links.billing_request) { view('vErr'); return null; }
+    flow = f;
+    return GC.get(f.links.billing_request).then(function (br) {
+      if (!br || br.status === 'cancelled') { view('vErr'); return; }
+      if (br.status === 'fulfilled') { view('vDone'); return; }
+      /* prefilled_customer : ce que payments.html a transmis (nom, e-mail
+         saisis dans le paiement) — d'où l'intérêt qu'ils soient justes. */
+      var p = f.prefilled_customer || {};
+      $('gFirst').value = p.given_name || ''; $('gLast').value = p.family_name || ''; $('gMail').value = p.email || '';
+      $('ibanTest').textContent = X.IBAN_TEST;
+      view('v1');
+    });
+  }).catch(function () { view('vErr'); });
+
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest ? e.target.closest('[data-a]') : null; if (!t) return;
+    var a = t.getAttribute('data-a');
+    if (a === 'n1') {
+      if ($('gFirst').value.trim().length < 1 || $('gLast').value.trim().length < 1) return err('e1', 'Indiquez votre prénom et votre nom.');
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test($('gMail').value.trim())) return err('e1', 'Adresse e-mail invalide.');
+      err('e1'); view('v2');
+    } else if (a === 'n2') {
+      if (!$('gAddr').value.trim() || !/^\d{4,5}$/.test($('gCp').value.trim()) || !$('gCity').value.trim()) return err('e2', 'Adresse incomplète.');
+      err('e2'); if (!$('gHolder').value) $('gHolder').value = ($('gFirst').value.trim() + ' ' + $('gLast').value.trim()).trim(); view('v3');
+    } else if (a === 'n3') {
+      if ($('gHolder').value.trim().length < 2) return err('e3', 'Indiquez le titulaire du compte.');
+      if (!X.ibanOk($('gIban').value)) { $('gIban').classList.add('bad'); return err('e3', 'Cet IBAN n\'est pas valide. Vérifiez-le.'); }
+      $('gIban').classList.remove('bad'); err('e3');
+      $('sum4').innerHTML = '<div class="sum-r"><span>Créancier</span><span>Ambitio Corp</span></div>'
+        + '<div class="sum-r"><span>Débiteur</span><span>' + esc($('gFirst').value.trim() + ' ' + $('gLast').value.trim()) + (($('gCo').value || '').trim() ? ' — ' + esc($('gCo').value.trim()) : '') + '</span></div>'
+        + '<div class="sum-r"><span>Titulaire</span><span>' + esc($('gHolder').value.trim()) + '</span></div>'
+        + '<div class="sum-r"><span>IBAN</span><span>' + esc(maskIban($('gIban').value)) + '</span></div>'
+        + '<div class="sum-r"><span>Adresse</span><span>' + esc($('gAddr').value.trim() + ', ' + $('gCp').value.trim() + ' ' + $('gCity').value.trim()) + '</span></div>'
+        + '<div class="sum-r"><span>Type</span><span>Prélèvement SEPA (Core)</span></div>';
+      view('v4');
+    } else if (a === 'b1') view('v1');
+    else if (a === 'b2') view('v2');
+    else if (a === 'b3') view('v3');
+    else if (a === 'fillIban') { $('gIban').value = X.IBAN_TEST; $('gIban').classList.remove('bad'); err('e3'); }
+    else if (a === 'confirm') {
+      var b = $('btnConfirm'); b.disabled = true; b.innerHTML = '<span class="spin"></span>';
+      var mail = $('gMail').value.trim(), iban = maskIban($('gIban').value);
+      GC.complete(FLOW, {
+        given_name: $('gFirst').value.trim(), family_name: $('gLast').value.trim(), email: mail, company_name: $('gCo').value.trim(),
+        address_line1: $('gAddr').value.trim(), postal_code: $('gCp').value.trim(), city: $('gCity').value.trim(),
+        holder: $('gHolder').value.trim(), ibanMasked: iban
+      }).then(function () {
+        /* L'e-mail de confirmation que GoCardless envoie au débiteur. */
+        X.deliver({ channel: 'email', to: mail, from: 'GoCardless <help@gocardless.com>', subject: 'Votre prélèvement automatique pour Ambitio Corp est configuré', text: 'Bonjour ' + $('gFirst').value.trim() + ',\n\nVotre mandat de prélèvement SEPA au profit d\'Ambitio Corp a bien été enregistré (compte ' + iban + '). Vous serez prévenu(e) avant chaque prélèvement.' });
+        $('okSub').textContent = 'Un e-mail de confirmation a été envoyé à ' + mail + '.';
+        view('vOk');
+      }).catch(function (e) { b.disabled = false; b.textContent = 'Configurer le prélèvement'; err('e3', (e && e.message) || 'Erreur'); view('v3'); });
+    }
+  });
+})();
+</script>
+</body>
+</html>

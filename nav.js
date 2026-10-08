@@ -129,6 +129,11 @@
     // et simulateur de closing contre un prospect joué par l'IA.
     { id: 'sales-objections',  icon: '🛡️', label: 'Objections',   href: 'sales-objections.html',  section: 'Outils', perm: '_all' },
     { id: 'training-closer',   icon: '🥊', label: 'Entraînement closer', href: 'training-closer.html', section: 'Outils', perm: '_all' },
+    // Bac à sable closer (demande Adrien 08/10/2026, miroir vivant 09/10) :
+    // faux leads + vraies pages Signatures / Paiements / signature client,
+    // sur une base locale — rien de réel n'est déclenché. Sales + admin
+    // seulement (perm '_sales'), ouvert dans une fenêtre à part (newWindow).
+    { id: 'sandbox-closer',    icon: '🧪', label: 'Bac à sable closer', href: 'sandbox-closer.html', section: 'Outils', perm: '_sales', newWindow: true },
     { id: 'documents',         icon: '📚', label: 'Documents',    href: 'documents.html',         section: 'Outils', perm: '_all' },
     // Mur de témoignages : ouvert à toute l'équipe connectée, coachs et CSM
     // compris — ce sont eux qui reçoivent le plus de retours clients. Chacun
@@ -608,6 +613,8 @@
     const perms   = getUserModules();
     const modules = ALL_MODULES.filter(m => {
       if (m.perm === '_admin') return role === 'admin';
+      // '_sales' : équipe commerciale + admins, jamais coach ni CSM.
+      if (m.perm === '_sales') return role === 'sales' || role === 'admin';
       // Customer Success : un admin le voit TOUJOURS, quelle que soit la
       // grille de modules enregistrée sur sa fiche (Adrien 08/10/2026 : le
       // module avait disparu de son menu, csm_* à « none » dans son profil).
@@ -737,7 +744,7 @@
       }
       const isActive   = path === m.href.split('#')[0];
       const badgeClass = m.badge && /^\d+$/.test(m.badge) ? 'nav-item-badge num' : 'nav-item-badge';
-      return `<a class="nav-item${isActive?' active':''}" href="${m.href}" data-id="${m.id}" data-label="${m.label}">
+      return `<a class="nav-item${isActive?' active':''}" href="${m.href}"${m.newWindow?' target="_blank" rel="noopener"':''} data-id="${m.id}" data-label="${m.label}">
         <span class="nav-item-icon">${m.icon}</span>
         <span class="nav-item-label">${m.label}</span>
         ${m.badge?`<span class="${badgeClass}">${m.badge}</span>`:''}

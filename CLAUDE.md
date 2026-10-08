@@ -220,6 +220,30 @@ python3 scripts/build-theme-light.py --check   # vérifie qu'il est à jour
 Règle : 100 % peinture, jamais de layout. Un nouveau token de page se déclare
 aussi dans `theme-light.css` §1 avec sa valeur claire.
 
+## Bac à sable closer (Outils → 🧪, sales + admin)
+
+`sandbox-closer.html` : entraînement sur faux leads, **miroir vivant** du réel.
+Les vraies pages `sign.html`, `sales-signatures.html`, `payments.html` tournent
+dans `sandbox-frame.html` (pare-feu réseau + Firebase remplacé par la base
+locale `sandbox-db.js`) ; le vrai code `api/*` de la signature et des paiements
+tourne dans le navigateur via `sandbox-server.js` — **GÉNÉRÉ**, ne jamais
+l'éditer. Seul accès réel : la **lecture** de `signature_templates`.
+
+**Après toute modification d'un fichier `api/` utilisé par la signature ou les
+paiements (sign-session, signature-*, gocardless-*, payments-send-mandate-*,
+`_sign-*`, `_contract-render`, `_companyLookup`…) :**
+
+```bash
+node scripts/build-sandbox-server.js           # régénère sandbox-server.js
+node scripts/build-sandbox-server.js --check   # vérifie qu'il est à jour
+```
+
+Une nouvelle dépendance Node (`require` d'un paquet) dans ces fichiers doit
+recevoir son remplaçant dans `scripts/sandbox/shim-*.js`, sinon le build échoue ;
+un nouvel appel `fetch` vers un service externe est refusé à l'exécution tant
+qu'il n'est pas simulé dans `shim-services.js`. C'est voulu : rien de réel ne
+doit pouvoir partir du bac à sable.
+
 ## `nav.js` — trois variables globales
 
 Ce ne sont **pas** des fonctions :

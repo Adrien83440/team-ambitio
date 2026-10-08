@@ -627,6 +627,20 @@ function updatePreview() {
   }
 }
 
+/* Un contrat signé existe-t-il pour ce client ? Requêtes à un seul champ
+   (pas d'index composite) : par lead d'abord, sinon par e-mail du client. */
+async function hasSignedContract(leadId, email) {
+  const col = db.collection('signature_requests');
+  const isSigned = snap => snap.docs.some(d => (d.data() || {}).status === 'signed');
+  if (leadId && isSigned(await col.where('leadId', '==', leadId).get())) return true;
+  const mail = String(email || '').trim();
+  if (mail) {
+    if (isSigned(await col.where('clientEmail', '==', mail).get())) return true;
+    if (mail.toLowerCase() !== mail && isSigned(await col.where('clientEmail', '==', mail.toLowerCase()).get())) return true;
+  }
+  return false;
+}
+
 async function createPayment() {
   const btn = document.getElementById('btnCreatePay');
   const name = document.getElementById('pmLeadName').value.trim();
@@ -639,6 +653,24 @@ async function createPayment() {
   const leadId = document.getElementById('payModal').dataset.leadId || null;
 
   if (!name || !email || !total) { toast('❌ Nom, email et montant requis', false); return; }
+
+  /* Paiement CONDITIONNÉ à la signature du contrat (décision Adrien
+     08/10/2026) : pas de prélèvement sans contrat signé. On cherche une
+     demande de signature signée pour ce lead, à défaut pour cet e-mail.
+     Un admin peut passer outre (renouvellement, contrat papier…) après
+     confirmation explicite ; un sales, jamais. */
+  btn.disabled = true; btn.textContent = 'Vérification du contrat…';
+  let contratSigne = false;
+  try { contratSigne = await hasSignedContract(leadId, email); }
+  catch (e) { console.warn('[payments] vérification du contrat :', e && e.message); }
+  btn.disabled = false; btn.textContent = '✅ Créer le paiement';
+  if (!contratSigne) {
+    if (currentRole !== 'admin') {
+      toast('🔒 Contrat non signé — le paiement ne peut être créé qu\'après la signature du contrat par le client.', false);
+      return;
+    }
+    if (!confirm('Aucun contrat signé trouvé pour ce client (lead ou e-mail).\n\nCréer le paiement quand même ? (exception admin)')) return;
+  }
 
   btn.disabled = true; btn.textContent = 'Création…';
   try {
