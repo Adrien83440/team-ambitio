@@ -12,7 +12,9 @@
 //   C. fiche coaching (clients) sans personId → rattachée à la person qui a le
 //      même email et pas encore de coachingId ;
 //   D. lead de Yann : type / tag « VSL Élite » posés par un opt-in pendant
-//      l'appel de close → tunnel d'origine restauré depuis engagementHistory.
+//      l'appel de close → tunnel d'origine restauré depuis engagementHistory ;
+//   E. fiche coaching de Yann créée (BP 12 Mois - 12C, entrée 07/10/2026),
+//      rattachée à sa person. Idempotent : ignoré si une fiche existe déjà.
 //
 // Effets de bord à connaître (triggers _sync.js) : écrire persons.closeurSlug
 // le propage à leads.closeurSlug et invoice_clients.salesOwner. Le dry-run
@@ -30,6 +32,10 @@ const R = require('./_firestore-rest.js');
 
 const APPLY = process.argv.indexOf('--apply') >= 0;
 const YANN_LEAD_ID = 'sl_48143a45ee0f558049df';
+const YANN_PERSON_ID = 'mAWMu17Yxg9pr7waHXtr';
+// Décision Adrien 08/10/2026 : toutes les fiches du bloc A ont été closées par
+// Élodie (y compris celles où assignedTo désignait quelqu'un d'autre).
+const CLOSEUR_VALIDE = 'elodie';
 const nowIso = new Date().toISOString();
 
 function lower(s) { return (s || '').toString().trim().toLowerCase(); }
@@ -79,6 +85,8 @@ async function patch(path, fields) {
     const lead = await R.getDoc('leads/' + leadId);
     const c = closeurOf(lead && lead.data);
     if (!c.slug) { console.log('  · ' + (d.nom || p.id) + ' — aucun closeur trouvé sur ' + leadId + ', ignoré'); continue; }
+    if (c.slug !== CLOSEUR_VALIDE) console.log('  ⚠ ' + (d.nom || p.id) + ' : ' + c.slug + ' (' + c.src + ') remplacé par ' + CLOSEUR_VALIDE + ' (décision 08/10)');
+    c.slug = CLOSEUR_VALIDE;
     console.log('  ' + (d.nom || p.id) + ' ← ' + c.slug + ' (' + c.src + ')' + (nameOf[c.slug] ? '' : '  ⚠ slug absent du roster'));
     const ic = icByPerson[p.id];
     if (ic && ic.data.salesOwner && ic.data.salesOwner !== c.slug) {
@@ -112,6 +120,51 @@ async function patch(path, fields) {
     const next = cur.slice();
     addByPerson[pid].forEach(function (id) { if (next.indexOf(id) < 0) next.push(id); });
     await patch('persons/' + pid, { paymentIds: next, _lastSyncedAt: nowIso });
+  }
+
+  // ── E. Fiche coaching de Yann (même forme que createClient de coaching.html)
+  console.log('\n── E. Fiche coaching de Yann');
+  let nE = 0;
+  const clientsBefore = await all('clients');
+  const yannPerson = byId[YANN_PERSON_ID];
+  const yannEmail = lower(yannPerson && yannPerson.data.email);
+  const yannExisting = clientsBefore.filter(function (c) { return lower(c.data.email) === yannEmail; });
+  if (!yannPerson || !yannEmail) {
+    console.log('  · fiche person de Yann introuvable, ignoré');
+  } else if (yannExisting.length || yannPerson.data.coachingId) {
+    console.log('  · fiche coaching déjà présente (' + (yannPerson.data.coachingId || yannExisting[0].id) + '), ignoré');
+  } else {
+    const programme = 'BP 12 Mois - 12C';
+    const nbTotal = 12;
+    const dateEntree = '2026-10-07';
+    const sessions = [{ numero: 0, titre: 'RDV URGENT 72H', date: '', coach: '', resume: '', devoirs: '', statut: 'planifie', type: 'rdv72h' }];
+    for (let i = 1; i <= nbTotal; i++) {
+      sessions.push({ numero: i, titre: 'COACHING #' + i, date: '', coach: '', resume: '', devoirs: '', statut: 'planifie' });
+    }
+    const id = 'cli_' + Date.now();
+    const doc = {
+      nom: 'Yann Grabit',
+      email: yannEmail,
+      tel: yannPerson.data.telephone || '',
+      telephone: yannPerson.data.telephone || '',
+      activite: '',
+      programme: programme,
+      dateEntree: dateEntree,
+      nbCoachingsTotal: nbTotal,
+      nbCoachingsFaits: 0,
+      lastSessionDate: '',
+      sessions: sessions,
+      years: [{ yearNum: 1, label: 'Année 1', startDate: dateEntree, notes: programme, sessions: sessions }],
+      planAction: '',
+      statut: 'actif',
+      personId: YANN_PERSON_ID,
+      _updatedAt: Date.now(),
+      _createdBy: 'script:fix-person-links-2026-10'
+    };
+    console.log('  ' + (APPLY ? '✏️  ' : '→ ') + 'création clients/' + id + ' — ' + doc.nom + ', ' + programme + ', entrée ' + dateEntree + ', ' + sessions.length + ' séances');
+    if (APPLY) await R.createDoc('clients/' + id, doc);
+    await patch('persons/' + YANN_PERSON_ID, { coachingId: id, _lastSyncedAt: nowIso });
+    nE++;
   }
 
   // ── C. Fiches coaching ────────────────────────────────────────────────────
@@ -163,6 +216,6 @@ async function patch(path, fields) {
     console.log('  · rien à faire (déjà restauré ou historique absent)');
   }
 
-  console.log('\nRésumé : A ' + nA + ' closeur(s) · B ' + nB + ' paiement(s) · C ' + nC + ' fiche(s) coaching · D ' + nD + ' lead');
+  console.log('\nRésumé : A ' + nA + ' closeur(s) · B ' + nB + ' paiement(s) · E ' + nE + ' fiche coaching créée · C ' + nC + ' fiche(s) coaching rattachée(s) · D ' + nD + ' lead');
   if (!APPLY) console.log('Dry-run terminé — relancer avec --apply après validation.');
 })().catch(function (e) { console.error('ERREUR', e.message); process.exit(1); });
