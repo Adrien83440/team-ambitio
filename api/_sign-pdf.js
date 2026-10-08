@@ -483,8 +483,8 @@ async function proofPages(doc, fonts, P) {
     ['Contrat', P.templateName],
     ['Référence du dossier', P.requestId],
     ['Identifiant de signature', P.certificateId],
-    ['Mode de lecture', P.webMode ? 'Texte intégral du contrat, article par article (version ' + P.webVersion + '), PDF original consultable' : 'Document PDF original, page par page'],
-    ['Empreinte du modèle PDF', 'SHA-256 ' + P.templatePdfSha256, { mono: true }],
+    ['Mode de lecture', P.generated ? 'Texte intégral du contrat, article par article (version ' + P.webVersion + ') ; PDF fabriqué depuis ce même texte' : (P.webMode ? 'Texte intégral du contrat, article par article (version ' + P.webVersion + '), PDF original consultable' : 'Document PDF original, page par page')],
+    ['Empreinte du modèle PDF', P.templatePdfSha256 ? 'SHA-256 ' + P.templatePdfSha256 : '', { mono: true }],
     ['Empreinte du texte présenté', P.webDigest ? 'SHA-256 ' + P.webDigest : '', { mono: true }],
     ['Conditions convenues', (P.conditions || []).length ? P.conditions.join('\n') + '\n(renseignées par le conseiller avant l\'envoi, non modifiables par le client)' : ''],
     ['Demande créée le', P.createdAt ? parisStamp(P.createdAt) + ' (heure de Paris)' : ''],
@@ -663,18 +663,32 @@ async function buildPreviewPdf(opts) {
    signature n'est jamais bloquée par un tiers, et le dossier n'affirme
    jamais un sceau qui n'existe pas. */
 async function buildSignedPdf(opts) {
-  async function make(sealPlanned) {
+  return finishSigned(async function () {
     const doc = await PDFDocument.load(opts.templatePdf);
     const fonts = await embedFonts(doc);
-    doc.setTitle(opts.proof.templateName + ' — signé');
-    doc.setAuthor('SARL Ambitio Corp');
-    doc.setSubject('Contrat signé électroniquement — réf. ' + opts.proof.certificateId);
-    doc.setProducer('Ambitio — signature électronique');
-    doc.setCreator('team.alteore.com');
     const placed = await stampContract(doc, fonts, opts.fields, opts.scale, opts.signers, opts.prefill);
     for (const S of opts.signers) {
       if (S.role === 2 && !placed[2].signature) await cosignPage(doc, fonts, S, opts.proof.templateName);
     }
+    return { doc: doc, fonts: fonts };
+  }, opts.proof);
+}
+
+/* Finition commune : métadonnées, dossier de preuve, sceau RFC 3161.
+   makeContract() fabrique le contrat rempli et renvoie { doc, fonts } (fonts
+   = jeu Montserrat de embedFonts, utilisé par le dossier de preuve). Si
+   aucune autorité ne répond, on refabrique SANS sceau (et le dossier le dit). */
+async function finishSigned(makeContract, proof) {
+  async function make(sealPlanned) {
+    const built = await makeContract();
+    const doc = built.doc;
+    const fonts = built.fonts;
+    doc.setTitle(proof.templateName + ' — signé');
+    doc.setAuthor('SARL Ambitio Corp');
+    doc.setSubject('Contrat signé électroniquement — réf. ' + proof.certificateId);
+    doc.setProducer('Ambitio — signature électronique');
+    doc.setCreator('team.alteore.com');
+    const opts = { proof: proof };
     const P = Object.assign({}, opts.proof, { sealPlanned: sealPlanned });
     P.signers = [];
     for (const ps of opts.proof.signers) {
@@ -688,7 +702,7 @@ async function buildSignedPdf(opts) {
   }
   try {
     const doc = await make(true);
-    const sealed = await sealDocument(doc, 'Horodatage ' + opts.proof.certificateId);
+    const sealed = await sealDocument(doc, 'Horodatage ' + proof.certificateId);
     return { bytes: sealed.bytes, seal: sealed.tsa };
   } catch (e) {
     console.error('[sign-pdf] sceau impossible, PDF non scellé :', e && e.message);
@@ -697,4 +711,4 @@ async function buildSignedPdf(opts) {
   }
 }
 
-module.exports = { buildPreviewPdf, buildSignedPdf, EVENT_LABELS };
+module.exports = { buildPreviewPdf, buildSignedPdf, finishSigned, embedFonts, drawCheckbox, watermark, wrap, clean, EVENT_LABELS };
