@@ -108,6 +108,23 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
 .rc-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .rc-toast.err{background:#2e1a1a;border-color:rgba(239,68,68,.35);color:#fca5a5}
 .locked{text-align:center;padding:80px 20px;color:rgba(255,255,255,.35)}
+/* ── Analyse IA du closing (programme IA 10/2026) ── */
+.an-score{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.an-score .n{font-family:'Bricolage Grotesque',sans-serif;font-size:30px;font-weight:800;line-height:1}
+.an-score .n small{font-size:13px;color:rgba(255,255,255,.45);font-weight:600}
+.an-verdict{font-size:12.5px;line-height:1.55;color:rgba(255,255,255,.82)}
+.an-h{font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:rgba(255,255,255,.45);margin:12px 0 6px}
+.an-step{display:grid;grid-template-columns:minmax(0,1fr) 34px;gap:2px 8px;align-items:center;font-size:12px;padding:4px 0}
+.an-step .bar{grid-column:1/-1;height:4px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden}
+.an-step .bar i{display:block;height:100%;border-radius:999px}
+.an-step .c{grid-column:1/-1;font-size:11px;color:rgba(255,255,255,.5);line-height:1.45}
+.an-step b{font-family:var(--font-m,monospace);font-size:11.5px;text-align:right}
+.an-ul{margin:0;padding-left:16px;font-size:12px;line-height:1.5;color:rgba(255,255,255,.8)}
+.an-obj{padding:8px 10px;border-radius:9px;background:rgba(255,255,255,.04);margin-bottom:6px;cursor:pointer;font-size:12px;line-height:1.5}
+.an-obj:hover{background:rgba(244,114,182,.07)}
+.an-obj q{display:block;font-style:italic;quotes:"« " " »"}
+.an-obj small{display:block;color:rgba(255,255,255,.5);margin-top:3px}
+.an-bascule{padding:9px 11px;border-radius:10px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.22);font-size:12px;line-height:1.5;cursor:pointer}
 @media (max-width:980px){.rp-grid{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:640px){.rc{padding:14px 14px 80px}.rc-row{flex-wrap:wrap}.rc-tags{width:100%;justify-content:flex-start}.rp-acts{margin-left:0;width:100%}}
 </style>
@@ -485,11 +502,14 @@ function renderPlayer() {
     + '<span id="chBtns">'
     + (rp.status === 'ready' ? '<button class="bb bb-o bb-s" data-action="regen">✨ Régénérer (IA)</button> ' : '')
     + (rp.status === 'ready' || v.fileId ? '<button class="bb bb-o bb-s" data-action="chEdit">✏️ Modifier</button>' : '')
-    + '</span></h2><div id="chBox"></div></div></div>';
+    + '</span></h2><div id="chBox"></div></div>'
+    + (rp.status === 'ready' ? '<div class="card"><h2>🤖 Analyse IA du closing <span class="sp"></span><button class="bb bb-o bb-s" data-action="analyze">' + (rp.analysis ? '↻ Réanalyser' : '✨ Analyser') + '</button></h2><div id="anBox"></div></div>' : '')
+    + '</div>';
   h += '</div>';
 
   $('viewPlayer').innerHTML = h;
   renderChapters();
+  renderAnalysis();
   if ($('trList')) $('trList').innerHTML = transcriptRows();
   wireVideo();
 }
@@ -631,6 +651,72 @@ function doRegen(btn) {
   }).catch(function (e) { busy(btn, false); toast('Génération impossible : ' + e.message, true); });
 }
 
+/* ═══ Analyse IA du closing (programme IA 10/2026) ═══
+   bookings/{id}.replay.analysis, produite par api/_aiClosing.js à l'import
+   ou via le bouton (action 'analyze'). Chaque objection et la bascule sont
+   cliquables : la vidéo saute au moment exact. */
+function noteColor(n, max) {
+  var r = n / max;
+  return r >= 0.75 ? '#34d399' : (r >= 0.5 ? '#fbbf24' : '#f87171');
+}
+function renderAnalysis() {
+  var box = $('anBox');
+  if (!box) return;
+  var rp = CUR.replay, a = rp.analysis;
+  if (!a) {
+    box.innerHTML = '<div class="rp-note">' + (rp.analysisError ? '⚠️ ' + esc(rp.analysisError) : 'Pas encore analysé. L\'IA note chaque étape de la trame de closing, repère le moment de bascule et les objections (ajoutées à la bibliothèque <a href="sales-objections.html" style="color:#f9a8d4">Objections</a>).') + '</div>';
+    return;
+  }
+  var h = '<div class="an-score"><div class="n" style="color:' + noteColor(a.score, 100) + '">' + a.score + '<small>/100</small></div><div class="an-verdict">' + esc(a.verdict) + '</div></div>';
+  if (a.bascule && a.bascule.description) {
+    h += '<div class="an-bascule" data-action="seek" data-t="' + (a.bascule.t || 0) + '">⚡ <b>Bascule à ' + fmtT(a.bascule.t || 0) + '</b> — ' + esc(a.bascule.description) + '</div>';
+  }
+  if ((a.etapes || []).length) {
+    h += '<div class="an-h">Trame de closing</div>';
+    a.etapes.forEach(function (e) {
+      var n = Math.max(0, Math.min(10, e.note || 0));
+      h += '<div class="an-step"><span>' + esc(e.etape) + '</span><b>' + n + '/10</b><div class="bar"><i style="width:' + (n * 10) + '%;background:' + noteColor(n, 10) + '"></i></div>'
+        + (e.commentaire ? '<div class="c">' + esc(e.commentaire) + '</div>' : '') + '</div>';
+    });
+  }
+  if ((a.objections || []).length) {
+    h += '<div class="an-h">Objections (' + a.objections.length + ')</div>';
+    a.objections.forEach(function (o) {
+      h += '<div class="an-obj" data-action="seek" data-t="' + (o.t || 0) + '"><q>' + esc(o.quote) + '</q><small>' + fmtT(o.t || 0) + ' · ' + (o.worked ? '✓ levée' : '✕ non levée') + (o.response ? ' — ' + esc(o.response) : '') + '</small></div>';
+    });
+  }
+  function list(title, arr) {
+    if (!(arr || []).length) return '';
+    return '<div class="an-h">' + title + '</div><ul class="an-ul">' + arr.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
+  }
+  h += list('Points forts', a.pointsForts);
+  h += list('Axes de progrès', a.axesProgres);
+  if (a.prospect) {
+    h += list('Douleurs du prospect', a.prospect.douleurs);
+    h += list('Motivations', a.prospect.motivations);
+    h += list('Freins', a.prospect.freins);
+  }
+  if (a.conseilRelance) h += '<div class="an-h">Conseil de relance</div><div class="an-verdict">' + esc(a.conseilRelance) + '</div>';
+  box.innerHTML = h;
+}
+function fmtT(sec) {
+  sec = Math.max(0, Math.round(sec || 0));
+  var hh = Math.floor(sec / 3600), mm = Math.floor((sec % 3600) / 60), ss = sec % 60;
+  return (hh ? hh + ':' + (mm < 10 ? '0' : '') : '') + mm + ':' + (ss < 10 ? '0' : '') + ss;
+}
+function doAnalyze(btn) {
+  if (!CUR) return;
+  busy(btn, true, 'Analyse… (≈ 1 min)');
+  api('POST', {}, { action: 'analyze', id: CUR.booking.id }).then(function (j) {
+    CUR.replay.analysis = j.analysis;
+    CUR.replay.analysisError = null;
+    busy(btn, false);
+    renderAnalysis();
+    btn.textContent = '↻ Réanalyser';
+    toast('✓ Analyse terminée — objections ajoutées à la bibliothèque');
+  }).catch(function (e) { busy(btn, false); toast('Analyse impossible : ' + e.message, true); });
+}
+
 function saveChapters(btn) {
   var list = editToChapters(true);
   if (!list) return;
@@ -657,6 +743,7 @@ document.addEventListener('click', function (ev) {
   if (act === 'seek') { seek(el.getAttribute('data-t')); return; }
   if (act === 'import') { doImport(el); return; }
   if (act === 'regen') { doRegen(el); return; }
+  if (act === 'analyze') { doAnalyze(el); return; }
   if (act === 'mode') {
     var t = currentTime();
     MODE = MODE === 'native' ? 'drive' : 'native';

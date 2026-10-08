@@ -523,6 +523,10 @@ function renderCard(l){
   if(isKanbanFieldVisible('status')&&ls!=='nouveau')h+='<span class="crm-card-setter" style="color:var(--blue)">📞 '+(sL[ls]||ls)+'</span>';
   if(isKanbanFieldVisible('utm')&&l.utm)h+='<span class="crm-card-setter" style="color:var(--purple);font-size:9px">🔗 '+esc(decodeUtm(l.utm))+'</span>';
   if(isKanbanFieldVisible('closeur')&&l.closeur)h+='<span class="crm-card-setter" style="color:var(--gold);font-size:9px">🎯 '+esc(l.closeur)+'</span>';
+  /* Probabilité de close estimée par l'IA (programme IA 10/2026) —
+     leads.aiClose écrit par api/ai-close-proba.js (cron horaire). Discret :
+     une petite pastille, raison au survol. */
+  if(isKanbanFieldVisible('aiClose')&&l.aiClose&&typeof l.aiClose.proba==='number'){var acp=l.aiClose.proba;h+='<span class="crm-card-ai '+(acp>=60?'hi':(acp>=30?'mid':'lo'))+'" title="'+escA('Probabilité de close (IA) : '+acp+' % — '+(l.aiClose.raison||''))+'">◔ '+acp+'%</span>';}
   if(hn)h+='<span class="crm-card-notes-dot"></span>';
   h+='</div>';
   if(isKanbanFieldVisible('tags')&&l.tags&&l.tags.length>0){h+='<div class="crm-card-tags">';l.tags.forEach(function(t){if(t)h+='<span class="crm-card-tag" style="background:'+tagColor(t)+'20;color:'+tagColor(t)+'">'+esc(t)+'</span>';});h+='</div>';}
@@ -1476,7 +1480,8 @@ var KANBAN_FIELDS=[
   {key:'createdAt',label:'Date réelle',icon:'📅',default:true},
   {key:'lastContact',label:'Dernier contact',icon:'⏱',default:true},
   {key:'calls',label:'Nb appels',icon:'📞',default:true},
-  {key:'setterSlug',label:'Setter d\'origine 🔒',icon:'🔒',default:false}
+  {key:'setterSlug',label:'Setter d\'origine 🔒',icon:'🔒',default:false},
+  {key:'aiClose',label:'Proba de close (IA)',icon:'◔',default:true}
 ];
 var visibleKanbanFields=null;
 
@@ -1484,6 +1489,10 @@ function loadKanbanConfig(){
   var saved=localStorage.getItem('crm_kanban_fields_v2');
   if(saved){try{visibleKanbanFields=JSON.parse(saved);}catch(e){visibleKanbanFields=null;}}
   if(!visibleKanbanFields){visibleKanbanFields=KANBAN_FIELDS.filter(function(f){return f.default;}).map(function(f){return f.key;});}
+  /* Nouveau champ « Proba de close (IA) » (10/2026) : ajouté UNE fois aux
+     configurations déjà enregistrées ; si l'utilisateur le décoche ensuite,
+     on respecte son choix. */
+  try{if(!localStorage.getItem('crm_kf_aiclose_v1')){if(visibleKanbanFields.indexOf('aiClose')<0)visibleKanbanFields.push('aiClose');localStorage.setItem('crm_kf_aiclose_v1','1');localStorage.setItem('crm_kanban_fields_v2',JSON.stringify(visibleKanbanFields));}}catch(e){}
 }
 loadKanbanConfig();
 

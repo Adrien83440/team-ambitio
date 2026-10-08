@@ -17,9 +17,9 @@
 //   }
 //
 // Réponse 200 — client trouvé, quota OK :
-//   { ok:true, allowed:true,  clientFound:true,  used:1, quota:2, programme:"...", sessionsCount:1, bookingsCount:0 }
+//   { ok:true, allowed:true,  clientFound:true,  used:1, quota:2, programme:"...", sessionsCount:1, bookingsCount:1, pairedCount:1 }
 // Réponse 200 — client trouvé, quota épuisé :
-//   { ok:true, allowed:false, clientFound:true,  used:2, quota:2, programme:"...", sessionsCount:1, bookingsCount:1 }
+//   { ok:true, allowed:false, clientFound:true,  used:2, quota:2, programme:"...", sessionsCount:1, bookingsCount:1, pairedCount:0 }
 // Réponse 200 — client introuvable (laisse passer, flag posé côté client) :
 //   { ok:true, allowed:true,  clientFound:false, used:0, quota:0 }
 //
@@ -31,28 +31,72 @@
 // qui utilise l'Admin SDK et bypass les rules. On n'expose au client que le
 // strict nécessaire : { allowed, used, quota, clientFound, programme }.
 //
-// Logique de comptage du mois courant
-// -----------------------------------
-//   used = sessions "fait" du mois (depuis c.sessions OU c.years[].sessions),
-//          en EXCLUANT la séance d'accueil (numero 0) et le RDV 72h éclair
-//          (type 'rdv72h') qui ne comptent pas dans le quota mensuel
-//        + bookings confirmed isCoaching=true du mois, MAIS uniquement ceux
-//          dont la date est >= aujourd'hui (RDV à venir), en excluant ceux
-//          flaggés excludeFromQuota === true
+// ────────────────────────────────────────────────────────────────────────────
+// COMPTAGE DU MOIS — APPARIEMENT PAR JOUR (corrigé le 28/08/2026)
+// ────────────────────────────────────────────────────────────────────────────
+// Une même séance de coaching laisse DEUX traces indépendantes en base :
+//   (1) un `bookings/{id}` confirmed isCoaching:true — posé à la réservation,
+//       qui ne bascule JAMAIS en "done" ;
+//   (2) une séance `statut:'fait'` dans clients/{id}.years[].sessions[] —
+//       saisie À LA MAIN par le coach dans coaching.html, parfois plusieurs
+//       jours après le RDV, parfois jamais (RDV pris hors plateforme → seule
+//       la trace (2) existe ; RDV honoré mais non saisi → seule (1) existe).
+//
+// L'ancienne règle sommait « séances faites + RDV À VENIR », en ignorant
+// délibérément les RDV passés pour ne pas compter deux fois une séance ayant
+// ses deux traces. Elle ouvrait un trou béant : entre le RDV honoré et sa
+// saisie par le coach, le client comptait 0 séance sur le mois et pouvait en
+// réserver une seconde. C'est ainsi qu'un BP 12 Mois - 12C (quota 1) a pris
+// deux coachings en août 2026.
+//
+// Nouvelle règle : on regroupe les deux sources PAR JOUR et on retient, pour
+// chaque jour du mois, le maximum des deux — jamais leur somme.
+//
+//   used = Σ_(jours du mois) max( séances "fait" ce jour, bookings ce jour )
+//
+//   RDV le 05 honoré et saisi   → max(1,1) = 1  (plus de double comptage)
+//   RDV le 05 honoré, non saisi → max(0,1) = 1  ← le trou est fermé
+//   Séance le 12 saisie sans booking (RDV hors plateforme) → max(1,0) = 1
+//   RDV le 20 à venir           → max(0,1) = 1  (anti-surbooking conservé)
+//   RDV le 05 annulé puis reposé le 20 → le doc cancelled est ignoré, 1 seul
+//
+// Un RDV replanifié bascule en status 'cancelled' (+ rescheduled) : il sort
+// donc du décompte de lui-même, et seul le nouveau créneau compte.
+//
+// ────────────────────────────────────────────────────────────────────────────
+// CASSE DE L'EMAIL
+// ────────────────────────────────────────────────────────────────────────────
+// booking.html normalise `prospect.email` en minuscules depuis le 28/08/2026,
+// mais l'historique contient des graphies mixtes (« Jean.Dupont@x.com ») :
+// Firestore compare la casse, donc ces bookings étaient invisibles au quota et
+// le client n'était JAMAIS bloqué. On interroge donc les deux graphies et on
+// dédoublonne par identifiant de document — même précaution que
+// countUpcomingCoachingBookings() dans api/_recurrence-core.js.
+//
+// Même problème sur la fiche `clients` : si aucune des deux graphies exactes
+// ne matche, on tombait en clientFound:false → fail-open → réservation
+// autorisée en silence. On ajoute un balayage de secours insensible à la casse
+// (cf. findClientByEmail), déclenché uniquement quand les requêtes indexées
+// ont échoué.
+//
+// ────────────────────────────────────────────────────────────────────────────
+// QUOTA MENSUEL
+// ────────────────────────────────────────────────────────────────────────────
 //   quota = clientData.quotaOverrides[monthYear] si présent (override admin)
 //         | sinon séances ÷ durée du programme, lues sur le libellé
-//           (« Elite NEW - 6 Mois - 24C » → 24/6 = 4). Cf. getMonthlyQuota.
-//   → la partie "sessions fait" est strictement alignée sur coaching.html
-//     (getSessionsInMonth) : même exclusion numero 0 / rdv72h.
+//           (« Elite NEW - 6 Mois - 24C » → 24/6 = 4).
+// La règle vit dans api/_coaching-quota.js (monthlyQuotaFromProgramme),
+// partagée avec la récurrence hebdomadaire et l'Academy — un seul endroit à
+// corriger si elle bouge :
+//     BP 12 Mois - 12C         → 12/12 = 1
+//     BP 12 Mois - 24C         → 24/12 = 2
+//     Elite - 12 Mois - 24C    → 24/12 = 2
+//     Elite NEW - 6 Mois - 24C → 24/6  = 4
 //
-// Pourquoi "RDV à venir uniquement"
-// ---------------------------------
-//   Une séance déjà réalisée existe simultanément (1) en booking confirmed
-//   (le statut ne bascule jamais en "done") et (2) en session "fait" saisie
-//   dans coaching.html. Sommer les deux la comptait deux fois (quota 2/2 alors
-//   que la fiche coaching affiche 1/2). En ne comptant que les bookings futurs,
-//   un RDV passé n'est compté qu'une fois (via sessionsCount) et un RDV futur
-//   réservé reste décompté pour empêcher le surbooking.
+// La séance d'accueil (numero 0) et le RDV 72h éclair (type 'rdv72h') sont
+// exclus du décompte : séances d'onboarding offertes, hors quota mensuel.
+// Alignement strict avec coaching.html (getSessionsInMonth), coaching-shared.js,
+// academy-client-info.js, csm-dashboard.html et csm-clients.html.
 //
 // Overrides manuels (gérés depuis coaching.html, fiche client)
 // ------------------------------------------------------------
@@ -74,31 +118,18 @@
 
 const { db } = require('./_firebaseAdmin');
 const parseBody = require('./_parseBody');
-const { monthlyQuotaFromProgramme } = require('./_recurrence-core');
+const { effectiveMonthlyQuota, monthlyQuotaFromProgramme } = require('./_coaching-quota');
 
 function normEmail(e) {
   return (e || '').toString().trim().toLowerCase();
 }
 
-/* ── QUOTA MENSUEL ────────────────────────────────────────────────────────
-   CORRIGÉ le 18/08/2026. Cet endpoint dérivait le quota du seul « 24C »
-   (→ 2/mois) alors que coaching.html avait été corrigé le 31/07 : le quota,
-   c'est le nombre de séances DIVISÉ par la durée du programme.
-
-     BP 12 Mois - 12C          → 12/12 = 1   (inchangé)
-     BP 12 Mois - 24C          → 24/12 = 2   (inchangé)
-     Elite - 12 Mois - 24C     → 24/12 = 2   (inchangé)
-     Elite NEW - 6 Mois - 24C  → 24/6  = 4   ← était calculé à 2
-
-   Conséquence de l'ancienne règle : un client Elite NEW, qui a une séance par
-   semaine, se voyait refuser sa 3e séance du mois avec « quota atteint ».
-   La règle vit maintenant dans api/_recurrence-core.js, partagée avec la
-   récurrence hebdomadaire — un seul endroit à corriger si elle bouge. */
+/* Quota mensuel — règle unique, partagée avec la récurrence hebdomadaire. */
 const getMonthlyQuota = monthlyQuotaFromProgramme;
 
 // Aplatit les sessions d'un client : supporte le format legacy (sessions[]
 // flat à la racine) et le nouveau format (years[].sessions[]). Cohérent
-// avec la fonction getAllSessions() dans coaching.html (ligne ~1380).
+// avec la fonction getAllSessions() dans coaching.html (ligne ~1546).
 function flattenSessions(c) {
   const all = [];
   if (Array.isArray(c.years) && c.years.length) {
@@ -113,28 +144,131 @@ function flattenSessions(c) {
   return all;
 }
 
-function countSessionsInMonth(c, monthYear /* "YYYY-MM" */) {
-  const sessions = flattenSessions(c);
-  return sessions.filter((s) => {
-    if (!s || s.statut !== 'fait') return false;
-    // Exclure la séance d'accueil (numero === 0) et le RDV 72h éclair
-    // (type === 'rdv72h') : ce sont des séances d'onboarding offertes qui ne
-    // comptent PAS dans le quota mensuel de coachings. Sans cette exclusion, un
-    // client qui a fait son 72h en début de mois se voit refuser son 1er vrai
-    // coaching du mois (used 1/1). Alignement strict avec coaching.html
-    // (getSessionsInMonth ~ligne 1380), academy-client-info.js,
-    // csm-dashboard.html et coaching-dashboard.html.
-    if (s.numero === 0 || s.type === 'rdv72h') return false;
-    if (!s.date || typeof s.date !== 'string') return false;
-    return s.date.slice(0, 7) === monthYear;
-  }).length;
+/**
+ * Séances "fait" du mois, regroupées PAR JOUR : { "2026-08-05": 1, ... }
+ * Exclut la séance d'accueil (numero 0) et le RDV 72h éclair.
+ */
+function sessionDayCounts(c, monthYear /* "YYYY-MM" */) {
+  const byDay = {};
+  flattenSessions(c).forEach((s) => {
+    if (!s || s.statut !== 'fait') return;
+    if (s.numero === 0 || s.type === 'rdv72h') return;
+    if (!s.date || typeof s.date !== 'string') return;
+    const day = s.date.slice(0, 10);
+    if (day.slice(0, 7) !== monthYear) return;
+    byDay[day] = (byDay[day] || 0) + 1;
+  });
+  return byDay;
 }
 
-// Date du jour au format "YYYY-MM-DD" dans le fuseau métier (Europe/Paris).
-// Le serveur Vercel tourne en UTC : on ancre explicitement sur Paris pour ne
-// pas exclure à tort un RDV daté d'aujourd'hui aux abords de minuit.
-function parisToday() {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(new Date());
+/**
+ * Bookings coaching confirmés du mois, regroupés PAR JOUR.
+ * Passés ET à venir : le passé est apparié aux séances "fait" par
+ * countUsed(), il n'est donc jamais compté deux fois (cf. en-tête).
+ *
+ * Interroge les deux graphies de l'email (brute et minuscule) et dédoublonne
+ * par identifiant de document — l'historique contient des `prospect.email`
+ * en casse mixte, invisibles à une requête en minuscules.
+ *
+ * @returns {Promise<{byDay:Object, total:number}>}
+ */
+async function bookingDayCounts(rawEmail, monthYear) {
+  const raw = String(rawEmail || '').trim();
+  const lower = raw.toLowerCase();
+  const variants = raw && raw !== lower ? [lower, raw] : [lower];
+
+  const seen = {};
+  const byDay = {};
+  let total = 0;
+
+  for (const v of variants) {
+    if (!v) continue;
+    const snap = await db.collection('bookings').where('prospect.email', '==', v).get();
+    snap.forEach((doc) => {
+      if (seen[doc.id]) return;
+      const b = doc.data();
+      if (b.isCoaching !== true) return;
+      if (b.status !== 'confirmed') return;      // annulé / replanifié → hors quota
+      if (b.excludeFromQuota === true) return;   // exclu manuellement par un coach
+      if (!b.date || typeof b.date !== 'string') return;
+      const day = b.date.slice(0, 10);
+      if (day.slice(0, 7) !== monthYear) return;
+      seen[doc.id] = 1;
+      byDay[day] = (byDay[day] || 0) + 1;
+      total++;
+    });
+  }
+  return { byDay: byDay, total: total };
+}
+
+/**
+ * Consommation du mois : pour chaque jour, le MAX des deux sources — jamais
+ * leur somme. Voir l'en-tête du fichier pour le pourquoi détaillé.
+ *
+ * @returns {{used:number, paired:number}} paired = nb de séances ayant leurs
+ *          deux traces le même jour (utile au diagnostic côté admin).
+ */
+function countUsed(sessionsByDay, bookingsByDay) {
+  const days = {};
+  Object.keys(sessionsByDay).forEach((d) => { days[d] = 1; });
+  Object.keys(bookingsByDay).forEach((d) => { days[d] = 1; });
+
+  let used = 0;
+  let paired = 0;
+  Object.keys(days).forEach((d) => {
+    const s = sessionsByDay[d] || 0;
+    const b = bookingsByDay[d] || 0;
+    used += Math.max(s, b);
+    paired += Math.min(s, b);
+  });
+  return { used: used, paired: paired };
+}
+
+/**
+ * Retrouve la fiche coaching d'un email, quelle que soit la casse en base.
+ *
+ * 1. requête indexée sur l'email normalisé (cas nominal) ;
+ * 2. requête indexée sur la graphie brute saisie par le visiteur ;
+ * 3. balayage de secours insensible à la casse — uniquement si 1 et 2 ont
+ *    échoué. Sans lui, une fiche client enregistrée « Jean.Dupont@x.com »
+ *    renvoyait clientFound:false, donc un fail-open silencieux : le client
+ *    n'était jamais bloqué. Le balayage ne lit que le champ `email`
+ *    (projection `select`) puis recharge le seul document retenu.
+ *
+ * @returns {Promise<{data:Object|null, matchedBy:string}>}
+ */
+async function findClientByEmail(rawEmail) {
+  const raw = String(rawEmail || '').trim();
+  const lower = raw.toLowerCase();
+  const variants = raw && raw !== lower ? [lower, raw] : [lower];
+
+  for (const v of variants) {
+    if (!v) continue;
+    const snap = await db.collection('clients').where('email', '==', v).limit(2).get();
+    if (!snap.empty) {
+      if (snap.size > 1) console.warn('[check-coaching-quota] multiple clients for email', lower);
+      return { data: snap.docs[0].data(), matchedBy: 'exact' };
+    }
+  }
+
+  // Balayage de secours insensible à la casse. Ne se déclenche que si les
+  // deux requêtes indexées ont échoué (email inconnu, ou casse divergente en
+  // base) : projection sur le seul champ `email`, et garde-fou de volume pour
+  // qu'une collection anormalement grosse ne fasse jamais exploser le temps
+  // de réponse d'une réservation.
+  const all = await db.collection('clients').select('email').limit(5000).get();
+  let hitId = null;
+  all.forEach((doc) => {
+    if (hitId) return;
+    const e = ((doc.get('email') || '') + '').trim().toLowerCase();
+    if (e && e === lower) hitId = doc.id;
+  });
+  if (!hitId) return { data: null, matchedBy: 'none' };
+
+  console.warn('[check-coaching-quota] client trouvé par balayage insensible à la casse — '
+    + 'email à normaliser sur clients/' + hitId);
+  const full = await db.collection('clients').doc(hitId).get();
+  return { data: full.exists ? full.data() : null, matchedBy: 'scan' };
 }
 
 module.exports = async (req, res) => {
@@ -162,33 +296,13 @@ module.exports = async (req, res) => {
   }
 
   try {
-    // ── 1. Cherche la fiche client coaching par email (case-insensitive) ───
-    // On normalise côté code car Firestore est case-sensitive sur les ==.
-    // On part du principe que les emails sont stockés en clair (potentielle-
-    // ment avec une casse mixte). On fait deux tentatives : exact, puis
-    // lowercase. Si rien, on déclare le client introuvable.
+    // ── 1. Cherche la fiche client coaching par email ──────────────────────
     let clientData = null;
+    let matchedBy = 'none';
     try {
-      let snap = await db.collection('clients')
-        .where('email', '==', email)
-        .limit(2)
-        .get();
-
-      if (snap.empty) {
-        // Fallback : tentative sur l'email tel quel (cas où la donnée a une
-        // casse différente en base — rare mais on couvre).
-        snap = await db.collection('clients')
-          .where('email', '==', body.email)
-          .limit(2)
-          .get();
-      }
-
-      if (!snap.empty) {
-        if (snap.size > 1) {
-          console.warn('[check-coaching-quota] multiple clients for email', email);
-        }
-        clientData = snap.docs[0].data();
-      }
+      const found = await findClientByEmail(body.email || email);
+      clientData = found.data;
+      matchedBy = found.matchedBy;
     } catch (e) {
       console.error('[check-coaching-quota] clients query error:', e);
       // Fail-open : on laisse passer (cf doc en haut)
@@ -230,40 +344,29 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // ── 2. Compte les sessions "fait" du mois ──────────────────────────────
-    const sessionsCount = countSessionsInMonth(clientData, monthYear);
+    // ── 2. Séances "fait" du mois, par jour ────────────────────────────────
+    const sessionsByDay = sessionDayCounts(clientData, monthYear);
+    let sessionsCount = 0;
+    Object.keys(sessionsByDay).forEach((d) => { sessionsCount += sessionsByDay[d]; });
 
-    // ── 3. Compte les bookings confirmed isCoaching=true du mois ───────────
-    // On filtre par prospect.email puis on raffine en mémoire sur isCoaching,
-    // status, excludeFromQuota et date du mois. Volume très faible (1-2
-    // bookings max par mois par email), pas d'enjeu de pagination.
+    // ── 3. Bookings coaching confirmés du mois, par jour ───────────────────
+    // Volume très faible (quelques bookings par email), pas d'enjeu de
+    // pagination. En cas d'échec on continue avec les seules séances "fait"
+    // (fail-open partiel) plutôt que de bloquer un RDV légitime.
+    let bookingsByDay = {};
     let bookingsCount = 0;
     try {
-      const today = parisToday(); // "YYYY-MM-DD" — borne basse des RDV à venir
-      const bSnap = await db.collection('bookings')
-        .where('prospect.email', '==', email)
-        .get();
-      bSnap.forEach((doc) => {
-        const b = doc.data();
-        if (b.isCoaching !== true) return;
-        if (b.status !== 'confirmed') return;
-        if (b.excludeFromQuota === true) return; // exclu manuellement
-        if (!b.date || typeof b.date !== 'string') return;
-        if (b.date.slice(0, 7) !== monthYear) return;
-        // Ne compter QUE les RDV à venir (date >= aujourd'hui). Un RDV déjà
-        // passé correspond à une séance qui est (ou sera) enregistrée en
-        // "fait" et donc déjà comptée dans sessionsCount : l'inclure ici la
-        // compterait deux fois (bug du quota 2/2 alors que coaching affiche
-        // 1/2). Le décompte vaut donc : séances faites + RDV à venir réservés.
-        if (b.date.slice(0, 10) < today) return;
-        bookingsCount++;
-      });
+      const bk = await bookingDayCounts(body.email || email, monthYear);
+      bookingsByDay = bk.byDay;
+      bookingsCount = bk.total;
     } catch (e) {
       console.error('[check-coaching-quota] bookings query error:', e);
-      // Fail-open partiel : on retourne ce qu'on a déjà (sessionsCount)
     }
 
-    const used = sessionsCount + bookingsCount;
+    // ── 4. Consommation : max par jour, jamais la somme ────────────────────
+    const tally = countUsed(sessionsByDay, bookingsByDay);
+    const used = tally.used;
+
     // Quota effectif : override mensuel sur la fiche client si présent,
     // sinon dérivé du programme. Permet à l'admin/coach d'accorder une
     // exception ponctuelle depuis coaching.html (fiche client → section
@@ -271,7 +374,7 @@ module.exports = async (req, res) => {
     const quotaDerived = getMonthlyQuota(clientData.programme);
     const overrideRaw = (clientData.quotaOverrides && clientData.quotaOverrides[monthYear]);
     const quotaOverride = (typeof overrideRaw === 'number' && overrideRaw >= 0) ? overrideRaw : null;
-    const quota = quotaOverride !== null ? quotaOverride : quotaDerived;
+    const quota = effectiveMonthlyQuota(clientData, monthYear);
     const allowed = used < quota;
 
     res.status(200).json({
@@ -284,6 +387,8 @@ module.exports = async (req, res) => {
       quotaOverride: quotaOverride,
       sessionsCount: sessionsCount,
       bookingsCount: bookingsCount,
+      pairedCount: tally.paired,
+      clientMatchedBy: matchedBy,
       programme: clientData.programme || null
     });
   } catch (e) {
@@ -299,3 +404,7 @@ module.exports = async (req, res) => {
     });
   }
 };
+
+// Exporté pour les tests unitaires — la logique d'appariement mérite d'être
+// vérifiée sans Firestore.
+module.exports.__test = { normEmail, flattenSessions, sessionDayCounts, countUsed, getMonthlyQuota };

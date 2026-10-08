@@ -48,7 +48,7 @@
   <script type="module">
     import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import{getAuth,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    import{getFirestore,doc,setDoc}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import{getFirestore,initializeFirestore,doc,setDoc}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
     const app=initializeApp({
       apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
       authDomain:"ambitio-team.firebaseapp.com",
@@ -57,7 +57,7 @@
       messagingSenderId:"1079366902268",
       appId:"1:1079366902268:web:b4ec1691dba54230339279"
     });
-    const auth=getAuth(app),db=getFirestore(app);
+    const auth=getAuth(app),db=initializeFirestore(app,{experimentalAutoDetectLongPolling:true}); /* auto-detect long-polling : sans lui WebChannel se bloque sur Safari. En SDK modulaire le reglage se pose ici, pas via settings(). */
     window._db=db;window._doc=doc;window._setDoc=setDoc;
     onAuthStateChanged(auth,user=>{
       if(!user){document.body.innerHTML='<h2 style="padding:40px">⛔ Connectez-vous d\'abord sur alteore.com</h2>';return;}

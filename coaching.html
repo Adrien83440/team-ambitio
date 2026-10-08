@@ -1238,6 +1238,14 @@
   </div>
 </div>
 
+<!-- Programme IA 10/2026 : compte-rendu de séance (bouton ✨ CR IA) + alertes risque client -->
+<script src="ai-session-report.js" defer></script>
+<script src="ai-risk-alerts.js" defer></script>
+<div id="aiRiskMount" style="padding:16px 32px 0"></div>
+<!-- Brief du matin IA (admins) — ai-brief-widget.js -->
+<div id="aiBriefMount" style="padding:20px 32px 0"></div>
+<script src="ai-brief-widget.js"></script>
+
 <!-- HERO : mois + stats inline -->
 <div class="hero">
   <div class="hero-row">
@@ -1703,6 +1711,15 @@ window.loadClients = async function(){
   
   updateMonthLabel();
   applyFilters(); renderRecentActivity();
+  // Lien profond ?client=<id> (cockpit CSM, alertes risque IA) : ouvre la
+  // fiche une fois, au premier chargement.
+  if(!window._deepClientDone){
+    window._deepClientDone = true;
+    try{
+      const dc = new URLSearchParams(location.search).get('client');
+      if(dc && _clients.some(c=>c._id===dc) && typeof openDetail==='function') openDetail(dc);
+    }catch(e){}
+  }
 };
 
 // ── ACTIVITÉ RÉCENTE ──
@@ -2902,6 +2919,7 @@ function openDetail(id){
   const _quotaEffective = _quotaOverrideVal !== null ? _quotaOverrideVal : _quotaDerived;
   
   const panel = document.getElementById('detailPanel');
+  panel.dataset.clientId = id;
   panel.innerHTML = `
     <div class="dp-header">
       <div class="dp-header-top">
@@ -4575,6 +4593,9 @@ async function scanDriveForClient(clientId){
   // Link docs to sessions (avoid duplicates)
   let linked=0, unlinked=0;
   let changed = false;
+  // Séances qui viennent de recevoir un lien (replay / synthèse) : après la
+  // sauvegarde, chacune part au client par email (autoSendReplay).
+  const touched = [];
   // Collect all sessions from all years (references, so modifications propagate)
   const sessions = [];
   if(c.years && c.years.length){
@@ -4595,6 +4616,7 @@ async function scanDriveForClient(clientId){
          visioUrl déjà renseigné (valeur manuelle prioritaire). */
       if(doc.videoUrl && !alreadyLinkedSession.visioUrl){
         alreadyLinkedSession.visioUrl = doc.videoUrl;
+        touched.push(alreadyLinkedSession);
         changed = true;
         log(`🎥 Vidéo ajoutée à session #${alreadyLinkedSession.numero} (résumé déjà lié)`,'dsl-match');
       } else {
@@ -4631,6 +4653,7 @@ async function scanDriveForClient(clientId){
 
     if(matchedSession){
       matchedSession.driveUrl = doc.url;
+      touched.push(matchedSession);
       matchedSession.driveTitle = doc.title;
       matchedSession.driveSummary = summary;
       if(!matchedSession.resume || matchedSession.resume.length<20){
@@ -4676,6 +4699,13 @@ async function scanDriveForClient(clientId){
       c._updatedAt = Date.now();
     await saveClientDoc(clientId, c);
       log(`💾 Sauvegardé: ${linked} liés, ${unlinked} non-liés`,'dsl-match');
+      // ✉️ Chaque séance qui vient de recevoir un lien part au client. Le
+      // serveur tient le registre anti-doublon : ici on ne fait que signaler.
+      for(const ts of touched){
+        let tyi=null;
+        (c.years||[]).forEach((y,i)=>{ if(tyi===null && (y.sessions||[]).indexOf(ts)>=0) tyi=i; });
+        await autoSendReplay(clientId, tyi, ts.numero);
+      }
     }catch(e){
       log(`❌ Erreur sauvegarde: ${e.message}`,'dsl-err');
     }
@@ -4757,6 +4787,43 @@ async function sendReplayToClient(clientId, yi, numero, btnEl){
   }
 }
 window.sendReplayToClient=sendReplayToClient;
+
+// ── ENVOI AUTOMATIQUE DU REPLAY / DE LA SYNTHÈSE AU CLIENT ──
+// Appelé après chaque enregistrement d'une séance « faite » (validation,
+// modification, scan Drive). Le client reçoit par email le replay et/ou la
+// synthèse de sa séance individuelle sans qu'un humain ait à cliquer.
+// Le serveur (api/coaching-send-replay, mode auto) relit la fiche, refuse
+// les clients inactifs, et tient un registre anti-doublon dans la
+// sous-collection clients/{id}/replay_emails : rien ne part deux fois avec
+// les mêmes liens, mais un lien NOUVEAU (la synthèse arrive après le
+// replay) déclenche un complément. Fail-soft : la séance est déjà
+// enregistrée, un envoi qui échoue ne doit jamais faire croire le contraire.
+async function autoSendReplay(clientId, yi, numero){
+  try{
+    const c=_clients.find(x=>x._id===clientId);
+    if(!c) return;
+    let s=null;
+    if(Array.isArray(c.years)&&yi!=null&&c.years[yi])s=(c.years[yi].sessions||[]).find(x=>x&&x.numero===numero);
+    if(!s&&yi==null&&Array.isArray(c.years))for(const y of c.years){s=((y&&y.sessions)||[]).find(x=>x&&x.numero===numero);if(s)break;}
+    if(!s&&Array.isArray(c.sessions))s=c.sessions.find(x=>x&&x.numero===numero);
+    if(!s||s.statut!=='fait') return;
+    if(!(s.visioUrl||s.driveUrl||s.resumeUrl)) return;
+    if(!(c.email||'').trim()) return;
+    const token=(window._auth&&window._auth.currentUser)?await window._auth.currentUser.getIdToken():'';
+    if(!token) return;
+    const r=await fetch('/api/coaching-send-replay',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({clientId:clientId,yearIndex:yi,sessionNumero:numero,sessionDate:s.date||null,auto:true})});
+    const j=await r.json().catch(()=>({}));
+    if(!j.ok){console.warn('[replay auto] envoi impossible',j.error||('HTTP '+r.status));return;}
+    if(j.skipped){console.info('[replay auto] rien à envoyer :',j.skipped);return;}
+    s.replaySentAt=j.sentAt||new Date().toISOString();
+    s.replaySentTo=j.to;
+    s.replaySentBy='auto';
+    showToast('✉️ Séance envoyée à '+j.to,'success');
+    const panel=document.getElementById('detailPanel');
+    if(panel&&panel.dataset.clientId===clientId) setTimeout(()=>openDetail(clientId),250);
+  }catch(e){console.warn('[replay auto]',e&&e.message);}
+}
+window.autoSendReplay=autoSendReplay;
 
 // ═══════════════════════════════════════════
 // YEAR TABS SYSTEM
@@ -4862,7 +4929,7 @@ async function markYrDone(clientId,yi,sn){
   try{
     c._updatedAt = Date.now();
     await saveClientDoc(clientId, c);
-    syncSeanceAcademy(clientId, sn, (c.years[yi]||{}).label || '');
+    syncSeanceAcademy(clientId, sn, (c.years[yi]||{}).label || '').then(function(){ autoSendReplay(clientId, yi, sn); });
     showToast('Séance validée !','success');applyFilters(); renderRecentActivity();openDetail(clientId);
   }catch(e){showToast('Erreur: '+e.message,'error');}
 }
@@ -4899,7 +4966,7 @@ async function saveYrEdit(clientId,yi,sn){
   try{
     c._updatedAt = Date.now();
     await saveClientDoc(clientId, c);
-    if(s.statut==='fait') syncSeanceAcademy(clientId, sn, (c.years[yi]||{}).label || '');
+    if(s.statut==='fait') syncSeanceAcademy(clientId, sn, (c.years[yi]||{}).label || '').then(function(){ autoSendReplay(clientId, yi, sn); });
     showToast('Séance mise à jour !','success');applyFilters(); renderRecentActivity();openDetail(clientId);
   }catch(e){showToast('Erreur: '+e.message,'error');}
 }
@@ -5239,7 +5306,7 @@ function renderYearTabs(c,id){
           // ✉️ Envoi manuel au client (CSM/coach/admin) — replay + résumé par email.
           // Le cron auto pose replaySentAt/'cron' ; ici on peut déclencher ou RENVOYER.
           h+='<button class="si-link-pill" style="border:1px dashed var(--blue-main);background:transparent;color:var(--blue-main);cursor:pointer;font:inherit" onclick="sendReplayToClient(\''+id+'\','+yi+','+s.numero+',this)">'+(s.replaySentAt?'✉️ Renvoyer au client':'✉️ Envoyer au client')+'</button>';
-          if(s.replaySentAt)h+='<span style="font-size:10.5px;color:#94a3b8;align-self:center">envoyé le '+formatDate(String(s.replaySentAt).slice(0,10))+(s.replaySentTo?' → '+escHtml(s.replaySentTo):'')+'</span>';
+          if(s.replaySentAt)h+='<span style="font-size:10.5px;color:#94a3b8;align-self:center">envoyé le '+formatDate(String(s.replaySentAt).slice(0,10))+(s.replaySentTo?' → '+escHtml(s.replaySentTo):'')+(s.replaySentBy==='auto'?' · auto':s.replaySentBy==='cron'?' · cron':'')+'</span>';
           h+='</div>';
         }
         if(s.resume||s.driveSummary)h+='<div class="si-resume">'+escHtml(s.resume||s.driveSummary||'')+'</div>';
@@ -5256,7 +5323,7 @@ function renderYearTabs(c,id){
         h+='<div class="si-edit-field"><label>🎥 Visio</label><input type="url" id="sev-'+k+'" value="'+(s.visioUrl||'')+'"/></div>';
         h+='<div class="si-edit-field"><label>📄 Google Doc</label><input type="url" id="seg-'+k+'" value="'+(s.driveUrl||s.resumeUrl||'')+'"/></div>';
         h+='</div>';
-        h+='<div class="si-edit-field" style="margin-bottom:8px"><label>Résumé</label><textarea id="ser-'+k+'">'+escHtml(s.resume||'')+'</textarea></div>';
+        h+='<div class="si-edit-field" style="margin-bottom:8px"><label>Résumé <button type="button" class="ai-cr-btn" data-ai-cr="ser-'+k+'|sedv-'+k+'" data-client="'+id+'" data-yi="'+yi+'" data-sn="'+s.numero+'" title="Colle tes notes brutes (ou les notes Gemini) dans Résumé, l\'IA les met au propre et propose les devoirs">✨ CR IA</button></label><textarea id="ser-'+k+'">'+escHtml(s.resume||'')+'</textarea></div>';
         h+='<div class="si-edit-field" style="margin-bottom:8px"><label>Devoirs</label><textarea id="sedv-'+k+'" rows="2">'+escHtml(s.devoirs||'')+'</textarea></div>';
         h+='<div class="si-edit-field" style="margin-bottom:4px"><label>Notes</label><textarea id="sen-'+k+'" rows="2">'+escHtml(s.notes||'')+'</textarea></div>';
         h+='<div class="si-edit-save-row">';
@@ -5274,7 +5341,7 @@ function renderYearTabs(c,id){
         h+='<div class="si-edit-field"><label>🎥 Visio</label><input type="url" id="qsv-'+k+'" placeholder="https://meet..."/></div>';
         h+='<div class="si-edit-field"><label>📄 Google Doc</label><input type="url" id="qsg-'+k+'" placeholder="https://docs..."/></div>';
         h+='</div>';
-        h+='<div class="si-edit-field" style="margin-bottom:8px"><label>Résumé</label><textarea id="qsr-'+k+'" rows="2"></textarea></div>';
+        h+='<div class="si-edit-field" style="margin-bottom:8px"><label>Résumé <button type="button" class="ai-cr-btn" data-ai-cr="qsr-'+k+'|qsdv-'+k+'" data-client="'+id+'" data-yi="'+yi+'" data-sn="'+s.numero+'" title="Colle tes notes brutes (ou les notes Gemini) dans Résumé, l\'IA les met au propre et propose les devoirs">✨ CR IA</button></label><textarea id="qsr-'+k+'" rows="2" placeholder="Notes brutes ou notes Gemini → ✨ CR IA"></textarea></div>';
         h+='<div class="si-edit-field" style="margin-bottom:8px"><label>Devoirs</label><textarea id="qsdv-'+k+'" rows="2"></textarea></div>';
         h+='<div class="si-edit-field" style="margin-bottom:8px"><label>Notes</label><textarea id="qsn-'+k+'" rows="2"></textarea></div>';
         if(is72)h+=render72hFiles(s.files||[],id,yi,s.numero);

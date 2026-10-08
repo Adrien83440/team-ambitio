@@ -59,8 +59,12 @@
 
   const ALL_MODULES = [
     // ─── CUSTOMER SUCCESS — visible pour le rôle csm + admin ───
-    { id: 'csm-dashboard',     icon: '💎', label: 'Dashboard CSM', href: 'csm-dashboard.html', section: 'Customer Success', perm: 'csm_dashboard' },
-    { id: 'csm-clients',       icon: '👥', label: 'Clients',       href: 'csm-clients.html',   section: 'Customer Success', perm: 'csm_clients' },
+    // Cockpit CSM (refonte 10/2026, programme IA) : feu tricolore, paiements,
+    // renouvellements, suivis, diagnostic IA — données via api/csm-cockpit.js.
+    // Les deux anciennes vues restent accessibles le temps de la transition.
+    { id: 'csm-cockpit',       icon: '💎', label: 'Cockpit CSM',   href: 'csm-cockpit.html',   section: 'Customer Success', perm: 'csm_dashboard' },
+    { id: 'csm-dashboard',     icon: '📊', label: 'Ancien dashboard', href: 'csm-dashboard.html', section: 'Customer Success', perm: 'csm_dashboard' },
+    { id: 'csm-clients',       icon: '👥', label: 'Clients (ancienne vue)', href: 'csm-clients.html',   section: 'Customer Success', perm: 'csm_clients' },
     { id: 'csm-diagnostic',    icon: '🔍', label: 'Diagnostic',    href: 'csm-diagnostic.html', section: 'Customer Success', perm: 'csm_dashboard' },
     { id: 'coach-clients',       icon: '👥', label: 'Coaching',      href: 'coaching.html',               section: 'Coaching', perm: 'coaching_clients' },
     { id: 'coach-dashboard',     icon: '📊', label: 'Dashboard',     href: 'coaching-dashboard.html',     section: 'Coaching', perm: 'coaching_dashboard' },
@@ -76,6 +80,9 @@
       { id: 'sales-setting',      icon: '📞', label: 'Set NB',       href: 'sales-setting.html' },
       { id: 'sales-closing',      icon: '🎯', label: 'Close SB',     href: 'sales-closing.html' },
       { id: 'sales-eod',          icon: '📝', label: 'EOD',          href: 'sales-eod.html' },
+      // Bibliothèque d'objections (programme IA 10/2026) : objections détectées
+      // par l'IA dans les closings et appels de setting, réponses qui marchent.
+      { id: 'sales-objections',   icon: '🛡️', label: 'Objections',   href: 'sales-objections.html' },
       { id: 'sales-commissions',  icon: '💰', label: 'Commissions',  href: 'sales-commissions.html', perm: 'sales_commissions' },
       { id: 'sales-projections',  icon: '📈', label: 'Projections',  href: 'sales-projections.html', perm: 'sales_projections' },
       { id: 'sales-equipe',       icon: '👥', label: 'Équipe Sales', href: 'sales-equipe.html', perm: 'sales_equipe' },
@@ -93,6 +100,8 @@
     //   domaines et checklist de migration — dans admin-site.html.
     { id: 'tunnels',           icon: '🧭', label: 'Funnel',        href: 'admin-tunnels.html', section: 'Funnel & Site', perm: '_admin' },
     { id: 'site-pages',        icon: '🌐', label: 'Site & pages',  href: 'admin-site.html',    section: 'Funnel & Site', perm: '_admin' },
+    // Attribution IA (programme IA 10/2026) : provenance → RDV → close → CA.
+    { id: 'admin-attribution', icon: '📈', label: 'Attribution IA', href: 'admin-attribution.html', section: 'Funnel & Site', perm: '_admin' },
     { id: 'admin-users',       icon: '🔑', label: 'Utilisateurs', href: 'admin-users.html',      section: 'Admin', perm: '_admin' },
     { id: 'admin-persons',     icon: '👤', label: 'Persons',      href: 'admin-persons.html',    section: 'Admin', perm: '_admin' },
     { id: 'admin-numbers',     icon: '📞', label: 'Numéros',      href: 'admin-numbers.html',     section: 'Admin', perm: '_admin' },
@@ -108,6 +117,9 @@
     // l'entrée reste alors dans la section Sales (sectionNonAdmin). Données
     // servies par api/calls-list + api/call-detail.
     { id: 'sales-appels',      icon: '🎧', label: 'Réécoutes',   href: 'sales-appels.html',      section: 'Admin', sectionNonAdmin: 'Sales', perm: 'sales_dialer' },
+    // Réglages IA (programme IA 10/2026) : budget mensuel, interrupteur,
+    // modèle par tâche, « cerveau Alteore ». Données via api/ai-admin.js.
+    { id: 'admin-ia',          icon: '🤖', label: 'Réglages IA',  href: 'admin-ia.html',          section: 'Admin', perm: '_admin' },
     { id: 'alteoforms',        icon: '📝', label: 'AlteoForms',   href: 'alteoforms.html',        section: 'Outils', perm: 'alteoforms' },
     { id: 'payments',          icon: '💳', label: 'Paiements',    href: 'payments.html',          section: 'Outils', perm: 'payments' },
     // Formations internes (Setting LAB / Closing LAB / Coach LAB) : accès
@@ -1506,6 +1518,26 @@
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // RELANCES IA — pop-up « relance proposée » au closer du deal (programme IA
+  // 10/2026). ai-followup-popup.js ne s'active que pour sales / admin et
+  // n'envoie RIEN sans un clic « Envoyer » (règle d'or : l'IA propose).
+  // ─────────────────────────────────────────────────────────────────────────
+  function injectAiFollowupWidget() {
+    if (window.__aiFollowupInjected) return;
+    window.__aiFollowupInjected = true;
+    // + barre de commande ⌘K (tous rôles internes) et orbe vocal « Demande à
+    //   Alteore » (admins) — chaque script vérifie lui-même le rôle.
+    ['ai-followup-popup.js', 'ai-cmdk.js', 'ai-ask-orb.js'].forEach(function (src) {
+      if (document.querySelector('script[src="' + src + '"]')) return;
+      var script = document.createElement('script');
+      script.src = src;
+      script.defer = true;
+      script.setAttribute('data-ai-followup', '1');
+      document.head.appendChild(script);
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // ACTIVITY TRACKER — connexions et temps d'activité par utilisateur
   // Alimente user_activity/* via POST /api/user-activity { action:'beat' }.
   // Lu par admin-users.html (section « Activité de connexion »).
@@ -1629,11 +1661,12 @@
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { injectInboxWidget(); injectInfosWidget(); injectCelebrationWidget(); initActivityTracker(); });
+    document.addEventListener('DOMContentLoaded', function () { injectInboxWidget(); injectInfosWidget(); injectCelebrationWidget(); injectAiFollowupWidget(); initActivityTracker(); });
   } else {
     injectInboxWidget();
     injectInfosWidget();
     injectCelebrationWidget();
+    injectAiFollowupWidget();
     initActivityTracker();
   }
 })();

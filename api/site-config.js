@@ -39,8 +39,8 @@ const DEFAULTS = {
   ctaUrl: 'https://team.alteore.com/alteoforms-render.html?id=MIdcp9T5fczESwm6zUEE',
   secteurs: ['Retail', 'Restauration', 'Artisanat', 'Bien-être', 'Services', 'BTP', 'Commerce', 'Boulangerie', 'Épicerie', 'Beauté'],
   photos: {
-    hero:     'https://lh3.googleusercontent.com/d/1J8a64atR2eX_S_vhGf7p5Gdb1ycVG2Ae=w1000-rw',
-    histoire: 'https://lh3.googleusercontent.com/d/1Y057woWFhBguJWPmEDzuCHL-X1FSRQLe=w900-rw',
+    hero:     'https://lh3.googleusercontent.com/d/1Y057woWFhBguJWPmEDzuCHL-X1FSRQLe=w1000-rw',
+    histoire: 'https://lh3.googleusercontent.com/d/1J8a64atR2eX_S_vhGf7p5Gdb1ycVG2Ae=w900-rw',
     adrien:   'https://lh3.googleusercontent.com/d/1E4CifBShs3CyVigYyE392cL-bOAtd6Cn=w720-rw',
     emily:    'https://lh3.googleusercontent.com/d/1mryOuGZtOKFZ9fvr0l1o_l0kXM5VRFZl=w720-rw',
     groupe:   'https://i.postimg.cc/15rPxXSC/2025-09-16-MASTER-MIND-JJ-126.jpg'

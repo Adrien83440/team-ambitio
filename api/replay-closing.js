@@ -169,6 +169,9 @@ async function actionGet(req, res) {
       chapters: rp.chapters || [],
       chaptersEdited: !!rp.chaptersEditedAt,
       chaptersError: rp.chaptersError || null,
+      analysis: rp.analysis || null,
+      analysisAt: rp.analysisAt || null,
+      analysisError: rp.analysisError || null,
       speakers: rp.speakers || [],
       durationSec: rp.durationSec || null,
       videoError: rp.videoError || null,
@@ -232,6 +235,23 @@ async function actionRegen(req, res, body) {
   res.status(200).json({ ok: true, summary: ai.summary, chapters: ai.chapters });
 }
 
+// Analyse IA du closing (programme IA, Lot 2) : (re)lance l'analyse sur la
+// transcription existante. Remplace aussi les objections de cet appel dans la
+// bibliothèque (idempotent).
+async function actionAnalyze(req, res, body, auth) {
+  const id = String(body.id || '').trim();
+  if (!id) { res.status(400).json({ ok: false, error: 'id_required' }); return; }
+  const b = await loadBooking(id);
+  if (!b) { res.status(404).json({ ok: false, error: 'booking_not_found' }); return; }
+  const rp = b.replay || {};
+  if (rp.status !== 'ready') { res.status(409).json({ ok: false, error: 'no_transcript' }); return; }
+  const entries = await MT.readEntries(id, rp.chunks);
+  if (!entries.length) { res.status(409).json({ ok: false, error: 'no_transcript' }); return; }
+  const r = await require('./_aiClosing').analyzeClosing(id, b, MT.transcriptForAi(entries, rp.speakers || []), { uid: auth.uid });
+  if (!r.ok) { res.status(200).json({ ok: false, error: r.error, message: require('./_ai').humanError(r.error) }); return; }
+  res.status(200).json({ ok: true, analysis: r.analysis });
+}
+
 // ─── Cron : import des appels pas encore traités ─────────────────────────
 // `q` = query string (cron) ou corps JSON (bouton de la page). La page peut
 // remonter plus loin que 30 jours : au-delà, Google n'a plus les segments et
@@ -292,6 +312,7 @@ async function actionSync(req, res, q, maxDays) {
       else if (x.status === 'pending') out.pending++;
       else out.none++;
       if (x.chaptersError) out.errors.push({ id: item.id, error: 'chapitres: ' + x.chaptersError });
+      if (x.analysisError) out.errors.push({ id: item.id, error: 'analyse: ' + x.analysisError });
     } catch (e) {
       console.error('[replay-sync]', item.id, e.message);
       // Erreur de configuration : inutile d'insister sur les appels suivants.
@@ -335,6 +356,7 @@ module.exports = async (req, res) => {
     if (req.method === 'POST' && action === 'import') { await actionImport(req, res, body); return; }
     if (req.method === 'POST' && action === 'chapters') { await actionChapters(req, res, body, auth); return; }
     if (req.method === 'POST' && action === 'regen') { await actionRegen(req, res, body); return; }
+    if (req.method === 'POST' && action === 'analyze') { await actionAnalyze(req, res, body, auth); return; }
     if (req.method === 'POST' && action === 'sync') { await actionSync(req, res, body, 365); return; }
     res.status(400).json({ ok: false, error: 'unknown_action' });
   } catch (e) {

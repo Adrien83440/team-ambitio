@@ -744,8 +744,11 @@
   <div id="rtLoginErr" style="color:#ef4444;font-size:12px;margin-top:8px"></div>
 </div>
 
-<!-- DATA -->
-<script src="retargeting-data.js"></script>
+<!-- DATA — retargeting-data.js (620 Ko) N'EST PLUS chargé ici.
+     Il ne sert qu'à la migration one-shot des contacts webinaire, dont la
+     bannière est masquée dès que _meta/retargeting_migrated existe. Le
+     charger à chaque ouverture faisait 620 Ko de JS bloquant pour rien.
+     Il est désormais chargé à la demande par rtLoadMigrationData(). -->
 
 
 <script>
@@ -875,7 +878,14 @@ function startListening() {
     .where('inRetargeting', '==', true)
     .onSnapshot(function(snap) {
       allContacts = [];
-      snap.forEach(function(doc) { var d = doc.data(); d.id = doc.id; allContacts.push(d); });
+      snap.forEach(function(doc) {
+        var d = doc.data();
+        // Doublon neutralisé : le relancer enverrait deux fois le même
+        // message au même contact. Même motif que sales-leads.html:5385.
+        if (d._merged === true) return;
+        d.id = doc.id;
+        allContacts.push(d);
+      });
       allContacts.sort(function(a, b) {
         var da = a.createdAt ? (a.createdAt.toDate ? a.createdAt.toDate() : new Date(a.createdAt)) : new Date(0);
         var db2 = b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt)) : new Date(0);
@@ -1170,8 +1180,35 @@ function checkMigration() {
     if (!snap.exists) document.getElementById('migrationBanner').style.display = 'flex';
   });
 }
+/* Charge retargeting-data.js à la demande. Résout immédiatement si
+   RAW_CONTACTS est déjà là (double-clic, ou fichier chargé autrement). */
+function rtLoadMigrationData() {
+  return new Promise(function(resolve, reject) {
+    if (typeof RAW_CONTACTS !== 'undefined') { resolve(); return; }
+    var sc = document.createElement('script');
+    sc.src = 'retargeting-data.js';
+    sc.onload = function() {
+      if (typeof RAW_CONTACTS === 'undefined') reject(new Error('retargeting-data.js chargé mais RAW_CONTACTS absent'));
+      else resolve();
+    };
+    sc.onerror = function() { reject(new Error('retargeting-data.js introuvable — le fichier a-t-il été retiré du déploiement ?')); };
+    document.head.appendChild(sc);
+  });
+}
+
 document.getElementById('migrationBtn').addEventListener('click', function() {
-  if (typeof RAW_CONTACTS === 'undefined') { alert('retargeting-data.js non chargé'); return; }
+  var _mb = document.getElementById('migrationBtn');
+  _mb.disabled = true; _mb.textContent = 'Chargement des données...';
+  rtLoadMigrationData().then(function() {
+    _mb.textContent = 'Import en cours...';
+    rtRunMigration();
+  }).catch(function(e) {
+    _mb.disabled = false; _mb.textContent = 'Importer les contacts webinaire';
+    alert(e.message);
+  });
+});
+
+function rtRunMigration() {
   var OLD_KEY = 'ambitio_retargeting_state';
   var oldState = {}; try { oldState = JSON.parse(localStorage.getItem(OLD_KEY) || '{}'); } catch(e) {}
   var SR = { none:'nouveau', appele:'appele', decroche:'decroche', parle:'parle', rdv:'rdv_pose', pasinteresse:'pas_interesse', arappeler:'arappeler' };
@@ -1217,7 +1254,7 @@ document.getElementById('migrationBtn').addEventListener('click', function() {
     }).catch(function(err) { btn.textContent = '❌ ' + err.message; btn.disabled = false; });
   }
   processBatch(0);
-});
+}
 
 /* ═══ AUTH & INIT ═══ */
 // Guard anti-double-démarrage (voir startListening ci-dessus)

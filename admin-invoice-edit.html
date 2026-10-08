@@ -1188,8 +1188,25 @@ async function onValidateClick() {
     if (!l.description && !l.productName) return toast('Ligne ' + (i + 1) + ' : description requise', true);
   }
 
+  /* Contrôle IA consultatif (programme IA 10/2026, api/ai-invoice-check.js) :
+     les avertissements s'affichent dans la confirmation, l'admin décide.
+     Délai max 12 s ; en cas d'échec on valide comme avant. */
+  let aiWarn = '';
+  try {
+    const vb = document.getElementById('btnValidate');
+    if (vb) vb.textContent = '🔎 Contrôle…';
+    const tok = await firebase.auth().currentUser.getIdToken();
+    const ctrl = new AbortController();
+    const tmr = setTimeout(function () { ctrl.abort(); }, 12000);
+    const rr = await fetch('/api/ai-invoice-check', { method: 'POST', signal: ctrl.signal, headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok }, body: JSON.stringify({ invoiceId: invoiceFirestoreId }) });
+    clearTimeout(tmr);
+    const jj = await rr.json().catch(function () { return null; });
+    if (jj && jj.ok && jj.warnings && jj.warnings.length) aiWarn = '⚠️ CONTRÔLE AVANT ÉMISSION — à vérifier :\n• ' + jj.warnings.join('\n• ') + '\n\n';
+    if (vb) vb.textContent = '✅ Valider';
+  } catch (eAi) { const vb2 = document.getElementById('btnValidate'); if (vb2) vb2.textContent = '✅ Valider'; }
+
   if (!confirm(
-    'Valider définitivement la facture ?\n\n'
+    aiWarn + 'Valider définitivement la facture ?\n\n'
     + '• Un numéro séquentiel sera attribué (F' + new Date().getFullYear() + '-XXXXX)\n'
     + '• La date d\'émission sera fixée à maintenant\n'
     + '• Le PDF sera généré (avec CGV embarquées) et stocké\n'

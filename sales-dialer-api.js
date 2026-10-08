@@ -14,6 +14,7 @@
     cancelCampaign: `${API_BASE}/dialer-cancel-campaign`,
     callDetail:     `${API_BASE}/call-detail`,
     smsSend:        `${API_BASE}/ringover-sms-send`,
+    aiLead:         `${API_BASE}/ai-lead`,
     // Admin (gestion des numéros — conservés pour l'UI admin-numbers.html)
     searchNumbers:  `${API_BASE}/dialer-search-numbers`,
     purchaseNumber: `${API_BASE}/dialer-purchase-number`,
@@ -101,6 +102,15 @@
   }
 
   const SalesDialerAPI = {
+
+    /**
+     * Score IA + brief pré-appel d'un lead (programme IA 10/2026).
+     * Renvoie le cache si la fiche n'a pas bougé, sauf force === true.
+     * @returns {Promise<{ ok: boolean, aiLead?: Object, cached?: boolean, message?: string }>}
+     */
+    async aiLead(leadId, force) {
+      return authedFetch(ENDPOINTS.aiLead, { method: 'POST', body: { leadId, force: !!force } });
+    },
 
     /**
      * Initie un appel via Ringover (API-initiated click-to-call).

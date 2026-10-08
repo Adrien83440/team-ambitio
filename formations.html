@@ -362,6 +362,15 @@ body.fm-noscroll{overflow:hidden}
   function renderCatalogue() {
     var right = CAN_EDIT ? '<a class="au-btn primary" href="formations-admin.html">✏️ Gérer les formations</a>' : '';
     var h = pageHead('🎓', 'Formations', 'Les espaces de formation interne ouverts pour toi. Ta progression est enregistrée automatiquement.', right);
+    /* Programme IA 10/2026 : simulateur de closing (training-closer.html),
+       réservé à l'équipe commerciale. */
+    var _role = ''; try { _role = localStorage.getItem('ambitio_role') || ''; } catch (eR) {}
+    if (_role === 'sales' || _role === 'admin') {
+      h += '<div class="fm-grid" style="margin-bottom:14px"><a class="fm-card" href="training-closer.html" style="--fm-c:#a855f7">' +
+        '<div style="display:flex;align-items:center;gap:12px"><div class="fm-card-ico">🥊</div><div style="flex:1;min-width:0"><div class="fm-card-n">Entraînement closer (IA)</div>' +
+        '<div class="fm-card-h">Un prospect simulé, construit à partir de nos vraies objections</div></div><span class="fm-pill gold">Nouveau</span></div>' +
+        '<div class="fm-card-d">Choisis un profil et un niveau de difficulté, mène ton closing par écrit, puis reçois un débrief noté sur la trame.</div></a></div>';
+    }
     if (!ORDER.length) {
       h += '<div class="au-empty"><span class="i">🎓</span>Aucune formation ne t\'a encore été ouverte.<br>' +
            (CAN_EDIT ? 'Crée-en une depuis « Gérer les formations ».' : 'Demande l\'accès à un admin depuis la page Utilisateurs.') + '</div>';

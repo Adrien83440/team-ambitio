@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Objections</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}
+</script>
+<link rel="stylesheet" href="sales.css"/>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   sales-objections.html — Bibliothèque d'objections (programme IA 10/2026)
+   Objections détectées par l'IA dans les closings (Replay) et les appels de
+   setting (fin d'appel), avec citation exacte, réponse de l'équipe, et si
+   elle a marché. Playbook par type généré à la demande (Opus).
+   Données via api/ai-objections.js (Admin SDK). Rôles sales + admin.
+   ═══════════════════════════════════════════════════════════════════════ */
+.ob{padding:20px 24px 80px;max-width:1180px;margin:0 auto;font-family:'Figtree',sans-serif}
+.ob-top{display:flex;align-items:center;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+.ob-top h1{font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:800;letter-spacing:-.3px}
+.ob-top small{font-size:12px;color:rgba(255,255,255,.48);display:block;margin-top:2px}
+.ob-top .sp{flex:1}
+.ob-ic{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#34d399,#0ea5e9);display:flex;align-items:center;justify-content:center;font-size:19px;box-shadow:0 3px 12px rgba(52,211,153,.3);flex-shrink:0}
+.bi{padding:8px 12px;background:var(--bg3,#141420);border:1.5px solid rgba(255,255,255,.07);border-radius:8px;color:#fff;font-family:'Figtree',sans-serif;font-size:13px;outline:0}
+.bi option{background:var(--bg3,#141420)}
+.bb{padding:8px 14px;border:none;border-radius:8px;font-family:'Figtree',sans-serif;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px;line-height:1.3}
+.bb-p{background:#34d399;color:#04140d}.bb-p:hover{background:#6ee7b7}
+.bb[disabled]{opacity:.45;cursor:wait}
+
+.cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;margin-bottom:16px}
+.cat{border:1.5px solid rgba(255,255,255,.07);background:var(--bg2,#0f0f1a);border-radius:12px;padding:10px 12px;cursor:pointer;transition:all .15s;color:inherit;text-align:left;font-family:inherit}
+.cat:hover{border-color:rgba(255,255,255,.18)}
+.cat.on{border-color:rgba(52,211,153,.55);background:rgba(52,211,153,.07)}
+.cat .n{font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:800;line-height:1}
+.cat .l{font-size:11.5px;font-weight:700;color:rgba(255,255,255,.7);margin-top:4px}
+.cat .s{font-size:10.5px;color:rgba(255,255,255,.42);margin-top:3px}
+.cat .bar{height:4px;border-radius:999px;background:rgba(255,255,255,.06);margin-top:7px;overflow:hidden}
+.cat .bar i{display:block;height:100%;background:linear-gradient(90deg,#34d399,#0ea5e9)}
+
+.pb{border:1px solid rgba(52,211,153,.25);background:linear-gradient(135deg,rgba(52,211,153,.07),rgba(14,165,233,.05));border-radius:14px;padding:14px 16px;margin-bottom:16px}
+.pb h2{font-size:12px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#6ee7b7;display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.pb h2 .sp{flex:1}
+.pb-sens{font-size:13px;line-height:1.55;margin-bottom:10px}
+.pb-r{padding:9px 11px;border-radius:10px;background:rgba(10,10,25,.35);margin-bottom:7px}
+.pb-r b{display:block;font-size:12.5px;margin-bottom:3px}
+.pb-r q{display:block;font-size:13px;line-height:1.5;font-style:italic;quotes:"« " " »"}
+.pb-r small{display:block;font-size:11px;color:rgba(255,255,255,.45);margin-top:4px}
+.pb-x{font-size:12px;color:#fca5a5;line-height:1.5;margin-top:6px}
+.pb-empty{font-size:12.5px;color:rgba(255,255,255,.55)}
+
+.list{display:flex;flex-direction:column;gap:8px}
+.it{background:var(--bg2,#0f0f1a);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:11px 14px}
+.it-q{font-size:13.5px;line-height:1.5;font-style:italic}
+.it-r{font-size:12.5px;line-height:1.5;color:rgba(255,255,255,.72);margin-top:6px}
+.it-r b{color:rgba(255,255,255,.88)}
+.it-m{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;font-size:11px;color:rgba(255,255,255,.45)}
+.tag{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.12)}
+.tag.ok{color:#34d399;border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.08)}
+.tag.ko{color:#fca5a5;border-color:rgba(248,113,113,.3);background:rgba(248,113,113,.06)}
+.tag.cl{color:#fbbf24;border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.07)}
+.empty{text-align:center;padding:50px 20px;color:rgba(255,255,255,.4);font-size:13px;line-height:1.7}
+.ob-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2e1a;border:1px solid rgba(16,185,129,.3);color:#6ee7b7;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none;max-width:90vw}
+.ob-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.ob-toast.err{background:#2e1a1a;border-color:rgba(239,68,68,.35);color:#fca5a5}
+.locked{text-align:center;padding:80px 20px;color:rgba(255,255,255,.35)}
+@media (max-width:640px){.ob{padding:14px 16px 80px}.cats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+</head>
+<body>
+<div class="ob" id="mainView" style="display:none">
+  <div class="ob-top">
+    <div class="ob-ic">🛡️</div>
+    <div><h1>Objections</h1><small>Détectées par l'IA dans les closings et les appels — avec ce qui a vraiment marché</small></div>
+    <div class="sp"></div>
+    <select class="bi" id="fSource"><option value="">Closing + setting</option><option value="closing">Closing</option><option value="setting">Setting</option></select>
+    <select class="bi" id="fDays"><option value="30">30 jours</option><option value="90" selected>90 jours</option><option value="365">12 mois</option><option value="0">Tout</option></select>
+  </div>
+  <div class="cats" id="cats"></div>
+  <div id="pb"></div>
+  <div class="list" id="list"></div>
+</div>
+<div class="locked" id="lockedView" style="display:none">🔒 Réservé à l'équipe commerciale</div>
+<div class="ob-toast" id="toast"></div>
+
+<script>
+(function () {
+var API = '/api/ai-objections';
+var data = null;
+var cur = '';   // catégorie sélectionnée ('' = toutes)
+var busyPb = false;
+
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function toast(m, err) { var t = $('toast'); t.textContent = m; t.className = 'ob-toast show' + (err ? ' err' : ''); clearTimeout(toast._t); toast._t = setTimeout(function () { t.className = 'ob-toast'; }, 3500); }
+
+function api(method, qs, body) {
+  var u = firebase.auth().currentUser;
+  if (!u) return Promise.reject(new Error('Session expirée'));
+  return u.getIdToken().then(function (tok) {
+    var opt = { method: method, headers: { Authorization: 'Bearer ' + tok } };
+    if (body) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+    return fetch(API + (qs || ''), opt);
+  }).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      if (!r.ok || j.ok === false) throw new Error(j.message || j.error || ('Erreur ' + r.status));
+      return j;
+    });
+  });
+}
+
+function renderCats() {
+  var c = data.counts, cats = data.categories;
+  var keys = Object.keys(cats).filter(function (k) { return c[k] && c[k].total; })
+    .sort(function (a, b) { return c[b].total - c[a].total; });
+  var total = 0; keys.forEach(function (k) { total += c[k].total; });
+  var max = keys.length ? c[keys[0]].total : 1;
+  var h = '<button type="button" class="cat' + (cur === '' ? ' on' : '') + '" data-cat=""><div class="n">' + total + '</div><div class="l">Toutes</div><div class="s">' + keys.length + ' types</div></button>';
+  keys.forEach(function (k) {
+    var x = c[k];
+    h += '<button type="button" class="cat' + (cur === k ? ' on' : '') + '" data-cat="' + k + '"><div class="n">' + x.total + '</div><div class="l">' + esc(cats[k]) + '</div>' +
+         '<div class="s">' + x.worked + ' levée' + (x.worked > 1 ? 's' : '') + ' · ' + x.closes + ' close' + (x.closes > 1 ? 's' : '') + '</div>' +
+         '<div class="bar"><i style="width:' + Math.round(x.total / max * 100) + '%"></i></div></button>';
+  });
+  $('cats').innerHTML = h;
+}
+
+function renderPlaybook() {
+  if (!cur) { $('pb').innerHTML = ''; return; }
+  var pb = data.playbooks[cur];
+  var h = '<div class="pb"><h2>🧠 Playbook — ' + esc(data.categories[cur]) + '<span class="sp"></span>' +
+          '<button type="button" class="bb bb-p" data-act="pb"' + (busyPb ? ' disabled' : '') + '>' + (busyPb ? '⏳ Synthèse…' : (pb ? '↻ Mettre à jour' : '✨ Générer')) + '</button></h2>';
+  if (!pb) {
+    h += '<div class="pb-empty">L\'IA peut synthétiser les réponses qui ont fait leurs preuves sur ce type d\'objection (3 objections minimum).</div>';
+  } else {
+    h += '<div class="pb-sens">' + esc(pb.vraiSens) + '</div>';
+    (pb.reponses || []).forEach(function (r) { h += '<div class="pb-r"><b>' + esc(r.titre) + '</b><q>' + esc(r.formulation) + '</q><small>' + esc(r.preuve) + '</small></div>'; });
+    if ((pb.aEviter || []).length) h += '<div class="pb-x">À éviter : ' + pb.aEviter.map(esc).join(' · ') + '</div>';
+    h += '<div class="pb-empty" style="margin-top:8px;font-size:11px">Basé sur ' + pb.basedOn + ' objections · ' + new Date(pb.generatedAt).toLocaleDateString('fr-FR') + '</div>';
+  }
+  h += '</div>';
+  $('pb').innerHTML = h;
+}
+
+function renderList() {
+  var items = data.items.filter(function (o) { return !cur || o.category === cur; });
+  // Les réponses qui ont marché d'abord, puis le plus récent.
+  items.sort(function (a, b) {
+    var sa = (a.worked ? 2 : 0) + (a.outcome === 'close' ? 1 : 0), sb = (b.worked ? 2 : 0) + (b.outcome === 'close' ? 1 : 0);
+    return sb !== sa ? sb - sa : (b.at || 0) - (a.at || 0);
+  });
+  if (!items.length) { $('list').innerHTML = '<div class="empty">Aucune objection détectée pour l\'instant.<br/>Elles apparaissent ici au fil des analyses de closings (Replay) et des fins d\'appel.</div>'; return; }
+  var h = '';
+  items.slice(0, 200).forEach(function (o) {
+    h += '<div class="it"><div class="it-q">« ' + esc(o.quote) + ' »</div>';
+    if (o.response) h += '<div class="it-r"><b>Réponse :</b> ' + esc(o.response) + '</div>';
+    h += '<div class="it-m"><span class="tag ' + (o.worked ? 'ok">✓ Levée' : 'ko">✕ Non levée') + '</span>';
+    if (o.outcome === 'close') h += '<span class="tag cl">💰 Closé</span>';
+    else if (o.outcome) h += '<span class="tag">' + esc(o.outcome) + '</span>';
+    h += '<span>' + esc(data.categories[o.category] || o.category) + '</span><span>·</span><span>' + (o.source === 'closing' ? '🎯 Closing' : '📞 Setting') + '</span>';
+    if (o.who) h += '<span>·</span><span>' + esc(o.who) + '</span>';
+    if (o.at) h += '<span>·</span><span>' + new Date(o.at).toLocaleDateString('fr-FR') + '</span>';
+    h += '</div></div>';
+  });
+  $('list').innerHTML = h;
+}
+
+function render() { renderCats(); renderPlaybook(); renderList(); }
+
+function load() {
+  var qs = '?days=' + encodeURIComponent($('fDays').value) + '&source=' + encodeURIComponent($('fSource').value);
+  api('GET', qs).then(function (j) { data = j; render(); }).catch(function (e) { toast(e.message, true); });
+}
+
+document.addEventListener('click', function (e) {
+  var t = e.target.closest ? e.target.closest('[data-cat],[data-act]') : null;
+  if (!t || !data) return;
+  if (t.hasAttribute('data-cat')) { cur = t.getAttribute('data-cat'); render(); return; }
+  if (t.getAttribute('data-act') === 'pb' && cur && !busyPb) {
+    busyPb = true; renderPlaybook();
+    api('POST', '', { action: 'playbook', category: cur })
+      .then(function (j) { data.playbooks[cur] = j.playbook; toast('Playbook mis à jour'); })
+      .catch(function (er) { toast(er.message, true); })
+      .then(function () { busyPb = false; renderPlaybook(); });
+  }
+});
+document.addEventListener('change', function (e) { if (e.target && (e.target.id === 'fDays' || e.target.id === 'fSource')) load(); });
+
+firebase.auth().onAuthStateChanged(function (u) {
+  if (!u) return;
+  var role = localStorage.getItem('ambitio_role') || '';
+  if (role !== 'admin' && role !== 'sales') { $('lockedView').style.display = ''; return; }
+  $('mainView').style.display = '';
+  load();
+});
+})();
+</script>
+<script src="nav.js"></script>
+</body>
+</html>

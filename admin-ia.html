@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Réglages IA</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}
+</script>
+<link rel="stylesheet" href="sales.css"/>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   admin-ia.html — Réglages IA (programme IA Alteore, 10/2026)
+   Budget mensuel, interrupteur global, modèle par tâche, « cerveau
+   Alteore » (contexte injecté dans tous les prompts), consommation.
+   Toutes les données passent par api/ai-admin.js (Admin SDK). Admin only.
+   ═══════════════════════════════════════════════════════════════════════ */
+.ia{padding:20px 24px 80px;max-width:1180px;margin:0 auto;font-family:'Figtree',sans-serif}
+.ia-top{display:flex;align-items:center;gap:14px;margin-bottom:20px;flex-wrap:wrap}
+.ia-top h1{font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:800;letter-spacing:-.3px}
+.ia-top small{font-size:12px;color:rgba(255,255,255,.48);display:block;margin-top:2px}
+.ia-top .sp{flex:1}
+.ia-ic{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#818cf8,#a855f7);display:flex;align-items:center;justify-content:center;font-size:19px;box-shadow:0 3px 12px rgba(129,140,248,.35);flex-shrink:0}
+.bb{padding:8px 16px;border:none;border-radius:8px;font-family:'Figtree',sans-serif;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .15s;text-decoration:none;line-height:1.3}
+.bb-p{background:#818cf8;color:#0b0b14}.bb-p:hover{background:#a5b4fc}
+.bb-o{background:0;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.62)}.bb-o:hover{color:#fff;border-color:rgba(255,255,255,.25)}
+.bb[disabled]{opacity:.4;cursor:not-allowed}
+.bi{padding:8px 12px;background:var(--bg3,#141420);border:1.5px solid rgba(255,255,255,.07);border-radius:8px;color:#fff;font-family:'Figtree',sans-serif;font-size:13px;outline:0;box-sizing:border-box}
+.bi:focus{border-color:#818cf8}
+.bi option{background:var(--bg3,#141420)}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-bottom:16px}
+.card{background:var(--bg2,#0f0f1a);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:16px 18px;margin-bottom:16px}
+.grid2 .card{margin-bottom:0}
+.card h2{font-size:12px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card h2 .sp{flex:1}
+.hint{font-size:12px;color:rgba(255,255,255,.45);line-height:1.6}
+
+.gauge-n{font-family:'Bricolage Grotesque',sans-serif;font-size:30px;font-weight:800;letter-spacing:-.5px}
+.gauge-n small{font-size:14px;font-weight:600;color:rgba(255,255,255,.5);margin-left:4px}
+.gauge{height:10px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;margin:10px 0 6px}
+.gauge i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#34d399,#818cf8);transition:width .4s}
+.gauge.warn i{background:linear-gradient(90deg,#fbbf24,#f97316)}
+.gauge.over i{background:linear-gradient(90deg,#f87171,#dc2626)}
+.kv{display:flex;justify-content:space-between;font-size:12.5px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.kv:last-child{border-bottom:0}
+.kv b{font-weight:700}
+
+.frm{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px 14px;align-items:center;font-size:13px}
+.frm label{color:rgba(255,255,255,.65)}
+.sw{position:relative;width:44px;height:24px;border-radius:999px;background:rgba(255,255,255,.12);cursor:pointer;border:0;transition:background .15s}
+.sw::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s}
+.sw.on{background:#34d399}.sw.on::after{left:23px}
+
+.tt{width:100%;border-collapse:collapse;font-size:12.5px}
+.tt th{text-align:left;font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:rgba(255,255,255,.45);padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.07)}
+.tt td{padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle}
+.tt tr:last-child td{border-bottom:0}
+.tt .bi{padding:5px 8px;font-size:12px}
+.tt .dflt{font-size:11px;color:rgba(255,255,255,.4)}
+.mono{font-family:var(--font-m,monospace);font-size:11.5px}
+.wd{padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:12.5px;line-height:1.5}
+.wd:last-child{border-bottom:0}
+.wd-hd{display:flex;gap:8px;align-items:center}.wd-hd b{flex:1}
+.wd-sev{font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;text-transform:uppercase}
+.wd-sev.haute{background:rgba(248,113,113,.15);color:#fca5a5}.wd-sev.moyenne{background:rgba(251,191,36,.12);color:#fcd34d}.wd-sev.basse{background:rgba(255,255,255,.06);color:rgba(255,255,255,.6)}
+.wd-reco{color:#c7d2fe;margin-top:3px}.wd-ex{color:rgba(255,255,255,.45);font-size:11.5px;margin-top:3px}
+.ok{color:#34d399}.ko{color:#f87171}
+
+.ctx{width:100%;min-height:360px;resize:vertical;line-height:1.55;font-size:13px}
+.ctx-bar{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.ctx-bar .sp{flex:1}
+
+.ia-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2e1a;border:1px solid rgba(16,185,129,.3);color:#6ee7b7;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none;max-width:90vw}
+.ia-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.ia-toast.err{background:#2e1a1a;border-color:rgba(239,68,68,.35);color:#fca5a5}
+.locked{text-align:center;padding:80px 20px;color:rgba(255,255,255,.35)}
+@media (max-width:900px){.grid2{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:640px){.ia{padding:14px 16px 80px}.tt .hide-m{display:none}.frm{grid-template-columns:minmax(0,1fr)}}
+</style>
+</head>
+<body>
+<div class="ia" id="mainView" style="display:none">
+  <div class="ia-top">
+    <div class="ia-ic">🤖</div>
+    <div><h1>Réglages IA</h1><small>Budget, modèles et « cerveau Alteore » — l'IA propose, l'équipe valide</small></div>
+    <div class="sp"></div>
+    <button class="bb bb-o" data-action="brief">☀️ Générer le brief du matin</button>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h2>💶 Consommation du mois <span class="sp"></span><span class="mono" id="uMonth"></span></h2>
+      <div class="gauge-n" id="uSpent">—</div>
+      <div class="gauge" id="uGauge"><i style="width:0"></i></div>
+      <div class="hint" id="uHint"></div>
+      <div id="uByTask" style="margin-top:12px"></div>
+    </div>
+    <div class="card">
+      <h2>⚙️ Réglages</h2>
+      <div class="frm">
+        <label>IA activée</label><div><button class="sw" id="cEnabled" data-action="toggle" aria-label="Activer l'IA"></button></div>
+        <label for="cBudget">Budget mensuel (€)</label><input class="bi" id="cBudget" type="number" min="0" step="5"/>
+        <label for="cAlert">Alerte à (%)</label><input class="bi" id="cAlert" type="number" min="10" max="100" step="5"/>
+        <label for="cRate">Taux 1 $ → €</label><input class="bi" id="cRate" type="number" min="0.5" max="1.5" step="0.01"/>
+        <label for="cAccount">Compte d'envoi</label>
+        <select class="bi" id="cAccount"><option value="contact">contact</option><option value="coaching">coaching</option><option value="strategie">strategie</option></select>
+        <label for="cExtra">Emails en plus</label><input class="bi" id="cExtra" type="text" placeholder="séparés par des virgules (en plus des admins)"/>
+      </div>
+      <div class="ctx-bar"><span class="hint">Au-delà du budget, les fonctions IA se mettent en pause jusqu'au mois suivant.</span><span class="sp"></span><button class="bb bb-p" data-action="saveCfg">Enregistrer</button></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🛰️ Agent de surveillance <span class="sp"></span><button class="bb bb-o" data-action="wdRun" style="padding:5px 12px;font-size:11px">↻ Relancer</button></h2>
+    <div class="hint" style="margin-bottom:8px">Contrôles chaque nuit : leads non traités, RDV sans issue, fuseaux, mandats, factures, alertes. Recommandations seulement — rien n'est corrigé automatiquement.</div>
+    <div id="wdList"><div class="hint">Chargement…</div></div>
+  </div>
+
+  <div class="card">
+    <h2>🧠 Cerveau Alteore <span class="sp"></span><span class="hint" id="ctxInfo"></span></h2>
+    <div class="hint" style="margin-bottom:10px">Ce texte est donné à l'IA avant CHAQUE tâche : offres, prix, client idéal, script, objections, ton. Plus il est précis, meilleures sont les propositions. Il est mis en cache : le relire coûte ~10 fois moins cher.</div>
+    <textarea class="bi ctx" id="ctxText" spellcheck="true"></textarea>
+    <div class="ctx-bar">
+      <button class="bb bb-o" data-action="template">📋 Insérer le plan type</button>
+      <span class="hint" id="ctxLen"></span>
+      <span class="sp"></span>
+      <button class="bb bb-p" data-action="saveCtx">Enregistrer le cerveau</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🎛️ Modèle par tâche <span class="sp"></span><button class="bb bb-p bb-s" data-action="saveTasks" style="padding:5px 12px;font-size:11px">Enregistrer</button></h2>
+    <div class="hint" style="margin-bottom:8px">Opus 5.5 pour ce qui rapporte, Haiku 4.5 pour le volume. Ne change un modèle que si la qualité ou le coût le justifie.</div>
+    <div style="overflow-x:auto"><table class="tt" id="tasksTable"></table></div>
+  </div>
+
+  <div class="card">
+    <h2>🧾 Derniers appels IA</h2>
+    <div style="overflow-x:auto"><table class="tt" id="recentTable"></table></div>
+  </div>
+</div>
+<div class="locked" id="lockedView" style="display:none">🔒 Réservé aux administrateurs</div>
+<div class="ia-toast" id="toast"></div>
+
+<script>
+(function () {
+var API = '/api/ai-admin';
+var state = { cfg: null, defaults: null };
+
+var TASK_LABELS = {
+  lead_score: 'Score lead + brief pré-appel',
+  morning_brief: 'Brief du matin',
+  closing_prep: 'Dossier de préparation closing',
+  closing_analysis: 'Analyse post-closing',
+  closing_followup: 'Relance des non-closés',
+  objection_playbook: 'Playbook d\'objections',
+  close_probability: 'Probabilité de close',
+  call_summary: 'Résumé de fin d\'appel',
+  call_rating: 'Notation des appels',
+  message_assist: 'Assistant DM / SMS',
+  client_risk: 'Risque client (feu tricolore)',
+  session_report: 'Compte-rendu de séance',
+  csm_diagnostic: 'Diagnostic CSM',
+  invoice_check: 'Contrôle des factures',
+  ask_alteore: 'Demande à Alteore',
+  watchdog: 'Agent de surveillance',
+  attribution: 'Attribution marketing',
+  training: 'Entraînement closer',
+  command: 'Barre de commande ⌘K',
+  training_debrief: 'Débrief d\'entraînement'
+};
+var MODELS = [
+  ['', 'Défaut'],
+  ['claude-opus-5-5', 'Opus 5.5'],
+  ['claude-sonnet-5-5', 'Sonnet 5.5'],
+  ['claude-haiku-4-5', 'Haiku 4.5']
+];
+var MODEL_SHORT = { 'claude-opus-5-5': 'Opus 5.5', 'claude-sonnet-5-5': 'Sonnet 5.5', 'claude-haiku-4-5': 'Haiku 4.5' };
+var EFFORTS = ['', 'low', 'medium', 'high', 'xhigh'];
+
+var TEMPLATE = [
+  '# QUI SOMMES-NOUS',
+  'Alteore (SARL Ambitio Corp) — accompagnement / coaching business d\'entrepreneurs francophones. 100 % B2B.',
+  '',
+  '# NOS OFFRES ET PRIX',
+  '- BP 6 : …',
+  '- BP 12 : …',
+  '- Elite : …',
+  '- Titan : …',
+  '(modalités : comptant / mensualisé, garanties…)',
+  '',
+  '# CLIENT IDÉAL',
+  '- Profil, CA mensuel minimum, secteurs, signaux d\'achat…',
+  '- Hors cible (à disqualifier poliment) : …',
+  '',
+  '# PARCOURS DU PROSPECT',
+  'Pub → VSL / quiz / webinaire → opt-in → appel setter (SET NB) ou self booking → RDV closing → close → onboarding coaching.',
+  '',
+  '# SCRIPT DE SETTING (étapes clés)',
+  '1. …',
+  '',
+  '# TRAME DE CLOSING (étapes clés)',
+  '1. …',
+  '',
+  '# OBJECTIONS FRÉQUENTES ET RÉPONSES QUI MARCHENT',
+  '- « C\'est trop cher » → …',
+  '- « Je dois en parler à mon associé / conjoint » → …',
+  '- « Je n\'ai pas le temps » → …',
+  '',
+  '# TON ET STYLE',
+  '- Vouvoiement avec les prospects, direct, chaleureux, jamais agressif.',
+  '',
+  '# INTERDITS',
+  '- Ne jamais promettre de résultat chiffré garanti.',
+  '- …'
+].join('\n');
+
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function eur(usd) { var r = (state.cfg && state.cfg.eurPerUsd) || 0.86; return (Number(usd) || 0) * r; }
+function fmtEur(v) { return (Math.round(v * 100) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; }
+function toast(msg, err) {
+  var t = $('toast'); t.textContent = msg; t.className = 'ia-toast show' + (err ? ' err' : '');
+  clearTimeout(toast._t); toast._t = setTimeout(function () { t.className = 'ia-toast' + (err ? ' err' : ''); }, 3200);
+}
+
+function api(url, method, body) {
+  var u = firebase.auth().currentUser;
+  if (!u) return Promise.reject(new Error('Session expirée'));
+  return u.getIdToken().then(function (tok) {
+    var opt = { method: method, headers: { Authorization: 'Bearer ' + tok } };
+    if (body) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+    return fetch(url, opt);
+  }).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      if (!r.ok || j.ok === false) { var e = new Error(j.message || j.error || ('Erreur ' + r.status)); e.data = j; throw e; }
+      return j;
+    });
+  });
+}
+
+/* ═══ RENDU ═══ */
+function renderUsage(u) {
+  var cur = u.current || {};
+  var budget = Number(state.cfg.monthlyBudgetEur) || 0;
+  var spent = eur(cur.costUsd);
+  var pct = budget ? Math.min(100, spent / budget * 100) : 0;
+  $('uMonth').textContent = cur.month || '';
+  $('uSpent').innerHTML = fmtEur(spent) + '<small>/ ' + (budget ? budget + ' €' : 'sans plafond') + '</small>';
+  var g = $('uGauge');
+  g.className = 'gauge' + (pct >= 100 ? ' over' : (pct >= (state.cfg.alertPct || 80) ? ' warn' : ''));
+  g.firstChild.style.width = pct + '%';
+  var prev = u.previous || {};
+  $('uHint').textContent = (cur.calls || 0) + ' appels ce mois' + (prev.costUsd ? ' · mois précédent : ' + fmtEur(eur(prev.costUsd)) : '');
+  var by = cur.byTask || {};
+  var keys = Object.keys(by).sort(function (a, b) { return (by[b].costUsd || 0) - (by[a].costUsd || 0); });
+  var h = '';
+  keys.forEach(function (k) {
+    h += '<div class="kv"><span>' + esc(TASK_LABELS[k] || k) + ' <span class="hint">· ' + (by[k].calls || 0) + '</span></span><b>' + fmtEur(eur(by[k].costUsd)) + '</b></div>';
+  });
+  $('uByTask').innerHTML = h || '<div class="hint">Aucun appel IA ce mois-ci.</div>';
+}
+
+function renderCfg() {
+  var c = state.cfg;
+  $('cEnabled').classList.toggle('on', c.enabled !== false);
+  $('cBudget').value = c.monthlyBudgetEur;
+  $('cAlert').value = c.alertPct;
+  $('cRate').value = c.eurPerUsd;
+  $('cAccount').value = c.emailAccount || 'contact';
+  $('cExtra').value = (c.extraEmails || []).join(', ');
+}
+
+function renderTasks() {
+  var d = state.defaults.tasks, over = state.cfg.tasks || {};
+  var h = '<tr><th>Tâche</th><th class="hide-m">Par défaut</th><th>Modèle</th><th>Effort</th><th>Active</th></tr>';
+  Object.keys(d).forEach(function (k) {
+    var o = over[k] || {};
+    h += '<tr data-task="' + k + '"><td>' + esc(TASK_LABELS[k] || k) + '</td>';
+    h += '<td class="hide-m dflt">' + esc(MODEL_SHORT[d[k].model] || d[k].model) + (d[k].effort ? ' · ' + d[k].effort : '') + '</td>';
+    h += '<td><select class="bi" data-f="model">';
+    MODELS.forEach(function (m) { h += '<option value="' + m[0] + '"' + ((o.model || '') === m[0] ? ' selected' : '') + '>' + m[1] + '</option>'; });
+    h += '</select></td><td><select class="bi" data-f="effort">';
+    EFFORTS.forEach(function (e) { h += '<option value="' + e + '"' + ((o.effort || '') === e ? ' selected' : '') + '>' + (e || 'Défaut') + '</option>'; });
+    h += '</select></td><td><input type="checkbox" data-f="enabled"' + (o.enabled === false ? '' : ' checked') + '/></td></tr>';
+  });
+  $('tasksTable').innerHTML = h;
+}
+
+function renderRecent(list) {
+  var h = '<tr><th>Quand</th><th>Tâche</th><th class="hide-m">Modèle</th><th class="hide-m">Tokens</th><th>Coût</th><th></th></tr>';
+  (list || []).forEach(function (r) {
+    var d = r.at ? new Date(r.at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    h += '<tr><td class="mono">' + d + '</td><td>' + esc(TASK_LABELS[r.task] || r.task) + '</td><td class="hide-m">' + esc(MODEL_SHORT[r.model] || r.model || '') + '</td>' +
+         '<td class="hide-m mono">' + (r.tokens || 0).toLocaleString('fr-FR') + '</td><td class="mono">' + fmtEur(eur(r.costUsd)) + '</td>' +
+         '<td>' + (r.ok ? '<span class="ok">✓</span>' : '<span class="ko" title="' + esc(r.error || '') + '">✕</span>') + '</td></tr>';
+  });
+  if (!(list || []).length) h += '<tr><td colspan="6" class="hint">Aucun appel pour l\'instant.</td></tr>';
+  $('recentTable').innerHTML = h;
+}
+
+function renderCtxLen() {
+  var n = $('ctxText').value.length;
+  $('ctxLen').textContent = n.toLocaleString('fr-FR') + ' caractères · ~' + Math.round(n / 3.5).toLocaleString('fr-FR') + ' tokens';
+}
+
+function loadWatch() {
+  api('/api/ai-watchdog', 'POST', { action: 'list' }).then(function (j) {
+    var items = j.items || [];
+    if (!items.length) { $('wdList').innerHTML = '<div class="hint">✅ Rien à signaler.</div>'; return; }
+    $('wdList').innerHTML = items.map(function (w) {
+      return '<div class="wd"><div class="wd-hd"><span class="wd-sev ' + esc(w.severity) + '">' + esc(w.severity) + '</span><b>' + esc(w.title) + ' (' + w.count + ')</b>' +
+        (w.link ? '<a class="bb bb-o" href="' + esc(w.link) + '" style="padding:4px 10px;font-size:11px">Ouvrir</a>' : '') +
+        '<button class="bb bb-o" data-action="wdDone" data-id="' + esc(w.id) + '" style="padding:4px 10px;font-size:11px">✓ Traité</button></div>' +
+        (w.reco ? '<div class="wd-reco">💡 ' + esc(w.reco) + '</div>' : '') +
+        '<div class="wd-ex">' + (w.examples || []).slice(0, 4).map(esc).join(' · ') + '</div></div>';
+    }).join('');
+  }).catch(function (e) { $('wdList').innerHTML = '<div class="hint">⚠️ ' + esc(e.message) + '</div>'; });
+}
+
+function load() {
+  loadWatch();
+  api(API, 'GET').then(function (j) {
+    state.cfg = j.config; state.defaults = j.defaults;
+    renderCfg(); renderUsage(j.usage); renderTasks(); renderRecent(j.recent);
+    $('ctxText').value = j.context || '';
+    $('ctxText').placeholder = 'Décris Alteore ici (ou clique « Insérer le plan type »)…';
+    $('ctxInfo').textContent = j.contextUpdatedAt ? 'Modifié le ' + new Date(j.contextUpdatedAt).toLocaleString('fr-FR') : 'Jamais renseigné';
+    renderCtxLen();
+  }).catch(function (e) { toast(e.message, true); });
+}
+
+/* ═══ ACTIONS ═══ */
+document.addEventListener('click', function (e) {
+  var t = e.target.closest ? e.target.closest('[data-action]') : null;
+  if (!t) return;
+  var a = t.getAttribute('data-action');
+  if (a === 'toggle') { t.classList.toggle('on'); return; }
+  if (a === 'template') {
+    var ta = $('ctxText');
+    if (ta.value.trim() && !confirm('Ajouter le plan type à la fin du texte actuel ?')) return;
+    ta.value = (ta.value.trim() ? ta.value.trim() + '\n\n' : '') + TEMPLATE;
+    renderCtxLen(); return;
+  }
+  if (a === 'saveCfg') {
+    t.disabled = true;
+    api(API, 'POST', { config: {
+      enabled: $('cEnabled').classList.contains('on'),
+      monthlyBudgetEur: Number($('cBudget').value),
+      alertPct: Number($('cAlert').value),
+      eurPerUsd: Number($('cRate').value),
+      emailAccount: $('cAccount').value,
+      extraEmails: $('cExtra').value.split(',')
+    } }).then(function () { toast('Réglages enregistrés'); load(); })
+      .catch(function (er) { toast(er.message, true); })
+      .then(function () { t.disabled = false; });
+    return;
+  }
+  if (a === 'saveCtx') {
+    t.disabled = true;
+    api(API, 'POST', { context: $('ctxText').value })
+      .then(function () { toast('Cerveau Alteore enregistré — pris en compte sous 1 minute'); load(); })
+      .catch(function (er) { toast(er.message, true); })
+      .then(function () { t.disabled = false; });
+    return;
+  }
+  if (a === 'saveTasks') {
+    var tasks = {};
+    var rows = document.querySelectorAll('#tasksTable tr[data-task]');
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i], k = r.getAttribute('data-task'), o = {};
+      var m = r.querySelector('[data-f="model"]').value, ef = r.querySelector('[data-f="effort"]').value;
+      if (m) o.model = m;
+      if (ef) o.effort = ef;
+      if (!r.querySelector('[data-f="enabled"]').checked) o.enabled = false;
+      if (o.model || o.effort || o.enabled === false) tasks[k] = o;
+    }
+    t.disabled = true;
+    api(API, 'POST', { config: { tasks: tasks } })
+      .then(function () { toast('Modèles enregistrés'); load(); })
+      .catch(function (er) { toast(er.message, true); })
+      .then(function () { t.disabled = false; });
+    return;
+  }
+  if (a === 'wdDone') {
+    api('/api/ai-watchdog', 'POST', { action: 'done', id: t.getAttribute('data-id') }).then(loadWatch).catch(function (er) { toast(er.message, true); });
+    return;
+  }
+  if (a === 'wdRun') {
+    t.disabled = true; toast('Contrôles en cours…');
+    api('/api/ai-watchdog', 'POST', { action: 'run' }).then(function () { toast('Contrôles terminés'); loadWatch(); })
+      .catch(function (er) { toast(er.message, true); }).then(function () { t.disabled = false; });
+    return;
+  }
+  if (a === 'brief') {
+    t.disabled = true; toast('Génération du brief… (≈ 30 s)');
+    api('/api/ai-morning-brief', 'POST', { regenerate: true })
+      .then(function () { toast('Brief généré — visible en haut des dashboards'); load(); })
+      .catch(function (er) { toast(er.message, true); })
+      .then(function () { t.disabled = false; });
+  }
+});
+document.addEventListener('input', function (e) { if (e.target && e.target.id === 'ctxText') renderCtxLen(); });
+
+/* ═══ BOOT ═══ */
+firebase.auth().onAuthStateChanged(function (u) {
+  if (!u) return;
+  var role = localStorage.getItem('ambitio_role') || 'coach';
+  if (role !== 'admin') { $('lockedView').style.display = ''; return; }
+  $('mainView').style.display = '';
+  load();
+});
+})();
+</script>
+<script src="nav.js"></script>
+</body>
+</html>

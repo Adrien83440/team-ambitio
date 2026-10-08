@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Cockpit CSM</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}
+</script>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   csm-cockpit.html — Cockpit CSM (refonte du module CSM, programme IA 10/2026)
+   Une seule page pour piloter le portefeuille : feu tricolore par client
+   (règles validées par Adrien + signal IA), coaching, paiements, renouvellements,
+   notes, suivis, diagnostic IA. Toutes les données via api/csm-cockpit.js
+   (Admin SDK) — corrige l'ancien écran où la CSM ne voyait aucun paiement.
+   Thème crème du module CSM. Rôles : admin + csm.
+   ═══════════════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#f5f4ee;--bg2:#ffffff;--bg3:#faf9f4;--ink:#1a1a1a;--ink2:#4a4a45;--muted:#6b6b66;--soft:#9c9c95;
+  --border:rgba(0,0,0,.09);--border2:rgba(0,0,0,.16);
+  --accent:#0f6e56;--accent2:#14b8a6;--accentBg:rgba(20,184,166,.10);
+  --red:#dc2626;--redBg:rgba(220,38,38,.08);--orange:#d97706;--orangeBg:rgba(217,119,6,.10);--green:#16a34a;--greenBg:rgba(22,163,74,.09);
+  --violet:#7c3aed;--violetBg:rgba(124,58,237,.09);
+  --r:14px;--sh:0 1px 2px rgba(0,0,0,.04),0 6px 24px rgba(0,0,0,.05);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Plus Jakarta Sans',system-ui,sans-serif}
+.ck{padding:22px 26px 60px;max-width:1500px;margin:0 auto}
+.ck-top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+.ck-ic{width:44px;height:44px;border-radius:13px;background:linear-gradient(135deg,var(--accent2),var(--accent));display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 6px 18px rgba(15,110,86,.25);flex:none}
+.ck-top h1{margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:800;letter-spacing:-.4px}
+.ck-top small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.ck-top .sp{flex:1}
+.in{padding:9px 12px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg2);font:inherit;font-size:13px;color:var(--ink);outline:0}
+.in:focus{border-color:var(--accent2)}
+.ck-search{min-width:220px}
+.seg{display:inline-flex;background:var(--bg2);border:1.5px solid var(--border);border-radius:10px;padding:3px}
+.seg button{border:0;background:none;padding:6px 11px;border-radius:7px;font:inherit;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer}
+.seg button.on{background:var(--ink);color:#fff}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg2);font:inherit;font-size:12.5px;font-weight:700;color:var(--ink);cursor:pointer;text-decoration:none;line-height:1.2}
+.btn:hover{border-color:var(--border2)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.pri:hover{background:#0b5a46}
+.btn.ai{background:linear-gradient(135deg,#6366f1,#a855f7);border:0;color:#fff}
+.btn.sm{padding:5px 10px;font-size:11.5px;border-radius:8px}
+.btn[disabled]{opacity:.5;cursor:wait}
+
+.kpis{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:9px;margin-bottom:14px}
+.kpi{background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--r);padding:11px 13px;cursor:pointer;transition:all .15s;text-align:left;font:inherit;color:inherit}
+.kpi:hover{border-color:var(--border2);transform:translateY(-1px)}
+.kpi.on{border-color:var(--ink);box-shadow:var(--sh)}
+.kpi .n{font-family:'Bricolage Grotesque',sans-serif;font-size:24px;font-weight:800;line-height:1}
+.kpi .l{font-size:11px;font-weight:700;color:var(--muted);margin-top:5px}
+.kpi.r .n{color:var(--red)}.kpi.o .n{color:var(--orange)}.kpi.g .n{color:var(--green)}.kpi.v .n{color:var(--violet)}
+
+#aiRiskMount{margin-bottom:14px}
+#aiRiskMount:empty{display:none}
+
+.grid{display:grid;grid-template-columns:420px minmax(0,1fr);gap:14px;align-items:start}
+.list{background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--r);overflow:hidden;position:sticky;top:12px;max-height:calc(100vh - 24px);display:flex;flex-direction:column}
+.list-hd{padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.list-hd .sp{flex:1}
+.list-bd{overflow-y:auto}
+.cl{display:flex;gap:11px;padding:11px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s}
+.cl:hover{background:var(--bg3)}
+.cl.sel{background:var(--accentBg)}
+.dot{width:12px;height:12px;border-radius:50%;flex:none;margin-top:4px;box-shadow:0 0 0 3px rgba(0,0,0,.03)}
+.dot.rouge{background:var(--red);box-shadow:0 0 0 4px var(--redBg)}.dot.orange{background:var(--orange);box-shadow:0 0 0 4px var(--orangeBg)}.dot.vert{background:var(--green);box-shadow:0 0 0 4px var(--greenBg)}.dot.none{background:#cfcfc8}
+.cl-m{flex:1;min-width:0}
+.cl-n{font-weight:800;font-size:13.5px;display:flex;align-items:center;gap:6px}
+.cl-n span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cl-s{font-size:11.5px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cl-r{font-size:11.5px;color:var(--ink2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--bg3);border:1px solid var(--border);color:var(--ink2);white-space:nowrap}
+.chip.red{background:var(--redBg);border-color:rgba(220,38,38,.25);color:var(--red)}
+.chip.vio{background:var(--violetBg);border-color:rgba(124,58,237,.25);color:var(--violet)}
+.chip.org{background:var(--orangeBg);border-color:rgba(217,119,6,.25);color:var(--orange)}
+.chip.grn{background:var(--greenBg);border-color:rgba(22,163,74,.25);color:var(--green)}
+.empty{padding:40px 16px;text-align:center;color:var(--muted);font-size:13px;line-height:1.6}
+
+.det{min-width:0}
+.det-ph{background:var(--bg2);border:1.5px dashed var(--border2);border-radius:var(--r);padding:60px 20px;text-align:center;color:var(--muted);font-size:13.5px}
+.hero{background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:12px;box-shadow:var(--sh)}
+.hero-top{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+.lvl{width:54px;height:54px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:24px;flex:none}
+.lvl.rouge{background:var(--redBg)}.lvl.orange{background:var(--orangeBg)}.lvl.vert{background:var(--greenBg)}.lvl.none{background:var(--bg3)}
+.hero h2{margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:21px;font-weight:800;letter-spacing:-.3px}
+.hero .sub{font-size:12.5px;color:var(--muted);margin-top:3px}
+.hero .acts{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.reasons{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.reason{font-size:12px;padding:5px 10px;border-radius:9px;background:var(--bg3);border:1px solid var(--border)}
+.reason.r{background:var(--redBg);border-color:rgba(220,38,38,.2)}.reason.o{background:var(--orangeBg);border-color:rgba(217,119,6,.2)}
+.ok-line{font-size:12.5px;color:var(--green);margin-top:10px;font-weight:600}
+
+.cards{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.card{background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--r);padding:14px 16px}
+.card.full{grid-column:1/-1}
+.card h3{margin:0 0 10px;font-size:11.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px}
+.card h3 .sp{flex:1}
+.kv{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border)}
+.kv:last-child{border-bottom:0}
+.kv span:first-child{color:var(--muted)}
+.kv b{font-weight:700;text-align:right}
+.bar{height:8px;border-radius:999px;background:var(--bg3);overflow:hidden;margin:6px 0 10px;border:1px solid var(--border)}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:999px}
+.pay{padding:9px 0;border-bottom:1px solid var(--border);font-size:12.5px}
+.pay:last-child{border-bottom:0}
+.pay-t{display:flex;justify-content:space-between;gap:8px;font-weight:700}
+.pay-s{color:var(--muted);margin-top:2px}
+.fail{color:var(--red);font-weight:600;margin-top:3px}
+.ses{padding:8px 0;border-bottom:1px solid var(--border);font-size:12.5px;line-height:1.5}
+.ses:last-child{border-bottom:0}
+.ses b{font-size:12px}
+.ses .d{color:var(--muted);font-size:11.5px}
+.tl{font-size:12.5px;padding:8px 0;border-bottom:1px solid var(--border);line-height:1.5}
+.tl:last-child{border-bottom:0}
+.tl small{display:block;color:var(--muted);font-size:11px}
+textarea.in{width:100%;min-height:74px;resize:vertical;line-height:1.5}
+.row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+.row .sp{flex:1}
+.diag p{margin:0 0 8px;font-size:13px;line-height:1.55}
+.diag h4{margin:10px 0 4px;font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--violet)}
+.diag ul{margin:0;padding-left:18px;font-size:12.5px;line-height:1.55}
+.msg{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.55;white-space:pre-wrap}
+.opp{background:linear-gradient(135deg,var(--violetBg),rgba(20,184,166,.07));border-color:rgba(124,58,237,.25)}
+.back{display:none}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;font-size:13px;font-weight:600;padding:10px 18px;border-radius:10px;opacity:0;transition:all .25s;pointer-events:none;z-index:3000;max-width:90vw}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.err{background:var(--red)}
+.locked{text-align:center;padding:80px 20px;color:var(--muted)}
+.skel{height:14px;border-radius:7px;background:linear-gradient(90deg,#eee 25%,#f6f6f6 50%,#eee 75%);background-size:200% 100%;animation:sk 1.2s infinite;margin:14px}
+@keyframes sk{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@media (max-width:1250px){.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (max-width:1050px){
+  .grid{grid-template-columns:minmax(0,1fr)}
+  .list{position:static;max-height:none}
+  .det{display:none}
+  body.has-sel .det{display:block}
+  body.has-sel .list,body.has-sel .kpis,body.has-sel #aiRiskMount{display:none}
+  .back{display:inline-flex}
+}
+@media (max-width:640px){
+  .ck{padding:14px 16px 60px}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cards{grid-template-columns:minmax(0,1fr)}
+  .ck-search{min-width:0;flex:1}
+  .hero .acts{margin-left:0;width:100%}
+}
+</style>
+</head>
+<body>
+<div class="ck" id="mainView" style="display:none">
+  <div class="ck-top">
+    <div class="ck-ic">💎</div>
+    <div><h1>Cockpit CSM</h1><small id="subTitle">Chargement du portefeuille…</small></div>
+    <div class="sp"></div>
+    <input class="in ck-search" id="fQ" type="search" placeholder="Rechercher un client, un email…"/>
+    <select class="in" id="fCoach"><option value="">Tous les coachs</option></select>
+    <div class="seg" id="fScope"><button type="button" data-scope="active" class="on">Actifs</button><button type="button" data-scope="all">Tous</button></div>
+    <button class="btn" type="button" data-act="reload" title="Recharger">↻</button>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+  <div id="aiRiskMount"></div>
+
+  <div class="grid">
+    <div class="list">
+      <div class="list-hd"><span id="listCount">—</span><span class="sp"></span>
+        <select class="in" id="fSort" style="padding:5px 8px;font-size:12px"><option value="risk">Tri : risque</option><option value="last">Tri : dernière séance</option><option value="end">Tri : fin de programme</option><option value="name">Tri : nom</option></select>
+      </div>
+      <div class="list-bd" id="list"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+    </div>
+    <div class="det" id="det"><div class="det-ph">👈 Choisis un client pour voir sa situation complète.</div></div>
+  </div>
+</div>
+<div class="locked" id="lockedView" style="display:none">🔒 Réservé à l'équipe Customer Success</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+var API = '/api/csm-cockpit';
+var S = { list: [], kpis: {}, scope: 'active', filter: '', q: '', coach: '', sort: 'risk', sel: null, detail: null, busy: {} };
+var LVL_ICON = { rouge: '🔴', orange: '🟠', vert: '🟢' };
+var LVL_TXT = { rouge: 'Client en danger', orange: 'À surveiller', vert: 'Tout va bien' };
+var STATUS_TXT = { active: 'Actif', paused: 'En pause', completed: 'Terminé', stopped: 'Arrêté', procedure: 'Procédure' };
+var PAY_TXT = { draft: 'Brouillon', pending_mandate: 'Mandat en attente', mandate_active: 'Mandat actif', active: 'En cours', completed: 'Soldé', failed: 'Échec', cancelled: 'Annulé', mandate_failed: 'Mandat en échec' };
+var CH_TXT = { note: '📝 Note', appel: '📞 Appel', sms: '💬 SMS', email: '✉️ Email', whatsapp: '🟢 WhatsApp', visio: '🎥 Visio' };
+
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function eur(n) { return (Number(n) || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 }) + ' €'; }
+function dFr(s) { if (!s) return '—'; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s)); return m ? m[3] + '/' + m[2] + '/' + m[1].slice(2) : String(s); }
+function ago(d) { return d == null ? '—' : (d === 0 ? 'aujourd\'hui' : (d === 1 ? 'hier' : 'il y a ' + d + ' j')); }
+function toast(m, err) { var t = $('toast'); t.textContent = m; t.className = 'toast on' + (err ? ' err' : ''); clearTimeout(toast._t); toast._t = setTimeout(function () { t.className = 'toast'; }, 3000); }
+
+function api(method, qs, body) {
+  var u = firebase.auth().currentUser;
+  if (!u) return Promise.reject(new Error('Session expirée'));
+  return u.getIdToken().then(function (tok) {
+    var opt = { method: method, headers: { Authorization: 'Bearer ' + tok } };
+    if (body) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+    return fetch(API + (qs || ''), opt);
+  }).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      if (!r.ok || j.ok === false) throw new Error(j.message || j.error || ('Erreur ' + r.status));
+      return j;
+    });
+  });
+}
+
+/* ═══ LISTE ═══ */
+var KPI_DEFS = [
+  { k: '', n: 'actifs', l: 'Clients actifs' },
+  { k: 'rouge', n: 'rouge', l: '🔴 En danger', c: 'r' },
+  { k: 'orange', n: 'orange', l: '🟠 À surveiller', c: 'o' },
+  { k: 'vert', n: 'vert', l: '🟢 Tout va bien', c: 'g' },
+  { k: 'impayes', n: 'impayes', l: '💸 Impayés', c: 'r' },
+  { k: 'opp', n: 'opportunites', l: '💎 Opportunités', c: 'v' },
+  { k: 'fin', n: 'finProche', l: '⏳ Fin < 60 j' },
+  { k: 'suivi', n: 'sansSuivi30j', l: '📞 Sans suivi 30 j' }
+];
+function renderKpis() {
+  var h = '';
+  KPI_DEFS.forEach(function (d) {
+    h += '<button type="button" class="kpi ' + (d.c || '') + (S.filter === d.k ? ' on' : '') + '" data-filter="' + d.k + '"><div class="n">' + (S.kpis[d.n] != null ? S.kpis[d.n] : '—') + '</div><div class="l">' + d.l + '</div></button>';
+  });
+  $('kpis').innerHTML = h;
+}
+
+function filtered() {
+  var q = S.q.toLowerCase();
+  var out = S.list.filter(function (c) {
+    if (S.coach && c.coach !== S.coach) return false;
+    if (q && (c.nom + ' ' + c.email + ' ' + c.programme + ' ' + c.telephone).toLowerCase().indexOf(q) < 0) return false;
+    switch (S.filter) {
+      case 'rouge': case 'orange': case 'vert': return c.level === S.filter;
+      case 'impayes': return c.unpaid;
+      case 'opp': return !!c.opportunity;
+      case 'fin': return c.daysToEnd != null && c.daysToEnd >= 0 && c.daysToEnd <= 60;
+      case 'suivi': return c.active && (!c.lastFollowupAt || Date.now() - c.lastFollowupAt > 30 * 86400000);
+    }
+    return true;
+  });
+  var rank = { rouge: 0, orange: 1, vert: 2 };
+  out.sort(function (a, b) {
+    if (S.sort === 'name') return a.nom.localeCompare(b.nom, 'fr');
+    if (S.sort === 'end') return (a.daysToEnd == null ? 9999 : a.daysToEnd) - (b.daysToEnd == null ? 9999 : b.daysToEnd);
+    if (S.sort === 'last') return (b.daysSinceLastSession == null ? 9999 : b.daysSinceLastSession) - (a.daysSinceLastSession == null ? 9999 : a.daysSinceLastSession);
+    var ra = rank[a.level] != null ? rank[a.level] : 3, rb = rank[b.level] != null ? rank[b.level] : 3;
+    if (ra !== rb) return ra - rb;
+    return (b.daysSinceLastSession || 0) - (a.daysSinceLastSession || 0);
+  });
+  return out;
+}
+
+function renderList() {
+  var list = filtered();
+  $('listCount').textContent = list.length + ' client' + (list.length > 1 ? 's' : '');
+  if (!list.length) { $('list').innerHTML = '<div class="empty">Aucun client dans cette vue.</div>'; return; }
+  var h = '';
+  list.forEach(function (c) {
+    var sub = [];
+    sub.push(c.lastSession ? 'Séance ' + ago(c.daysSinceLastSession) : 'Aucune séance');
+    if (c.nextSession) sub.push('prochaine ' + dFr(c.nextSession));
+    if (c.coach) sub.push(c.coach);
+    h += '<div class="cl' + (S.sel === c.id ? ' sel' : '') + '" data-id="' + esc(c.id) + '"><span class="dot ' + (c.level || 'none') + '"></span><div class="cl-m">';
+    h += '<div class="cl-n"><span>' + esc(c.nom) + '</span>' + (c.unpaid ? '<span class="chip red">💸</span>' : '') + (c.opportunity ? '<span class="chip vio">💎</span>' : '') + (!c.active ? '<span class="chip">' + esc(STATUS_TXT[c.clientStatus] || 'Inactif') + '</span>' : '') + '</div>';
+    h += '<div class="cl-s">' + esc(sub.join(' · ')) + '</div>';
+    if (c.reasons && c.reasons.length) h += '<div class="cl-r">' + esc(c.reasons[0]) + (c.reasons.length > 1 ? ' <span style="color:var(--soft)">+' + (c.reasons.length - 1) + '</span>' : '') + '</div>';
+    h += '</div></div>';
+  });
+  $('list').innerHTML = h;
+}
+
+function loadList() {
+  return api('GET', '?scope=' + S.scope).then(function (j) {
+    S.list = j.clients || []; S.kpis = j.kpis || {};
+    var sel = $('fCoach'), cur = sel.value;
+    sel.innerHTML = '<option value="">Tous les coachs</option>' + (j.coaches || []).map(function (c) { return '<option' + (c === cur ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('');
+    $('subTitle').textContent = (S.kpis.actifs || 0) + ' clients actifs · feu tricolore recalculé à chaque ouverture';
+    renderKpis(); renderList();
+  }).catch(function (e) { toast(e.message, true); $('list').innerHTML = '<div class="empty">⚠️ ' + esc(e.message) + '</div>'; });
+}
+
+/* ═══ DÉTAIL ═══ */
+function select(id, push) {
+  S.sel = id; S.detail = null;
+  document.body.classList.add('has-sel');
+  renderList();
+  $('det').innerHTML = '<div class="hero"><div class="skel"></div><div class="skel" style="width:60%"></div></div>';
+  if (push !== false) { try { history.replaceState(null, '', '?client=' + encodeURIComponent(id)); } catch (e) {} }
+  api('GET', '?id=' + encodeURIComponent(id)).then(function (j) {
+    if (S.sel !== id) return;
+    S.detail = j; renderDetail();
+  }).catch(function (e) { $('det').innerHTML = '<div class="det-ph">⚠️ ' + esc(e.message) + '</div>'; });
+}
+
+function renderDetail() {
+  var d = S.detail; if (!d) return;
+  var c = d.client;
+  var h = '<button type="button" class="btn sm back" data-act="back" style="margin-bottom:10px">← Liste</button>';
+  // Hero
+  h += '<div class="hero"><div class="hero-top"><div class="lvl ' + (c.level || 'none') + '">' + (LVL_ICON[c.level] || '⚪') + '</div><div style="min-width:0;flex:1">';
+  h += '<h2>' + esc(c.nom) + '</h2><div class="sub">' + esc([c.programme, c.coach ? 'coach ' + c.coach : '', LVL_TXT[c.level] || ''].filter(Boolean).join(' · ')) + '</div>';
+  h += '<div class="row" style="margin-top:8px">';
+  if (c.telephone) h += '<a class="btn sm" href="tel:' + esc(c.telephone) + '">📞 ' + esc(c.telephone) + '</a>';
+  if (c.email) h += '<a class="btn sm" href="mailto:' + esc(c.email) + '">✉️ Email</a>';
+  h += '<a class="btn sm" href="coaching.html?client=' + encodeURIComponent(c.id) + '" target="_blank" rel="noopener">📘 Fiche coaching</a>';
+  h += '<select class="in" data-act="status" style="padding:5px 8px;font-size:12px">';
+  Object.keys(STATUS_TXT).forEach(function (k) { h += '<option value="' + k + '"' + (c.clientStatus === k ? ' selected' : '') + '>Statut : ' + STATUS_TXT[k] + '</option>'; });
+  h += '</select></div></div>';
+  h += '<div class="acts"><button class="btn sm" type="button" data-act="recompute"' + (S.busy.rc ? ' disabled' : '') + '>' + (S.busy.rc ? '⏳' : '🔁') + ' Recalculer</button></div></div>';
+  if (c.reasons && c.reasons.length) {
+    h += '<div class="reasons">' + c.reasons.map(function (r) { return '<span class="reason ' + (c.level === 'rouge' && /^(💸|🚫)|depuis/.test(r) ? 'r' : 'o') + '">' + esc(r) + '</span>'; }).join('') + '</div>';
+  } else if (c.level === 'vert') {
+    h += '<div class="ok-line">✓ ' + esc((c.aiSignal && c.aiSignal.raison) || 'Aucun signal d\'alerte') + '</div>';
+  }
+  h += '</div>';
+
+  h += '<div class="cards">';
+  // Coaching
+  var pct = c.sessionsTotal ? Math.min(100, Math.round(c.sessionsDone / c.sessionsTotal * 100)) : 0;
+  h += '<div class="card"><h3>🎯 Coaching</h3>';
+  h += '<div style="font-size:13px;font-weight:700">' + c.sessionsDone + ' / ' + (c.sessionsTotal || '?') + ' séances</div><div class="bar"><i style="width:' + pct + '%"></i></div>';
+  h += '<div class="kv"><span>Dernière séance</span><b>' + dFr(c.lastSession) + ' · ' + ago(c.daysSinceLastSession) + '</b></div>';
+  h += '<div class="kv"><span>Prochaine séance</span><b>' + (c.nextSession ? dFr(c.nextSession) + c.nextSession.slice(10) : '<span style="color:var(--red)">aucune planifiée</span>') + '</b></div>';
+  h += '<div class="kv"><span>Quota du mois</span><b>' + c.quota.done + ' / ' + c.quota.target + '</b></div>';
+  h += '<div class="kv"><span>Entrée</span><b>' + dFr(c.dateEntree) + '</b></div>';
+  h += '<div class="kv"><span>Fin de programme</span><b>' + (c.contractEnd ? dFr(c.contractEnd) + (c.daysToEnd != null ? ' · ' + (c.daysToEnd >= 0 ? 'dans ' + c.daysToEnd + ' j' : 'dépassée') : '') : '—') + '</b></div>';
+  if (d.academy) h += '<div class="kv"><span>Academy</span><b>' + d.academy.devoirsNonFaits + ' devoir(s) en retard · ' + d.academy.seancesNonHonorees + ' non honorée(s)</b></div>';
+  h += '</div>';
+
+  // Paiements
+  h += '<div class="card"><h3>💳 Paiements</h3>';
+  if (!d.payments.length) h += '<div class="empty" style="padding:14px">Aucun plan de paiement relié à ce client.</div>';
+  d.payments.forEach(function (p) {
+    var bad = p.status === 'failed' || p.status === 'mandate_failed';
+    h += '<div class="pay"><div class="pay-t"><span>' + esc(p.description || 'Plan de paiement') + '</span><span class="chip' + (bad ? ' red' : (p.status === 'completed' ? ' grn' : '')) + '">' + esc(PAY_TXT[p.status] || p.status) + '</span></div>';
+    h += '<div class="pay-s">' + eur(p.paidAmount) + ' / ' + eur(p.totalAmount) + (p.installmentsCount > 1 ? ' · ' + p.paidCount + '/' + p.installmentsCount + ' échéances de ' + eur(p.installmentAmount) : '') + '</div>';
+    if (p.lastPaymentFailure) h += '<div class="fail">⚠️ Dernier rejet : ' + esc(p.lastPaymentFailure.action || '') + ' le ' + dFr(p.lastPaymentFailure.at) + '</div>';
+    if (p.recouvrement && p.recouvrement.status) h += '<div class="pay-s">⚖️ Recouvrement : ' + esc(p.recouvrement.status) + '</div>';
+    h += '</div>';
+  });
+  d.invoiceClients.forEach(function (ic) { if (ic.clientStatus === 'procedure') h += '<div class="fail">⚖️ Dossier facturation en procédure (' + esc(ic.companyName) + ')</div>'; });
+  h += '</div>';
+
+  // Opportunité
+  if (c.opportunity) {
+    h += '<div class="card full opp"><h3>💎 Opportunité — ' + (c.opportunity.type === 'upsell' ? 'upsell' : 'renouvellement') + '</h3><div style="font-size:13px;line-height:1.55">' +
+      (c.opportunity.argument ? esc(c.opportunity.argument) : 'Fin de programme ' + (c.opportunity.daysToEnd != null ? 'dans ' + c.opportunity.daysToEnd + ' jours' : 'proche') + ' : le bon moment pour parler de la suite.') + '</div></div>';
+  }
+
+  // Diagnostic IA
+  var dg = d.diagnostic;
+  h += '<div class="card full diag"><h3>🤖 Diagnostic IA<span class="sp"></span><button class="btn ai sm" type="button" data-act="diag"' + (S.busy.dg ? ' disabled' : '') + '>' + (S.busy.dg ? '⏳ Analyse…' : (dg ? '↻ Refaire' : '✨ Établir le diagnostic')) + '</button></h3>';
+  if (!dg) h += '<div style="font-size:12.5px;color:var(--muted)">L\'IA lit séances, RDV, paiements, notes et suivis, et propose un plan d\'action sur 30 jours + un message à envoyer au client (à relire).</div>';
+  else {
+    h += '<p><b>' + esc(dg.synthese) + '</b></p>';
+    h += '<p>🎯 ' + esc(dg.coaching) + '</p><p>💳 ' + esc(dg.paiement) + '</p><p>💬 ' + esc(dg.engagement) + '</p>';
+    if ((dg.risques || []).length) h += '<h4>Risques</h4><ul>' + dg.risques.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
+    if ((dg.leviers || []).length) h += '<h4>Leviers</h4><ul>' + dg.leviers.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
+    if ((dg.plan30j || []).length) h += '<h4>Plan 30 jours</h4><ul>' + dg.plan30j.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
+    if (dg.messageClient) h += '<h4>Message proposé au client</h4><div class="msg" id="dgMsg">' + esc(dg.messageClient) + '</div><div class="row"><button class="btn sm" type="button" data-act="copyMsg">📋 Copier</button><span style="font-size:11px;color:var(--muted)">Généré le ' + new Date(dg.generatedAt).toLocaleString('fr-FR') + ' — à relire avant envoi</span></div>';
+  }
+  h += '</div>';
+
+  // Suivi CSM
+  h += '<div class="card"><h3>📞 Suivis CSM</h3><div class="row" style="margin-top:0"><select class="in" id="fuCh" style="padding:6px 8px;font-size:12px">';
+  Object.keys(CH_TXT).forEach(function (k) { if (k !== 'note') h += '<option value="' + k + '">' + CH_TXT[k] + '</option>'; });
+  h += '</select></div><textarea class="in" id="fuMsg" placeholder="Ce qui s\'est dit / ce qui a été envoyé…" style="margin-top:8px"></textarea><div class="row"><span class="sp"></span><button class="btn pri sm" type="button" data-act="followup">Tracer le suivi</button></div>';
+  (d.followups || []).slice(0, 10).forEach(function (f) { h += '<div class="tl">' + esc(CH_TXT[f.channel] || f.channel || '') + ' — ' + esc(f.message || '(sans message)') + '<small>' + esc(f.byName || '') + ' · ' + (f.at ? new Date(f.at).toLocaleString('fr-FR') : '') + '</small></div>'; });
+  h += '</div>';
+
+  // Notes
+  h += '<div class="card"><h3>📝 Notes CSM</h3><textarea class="in" id="noteTxt" placeholder="Note interne…"></textarea><div class="row"><span class="sp"></span><button class="btn pri sm" type="button" data-act="note">Ajouter</button></div>';
+  (d.csmNotes || []).slice(0, 12).forEach(function (n) { h += '<div class="tl">' + esc(n.contenu || '') + '<small>' + esc(n.auteur || '') + ' · ' + (n.createdAt ? new Date(n.createdAt).toLocaleString('fr-FR') : '') + '</small></div>'; });
+  h += '</div>';
+
+  // Séances
+  h += '<div class="card"><h3>📚 Dernières séances</h3>';
+  if (!d.sessions.length) h += '<div class="empty" style="padding:14px">Aucune séance faite.</div>';
+  d.sessions.forEach(function (s) { h += '<div class="ses"><b>' + (s.onboarding ? 'RDV 72 h' : 'Séance ' + s.numero) + '</b> <span class="d">· ' + dFr(s.date) + (s.coach ? ' · ' + esc(s.coach) : '') + '</span>' + (s.resume ? '<div>' + esc(s.resume) + '</div>' : '') + (s.devoirs ? '<div class="d">Devoirs : ' + esc(s.devoirs) + '</div>' : '') + '</div>'; });
+  h += '</div>';
+
+  // RDV
+  h += '<div class="card"><h3>📅 RDV coaching</h3>';
+  if (!d.bookings.length) h += '<div class="empty" style="padding:14px">Aucun RDV sur les 5 derniers mois.</div>';
+  d.bookings.forEach(function (b) {
+    var st = b.rescheduled ? 'replanifié' : (b.status === 'cancelled' ? 'annulé' + (b.origin ? ' (' + (b.origin === 'prospect' ? 'par le client' : 'par l\'équipe') + ')' : '') : (b.status === 'no_show' ? 'absent' : (b.status === 'confirmed' ? 'confirmé' : b.status)));
+    var cls = (b.status === 'no_show' || (b.status === 'cancelled' && b.origin === 'prospect' && !b.rescheduled)) ? 'red' : (b.status === 'confirmed' ? 'grn' : '');
+    h += '<div class="kv"><span>' + dFr(b.date) + ' ' + esc(b.time) + (b.coach ? ' · ' + esc(b.coach) : '') + '</span><b><span class="chip ' + cls + '">' + esc(st) + '</span></b></div>';
+  });
+  h += '</div>';
+
+  if (d.planAction) h += '<div class="card full"><h3>🗺️ Plan d\'action (fiche coaching)</h3><div style="font-size:12.5px;line-height:1.55;white-space:pre-wrap">' + esc(d.planAction) + '</div></div>';
+  h += '</div>';
+  $('det').innerHTML = h;
+}
+
+function act(a, el) {
+  var d = S.detail; if (!d) return;
+  var id = d.client.id;
+  if (a === 'back') { S.sel = null; document.body.classList.remove('has-sel'); renderList(); try { history.replaceState(null, '', location.pathname); } catch (e) {} return; }
+  if (a === 'copyMsg') { var t = $('dgMsg'); if (t && navigator.clipboard) navigator.clipboard.writeText(t.textContent).then(function () { toast('Message copié'); }); return; }
+  if (a === 'note') {
+    var txt = $('noteTxt').value.trim(); if (!txt) return;
+    el.disabled = true;
+    api('POST', '', { action: 'note', id: id, text: txt }).then(function () { toast('Note ajoutée'); select(id, false); }).catch(function (e) { el.disabled = false; toast(e.message, true); });
+    return;
+  }
+  if (a === 'followup') {
+    var msg = $('fuMsg').value.trim(); if (!msg) { toast('Écris ce qui s\'est passé', true); return; }
+    el.disabled = true;
+    api('POST', '', { action: 'followup', id: id, channel: $('fuCh').value, message: msg }).then(function () {
+      toast('Suivi tracé');
+      for (var i = 0; i < S.list.length; i++) if (S.list[i].id === id) S.list[i].lastFollowupAt = Date.now();
+      select(id, false);
+    }).catch(function (e) { el.disabled = false; toast(e.message, true); });
+    return;
+  }
+  if (a === 'diag') {
+    S.busy.dg = true; renderDetail();
+    api('POST', '', { action: 'diagnostic', id: id }).then(function (j) { S.busy.dg = false; if (S.detail && S.detail.client.id === id) { S.detail.diagnostic = j.diagnostic; renderDetail(); } toast('Diagnostic prêt'); })
+      .catch(function (e) { S.busy.dg = false; renderDetail(); toast(e.message, true); });
+    return;
+  }
+  if (a === 'recompute') {
+    S.busy.rc = true; renderDetail();
+    firebase.auth().currentUser.getIdToken().then(function (tok) {
+      return fetch('/api/ai-client-risk', { method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'recompute', clientId: id }) });
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      S.busy.rc = false;
+      if (!j || j.ok === false) throw new Error((j && j.error) || 'Erreur');
+      toast('Situation recalculée (Academy + IA)');
+      loadList(); select(id, false);
+    }).catch(function (e) { S.busy.rc = false; renderDetail(); toast(e.message, true); });
+  }
+}
+
+/* ═══ ÉVÉNEMENTS ═══ */
+document.addEventListener('click', function (e) {
+  var t = e.target.closest ? e.target.closest('[data-filter],[data-id],[data-act],[data-scope]') : null;
+  if (!t) return;
+  if (t.hasAttribute('data-filter')) { var f = t.getAttribute('data-filter'); S.filter = (S.filter === f ? '' : f); renderKpis(); renderList(); return; }
+  if (t.hasAttribute('data-scope')) {
+    S.scope = t.getAttribute('data-scope');
+    var bs = document.querySelectorAll('#fScope button');
+    for (var i = 0; i < bs.length; i++) bs[i].classList.toggle('on', bs[i].getAttribute('data-scope') === S.scope);
+    loadList(); return;
+  }
+  if (t.hasAttribute('data-id')) { select(t.getAttribute('data-id')); return; }
+  var a = t.getAttribute('data-act');
+  if (a === 'reload') { loadList(); if (S.sel) select(S.sel, false); return; }
+  if (a !== 'status') act(a, t);
+});
+document.addEventListener('change', function (e) {
+  var t = e.target;
+  if (t.id === 'fCoach') { S.coach = t.value; renderList(); return; }
+  if (t.id === 'fSort') { S.sort = t.value; renderList(); return; }
+  if (t.getAttribute && t.getAttribute('data-act') === 'status' && S.detail) {
+    var id = S.detail.client.id, v = t.value;
+    api('POST', '', { action: 'status', id: id, clientStatus: v }).then(function () {
+      toast('Statut mis à jour');
+      S.detail.client.clientStatus = v;
+      for (var i = 0; i < S.list.length; i++) if (S.list[i].id === id) S.list[i].clientStatus = v;
+    }).catch(function (er) { toast(er.message, true); });
+  }
+});
+document.addEventListener('input', function (e) { if (e.target.id === 'fQ') { S.q = e.target.value; renderList(); } });
+
+// Utilisé par ai-risk-alerts.js : un clic sur une alerte ouvre le client ici.
+window.openDetail = function (id) { select(id); };
+
+/* ═══ BOOT ═══ */
+firebase.auth().onAuthStateChanged(function (u) {
+  if (!u) return;
+  var role = localStorage.getItem('ambitio_role') || '';
+  if (role !== 'admin' && role !== 'csm') { $('lockedView').style.display = ''; return; }
+  $('mainView').style.display = '';
+  loadList().then(function () {
+    var id = new URLSearchParams(location.search).get('client');
+    if (id) select(id, false);
+  });
+});
+})();
+</script>
+<script src="ai-risk-alerts.js" defer></script>
+<script src="nav.js"></script>
+</body>
+</html>

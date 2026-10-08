@@ -611,6 +611,20 @@ async function importBooking(bookingId, b, opts) {
       out.chaptersError = e.message;
     }
   }
+
+  // 7. Analyse IA du closing (programme IA, Lot 2) — une fois par appel, dans
+  // son propre try : un échec ici ne doit jamais être compté comme un échec
+  // des chapitres. require paresseux : _aiClosing ne dépend pas de ce fichier.
+  if (!prev.analysis && entries.length >= MIN_ENTRIES_FOR_AI) {
+    try {
+      const an = await require('./_aiClosing').analyzeClosing(bookingId, b, transcriptForAi(entries, speakers), {});
+      if (an.ok) out.analysis = true;
+      else out.analysisError = an.error;
+    } catch (e) {
+      console.error('[replay] analyse', bookingId, e.message);
+      out.analysisError = e.message;
+    }
+  }
   return out;
 }
 
@@ -621,5 +635,6 @@ module.exports = {
   loadTypeMap, isClosingBooking, clientName,
   meetCodeFromLink, driveFileIdFromUrl,
   readEntries, cleanChapters, generateChapters, parseClock, fmtClock,
+  transcriptForAi,
   importBooking,
 };

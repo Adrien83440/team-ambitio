@@ -56,10 +56,27 @@
   <div id="diagContent" class="diag-loading">⏳ Chargement des données…</div>
 </div>
 
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+  /* Cette page chargeait un fichier de configuration externe qui n'a JAMAIS
+     existe dans le depot (aucun historique Git). Firebase n'y etait donc
+     jamais initialise, et firebase.firestore() plus bas levait une exception :
+     la page etait inutilisable depuis toujours.
+     Configuration inlinee, identique a toutes les autres pages du projet.
+     Version du SDK alignee sur celle du reste du depot au passage. */
+  if (!firebase.apps.length) {
+    firebase.initializeApp({
+      apiKey:            "AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
+      authDomain:        "ambitio-team.firebaseapp.com",
+      projectId:         "ambitio-team",
+      storageBucket:     "ambitio-team.firebasestorage.app",
+      messagingSenderId: "1079366902268",
+      appId:             "1:1079366902268:web:b4ec1691dba54230339279"
+    }); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }
+  }
+</script>
 <script src="nav.js"></script>
 
 <script>
@@ -271,6 +288,17 @@ window.confirmCreateAllLeads = async function(){
   location.reload();
 };
 
+/* 9 derniers chiffres du téléphone — clé de rapprochement utilisée par
+   funnel-core.js (phone9) et sales-leads.html. Un lead créé sans ce champ
+   est invisible pour toutes les recherches par téléphone du reste de
+   l'application. Implémentation identique à funnel-core.js:717. */
+function phoneNormalized(raw) {
+  if (!raw) return null;
+  var d = String(raw).replace(/[^\d]/g, '');
+  if (d.length < 6) return null;
+  return d.length >= 9 ? d.slice(-9) : d;
+}
+
 async function createLeadDoc(co){
   // Conversion d'une fiche coaching en lead client
   var nom = co.nom || co.name || '';
@@ -280,6 +308,7 @@ async function createLeadDoc(co){
     nom: nom.trim(),
     email: (co.email||'').toLowerCase().trim(),
     telephone: co.telephone || co.phone || '',
+    phoneNormalized: phoneNormalized(co.telephone || co.phone),
     commerce: co.activite || co.secteur || co.commerce || '',
     secteur: co.secteur || co.activite || '',
     isClient: true,

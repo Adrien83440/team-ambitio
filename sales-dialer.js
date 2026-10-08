@@ -565,6 +565,7 @@
       $('sd-incall-name').textContent = 'Inconnu';
       $('sd-incall-avatar').textContent = '?';
     }
+    paintAi();
     $('sd-incall-state').textContent = 'CONNEXION…';
     $('sd-incall-timer').textContent = '00:00';
     const tag = $('sd-incall-power-tag');
@@ -645,6 +646,71 @@
     } catch (e) { console.error('loadLead', e); }
   }
 
+  // ─── Brief IA pré-appel (programme IA 10/2026) ──────────────────────────
+  // leads.aiLead { proba, niveau, raison, angle, ouverture, brief[3], key }
+  // écrit par api/ai-lead.js. aiLeadKey() doit rester STRICTEMENT identique
+  // à api/_aiLeadContext.js (le score est recalculé quand la fiche bouge).
+  const aiState = { pendingFor: null, error: null };
+  function aiLeadKey(l) {
+    l = l || {};
+    return (l.communications || []).length + ':' + (l.notesHistory || []).length + ':' +
+      String(l.status || '') + ':' + String(l.stage || '') + ':' + (l.quiz ? 1 : 0);
+  }
+  function aiEsc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function paintAi() {
+    const box = $('sd-ai-box');
+    const line = $('sd-incall-ai');
+    const a = activeLeadData && activeLeadData.aiLead;
+    if (line) {
+      if (a && a.ouverture) {
+        line.style.display = '';
+        line.innerHTML = `<span class="sd-ai-pill sd-ai-${a.niveau === 'chaud' ? 'hot' : (a.niveau === 'tiède' ? 'warm' : 'cold')}">🎯 ${a.proba}</span> « ${aiEsc(a.ouverture)} »`;
+      } else {
+        line.style.display = 'none';
+      }
+    }
+    if (!box) return;
+    if (!a) {
+      box.innerHTML = `<div class="sd-ai-hd">🤖 Brief IA</div><div class="sd-ai-wait">${aiState.error ? '⚠️ ' + aiEsc(aiState.error) : (aiState.pendingFor === activeLeadId ? '⏳ Analyse du dossier…' : 'Pas encore analysé.')}</div>`;
+      return;
+    }
+    const lvl = a.niveau === 'chaud' ? 'hot' : (a.niveau === 'tiède' ? 'warm' : 'cold');
+    box.innerHTML = `
+      <div class="sd-ai-hd">🤖 Brief IA <span class="sd-ai-pill sd-ai-${lvl}">🎯 ${a.proba} % RDV</span>
+        <button type="button" class="sd-ai-rf" id="sd-ai-refresh" title="Recalculer">↻</button></div>
+      <ul class="sd-ai-brief">${(a.brief || []).map(b => `<li>${aiEsc(b)}</li>`).join('')}</ul>
+      ${a.angle ? `<div class="sd-ai-row"><b>Angle :</b> ${aiEsc(a.angle)}</div>` : ''}
+      ${a.ouverture ? `<div class="sd-ai-open">« ${aiEsc(a.ouverture)} »</div>` : ''}
+      ${aiState.pendingFor === activeLeadId ? '<div class="sd-ai-wait">⏳ Mise à jour…</div>' : ''}`;
+    const rf = $('sd-ai-refresh');
+    if (rf) rf.addEventListener('click', () => requestAi(true));
+  }
+  async function requestAi(force) {
+    if (!activeLeadId || !window.SalesDialerAPI || aiState.pendingFor === activeLeadId) return;
+    const forId = activeLeadId;
+    aiState.pendingFor = forId;
+    aiState.error = null;
+    paintAi();
+    try {
+      const j = await window.SalesDialerAPI.aiLead(forId, force);
+      if (j && j.ok && j.aiLead && activeLeadId === forId && activeLeadData) activeLeadData.aiLead = j.aiLead;
+      else if (j && j.ok === false && activeLeadId === forId) aiState.error = j.message || j.error || 'Erreur IA';
+    } catch (e) {
+      if (activeLeadId === forId) aiState.error = e.message || 'Erreur IA';
+    }
+    if (aiState.pendingFor === forId) aiState.pendingFor = null;
+    if (activeLeadId === forId) paintAi();
+  }
+  function ensureAi() {
+    const L = activeLeadData;
+    if (!L || !activeLeadId || L._merged) return;
+    if (L.aiLead && L.aiLead.key === aiLeadKey(L)) return;
+    requestAi(false);
+  }
+
   function renderLead() {
     const p = $('sd-lead-panel');
     if (!activeLeadData) { p.innerHTML = '<div class="sd-empty">Aucun lead sélectionné</div>'; return; }
@@ -663,6 +729,7 @@
             <div class="sd-lead-sub">${esc(L.email || '')}</div>
           </div>
         </div>
+        <div class="sd-ai" id="sd-ai-box"></div>
         <div class="sd-lead-row"><span>Téléphone</span><span>${esc(L.telephone || '—')}</span></div>
         <div class="sd-lead-row"><span>Statut</span><span>${esc(L.status || '—')}</span></div>
         <div class="sd-lead-row"><span>Assigné</span><span>${esc(L.assignedTo || '—')}</span></div>
@@ -672,6 +739,9 @@
         </div>
         <a class="sd-lead-link" href="sales-contact.html?id=${activeLeadId}" target="_blank">Ouvrir la fiche complète →</a>
       </div>`;
+    aiState.error = null;
+    paintAi();
+    ensureAi();
     const ta = $('sd-lead-notes-ta');
     ta.addEventListener('input', () => {
       if (leadNotesTimeout) clearTimeout(leadNotesTimeout);

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Entraînement closer</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}
+</script>
+<link rel="stylesheet" href="sales.css"/>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   training-closer.html — Entraînement closer (programme IA 10/2026)
+   Simulation de closing par écrit contre un prospect joué par l'IA, nourri
+   de nos vraies objections ; débrief noté sur la trame. api/ai-training.js.
+   Rôles : sales + admin. Accès depuis Formations.
+   ═══════════════════════════════════════════════════════════════════════ */
+.tr{padding:20px 24px 40px;max-width:900px;margin:0 auto;font-family:'Figtree',sans-serif;display:flex;flex-direction:column;min-height:calc(100vh - 20px)}
+.tr-top{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.tr-top h1{font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:800}
+.tr-top small{display:block;font-size:12px;color:rgba(255,255,255,.48);margin-top:2px}
+.tr-top .sp{flex:1}
+.tr-ic{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#a855f7,#ec4899);display:flex;align-items:center;justify-content:center;font-size:19px}
+.bi{padding:8px 10px;background:var(--bg3,#141420);border:1.5px solid rgba(255,255,255,.08);border-radius:8px;color:#fff;font-family:inherit;font-size:13px;outline:0}
+.bi option{background:var(--bg3,#141420)}
+.bb{padding:9px 14px;border:none;border-radius:9px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+.bb-p{background:linear-gradient(135deg,#a855f7,#ec4899);color:#fff}
+.bb-o{background:0;border:1px solid rgba(255,255,255,.14);color:rgba(255,255,255,.75)}
+.bb[disabled]{opacity:.5;cursor:wait}
+.setup{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:8px;align-items:end;background:var(--bg2,#0f0f1a);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:12px 14px;margin-bottom:12px}
+.setup label{display:block;font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:4px}
+.setup .bi{width:100%}
+.chat{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:6px 2px;min-height:300px}
+.msg{max-width:78%;padding:10px 13px;border-radius:14px;font-size:14px;line-height:1.5;white-space:pre-wrap}
+.msg.closer{align-self:flex-end;background:linear-gradient(135deg,rgba(168,85,247,.35),rgba(236,72,153,.25));border:1px solid rgba(236,72,153,.3)}
+.msg.prospect{align-self:flex-start;background:var(--bg2,#0f0f1a);border:1px solid rgba(255,255,255,.08)}
+.msg small{display:block;font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;opacity:.55;margin-bottom:3px}
+.typing{align-self:flex-start;font-size:12px;color:rgba(255,255,255,.5)}
+.composer{display:flex;gap:8px;margin-top:10px}
+.composer textarea{flex:1;min-height:52px;max-height:160px;resize:vertical}
+.empty{color:rgba(255,255,255,.45);font-size:13px;line-height:1.7;text-align:center;padding:40px 10px}
+.deb{background:var(--bg2,#0f0f1a);border:1px solid rgba(168,85,247,.35);border-radius:14px;padding:14px 16px;margin-top:12px}
+.deb h3{margin:0 0 6px;font-size:12px;letter-spacing:.5px;text-transform:uppercase;color:#d8b4fe}
+.deb ul{margin:4px 0 10px;padding-left:18px;font-size:13px;line-height:1.55}
+.score{font-family:'Bricolage Grotesque',sans-serif;font-size:34px;font-weight:800}
+.locked{text-align:center;padding:80px 20px;color:rgba(255,255,255,.35)}
+@media (max-width:700px){.setup{grid-template-columns:minmax(0,1fr)}.msg{max-width:92%}.tr{padding:14px 16px 30px}}
+</style>
+</head>
+<body>
+<div class="tr" id="mainView" style="display:none">
+  <div class="tr-top">
+    <div class="tr-ic">🥊</div>
+    <div><h1>Entraînement closer</h1><small>Un prospect simulé par l'IA, nourri de nos vraies objections — puis un débrief noté</small></div>
+    <div class="sp"></div>
+    <a class="bb bb-o" href="formations.html" style="text-decoration:none">← Formations</a>
+  </div>
+  <div class="setup">
+    <div><label>Profil</label><select class="bi" id="sProfil"><option value="libre">🎲 Surprise</option><option value="btp">🏗️ Gérant BTP sceptique</option><option value="coach">🌱 Coach qui débute</option><option value="ecom">🛒 E-commerçant pressé</option><option value="restau">🍽️ Restauratrice en couple</option></select></div>
+    <div><label>Difficulté</label><select class="bi" id="sDiff"><option value="facile">Facile</option><option value="moyen" selected>Moyen</option><option value="difficile">Difficile</option></select></div>
+    <div><label>Objection à travailler</label><select class="bi" id="sObj"><option value="">Au hasard</option><option value="prix">Prix / budget</option><option value="temps">Pas le temps</option><option value="tiers">En parler au conjoint / associé</option><option value="reflexion">Besoin de réfléchir</option><option value="confiance">Confiance</option><option value="timing">Pas le bon moment</option><option value="deja_essaye">Déjà essayé</option><option value="autonomie">Je peux le faire seul</option></select></div>
+    <button class="bb bb-o" type="button" id="btnNew">↻ Nouvelle partie</button>
+  </div>
+  <div class="chat" id="chat"><div class="empty">Tu es le closer. Ouvre l'appel comme en vrai (cadre, découverte…).<br/>Le prospect te répond. Quand tu as fini, clique « Terminer & débrief ».</div></div>
+  <div class="composer"><textarea class="bi" id="msg" placeholder="Ta réplique… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne)"></textarea>
+    <div style="display:flex;flex-direction:column;gap:6px"><button class="bb bb-p" type="button" id="btnSend">Envoyer</button><button class="bb bb-o" type="button" id="btnDeb">Terminer & débrief</button></div></div>
+  <div id="debrief"></div>
+</div>
+<div class="locked" id="lockedView" style="display:none">🔒 Réservé à l'équipe commerciale</div>
+
+<script>
+(function () {
+var API = '/api/ai-training';
+var history = [], busy = false;
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function scenario() { return { profil: $('sProfil').value, difficulte: $('sDiff').value, objection: $('sObj').value }; }
+function api(body) {
+  return firebase.auth().currentUser.getIdToken().then(function (tok) {
+    return fetch(API, { method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  }).then(function (r) { return r.json(); }).then(function (j) { if (!j || j.ok === false) throw new Error((j && (j.message || j.error)) || 'Erreur'); return j; });
+}
+function render(typing) {
+  if (!history.length) return;
+  $('chat').innerHTML = history.map(function (m) { return '<div class="msg ' + m.role + '"><small>' + (m.role === 'closer' ? 'Toi' : 'Prospect') + '</small>' + esc(m.text) + '</div>'; }).join('') + (typing ? '<div class="typing">Le prospect réfléchit…</div>' : '');
+  $('chat').scrollTop = $('chat').scrollHeight;
+}
+function send() {
+  var t = $('msg').value.trim();
+  if (!t || busy) return;
+  busy = true; $('msg').value = '';
+  history.push({ role: 'closer', text: t });
+  render(true);
+  api({ action: 'turn', scenario: scenario(), history: history.slice(0, -1), message: t }).then(function (j) {
+    history.push({ role: 'prospect', text: j.reply });
+  }).catch(function (e) { history.push({ role: 'prospect', text: '⚠️ ' + e.message }); })
+    .then(function () { busy = false; render(false); $('msg').focus(); });
+}
+$('btnSend').addEventListener('click', send);
+$('msg').addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+$('btnNew').addEventListener('click', function () {
+  history = []; $('debrief').innerHTML = '';
+  $('chat').innerHTML = '<div class="empty">Nouvelle partie. Ouvre l\'appel quand tu veux.</div>';
+});
+$('btnDeb').addEventListener('click', function () {
+  var b = this;
+  if (history.length < 4) { alert('Échange encore trop court pour un débrief.'); return; }
+  b.disabled = true; b.textContent = '⏳ Débrief…';
+  api({ action: 'debrief', scenario: scenario(), history: history }).then(function (j) {
+    var d = j.debrief;
+    var h = '<div class="deb"><div style="display:flex;align-items:center;gap:14px"><div class="score" style="color:' + (d.score >= 75 ? '#34d399' : (d.score >= 50 ? '#fbbf24' : '#f87171')) + '">' + d.score + '<span style="font-size:14px;opacity:.6">/100</span></div><div style="font-size:13.5px;line-height:1.55">' + esc(d.verdict) + '</div></div>';
+    h += '<h3 style="margin-top:12px">Trame</h3><ul>' + (d.etapes || []).map(function (e) { return '<li><b>' + esc(e.etape) + ' · ' + e.note + '/10</b> — ' + esc(e.commentaire) + '</li>'; }).join('') + '</ul>';
+    h += '<h3>Points forts</h3><ul>' + (d.pointsForts || []).map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
+    h += '<h3>À travailler</h3><ul>' + (d.axesProgres || []).map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
+    h += '<h3>Formulations à réutiliser</h3><ul>' + (d.phrases || []).map(function (x) { return '<li>« ' + esc(x) + ' »</li>'; }).join('') + '</ul></div>';
+    $('debrief').innerHTML = h;
+    $('debrief').scrollIntoView({ behavior: 'smooth' });
+  }).catch(function (e) { alert(e.message); }).then(function () { b.disabled = false; b.textContent = 'Terminer & débrief'; });
+});
+firebase.auth().onAuthStateChanged(function (u) {
+  if (!u) return;
+  var r = localStorage.getItem('ambitio_role') || '';
+  if (r !== 'admin' && r !== 'sales') { $('lockedView').style.display = ''; return; }
+  $('mainView').style.display = '';
+});
+})();
+</script>
+<script src="nav.js"></script>
+</body>
+</html>

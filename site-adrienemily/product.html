@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nos programmes — Business Phénix · Elite Phénix · Titan Phénix | Adrien &amp; Emily</title>
-<meta name="description" content="Trois niveaux d'accompagnement pour dirigeants de TPE/PME : structurer, développer et pérenniser ton entreprise. Diagnostic gratuit pour trouver le bon parcours.">
+<meta name="description" content="Trois niveaux d'accompagnement pour dirigeants de TPE/PME. Elite Phénix : 6 mois pour diriger sans être indispensable. Réservez votre appel diagnostic.">
 <link rel="canonical" href="https://www.adrienemily.com/product">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Nos programmes d'accompagnement — Adrien &amp; Emily">
-<meta property="og:description" content="Business Phénix, Elite Phénix, Titan Phénix : trois niveaux d'accompagnement pour dirigeants de TPE/PME.">
+<meta property="og:description" content="Business Phénix, Elite Phénix, Titan Phénix : trois niveaux d'accompagnement pour dirigeants de TPE/PME. Plus de 200 dirigeants accompagnés.">
 <meta property="og:url" content="https://www.adrienemily.com/product">
 <meta property="og:image" content="https://lh3.googleusercontent.com/d/1Y057woWFhBguJWPmEDzuCHL-X1FSRQLe=w1200-rw">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -164,28 +164,69 @@ footer::before{content:"";position:absolute;top:-1px;left:0;right:0;height:1px;b
 }
 
 /* ════════════════════ PROGRAMMES ════════════════════ */
-.ph{padding:158px 0 60px;text-align:center}
+.ph{padding:158px 0 46px;text-align:center}
 .ph h1{font-size:clamp(30px,4.2vw,50px);font-weight:800;margin-bottom:18px}
-.ph .lead{margin:0 auto}
+.ph .lead{margin:0 auto;max-width:720px}
 
-/* Cartes programmes */
-.prog-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:50px;align-items:stretch}
-.prog{position:relative;display:flex;flex-direction:column;background:linear-gradient(180deg,rgba(255,255,255,.035) 0%,rgba(255,255,255,.012) 100%);border:1px solid var(--border);border-radius:22px;padding:34px 28px 28px;text-align:left;transition:transform .2s,border-color .2s,box-shadow .2s}
+/* Bande de preuve sociale (chiffres animés + Trustpilot) */
+.stats{border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:rgba(255,255,255,.015);padding:38px 0}
+.stats-in{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;text-align:center}
+.stat{position:relative}
+.stat + .stat::before{content:"";position:absolute;left:-10px;top:12%;bottom:12%;width:1px;background:linear-gradient(180deg,transparent,rgba(255,255,255,.14),transparent)}
+.stat b{display:block;font-family:'Sora',Arial,sans-serif;font-size:clamp(30px,3.6vw,44px);font-weight:800;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.stat span{font-size:13.5px;color:var(--muted)}
+.stat .s{display:inline-flex;gap:3px;margin:4px 0 2px}
+.stat .s svg{width:17px;height:17px;display:block}
+
+/* Cartes programmes — Elite dominante au centre */
+.prog-grid{display:grid;grid-template-columns:1fr 1.14fr 1fr;gap:20px;margin-top:56px;align-items:stretch}
+.prog{position:relative;display:flex;flex-direction:column;background:linear-gradient(180deg,rgba(255,255,255,.035) 0%,rgba(255,255,255,.012) 100%);border:1px solid var(--border);border-radius:22px;padding:34px 28px 28px;text-align:left;transition:transform .2s,border-color .2s,box-shadow .2s;scroll-margin-top:90px}
 .prog:hover{transform:translateY(-5px);box-shadow:0 24px 60px rgba(0,0,0,.4)}
 .prog .lvl{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);margin-bottom:10px}
 .prog h3{font-family:'Sora',Arial,sans-serif;font-size:23px;font-weight:800;margin-bottom:6px}
-.prog .tagline{font-size:14px;color:var(--muted);margin-bottom:18px;min-height:44px}
+.prog .tagline{font-size:14px;color:var(--muted);margin-bottom:18px}
 .prog .for{font-size:12.5px;color:var(--cyan-lt);background:rgba(34,211,238,.07);border:1px solid rgba(34,211,238,.22);border-radius:10px;padding:9px 13px;margin-bottom:20px;line-height:1.5}
 .prog ul{list-style:none;display:flex;flex-direction:column;gap:10px;margin-bottom:26px}
 .prog li{display:flex;gap:10px;font-size:14px;color:#C9D2EC;line-height:1.5}
 .prog li::before{content:"✓";flex:none;width:20px;height:20px;border-radius:6px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:#4ade80;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;margin-top:2px}
 .prog .foot{margin-top:auto}
 .prog .foot .btn,.prog .foot .btn-ghost{width:100%}
-.prog.hot{border-color:rgba(249,115,22,.45);background:linear-gradient(180deg,rgba(249,115,22,.07) 0%,rgba(249,115,22,.02) 100%);box-shadow:0 18px 50px rgba(249,115,22,.12)}
-.prog.hot:hover{border-color:rgba(249,115,22,.65)}
+/* Le ruban dépasse du haut de la carte : ne pas le rogner (overflow:hidden
+   vient de .spot), et arrondir le halo spotlight pour compenser. */
+.prog.spot{overflow:visible}
+.prog.spot::after{border-radius:22px}
+.prog.hot{border-color:rgba(249,115,22,.5);background:linear-gradient(180deg,rgba(249,115,22,.09) 0%,rgba(249,115,22,.02) 100%);margin:-16px 0;padding:44px 30px 34px;box-shadow:0 18px 50px rgba(249,115,22,.14);animation:hotpulse 4.5s ease-in-out infinite}
+.prog.hot:hover{border-color:rgba(249,115,22,.7);transform:translateY(-5px)}
+.prog.hot h3{font-size:26px}
+.prog.hot .for{color:#FDBA74;background:rgba(249,115,22,.08);border-color:rgba(249,115,22,.3)}
+.prog.hot.spot::after{background:radial-gradient(280px circle at var(--mx,50%) var(--my,50%),rgba(249,115,22,.14),transparent 65%)}
+@keyframes hotpulse{0%,100%{box-shadow:0 18px 50px rgba(249,115,22,.14)}50%{box-shadow:0 22px 66px rgba(249,115,22,.3)}}
+@media(prefers-reduced-motion:reduce){.prog.hot{animation:none}}
 .prog .ribbon{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--warm);color:#0B1220;font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;border-radius:20px;padding:5px 16px;white-space:nowrap;box-shadow:0 6px 18px rgba(249,115,22,.35)}
+/* Ordre : Elite en tête du DOM (mobile) mais au centre sur desktop */
+@media(min-width:981px){
+  .p-biz{order:1}.p-eli{order:2}.p-tit{order:3}
+}
 
-/* 9 piliers */
+/* Moteurs du Modèle Phénix */
+.mot-tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--cyan);margin-bottom:10px}
+.card.mot{padding:30px 28px}
+.card.mot h3{font-size:20px}
+
+/* Panneau format Elite */
+.fmt{position:relative;overflow:hidden;background:linear-gradient(135deg,rgba(249,115,22,.09),rgba(251,191,36,.03) 42%,rgba(255,255,255,.02));border:1px solid rgba(249,115,22,.3);border-radius:26px;padding:46px 42px;margin-top:44px}
+.fmt::before{content:"";position:absolute;top:-140px;left:50%;width:520px;height:280px;margin-left:-260px;background:radial-gradient(closest-side,rgba(249,115,22,.22),transparent);pointer-events:none}
+.fmt-nums{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:36px;position:relative}
+.fnum{background:rgba(7,11,30,.55);border:1px solid var(--border);border-radius:16px;padding:20px 14px;text-align:center;transition:border-color .15s,transform .15s}
+.fnum:hover{border-color:rgba(249,115,22,.45);transform:translateY(-3px)}
+.fnum b{display:block;font-family:'Sora',Arial,sans-serif;font-size:clamp(26px,3vw,38px);font-weight:800;background:var(--warm);-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1.15;margin-bottom:6px}
+.fnum span{font-size:12.5px;color:var(--muted);line-height:1.45;display:block}
+.ticks{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:13px 28px;position:relative}
+.ticks li{display:flex;gap:11px;font-size:14.5px;color:#C9D2EC;line-height:1.55}
+.ticks li::before{content:"✓";flex:none;width:20px;height:20px;border-radius:6px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:#4ade80;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;margin-top:3px}
+.fmt-cta{margin-top:34px;text-align:center;position:relative}
+
+/* 9 piliers (Business) */
 .pil-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:40px}
 .pil{display:flex;align-items:center;gap:12px;background:var(--card2);border:1px solid var(--border);border-radius:13px;padding:14px 16px;font-size:14px;font-weight:600;transition:border-color .15s,transform .15s}
 .pil:hover{border-color:rgba(34,211,238,.4);transform:translateY(-2px)}
@@ -204,14 +245,20 @@ footer::before{content:"";position:absolute;top:-1px;left:0;right:0;height:1px;b
 .final small{display:block;font-size:13px;color:var(--muted2);margin-top:14px}
 
 @media(max-width:980px){
-  .prog-grid{grid-template-columns:1fr;max-width:520px;margin-left:auto;margin-right:auto}
-  .prog .tagline{min-height:0}
+  .prog-grid{grid-template-columns:1fr;max-width:520px;margin-left:auto;margin-right:auto;margin-top:44px}
+  .prog.hot{margin:0;padding:40px 28px 30px}
+  .fmt{padding:36px 26px}
+  .fmt-nums{grid-template-columns:repeat(2,1fr)}
+  .ticks{grid-template-columns:1fr}
   .pil-grid{grid-template-columns:repeat(2,1fr)}
   .helper{grid-template-columns:1fr;text-align:center}
   .helper p{margin:0 auto}
 }
 @media(max-width:640px){
-  .ph{padding:128px 0 44px}
+  .ph{padding:128px 0 40px}
+  .stats-in{grid-template-columns:1fr;gap:26px}
+  .stat + .stat::before{display:none}
+  .fmt-nums{grid-template-columns:1fr 1fr;gap:10px}
   .pil-grid{grid-template-columns:1fr}
   .helper{padding:28px 20px}
   .final{padding:48px 20px}
@@ -253,100 +300,178 @@ footer::before{content:"";position:absolute;top:-1px;left:0;right:0;height:1px;b
 <section class="ph">
   <div class="wrap">
     <span class="kicker">Nos programmes</span>
-    <h1>Trois niveaux d'accompagnement,<br><span class="grad-txt">un seul objectif : ta liberté</span></h1>
-    <p class="lead">Quel que soit ton point de départ, il existe un parcours structuré pour faire passer ton entreprise au niveau supérieur — sans qu'elle repose entièrement sur toi.</p>
+    <h1>Votre entreprise ne devrait pas<br><span class="grad-txt">reposer sur vous seul</span></h1>
+    <p class="lead">Business, Elite ou Titan : trois niveaux d'accompagnement pour dirigeants de TPE/PME, un point d'entrée unique — l'appel diagnostic — et une même conviction : diriger, ce n'est pas tout porter.</p>
+  </div>
+</section>
 
-    <!-- ─── Les 3 programmes ─── -->
+<!-- ═══════════ PREUVE SOCIALE ═══════════ -->
+<div class="stats">
+  <div class="wrap stats-in">
+    <div class="stat rv"><b><span data-count="200" data-prefix="+" data-site-count="dirigeants">0</span></b><span>Dirigeants accompagnés</span></div>
+    <div class="stat rv d1"><b><span data-count="13" data-suffix="&nbsp;M€">0</span></b><span>Générés collectivement par nos clients</span></div>
+    <div class="stat trust rv d2"><b data-site-tp>4,8/5</b><span class="s" id="trustStars"></span><span>sur Trustpilot</span></div>
+  </div>
+</div>
+
+<!-- ═══════════ LES 3 PROGRAMMES ═══════════ -->
+<section style="padding-top:56px">
+  <div class="wrap">
     <div class="prog-grid">
-      <div class="prog spot rv">
-        <div class="lvl">Niveau 1 · Structurer</div>
-        <h3>Business Phénix</h3>
-        <p class="tagline">Le programme cœur : 12 mois pour reconstruire ton entreprise sur des bases solides et rentables.</p>
-        <div class="for">Pour le dirigeant qui porte tout seul et veut structurer son activité pour retrouver marge et temps.</div>
-        <ul>
-          <li>12 mois d'accompagnement en groupe</li>
-          <li>La méthode complète des 9 piliers</li>
-          <li>Coaching de groupe régulier avec Adrien &amp; Emily</li>
-          <li>Outils concrets : tableaux de pilotage, scripts, process</li>
-          <li>Communauté de dirigeants qui vivent les mêmes réalités</li>
-        </ul>
-        <div class="foot"><a class="btn-ghost" data-alteo-cta data-site-cta href="https://team.alteore.com/alteoforms-render.html?id=MIdcp9T5fczESwm6zUEE">Vérifier si c'est pour moi</a></div>
-      </div>
 
-      <div class="prog hot spot rv d1">
-        <span class="ribbon">Le plus demandé</span>
-        <div class="lvl" style="color:#fdba74">Niveau 2 · Déléguer &amp; piloter</div>
+      <!-- Elite en premier dans le DOM : première carte affichée sur mobile,
+           carte centrale sur desktop (ordre géré en CSS). -->
+      <div class="prog hot spot rv p-eli" id="elite">
+        <span class="ribbon">Programme phare</span>
+        <div class="lvl" style="color:#fdba74">Accompagnement individuel · 6 mois</div>
         <h3>Elite Phénix</h3>
-        <p class="tagline">L'accompagnement renforcé pour bâtir une entreprise qui tourne sans dépendre de toi au quotidien.</p>
-        <div class="for">Pour le dirigeant établi (20&nbsp;000 à 200&nbsp;000&nbsp;€/mois, avec équipe) qui veut sortir de l'opérationnel.</div>
+        <p class="tagline"><strong style="color:#ECF1FF">Diriger sans être indispensable.</strong> Faire de votre entreprise un système qui tourne sans que vous ayez à tout porter.</p>
+        <div class="for">Pour les dirigeants de TPE/PME établies — équipe, charges fixes, complexité — devenus le centre de tout : tout remonte à vous, rien n'avance sans vous.</div>
         <ul>
-          <li>Tout Business Phénix, plus un suivi individuel rapproché</li>
-          <li>Travail en profondeur sur les 4 piliers structurels : systématisation, délégation, pilotage par les chiffres, croissance &amp; duplication</li>
-          <li>Plan d'action personnalisé sur ta situation réelle</li>
-          <li>Accès direct à Adrien &amp; Emily entre les sessions</li>
+          <li>6 mois d'accompagnement individuel avec un coach référent dédié, le même du début à la fin</li>
+          <li>24 séances individuelles, une par semaine, sur un créneau fixe</li>
+          <li>Diagnostic de départ réalisé par Adrien ou Emily</li>
+          <li>Suivi WhatsApp entre les séances : au moins deux points par semaine</li>
+          <li>Un expert mobilisé quand un sujet le demande</li>
+          <li>5 étapes clés, chacune validée par une victoire concrète et vérifiable</li>
+          <li>Zéro vidéo à regarder : uniquement de l'exécution accompagnée</li>
         </ul>
-        <div class="foot"><a class="btn" data-alteo-cta data-site-cta href="https://team.alteore.com/alteoforms-render.html?id=MIdcp9T5fczESwm6zUEE">Réserver mon diagnostic gratuit</a></div>
+        <div class="foot"><a class="btn" data-alteo-cta href="https://team.alteore.com/booking.html?type=call_strat_phenix_all">Réserver mon appel diagnostic</a></div>
       </div>
 
-      <div class="prog spot rv d2">
-        <div class="lvl">Niveau 3 · Dupliquer</div>
-        <h3>Titan Phénix</h3>
-        <p class="tagline">Le niveau le plus avancé, pour les dirigeants qui visent la duplication et la croissance à grande échelle.</p>
-        <div class="for">Sur candidature — pour les entreprises déjà structurées, prêtes à changer d'échelle.</div>
+      <div class="prog spot rv d1 p-biz" id="business">
+        <div class="lvl">Offre d'entrée · Collectif</div>
+        <h3>Business Phénix</h3>
+        <p class="tagline">Posez les bases d'une gestion saine et avancez à votre rythme, dans un cadre collectif.</p>
+        <div class="for">Pour les dirigeants qui veulent structurer leur gestion et progresser au sein d'un collectif d'entrepreneurs.</div>
         <ul>
-          <li>Accompagnement sur mesure, en très petit comité</li>
-          <li>Stratégie de duplication : nouvelle offre, nouveau site, nouvelle équipe</li>
-          <li>Structuration financière et organisationnelle avancée</li>
-          <li>Mastermind entre dirigeants de haut niveau</li>
+          <li>Programme de 12 mois</li>
+          <li>Coachings de groupe deux fois par semaine, le lundi et le jeudi, animés par nos coachs</li>
+          <li>Accès à l'académie</li>
+          <li>Outils de pilotage : tableaux de bord de gestion</li>
+          <li>La méthode des 9 piliers, du mindset à la pérennisation</li>
         </ul>
-        <div class="foot"><a class="btn-ghost" href="/contacts-page">Candidater</a></div>
+        <div class="foot"><a class="btn-ghost" data-alteo-cta href="https://team.alteore.com/booking.html?type=call_strat_phenix_all">Réserver mon appel diagnostic</a></div>
+      </div>
+
+      <div class="prog spot rv d2 p-tit" id="titan">
+        <div class="lvl">Sur candidature · Done for you</div>
+        <h3>Titan Phénix</h3>
+        <p class="tagline">Nous ne vous conseillons pas seulement : nous installons dans votre entreprise les acteurs et les systèmes dont elle a besoin.</p>
+        <div class="for">Accessible uniquement sur candidature.</div>
+        <ul>
+          <li>Community management</li>
+          <li>Recrutement via des chasseurs de têtes</li>
+          <li>Création de site internet</li>
+          <li>Mise en place d'automatisations</li>
+          <li>Et tous les autres acteurs nécessaires à votre organisation</li>
+        </ul>
+        <!-- TODO Adrien : remplacer #candidature-titan par le lien du formulaire de candidature Titan -->
+        <div class="foot"><a class="btn-ghost" data-alteo-cta href="#candidature-titan">Candidater à Titan</a></div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ ELITE — LE MODÈLE PHÉNIX ═══════════ -->
+<section style="padding-top:34px">
+  <div class="wrap center">
+    <span class="kicker rv">La méthode Elite</span>
+    <h2 class="h2 rv">Le Modèle Phénix, en <span class="grad-txt">3 moteurs</span></h2>
+    <p class="lead rv">La croissance qui plafonne n'est qu'un symptôme. La cause, c'est un dirigeant devenu indispensable. Les trois moteurs du Modèle Phénix s'attaquent à cette cause — dans cet ordre.</p>
+    <div class="cards c3" style="text-align:left">
+      <div class="card mot spot rv">
+        <span class="mot-tag">Moteur 1</span>
+        <div class="ic">⚙️</div>
+        <h3>Structuration</h3>
+        <p>Sortez de l'opérationnel : les rôles sont clarifiés, la délégation devient réelle, et votre entreprise cesse de dépendre de votre présence permanente.</p>
+      </div>
+      <div class="card mot spot rv d1">
+        <span class="mot-tag">Moteur 2</span>
+        <div class="ic">📊</div>
+        <h3>Rentabilité</h3>
+        <p>Pilotez par les chiffres : vous reprenez le contrôle de vos marges et de votre trésorerie, et chaque décision s'appuie sur des données, pas sur des impressions.</p>
+      </div>
+      <div class="card mot spot rv d2">
+        <span class="mot-tag">Moteur 3</span>
+        <div class="ic">🚀</div>
+        <h3>Développement</h3>
+        <p>Faites croître une entreprise qui ne dépend plus d'une seule personne — une croissance structurée, que vous choisissez au lieu de la subir.</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ═══════════ LES 9 PILIERS ═══════════ -->
-<section style="padding-top:30px">
+<!-- ═══════════ ELITE — LE FORMAT ═══════════ -->
+<section style="padding-top:34px">
   <div class="wrap center">
-    <span class="kicker rv">La méthode</span>
-    <h2 class="h2 rv">Les 9 piliers de la méthode Phénix</h2>
-    <p class="lead rv">Chaque dimension de ton business est couverte, dans un ordre pensé pour des résultats rapides et durables.</p>
+    <span class="kicker rv">Le format Elite</span>
+    <h2 class="h2 rv">Six mois d'exécution accompagnée</h2>
+    <p class="lead rv">Rien à regarder, rien à consommer : un cadre individuel, rythmé, tenu d'un bout à l'autre par la même personne — et des victoires concrètes à chaque étape.</p>
+
+    <div class="fmt rv" style="text-align:left">
+      <div class="fmt-nums">
+        <div class="fnum rv"><b><span data-count="6">0</span>&nbsp;mois</b><span>d'accompagnement individuel</span></div>
+        <div class="fnum rv d1"><b><span data-count="24">0</span>&nbsp;séances</b><span>une par semaine, sur un créneau fixe</span></div>
+        <div class="fnum rv d2"><b><span data-count="2">0</span>&nbsp;points</b><span>WhatsApp par semaine, au minimum</span></div>
+        <div class="fnum rv d3"><b><span data-count="5">0</span>&nbsp;étapes</b><span>clés, validées par des victoires concrètes</span></div>
+      </div>
+      <ul class="ticks">
+        <li>Un coach référent dédié, le même du début à la fin de l'accompagnement</li>
+        <li>Un diagnostic de départ réalisé par Adrien ou Emily, qui transmettent ensuite votre dossier à votre coach référent</li>
+        <li>Un suivi WhatsApp entre les séances, pour que rien ne retombe entre deux rendez-vous</li>
+        <li>Un expert qui intervient à la place de la séance hebdomadaire quand un sujet le demande</li>
+        <li>Des outils propriétaires appliqués pendant les séances : délégation, rôles, pilotage de la semaine…</li>
+        <li>Zéro vidéo à regarder : uniquement de l'exécution accompagnée, sur votre situation réelle</li>
+      </ul>
+      <div class="fmt-cta"><a class="btn big" data-alteo-cta href="https://team.alteore.com/booking.html?type=call_strat_phenix_all">Réserver mon appel diagnostic</a></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ BUSINESS — LES 9 PILIERS ═══════════ -->
+<section style="padding-top:34px">
+  <div class="wrap center">
+    <span class="kicker rv">Business Phénix</span>
+    <h2 class="h2 rv">Les 9 piliers du programme Business</h2>
+    <p class="lead rv">Le cadre collectif de 12 mois couvre chaque dimension de votre gestion, dans un ordre pensé pour des résultats durables.</p>
     <div class="pil-grid" style="text-align:left">
       <div class="pil spot rv"><span class="n">1</span>Mindset du dirigeant</div>
       <div class="pil spot rv"><span class="n">2</span>Positionnement</div>
       <div class="pil spot rv"><span class="n">3</span>Gestion du temps</div>
-      <div class="pil spot rv d1"><span class="n">4</span>Ventes</div>
+      <div class="pil spot rv d1"><span class="n">4</span>Vente</div>
       <div class="pil spot rv d1"><span class="n">5</span>Délégation</div>
       <div class="pil spot rv d1"><span class="n">6</span>Marketing</div>
       <div class="pil spot rv d2"><span class="n">7</span>Maîtrise des coûts</div>
       <div class="pil spot rv d2"><span class="n">8</span>Expérience client</div>
-      <div class="pil spot rv d2"><span class="n">9</span>Pérennité</div>
+      <div class="pil spot rv d2"><span class="n">9</span>Pérennisation</div>
     </div>
   </div>
 </section>
 
 <!-- ═══════════ AIDE AU CHOIX ═══════════ -->
-<section style="padding-top:30px">
+<section style="padding-top:34px">
   <div class="wrap">
     <div class="helper rv">
       <div>
-        <h3>Tu ne sais pas quel programme est fait pour toi ?</h3>
-        <p>C'est justement le rôle du diagnostic gratuit : en 30 minutes, on analyse ta situation et on te dit honnêtement quel parcours a du sens — ou si aucun n'en a pour l'instant.</p>
+        <h3>Vous hésitez entre les trois programmes ?</h3>
+        <p>C'est précisément le rôle de l'appel diagnostic : nous analysons votre situation et nous vous disons honnêtement quel parcours a du sens pour vous — ou si aucun n'en a pour l'instant.</p>
       </div>
-      <a class="btn big" data-alteo-cta data-site-cta href="https://team.alteore.com/alteoforms-render.html?id=MIdcp9T5fczESwm6zUEE">Faire le point gratuitement</a>
+      <a class="btn big" data-alteo-cta href="https://team.alteore.com/booking.html?type=call_strat_phenix_all">Réserver mon appel diagnostic</a>
     </div>
   </div>
 </section>
 
 <!-- ═══════════ CTA FINAL ═══════════ -->
-<section style="padding-top:30px">
+<section style="padding-top:34px">
   <div class="wrap">
     <div class="final rv">
       <span class="kicker">Prêt à passer à l'action ?</span>
       <h2>Le bon programme, au bon moment</h2>
-      <p>L'investissement dépend de ta problématique et du niveau d'accompagnement choisi. Chaque parcours est structuré pour que les résultats obtenus couvrent largement l'engagement consenti.</p>
-      <a class="btn big" data-alteo-cta data-site-cta href="https://team.alteore.com/alteoforms-render.html?id=MIdcp9T5fczESwm6zUEE">Réserver mon diagnostic gratuit</a>
-      <small>Échange gratuit · Sans engagement · 100&nbsp;% confidentiel</small>
+      <p>Chaque parcours commence par le même point d'entrée : un appel diagnostic pour comprendre votre situation, identifier ce qui fait de vous le passage obligé de votre entreprise — et vous orienter vers ce qui a du sens.</p>
+      <a class="btn big" data-alteo-cta href="https://team.alteore.com/booking.html?type=call_strat_phenix_all">Réserver mon appel diagnostic</a>
+      <small>Échange sans engagement · 100&nbsp;% confidentiel</small>
     </div>
   </div>
 </section>
@@ -545,9 +670,12 @@ footer::before{content:"";position:absolute;top:-1px;left:0;right:0;height:1px;b
   document.addEventListener('keydown', vtDelegate);
 
   /* ── Contenu piloté depuis « Site & pages » (team.alteore) ──
-     Les chiffres, photos, témoignages, secteurs et l'URL du CTA sont lus
-     depuis /api/site-config : modifiables sans toucher au code des pages.
-     Les valeurs en dur ci-dessus restent le repli si l'appel échoue. */
+     Les chiffres, photos, témoignages et secteurs sont lus depuis
+     /api/site-config : modifiables sans toucher au code des pages.
+     Les valeurs en dur ci-dessus restent le repli si l'appel échoue.
+     NOTE : les CTA de cette page pointent en dur vers l'appel diagnostic
+     (booking.html?type=call_strat_phenix_all) — ils ne portent pas
+     data-site-cta et ne suivent donc pas l'URL CTA de la config. */
   function escT(x) { return String(x == null ? '' : x).replace(/[&<>"]/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]; }); }
   function vtHtml(list) {
     var play = '<span class="vt-play"><svg viewBox="0 0 24 24" fill="#0B1220"><path d="M8 5v14l11-7z"/></svg></span>';

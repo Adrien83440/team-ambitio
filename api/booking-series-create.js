@@ -402,6 +402,7 @@ module.exports = async (req, res) => {
         timezone: body.timezone || first.timezone || 'Europe/Paris',
         prospect: first.prospect || {},
         formData: first.formData || {},
+        formAnswers: first.formAnswers || [],
         isCoaching: true,
         source: first.source || 'self_booking',
         clientId: client.id,

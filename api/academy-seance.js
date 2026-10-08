@@ -162,8 +162,17 @@ module.exports = async (req, res) => {
       seanceId: seanceId,
       date: dateOk(s.date) ? s.date : '',
       coach: String(s.coach || ''),
+      // Champs RÉELS de la fiche (coaching.html) : visioUrl = enregistrement
+      // de la séance (replay), driveUrl / resumeUrl = synthèse Google Doc.
+      // Les noms lus avant le 08/09/2026 (lienVisio, docUrl…) n'ont jamais
+      // existé dans la fiche : l'Academy ne recevait aucun lien.
+      lienReplay: String(s.visioUrl || ''),
       lienVisio: String(s.lienVisio || s.visio || s.meetUrl || ''),
-      lienCompteRendu: String(s.lienCompteRendu || s.docUrl || s.lienDoc || ''),
+      lienCompteRendu: String(s.driveUrl || s.resumeUrl || s.lienCompteRendu || s.docUrl || s.lienDoc || ''),
+      // La fiche ne synchronise que les séances faites : le crédit est
+      // consommé. Absent (undefined → retiré du JSON) sinon : l'Academy garde
+      // le statut qu'elle connaît (report, non honorée…).
+      statut: s.statut === 'fait' ? 'tenue' : undefined,
       // Ce que l'élève LIT.
       resumePartage: cap(s.resume || '', 4000),
       // Ce qu'il ne verra jamais : l'Academy le range dans une zone séparée.

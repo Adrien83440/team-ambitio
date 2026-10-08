@@ -175,6 +175,7 @@ body { min-height: 100vh; }
 .rdv-btn.warn { background: linear-gradient(135deg, #92400e, var(--orange)); border-color: transparent; color: white; }
 .rdv-btn.icon { width: 32px; height: 32px; padding: 0; justify-content: center; }
 .rdv-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.rdv-btn.ai-ready { border-color: rgba(129,140,248,0.55); background: rgba(129,140,248,0.12); box-shadow: 0 0 0 3px rgba(129,140,248,0.08); }
 
 /* EMPTY */
 .rdv-empty { text-align: center; padding: 60px 20px; color: var(--text-muted); }
@@ -234,6 +235,8 @@ body { min-height: 100vh; }
 <script src="alteore-flow.js" defer></script>
 <script src="rdv-outcome.js" defer></script>
 <script src="close-wizard.js" defer></script>
+<!-- Programme IA 10/2026 : dossier de préparation au closing -->
+<script src="ai-prep-modal.js" defer></script>
 </head>
 
 <body>
@@ -768,6 +771,9 @@ function renderCard(b, doubleBooked) {
   }
   actions += '<button class="rdv-btn icon" type="button" onclick="openRescheduleModal(\'' + b.id + '\')" title="Replanifier ce RDV (nouveau créneau, l\'ancien passe en Replanifié)">📅</button>';
   if (b.leadId) {
+    // Dossier de préparation IA (programme IA 10/2026) — ai-prep-modal.js.
+    // Généré automatiquement ~1 h avant le RDV ; sinon à la demande.
+    actions += '<button class="rdv-btn icon' + (b.aiPrep ? ' ai-ready' : '') + '" type="button" data-ai-prep="' + escapeHtml(b.id) + '" title="' + (b.aiPrep ? 'Dossier IA prêt' : 'Préparer le dossier IA') + '">📋</button>';
     actions += '<a class="rdv-btn icon" href="sales-contact.html?id=' + encodeURIComponent(b.leadId) + '" title="Fiche prospect">👁</a>';
   }
   if (phone) {
@@ -883,6 +889,9 @@ function renderPastCard(b) {
   var actions = '';
   actions += '<button class="rdv-btn outcome" onclick="openOutcomeModal(\'' + b.id + '\')">' + (b.outcome ? '✎ Modifier' : '🎯 Résultat') + '</button>';
   if (b.leadId) {
+    // Dossier de préparation IA (programme IA 10/2026) — ai-prep-modal.js.
+    // Généré automatiquement ~1 h avant le RDV ; sinon à la demande.
+    actions += '<button class="rdv-btn icon' + (b.aiPrep ? ' ai-ready' : '') + '" type="button" data-ai-prep="' + escapeHtml(b.id) + '" title="' + (b.aiPrep ? 'Dossier IA prêt' : 'Préparer le dossier IA') + '">📋</button>';
     actions += '<a class="rdv-btn icon" href="sales-contact.html?id=' + encodeURIComponent(b.leadId) + '" title="Fiche prospect">👁</a>';
   }
   if (phone) {

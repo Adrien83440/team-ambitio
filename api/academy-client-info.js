@@ -34,12 +34,17 @@
 //   • total « séances réalisées » : statut==='fait' && numero!==0 &&
 //     type!=='rdv72h' (le compteur global de coaching.html, ligne ~1658) ;
 //   • dernière séance : dernière 'fait' avec un coach (ligne ~1795) ;
-//   • quota du mois : quotaOverrides[monthYear] sinon 2 si programme
-//     contient « 24c », sinon 1 ; used = sessions 'fait' du mois.
+//   • quota du mois : quotaOverrides[monthYear] sinon la règle partagée
+//     séances ÷ durée du programme (api/_coaching-quota.js) ;
+//     used = sessions 'fait' du mois.
+//     Cet endpoint avait sa propre règle simplifiée (« 24c → 2, sinon 1 »),
+//     qui affichait 2/mois à un Elite NEW ayant droit à 4. Corrigé le
+//     28/08/2026 : plus qu'une définition, dans le helper.
 // ============================================================================
 
 const { db } = require('./_firebaseAdmin');
 const parseBody = require('./_parseBody');
+const { effectiveMonthlyQuota, monthlyQuotaFromProgramme } = require('./_coaching-quota');
 
 const ALTEOR_BASE = 'https://team.alteore.com';
 
@@ -47,10 +52,9 @@ function normEmail(e) {
   return (e || '').toString().trim().toLowerCase();
 }
 
-function getMonthlyQuota(programme) {
-  if (!programme) return 1;
-  return String(programme).toLowerCase().includes('24c') ? 2 : 1;
-}
+/* Quota mensuel dérivé du programme — règle unique, cf. api/_coaching-quota.js.
+   Conservé sous ce nom : il est exposé dans __test et utilisé par les tests. */
+const getMonthlyQuota = monthlyQuotaFromProgramme;
 
 // Aplatit les sessions d'un client (years[].sessions[] sinon sessions[]).
 function flattenSessions(c) {
@@ -101,8 +105,7 @@ function coachingSummary(clientData, monthYear) {
   }
   if (lastResume.length > 800) lastResume = lastResume.slice(0, 800).trim() + ' […]';
 
-  const overrides = (clientData.quotaOverrides && typeof clientData.quotaOverrides === 'object') ? clientData.quotaOverrides : {};
-  const quota = (typeof overrides[monthYear] === 'number') ? overrides[monthYear] : getMonthlyQuota(clientData.programme);
+  const quota = effectiveMonthlyQuota(clientData, monthYear);
   const used = countSessionsInMonth(clientData, monthYear);
 
   return {

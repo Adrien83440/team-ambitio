@@ -476,13 +476,32 @@ function getAlertStatus(c){
 function isEnRetard(c)  { return !isInactive(c) && getAlertStatus(c) === 'alert'; }
 function isAttention(c) { return !isInactive(c) && getAlertStatus(c) === 'warning'; }
 
+/* Quota MENSUEL = séances ÷ durée du programme (« Elite NEW - 6 Mois - 24C »
+   → 24/6 = 4). Règle unique du produit, alignée sur coaching.html:1529,
+   coaching-shared.js et api/_recurrence-core.js. Cette copie était restée sur
+   l'ancienne table « 24c → 2 » et sous-affichait les Elite NEW. */
 function getMonthlyQuota(programme){
   if(!programme) return 1;
-  var p = programme.toLowerCase();
+  var p = String(programme).toLowerCase();
+  var mMois = p.match(/(\d+)\s*mois/);
+  var mSeances = p.match(/(\d+)\s*c\b/);
+  if(mMois && mSeances){
+    var mois = parseInt(mMois[1], 10), seances = parseInt(mSeances[1], 10);
+    if(mois > 0 && seances > 0) return Math.max(1, Math.round(seances / mois));
+  }
   if(p.indexOf('24c') >= 0) return 2;
   if(p.indexOf('12c') >= 0) return 1;
   if(p.indexOf('6c')  >= 0) return 1;
   return 1;
+}
+/* Quota effectif du mois : l'override posé sur la fiche client prime sur la
+   règle dérivée (même arbitrage que api/booking-check-coaching-quota.js). */
+function getEffectiveQuota(c, year, month){
+  var derived = getMonthlyQuota(c && c.programme);
+  if(!c || !c.quotaOverrides) return derived;
+  var key = year + '-' + String(month + 1).padStart(2, '0');
+  var ov = c.quotaOverrides[key];
+  return (typeof ov === 'number' && ov >= 0) ? ov : derived;
 }
 function getAllSessions(c){
   if(c.years && c.years.length){
@@ -735,7 +754,8 @@ function renderCard2(){
   body.innerHTML = top.map(function(c){
     var done = c.nbCoachingsFaits || 0;
     var total = c.nbCoachingsTotal || 12;
-    var quota = getMonthlyQuota(c.programme);
+    var _now2 = new Date();
+    var quota = getEffectiveQuota(c, _now2.getFullYear(), _now2.getMonth());
     return ''
       + '<div class="card-item">'
       + '  <div class="ci-av">'+esc(getInitials(c.nom))+'</div>'

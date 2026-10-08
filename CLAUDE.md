@@ -6,17 +6,19 @@ Contexte permanent pour Claude Code. À lire intégralement avant toute action s
 
 ## ⛔ DANGER IMMÉDIAT — À LIRE EN PREMIER
 
-### 1. Ne JAMAIS déployer les Cloud Functions depuis ce repo en l'état
+### 1. Cloud Functions : rapatriement VÉRIFIÉ le 26/09/2026 — déploiement débloqué
 
-`Functions/index.js` dans ce repo fait **573 lignes**. La version réellement déployée en
-production fait **plus de 2 000 lignes** et vit dans `~/index.js` sur Cloud Shell.
-**Le repo est en retard, pas la production.**
+L'ancien blocage (« repo 573 lignes vs prod 2 000+ ») est **périmé**. Le 26/09/2026,
+`~/index.js` de Cloud Shell (4 544 lignes) a été téléchargé et diffé contre
+`Functions/index.js` du repo : **le repo contient tout ce que la prod a, plus des
+correctifs pas encore déployés** (garde-fou `seriesManaged` des séries coaching,
+`clientType: 'company'` par défaut, `pickAliveLead` dans `findLead`/`onNewLead`).
 
-Lancer `firebase deploy --only functions` aujourd'hui **écraserait la production** et
-détruirait tout le code non rapatrié.
-
-→ Tant qu'Adrien n'a pas confirmé le rapatriement de `~/index.js` dans le repo :
-**aucun déploiement de Cloud Functions, sous aucun prétexte.**
+Le déploiement depuis le repo est donc autorisé, avec les précautions de la règle 2
+ci-dessous. `node-fetch@^2` a été ajouté à `Functions/package.json` le même jour
+(requis par index.js, présent seulement dans les node_modules de Cloud Shell avant ça).
+Après un déploiement réussi, la copie `~/index.js` de Cloud Shell devient obsolète :
+le repo est la source de vérité.
 
 ### 2. Ne JAMAIS utiliser `--force` sur un déploiement Firebase
 
@@ -84,7 +86,7 @@ HTML / CSS / JavaScript **vanilla**, aucun build, aucun bundler. Chaque page est
 |---|---|---|
 | Usage | **tous** les endpoints HTTP appelables | uniquement triggers Firestore et jobs planifiés |
 | Pourquoi | la policy GCP `iam.allowedPolicyMemberDomains` bloque `allUsers` / `allAuthenticatedUsers` sur les callables Cloud Functions | — |
-| Runtime | Node 24 (depuis le 09/09/2026 — Vercel refusait les builds Node 20 à partir du 01/10/2026) | Node 20 |
+| Runtime | Node 24 (depuis le 09/09/2026 — Vercel refusait les builds Node 20 à partir du 01/10/2026) | Node 22 (depuis le 26/09/2026 — Node 20 décommissionné par GCP le 30/10/2026) |
 
 **Conséquence : tout nouvel endpoint HTTP va dans `api/`, jamais dans Cloud Functions.**
 
@@ -306,9 +308,10 @@ firebase deploy --only firestore:rules --project ambitio-team
 Après vérification de l'écart avec la Console par Adrien.
 
 ### Cloud Functions
-**Bloqué** jusqu'au rapatriement de `~/index.js` (voir « Danger immédiat »).
-Une fois débloqué : `firebase deploy --only functions --project ambitio-team`, réponse
-**No** à la suppression des fonctions orphelines.
+Débloqué depuis le 26/09/2026 (rapatriement vérifié, voir « Danger immédiat »).
+`firebase deploy --only functions --project ambitio-team`, réponse **No** à la
+suppression des fonctions orphelines. Commande interactive : c'est Adrien qui la
+lance dans son terminal, jamais un agent en mode non interactif.
 
 ### Ordre général
 Règles Firestore → variables d'environnement → frontend → activation des flags de

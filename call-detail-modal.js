@@ -272,10 +272,35 @@
       h += '<div class="cdm-audio-empty">Analyse en cours (Claude)…</div>';
     } else if (detail.aiAnalysisStatus === 'failed') {
       h += '<div class="cdm-audio-empty">Échec de l\'analyse IA</div>';
-    } else {
+    } else if (!detail.aiCall) {
       h += '<div class="cdm-audio-empty">Pas d\'analyse disponible</div>';
     }
     h += '</div>';
+
+    // — Notation de l'appel (programme IA 10/2026, api/ai-call.js) : contenu
+    //   du discours uniquement, sur la grille du script de setting.
+    const ac = detail.aiCall;
+    if (ac) {
+      h += '<div class="cdm-section">';
+      h += '<div class="cdm-section-title">🎯 Fin d\'appel & notation IA' + (ac.notation ? ' — ' + ac.notation.score + '/100' : '') + '</div>';
+      h += '<div class="cdm-summary">' + escHtml(ac.resume || '') + '</div>';
+      if (ac.prochaineAction && ac.prochaineAction.action) h += '<div class="cdm-list-item">➡️ ' + escHtml(ac.prochaineAction.action) + (ac.prochaineAction.quand ? ' — ' + escHtml(ac.prochaineAction.quand) : '') + '</div>';
+      if (ac.notation) {
+        h += '<div class="cdm-list">';
+        (ac.notation.etapes || []).forEach(function (e) {
+          h += '<div class="cdm-list-item"><b>' + escHtml(e.etape) + ' · ' + e.note + '/10</b>' + (e.commentaire ? ' — ' + escHtml(e.commentaire) : '') + '</div>';
+        });
+        h += '</div>';
+        if (ac.notation.pointFort) h += '<div class="cdm-list-item">👏 ' + escHtml(ac.notation.pointFort) + '</div>';
+        if (ac.notation.axeProgres) h += '<div class="cdm-list-item">💡 ' + escHtml(ac.notation.axeProgres) + '</div>';
+      }
+      if (Array.isArray(ac.objections) && ac.objections.length) {
+        h += '<div class="cdm-section-title" style="margin-top:6px">🛡️ Objections</div><div class="cdm-list">';
+        ac.objections.forEach(function (o) { h += '<div class="cdm-list-item">« ' + escHtml(o.quote) + ' »' + (o.response ? ' → ' + escHtml(o.response) : '') + (o.worked ? ' ✓' : ' ✕') + '</div>'; });
+        h += '</div>';
+      }
+      h += '</div>';
+    }
 
     body.innerHTML = h;
   }

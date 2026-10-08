@@ -205,6 +205,9 @@ function startClientsListener(){
       allClients = [];
       snap.forEach(function(doc){
         var d = doc.data();
+        // Doublon neutralisé par la déduplication — sa fiche primaire est
+        // déjà dans la liste. Même motif que csm-clients.html:1183.
+        if(d._merged === true) return;
         d.id = doc.id;
         allClients.push(d);
       });

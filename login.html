@@ -165,7 +165,7 @@
 <script type="module">
   import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import{getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-  import{getFirestore,doc,getDoc}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import{getFirestore,initializeFirestore,doc,getDoc}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
   const app=initializeApp({
     apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
     authDomain:"ambitio-team.firebaseapp.com",
@@ -174,7 +174,7 @@
     messagingSenderId:"1079366902268",
     appId:"1:1079366902268:web:b4ec1691dba54230339279"
   });
-  const auth=getAuth(app),db=getFirestore(app);
+  const auth=getAuth(app),db=initializeFirestore(app,{experimentalAutoDetectLongPolling:true}); /* auto-detect long-polling : sans lui WebChannel se bloque sur Safari. En SDK modulaire le reglage se pose ici, pas via settings(). */
   window._auth=auth;window._db=db;window._signOut=signOut;
   window._signIn=signInWithEmailAndPassword;
   window._doc=doc;window._getDoc=getDoc;
@@ -230,7 +230,7 @@
     if(modules) localStorage.setItem('ambitio_modules',JSON.stringify(modules));
     else localStorage.removeItem('ambitio_modules');
     // Redirect button based on role
-    const dest={coach:'coaching.html',sales:'sales-dashboard.html',admin:'coaching.html',csm:'csm-dashboard.html'};
+    const dest={coach:'coaching.html',sales:'sales-dashboard.html',admin:'coaching.html',csm:'csm-cockpit.html'};
     const goBtn=document.getElementById('goBtn');
     if(goBtn) goBtn.href=dest[role]||'coaching.html';
   };

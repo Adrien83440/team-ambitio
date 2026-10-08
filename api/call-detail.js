@@ -172,6 +172,8 @@ module.exports = async (req, res) => {
       aiAnalysisStatus: log.aiAnalysisStatus || 'pending',
       aiAnalysis:       log.aiAnalysis       || null,
       aiSummary:        log.aiSummary        || null,
+      // Programme IA 10/2026 : fin d'appel + notation (api/ai-call.js)
+      aiCall:           (log.aiCall && log.aiCall.resume) ? log.aiCall : null,
     });
 
   } catch (err) {

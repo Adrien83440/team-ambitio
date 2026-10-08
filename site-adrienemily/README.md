@@ -16,7 +16,7 @@ accordéon, témoignages Vimeo au clic, menu mobile, 100 % responsive, ES5.
 |---|---|---|---|
 | `index.html` | `accueil` — cocher **« Page d'accueil du domaine »** | `/` | Hero, chiffres animés, 3 bénéfices, méthode 3 étapes, différenciation, témoignages vidéo, citation, FAQ, CTA |
 | `about.html` | `about` | `/about` | Portraits Adrien & Emily, histoire, citation, convictions, chiffres, CTA |
-| `product.html` | `product` | `/product` | **Nouvelle** page Programmes : Business / Elite / Titan Phénix, les 9 piliers, aide au choix |
+| `product.html` | `product` | `/product` | Page Programmes (réécrite le 28/09/2026 d'après le brief offres) : Elite Phénix en carte phare, Business en offre d'entrée, Titan sur candidature, Modèle Phénix (3 moteurs), format Elite, 9 piliers Business |
 | `contacts-page.html` | `contacts-page` | `/contacts-page` | Formulaire `data-alteo-optin` (prenom, nom, email, téléphone, message → fiche Leads Live), email direct, CTA diagnostic |
 
 Les slugs `about`, `product` et `contacts-page` reprennent **exactement** les
@@ -70,10 +70,14 @@ Firestore `site_config`, Admin SDK : aucune règle à déployer).
 
 ## ⚠️ À valider par Adrien
 
-- **Textes de la page Programmes** : les descriptifs d'Elite Phénix et Titan
-  Phénix ont été rédigés d'après le quiz (4 piliers) et le positionnement en
-  3 niveaux — seul Business Phénix (12 mois, 9 piliers) vient du site actuel.
-- CTA « diagnostic gratuit » : garde l'AlteoForm actuel
-  (`MIdcp9T5fczESwm6zUEE`) partout, comme sur le site Systeme.io.
+- **Page Programmes (`product.html`)** : contenu réécrit le 28/09/2026 d'après
+  le brief offres (vouvoiement, aucun prix, Elite = accompagnement jamais
+  « formation », chiffres validés uniquement : +200 dirigeants, 13 M€, 4,8/5).
+  Ses CTA pointent **en dur** vers
+  `booking.html?type=call_strat_phenix_all` (sans `data-site-cta`) : l'URL CTA
+  de « Site & pages » ne s'applique plus à cette page. Le CTA Titan est un
+  placeholder `#candidature-titan` (lien de candidature à fournir).
+- CTA « diagnostic gratuit » des **autres pages** : garde l'AlteoForm actuel
+  (`MIdcp9T5fczESwm6zUEE`), comme sur le site Systeme.io.
 - La photo « coaching de groupe » (accueil) vient de postimg.cc comme sur le
   site actuel — à rapatrier un jour dans les Médias du tunnel.

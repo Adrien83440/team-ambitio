@@ -105,7 +105,7 @@
   <script>
     (function(){
       const role = localStorage.getItem('ambitio_role');
-      if(role && role === 'sales') window.location.href = 'sales.html';
+      if(role && role === 'sales') window.location.href = 'sales-dashboard.html';
     })();
   </script>
   <script src="nav.js"></script>
@@ -151,7 +151,7 @@
 <script type="module">
   import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import{getAuth,onAuthStateChanged,signOut}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-  import{getFirestore,doc,setDoc,getDoc,collection,getDocs,deleteDoc,updateDoc}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import{getFirestore,initializeFirestore,doc,setDoc,getDoc,collection,getDocs,deleteDoc,updateDoc}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
   const app=initializeApp({
     apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
     authDomain:"ambitio-team.firebaseapp.com",
@@ -160,7 +160,7 @@
     messagingSenderId:"1079366902268",
     appId:"1:1079366902268:web:b4ec1691dba54230339279"
   });
-  const auth=getAuth(app),db=getFirestore(app);
+  const auth=getAuth(app),db=initializeFirestore(app,{experimentalAutoDetectLongPolling:true}); /* auto-detect long-polling : sans lui WebChannel se bloque sur Safari. En SDK modulaire le reglage se pose ici, pas via settings(). */
   window._auth=auth;window._db=db;window._doc=doc;window._setDoc=setDoc;
   window._getDoc=getDoc;window._collection=collection;window._getDocs=getDocs;
   window._deleteDoc=deleteDoc;window._updateDoc=updateDoc;window._signOut=signOut;
@@ -171,7 +171,7 @@
     const uSnap=await getDoc(doc(db,'users',user.uid));
     const uData=uSnap.exists()?uSnap.data():{};
     const role=uData.role||'admin';
-    if(role==='sales'){window.location.href='sales.html';return;}
+    if(role==='sales'){window.location.href='sales-dashboard.html';return;}
     window._role=role;
     window._userName=user.displayName||user.email.split('@')[0];
     const el=id=>document.getElementById(id);
@@ -211,7 +211,9 @@ function onClientsLoaded(clients) {
   // Fréquence entre séances
   let totalIntervals=0, countIntervals=0;
   clients.forEach(c => {
-    const dates=(c.sessions||[]).filter(s=>s.statut==='fait'&&s.date)
+    // getAllSessions() : les séances vivent dans years[].sessions[], pas
+    // dans c.sessions — sans ça l'intervalle moyen tombait à 0 pour tous.
+    const dates=getAllSessions(c).filter(s=>s&&s.statut==='fait'&&s.date)
       .map(s=>new Date(s.date).getTime()).sort((a,b)=>a-b);
     for(let i=1;i<dates.length;i++){totalIntervals+=Math.floor((dates[i]-dates[i-1])/86400000);countIntervals++;}
   });

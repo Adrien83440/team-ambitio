@@ -1318,13 +1318,32 @@ function loadCoachMembers(){
 
 
 /* ─── Quota / sessions logic — réplique de coaching.html ─── */
+/* Quota MENSUEL = séances ÷ durée du programme (« Elite NEW - 6 Mois - 24C »
+   → 24/6 = 4). Règle unique du produit, alignée sur coaching.html:1529,
+   coaching-shared.js et api/_recurrence-core.js. Cette copie était restée sur
+   l'ancienne table « 24c → 2 » et sous-affichait les Elite NEW. */
 function getMonthlyQuota(programme){
   if(!programme) return 1;
   var p = String(programme).toLowerCase();
+  var mMois = p.match(/(\d+)\s*mois/);
+  var mSeances = p.match(/(\d+)\s*c\b/);
+  if(mMois && mSeances){
+    var mois = parseInt(mMois[1], 10), seances = parseInt(mSeances[1], 10);
+    if(mois > 0 && seances > 0) return Math.max(1, Math.round(seances / mois));
+  }
   if(p.indexOf('24c') >= 0) return 2;
   if(p.indexOf('12c') >= 0) return 1;
   if(p.indexOf('6c')  >= 0) return 1;
   return 1;
+}
+/* Quota effectif du mois : l'override posé sur la fiche client prime sur la
+   règle dérivée (même arbitrage que api/booking-check-coaching-quota.js). */
+function getEffectiveQuota(coachingDoc, year, month){
+  var derived = getMonthlyQuota(coachingDoc && coachingDoc.programme);
+  if(!coachingDoc || !coachingDoc.quotaOverrides) return derived;
+  var key = year + '-' + String(month + 1).padStart(2, '0');
+  var ov = coachingDoc.quotaOverrides[key];
+  return (typeof ov === 'number' && ov >= 0) ? ov : derived;
 }
 function getAllCoachingSessions(coachingDoc){
   if(!coachingDoc) return [];
@@ -1348,7 +1367,7 @@ function getCoachingQuotaStatus(coachingDoc, year, month){
   var done  = coachingDoc.nbCoachingsFaits || 0;
   var total = coachingDoc.nbCoachingsTotal || 12;
   if(done >= total) return { status:'done', used:0, max:0 };
-  var quota = getMonthlyQuota(coachingDoc.programme);
+  var quota = getEffectiveQuota(coachingDoc, year, month);
   var sessions = getSessionsInMonth(coachingDoc, year, month);
   var used = sessions.length;
   if(used >= quota)  return { status:'ok', used:used, max:quota };
@@ -3286,6 +3305,7 @@ function csmCreateLeadForClient(clientId){
     nom: (c.nom||'').trim(),
     email: (c.email||'').toLowerCase().trim(),
     telephone: c.telephone || '',
+    phoneNormalized: phoneNormalized(c.telephone),
     commerce: c.commerce || '',
     secteur: c.secteur || '',
     isClient: true,
@@ -3316,6 +3336,17 @@ function csmCreateLeadForClient(clientId){
     console.error('csmCreateLeadForClient error', e);
     showToast('❌ Erreur création lead — voir console', 'error');
   });
+}
+
+/* 9 derniers chiffres du téléphone — clé de rapprochement utilisée par
+   funnel-core.js (phone9) et sales-leads.html. Un lead créé sans ce champ
+   est invisible pour toutes les recherches par téléphone du reste de
+   l'application. Implémentation identique à funnel-core.js:717. */
+function phoneNormalized(raw) {
+  if (!raw) return null;
+  var d = String(raw).replace(/[^\d]/g, '');
+  if (d.length < 6) return null;
+  return d.length >= 9 ? d.slice(-9) : d;
 }
 window.csmCreateLeadForClient = csmCreateLeadForClient;
 

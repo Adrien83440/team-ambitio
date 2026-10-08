@@ -256,6 +256,39 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .ld-card-info { flex: 1; min-width: 0; }
 .ld-card-name { font-family: var(--fh); font-size: 14.5px; font-weight: 700; letter-spacing: -0.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 7px; }
 .ld-card-name .l2ago { font-family: var(--fm); font-size: 10px; font-weight: 400; color: var(--muted2); flex: none; }
+/* ── IA : probabilité de RDV (aiLead.proba) — programme IA 10/2026 ── */
+.l2ai-badge { flex: none; font-family: var(--fm); font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.12); color: var(--muted); }
+.l2ai-badge.chaud { color: #34d399; border-color: rgba(52,211,153,0.4); background: rgba(52,211,153,0.08); }
+.l2ai-badge.tiede { color: #fbbf24; border-color: rgba(251,191,36,0.35); background: rgba(251,191,36,0.06); }
+.l2ai-badge.froid { color: #94a3b8; border-color: rgba(148,163,184,0.3); }
+.l2sort-btn.on { border-color: rgba(129,140,248,0.5); color: #a5b4fc; background: rgba(129,140,248,0.08); }
+.l2ai { margin: 0 0 12px; padding: 11px 13px; border-radius: 12px; border: 1px solid rgba(129,140,248,0.28); background: linear-gradient(135deg, rgba(99,102,241,0.10), rgba(168,85,247,0.06)); }
+.l2ai-hd { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #a5b4fc; }
+.l2ai-hd .sp { flex: 1; }
+.l2ai-p { font-family: var(--fm); font-size: 12px; text-transform: none; letter-spacing: 0; }
+.l2ai-rf { background: none; border: 1px solid rgba(255,255,255,0.12); color: var(--muted); border-radius: 7px; padding: 2px 8px; font-size: 11px; cursor: pointer; }
+.l2ai-rf:hover { color: var(--text); border-color: rgba(255,255,255,0.25); }
+.l2ai-brief { margin: 8px 0 0; padding: 0; list-style: none; font-size: 12.5px; line-height: 1.5; }
+.l2ai-brief li { margin: 2px 0; }
+.l2ai-row { margin-top: 7px; font-size: 12.5px; line-height: 1.5; }
+.l2ai-row b { color: #c7d2fe; font-weight: 700; }
+.l2ai-open { margin-top: 8px; padding: 8px 10px; border-radius: 9px; background: rgba(255,255,255,0.05); font-size: 13px; line-height: 1.5; font-style: italic; }
+.l2ai-why { margin-top: 6px; font-size: 11px; color: var(--muted2); line-height: 1.45; }
+.l2ai-wait { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.l2ai-call { margin-top: 10px; padding: 9px 10px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); }
+.l2ai-call-hd { font-size: 11px; font-weight: 800; color: #c7d2fe; display: flex; gap: 6px; align-items: center; }
+.l2ai-call-hd .sp { flex: 1; }
+.l2ai-call p { margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; }
+.l2ai-acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.l2ai-acts .ld-status-btn { font-size: 11.5px; }
+.l2ai-slot { margin-top: 7px; font-size: 11.5px; color: #a5b4fc; }
+.l2tpl-ai { border-color: rgba(129,140,248,0.45) !important; color: #a5b4fc !important; }
+.l2sug { margin: 8px 0 0; display: flex; flex-direction: column; gap: 6px; }
+.l2sug-it { padding: 8px 10px; border-radius: 9px; border: 1px solid rgba(129,140,248,0.3); background: rgba(129,140,248,0.06); font-size: 12.5px; line-height: 1.45; cursor: pointer; }
+.l2sug-it:hover { background: rgba(129,140,248,0.12); }
+.l2sug-it b { display: block; font-size: 10.5px; color: #a5b4fc; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 2px; }
+.l2sug textarea { width: 100%; min-height: 90px; }
+.l2sug-row { display: flex; gap: 6px; justify-content: flex-end; }
 .ld-card-meta { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 3px; font-size: 11px; color: var(--muted); }
 .l2last { margin-top: 4px; font-size: 10.5px; font-family: var(--fm); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ld-card-time { display: none; }
@@ -1016,6 +1049,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
         <button type="button" id="ldSearchClear" class="ld-search-clear" aria-label="Effacer la recherche">×</button>
       </div>
       <button class="l2filters-btn" id="l2FiltersBtn" type="button">⛃ Filtres <span class="n" id="l2FiltersCount">0</span></button>
+      <button class="l2filters-btn l2sort-btn" id="l2SortBtn" type="button" data-l2="sort" title="Ordre de la file : date d'arrivée ou probabilité de RDV calculée par l'IA">📅 Arrivée</button>
     </div>
     <div class="l2tri-row" id="l2Triage"></div>
     <div class="ld-filters l2periodbar" id="l2PeriodBar">
@@ -2358,6 +2392,13 @@ function getFilteredLeads() {
   // actifs (création OU re-optin OU re-booking) remontent en haut, et qu'un
   // lead ressuscité ne reste pas coincé en tête au-delà de sa date d'activité.
   list.sort(function(a, b) {
+    // Mode « Proba RDV » : score IA décroissant, leads non scorés en dessous
+    // (puis date d'activité en départage).
+    if (l2Sort === 'proba') {
+      var pa = (a.aiLead && typeof a.aiLead.proba === 'number') ? a.aiLead.proba : -1;
+      var pb = (b.aiLead && typeof b.aiLead.proba === 'number') ? b.aiLead.proba : -1;
+      if (pa !== pb) return pb - pa;
+    }
     var da = _getLeadEffectiveDate(a);
     var db = _getLeadEffectiveDate(b);
     if (!da && !db) return 0;
@@ -2631,6 +2672,10 @@ try {
   if (_l2v === 'arrivees' || _l2v === 'atraiter' || _l2v === 'new' || _l2v === 'fu'
       || _l2v === 'sb' || _l2v === 'nb') l2View = _l2v;
 } catch (e) {}
+/* Ordre de la file (programme IA 10/2026) : 'date' = date d'arrivée (historique),
+   'proba' = probabilité de RDV calculée par l'IA (leads.aiLead.proba). */
+var l2Sort = 'date';
+try { if (localStorage.getItem('ll2_sort') === 'proba') l2Sort = 'proba'; } catch (e) {}
 var l2Seg = 'action';          // segment actif de la fiche (action|infos|ech)
 var l2QuickOpenId = null;      // carte dont la rangée ⚡ est dépliée
 
@@ -2792,6 +2837,12 @@ function l2RenderTriage(leads) {
   }
   host.innerHTML = h;
 
+  var sb = l2El('l2SortBtn');
+  if (sb) {
+    sb.classList.toggle('on', l2Sort === 'proba');
+    sb.textContent = l2Sort === 'proba' ? '🎯 Proba RDV' : '📅 Arrivée';
+  }
+
   // Badge « filtres actifs » sur le bouton Filtres
   var fc = l2FiltersActiveCount();
   var fb = l2El('l2FiltersBtn');
@@ -2862,7 +2913,10 @@ function renderFeed() {
     sections = [{ t: '🔔 Follow-ups programmés', hot: true, list: lf }];
   } else {
     // 📥 Arrivées (défaut) : ordre strict d'arrivée + séparateurs par jour.
-    sections = l2ArriveesSections(leads);
+    // En mode « Proba RDV » : une seule liste, la plus chaude en haut.
+    sections = l2Sort === 'proba'
+      ? [{ t: '🎯 Par probabilité de RDV (IA)', list: leads }]
+      : l2ArriveesSections(leads);
   }
 
   var h = '', total = 0;
@@ -3893,6 +3947,156 @@ function l2LastActivity(l) {
 }
 
 /* ═══ CARTE COMPACTE (file) ═══ */
+/* ═══ IA : score de probabilité de RDV + brief pré-appel (programme IA 10/2026) ═══
+   Champ leads.aiLead { proba, niveau, raison, angle, ouverture, brief[3], key,
+   generatedAt } écrit par api/ai-lead.js (Haiku). Calculé à l'arrivée par le
+   cron (≤ 10 min) et recalculé à l'ouverture de la fiche quand elle a bougé.
+   aiLeadKey() doit rester STRICTEMENT identique à api/_aiLeadContext.js. */
+var l2AiPending = {};
+var l2AiErr = {};
+function aiLeadKey(l) {
+  l = l || {};
+  return (l.communications || []).length + ':' + (l.notesHistory || []).length + ':' +
+    String(l.status || '') + ':' + String(l.stage || '') + ':' + (l.quiz ? 1 : 0);
+}
+function l2AiLevelCls(n) { return n === 'chaud' ? 'chaud' : (n === 'tiède' ? 'tiede' : 'froid'); }
+function l2AiBadgeHTML(l) {
+  var a = l.aiLead;
+  if (!a || typeof a.proba !== 'number') return '';
+  return '<span class="l2ai-badge ' + l2AiLevelCls(a.niveau) + '" title="Probabilité de RDV estimée par l\'IA — ' + escAttr(a.raison || '') + '">🎯 ' + a.proba + '</span>';
+}
+function l2AiBlockHTML(l, id) {
+  var a = l.aiLead;
+  var h = '<div class="l2ai" data-ai-block="' + id + '">';
+  h += '<div class="l2ai-hd">🤖 Brief IA<span class="sp"></span>';
+  if (a && typeof a.proba === 'number') h += '<span class="l2ai-badge ' + l2AiLevelCls(a.niveau) + ' l2ai-p">🎯 ' + a.proba + ' % RDV</span>';
+  h += '<button type="button" class="l2ai-rf" data-l2="aiRefresh" data-id="' + id + '" title="Recalculer">↻</button></div>';
+  if (!a) {
+    h += '<div class="l2ai-wait">' + (l2AiErr[id] ? '⚠️ ' + escHtml(l2AiErr[id]) : (l2AiPending[id] ? '⏳ Analyse du dossier…' : 'Pas encore analysé.')) + '</div>';
+  } else {
+    var br = a.brief || [];
+    if (br.length) {
+      h += '<ul class="l2ai-brief">';
+      for (var i = 0; i < br.length; i++) h += '<li>' + escHtml(br[i]) + '</li>';
+      h += '</ul>';
+    }
+    if (a.angle) h += '<div class="l2ai-row"><b>Angle :</b> ' + escHtml(a.angle) + '</div>';
+    if (a.ouverture) h += '<div class="l2ai-open">« ' + escHtml(a.ouverture) + ' »</div>';
+    if (a.raison) h += '<div class="l2ai-why">Pourquoi ' + a.proba + ' % : ' + escHtml(a.raison) + '</div>';
+    if (a.creneau) h += '<div class="l2ai-slot">🕒 ' + escHtml(a.creneau) + '</div>';
+    if (l2AiPending[id]) h += '<div class="l2ai-wait">⏳ Mise à jour…</div>';
+    else if (l2AiErr[id]) h += '<div class="l2ai-wait">⚠️ ' + escHtml(l2AiErr[id]) + '</div>';
+  }
+  h += l2AiLastCallHTML(l, id);
+  h += '</div>';
+  return h;
+}
+/* Fin d'appel automatique (Lot 4) : leads.aiLastCall écrit par api/ai-call.js
+   à partir de la transcription Ringover. PROPOSITION seulement — le setter
+   applique le statut avec les boutons habituels (même data-action que la
+   grille de statuts : même journal, même sync de stage) et copie le résumé
+   dans la zone de note avant de cliquer « + Ajouter ». */
+var L2_AI_RESULT = { rdv_pose: '✅ RDV posé', a_rappeler: '🔁 À rappeler', pas_interesse: '🚫 Pas intéressé', disqualifie: '⛔ Disqualifié', messagerie: '📭 Messagerie', faux_numero: '❌ Faux numéro', autre: '• Autre' };
+function l2AiLastCallHTML(l, id) {
+  var c = l.aiLastCall;
+  if (!c || !c.resume) return '';
+  var h = '<div class="l2ai-call"><div class="l2ai-call-hd">📞 Dernier appel analysé<span class="sp"></span><span>' + escHtml(L2_AI_RESULT[c.resultat] || '') + '</span></div>';
+  h += '<p>' + escHtml(c.resume) + '</p>';
+  var pa = c.prochaineAction || {};
+  if (pa.action && pa.action.toLowerCase() !== 'rien') h += '<p>➡️ <b>' + escHtml(pa.action) + '</b>' + (pa.quand ? ' — ' + escHtml(pa.quand) : '') + '</p>';
+  h += '<div class="l2ai-acts">';
+  var st = c.statutSuggere ? getStatusObj(c.statutSuggere) : null;
+  if (st && (l.status || 'nouveau') !== st.key) h += '<button class="ld-status-btn" style="color:' + st.color + ';border-color:' + st.color + '" data-action="setStatus" data-id="' + id + '" data-status="' + st.key + '">Appliquer : ' + st.icon + ' ' + st.label + '</button>';
+  h += '<button type="button" class="ld-status-btn" data-l2="aiNote" data-id="' + id + '">📝 Résumé → note</button>';
+  if (pa.message) h += '<button type="button" class="ld-status-btn" data-l2="aiSmsUse" data-id="' + id + '">💬 SMS proposé → composeur</button>';
+  h += '</div></div>';
+  return h;
+}
+
+/* Assistant SMS / DM (Lot 4) — api/ai-message.js. Les propositions vivent en
+   mémoire (l2AiSugg) pour survivre aux re-rendus de la fiche. */
+var l2AiSugg = {};
+function l2AiSuggHTML(id) {
+  var st = l2AiSugg[id];
+  if (!st) return '';
+  var h = '<div class="l2sug">';
+  if (st.mode === 'dmInput') {
+    h += '<textarea data-ai-dm="' + id + '" placeholder="Colle ici la conversation Instagram (le dernier message du prospect en bas)…">' + escHtml(st.convo || '') + '</textarea>';
+    h += '<div class="l2sug-row"><button type="button" class="l2tpl" data-l2="aiClose" data-id="' + id + '">Fermer</button><button type="button" class="l2tpl l2tpl-ai" data-l2="aiDmGo" data-id="' + id + '">' + (st.busy ? '⏳…' : '✨ Proposer 3 réponses') + '</button></div>';
+  }
+  if (st.busy && st.mode !== 'dmInput') h += '<div class="l2ai-wait">⏳ L\'IA rédige…</div>';
+  if (st.error) h += '<div class="l2ai-wait">⚠️ ' + escHtml(st.error) + '</div>';
+  (st.list || []).forEach(function (sg, i) {
+    h += '<div class="l2sug-it" data-l2="aiUse" data-id="' + id + '" data-i="' + i + '"><b>' + escHtml(sg.intention) + (st.channel === 'dm' ? ' · cliquer pour copier' : ' · cliquer pour insérer') + '</b>' + escHtml(sg.texte) + '</div>';
+  });
+  if ((st.list || []).length && st.mode !== 'dmInput') h += '<div class="l2sug-row"><button type="button" class="l2tpl" data-l2="aiClose" data-id="' + id + '">Fermer</button></div>';
+  h += '</div>';
+  return h;
+}
+function l2AiSuggRepaint(id) {
+  var old = document.querySelector('.l2body[data-lead-id="' + id + '"] .l2sug');
+  var anchor = document.querySelector('.l2body[data-lead-id="' + id + '"] .ld-sms-composer .l2tpl-row');
+  if (old) old.parentNode.removeChild(old);
+  if (!anchor) return;
+  var tmp = document.createElement('div');
+  tmp.innerHTML = l2AiSuggHTML(id);
+  if (tmp.firstChild) anchor.parentNode.insertBefore(tmp.firstChild, anchor.nextSibling);
+}
+function l2AiMessage(id, channel, convo) {
+  var u = firebase.auth().currentUser;
+  if (!u) return;
+  var st = l2AiSugg[id] = { mode: channel === 'dm' ? 'dmInput' : 'sms', channel: channel, convo: convo || '', busy: true, list: [] };
+  l2AiSuggRepaint(id);
+  u.getIdToken().then(function (tok) {
+    return fetch('/api/ai-message', { method: 'POST', headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify({ leadId: id, channel: channel, conversation: convo || '' }) });
+  }).then(function (r) { return r.json().catch(function () { return {}; }); })
+    .then(function (j) {
+      st.busy = false;
+      if (!j || j.ok === false) st.error = (j && (j.message || j.error)) || 'Erreur IA';
+      else st.list = j.suggestions || [];
+      l2AiSuggRepaint(id);
+    })
+    .catch(function (e) { st.busy = false; st.error = e.message; l2AiSuggRepaint(id); });
+}
+
+function l2AiRepaint(id) {
+  var box = document.querySelector('[data-ai-block="' + id + '"]');
+  if (!box) return;
+  var l = null;
+  for (var i = 0; i < allLeads.length; i++) { if (allLeads[i].id === id) { l = allLeads[i]; break; } }
+  if (!l) return;
+  var tmp = document.createElement('div');
+  tmp.innerHTML = l2AiBlockHTML(l, id);
+  box.parentNode.replaceChild(tmp.firstChild, box);
+}
+function l2AiEnsure(l) {
+  if (!l || !l.id || l._merged) return;
+  if (l.aiLead && l.aiLead.key === aiLeadKey(l)) return;
+  if (l2AiErr[l.id]) return; // pas de boucle sur erreur : ↻ pour réessayer
+  l2AiRequest(l.id, false);
+}
+function l2AiRequest(id, force) {
+  if (l2AiPending[id]) return;
+  var u = firebase.auth().currentUser;
+  if (!u) return;
+  l2AiPending[id] = true;
+  delete l2AiErr[id];
+  l2AiRepaint(id);
+  u.getIdToken().then(function (tok) {
+    return fetch('/api/ai-lead', { method: 'POST', headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify({ leadId: id, force: !!force }) });
+  }).then(function (r) { return r.json().catch(function () { return {}; }); })
+    .then(function (j) {
+      delete l2AiPending[id];
+      if (!j || j.ok === false) l2AiErr[id] = (j && (j.message || j.error)) || 'Erreur IA';
+      else if (j.aiLead) {
+        // Le snapshot temps réel apportera aussi la mise à jour ; on peint tout de suite.
+        for (var i = 0; i < allLeads.length; i++) { if (allLeads[i].id === id) { allLeads[i].aiLead = j.aiLead; break; } }
+      }
+      l2AiRepaint(id);
+    })
+    .catch(function (e) { delete l2AiPending[id]; l2AiErr[id] = e.message || 'Erreur réseau'; l2AiRepaint(id); });
+}
+
 function renderCard(l) {
   var id = l.id;
   var statusObj = getStatusObj(l.status || 'nouveau');
@@ -3911,7 +4115,7 @@ function renderCard(l) {
     h += '<div class="ld-card-avatar" style="background:var(--bg4);color:var(--muted)">?</div>';
   }
   h += '<div class="ld-card-info">';
-  h += '<div class="ld-card-name">' + escHtml(l.nom || '—') + '<span class="l2ago">' + ago + '</span></div>';
+  h += '<div class="ld-card-name">' + escHtml(l.nom || '—') + l2AiBadgeHTML(l) + '<span class="l2ago">' + ago + '</span></div>';
   h += '<div class="ld-card-meta">' + renderLeadTags(l, true) + '</div>';
   var lastAct = l2LastActivity(l);
   if (lastAct) h += '<div class="l2last">' + escHtml(lastAct) + '</div>';
@@ -4025,7 +4229,8 @@ function ldGroupeBlockHTML(l, id) {
 
 /* ═══ FICHE — construction des segments ═══ */
 function l2SegAction(l, id) {
-  var h = ldGroupeBlockHTML(l, id);
+  var h = l2AiBlockHTML(l, id);
+  h += ldGroupeBlockHTML(l, id);
   h += '<div class="ld-actions">';
   h += '<div class="ld-actions-title">Statut</div>';
   h += '<div class="ld-status-grid">';
@@ -4408,7 +4613,10 @@ function l2SegEch(l, id) {
     h += '<button type="button" class="l2tpl" data-l2="tpl" data-tpl="rate" data-id="' + id + '">📞 Vous ai manqué</button>';
     h += '<button type="button" class="l2tpl" data-l2="tpl" data-tpl="confirm" data-id="' + id + '">✅ Confirmation RDV</button>';
     h += '<button type="button" class="l2tpl" data-l2="tpl" data-tpl="veille" data-id="' + id + '">🌙 Rappel veille</button>';
+    h += '<button type="button" class="l2tpl l2tpl-ai" data-l2="aiMsg" data-id="' + id + '" title="3 propositions de SMS rédigées par l\'IA à partir du dossier — à modifier avant envoi">✨ Suggérer (IA)</button>';
+    h += '<button type="button" class="l2tpl l2tpl-ai" data-l2="aiDm" data-id="' + id + '" title="Colle la conversation Instagram : l\'IA propose 3 réponses">📸 Assistant DM</button>';
     h += '</div>';
+    h += l2AiSuggHTML(id);
     h += '<div class="ld-sms-composer-footer">';
     h += '<div class="ld-sms-composer-counter" data-sms-counter="' + id + '">0 / 160</div>';
     h += '<button class="ld-sms-send-btn" data-action="sendSms" data-id="' + id + '">💬 Envoyer SMS</button>';
@@ -4692,6 +4900,9 @@ function l2RenderSheet(id, preserve) {
   inner.innerHTML = h;
   sheet.classList.add('has-lead');
 
+  // IA : (re)calcule le score + brief si absent ou périmé (fiche qui a bougé).
+  try { if (l2Seg === 'action') l2AiEnsure(l); } catch (eAi) { console.warn('[IA] score', eAi); }
+
   if (drafts) l2RestoreDrafts(inner, drafts, id);
   var body = inner.querySelector('.l2body');
   if (body) body.scrollTop = scrollPos;
@@ -4820,6 +5031,52 @@ document.addEventListener('click', function (e) {
   var a = t.getAttribute('data-l2');
   var id = t.getAttribute('data-id');
 
+  if (a === 'sort') {
+    l2Sort = l2Sort === 'proba' ? 'date' : 'proba';
+    try { localStorage.setItem('ll2_sort', l2Sort); } catch (e2) {}
+    renderFeed();
+    return;
+  }
+  if (a === 'aiRefresh') {
+    e.stopPropagation();
+    l2AiRequest(id, true);
+    return;
+  }
+  if (a === 'aiMsg') { l2AiMessage(id, 'sms', ''); return; }
+  if (a === 'aiDm') { l2AiSugg[id] = { mode: 'dmInput', channel: 'dm', list: [] }; l2AiSuggRepaint(id); var dmTa = document.querySelector('[data-ai-dm="' + id + '"]'); if (dmTa) dmTa.focus(); return; }
+  if (a === 'aiDmGo') {
+    var dmBox = document.querySelector('[data-ai-dm="' + id + '"]');
+    var convo = dmBox ? dmBox.value.trim() : '';
+    if (convo.length < 10) { toast('⚠️ Colle d\'abord la conversation'); return; }
+    l2AiMessage(id, 'dm', convo);
+    return;
+  }
+  if (a === 'aiClose') { delete l2AiSugg[id]; l2AiSuggRepaint(id); return; }
+  if (a === 'aiUse') {
+    var sg = l2AiSugg[id] && l2AiSugg[id].list[Number(t.getAttribute('data-i'))];
+    if (!sg) return;
+    if (l2AiSugg[id].channel === 'dm') {
+      if (navigator.clipboard) navigator.clipboard.writeText(sg.texte).then(function () { toast('📋 Réponse copiée — colle-la dans Instagram'); });
+      return;
+    }
+    var smsTa = document.querySelector('[data-sms-input="' + id + '"]');
+    if (smsTa) { smsTa.value = sg.texte; updateSmsCounter(id); smsTa.focus(); toast('✏️ SMS inséré — relis puis envoie'); }
+    return;
+  }
+  if (a === 'aiNote' || a === 'aiSmsUse') {
+    var ll = null;
+    for (var ai2 = 0; ai2 < allLeads.length; ai2++) { if (allLeads[ai2].id === id) { ll = allLeads[ai2]; break; } }
+    var lc = ll && ll.aiLastCall;
+    if (!lc) return;
+    if (a === 'aiNote') {
+      var nta = document.querySelector('[data-field="newNote"][data-id="' + id + '"]');
+      if (nta) { nta.value = '📞 ' + lc.resume + (lc.prochaineAction && lc.prochaineAction.action ? '\n➡️ ' + lc.prochaineAction.action + (lc.prochaineAction.quand ? ' — ' + lc.prochaineAction.quand : '') : ''); nta.focus(); toast('✏️ Résumé copié dans la note — clique « + Ajouter »'); }
+    } else {
+      l2Seg = 'ech'; l2RenderSheet(id, true);
+      setTimeout(function () { var sta = document.querySelector('[data-sms-input="' + id + '"]'); if (sta) { sta.value = lc.prochaineAction.message; updateSmsCounter(id); sta.focus(); } }, 50);
+    }
+    return;
+  }
   if (a === 'view') {
     l2View = t.getAttribute('data-view') || 'atraiter';
     try { localStorage.setItem('ll2_view', l2View); } catch (e2) {}
