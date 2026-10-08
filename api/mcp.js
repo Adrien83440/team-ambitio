@@ -34,11 +34,17 @@ function safeEqual(a, b) {
 }
 
 function authorized(req) {
-  const secret = process.env.MCP_SECRET || '';
-  if (secret.length < 32) return false;
+  // trim : une valeur collée dans Vercel avec un espace ou un retour à la
+  // ligne final ne doit pas rendre le connecteur inutilisable.
+  const secret = String(process.env.MCP_SECRET || '').trim();
+  if (secret.length < 32) { console.warn('[mcp] MCP_SECRET absent ou trop court (' + secret.length + ' car.)'); return false; }
   const h = String(req.headers['authorization'] || '');
   if (h.indexOf('Bearer ') === 0 && safeEqual(h.slice(7).trim(), secret)) return true;
-  return safeEqual((req.query && req.query.key) || '', secret);
+  const key = String((req.query && req.query.key) || '').trim();
+  if (safeEqual(key, secret)) return true;
+  // Diagnostic sans fuite : longueurs seulement.
+  console.warn('[mcp] refus : clé reçue ' + key.length + ' car., secret attendu ' + secret.length + ' car.');
+  return false;
 }
 
 function ok(id, result) { return { jsonrpc: '2.0', id: id, result: result }; }
