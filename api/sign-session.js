@@ -80,10 +80,25 @@ function pngFromDataUrl(s, maxBytes) {
 /* Les champs du modèle (instantané pris à l'envoi), dédoublonnés : « Nom
    Prénom » posé trois fois se remplit une fois ; une case ou un texte libre
    est une exigence par champ. */
+/* Un champ « rempli par l'équipe » (le conseiller, dans la fenêtre d'envoi) :
+   formule de paiement, nombre de mensualités… Marqué sur le champ du modèle
+   (filledBy, éditeur sales-signatures) ou dans la version web (fieldHints). */
+function isEquipe(f, h) { return (f && f.filledBy === 'equipe') || (h && h.filledBy === 'equipe'); }
+
+/* Date à partir de laquelle l'accompagnement peut démarrer sans renonciation :
+   le délai de 14 jours court à compter de la conclusion (aujourd'hui) ; il
+   expire à la fin du 14e jour, le démarrage est donc possible le 15e. */
+function startNoWaiver() {
+  const p = core.parisToday().split('/');
+  const d = new Date(Date.UTC(+p[2], +p[1] - 1, +p[0] + 15));
+  return String(d.getUTCDate()).padStart(2, '0') + '/' + String(d.getUTCMonth() + 1).padStart(2, '0') + '/' + d.getUTCFullYear();
+}
+
 function formSpec(fields, role, hints, prefill) {
   const seen = {};
   const checks = [];
   const texts = [];
+  const conditions = [];
   let paraphe = false;
   let dateField = false;
   let signature = false;
@@ -92,7 +107,7 @@ function formSpec(fields, role, hints, prefill) {
     const h = (hints && hints[f.id]) || {};
     if (f.fieldType === 'texte_libre') {
       if (seen[f.id]) return; seen[f.id] = 1;
-      const equipe = h.filledBy === 'equipe';
+      const equipe = isEquipe(f, h);
       const pre = prefill && prefill[f.id] ? String(prefill[f.id]) : '';
       if (r !== role && !pre) return;
       texts.push({
@@ -102,17 +117,27 @@ function formSpec(fields, role, hints, prefill) {
       });
       return;
     }
+    if (f.fieldType === 'case_cocher' && isEquipe(f, h)) {
+      if (seen[f.id]) return; seen[f.id] = 1;
+      conditions.push({ id: f.id, label: h.label || f.label || 'Option', group: h.group || f.group || '', value: !!(prefill && prefill[f.id] === true) });
+      return;
+    }
     if (r !== role) return;
     if (f.fieldType === 'case_cocher') {
       if (seen[f.id]) return; seen[f.id] = 1;
-      checks.push({ id: f.id, label: h.label || (f.label && f.label !== 'Case à cocher' ? f.label : 'Case à cocher'), help: h.help || '', required: f.required !== false });
+      const label = h.label || (f.label && f.label !== 'Case à cocher' ? f.label : 'Case à cocher');
+      checks.push({
+        id: f.id, label: label, help: h.help || '',
+        required: h.required === false ? false : f.required !== false,
+        kind: h.kind || (/renonce/i.test(label) && /r[ée]tractation/i.test(label) ? 'renonciation' : ''),
+      });
       return;
     }
     if (f.fieldType === 'paraphe') paraphe = true;
     if (f.fieldType === 'date_signature') dateField = true;
     if (f.fieldType === 'signature') signature = true;
   });
-  return { checks: checks, texts: texts, paraphe: paraphe, dateField: dateField, signatureField: signature };
+  return { checks: checks, texts: texts, conditions: conditions, paraphe: paraphe, dateField: dateField, signatureField: signature };
 }
 
 function initials(first, last) {
@@ -420,8 +445,9 @@ module.exports = async (req, res) => {
         form: {
           needsCompany: i === 0,
           company: i >= 1 ? (s0.company || null) : null,
-          checks: spec.checks, texts: spec.texts,
+          checks: spec.checks, texts: spec.texts, conditions: spec.conditions,
           paraphe: spec.paraphe, dateField: spec.dateField,
+          startNoWaiver: startNoWaiver(),
           qualites: QUALITES,
           declarations: DECLARATIONS,
         },
@@ -570,7 +596,13 @@ async function finalize(found, ctx, v, info, body) {
       { id: 'esign', etat: 'Accepté', libelle: DECLARATIONS.esign, at: lastAt('consentement', function (e) { return e.data && e.data.id === 'esign'; }) },
     ].concat(v.spec.checks.map(function (c) {
       const ty = v.checks[c.id] ? 'case_cochee' : 'case_decochee';
-      return { id: c.id, etat: v.checks[c.id] ? 'Coché' : 'Non coché', libelle: c.label, at: lastAt(ty, function (e) { return e.data && e.data.id === c.id; }) };
+      let lib = c.label;
+      if (c.kind === 'renonciation') {
+        lib += v.checks[c.id]
+          ? ' — Démarrage immédiat demandé ; renonciation au délai de rétractation.'
+          : ' — Pas de renonciation : l\'accompagnement démarrera à l\'issue du délai de rétractation, à partir du ' + startNoWaiver() + '. Information affichée au signataire avant signature.';
+      }
+      return { id: c.id, etat: v.checks[c.id] ? 'Coché' : 'Non coché', libelle: lib, at: lastAt(ty, function (e) { return e.data && e.data.id === c.id; }) };
     })),
     lecture: (ctx.webMode ? sectionsVues + ' article(s) sur ' + (ctx.web.sections || []).length + ' affichés à l\'écran' : 'PDF original lu page par page')
       + (rd.duree ? ' — durée de lecture ' + rd.duree : '') + ' — fin de lecture confirmée le ' + core.parisDateTime(new Date(readDone.at || nowIso)),
@@ -629,7 +661,17 @@ async function finalize(found, ctx, v, info, body) {
     auditTsa = { authority: t.authority, genTime: t.genTime, url: t.url, tokenB64: t.token.toString('base64') };
   } catch (e) { console.error('[sign-session] horodatage du journal impossible :', e && e.message); }
 
+  /* Conditions convenues, remplies par le conseiller à l'envoi : elles
+     figurent au dossier de preuve, le client les a vues sans pouvoir les
+     modifier. */
+  const spec0 = formSpec(ctx.fields, 1, ctx.hints, ctx.prefill);
+  const conditions = spec0.conditions.map(function (c) { return (c.value ? 'Retenu : ' : 'Non retenu : ') + c.label; })
+    .concat(spec0.texts.filter(function (t) { return t.locked; }).map(function (t) { return t.label + ' : ' + (t.value || '—'); }));
+  const renCheck = spec0.checks.find(function (c) { return c.kind === 'renonciation'; });
+  const renonce = renCheck ? !!(all[0].checks || {})[renCheck.id] : null;
+
   const proof = {
+    conditions: conditions,
     templateName: R.templateName || 'Contrat',
     requestId: found.id,
     certificateId: certId,
@@ -704,6 +746,8 @@ async function finalize(found, ctx, v, info, body) {
     signedPdfSha256: finalSha,
     signedPdfBytes: out.bytes.length,
     flow: 'v2',
+    renonciationRetractation: renonce,
+    demarragePossibleLe: renonce === false ? startNoWaiver() : (renonce === true ? core.parisToday() : null),
     company: d0.company,
     representative: { firstName: d0.rep.first, lastName: d0.rep.last, qualite: d0.rep.qualite },
     seal: out.seal ? { authority: out.seal.authority, genTime: out.seal.genTime } : { error: out.sealError || 'echec' },

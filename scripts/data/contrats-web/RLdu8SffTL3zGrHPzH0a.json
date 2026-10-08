@@ -6,13 +6,25 @@
   "tagline": "Accompagnement d’exécution — 6 mois",
   "fieldHints": {
     "f_e57nwe8c": {
-      "label": "« Je renonce expressément au délai de rétractation et je demande l’exécution immédiate de mon accompagnement Elite Phénix. »"
+      "label": "« Je renonce expressément au délai de rétractation et je demande l’exécution immédiate de mon accompagnement Elite Phénix. »",
+      "kind": "renonciation",
+      "required": false
     },
     "f_8uuhiy2d": {
-      "label": "Nombre de mensualités (paiement échelonné)",
+      "label": "Nombre de mensualités (si paiement échelonné)",
       "help": "Laisser vide en cas de paiement intégral. Rempli par votre conseiller.",
       "filledBy": "equipe",
       "maxLength": 3
+    },
+    "f_formule_int": {
+      "label": "Paiement intégral à la signature — 12 000 € HT (14 400 € TTC)",
+      "filledBy": "equipe",
+      "group": "formule de paiement"
+    },
+    "f_formule_ech": {
+      "label": "Paiement échelonné — 13 000 € HT (15 600 € TTC)",
+      "filledBy": "equipe",
+      "group": "formule de paiement"
     }
   },
   "sections": [
@@ -80,9 +92,9 @@
       "blocks": [
         "h:4.1. Prix de l’accompagnement",
         "p:Le prix de l’accompagnement est fixé, au choix du CLIENT :",
-        "p:— **12 000 € HT** (soit 14 400 € TTC) en paiement intégral à la signature.",
+        "p:{{field:f_formule_int}} — **12 000 € HT** (soit 14 400 € TTC) en paiement intégral à la signature.",
         "i:Dans ce cas, le CLIENT bénéficie de l’offre commerciale la plus avantageuse, accordée en raison du règlement intégral de l’accompagnement.",
-        "p:— ou **13 000 € HT** (soit 15 600 € TTC) en paiement échelonné. Soit {{field:f_8uuhiy2d}} mensualités",
+        "p:{{field:f_formule_ech}} — ou **13 000 € HT** (soit 15 600 € TTC) en paiement échelonné. Soit {{field:f_8uuhiy2d}} mensualités",
         "h:4.2. Modalités de règlement",
         "p:Les règlements sont encaissés par prélèvement SEPA. Le CLIENT signe le mandat de prélèvement le jour de la signature du contrat. Le premier prélèvement est lancé à cette même date ; les suivants, le cas échéant, à la même date des mois suivants.",
         "p:L’accompagnement démarre dès la signature du contrat, sans attendre la compensation bancaire du premier prélèvement.",
@@ -275,6 +287,46 @@
         "p:**Le PRESTATAIRE** — SARL Ambitio Corp, représentée par Emily UGHETTO et Adrien FRANCOIS.",
         "p:**Le CLIENT** — {{entreprise}} (Signature précédée de la date et de la mention « Lu et approuvé »)"
       ]
+    }
+  ],
+  "fieldPatches": {
+    "f_e57nwe8c": {
+      "required": false
+    },
+    "f_8uuhiy2d": {
+      "filledBy": "equipe"
+    }
+  },
+  "fieldAdds": [
+    {
+      "id": "f_formule_int",
+      "fieldType": "case_cocher",
+      "type": "checkbox",
+      "label": "Paiement intégral — 12 000 € HT",
+      "page": 3,
+      "signerRole": 1,
+      "required": true,
+      "filledBy": "equipe",
+      "group": "formule de paiement",
+      "x": 50.4,
+      "y": 314.0,
+      "w": 14.4,
+      "h": 14.4
+    },
+    {
+      "id": "f_formule_ech",
+      "fieldType": "case_cocher",
+      "type": "checkbox",
+      "label": "Paiement échelonné — 13 000 € HT",
+      "page": 3,
+      "signerRole": 1,
+      "required": true,
+      "filledBy": "equipe",
+      "group": "formule de paiement",
+      "x": 50.4,
+      "y": 367.8,
+      "w": 14.4,
+      "h": 14.4
     }
   ]
 }

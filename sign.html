@@ -139,6 +139,14 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:inherit;}
 .chk-tag{display:inline-block;margin-top:6px;font-size:11px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;padding:2px 8px;border-radius:6px;}
 .tag-req{background:var(--amberSoft);color:var(--amber);}.tag-opt{background:#f1f5f9;color:var(--muted);}
 .chk input{position:absolute;opacity:0;pointer-events:none;}
+.ren{margin-top:10px;padding:12px 14px;border-radius:12px;font-size:13.5px;line-height:1.5;}
+.ren-off{background:var(--amberSoft);color:#92400e;border:1px solid rgba(245,158,11,.35);}
+.ren-on{background:var(--greenSoft);color:#065f46;border:1px solid rgba(5,150,105,.3);}
+.cond{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px;}
+.cond:last-child{border:none;}
+.cond-i{flex:none;width:22px;height:22px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;}
+.cond-y{background:var(--accent);color:#fff;}.cond-n{border:2px solid var(--line2);color:transparent;}
+.cond-y+span{font-weight:700;}.cond-n+span{color:var(--muted);text-decoration:line-through;}
 /* Mentions */
 .mention{border:1.5px solid var(--line);border-radius:14px;padding:16px;margin-top:12px;background:#fff;}
 .mention-k{font-size:12px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;color:var(--muted);}
@@ -551,7 +559,8 @@ function inline(s){
   var h=esc(s);
   h=h.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
   h=h.replace(/\{\{field:([A-Za-z0-9_]+)\}\}/g,function(m,id){
-    var t=findText(id);
+    var t=findText(id),cd=findCond(id);
+    if(cd)return '<span class="ph ok">'+(cd.value?'☑ retenu':'☐ non retenu')+'</span>';
     if(t&&t.value)return '<span class="ph ok">'+esc(t.value)+'</span>';
     if(isDateField(id))return '<span class="ph" data-ph="date">date de signature</span>';
     return '<span class="ph">'+esc(t?t.label:'à compléter')+'</span>';
@@ -561,7 +570,8 @@ function inline(s){
 }
 function findText(id){var t=(S.content.form.texts||[]);for(var i=0;i<t.length;i++)if(t[i].id===id)return t[i];return null;}
 function findCheck(id){var t=(S.content.form.checks||[]);for(var i=0;i<t.length;i++)if(t[i].id===id)return t[i];return null;}
-function isDateField(id){return /date/i.test(id)||!findText(id)&&!findCheck(id);}
+function findCond(id){var t=(S.content.form.conditions||[]);for(var i=0;i<t.length;i++)if(t[i].id===id)return t[i];return null;}
+function isDateField(id){return !findText(id)&&!findCheck(id)&&!findCond(id);}
 function buildRead(){
   var C=S.content;
   if(C.message){$('closerMsg').textContent='💬 Message de votre conseiller : '+C.message;show('closerMsg');}
@@ -581,8 +591,9 @@ function buildRead(){
         else if(k==='ol')h+='<p class="ol">'+inline(t)+'</p>';
         else if(k==='i'||k==='q')h+='<p class="it">'+inline(t)+'</p>';
         else if(k==='field'){
-          var c=findCheck(t),tx=findText(t);
-          if(c)h+='<div class="fcall"><span>☐</span><span><b>Case à cocher à l\'étape 4</b> — « '+esc(c.label)+' » ('+(c.required?'obligatoire':'facultative')+')</span></div>';
+          var c=findCheck(t),tx=findText(t),cd=findCond(t);
+          if(cd)h+='<div class="fcall"><span>'+(cd.value?'☑':'☐')+'</span><span><b>'+(cd.value?'Retenu':'Non retenu')+'</b> — '+esc(cd.label)+' <i>(renseigné par votre conseiller)</i></span></div>';
+          else if(c)h+='<div class="fcall"><span>☐</span><span><b>Case à cocher à l\'étape 4</b> — « '+esc(c.label)+' » ('+(c.required?'obligatoire':'facultative')+')</span></div>';
           else if(tx)h+='<div class="fcall"><span>✎</span><span><b>'+esc(tx.label)+'</b>'+(tx.value?' : '+esc(tx.value):' — à compléter à l\'étape 4')+'</span></div>';
         }
       });
@@ -692,12 +703,19 @@ function buildForm(){
       S.checks[c.id]=false;
       h+='<label class="chk" data-chk="c:'+esc(c.id)+'"><span class="chk-box"><svg viewBox="0 0 20 20" fill="none"><path d="M4 10.5l4 4 8-9" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>'
         +'<span><span class="chk-t">'+esc(c.label)+'</span>'+(c.help?'<br/><span class="help">'+esc(c.help)+'</span>':'')+'<br/><span class="chk-tag '+(c.required?'tag-req">Obligatoire':'tag-opt">Facultatif — à cocher seulement si vous le souhaitez')+'</span></span></label>';
+      if(c.kind==='renonciation')h+='<div class="ren" id="ren_'+esc(c.id)+'"></div>';
     });
     $('checksList').innerHTML=h;show('checksCard');
+    F.checks.forEach(function(c){if(c.kind==='renonciation')renPanel(c.id);});
   }
-  /* Textes */
-  if(F.texts.length){
+  /* Conditions et textes : ce que le conseiller a renseigné avant l'envoi
+     (lecture seule), puis les textes libres à remplir par le client. */
+  if(F.texts.length||(F.conditions&&F.conditions.length)){
     var t='';
+    if(F.conditions&&F.conditions.length){
+      t+='<p class="sub" style="margin-bottom:6px">Renseignées par votre conseiller — vérifiez qu\'elles correspondent à ce que vous avez convenu ensemble.</p>';
+      F.conditions.forEach(function(x){t+='<div class="cond"><span class="cond-i '+(x.value?'cond-y">✓':'cond-n">·')+'</span><span>'+esc(x.label)+'</span></div>';});
+    }
     F.texts.forEach(function(x){
       if(x.locked){t+='<div class="co" style="margin-top:10px"><div class="co-row"><span class="co-k">'+esc(x.label)+'</span><span class="co-v">'+(x.value?esc(x.value):'—')+'</span></div><div class="help">'+esc(x.help||'Renseigné par votre conseiller.')+'</div></div>';}
       else t+='<label class="lbl" for="tx_'+esc(x.id)+'">'+esc(x.label)+(x.required?'':' <small>(facultatif)</small>')+'</label><textarea class="inp" rows="2" id="tx_'+esc(x.id)+'" data-tx="'+esc(x.id)+'" maxlength="'+(x.maxLength||500)+'"></textarea>'+(x.help?'<div class="help">'+esc(x.help)+'</div>':'');
@@ -863,6 +881,14 @@ function refreshPlaceholders(){
   for(var i=0;i<ps.length;i++){var k=ps[i].getAttribute('data-ph');if(k==='date')continue;var v=phValue(k);if(v){ps[i].textContent=v;ps[i].className='ph ok';}}
 }
 
+/* Renonciation au délai de rétractation : facultative, mais ses
+   conséquences sont dites clairement, avant la signature. */
+function renPanel(id){
+  var el=$('ren_'+id);if(!el)return;
+  if(S.checks[id]){el.className='ren ren-on';el.innerHTML='✅ <strong>Démarrage immédiat.</strong> Votre accompagnement pourra commencer dès la signature. Vous renoncez à votre délai de rétractation de 14 jours.';}
+  else{el.className='ren ren-off';el.innerHTML='⏳ <strong>Si vous ne cochez pas cette case</strong>, vous conservez votre délai de rétractation de 14 jours. Votre accompagnement (séances individuelles, accès au programme) ne pourra démarrer qu\'à son expiration, <strong>à partir du '+esc(S.content.form.startNoWaiver||'')+'</strong>.';}
+}
+
 /* ═══ ÉTAPE 4 — MENTIONS ═══ */
 $('mDate').addEventListener('input',function(){
   var d=this.value.replace(/\D/g,'').slice(0,8),o=d;
@@ -974,7 +1000,9 @@ function buildRecap(){
   row('Contrat',S.content.templateName);
   row('Société',c.name);row('SIRET',fmtSiret(c.siret));row('Siège social',c.addressLine||addrLine(c.address));
   row('Représentant',repFull()+(qualite()?', '+qualite():''));
-  S.content.form.checks.forEach(function(x){row(S.checks[x.id]?'☑ Coché':'☐ Non coché',x.label);});
+  (S.content.form.conditions||[]).forEach(function(x){row(x.value?'☑ Retenu':'☐ Non retenu',x.label);});
+  S.content.form.checks.forEach(function(x){row(S.checks[x.id]?'☑ Coché':'☐ Non coché',x.label);
+    if(x.kind==='renonciation')row('Démarrage',S.checks[x.id]?'Immédiat, dès la signature':'À partir du '+(S.content.form.startNoWaiver||''));});
   S.content.form.texts.forEach(function(x){var e=$('tx_'+x.id);row(x.label,x.locked?x.value:(e&&e.value));});
   row('Date',$('mDate').value);row('Mention',$('mLu').value.trim());
   if(S.content.form.paraphe)row('Paraphe',$('mPar').value.trim());
@@ -1056,7 +1084,7 @@ document.addEventListener('click',function(e){
     var on=!t.classList.contains('on');t.classList.toggle('on',on);
     var parts=chk.split(':'),kind=parts[0],id=parts.slice(1).join(':');
     if(kind==='decl'){S.decl[id]=on;track('consentement',{id:id,libelle:$(id==='pouvoir'?'txtPouvoir':'txtEsign').textContent,valeur:on});}
-    else{S.checks[id]=on;var c=findCheck(id);track(on?'case_cochee':'case_decochee',{id:id,libelle:c?c.label.slice(0,180):''});}
+    else{S.checks[id]=on;var c=findCheck(id);track(on?'case_cochee':'case_decochee',{id:id,libelle:c?c.label.slice(0,180):''});if(c&&c.kind==='renonciation')renPanel(id);}
     refreshBar();return;
   }
   var a=t.getAttribute('data-action');

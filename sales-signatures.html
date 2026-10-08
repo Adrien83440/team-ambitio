@@ -728,9 +728,29 @@ function renderPropPanel(){
   if(f.fieldType==='paraphe'||f.fieldType==='signature'){
     h+='<div class="ep-section" style="padding:8px;background:rgba(99,102,241,.05);border-radius:8px;font-size:10px;color:var(--accent2)">🔁 Le client dessine une seule fois — appliqué sur toutes les instances.</div>';
   }
+  /* Qui remplit ce champ ? Le client pendant la signature, ou le conseiller
+     dans la fenêtre d'envoi (formule de paiement, mensualités…). */
+  if(f.fieldType==='texte_libre'||f.fieldType==='case_cocher'){
+    var eq=f.filledBy==='equipe';
+    h+='<div class="ep-section"><div class="ep-label">Rempli par</div>';
+    h+='<select class="ep-input" data-fprop="filledBy" data-fidx="'+selectedField+'"><option value=""'+(eq?'':' selected')+'>Le client, pendant la signature</option><option value="equipe"'+(eq?' selected':'')+'>Le conseiller, avant l\'envoi</option></select>';
+    if(eq&&f.fieldType==='case_cocher'){
+      h+='<div class="ep-label" style="margin-top:8px">Groupe de choix unique</div><input class="ep-input" data-fprop="group" data-fidx="'+selectedField+'" value="'+esc(f.group||'')+'" placeholder="ex. formule de paiement"/>';
+      h+='<div style="font-size:10px;color:var(--muted);margin-top:4px;line-height:1.4">Les cases d\'un même groupe deviennent un choix unique dans la fenêtre d\'envoi. Le libellé de chaque case est l\'option affichée.</div>';
+    }
+    h+='</div>';
+  }
   h+='<button class="sig-btn sig-btn-r" style="width:100%;justify-content:center;margin-top:8px;font-size:11px" onclick="removeField('+selectedField+')">🗑 Supprimer</button>';
   el.innerHTML=h;
 }
+
+document.addEventListener('change',function(e){
+  var t=e.target;if(!t||!t.getAttribute||!t.getAttribute('data-fprop'))return;
+  var idx=+t.getAttribute('data-fidx'),prop=t.getAttribute('data-fprop');
+  if(!currentTpl||!currentTpl.fields||!currentTpl.fields[idx])return;
+  currentTpl.fields[idx][prop]=t.value.trim();
+  renderPropPanel();
+});
 
 /* ═══ FIELD PALETTE (sidebar) ═══ */
 function renderFieldPalette(){
@@ -1049,25 +1069,64 @@ function sendForSignatureFromList(tplId){
 function _sendTpl(){
   return (currentTpl&&currentTpl.fields)?currentTpl:(TPL.find(function(t){return currentTpl&&t.id===currentTpl.id;})||{});
 }
-/* Textes libres marqués « rempli par l'équipe » dans la version web du
-   modèle (web.fieldHints[id].filledBy === 'equipe'). */
+/* Champs « remplis par le conseiller » avant l'envoi : textes libres
+   (nombre de mensualités, plan de paiement…) et cases (formule de paiement).
+   Marqués sur le champ (filledBy:'equipe', éditeur ci-dessous) ou dans la
+   version web du modèle (web.fieldHints[id].filledBy). Des cases qui
+   partagent un même « groupe » forment un choix unique (boutons radio). */
 function _equipeFields(tpl){
   var hints=(tpl.web&&tpl.web.fieldHints)||{};
-  return (tpl.fields||[]).filter(function(f){return f.fieldType==='texte_libre'&&hints[f.id]&&hints[f.id].filledBy==='equipe';})
-    .map(function(f){return {id:f.id,label:hints[f.id].label||f.label||'Texte',help:hints[f.id].help||'',max:hints[f.id].maxLength||200};});
+  return (tpl.fields||[]).filter(function(f){
+    var h=hints[f.id]||{};
+    return (f.fieldType==='texte_libre'||f.fieldType==='case_cocher')&&(f.filledBy==='equipe'||h.filledBy==='equipe');
+  }).map(function(f){
+    var h=hints[f.id]||{};
+    return {id:f.id,type:f.fieldType,label:h.label||f.label||'Champ',help:h.help||'',max:h.maxLength||200,
+      group:h.group||f.group||'',required:h.required===false?false:(f.required!==false)};
+  });
 }
 function openSendModal(){
   var box=document.getElementById('sendPrefill');
   var list=_equipeFields(_sendTpl());
   if(list.length){
-    var h='<div style="font-size:11px;font-weight:800;color:#0ea5e9;margin-bottom:8px">✎ À COMPLÉTER PAR VOUS</div>';
+    var h='<div style="font-size:11px;font-weight:800;color:#0ea5e9;margin-bottom:4px">✎ CONDITIONS À RENSEIGNER AVANT L\'ENVOI</div>'
+      +'<div style="font-size:10px;color:var(--muted);margin-bottom:10px">Imprimées sur le contrat. Le client les voit mais ne peut pas les modifier.</div>';
+    var groupsDone={};
     list.forEach(function(f){
-      h+='<div style="margin-bottom:8px"><div class="ep-label">'+esc(f.label)+'</div><input class="ep-input" data-prefill="'+esc(f.id)+'" maxlength="'+f.max+'"/>'
-        +(f.help?'<div style="font-size:10px;color:var(--muted);margin-top:3px">'+esc(f.help.replace(/ ?Rempli par votre conseiller\.?/,''))+'</div>':'')+'</div>';
+      if(f.type==='case_cocher'&&f.group){
+        if(groupsDone[f.group])return;groupsDone[f.group]=1;
+        h+='<div style="margin-bottom:10px"><div class="ep-label">'+esc(f.group.charAt(0).toUpperCase()+f.group.slice(1))+' *</div>';
+        list.filter(function(x){return x.type==='case_cocher'&&x.group===f.group;}).forEach(function(x){
+          h+='<label style="display:flex;gap:8px;align-items:flex-start;padding:7px 9px;border:1px solid var(--border);border-radius:8px;margin-top:5px;cursor:pointer;font-size:12px">'
+            +'<input type="radio" name="pf_'+esc(f.group)+'" data-prefill-check="'+esc(x.id)+'" data-group="'+esc(f.group)+'" style="margin-top:2px;accent-color:#0ea5e9"/><span>'+esc(x.label)+'</span></label>';
+        });
+        h+='</div>';
+      }else if(f.type==='case_cocher'){
+        h+='<label style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;font-size:12px;cursor:pointer"><input type="checkbox" data-prefill-check="'+esc(f.id)+'" style="margin-top:2px;accent-color:#0ea5e9"/><span>'+esc(f.label)+'</span></label>';
+      }else{
+        h+='<div style="margin-bottom:8px"><div class="ep-label">'+esc(f.label)+(f.required?' *':'')+'</div><input class="ep-input" data-prefill="'+esc(f.id)+'" data-req="'+(f.required?'1':'')+'" data-label="'+esc(f.label)+'" maxlength="'+f.max+'"/>'
+          +(f.help?'<div style="font-size:10px;color:var(--muted);margin-top:3px">'+esc(f.help.replace(/ ?Rempli par votre conseiller\.?/,''))+'</div>':'')+'</div>';
+      }
     });
     box.innerHTML=h;box.style.display='';
   }else{box.innerHTML='';box.style.display='none';}
   document.getElementById('sendModal').style.display='flex';
+}
+/* Lit et valide les conditions saisies. Renvoie null (et alerte) si un choix
+   ou un champ obligatoire manque : un contrat ne part jamais incomplet. */
+function _collectPrefill(){
+  var prefill={},manque=[],groups={};
+  [].slice.call(document.querySelectorAll('#sendPrefill [data-prefill]')).forEach(function(inp){
+    var v=inp.value.trim();if(v)prefill[inp.getAttribute('data-prefill')]=v;
+    else if(inp.getAttribute('data-req')==='1')manque.push(inp.getAttribute('data-label'));
+  });
+  [].slice.call(document.querySelectorAll('#sendPrefill [data-prefill-check]')).forEach(function(inp){
+    prefill[inp.getAttribute('data-prefill-check')]=!!inp.checked;
+    var g=inp.getAttribute('data-group');if(g){groups[g]=groups[g]||inp.checked;}
+  });
+  Object.keys(groups).forEach(function(g){if(!groups[g])manque.push(g);});
+  if(manque.length){alert('À renseigner avant l\'envoi :\n• '+manque.join('\n• '));return null;}
+  return prefill;
 }
 function toggleSecondSigner(checked){
   document.getElementById('sendSigner2Block').style.display=checked?'block':'none';
@@ -1084,6 +1143,7 @@ function submitSend(){
     phone2=document.getElementById('sendPhone2').value.trim();
   }
   if(!name||!email||!phone){alert('Signataire 1 : tous les champs sont obligatoires.');return;}
+  var prefill=_collectPrefill();if(!prefill)return;
   if(twoSigners && (!name2||!email2||!phone2)){alert('Signataire 2 : tous les champs sont obligatoires.');return;}
   var btn=document.getElementById('sendSubmitBtn');
   btn.disabled=true;btn.textContent='Envoi en cours…';
@@ -1091,7 +1151,7 @@ function submitSend(){
   var token2=twoSigners?(gid()+gid()):null;
   // Get template fields
   var tpl=_sendTpl();
-  var tplFields=(tpl.fields||[]).map(function(f){return{id:f.id,fieldType:f.fieldType,label:f.label,type:f.type,required:f.required!==false,signerRole:f.signerRole===2?2:1,page:f.page,x:f.x,y:f.y,w:f.w,h:f.h};});
+  var tplFields=(tpl.fields||[]).map(function(f){return{id:f.id,fieldType:f.fieldType,label:f.label,type:f.type,required:f.required!==false,signerRole:f.signerRole===2?2:1,page:f.page,x:f.x,y:f.y,w:f.w,h:f.h,filledBy:f.filledBy||'',group:f.group||''};});
   // Build signers array
   var signers=[{
     order:1,
@@ -1113,12 +1173,9 @@ function submitSend(){
       status:'pending'
     });
   }
-  /* Textes remplis par l'équipe : figés dans la demande, imprimés sur le
-     contrat, affichés au client en lecture seule. */
-  var prefill={};
-  [].slice.call(document.querySelectorAll('#sendPrefill [data-prefill]')).forEach(function(inp){
-    var v=inp.value.trim();if(v)prefill[inp.getAttribute('data-prefill')]=v;
-  });
+  /* Conditions remplies par l'équipe (prefill, lu plus haut) : figées dans
+     la demande, imprimées sur le contrat, affichées au client en lecture
+     seule. */
   var req={
     templateId:currentTpl.id,
     templateName:tpl.name||(currentTpl.name||'Contrat'),

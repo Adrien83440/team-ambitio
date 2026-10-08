@@ -93,7 +93,7 @@ function clean(fonts, s) {
   let t = String(s == null ? '' : s)
     .replace(/[    ]/g, ' ')
     .replace(/⚠️?/g, '(!)')
-    .replace(/[✓✔]/g, 'v')
+    .replace(/[\u2713\u2714\u2611]/g, '[x]').replace(/\u2610/g, '[ ]')
     .replace(/[\u{1F000}-\u{1FFFF}]/gu, '')
     .replace(/[\r\t]/g, ' ');
   if (!fonts.unicode) {
@@ -253,9 +253,11 @@ async function stampContract(doc, fonts, fields, scale, signers, prefill) {
     const ph = page.getHeight();
     const box = { x: f.x / scale, y: ph - f.y / scale - f.h / scale, w: f.w / scale, h: f.h / scale };
 
-    /* Texte libre rempli par l'équipe : il appartient au contrat, pas à un
-       signataire — on l'écrit quel que soit le rôle du champ. */
+    /* Champs remplis par l'équipe à l'envoi (texte, ou case d'un choix comme
+       la formule de paiement) : ils appartiennent au contrat, pas à un
+       signataire — on les écrit quel que soit le rôle du champ. */
     if (f.fieldType === 'texte_libre' && prefill && prefill[f.id]) { drawFreeText(page, fonts, prefill[f.id], box); return; }
+    if (f.fieldType === 'case_cocher' && prefill && typeof prefill[f.id] === 'boolean') { drawCheckbox(page, prefill[f.id], box); return; }
 
     const S = byRole[role];
     if (!S) return;
@@ -465,6 +467,7 @@ async function proofPages(doc, fonts, P) {
     ['Mode de lecture', P.webMode ? 'Texte intégral du contrat, article par article (version ' + P.webVersion + '), PDF original consultable' : 'Document PDF original, page par page'],
     ['Empreinte du modèle PDF', 'SHA-256 ' + P.templatePdfSha256, { mono: true }],
     ['Empreinte du texte présenté', P.webDigest ? 'SHA-256 ' + P.webDigest : '', { mono: true }],
+    ['Conditions convenues', (P.conditions || []).length ? P.conditions.join('\n') + '\n(renseignées par le conseiller avant l\'envoi, non modifiables par le client)' : ''],
     ['Demande créée le', P.createdAt ? parisStamp(P.createdAt) + ' (heure de Paris)' : ''],
     ['Envoyée par', P.createdBy || ''],
   ]);

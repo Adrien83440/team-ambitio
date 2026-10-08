@@ -5,9 +5,11 @@
 // article par article, au lieu d'un PDF à remplir. Ce texte est transcrit à
 // l'identique depuis les PDF en base, dans scripts/data/contrats-web/<id>.json.
 //
-// Ce script pose ce texte dans signature_templates/{id}.web — et RIEN d'autre :
-// écriture par updateMask sur le seul champ `web`. Le PDF, les champs, les
-// réglages Make / Academy ne sont pas touchés.
+// Ce script pose ce texte dans signature_templates/{id}.web. Si le fichier
+// porte aussi `fieldPatches` (propriétés à changer sur des champs existants)
+// ou `fieldAdds` (nouveaux champs, ajoutés une seule fois), il met à jour
+// `fields`. Écriture par updateMask sur `web` (et `fields` si besoin) : le
+// PDF, les réglages Make / Academy ne sont jamais touchés.
 //
 // L'empreinte SHA-256 du PDF du modèle est enregistrée avec le texte
 // (web.sourcePdfSha256). Si le PDF du modèle est remplacé plus tard, la page
@@ -85,10 +87,28 @@ function checkRefs(data, fieldIds) {
     const doc = await R.getDoc('signature_templates/' + id);
     if (!doc) { console.log('✗', id, 'modèle introuvable'); ko++; continue; }
     const T = doc.data;
-    const fieldIds = (T.fields || []).map(function (x) { return x.id; }).filter(Boolean);
+    /* Champs : patches puis ajouts (idempotent — un ajout déjà présent est ignoré). */
+    const fields = JSON.parse(JSON.stringify(T.fields || []));
+    const fieldLog = [];
+    Object.keys(data.fieldPatches || {}).forEach(function (fid) {
+      const f = fields.find(function (x) { return x.id === fid; });
+      if (!f) { fieldLog.push('✗ patch : champ inconnu ' + fid); return; }
+      Object.keys(data.fieldPatches[fid]).forEach(function (k) {
+        const v = data.fieldPatches[fid][k];
+        if (JSON.stringify(f[k]) !== JSON.stringify(v)) { fieldLog.push('~ ' + fid + ' (' + f.fieldType + ') ' + k + ' : ' + JSON.stringify(f[k]) + ' → ' + JSON.stringify(v)); f[k] = v; }
+      });
+    });
+    (data.fieldAdds || []).forEach(function (a) {
+      if (fields.some(function (x) { return x.id === a.id; })) return;
+      fields.push(a);
+      fieldLog.push('+ ' + a.id + ' (' + a.fieldType + ') page ' + a.page + ' x=' + a.x + ' y=' + a.y + ' « ' + a.label + ' »');
+    });
+    const fieldsChanged = fieldLog.some(function (l) { return l.charAt(0) !== '✗'; });
+    const fieldIds = fields.map(function (x) { return x.id; }).filter(Boolean);
     const errs = checkRefs(data, fieldIds);
     const pdf = await templatePdf(id, T);
     if (!pdf) errs.push('PDF du modèle introuvable');
+    fieldLog.filter(function (l) { return l.charAt(0) === '✗'; }).forEach(function (l) { errs.push(l); });
     if (errs.length) { console.log('✗', id, T.name); errs.forEach(function (e) { console.log('   -', e); }); ko++; continue; }
 
     const sha = crypto.createHash('sha256').update(pdf).digest('hex');
@@ -108,9 +128,11 @@ function checkRefs(data, fieldIds) {
     console.log('✓', id, '«' + T.name + '»', '| sections', data.sections.length, '| blocs', nBlocks,
       '| PDF sha256', sha.slice(0, 16) + '…', '| web v' + prev, '→ v' + web.version,
       '| taille', Math.round(JSON.stringify(web).length / 1024) + ' Ko');
+    fieldLog.forEach(function (l) { console.log('   champ', l); });
     if (APPLY) {
-      await R.patchDoc('signature_templates/' + id, { web: web }, ['web']);
-      console.log('   → écrit');
+      if (fieldsChanged) await R.patchDoc('signature_templates/' + id, { web: web, fields: fields }, ['web', 'fields']);
+      else await R.patchDoc('signature_templates/' + id, { web: web }, ['web']);
+      console.log('   → écrit' + (fieldsChanged ? ' (texte web + champs)' : ' (texte web)'));
     }
   }
   if (ko) { console.log('\n' + ko + ' modèle(s) en erreur — rien n\'a été écrit pour eux.'); process.exit(1); }
