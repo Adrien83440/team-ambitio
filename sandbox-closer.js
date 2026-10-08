@@ -648,6 +648,7 @@
   function tick() {
     var c = $('phClock'); if (c) c.textContent = X.frTime();
     gcWebhooks();
+    simCheck();
     var s = S(), openBl = null, changed = false;
     s.leads.forEach(function (l) {
       if (l.bilanShown) return;
@@ -735,6 +736,8 @@
         break;
       case 'phBack': ui.phoneBrowser = null; renderPhone(true); break;
       case 'phNotif': $('phNotif').classList.remove('show'); break;
+      case 'simGo': simGo(); break;
+      case 'simLater': simLater(); break;
     }
   });
   document.addEventListener('input', function (e) {
@@ -762,12 +765,91 @@
      tout sauf l'iframe elle-même (renderPhone ne la recharge pas). */
   X.onChange(function (st, local) { if (!local) { checkNewMessages(); renderAll(); } else checkNewMessages(); });
 
+  /* ═══ « SIMULER LE CLIENT » (demande Adrien 09/10/2026) ═════════════
+     Dès qu'un contrat part en signature (ou que c'est au tour de l'associé)
+     et dès qu'un lien mandat GoCardless est envoyé, une carte propose
+     d'ouvrir directement l'écran du client dans le téléphone simulé — même
+     si les coordonnées saisies sont fausses (le bilan le relève, la carte
+     le dit). */
+  var simSeen = null, simQueue = [];
+  function simKeys() {
+    var out = [];
+    X.dbList('signature_requests').forEach(function (r) {
+      if (r.status === 'signed' || r.status === 'cancelled' || !Array.isArray(r.signers)) return;
+      var idx = -1;
+      for (var i = 0; i < r.signers.length; i++) if (r.signers[i].status !== 'signed') { idx = i; break; }
+      if (idx < 0 || !r.signers[idx].token) return;
+      var d = r.dernierEnvoi || null, at = d && (d.signerIndex == null || d.signerIndex === idx) ? JSON.stringify(d.at || '') : '';
+      /* Sans trace d'envoi (lien pas encore parti, ou envoi en échec), on
+         propose quand même la simulation après 4 s. */
+      var age = Date.now() - X.tsMs(r.createdAt);
+      out.push({ base: 'sig:' + r.id + ':' + idx, at: at, ready: !!at || age > 4000, kind: 'sig', r: r, idx: idx });
+    });
+    X.dbList('payments').forEach(function (p) {
+      if (!p.gcBillingRequestFlowUrl || !p.mandateSentVia || p.status !== 'pending_mandate') return;
+      out.push({ base: 'pay:' + p.id, at: JSON.stringify(p.mandateSentAt || ''), ready: true, kind: 'pay', p: p });
+    });
+    return out;
+  }
+  function simCheck() {
+    var list = simKeys();
+    if (!simSeen) { simSeen = {}; list.forEach(function (x) { simSeen[x.base] = x.at || '-'; }); return; }
+    list.forEach(function (x) {
+      if (!x.ready) return;
+      var prev = simSeen[x.base];
+      /* Nouveau, ou RENVOI (nouvelle date d'envoi après une première). */
+      if (prev === undefined || (x.at && prev !== '-' && prev !== x.at)) { simQueue.push(x); }
+      simSeen[x.base] = x.at || prev || '-';
+    });
+    if (simQueue.length && !$('simPop').classList.contains('show')) simShow(simQueue.shift());
+  }
+  function simShow(x) {
+    var s = S(), h = '', target = null, contact = null, who = '', ok = true;
+    if (x.kind === 'sig') {
+      var sg = x.r.signers[x.idx];
+      contact = X.findContact(s, sg.phone, sg.email);
+      ok = !!(contact && X.samePhone(sg.phone, contact.telephone) && X.sameEmail(sg.email, contact.email));
+      who = sg.name || 'le client';
+      target = { src: 'sandbox-frame.html?page=sign.html&t=' + encodeURIComponent(sg.token), label: 'team.alteore.com/sign.html?t=' + sg.token };
+      h += '<div class="sp-t">📨 ' + (x.idx ? 'Au tour du 2ᵉ signataire' : 'Contrat envoyé') + '</div>';
+      h += '<div class="sp-d"><b>' + esc(x.r.templateName || 'Contrat') + '</b> → ' + esc(who) + '<br>En vrai, il reçoit maintenant le lien par SMS' + (x.idx ? '' : ' et par e-mail') + '.</div>';
+    } else {
+      var p = x.p, mailOk = X.sameEmail(p.leadEmail, (X.findContact(s, null, p.leadEmail) || {}).email);
+      contact = X.findContact(s, p.mandateSentVia === 'sms' ? p.leadPhone : null, p.mandateSentVia === 'email' ? p.leadEmail : null);
+      ok = !!contact; who = p.leadName || 'le client';
+      target = X.routeLink(p.gcBillingRequestFlowUrl);
+      h += '<div class="sp-t">🔗 Lien mandat envoyé</div>';
+      h += '<div class="sp-d">→ ' + esc(who) + ' par ' + (p.mandateSentVia === 'sms' ? 'SMS' : 'e-mail') + '.<br>En vrai, il ouvre la page GoCardless et saisit son IBAN.</div>';
+      if (!mailOk && p.mandateSentVia === 'email') ok = false;
+    }
+    if (!ok) h += '<div class="sp-w">⚠️ Le numéro ou l\'e-mail saisi ne correspond pas au client : <b>en vrai, il n\'aurait rien reçu</b>. Tu peux quand même simuler pour continuer — l\'erreur sera notée au bilan.</div>';
+    else h += '<div class="sp-ok">📱 Le message est aussi arrivé dans le téléphone du client.</div>';
+    h += '<div class="sp-b"><button class="b b-ok" data-a="simGo">👉 Simuler le client' + (x.kind === 'sig' ? ' : remplir et signer' : ' : saisir son IBAN') + '</button><button class="b b-gh" data-a="simLater">Plus tard</button></div>';
+    $('simPop').innerHTML = '<button class="mo-x" data-a="simLater" style="position:absolute;top:8px;right:8px">✕</button>' + h;
+    $('simPop')._target = target; $('simPop')._contact = contact ? contact.key : null;
+    show('simPop');
+  }
+  function simGo() {
+    var pop = $('simPop'), t = pop._target, c = pop._contact;
+    show('simPop', false);
+    if (!t) return;
+    ui.phoneOpen = true;
+    if (c) ui.phoneContact = c;
+    ui.phoneBrowser = t;
+    show('phone'); renderPhone(true); guardFrame($('phScreen').querySelector('iframe'));
+    setTimeout(function () { if (simQueue.length) simShow(simQueue.shift()); }, 400);
+  }
+  function simLater() {
+    show('simPop', false);
+    setTimeout(function () { if (simQueue.length) simShow(simQueue.shift()); }, 400);
+  }
+
   /* Les vraies pages et le serveur écrivent dans la fausse base : la fiche,
      le rail et les cartes suivent (rendu regroupé). */
   var dbRender = null;
   function onDbChange() {
     clearTimeout(dbRender);
-    dbRender = setTimeout(function () { renderSheet(); if (ui.view === 'leads') renderMain(); renderBadge(); }, 150);
+    dbRender = setTimeout(function () { renderSheet(); if (ui.view === 'leads') renderMain(); renderBadge(); simCheck(); }, 150);
   }
   function reloadMain() { var fr = $('main').querySelector('iframe.mirror'); if (fr) fr.removeAttribute('data-src'); }
 
@@ -804,6 +886,7 @@
     st.load().then(readRealTemplates).then(function (n) {
       X.seed(st.identity);
       st.listen(onDbChange, window);
+      simCheck();
       $('vLock').style.display = 'none'; $('vApp').style.display = '';
       checkNewMessages();
       renderAll();
