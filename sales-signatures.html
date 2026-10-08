@@ -1223,7 +1223,7 @@ function submitSend(){
     envoyerLien(ref.id,0,function(r){
       if(r&&r.ok)toast(messageEnvoi(r,name));
       else toast('⚠️ Contrat cree, mais ni email ni SMS n\'ont pu partir. Utilise « Renvoyer ».');
-    });
+    },token1);
     btn.disabled=false;btn.textContent='📨 Envoyer le contrat';
     document.getElementById('sendModal').style.display='none';
     document.getElementById('sendName').value='';
@@ -1487,9 +1487,15 @@ function academyGrantRetry(id){
 /* Envoi du lien de signature — email et SMS, independants l'un de l'autre.
    Le serveur dit lequel est parti ; on ne pretend jamais mieux que la
    realite. */
-function envoyerLien(requestId,signerIndex,apres){
+function envoyerLien(requestId,signerIndex,apres,lienToken){
   var payload={requestId:requestId};
   if(signerIndex!==null&&signerIndex!==undefined)payload.signerIndex=signerIndex;
+  /* Filet de sécurité : le token personnel du signataire, que l'endpoint
+     accepte aussi (porte 2). Sans lui, une session expirée ou une page
+     restée en cache bloquait l'envoi (401). */
+  if(!lienToken){var rq=(typeof REQ!=='undefined'&&REQ||[]).find(function(x){return x.id===requestId;});
+    if(rq)lienToken=(rq.signers&&rq.signers[signerIndex||0]&&rq.signers[signerIndex||0].token)||rq.token||'';}
+  if(lienToken)payload.token=lienToken;
   /* Jeton de l'utilisateur connecté (SDK compat : firebase.auth()). Avant le
      08/10/2026, ce code lisait window._auth — variable qui n'existe pas sur
      cette page : l'appel partait sans jeton, l'endpoint répondait 401, et
