@@ -39,6 +39,7 @@ const { verifyFirebaseAuth } = require('./_verifyFirebaseAuth');
 const { getTwilioClient, getTwilioCreds } = require('./_twilioClient');
 const { sendGmailWithAttachment } = require('./_billing-gmail');
 const parseBody = require('./_parseBody');
+const { appendAudit, clientInfo } = require('./_sign-core');
 
 const ACCOUNTS = { contact: 1, strategie: 1, coaching: 1 };
 
@@ -196,6 +197,12 @@ module.exports = async (req, res) => {
         canaux: (email.envoye ? 'email ' : '') + (sms.envoye ? 'sms' : ''),
       }),
     }, { merge: true }).catch((e) => console.warn('[signature-send-link] trace:', e && e.message));
+    /* Journal de preuve chaîné (api/_sign-core.js) : l'envoi du lien fait
+       partie de la chronologie opposable du dossier. */
+    await appendAudit(reqRef, [{
+      type: 'lien_envoye', signer: S.i,
+      data: { canaux: (email.envoye ? 'e-mail ' : '') + (sms.envoye ? 'SMS' : ''), par: par },
+    }], clientInfo(req)).catch((e) => console.warn('[signature-send-link] journal:', e && e.message));
 
     console.log('[signature-send-link]', requestId, 'signataire=' + S.i,
       'email=' + email.envoye, 'sms=' + sms.envoye, 'sid=' + sms.sid);

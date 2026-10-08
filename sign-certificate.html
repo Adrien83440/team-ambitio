@@ -6,6 +6,7 @@
 <title>Certificat de signature — Adrien & Emily</title>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script>firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }</script>
 <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <style>
@@ -134,6 +135,11 @@ body{background:#f0f2f5;font-family:var(--fm);color:#1e293b;-webkit-print-color-
       </div>
     </div>
 
+    <div class="section" id="v2Block" style="display:none">
+      <div class="section-title">🏢 Société et représentant</div>
+      <div class="info-grid" id="v2Grid"></div>
+    </div>
+
     <div class="section">
       <div class="section-title">✍️ Signature apposée</div>
       <div>
@@ -149,7 +155,8 @@ body{background:#f0f2f5;font-family:var(--fm);color:#1e293b;-webkit-print-color-
 
     <div class="section">
       <div class="section-title">🔐 Intégrité du document</div>
-      <div class="info-item"><div class="info-label">Empreinte SHA-256 du document original</div><div class="hash-box" id="docHash"></div></div>
+      <div class="info-item"><div class="info-label" id="docHashLbl">Empreinte SHA-256 du document original</div><div class="hash-box" id="docHash"></div></div>
+      <div class="info-grid" id="sealGrid" style="margin-top:10px"></div>
     </div>
 
     <div class="section">
@@ -187,22 +194,27 @@ body{background:#f0f2f5;font-family:var(--fm);color:#1e293b;-webkit-print-color-
 
 <script>
 var db=firebase.firestore();
+/* 08/10/2026 — refonte signature : signature_requests n'est plus lisible
+   publiquement (règles Firestore refermées). Ce certificat est désormais un
+   écran d'équipe : il exige une session team.alteore.com. Le client, lui,
+   dispose du dossier de preuve complet en dernières pages de son PDF signé. */
 (function(){
   try{
     var p=new URLSearchParams(location.search);
     var id=p.get('id');
-    var token=p.get('t');
-    // Clean token (some email clients add trailing chars)
-    if(token)token=token.replace(/[^a-zA-Z0-9]/g,'');
-    if(!id&&!token){showErr('Lien invalide — paramètre manquant.');return;}
-
-    var promise;
-    if(id){
-      promise=db.collection('signature_requests').doc(id).get().then(function(d){return d.exists?[d]:[];});
-    }else{
-      promise=db.collection('signature_requests').where('token','==',token).limit(1).get().then(function(sn){return sn.docs;});
-    }
-
+    if(!id){showErr('Lien invalide — paramètre manquant.');return;}
+    firebase.auth().onAuthStateChanged(function(u){
+      if(!u){showErr('Certificat réservé à l\'équipe : connectez-vous à team.alteore.com, puis rouvrez ce lien.');return;}
+      charger(id);
+    });
+  }catch(e){
+    console.error('[CERT] Init error:',e);
+    showErr('Erreur : '+e.message);
+  }
+})();
+function charger(id){
+  try{
+    var promise=db.collection('signature_requests').doc(id).get().then(function(d){return d.exists?[d]:[];});
     promise.then(function(docs){
       if(!docs||!docs.length){showErr('Certificat introuvable. Le document n\'existe pas ou a été supprimé.');return;}
       var doc=docs[0];var r=doc.data();
@@ -213,10 +225,10 @@ var db=firebase.firestore();
       showErr('Erreur de chargement : '+e.message);
     });
   }catch(e){
-    console.error('[CERT] Init error:',e);
+    console.error('[CERT] Load error:',e);
     showErr('Erreur : '+e.message);
   }
-})();
+}
 
 function showErr(m){
   document.getElementById('loadingView').style.display='none';
@@ -303,6 +315,10 @@ function render(r,docId){
 
   // Hash
   document.getElementById('docHash').textContent=r.documentHash||'Non disponible';
+  if(r.flow==='v2'){
+    document.getElementById('docHashLbl').textContent='Empreinte SHA-256 du contrat signé (PDF final, dossier de preuve inclus)';
+    renderV2(r,docId);
+  }
 
   // Technical metadata
   var meta=r.signingMeta||{};
@@ -341,6 +357,39 @@ function render(r,docId){
 }
 
 function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+
+/* Parcours v2 : société, représentant, sceaux, et le journal de preuve
+   chaîné (sous-collection audit, écrite par le serveur uniquement). */
+function renderV2(r,docId){
+  function item(k,v,mono){return v?'<div class="info-item"><div class="info-label">'+esc(k)+'</div><div class="info-value'+(mono?' mono':'')+'">'+esc(v)+'</div></div>':'';}
+  var c=r.company||{},rep=r.representative||{};
+  var h=item('Raison sociale',c.name)+item('Forme juridique',c.legalFormLabel)+item('SIRET',c.siret)+item('N° TVA',c.vatNumber)
+    +item('Siège social',c.addressLine)+item('Vérification registre',c.verification)
+    +item('Représentant',[rep.firstName,rep.lastName].filter(Boolean).join(' '))+item('Qualité',rep.qualite);
+  document.getElementById('v2Grid').innerHTML=h;
+  document.getElementById('v2Block').style.display='';
+  var se=r.seal||{},at=r.auditTsa||{},hd=r.auditHeadAtSignature||{};
+  function fmt(iso){try{return new Date(iso).toLocaleString('fr-FR',{timeZone:'Europe/Paris'});}catch(e){return iso;}}
+  document.getElementById('sealGrid').innerHTML=
+    item('Sceau du PDF (RFC 3161)',se.authority?(se.authority+' — '+fmt(se.genTime)):('Non scellé'+(se.error?' : '+se.error:'')))
+    +item('Horodatage du journal',at.authority?(at.authority+' — '+fmt(at.genTime)):'Indisponible')
+    +item('Journal à la signature',hd.seq?(hd.seq+' entrées — chaîne '+(hd.intact?'intacte':'NON INTÈGRE')):'')
+    +item('Tête de chaîne',hd.hash,true);
+  var labels={lien_envoye:'Lien envoyé',lien_ouvert:'Lien ouvert',otp_envoye:'Code SMS envoyé',otp_echec:'Code SMS incorrect',otp_verifie:'Téléphone vérifié (SMS)',contenu_charge:'Contrat affiché',section_vue:'Article affiché',lecture_terminee:'Lecture intégrale confirmée',pdf_original_ouvert:'PDF original consulté',etape:'Étape',entreprise_recherche:'Recherche entreprise',entreprise_selectionnee:'Entreprise sélectionnée',entreprise_manuelle:'Entreprise saisie',representant_saisi:'Représentant renseigné',case_cochee:'Case cochée',case_decochee:'Case décochée',champ_rempli:'Champ renseigné',mention_saisie:'Mention saisie',paraphe_saisi:'Paraphe saisi',signature_tracee:'Signature tracée',signature_effacee:'Signature effacée',consentement:'Déclaration',apercu_ouvert:'Aperçu consulté',page_masquee:'Page quittée',page_visible:'Retour sur la page',signature_validee:'SIGNATURE VALIDÉE',document_genere:'PDF signé généré et scellé',copie_telechargee:'Exemplaire téléchargé'};
+  db.collection('signature_requests').doc(docId).collection('audit').orderBy('seq').get().then(function(sn){
+    if(sn.empty)return;
+    var t='';
+    sn.forEach(function(d){
+      var e=d.data(),x=e.data||{};
+      var det=x.titre||x.libelle||x.nom||x.q||x.tel||x.canaux||'';
+      if(e.type==='mention_saisie')det=(x.nom||'')+' : « '+(x.valeur||'')+' »';
+      var col=e.type==='signature_validee'||e.type==='otp_verifie'?'green':(e.type==='otp_echec'?'amber':'blue');
+      t+='<div class="tl-item '+col+'"><div class="tl-date">'+esc(fmt(e.at))+' · #'+e.seq+' · IP '+esc(e.ip||'—')+(e.geo?' · '+esc(e.geo):'')+'</div>'
+        +'<div class="tl-text">'+esc(labels[e.type]||e.type)+(det?' <span style="color:#64748b;font-weight:400">— '+esc(String(det).slice(0,160))+'</span>':'')+'</div></div>';
+    });
+    document.getElementById('timeline').innerHTML=t;
+  }).catch(function(e){console.warn('[CERT] audit',e&&e.message);});
+}
 
 function doPrint(){
   // Open print-friendly version in new window to avoid Safari issues

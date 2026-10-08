@@ -47,6 +47,7 @@ const { db, admin } = require('./_firebaseAdmin');
 const { verifyFirebaseAuth } = require('./_verifyFirebaseAuth');
 const { sendGmailWithAttachment } = require('./_billing-gmail');
 const parseBody = require('./_parseBody');
+const { appendAudit, clientInfo } = require('./_sign-core');
 
 /* Comptes d'envoi autorisés — mêmes que signature-fallback.js. */
 const ACCOUNTS = { contact: 1, strategie: 1, coaching: 1 };
@@ -199,6 +200,9 @@ module.exports = async (req, res) => {
         by: par,
       }),
     }, { merge: true });
+
+    await appendAudit(reqRef, [{ type: 'copie_envoyee', signer: null, data: { a: to, par: par, envoi: envois } }], clientInfo(req))
+      .catch(function (e) { console.warn('[signature-completed] journal:', e && e.message); });
 
     console.log('[signature-completed] copie envoyée', requestId, '→', to,
       'par=' + par, 'envoi n°' + envois, 'msg=' + (sent && sent.messageId));

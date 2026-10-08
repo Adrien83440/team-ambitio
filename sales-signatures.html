@@ -287,6 +287,11 @@ try {
       <div><div class="ep-label">Téléphone (pour OTP SMS) *</div><input class="ep-input" id="sendPhone2" type="tel" placeholder="+33 6 12 34 56 78"/></div>
     </div>
 
+    <!-- Champs remplis par l'équipe (refonte signature 08/10/2026) : nombre de
+         mensualités, détail du plan de paiement… Le client les voit dans le
+         contrat mais ne peut pas les modifier. -->
+    <div id="sendPrefill" style="display:none;margin-bottom:14px;padding:12px;background:rgba(14,165,233,.05);border:1px solid rgba(14,165,233,.2);border-radius:10px"></div>
+
     <div style="margin-bottom:16px"><div class="ep-label">Message personnalisé</div><textarea class="ep-input" id="sendMsg" rows="3" placeholder="Bonjour, veuillez trouver ci-joint votre contrat à signer…"></textarea></div>
     <button class="sig-btn sig-btn-p" style="width:100%;justify-content:center;padding:12px;font-size:14px" id="sendSubmitBtn" onclick="submitSend()">📨 Envoyer le contrat</button>
   </div>
@@ -1002,7 +1007,7 @@ function sendForSignature(){
   if(!currentTpl){alert('Aucun document chargé.');return;}
   if(currentTpl._adhoc){_saveAdhocThenOpen();return;}
   if(!currentTpl.id){alert('Enregistrez d\'abord le modèle.');return;}
-  document.getElementById('sendModal').style.display='flex';
+  openSendModal();
 }
 // Envoi rapide : persiste le PDF + champs dans un modèle éphémère isAdhoc:true
 // (caché de la grille), puis ouvre le modal d'envoi. sign.html et le backend
@@ -1023,7 +1028,7 @@ function _saveAdhocThenOpen(){
       if(pdfSizeKB>=700)savePdfChunks(currentTpl.id,pdfB64);
       else _purgePdfChunks(currentTpl.id);
       _markPdfDirty(false);
-      document.getElementById('sendModal').style.display='flex';
+      openSendModal();
     }).catch(function(e){alert('Erreur: '+e.message);});
     return;
   }
@@ -1031,12 +1036,37 @@ function _saveAdhocThenOpen(){
   db.collection('signature_templates').add(data).then(function(ref){
     currentTpl.id=ref.id;
     if(pdfSizeKB>=700)savePdfChunks(ref.id,pdfB64);
-    document.getElementById('sendModal').style.display='flex';
+    openSendModal();
   }).catch(function(e){alert('Erreur: '+e.message);});
 }
 function sendForSignatureFromList(tplId){
   // Quick open modal with template context
   currentTpl={id:tplId};
+  openSendModal();
+}
+/* Le modèle visé par la fenêtre d'envoi : celui de l'éditeur s'il est chargé,
+   sinon celui de la grille. */
+function _sendTpl(){
+  return (currentTpl&&currentTpl.fields)?currentTpl:(TPL.find(function(t){return currentTpl&&t.id===currentTpl.id;})||{});
+}
+/* Textes libres marqués « rempli par l'équipe » dans la version web du
+   modèle (web.fieldHints[id].filledBy === 'equipe'). */
+function _equipeFields(tpl){
+  var hints=(tpl.web&&tpl.web.fieldHints)||{};
+  return (tpl.fields||[]).filter(function(f){return f.fieldType==='texte_libre'&&hints[f.id]&&hints[f.id].filledBy==='equipe';})
+    .map(function(f){return {id:f.id,label:hints[f.id].label||f.label||'Texte',help:hints[f.id].help||'',max:hints[f.id].maxLength||200};});
+}
+function openSendModal(){
+  var box=document.getElementById('sendPrefill');
+  var list=_equipeFields(_sendTpl());
+  if(list.length){
+    var h='<div style="font-size:11px;font-weight:800;color:#0ea5e9;margin-bottom:8px">✎ À COMPLÉTER PAR VOUS</div>';
+    list.forEach(function(f){
+      h+='<div style="margin-bottom:8px"><div class="ep-label">'+esc(f.label)+'</div><input class="ep-input" data-prefill="'+esc(f.id)+'" maxlength="'+f.max+'"/>'
+        +(f.help?'<div style="font-size:10px;color:var(--muted);margin-top:3px">'+esc(f.help.replace(/ ?Rempli par votre conseiller\.?/,''))+'</div>':'')+'</div>';
+    });
+    box.innerHTML=h;box.style.display='';
+  }else{box.innerHTML='';box.style.display='none';}
   document.getElementById('sendModal').style.display='flex';
 }
 function toggleSecondSigner(checked){
@@ -1060,7 +1090,7 @@ function submitSend(){
   var token1=gid()+gid();
   var token2=twoSigners?(gid()+gid()):null;
   // Get template fields
-  var tpl=currentTpl.fields?currentTpl:TPL.find(function(t){return t.id===currentTpl.id;})||{};
+  var tpl=_sendTpl();
   var tplFields=(tpl.fields||[]).map(function(f){return{id:f.id,fieldType:f.fieldType,label:f.label,type:f.type,required:f.required!==false,signerRole:f.signerRole===2?2:1,page:f.page,x:f.x,y:f.y,w:f.w,h:f.h};});
   // Build signers array
   var signers=[{
@@ -1083,6 +1113,12 @@ function submitSend(){
       status:'pending'
     });
   }
+  /* Textes remplis par l'équipe : figés dans la demande, imprimés sur le
+     contrat, affichés au client en lecture seule. */
+  var prefill={};
+  [].slice.call(document.querySelectorAll('#sendPrefill [data-prefill]')).forEach(function(inp){
+    var v=inp.value.trim();if(v)prefill[inp.getAttribute('data-prefill')]=v;
+  });
   var req={
     templateId:currentTpl.id,
     templateName:tpl.name||(currentTpl.name||'Contrat'),
@@ -1095,6 +1131,15 @@ function submitSend(){
     clientPhone:phone.replace(/\s+/g,''),
     // Nouveau modèle multi-signataire
     signers:signers,
+    /* Refonte 08/10/2026 : la page de signature retrouve la demande par ce
+       tableau (index natif array-contains) via api/sign-session.js — elle ne
+       lit plus Firestore elle-même. */
+    signerTokens:signers.map(function(x){return x.token;}),
+    flow:'v2',
+    prefill:prefill,
+    /* Texte web du contrat figé à l'envoi : si le modèle est réécrit ensuite,
+       ce client lit et signe la version qu'on lui a envoyée. */
+    webSnapshot:tpl.web||null,
     currentSigner:0,           // index du signataire qui doit signer maintenant
     twoSigners:twoSigners,
     token:token1,              // tokenactif = celui du signataire courant

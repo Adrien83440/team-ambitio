@@ -2,865 +2,1091 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="robots" content="noindex,nofollow"/>
 <title>Signature de contrat — Ambitio</title>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-<script>firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script>pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
-<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<script>if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';}</script>
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&display=swap" rel="stylesheet"/>
 <style>
-:root{--bg:#f8f9fb;--card:#ffffff;--border:#e2e8f0;--fg:#0f172a;--muted:#64748b;--accent:#6366f1;--accent2:#818cf8;--green:#059669;--red:#dc2626;--fm:'Plus Jakarta Sans',system-ui,sans-serif;--fsig:'Dancing Script',cursive;}
+/* ═══════════════════════════════════════════════════════════════════════════
+   sign.html — PAGE DE SIGNATURE (refonte du 08/10/2026)
+   Le signataire ne remplit plus un PDF : il lit le contrat en texte, renseigne
+   un formulaire guidé, écrit ses mentions et trace sa signature. Le PDF signé
+   est fabriqué ENSUITE, par le serveur (api/sign-session.js), sur le PDF du
+   modèle à l'identique. Cette page ne lit ni n'écrit jamais Firestore.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#f4f5f9;--card:#ffffff;--ink:#0f172a;--ink2:#334155;--muted:#64748b;--line:#e2e8f0;--line2:#cbd5e1;
+  --accent:#4f46e5;--accent2:#6366f1;--accentSoft:rgba(79,70,229,.08);--green:#059669;--greenSoft:rgba(5,150,105,.09);
+  --amber:#b45309;--amberSoft:rgba(245,158,11,.12);--red:#dc2626;--redSoft:rgba(220,38,38,.08);
+  --fm:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;--fd:'Source Serif 4',Georgia,serif;--fsig:'Dancing Script',cursive;
+  --r:14px;--shadow:0 1px 2px rgba(15,23,42,.04),0 4px 16px rgba(15,23,42,.05);
+}
 *{margin:0;padding:0;box-sizing:border-box;}
-body{background:var(--bg);color:var(--fg);font-family:var(--fm);min-height:100vh;}
-.wrap{max-width:900px;margin:0 auto;padding:20px 16px 60px;}
-.header{text-align:center;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border);}
-.logo{display:inline-flex;align-items:center;gap:8px;margin-bottom:10px;}
-.logo-box{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#1e3a8a,#6366f1);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:16px;}
-.logo-txt{font-size:15px;font-weight:800;color:var(--fg);}
-.header h1{font-size:18px;font-weight:800;margin-bottom:4px;}
-.header .sub{font-size:13px;color:var(--muted);}
-.progress{display:flex;gap:4px;margin-bottom:20px;}
-.prog-step{flex:1;height:4px;border-radius:2px;background:var(--border);transition:background .3s;}
-.prog-step.done{background:var(--accent);}
-.prog-step.active{background:var(--accent2);}
-.step{display:none;}.step.active{display:block;}
-.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
-.card-title{font-size:15px;font-weight:800;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
-.btn{padding:12px 24px;border-radius:12px;font-size:14px;font-weight:700;font-family:var(--fm);border:none;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:8px;justify-content:center;}
-.btn-primary{background:var(--accent);color:#fff;width:100%;}.btn-primary:hover{background:var(--accent2);}.btn-primary:disabled{opacity:.5;cursor:not-allowed;}
-.btn-green{background:var(--green);color:#fff;width:100%;font-size:16px;padding:14px;}.btn-green:hover{background:#047857;}.btn-green:disabled{opacity:.5;cursor:not-allowed;}
-.btn-outline{background:transparent;color:var(--accent);border:1px solid var(--accent);}
-.otp-wrap{display:flex;gap:8px;justify-content:center;margin:16px 0;}
-.otp-input{width:48px;height:56px;text-align:center;font-size:24px;font-weight:800;border-radius:10px;border:2px solid var(--border);background:var(--bg);color:var(--fg);font-family:var(--fm);}
-.otp-input:focus{outline:none;border-color:var(--accent);}
-.pdf-viewer{position:relative;margin:0 auto;overflow-x:auto;}
-.pdf-page-wrap{position:relative;margin:0 auto;display:inline-block;}
-.pdf-page-wrap canvas{display:block;}
-.pdf-fields-layer{position:absolute;top:0;left:0;}
-.pdf-nav{display:flex;align-items:center;justify-content:center;gap:14px;padding:10px 0;font-size:13px;font-weight:700;}
-.pdf-nav button{padding:6px 16px;border-radius:8px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-weight:700;font-size:13px;}
-.field-overlay{position:absolute;border-radius:3px;overflow:visible;}
-.field-overlay input[type=text],.field-overlay input[type=email],.field-overlay input[type=tel]{width:100%;height:100%;border:1.5px solid rgba(99,102,241,.5);border-radius:3px;background:rgba(255,255,255,.9);padding:0 4px;font-family:var(--fm);color:var(--fg);outline:none;}
-.field-overlay input:focus{border-color:#4f46e5;box-shadow:0 0 0 2px rgba(99,102,241,.15);}
-/* Texte libre : même boîte que les autres champs, mais multi-ligne. Pas de
-   resize manuel — la zone doit rester calée sur le cadre dessiné dans le PDF,
-   sinon ce qui est saisi ne correspond plus à ce qui sera imprimé. */
-.field-overlay textarea{width:100%;height:100%;border:1.5px solid rgba(14,165,233,.55);border-radius:3px;background:rgba(255,255,255,.9);padding:2px 4px;font-family:var(--fm);color:var(--fg);outline:none;resize:none;line-height:1.25;overflow:auto;}
-.field-overlay textarea:focus{border-color:#0284c7;box-shadow:0 0 0 2px rgba(14,165,233,.18);}
-.field-overlay textarea:disabled{color:var(--fg);opacity:1;}
-.field-overlay .sig-zone{width:100%;height:100%;border:2px dashed rgba(99,102,241,.4);border-radius:4px;background:rgba(255,255,255,.93);display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;}
-.field-overlay .sig-zone.filled{border-style:solid;border-color:var(--green);background:rgba(255,255,255,.97);}
-.field-overlay .sig-zone .sig-text{font-family:var(--fsig);color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px;}
-.field-overlay .cb-wrap{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.9);border:1.5px solid rgba(99,102,241,.5);border-radius:3px;cursor:pointer;}
-.field-overlay .cb-wrap input{width:18px;height:18px;accent-color:var(--accent);}
-.sig-panel{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-top:14px;}
-.sig-panel-title{font-size:14px;font-weight:800;margin-bottom:10px;}
-.sig-type-input{width:100%;padding:12px 16px;border:2px solid var(--border);border-radius:10px;font-family:var(--fsig);font-size:28px;color:#1e293b;background:var(--bg);text-align:center;}
-.sig-type-input:focus{outline:none;border-color:var(--accent);}
-.sig-preview{font-family:var(--fsig);font-size:32px;color:#1e293b;text-align:center;padding:8px;min-height:45px;}
-.status-icon{font-size:48px;margin-bottom:12px;}
-.info-box{padding:12px 16px;border-radius:10px;font-size:13px;margin:12px 0;}
-.info-box.blue{background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.15);color:var(--accent);}
-.info-box.green{background:rgba(5,150,105,.08);border:1px solid rgba(5,150,105,.15);color:var(--green);}
-.info-box.red{background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.2);color:#dc2626;line-height:1.55;text-align:left;}
-.loader{display:flex;align-items:center;justify-content:center;gap:8px;padding:60px;color:var(--muted);font-size:14px;}
-.spinner{width:20px;height:20px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;}
-@keyframes spin{to{transform:rotate(360deg)}}
-.field-check-row{display:flex;align-items:center;gap:8px;padding:8px 0;}
-.field-check-row input{width:18px;height:18px;accent-color:var(--accent);}
-.field-check-row label{font-size:14px;cursor:pointer;}
-@media(max-width:480px){.wrap{padding:12px 10px 40px;}.otp-input{width:40px;height:48px;font-size:20px;}.sig-type-input{font-size:22px;}}
+html{-webkit-text-size-adjust:100%;}
+body{background:var(--bg);color:var(--ink);font-family:var(--fm);min-height:100vh;font-size:15px;line-height:1.5;}
+button,input,select,textarea{font-family:inherit;font-size:16px;color:inherit;}
+.top{background:#0f172a;color:#fff;}
+.top-in{max-width:760px;margin:0 auto;padding:14px 16px 0;}
+.brand{display:flex;align-items:center;gap:10px;}
+.brand-box{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#4f46e5,#818cf8);display:flex;align-items:center;justify-content:center;font-weight:800;}
+.brand-t{font-weight:800;font-size:14px;letter-spacing:.2px;}
+.brand-s{font-size:12px;color:#94a3b8;}
+.lock{margin-left:auto;font-size:11px;color:#a5b4fc;display:flex;align-items:center;gap:5px;white-space:nowrap;}
+.steps{display:flex;gap:4px;margin-top:14px;padding-bottom:14px;}
+.st{flex:1;min-width:0;}
+.st-bar{height:4px;border-radius:2px;background:rgba(255,255,255,.14);transition:background .3s;}
+.st.done .st-bar{background:#818cf8;}.st.on .st-bar{background:#fff;}
+.st-l{font-size:10.5px;color:#94a3b8;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;}
+.st.on .st-l{color:#fff;}.st.done .st-l{color:#c7d2fe;}
+.wrap{max-width:760px;margin:0 auto;padding:18px 16px 120px;}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:20px;margin-bottom:14px;box-shadow:var(--shadow);}
+.h1{font-size:21px;font-weight:800;letter-spacing:-.3px;margin-bottom:6px;}
+.h2{font-size:16px;font-weight:800;margin-bottom:4px;}
+.sub{color:var(--muted);font-size:14px;}
+.view{display:none;}.view.on{display:block;}
+.center{text-align:center;}
+.ico{font-size:40px;margin-bottom:10px;}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:14px 20px;border-radius:12px;border:none;cursor:pointer;font-weight:700;font-size:15px;transition:transform .05s,background .15s,opacity .15s;min-height:48px;}
+.btn:active{transform:scale(.99);}
+.btn-p{background:var(--accent);color:#fff;}.btn-p:hover{background:#4338ca;}
+.btn-g{background:var(--green);color:#fff;}.btn-g:hover{background:#047857;}
+.btn-o{background:#fff;color:var(--accent);border:1.5px solid var(--line2);}
+.btn-l{background:none;color:var(--accent);padding:8px 10px;min-height:0;font-size:14px;}
+.btn[disabled]{opacity:.45;cursor:not-allowed;}
+.btn-w{width:100%;}
+.bar{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-top:1px solid var(--line);z-index:20;padding:12px 16px calc(12px + env(safe-area-inset-bottom));}
+.bar-in{max-width:760px;margin:0 auto;display:flex;gap:10px;align-items:center;}
+.bar-in .btn{flex:1;}
+.bar-hint{font-size:12px;color:var(--muted);flex:1.3;line-height:1.35;}
+.note{padding:12px 14px;border-radius:12px;font-size:13.5px;line-height:1.5;margin:12px 0;}
+.note-b{background:var(--accentSoft);color:#3730a3;}
+.note-g{background:var(--greenSoft);color:#065f46;}
+.note-a{background:var(--amberSoft);color:#92400e;}
+.note-r{background:var(--redSoft);color:#991b1b;}
+.lbl{display:block;font-size:13px;font-weight:700;color:var(--ink2);margin:14px 0 6px;}
+.lbl small{font-weight:500;color:var(--muted);}
+.inp{width:100%;padding:13px 14px;border:1.5px solid var(--line2);border-radius:11px;background:#fff;outline:none;transition:border-color .15s,box-shadow .15s;}
+.inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,70,229,.13);}
+.inp.ok{border-color:var(--green);}
+.inp.bad{border-color:var(--red);}
+.inp[readonly]{background:#f8fafc;color:var(--ink2);}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.row3{display:grid;grid-template-columns:120px 1fr;gap:10px;}
+.help{font-size:12.5px;color:var(--muted);margin-top:5px;}
+.err{font-size:12.5px;color:var(--red);margin-top:5px;font-weight:600;}
+.otp-in{letter-spacing:.5em;text-align:center;font-size:26px;font-weight:800;padding:14px 10px;font-variant-numeric:tabular-nums;}
+/* Lecture du contrat */
+.doc{background:#fff;border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:28px 22px;}
+.doc-h{text-align:center;padding-bottom:18px;margin-bottom:6px;border-bottom:1px solid var(--line);}
+.doc-t{font-family:var(--fd);font-size:22px;font-weight:700;letter-spacing:.2px;}
+.doc-s{font-family:var(--fd);font-size:15px;font-weight:600;margin-top:2px;}
+.doc-tg{font-family:var(--fd);font-style:italic;color:var(--muted);font-size:14px;margin-top:2px;}
+.sec{padding:18px 0 4px;scroll-margin-top:70px;}
+.sec-t{font-family:var(--fm);font-size:13px;font-weight:800;letter-spacing:.3px;color:var(--ink);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:flex-start;gap:8px;}
+.sec-t .seen{flex:none;width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line2);display:inline-flex;align-items:center;justify-content:center;font-size:11px;color:transparent;margin-top:-1px;transition:all .25s;}
+.sec.vu .sec-t .seen{background:var(--green);border-color:var(--green);color:#fff;}
+.doc p,.doc li{font-family:var(--fd);font-size:16px;line-height:1.62;color:#1e293b;}
+.doc p{margin:0 0 10px;}
+.doc h4{font-family:var(--fd);font-size:15.5px;font-weight:700;margin:14px 0 6px;}
+.doc ul{margin:0 0 10px 22px;}
+.doc .ol{margin:0 0 8px;padding-left:4px;}
+.doc .it{font-style:italic;color:#475569;}
+.ph{display:inline-block;padding:0 6px;border-radius:6px;background:var(--amberSoft);color:#92400e;font-family:var(--fm);font-size:13px;font-weight:700;line-height:1.7;}
+.ph.ok{background:var(--accentSoft);color:#3730a3;}
+.fcall{margin:12px 0;padding:12px 14px;border-radius:12px;border:1.5px dashed #a5b4fc;background:#f8f9ff;font-family:var(--fm);font-size:13.5px;color:#3730a3;display:flex;gap:10px;align-items:flex-start;}
+.fcall b{font-weight:800;}
+.toc{margin-bottom:14px;}
+.toc summary{cursor:pointer;font-weight:700;font-size:14px;list-style:none;display:flex;align-items:center;gap:8px;}
+.toc summary::-webkit-details-marker{display:none;}
+.toc ol{margin:10px 0 0 0;list-style:none;}
+.toc li a{display:flex;gap:8px;align-items:center;padding:6px 4px;font-size:13.5px;color:var(--ink2);text-decoration:none;border-radius:8px;}
+.toc li a:hover{background:#f1f5f9;}
+.toc li a .dot{width:8px;height:8px;border-radius:50%;background:var(--line2);flex:none;}
+.toc li a.vu .dot{background:var(--green);}
+.readbar{position:sticky;top:0;z-index:10;background:rgba(244,245,249,.94);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);padding:10px 0;margin:-6px 0 10px;}
+.readbar-in{display:flex;align-items:center;gap:10px;font-size:12.5px;font-weight:700;color:var(--ink2);}
+.readbar-track{flex:1;height:6px;background:var(--line);border-radius:3px;overflow:hidden;}
+.readbar-fill{height:100%;width:0;background:linear-gradient(90deg,#6366f1,#22c55e);transition:width .3s;}
+.endmark{text-align:center;padding:22px 0 6px;font-size:13px;color:var(--muted);font-weight:600;}
+.pdfpage{display:block;margin:0 auto 12px;box-shadow:0 1px 6px rgba(0,0,0,.12);border-radius:4px;max-width:100%;background:#fff;}
+/* Société */
+.res{border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;margin-top:10px;cursor:pointer;transition:all .15s;background:#fff;text-align:left;width:100%;display:block;}
+.res:hover{border-color:var(--accent2);}
+.res.sel{border-color:var(--accent);background:var(--accentSoft);box-shadow:0 0 0 3px rgba(79,70,229,.1);}
+.res-n{font-weight:800;font-size:15px;}
+.res-m{font-size:12.5px;color:var(--muted);margin-top:2px;}
+.badge{display:inline-block;font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:6px;vertical-align:middle;margin-left:6px;}
+.b-r{background:var(--redSoft);color:var(--red);}.b-g{background:var(--greenSoft);color:var(--green);}
+.co{border-radius:12px;background:#f8fafc;border:1px solid var(--line);padding:14px;margin-top:12px;}
+.co-row{display:flex;gap:10px;font-size:13.5px;padding:4px 0;}
+.co-k{color:var(--muted);min-width:118px;flex:none;}
+.co-v{font-weight:700;word-break:break-word;}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.chip{border:1.5px solid var(--line2);background:#fff;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer;}
+.chip:hover{border-color:var(--accent);color:var(--accent);}
+/* Cases à cocher : grandes, visibles, rien de pré-coché */
+.chk{display:flex;gap:14px;align-items:flex-start;border:2px solid var(--line2);border-radius:14px;padding:16px;cursor:pointer;background:#fff;transition:all .15s;margin-top:12px;}
+.chk:hover{border-color:var(--accent2);}
+.chk.on{border-color:var(--accent);background:var(--accentSoft);}
+.chk.need{border-color:#f59e0b;}
+.chk-box{flex:none;width:28px;height:28px;border-radius:8px;border:2.5px solid var(--line2);display:flex;align-items:center;justify-content:center;background:#fff;transition:all .15s;margin-top:1px;}
+.chk.on .chk-box{background:var(--accent);border-color:var(--accent);}
+.chk-box svg{width:17px;height:17px;opacity:0;transition:opacity .15s;}
+.chk.on .chk-box svg{opacity:1;}
+.chk-t{font-size:15px;font-weight:600;line-height:1.45;}
+.chk-tag{display:inline-block;margin-top:6px;font-size:11px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;padding:2px 8px;border-radius:6px;}
+.tag-req{background:var(--amberSoft);color:var(--amber);}.tag-opt{background:#f1f5f9;color:var(--muted);}
+.chk input{position:absolute;opacity:0;pointer-events:none;}
+/* Mentions */
+.mention{border:1.5px solid var(--line);border-radius:14px;padding:16px;margin-top:12px;background:#fff;}
+.mention-k{font-size:12px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;color:var(--muted);}
+.mention-ex{font-family:var(--fd);font-size:17px;font-style:italic;margin:4px 0 8px;color:var(--ink2);}
+.hand{font-family:var(--fsig);font-size:30px;padding:8px 14px;line-height:1.2;}
+.hand.small{font-size:24px;}
+.par-prev{font-family:var(--fsig);font-size:30px;color:#1a1a2e;margin-top:6px;min-height:40px;}
+/* Signature */
+.pad-wrap{position:relative;border:2px dashed var(--line2);border-radius:14px;background:#fff;touch-action:none;margin-top:10px;overflow:hidden;}
+.pad-wrap.ok{border-style:solid;border-color:var(--green);}
+.pad{display:block;width:100%;height:210px;touch-action:none;cursor:crosshair;}
+.pad-line{position:absolute;left:22px;right:22px;bottom:46px;border-bottom:1.5px solid #cbd5e1;pointer-events:none;}
+.pad-ph{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;color:#94a3b8;font-size:14px;pointer-events:none;font-weight:600;}
+.pad-x{position:absolute;top:8px;right:8px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--ink2);}
+.recap .co-row{border-bottom:1px solid var(--line);padding:8px 0;}
+.recap .co-row:last-child{border:none;}
+/* Modales */
+.modal{position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:50;display:none;flex-direction:column;}
+.modal.on{display:flex;}
+.modal-h{background:#0f172a;color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;}
+.modal-h b{flex:1;font-size:14px;}
+.modal-x{background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer;}
+.modal-b{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:14px;background:#e2e8f0;}
+.spin{width:22px;height:22px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite;display:inline-block;vertical-align:middle;}
+.spin.w{border-color:rgba(255,255,255,.35);border-top-color:#fff;width:18px;height:18px;}
+@keyframes sp{to{transform:rotate(360deg)}}
+.loading{display:flex;align-items:center;justify-content:center;gap:10px;padding:70px 10px;color:var(--muted);}
+.foot{text-align:center;font-size:11.5px;color:var(--muted);padding:16px 0 0;line-height:1.6;}
+.sum-err{margin-top:12px;}
+.sum-err li{margin-left:18px;font-size:13.5px;}
+@media(max-width:520px){
+  .wrap{padding:14px 12px 120px;}
+  .card{padding:16px;}
+  .doc{padding:20px 16px;}
+  .doc p,.doc li{font-size:15.5px;}
+  .row2{grid-template-columns:1fr;}
+  .row3{grid-template-columns:100px 1fr;}
+  .co-k{min-width:96px;}
+  .st-l{font-size:9.5px;}
+  .bar-hint{display:none;}
+}
 </style>
 </head>
 <body>
+<div class="top"><div class="top-in">
+  <div class="brand">
+    <div class="brand-box">A</div>
+    <div><div class="brand-t">Ambitio · Signature électronique</div><div class="brand-s" id="hdName">Chargement…</div></div>
+    <div class="lock">🔒 Connexion sécurisée</div>
+  </div>
+  <div class="steps" id="steps" style="display:none">
+    <div class="st" data-st="1"><div class="st-bar"></div><div class="st-l">1 · Identité</div></div>
+    <div class="st" data-st="2"><div class="st-bar"></div><div class="st-l">2 · Lecture</div></div>
+    <div class="st" data-st="3"><div class="st-bar"></div><div class="st-l">3 · Société</div></div>
+    <div class="st" data-st="4"><div class="st-bar"></div><div class="st-l">4 · Mentions</div></div>
+    <div class="st" data-st="5"><div class="st-bar"></div><div class="st-l">5 · Signature</div></div>
+  </div>
+</div></div>
+
 <div class="wrap">
-<div class="header">
-  <div class="logo"><div class="logo-box">A</div><div class="logo-txt">Ambitio</div></div>
-  <h1 id="headerTitle">Signature de contrat</h1>
-  <div class="sub" id="headerSub">Chargement…</div>
-</div>
-<div class="progress" id="progressBar"><div class="prog-step active"></div><div class="prog-step"></div><div class="prog-step"></div></div>
-<div id="loadingView" class="loader"><div class="spinner"></div> Chargement du contrat…</div>
-<div id="errorView" style="display:none;text-align:center;padding:40px"><div class="status-icon">❌</div><h2 style="margin-bottom:8px">Lien invalide</h2><p style="color:var(--muted);font-size:14px" id="errorMsg"></p></div>
-<div id="signedView" style="display:none;text-align:center;padding:40px"><div class="status-icon">✅</div><h2 style="margin-bottom:8px">Contrat déjà signé</h2><p style="color:var(--muted);font-size:14px">Ce contrat a déjà été signé.</p></div>
+  <div class="view on" id="vLoading"><div class="loading"><span class="spin"></span> Chargement de votre contrat…</div></div>
 
-<!-- STEP 1: OTP -->
-<div class="step" id="step1">
-  <div class="card">
-    <div class="card-title">🔐 Vérification d'identité</div>
-    <p style="font-size:14px;color:var(--muted);margin-bottom:14px">Un code de vérification sera envoyé par SMS.</p>
-    <div class="info-box blue">Numéro : <strong id="otpPhone"></strong></div>
-    <div id="otpSendWrap" style="margin-top:14px"><button class="btn btn-primary" id="otpSendBtn" onclick="requestOtp()">📱 Recevoir le code</button></div>
-    <div id="otpVerifyWrap" style="display:none;margin-top:14px">
-      <div style="font-size:13px;font-weight:600;text-align:center;margin-bottom:8px">Entrez le code reçu</div>
-      <div class="otp-wrap" id="otpInputs"></div>
-      <button class="btn btn-primary" id="otpVerifyBtn" onclick="verifyOtp()">Vérifier</button>
-      <div style="text-align:center;margin-top:10px"><button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="requestOtp()">🔄 Renvoyer</button></div>
-      <div class="info-box red" id="otpFail" style="display:none"></div>
-    </div>
-  </div>
-</div>
+  <div class="view" id="vError"><div class="card center"><div class="ico">⚠️</div><div class="h1">Lien indisponible</div><p class="sub" id="errMsg"></p></div></div>
 
-<!-- STEP 2: PDF + INLINE FIELDS + SIGNATURE -->
-<div class="step" id="step2">
-  <div class="card" style="padding:12px;text-align:center">
-    <div class="pdf-viewer" id="pdfViewer">
-      <div class="pdf-page-wrap" id="pdfPageWrap">
-        <canvas id="pdfCanvas"></canvas>
-        <div class="pdf-fields-layer" id="fieldsLayer"></div>
+  <div class="view" id="vWaiting"><div class="card center"><div class="ico">⏳</div><div class="h1">Pas encore à vous</div><p class="sub" id="waitMsg">Le premier signataire doit signer avant vous. Vous recevrez un SMS dès que ce sera votre tour.</p></div></div>
+
+  <div class="view" id="vSigned"><div class="card center">
+    <div class="ico">✅</div><div class="h1">Contrat signé</div>
+    <p class="sub">Ce contrat a déjà été signé. Vous pouvez télécharger votre exemplaire.</p>
+    <div style="margin-top:16px"><button class="btn btn-o" data-action="download">⬇️ Télécharger mon exemplaire signé</button></div>
+  </div></div>
+
+  <!-- ÉTAPE 1 — IDENTITÉ -->
+  <div class="view" id="v1">
+    <div class="card">
+      <div class="h1">Bonjour <span id="hello"></span>,</div>
+      <p class="sub">Vous êtes invité(e) à signer le contrat <strong id="tplName1"></strong>. Pour commencer, confirmons votre identité : un code à 6 chiffres va être envoyé par SMS à votre téléphone.</p>
+      <div class="note note-b">📱 Numéro enregistré : <strong id="phoneHint"></strong></div>
+      <div id="otpAsk"><button class="btn btn-p btn-w" data-action="otp-send" id="otpSendBtn">Recevoir mon code par SMS</button></div>
+      <div id="otpForm" style="display:none">
+        <label class="lbl" for="otpCode">Code reçu par SMS</label>
+        <input class="inp otp-in" id="otpCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••"/>
+        <div class="err" id="otpErr" style="display:none"></div>
+        <button class="btn btn-p btn-w" style="margin-top:12px" data-action="otp-verify" id="otpVerifyBtn">Valider le code</button>
+        <div class="center" style="margin-top:8px"><button class="btn btn-l" data-action="otp-send">Je n'ai rien reçu — renvoyer un code</button></div>
+        <div class="note note-r" id="otpFail" style="display:none"></div>
       </div>
-      <div class="pdf-nav">
-        <button onclick="goPdfPage(-1)">◀</button>
-        <span>Page <strong id="pNum">1</strong> / <strong id="pTotal">1</strong></span>
-        <button onclick="goPdfPage(1)">▶</button>
+      <p class="help" style="margin-top:14px">Ce code prouve que c'est bien vous qui signez. Il est valable 10 minutes et ne doit être communiqué à personne.</p>
+    </div>
+  </div>
+
+  <!-- ÉTAPE 2 — LECTURE -->
+  <div class="view" id="v2">
+    <div class="card" style="padding:16px 18px">
+      <div class="h2">Lisez votre contrat</div>
+      <p class="sub">Prenez le temps de tout lire : vous pourrez continuer une fois arrivé(e) en bas. Les zones <span class="ph">en jaune</span> seront complétées aux étapes suivantes.</p>
+      <div class="note note-b" id="closerMsg" style="display:none"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="btn btn-o" style="padding:10px 14px;min-height:0;font-size:13.5px" data-action="pdf-open" id="pdfBtn">📄 Voir le document PDF original</button>
+      </div>
+    </div>
+    <div class="readbar" id="readbar"><div class="readbar-in"><span id="readTxt">Lecture</span><div class="readbar-track"><div class="readbar-fill" id="readFill"></div></div></div></div>
+    <details class="card toc" id="toc" style="padding:14px 18px"><summary>📑 Sommaire <span class="sub" style="font-weight:500" id="tocCount"></span></summary><ol id="tocList"></ol></details>
+    <div class="doc" id="doc"></div>
+    <div class="endmark" id="endmark">— Fin du contrat —</div>
+  </div>
+
+  <!-- ÉTAPE 3 — SOCIÉTÉ -->
+  <div class="view" id="v3">
+    <div class="card" id="coCard">
+      <div class="h2">Votre société</div>
+      <p class="sub">Le contrat est conclu au nom de votre entreprise. Saisissez son numéro SIRET (14 chiffres) ou SIREN (9 chiffres) : nous retrouvons ses informations dans l'annuaire officiel des entreprises.</p>
+      <div id="coSearchBox">
+        <label class="lbl" for="coQ">SIRET, SIREN ou raison sociale</label>
+        <div style="display:flex;gap:8px">
+          <input class="inp" id="coQ" inputmode="text" autocomplete="off" placeholder="Ex. 943 098 707 00012"/>
+          <button class="btn btn-p" style="flex:none" data-action="co-search" id="coBtn">Rechercher</button>
+        </div>
+        <div class="err" id="coErr" style="display:none"></div>
+        <div id="coResults"></div>
+        <div style="margin-top:10px"><button class="btn btn-l" data-action="co-manual">Je ne trouve pas ma société</button></div>
+      </div>
+      <div id="coSelected" style="display:none"></div>
+      <div id="coManual" style="display:none">
+        <div class="note note-a">Saisie manuelle : ces informations figureront telles quelles sur le contrat. Vérifiez-les attentivement.</div>
+        <label class="lbl" for="mName">Raison sociale</label><input class="inp" id="mName" autocomplete="organization"/>
+        <div class="row2">
+          <div><label class="lbl" for="mForm">Forme juridique</label><input class="inp" id="mForm" placeholder="SARL, SAS, EURL…"/></div>
+          <div><label class="lbl" for="mSiret">SIRET (14 chiffres)</label><input class="inp" id="mSiret" inputmode="numeric" autocomplete="off"/></div>
+        </div>
+      </div>
+      <div id="coAddr" style="display:none">
+        <div class="note note-a" id="coAddrNote">L'adresse du siège n'est pas publiée par l'INSEE pour cette entreprise : merci de la saisir.</div>
+        <label class="lbl" for="aL1">Adresse du siège social</label><input class="inp" id="aL1" autocomplete="address-line1" placeholder="N° et voie"/>
+        <input class="inp" id="aL2" style="margin-top:8px" autocomplete="address-line2" placeholder="Complément (facultatif)"/>
+        <div class="row3" style="margin-top:8px">
+          <input class="inp" id="aCp" inputmode="numeric" autocomplete="postal-code" placeholder="Code postal" maxlength="5"/>
+          <input class="inp" id="aCity" autocomplete="address-level2" placeholder="Ville"/>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="h2">Le représentant qui signe</div>
+      <p class="sub">La personne physique qui engage la société par sa signature.</p>
+      <div id="dirChips"></div>
+      <div class="row2">
+        <div><label class="lbl" for="rFirst">Prénom</label><input class="inp" id="rFirst" autocomplete="given-name"/></div>
+        <div><label class="lbl" for="rLast">Nom</label><input class="inp" id="rLast" autocomplete="family-name"/></div>
+      </div>
+      <label class="lbl" for="rQual">Qualité</label>
+      <select class="inp" id="rQual"></select>
+      <input class="inp" id="rQualAutre" style="display:none;margin-top:8px" placeholder="Précisez votre qualité"/>
+      <label class="chk" data-chk="decl:pouvoir" id="chkPouvoir">
+        <span class="chk-box"><svg viewBox="0 0 20 20" fill="none"><path d="M4 10.5l4 4 8-9" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span><span class="chk-t" id="txtPouvoir"></span><br/><span class="chk-tag tag-req">Obligatoire</span></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- ÉTAPE 4 — CHOIX ET MENTIONS -->
+  <div class="view" id="v4">
+    <div class="card" id="checksCard" style="display:none">
+      <div class="h2">Vos choix</div>
+      <p class="sub">Lisez chaque phrase. Rien n'est coché à l'avance : cochez uniquement ce que vous acceptez.</p>
+      <div id="checksList"></div>
+    </div>
+    <div class="card" id="textsCard" style="display:none">
+      <div class="h2">Informations du contrat</div>
+      <div id="textsList"></div>
+    </div>
+    <div class="card">
+      <div class="h2">Vos mentions manuscrites</div>
+      <p class="sub">Comme sur un contrat papier, ces mentions doivent être écrites de votre main. Elles sont reportées telles quelles sur le contrat.</p>
+      <div class="mention">
+        <div class="mention-k">Date de signature</div>
+        <div class="mention-ex">Écrivez la date du jour : <span id="todayEx"></span></div>
+        <input class="inp hand small" id="mDate" inputmode="numeric" autocomplete="off" placeholder="JJ/MM/AAAA" maxlength="10"/>
+        <div class="err" id="mDateErr" style="display:none"></div>
+      </div>
+      <div class="mention">
+        <div class="mention-k">Mention obligatoire</div>
+        <div class="mention-ex">Recopiez : « Lu et approuvé »</div>
+        <input class="inp hand" id="mLu" autocomplete="off" autocapitalize="sentences" spellcheck="false" placeholder="Lu et approuvé"/>
+        <div class="err" id="mLuErr" style="display:none"></div>
+      </div>
+      <div class="mention" id="parBox" style="display:none">
+        <div class="mention-k">Paraphe</div>
+        <div class="mention-ex">Vos initiales, apposées sur chaque page du contrat</div>
+        <input class="inp" id="mPar" autocomplete="off" autocapitalize="characters" maxlength="10" placeholder="Ex. J.D."/>
+        <div class="par-prev" id="parPrev"></div>
       </div>
     </div>
   </div>
-  <div class="sig-panel">
-    <div class="sig-panel-title">✍️ Votre signature</div>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Tapez votre nom complet — il apparaîtra sur les zones de signature du contrat.</p>
-    <input class="sig-type-input" id="sigInput" type="text" placeholder="Votre Nom Prénom" oninput="onSigType()"/>
-    <div class="sig-preview" id="sigPreview"></div>
-  </div>
-  <div class="card" style="margin-top:14px">
-    <div class="field-check-row">
-      <input type="checkbox" id="acceptCheck" onchange="updateBtn()"/>
-      <label for="acceptCheck">J'ai lu le contrat et j'accepte ses termes et conditions</label>
+
+  <!-- ÉTAPE 5 — SIGNATURE -->
+  <div class="view" id="v5">
+    <div class="card recap">
+      <div class="h2">Récapitulatif</div>
+      <div id="recap"></div>
+      <button class="btn btn-o btn-w" style="margin-top:12px" data-action="preview" id="pvBtn">👁 Voir le contrat rempli (aperçu PDF)</button>
     </div>
-    <button class="btn btn-green" id="submitBtn" onclick="doSubmit()" disabled>✍️ Signer le contrat</button>
+    <div class="card">
+      <div class="h2">Votre signature</div>
+      <p class="sub">Signez dans le cadre avec votre doigt, votre stylet ou votre souris.</p>
+      <div class="pad-wrap" id="padWrap">
+        <canvas class="pad" id="pad"></canvas>
+        <div class="pad-line"></div>
+        <div class="pad-ph" id="padPh">✍️ Signez ici</div>
+        <button class="pad-x" data-action="pad-clear">Effacer</button>
+      </div>
+      <label class="lbl" for="sigName">Nom et prénom du signataire <small>— identiques au représentant</small></label>
+      <input class="inp" id="sigName" autocomplete="name"/>
+      <div class="err" id="sigNameErr" style="display:none"></div>
+      <label class="chk" data-chk="decl:esign" id="chkEsign">
+        <span class="chk-box"><svg viewBox="0 0 20 20" fill="none"><path d="M4 10.5l4 4 8-9" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span><span class="chk-t" id="txtEsign"></span><br/><span class="chk-tag tag-req">Obligatoire</span></span>
+      </label>
+      <div class="note note-r sum-err" id="submitErr" style="display:none"></div>
+    </div>
+    <p class="foot">Votre signature, vos mentions, l'heure et l'adresse IP de chaque action sont enregistrées par nos serveurs et scellées par un horodatage d'une autorité tierce. Le contrat signé vous est envoyé par e-mail.</p>
   </div>
+
+  <!-- FIN -->
+  <div class="view" id="vDone"><div class="card center">
+    <div class="ico">🎉</div>
+    <div class="h1" id="doneTitle">Contrat signé !</div>
+    <p class="sub" id="doneSub">Merci. Votre contrat signé est en cours d'envoi par e-mail.</p>
+    <div class="note note-g" id="doneRef" style="text-align:left"></div>
+    <div id="doneDl" style="margin-top:14px"><button class="btn btn-p" data-action="download">⬇️ Télécharger mon exemplaire signé</button></div>
+  </div></div>
 </div>
 
-<!-- STEP 3: DONE -->
-<div class="step" id="step3">
-  <div class="card" style="text-align:center">
-    <div class="status-icon">🎉</div>
-    <h2 id="doneTitle" style="margin-bottom:8px">Contrat signé avec succès !</h2>
-    <p id="doneSub" style="color:var(--muted);font-size:14px;margin-bottom:14px">Une copie vous sera envoyée à <strong id="doneEmail"></strong>.</p>
-    <div class="info-box green">Le document signé est horodaté et conservé de manière sécurisée.</div>
-  </div>
-</div>
-</div>
+<div class="bar" id="bar" style="display:none"><div class="bar-in">
+  <button class="btn btn-o" data-action="back" id="backBtn" style="flex:0 0 auto;padding:14px 16px">←</button>
+  <div class="bar-hint" id="barHint"></div>
+  <button class="btn btn-p" data-action="next" id="nextBtn">Continuer</button>
+</div></div>
+
+<div class="modal" id="mPdf"><div class="modal-h"><b id="mPdfTitle">Document</b><button class="modal-x" data-action="modal-close">Fermer ✕</button></div><div class="modal-b" id="mPdfBody"></div></div>
 
 <script>
-var db=firebase.firestore(),REQ=null,REQ_ID=null,TPL=null;
-var pdfDoc=null,pdfBytes=null,curPage=1,totalPages=1;
-var tplScale=1.2,renderScale=1;
-/* Taille visée pour le texte libre, en points PDF. C'est un plafond : si le
-   texte saisi ne tient pas dans la zone, drawFreeText() descend jusqu'à 6 pt
-   avant de couper. */
-var TL_FONT_PT=9;
-var fieldValues={},sigText='',parapheText='';
-// Multi-signataire
-var CURRENT_SIGNER=null;      // référence à signers[N] du signataire courant
-var CURRENT_SIGNER_IDX=0;     // index dans signers[] (0 = filler, 1 = cosigner)
-var IS_COSIGNER=false;        // true si on est le signataire 2
-var PREV_SIGNER_DATA=null;    // données du signataire 1 (pour signer 2)
+/* ═══ ÉTAT ═══ */
+var TOKEN=(new URLSearchParams(location.search).get('t')||'').replace(/[^A-Za-z0-9]/g,'');
+var S={step:0,reqId:'',signerIndex:0,load:null,content:null,
+  read:{seen:{},count:0,total:0,end:false,startedAt:0,done:false},
+  co:null,coManual:false,coResults:[],
+  checks:{},decl:{pouvoir:false,esign:false},
+  pad:{strokes:0,points:0,t0:0,t1:0,minX:1e9,minY:1e9,maxX:-1e9,maxY:-1e9},
+  sent:{},queue:[],busy:false};
 
-/* ═══ INIT ═══ */
-(function(){
-  var t=new URLSearchParams(location.search).get('t');
-  if(!t){showErr('Aucun token.');return;}
-  db.collection('signature_requests').where('signers','array-contains-any',[{token:t,order:1,role:'filler',status:'pending'},{token:t,order:1,role:'filler',status:'opened'}]).limit(1).get().catch(function(){return{empty:true};}).then(function(){
-    // Le where sur array-contains avec struct est trop fragile en Firestore.
-    // Fallback : on query par le champ token top-level (retro-compat) et on
-    // cherche aussi dans signers[] côté client.
-    return db.collection('signature_requests').where('token','==',t).limit(1).get();
-  }).then(function(sn){
-    var doc=null;
-    if(sn && !sn.empty){
-      doc=sn.docs[0];
-    }
-    // Si pas trouvé via token top-level, essayer via signers[].token (nouveau modèle)
-    // On scanne les 50 dernières requests — pragmatique et suffisant pour ce volume.
-    var p=doc?Promise.resolve(doc):db.collection('signature_requests').orderBy('createdAt','desc').limit(200).get().then(function(s2){
-      var found=null;
-      s2.forEach(function(d){
-        if(found)return;
-        var r=d.data();
-        if(Array.isArray(r.signers)){
-          for(var i=0;i<r.signers.length;i++){
-            if(r.signers[i] && r.signers[i].token===t){found=d;break;}
-          }
-        }
-      });
-      return found;
-    });
-    return p;
-  }).then(function(doc){
-    if(!doc){showErr('Lien invalide ou expiré.');return;}
-    REQ=doc.data();REQ_ID=doc.id;
-    // Déterminer quel signataire correspond à ce token
-    if(Array.isArray(REQ.signers) && REQ.signers.length){
-      for(var i=0;i<REQ.signers.length;i++){
-        if(REQ.signers[i] && REQ.signers[i].token===t){
-          CURRENT_SIGNER=REQ.signers[i];
-          CURRENT_SIGNER_IDX=i;
-          break;
-        }
-      }
-      IS_COSIGNER=(CURRENT_SIGNER_IDX===1);
-      // Si signataire 2 et le 1 n'a pas encore signé → on affiche un message spécifique
-      if(IS_COSIGNER && REQ.signers[0] && REQ.signers[0].status!=='signed'){
-        showErr('Le premier signataire doit signer avant vous. Vous recevrez un SMS dès qu\'il aura terminé.');return;
-      }
-      // Si ce signataire a déjà signé → on affiche l'écran signed
-      if(CURRENT_SIGNER && CURRENT_SIGNER.status==='signed'){
-        hide('loadingView');show('signedView');hide('progressBar');return;
-      }
-      // Pour signataire 2 : mémoriser les données du signataire 1 (champs déjà remplis)
-      if(IS_COSIGNER && REQ.signers[0]){
-        PREV_SIGNER_DATA=REQ.signers[0];
-      }
-    } else {
-      // Retro-compat : anciennes requests sans signers[]
-      CURRENT_SIGNER={
-        name:REQ.clientName,
-        email:REQ.clientEmail,
-        phone:REQ.clientPhone,
-        token:t,
-        order:1,
-        role:'filler'
-      };
-      CURRENT_SIGNER_IDX=0;
-      IS_COSIGNER=false;
-    }
-    // Request globalement signée → bloque tout le monde
-    if(REQ.status==='signed'){hide('loadingView');show('signedView');hide('progressBar');return;}
-    // Marquer "opened" sur le signataire courant (et la request si elle est pending)
-    var openedUpd={};
-    if(REQ.status==='pending')openedUpd.status='opened';
-    if(Array.isArray(REQ.signers)){
-      var newSigners=REQ.signers.slice();
-      if(newSigners[CURRENT_SIGNER_IDX] && newSigners[CURRENT_SIGNER_IDX].status==='pending'){
-        newSigners[CURRENT_SIGNER_IDX]=Object.assign({},newSigners[CURRENT_SIGNER_IDX],{status:'opened',openedAt:new Date().toISOString()});
-        openedUpd.signers=newSigners;
-      }
-    }
-    openedUpd.events=firebase.firestore.FieldValue.arrayUnion({type:'opened',by:'signer'+(CURRENT_SIGNER_IDX+1),date:new Date().toISOString()});
-    if(Object.keys(openedUpd).length)db.collection('signature_requests').doc(REQ_ID).update(openedUpd);
+/* ═══ OUTILS ═══ */
+function $(id){return document.getElementById(id);}
+function esc(s){var d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
+function show(id,on){var e=$(id);if(e)e.style.display=on===false?'none':'';}
+function hide(id){show(id,false);}
+function fold(s){return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();}
+function api(action,extra,opts){
+  var b={action:action,token:TOKEN};
+  if(extra){for(var k in extra){if(Object.prototype.hasOwnProperty.call(extra,k))b[k]=extra[k];}}
+  return fetch('/api/sign-session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b),keepalive:!!(opts&&opts.keepalive)})
+    .then(function(r){return r.json().catch(function(){return {};}).then(function(j){return {status:r.status,ok:r.ok,j:j||{}};});});
+}
+function otpApi(action,extra){
+  var b={action:action,token:TOKEN};
+  if(extra){for(var k in extra){b[k]=extra[k];}}
+  return fetch('/api/signature-otp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)})
+    .then(function(r){return r.json().catch(function(){return {};}).then(function(j){return {status:r.status,ok:r.ok,j:j||{}};});});
+}
+function view(id){
+  ['vLoading','vError','vWaiting','vSigned','v1','v2','v3','v4','v5','vDone'].forEach(function(v){var e=$(v);if(e)e.classList.toggle('on',v===id);});
+}
+function fail(msg){view('vError');$('errMsg').textContent=msg||'Une erreur est survenue.';hide('steps');hide('bar');}
 
-    // Header + OTP display
-    document.getElementById('headerTitle').textContent=(REQ.templateName||'Signature de contrat')+(IS_COSIGNER?' · Co-signataire':'');
-    document.getElementById('headerSub').textContent='Contrat pour '+CURRENT_SIGNER.name;
-    var ph=CURRENT_SIGNER.phone||'';
-    document.getElementById('otpPhone').textContent=ph.length>4?ph.slice(0,-4).replace(/\d/g,'*')+ph.slice(-4):ph;
-    // Pré-remplissage des fieldValues pour le signataire courant
-    if(CURRENT_SIGNER.name)fieldValues.nom_prenom=CURRENT_SIGNER.name;
-    if(CURRENT_SIGNER.email)fieldValues.email=CURRENT_SIGNER.email;
-    if(CURRENT_SIGNER.phone)fieldValues.telephone=CURRENT_SIGNER.phone;
-    fieldValues.date_signature=new Date().toLocaleDateString('fr-FR');
-    // Signataire 2 : merger les fieldsCompleted du signataire 1 pour affichage read-only
-    if(IS_COSIGNER && PREV_SIGNER_DATA && PREV_SIGNER_DATA.fieldsCompleted){
-      Object.keys(PREV_SIGNER_DATA.fieldsCompleted).forEach(function(k){
-        // Ne pas écraser nom/email/tel du signataire 2 par ceux du 1
-        if(k==='nom_prenom'||k==='email'||k==='telephone')return;
-        if(fieldValues[k]===undefined)fieldValues[k]=PREV_SIGNER_DATA.fieldsCompleted[k];
-      });
-    }
-    loadPdf();
-  }).catch(function(e){showErr(e.message);});
-})();
-
-function showErr(m){hide('loadingView');show('errorView');hide('progressBar');document.getElementById('errorMsg').textContent=m;}
-function show(id){document.getElementById(id).style.display='';}
-function hide(id){document.getElementById(id).style.display='none';}
-
-function loadPdf(){
-  if(!REQ.templateId){finishLoad();return;}
-  db.collection('signature_templates').doc(REQ.templateId).get().then(function(d){
-    if(!d.exists){finishLoad();return;}
-    TPL=d.data();
-    if(TPL.pdfBase64)decodePdf(TPL.pdfBase64);
-    else db.collection('signature_templates').doc(REQ.templateId).collection('pdf').orderBy('chunk').get().then(function(sn){
-      var p=[];sn.forEach(function(d){p.push(d.data().data);});
-      decodePdf('data:application/pdf;base64,'+p.join(''));
-    }).catch(function(){finishLoad();});
-  }).catch(function(){finishLoad();});
+/* ═══ JOURNAL DES ACTIONS ═══
+   Chaque action utile est envoyée au serveur, qui l'horodate, note l'IP et
+   la chaîne au journal de preuve. Envoi groupé toutes les 3 s, et au départ
+   de la page. Un même événement « une fois » n'est jamais envoyé deux fois. */
+function track(type,data,onceKey){
+  if(onceKey){if(S.sent[onceKey])return;S.sent[onceKey]=1;}
+  if(!S.load||S.step<2&&type!=='etape')return;
+  S.queue.push({type:type,data:data||null});
+  if(S.queue.length>=25)flush();
 }
-function decodePdf(url){
-  try{
-    var b=url.split(',')[1]||url,raw=atob(b);
-    pdfBytes=new Uint8Array(raw.length);
-    for(var i=0;i<raw.length;i++)pdfBytes[i]=raw.charCodeAt(i);
-    pdfjsLib.getDocument({data:pdfBytes.slice()}).promise.then(function(pdf){pdfDoc=pdf;totalPages=pdf.numPages;finishLoad();}).catch(function(){finishLoad();});
-  }catch(e){finishLoad();}
+function flush(keep){
+  if(!S.queue.length||S.busy)return Promise.resolve();
+  var batch=S.queue.splice(0,60);
+  S.busy=true;
+  return api('events',{events:batch},{keepalive:!!keep}).then(function(o){
+    S.busy=false;
+    if(!o.ok&&o.status>=500){S.queue=batch.concat(S.queue);}
+  }).catch(function(){S.busy=false;S.queue=batch.concat(S.queue);});
 }
-function finishLoad(){
-  hide('loadingView');
-  var h='';for(var i=0;i<6;i++)h+='<input class="otp-input" type="tel" maxlength="1" id="otp'+i+'" oninput="otpNav(this,'+i+')" onkeydown="otpBack(event,'+i+')"/>';
-  document.getElementById('otpInputs').innerHTML=h;
-  var fields=REQ.fields||[];
-  document.getElementById('sigInput').value=REQ.clientName||'';
-  sigText=REQ.clientName||'';onSigType();
-  goToStep(1);
-}
-
-/* ═══ STEPS ═══ */
-function goToStep(n){
-  for(var i=1;i<=3;i++)document.getElementById('step'+i).classList.toggle('active',i===n);
-  document.querySelectorAll('.prog-step').forEach(function(b,i){b.className='prog-step';if(i<n-1)b.classList.add('done');else if(i===n-1)b.classList.add('active');});
-  if(n===2){renderPage();updateBtn();}
-  if(n===3){
-    document.getElementById('doneEmail').textContent=(CURRENT_SIGNER&&CURRENT_SIGNER.email)||REQ.clientEmail||'';
-    // Adapter le message si on est le signataire 1 d'un contrat à 2 signataires
-    var hasNextSigner = Array.isArray(REQ.signers)
-      && REQ.signers.length > (CURRENT_SIGNER_IDX+1)
-      && REQ.signers[CURRENT_SIGNER_IDX+1];
-    if(hasNextSigner && !IS_COSIGNER){
-      var nextName=REQ.signers[CURRENT_SIGNER_IDX+1].name||'le second signataire';
-      var doneTitleEl=document.getElementById('doneTitle');
-      var doneSubEl=document.getElementById('doneSub');
-      if(doneTitleEl)doneTitleEl.textContent='✅ Votre signature est enregistrée';
-      if(doneSubEl)doneSubEl.innerHTML='Merci !<br><strong>'+esc(nextName)+'</strong> va recevoir un SMS pour signer à son tour. Le contrat final vous sera envoyé par email une fois les deux signatures apposées.';
-    }
-  }
-  scrollTo(0,0);
-}
-
-/* ═══ OTP ═══ */
-function otpNav(el,i){if(el.value&&i<5)document.getElementById('otp'+(i+1)).focus();}
-function otpBack(e,i){if(e.key==='Backspace'&&!e.target.value&&i>0)document.getElementById('otp'+(i-1)).focus();}
-/* Le code SMS passe par /api/signature-otp (Vercel), qui repond directement.
-   Avant, le navigateur deposait un document dans webhook_inbox et attendait
-   qu'une Cloud Function le traite : quand cette fonction a cesse de gerer les
-   actions signature, le code ne partait plus et rien ne le signalait. */
-function otpCall(payload){
-  return fetch('/api/signature-otp',{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(payload)
-  }).then(function(r){
-    return r.json().catch(function(){return {};}).then(function(j){
-      return {status:r.status,ok:r.ok,j:j||{}};
-    });
-  });
-}
-function requestOtp(){
-  var b=document.getElementById('otpSendBtn');b.disabled=true;b.textContent='Envoi…';
-  otpCall({action:'send',reqId:REQ_ID,signerIndex:CURRENT_SIGNER_IDX}).then(function(o){
-    if(!o.ok){
-      b.disabled=false;b.textContent='📱 Recevoir le code';
-      alert(o.j.error||'Envoi impossible. Réessayez dans un instant.');
-      return;
-    }
-    b.textContent='✅ Code envoyé';hide('otpSendWrap');show('otpVerifyWrap');
-    document.getElementById('otp0').focus();
-    otpSurveiller();
-  }).catch(function(e){
-    b.disabled=false;b.textContent='📱 Recevoir le code';
-    alert('Connexion indisponible : '+e.message);
-  });
-}
-/* Twilio ACCEPTE un message sans garantir qu'il arrive : en France, un envoi
-   depuis un numero non declare est regulierement filtre par l'operateur.
-   Sans cette surveillance, la page affichait « ✅ Code envoye » et le
-   signataire attendait un SMS qui ne viendrait jamais, sans rien pour le lui
-   dire. On interroge donc le statut reel, et on parle des qu'il est mauvais. */
-var otpTimer=null;
-function otpSurveiller(){
-  var essais=0;
-  var f=document.getElementById('otpFail');
-  if(f){f.style.display='none';f.innerHTML='';}
-  clearInterval(otpTimer);
-  otpTimer=setInterval(function(){
-    essais++;
-    if(essais>20){clearInterval(otpTimer);return;}   /* ~1 minute suffit */
-    otpCall({action:'status',reqId:REQ_ID}).then(function(o){
-      if(!o.ok||!o.j)return;
-      if(o.j.etat==='echec'){clearInterval(otpTimer);otpNonRecu(o.j.explication||'');}
-      else if(o.j.etat==='livre'){clearInterval(otpTimer);}
-    }).catch(function(){/* reseau : on retentera au tour suivant */});
-  },3000);
-}
-function otpNonRecu(pourquoi){
-  var f=document.getElementById('otpFail');
-  if(!f)return;
-  f.innerHTML='<strong>Le SMS n\'a pas pu être remis à votre téléphone.</strong>'
-    +(pourquoi?'<br>'+pourquoi:'')
-    +'<br><br>Inutile d\'attendre : contactez votre conseiller. Il peut vous envoyer '
-    +'le document à signer par e-mail.';
-  f.style.display='';
-}
-
-function verifyOtp(){
-  var code='';for(var i=0;i<6;i++)code+=document.getElementById('otp'+i).value;
-  if(code.length!==6){alert('Entrez les 6 chiffres.');return;}
-  var b=document.getElementById('otpVerifyBtn');b.disabled=true;b.textContent='Vérification…';
-  otpCall({action:'verify',reqId:REQ_ID,code:code}).then(function(o){
-    if(o.ok&&o.j.ok){clearInterval(otpTimer);goToStep(2);return;}
-    /* Panne de notre cote (5xx) : on laisse passer, comme le faisait l'ancien
-       parcours quand la Cloud Function ne repondait pas. Un code FAUX (400) ou
-       trop de tentatives (429) bloquent, eux. */
-    if(o.status>=500){
-      console.error('[otp] service indisponible, passage en mode degrade',o.j);
-      goToStep(2);return;
-    }
-    b.disabled=false;b.textContent='Vérifier';
-    alert(o.j.error||'Code incorrect.');
-  }).catch(function(e){
-    console.error('[otp] reseau',e);
-    goToStep(2);   /* reseau coupe : on ne bloque pas une signature en cours */
-  });
-}
-
-/* ═══ PDF RENDER + OVERLAYS ═══ */
-function renderPage(){
-  if(!pdfDoc)return;
-  document.getElementById('pNum').textContent=curPage;
-  document.getElementById('pTotal').textContent=totalPages;
-  pdfDoc.getPage(curPage).then(function(page){
-    var maxW=document.getElementById('pdfViewer').clientWidth-24;
-    var nat=page.getViewport({scale:1});
-    renderScale=Math.min(maxW/nat.width,1.5);
-    var vp=page.getViewport({scale:renderScale});
-    var dpr=window.devicePixelRatio||1;
-    var c=document.getElementById('pdfCanvas');
-    c.width=vp.width*dpr;c.height=vp.height*dpr;
-    c.style.width=vp.width+'px';c.style.height=vp.height+'px';
-    var ctx=c.getContext('2d');ctx.scale(dpr,dpr);
-    page.render({canvasContext:ctx,viewport:vp}).promise.then(function(){renderOverlays();});
-    var l=document.getElementById('fieldsLayer');l.style.width=vp.width+'px';l.style.height=vp.height+'px';
-  });
-}
-function goPdfPage(d){var p=curPage+d;if(p>=1&&p<=totalPages){curPage=p;renderPage();}}
-
-/* Clé de stockage d'une valeur dans fieldValues.
-   Historiquement tout est indexé par fieldType : « Nom Prénom » posé sur trois
-   pages doit afficher la même valeur partout, c'est voulu. Le texte libre est
-   l'exception — deux zones sur un même contrat doivent avoir chacune leur
-   contenu — donc il s'indexe sur l'identifiant de l'instance. Les champs
-   existants ne changent pas de clé : les requêtes déjà envoyées ou signées
-   restent lisibles telles quelles. */
-function fieldKey(f){
-  if(f.fieldType==='texte_libre'&&f.id)return f.id;
-  return f.fieldType;
-}
-
-function renderOverlays(){
-  var layer=document.getElementById('fieldsLayer');
-  var fields=REQ.fields||[];
-  var r=renderScale/tplScale;
-  var h='';
-  fields.forEach(function(f){
-    if(f.page!==curPage)return;
-    var x=f.x*r,y=f.y*r,w=f.w*r,fh=f.h*r;
-    var fkey=fieldKey(f);
-    var val=fieldValues[fkey]||'';
-    // Multi-signataire : un champ "appartient" au signataire 1 ou 2 selon signerRole
-    var fRole=f.signerRole===2?2:1;   // défaut 1
-    var myRole=IS_COSIGNER?2:1;
-    var belongsToMe=(fRole===myRole);
-    // Si je suis le signataire 2, les champs du 1 sont affichés en lecture seule
-    // (pour contexte) s'ils ont une valeur connue. Sinon masqués.
-    var readonly=!belongsToMe;
-    h+='<div class="field-overlay" style="left:'+x+'px;top:'+y+'px;width:'+w+'px;height:'+fh+'px;'+(readonly?'opacity:.55;pointer-events:none':'')+'">';
-    if(f.fieldType==='signature'){
-      // Signature : pour le cosigner, les signatures du signataire 1 sont affichées (lecture seule),
-      // et celles du signataire 2 sont actives.
-      if(belongsToMe){
-        var ok=sigText.length>0;
-        h+='<div class="sig-zone'+(ok?' filled':'')+'" onclick="document.getElementById(\'sigInput\').focus();document.getElementById(\'sigInput\').scrollIntoView({behavior:\'smooth\',block:\'center\'})">';
-        h+=ok?'<div class="sig-text" style="font-size:'+Math.min(fh*.6,20)+'px">'+esc(sigText)+'</div>':'<span style="font-size:10px;color:var(--muted)">✍️ Signature</span>';
-        h+='</div>';
-      } else {
-        // Afficher la signature du 1er (déjà apposée dans le PDF généré intermédiaire)
-        var prevSig=(PREV_SIGNER_DATA&&PREV_SIGNER_DATA.signatureText)||'';
-        h+='<div class="sig-zone filled">';
-        h+=prevSig?'<div class="sig-text" style="font-size:'+Math.min(fh*.6,20)+'px">'+esc(prevSig)+'</div>':'<span style="font-size:10px;color:var(--muted)">✍️ (Signataire 1)</span>';
-        h+='</div>';
-      }
-    }else if(f.fieldType==='paraphe'){
-      if(belongsToMe){
-        var ok2=parapheText.length>0;
-        h+='<div class="sig-zone'+(ok2?' filled':'')+'">';
-        h+=ok2?'<div class="sig-text" style="font-size:'+Math.min(fh*.55,16)+'px">'+esc(parapheText)+'</div>':'<span style="font-size:10px;color:var(--muted)">✏️</span>';
-        h+='</div>';
-      } else {
-        var prevPar=(PREV_SIGNER_DATA&&PREV_SIGNER_DATA.parapheText)||'';
-        h+='<div class="sig-zone filled">';
-        h+=prevPar?'<div class="sig-text" style="font-size:'+Math.min(fh*.55,16)+'px">'+esc(prevPar)+'</div>':'<span style="font-size:10px;color:var(--muted)">✏️ (S1)</span>';
-        h+='</div>';
-      }
-    }else if(f.fieldType==='case_cocher'||f.fieldType==='lu_approuve'){
-      if(belongsToMe){
-        h+='<div class="cb-wrap"><input type="checkbox" '+(fieldValues[fkey]?'checked':'')+' onchange="fieldValues[\''+fkey+'\']=this.checked;updateBtn()"/></div>';
-      } else {
-        h+='<div class="cb-wrap"><input type="checkbox" '+(fieldValues[fkey]?'checked':'')+' disabled/></div>';
-      }
-    }else if(f.fieldType==='texte_libre'){
-      /* La taille à l'écran suit celle visée dans le PDF pour que le signataire
-         voie à peu près le même découpage. Le PDF reste l'autorité : il
-         réajuste tout seul si le texte déborde. */
-      var tfs=Math.max(7,Math.min(TL_FONT_PT*renderScale,14));
-      if(belongsToMe){
-        h+='<textarea data-tlkey="'+esc(fkey)+'" placeholder="'+esc(f.label||'Texte libre')+'" style="font-size:'+tfs+'px">'+esc(val)+'</textarea>';
-      } else {
-        h+='<textarea style="font-size:'+tfs+'px" readonly disabled>'+esc(val)+'</textarea>';
-      }
-    }else{
-      var fs=Math.min(fh*.55,13);
-      if(belongsToMe){
-        h+='<input type="text" value="'+esc(val)+'" placeholder="'+esc(f.label)+'" style="font-size:'+fs+'px" oninput="fieldValues[\''+fkey+'\']=this.value;updateBtn()"/>';
-      } else {
-        h+='<input type="text" value="'+esc(val)+'" style="font-size:'+fs+'px" readonly disabled/>';
-      }
-    }
-    h+='</div>';
-  });
-  layer.innerHTML=h;
-}
-
-/* Saisie du texte libre : délégation d'événement plutôt qu'un oninput inline.
-   La clé est un identifiant de champ, on évite de l'injecter dans du HTML avec
-   des quotes imbriquées. On ne re-rend surtout PAS la couche : ça ferait
-   perdre le focus et la position du curseur à chaque frappe. */
-document.addEventListener('input',function(e){
-  var t=e.target;
-  if(!t||!t.dataset||!t.dataset.tlkey)return;
-  fieldValues[t.dataset.tlkey]=t.value;
-  updateBtn();
+setInterval(function(){flush();},3000);
+document.addEventListener('visibilitychange',function(){
+  if(S.step<2)return;
+  if(document.visibilityState==='hidden'){track('page_masquee',{etape:S.step});flush(true);}
+  else track('page_visible',{etape:S.step});
 });
 
-/* ═══ SIGNATURE / PARAPHE TYPED ═══ */
-function onSigType(){
-  sigText=document.getElementById('sigInput').value;
-  document.getElementById('sigPreview').textContent=sigText;
-  // Auto-generate paraphe from initials
-  parapheText=sigText.trim().split(/\s+/).map(function(w){return w.charAt(0).toUpperCase();}).join('.');
-  if(parapheText)parapheText+='.';
-  renderOverlays();updateBtn();
+/* ═══ BROUILLON LOCAL ═══
+   Si la personne quitte et revient, elle retrouve sa société et ses saisies.
+   Les mentions et la signature ne sont JAMAIS conservées : elles se refont. */
+function draftKey(){return 'sign_draft_'+TOKEN;}
+function val(id){var e=$(id);return e?e.value:'';}
+function saveDraft(){
+  try{localStorage.setItem(draftKey(),JSON.stringify({co:S.content&&S.content.form.needsCompany?S.co:null,coManual:S.coManual,f:val('rFirst'),l:val('rLast'),q:val('rQual'),qa:val('rQualAutre'),
+    m:{n:val('mName'),fo:val('mForm'),s:val('mSiret')},a:{l1:val('aL1'),l2:val('aL2'),cp:val('aCp'),c:val('aCity')}}));}catch(e){}
+}
+function loadDraft(){try{return JSON.parse(localStorage.getItem(draftKey())||'null');}catch(e){return null;}}
+function clearDraft(){try{localStorage.removeItem(draftKey());}catch(e){}}
+
+/* ═══ DÉMARRAGE ═══ */
+(function(){
+  if(!TOKEN){fail('Ce lien est incomplet. Utilisez le lien reçu par SMS ou par e-mail.');return;}
+  api('load').then(function(o){
+    if(!o.ok){fail(o.j.error||'Lien invalide ou expiré.');return;}
+    var L=o.j;S.load=L;S.reqId=L.reqId;S.signerIndex=L.signerIndex;
+    $('hdName').textContent=L.templateName;
+    document.title=L.templateName+' — Signature';
+    if(L.stage==='signed'){view('vSigned');return;}
+    if(L.stage==='waiting'){view('vWaiting');if(L.firstSignerName)$('waitMsg').textContent=L.firstSignerName+' doit signer avant vous. Vous recevrez un SMS dès que ce sera votre tour.';return;}
+    $('hello').textContent=L.firstName||'';
+    $('tplName1').textContent='« '+L.templateName+' »';
+    $('phoneHint').textContent=L.phoneHint||'—';
+    show('steps');
+    if(L.otpOk){loadContent();}else{go(1);}
+  }).catch(function(){fail('Connexion impossible. Vérifiez votre réseau puis rechargez la page.');});
+})();
+
+function go(n){
+  S.step=n;
+  view('v'+n);
+  var sts=document.querySelectorAll('.st');
+  for(var i=0;i<sts.length;i++){var k=+sts[i].getAttribute('data-st');sts[i].className='st'+(k<n?' done':(k===n?' on':''));}
+  show('bar',n>=2);
+  $('backBtn').style.visibility=n>2?'visible':'hidden';
+  refreshBar();
+  if(n>=2)track('etape',{n:n,nom:['','identite','lecture','societe','mentions','signature'][n]});
+  if(n===5)setTimeout(padSize,30);
+  window.scrollTo(0,0);
 }
 
-/* ═══ VALIDATION ═══ */
-function updateBtn(){
-  var fields=REQ.fields||[],ok=true,done={};
-  var myRole=IS_COSIGNER?2:1;
-  fields.forEach(function(f){
-    // Ne valider que les champs du signataire courant
-    var fRole=f.signerRole===2?2:1;
-    if(fRole!==myRole)return;
-    /* Dédoublonnage par clé : les champs sémantiques posés plusieurs fois ne
-       sont validés qu'une fois, alors que deux textes libres sont deux
-       exigences distinctes (clés différentes). */
-    var fkey=fieldKey(f);
-    if(done[fkey])return;done[fkey]=true;
-    if(f.required===false)return;
-    if(f.fieldType==='signature'&&!sigText.trim())ok=false;
-    else if(f.fieldType==='paraphe'&&!parapheText.trim())ok=false;
-    else if((f.fieldType==='case_cocher'||f.fieldType==='lu_approuve')&&!fieldValues[fkey])ok=false;
-    else if(f.fieldType!=='signature'&&f.fieldType!=='paraphe'&&f.fieldType!=='case_cocher'&&f.fieldType!=='lu_approuve'&&!(fieldValues[fkey]||'').trim())ok=false;
+/* ═══ ÉTAPE 1 — CODE SMS ═══ */
+var otpTimer=null;
+function otpSend(){
+  var b=$('otpSendBtn');b.disabled=true;b.innerHTML='<span class="spin w"></span> Envoi…';
+  hide('otpErr');hide('otpFail');
+  otpApi('send').then(function(o){
+    b.disabled=false;b.textContent='Recevoir mon code par SMS';
+    if(!o.ok){showOtpErr(o.j.error||'Envoi impossible. Réessayez dans un instant.');show('otpForm');return;}
+    hide('otpAsk');show('otpForm');
+    try{$('otpCode').focus();}catch(e){}
+    watchSms();
+  }).catch(function(){b.disabled=false;b.textContent='Recevoir mon code par SMS';showOtpErr('Connexion indisponible. Réessayez.');});
+}
+/* Twilio ACCEPTE un SMS sans garantir qu'il arrive. On suit le statut réel de
+   remise et on prévient tout de suite si l'opérateur l'a rejeté. */
+function watchSms(){
+  var n=0;clearInterval(otpTimer);
+  otpTimer=setInterval(function(){
+    n++;if(n>20){clearInterval(otpTimer);return;}
+    otpApi('status').then(function(o){
+      if(!o.ok)return;
+      if(o.j.etat==='echec'){clearInterval(otpTimer);
+        var f=$('otpFail');f.innerHTML='<strong>Le SMS n\'a pas pu être remis à votre téléphone.</strong>'+(o.j.explication?'<br>'+esc(o.j.explication):'')+'<br>Contactez votre conseiller : il peut vous renvoyer un lien.';show('otpFail');}
+      else if(o.j.etat==='livre')clearInterval(otpTimer);
+    }).catch(function(){});
+  },3000);
+}
+function showOtpErr(m){var e=$('otpErr');e.textContent=m;show('otpErr');}
+/* Plus de « mode dégradé » : sans code valide, pas d'accès au contrat. Une
+   panne de notre côté s'affiche comme telle, elle n'ouvre plus la porte. */
+function otpVerify(){
+  var code=($('otpCode').value||'').replace(/\D/g,'');
+  if(code.length!==6){showOtpErr('Saisissez les 6 chiffres du code.');return;}
+  var b=$('otpVerifyBtn');b.disabled=true;b.innerHTML='<span class="spin w"></span> Vérification…';hide('otpErr');
+  otpApi('verify',{code:code}).then(function(o){
+    b.disabled=false;b.textContent='Valider le code';
+    if(o.ok&&o.j.ok){clearInterval(otpTimer);loadContent();return;}
+    showOtpErr(o.j.error||(o.status>=500?'Service momentanément indisponible. Réessayez dans un instant.':'Code incorrect.'));
+  }).catch(function(){b.disabled=false;b.textContent='Valider le code';showOtpErr('Connexion indisponible. Réessayez.');});
+}
+$('otpCode').addEventListener('input',function(){this.value=this.value.replace(/\D/g,'').slice(0,6);if(this.value.length===6)otpVerify();});
+
+/* ═══ CONTENU ═══ */
+function loadContent(){
+  view('vLoading');
+  api('content').then(function(o){
+    if(!o.ok){if(o.j.stage==='otp'){go(1);return;}fail(o.j.error||'Impossible d\'afficher le contrat.');return;}
+    S.content=o.j;
+    buildRead();buildForm();
+    S.read.startedAt=Date.now();
+    go(2);
+    observeRead();
+  }).catch(function(){fail('Connexion impossible. Rechargez la page.');});
+}
+
+/* ═══ ÉTAPE 2 — LECTURE ═══ */
+function phValue(key){
+  var c=currentCompany();
+  if(key==='entreprise')return c&&c.name;
+  if(key==='siret')return c&&c.siret;
+  if(key==='siege_social')return c&&addrLine(c.address);
+  if(key==='nom_prenom'){var f=$('rFirst').value.trim(),l=$('rLast').value.trim();return (f||l)?(f+' '+l).trim():'';}
+  return '';
+}
+var PH_LABEL={entreprise:'votre société',nom_prenom:'votre nom',siege_social:'adresse du siège',siret:'n° SIRET'};
+function inline(s){
+  var h=esc(s);
+  h=h.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+  h=h.replace(/\{\{field:([A-Za-z0-9_]+)\}\}/g,function(m,id){
+    var t=findText(id);
+    if(t&&t.value)return '<span class="ph ok">'+esc(t.value)+'</span>';
+    if(isDateField(id))return '<span class="ph" data-ph="date">date de signature</span>';
+    return '<span class="ph">'+esc(t?t.label:'à compléter')+'</span>';
   });
-  document.getElementById('submitBtn').disabled=!(ok&&document.getElementById('acceptCheck').checked);
+  h=h.replace(/\{\{([a-z_]+)\}\}/g,function(m,k){var v=phValue(k);return '<span class="ph'+(v?' ok':'')+'" data-ph="'+k+'">'+esc(v||PH_LABEL[k]||k)+'</span>';});
+  return h;
 }
-
-/* ═══ SUBMIT ═══ */
-async function doSubmit(){
-  var btn=document.getElementById('submitBtn');
-  btn.disabled=true;btn.innerHTML='<div class="spinner" style="width:16px;height:16px;border-width:2px"></div> Génération…';
-  try{
-    var b64=await genPdf();
-    var hashHex='';
-    try{
-      var raw=atob(b64);var signedArr=new Uint8Array(raw.length);
-      for(var i=0;i<raw.length;i++)signedArr[i]=raw.charCodeAt(i);
-      var hashBuf=await crypto.subtle.digest('SHA-256',signedArr);
-      var hArr=new Uint8Array(hashBuf);
-      hashHex=Array.from(hArr).map(function(b){return b.toString(16).padStart(2,'0');}).join('');
-    }catch(e){console.error('Hash error:',e);}
-    var certId='CERT-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase();
-
-    // Détermine si c'est la signature finale ou une signature intermédiaire
-    var hasNextSigner = Array.isArray(REQ.signers)
-      && REQ.signers.length > (CURRENT_SIGNER_IDX+1)
-      && REQ.signers[CURRENT_SIGNER_IDX+1]
-      && REQ.signers[CURRENT_SIGNER_IDX+1].status !== 'signed';
-    var isFinalSignature = !hasNextSigner;
-
-    // Snapshot du signataire courant : marquer comme signé et stocker ses contribs
-    var signingMeta={userAgent:navigator.userAgent,platform:navigator.platform,language:navigator.language,screenWidth:screen.width,screenHeight:screen.height,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,signedAtLocal:new Date().toISOString()};
-
-    var u={events:firebase.firestore.FieldValue.arrayUnion({type:'signed',by:'signer'+(CURRENT_SIGNER_IDX+1),date:new Date().toISOString()})};
-
-    // MAJ du tableau signers si présent
-    if(Array.isArray(REQ.signers)){
-      var newSigners=REQ.signers.slice();
-      newSigners[CURRENT_SIGNER_IDX]=Object.assign({},newSigners[CURRENT_SIGNER_IDX],{
-        status:'signed',
-        signedAtLocal:new Date().toISOString(),
-        signatureText:sigText,
-        parapheText:parapheText,
-        fieldsCompleted:fieldValues,
-        certificateId:certId,
-        signingMeta:signingMeta
+function findText(id){var t=(S.content.form.texts||[]);for(var i=0;i<t.length;i++)if(t[i].id===id)return t[i];return null;}
+function findCheck(id){var t=(S.content.form.checks||[]);for(var i=0;i<t.length;i++)if(t[i].id===id)return t[i];return null;}
+function isDateField(id){return /date/i.test(id)||!findText(id)&&!findCheck(id);}
+function buildRead(){
+  var C=S.content;
+  if(C.message){$('closerMsg').textContent='💬 Message de votre conseiller : '+C.message;show('closerMsg');}
+  if(C.mode==='web'){
+    var W=C.web,h='<div class="doc-h"><div class="doc-t">'+esc(W.title)+'</div>'+(W.subtitle?'<div class="doc-s">'+esc(W.subtitle)+'</div>':'')+(W.tagline?'<div class="doc-tg">'+esc(W.tagline)+'</div>':'')+'</div>';
+    var toc='';
+    W.sections.forEach(function(sec,si){
+      h+='<section class="sec" id="sec_'+si+'" data-si="'+si+'"><div class="sec-t"><span class="seen">✓</span><span>'+esc(sec.title)+'</span></div>';
+      var inUl=false;
+      sec.blocks.forEach(function(b){
+        var m=/^(p|h|li|ol|i|q|field):(.*)$/.exec(b);if(!m)return;
+        var k=m[1],t=m[2];
+        if(k!=='li'&&inUl){h+='</ul>';inUl=false;}
+        if(k==='p')h+='<p>'+inline(t)+'</p>';
+        else if(k==='h')h+='<h4>'+inline(t)+'</h4>';
+        else if(k==='li'){if(!inUl){h+='<ul>';inUl=true;}h+='<li>'+inline(t)+'</li>';}
+        else if(k==='ol')h+='<p class="ol">'+inline(t)+'</p>';
+        else if(k==='i'||k==='q')h+='<p class="it">'+inline(t)+'</p>';
+        else if(k==='field'){
+          var c=findCheck(t),tx=findText(t);
+          if(c)h+='<div class="fcall"><span>☐</span><span><b>Case à cocher à l\'étape 4</b> — « '+esc(c.label)+' » ('+(c.required?'obligatoire':'facultative')+')</span></div>';
+          else if(tx)h+='<div class="fcall"><span>✎</span><span><b>'+esc(tx.label)+'</b>'+(tx.value?' : '+esc(tx.value):' — à compléter à l\'étape 4')+'</span></div>';
+        }
       });
-      u.signers=newSigners;
-    }
-
-    if(isFinalSignature){
-      // Signature finale → status global "signed", on persiste le PDF final
-      u.status='signed';
-      u.signedAt=firebase.firestore.FieldValue.serverTimestamp();
-      u.fieldValues=fieldValues;           // retro-compat (certificat actuel)
-      u.signatureText=sigText;
-      u.parapheText=parapheText;
-      u.certificateId=certId;
-      u.documentHash=hashHex;
-      u.signingMeta=signingMeta;
-      if(b64.length<900000)u.signedPdfBase64=b64;
-    } else {
-      // Signature intermédiaire (signataire 1 sur un contrat à 2) → status "partial"
-      // On stocke le PDF "en cours" pour que le signataire 2 le voie avec les contribs du 1 déjà apposées
-      u.status='partial';
-      u.partialSignedAt=firebase.firestore.FieldValue.serverTimestamp();
-      u.currentSigner=CURRENT_SIGNER_IDX+1;  // le prochain signataire
-      // Stocker les contribs du signataire 1 séparément — seront mergées au final
-      u.signer1SignatureText=sigText;
-      u.signer1ParapheText=parapheText;
-      u.signer1FieldValues=fieldValues;
-      // Stocker aussi dans fieldValues top-level pour que sign.html du 2e récupère la data via retro-compat
-      u.fieldValues=fieldValues;
-    }
-
-    await db.collection('signature_requests').doc(REQ_ID).update(u);
-    if(isFinalSignature && b64.length>=900000)await saveChunks(b64);
-
-    if(isFinalSignature){
-      /* ⚠ Le document webhook_inbox ci-dessous n'envoie PLUS rien : la Cloud
-         Function qui le traitait a ete redeployee sans ses handlers signature.
-         Le client signait et ne recevait jamais sa copie, en silence. On garde
-         l'ecriture (trace, et reprise possible si la fonction revit un jour),
-         mais l'envoi passe desormais par /api/signature-completed, sur Vercel,
-         qui deploie depuis git : le code lu est le code execute.
-         Meme remede que pour le code SMS, meme cause. */
-      await db.collection('webhook_inbox').add({
-        action:'signature_completed',
-        signatureRequestId:REQ_ID,
-        clientName:REQ.clientName,
-        clientEmail:REQ.clientEmail,
-        templateName:REQ.templateName,
-        createdAt:firebase.firestore.FieldValue.serverTimestamp()
-      });
-
-
-      // AE ACADEMY (V11b) : ouvre l'accès à la formation correspondant au
-      // contrat signé, via le pont. Fire-and-forget — token et statut « signed »
-      // sont revérifiés côté serveur, et le rattrapage existe dans
-      // sales-signatures : un échec ici ne gêne JAMAIS la signature.
-      try{
-        fetch('/api/academy-grant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId:REQ_ID,token:new URLSearchParams(location.search).get('t')||''})}).catch(function(e){console.warn('[academy-grant]',e&&e.message);});
-      }catch(e){}
-    } else {
-      /* ⚠ Ce document webhook_inbox n'envoie PLUS rien (Cloud Function
-         redeployee sans ses handlers signature) : le 2e signataire n'etait
-         JAMAIS prevenu. Garde comme trace ; l'envoi reel est juste en dessous. */
-      await db.collection('webhook_inbox').add({
-        action:'signature_resend',
-        signatureRequestId:REQ_ID,
-        targetSignerIndex:CURRENT_SIGNER_IDX+1,
-        createdAt:firebase.firestore.FieldValue.serverTimestamp()
-      });
-      /* Le token du lien courant prouve qu'on est bien sur ce dossier : c'est
-         la porte d'entree publique de l'endpoint (le signataire n'a pas de
-         compte). Fire-and-forget : la signature du 1er est deja enregistree,
-         elle ne doit pas dependre de la notification du 2e. */
-      try{
-        fetch('/api/signature-send-link',{
-          method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({
-            requestId:REQ_ID,
-            signerIndex:CURRENT_SIGNER_IDX+1,
-            token:new URLSearchParams(location.search).get('t')||''
-          })
-        }).catch(function(e){console.warn('[lien signataire 2]',e&&e.message);});
-      }catch(e){}
-    }
-
-    goToStep(3);
-
-    /* La copie signee, par email — APRES goToStep(3), et ce n'est pas un
-       detail : goToStep(3) fait getElementById('doneEmail').textContent sans
-       garde, or #doneEmail vit DANS le #doneSub que majCopie() remplace.
-       Lancer l'envoi avant rendrait l'ecran de fin dependant du hasard
-       d'ordonnancement du reseau.
-       On n'attend pas la reponse : la signature est deja enregistree, elle ne
-       doit pas dependre d'un mail. Mais on ecoute — si l'envoi echoue, on le
-       DIT, au lieu de promettre un email qui n'arrivera jamais. */
-    if(isFinalSignature)envoyerCopieSignee();
-  }catch(e){btn.disabled=false;btn.textContent='✍️ Signer le contrat';alert('Erreur: '+e.message);console.error(e);}
-}
-/* Copie du contrat signe. Le message de l'ecran de fin dit la verite :
-   « envoye » seulement quand il l'est vraiment. */
-function envoyerCopieSignee(){
-  var t=new URLSearchParams(location.search).get('t')||'';
-  fetch('/api/signature-completed',{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({requestId:REQ_ID,token:t})
-  }).then(function(r){return r.json().catch(function(){return {};});})
-  .then(function(j){
-    if(j&&j.ok){majCopie(true,j.sentTo||'');return;}
-    console.error('[copie signee] echec',j);
-    majCopie(false,'');
-  }).catch(function(e){
-    console.error('[copie signee] reseau',e&&e.message);
-    majCopie(false,'');
-  });
-}
-function majCopie(ok,adresse){
-  var el=document.getElementById('doneSub');
-  if(!el)return;
-  if(ok){
-    el.innerHTML='Une copie du contrat signe vient d\'etre envoyee a <strong>'
-      +esc(adresse||'votre adresse')+'</strong>.';
-  }else{
-    el.innerHTML='<strong>Votre signature est bien enregistree.</strong><br>'
-      +'En revanche, l\'envoi de la copie par email n\'a pas abouti. '
-      +'Demandez-la a votre conseiller — il peut vous la renvoyer.';
-  }
-}
-
-function saveChunks(b64){
-  var cs=600000,ch=[];for(var i=0;i<b64.length;i+=cs)ch.push(b64.slice(i,i+cs));
-  var batch=db.batch();
-  ch.forEach(function(c,i){batch.set(db.collection('signature_requests').doc(REQ_ID).collection('signed_pdf').doc('chunk_'+String(i).padStart(3,'0')),{chunk:i,data:c});});
-  return batch.commit();
-}
-
-/* ═══ PDF GEN (pdf-lib) ═══ */
-/* Découpe un texte en lignes qui tiennent dans maxW, à la taille donnée.
-   Respecte les retours à la ligne saisis par le signataire, et coupe les mots
-   plus larges que la boîte (URL, référence sans espace) plutôt que de les
-   laisser déborder de la page. */
-function wrapPdfText(text,font,size,maxW){
-  var out=[];
-  String(text).split(/\r?\n/).forEach(function(para){
-    var words=para.split(/\s+/).filter(function(w){return w.length;});
-    if(!words.length){out.push('');return;}
-    var line='';
-    words.forEach(function(w){
-      while(font.widthOfTextAtSize(w,size)>maxW&&w.length>1){
-        var cut=w.length;
-        while(cut>1&&font.widthOfTextAtSize(w.slice(0,cut),size)>maxW)cut--;
-        if(line){out.push(line);line='';}
-        out.push(w.slice(0,cut));
-        w=w.slice(cut);
-      }
-      var test=line?line+' '+w:w;
-      if(font.widthOfTextAtSize(test,size)<=maxW)line=test;
-      else{if(line)out.push(line);line=w;}
+      if(inUl)h+='</ul>';
+      h+='</section>';
+      toc+='<li><a href="#sec_'+si+'" data-si="'+si+'"><span class="dot"></span>'+esc(sec.title)+'</a></li>';
     });
-    out.push(line);
+    $('doc').innerHTML=h;$('tocList').innerHTML=toc;
+    S.read.total=W.sections.length;
+    $('tocCount').textContent='('+W.sections.length+' articles)';
+  }else{
+    hide('toc');$('pdfBtn').style.display='none';
+    $('doc').innerHTML='<div class="loading"><span class="spin"></span> Chargement du document…</div>';
+    S.read.total=C.pages||1;
+    api('pdf').then(function(o){
+      if(!o.ok){$('doc').innerHTML='<p class="note note-r">'+esc(o.j.error||'Document indisponible.')+'</p>';return;}
+      renderPdfInto($('doc'),o.j.pdf,true);
+    });
+  }
+  updateReadBar();
+}
+function markSeen(si,title){
+  if(S.read.seen[si])return;
+  S.read.seen[si]=1;S.read.count++;
+  var sec=$('sec_'+si);if(sec)sec.classList.add('vu');
+  var a=document.querySelector('#tocList a[data-si="'+si+'"]');if(a)a.classList.add('vu');
+  track('section_vue',{id:String(si),titre:title||''},'sec'+si);
+  updateReadBar();
+}
+function updateReadBar(){
+  var t=S.read.total||1,c=Math.min(S.read.count,t);
+  $('readFill').style.width=Math.round(100*c/t)+'%';
+  $('readTxt').textContent=S.content&&S.content.mode==='pdf'?('Pages lues : '+c+' / '+t):('Articles lus : '+c+' / '+t);
+  refreshBar();
+}
+/* Un article compte comme lu quand il a été affiché à l'écran au moins une
+   seconde (ou entièrement, s'il est court). On ne mesure pas la « vraie »
+   lecture — personne ne le peut — mais on trace honnêtement ce qui a été
+   affiché, et combien de temps. */
+function observeRead(){
+  var timers={};
+  function check(el,visible){
+    var si=el.getAttribute('data-si');if(si==null)return;
+    if(visible){if(!timers[si])timers[si]=setTimeout(function(){markSeen(+si,el.getAttribute('data-title')||(el.querySelector('.sec-t span:last-child')||{}).textContent);},1000);}
+    else{clearTimeout(timers[si]);timers[si]=null;}
+  }
+  function endSeen(){if(!S.read.end){S.read.end=true;refreshBar();}}
+  var secs=document.querySelectorAll('#doc [data-si]');
+  if('IntersectionObserver' in window){
+    var io=new IntersectionObserver(function(en){en.forEach(function(e){check(e.target,e.isIntersecting);});},{threshold:[0,.35],rootMargin:'0px 0px -20% 0px'});
+    for(var i=0;i<secs.length;i++)io.observe(secs[i]);
+    S._io=io;
+    var io2=new IntersectionObserver(function(en){en.forEach(function(e){if(e.isIntersecting)endSeen();});});
+    io2.observe($('endmark'));
+  }else{
+    var onScroll=function(){
+      var vh=window.innerHeight;
+      var all=document.querySelectorAll('#doc [data-si]');
+      for(var j=0;j<all.length;j++){var r=all[j].getBoundingClientRect();check(all[j],r.top<vh*.8&&r.bottom>0);}
+      var e=$('endmark').getBoundingClientRect();if(e.top<vh)endSeen();
+    };
+    window.addEventListener('scroll',onScroll,{passive:true});onScroll();
+  }
+}
+function fmtDur(ms){var s=Math.round(ms/1000),m=Math.floor(s/60);return (m?m+' min ':'')+(s%60)+' s';}
+
+/* Rendu PDF (lecture en mode PDF, document original, aperçu rempli). */
+function renderPdfInto(container,b64,trackPages){
+  if(!window.pdfjsLib){container.innerHTML='<p class="note note-r">Lecteur PDF indisponible sur ce navigateur.</p>';return Promise.resolve();}
+  var raw=atob(b64),bytes=new Uint8Array(raw.length);for(var i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);
+  container.innerHTML='';
+  return pdfjsLib.getDocument({data:bytes}).promise.then(function(pdf){
+    var chain=Promise.resolve();
+    var w=Math.min(container.clientWidth||700,900);
+    for(var p=1;p<=pdf.numPages;p++){(function(pn){
+      chain=chain.then(function(){return pdf.getPage(pn).then(function(page){
+        var vp1=page.getViewport({scale:1}),sc=w/vp1.width,vp=page.getViewport({scale:sc}),dpr=Math.min(window.devicePixelRatio||1,2);
+        var c=document.createElement('canvas');c.className='pdfpage';c.width=vp.width*dpr;c.height=vp.height*dpr;c.style.width=vp.width+'px';
+        if(trackPages){c.setAttribute('data-si',pn-1);c.setAttribute('data-title','Page '+pn);}
+        container.appendChild(c);
+        var ctx=c.getContext('2d');ctx.scale(dpr,dpr);
+        return page.render({canvasContext:ctx,viewport:vp}).promise;
+      });});
+    })(p);}
+    return chain.then(function(){if(trackPages)observeRead();});
   });
-  return out;
 }
 
-/* Appose un texte libre dans sa zone. On cherche la plus grande taille, de
-   TL_FONT_PT jusqu'à 6 pt, dont le texte découpé tient dans la hauteur. Si
-   même 6 pt déborde, on écrit ce qui rentre et on marque la coupure par « … » —
-   jamais de texte qui déborde par-dessus le contrat. */
-function drawFreeText(pg,P,font,v,px,py,pw,pfh){
-  var maxW=Math.max(4,pw-4),size=TL_FONT_PT,lh=size*1.25,lines=wrapPdfText(v,font,size,maxW);
-  while(size>6&&lines.length*lh>pfh-2){
-    size-=0.5;lh=size*1.25;
-    lines=wrapPdfText(v,font,size,maxW);
+/* ═══ FORMULAIRE ═══ */
+function buildForm(){
+  var F=S.content.form;
+  $('txtPouvoir').textContent=F.declarations.pouvoir;
+  $('txtEsign').textContent=F.declarations.esign;
+  var q='<option value="">Choisissez…</option>';
+  F.qualites.forEach(function(x){q+='<option>'+esc(x)+'</option>';});
+  q+='<option value="Autre">Autre…</option>';
+  $('rQual').innerHTML=q;
+  $('todayEx').textContent=S.content.today;
+  if(!F.needsCompany){
+    S.co=F.company;
+    $('coCard').innerHTML='<div class="h2">La société</div><p class="sub">Renseignée par le premier signataire.</p>'+companyCard(F.company);
   }
-  var maxLines=Math.max(1,Math.floor((pfh-2)/lh));
-  if(lines.length>maxLines){
-    lines=lines.slice(0,maxLines);
-    lines[maxLines-1]=String(lines[maxLines-1]).replace(/.$/,'')+'…';
+  /* Cases à cocher */
+  if(F.checks.length){
+    var h='';
+    F.checks.forEach(function(c){
+      S.checks[c.id]=false;
+      h+='<label class="chk" data-chk="c:'+esc(c.id)+'"><span class="chk-box"><svg viewBox="0 0 20 20" fill="none"><path d="M4 10.5l4 4 8-9" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>'
+        +'<span><span class="chk-t">'+esc(c.label)+'</span>'+(c.help?'<br/><span class="help">'+esc(c.help)+'</span>':'')+'<br/><span class="chk-tag '+(c.required?'tag-req">Obligatoire':'tag-opt">Facultatif — à cocher seulement si vous le souhaitez')+'</span></span></label>';
+    });
+    $('checksList').innerHTML=h;show('checksCard');
   }
-  /* Première ligne calée en haut de la zone, comme dans le champ à l'écran. */
-  var ty=py+pfh-lh;
-  for(var i=0;i<lines.length;i++){
-    if(lines[i])pg.drawText(lines[i],{x:px+2,y:ty,size:size,font:font,color:P.rgb(0,0,0)});
-    ty-=lh;
+  /* Textes */
+  if(F.texts.length){
+    var t='';
+    F.texts.forEach(function(x){
+      if(x.locked){t+='<div class="co" style="margin-top:10px"><div class="co-row"><span class="co-k">'+esc(x.label)+'</span><span class="co-v">'+(x.value?esc(x.value):'—')+'</span></div><div class="help">'+esc(x.help||'Renseigné par votre conseiller.')+'</div></div>';}
+      else t+='<label class="lbl" for="tx_'+esc(x.id)+'">'+esc(x.label)+(x.required?'':' <small>(facultatif)</small>')+'</label><textarea class="inp" rows="2" id="tx_'+esc(x.id)+'" data-tx="'+esc(x.id)+'" maxlength="'+(x.maxLength||500)+'"></textarea>'+(x.help?'<div class="help">'+esc(x.help)+'</div>':'');
+    });
+    $('textsList').innerHTML=t;show('textsCard');
+  }
+  if(F.paraphe){show('parBox');try{if(document.fonts&&document.fonts.load)document.fonts.load('700 84px "Dancing Script"');}catch(e){}}
+  /* Brouillon */
+  var D=loadDraft();
+  if(D&&F.needsCompany){
+    if(D.co){S.co=D.co;S.coManual=!!D.coManual;}
+    if(D.coManual){S.coManual=true;}
+    $('mName').value=(D.m&&D.m.n)||'';$('mForm').value=(D.m&&D.m.fo)||'';$('mSiret').value=(D.m&&D.m.s)||'';
+    if(D.a){$('aL1').value=D.a.l1||'';$('aL2').value=D.a.l2||'';$('aCp').value=D.a.cp||'';$('aCity').value=D.a.c||'';}
+    renderCompany();
+  }
+  if(D){$('rFirst').value=D.f||'';$('rLast').value=D.l||'';$('rQual').value=D.q||'';$('rQualAutre').value=D.qa||'';show('rQualAutre',$('rQual').value==='Autre');}
+  if(!$('rFirst').value&&!$('rLast').value&&S.content.signer.name){
+    /* Suggestion seulement : le nom de l'invitation, que la personne vérifie. */
+    $('rFirst').placeholder=S.content.signer.name.split(' ')[0]||'';
+    $('rLast').placeholder=S.content.signer.name.split(' ').slice(1).join(' ')||'';
   }
 }
 
-async function genPdf(){
-  var P=window.PDFLib,doc=await P.PDFDocument.load(pdfBytes);
-  var font=await doc.embedFont(P.StandardFonts.Helvetica);
-  var fontB=await doc.embedFont(P.StandardFonts.HelveticaBold);
-  var pages=doc.getPages(),fields=REQ.fields||[];
-  var myRole=IS_COSIGNER?2:1;
+/* ═══ ÉTAPE 3 — SOCIÉTÉ ═══ */
+function addrLine(a){if(!a)return '';var l1=[a.line1,a.line2].filter(Boolean).join(', ');var l2=[a.postalCode,a.city].filter(Boolean).join(' ');return [l1,l2].filter(Boolean).join(', ');}
+function fmtSiret(s){s=String(s||'');return s.length===14?s.slice(0,3)+' '+s.slice(3,6)+' '+s.slice(6,9)+' '+s.slice(9):s;}
+function coSearch(){
+  var q=$('coQ').value.trim();
+  hide('coErr');
+  if(q.replace(/\s/g,'').length<3){$('coErr').textContent='Saisissez au moins 3 caractères.';show('coErr');return;}
+  var b=$('coBtn');b.disabled=true;b.innerHTML='<span class="spin w"></span>';
+  api('company',{q:q}).then(function(o){
+    b.disabled=false;b.textContent='Rechercher';
+    if(!o.ok){$('coErr').textContent=o.j.error||'Recherche impossible.';show('coErr');return;}
+    S.coResults=o.j.results||[];
+    if(!S.coResults.length){$('coResults').innerHTML='<div class="note note-a">Aucune entreprise trouvée. Vérifiez le numéro, ou utilisez « Je ne trouve pas ma société ».</div>';return;}
+    var h='';
+    S.coResults.forEach(function(r,i){
+      h+='<button type="button" class="res" data-action="co-pick" data-i="'+i+'"><div class="res-n">'+esc(r.name)+(r.closed?'<span class="badge b-r">RADIÉE</span>':'')+'</div>'
+        +'<div class="res-m">'+esc(r.legalFormLabel||'')+' · SIRET '+esc(fmtSiret(r.siret))+'</div><div class="res-m">'+esc(r.addressHidden?'Adresse non diffusée':addrLine(r.address))+'</div></button>';
+    });
+    $('coResults').innerHTML=h;
+  }).catch(function(){b.disabled=false;b.textContent='Rechercher';$('coErr').textContent='Connexion indisponible.';show('coErr');});
+}
+function coPick(i){
+  var r=S.coResults[i];if(!r)return;
+  S.co=r;S.coManual=false;
+  if(r.addressHidden){$('aL1').value='';$('aL2').value='';$('aCp').value='';$('aCity').value='';}
+  track('entreprise_selectionnee',{nom:r.name,siret:r.siret,radiee:!!r.closed});
+  renderCompany();saveDraft();
+}
+function companyCard(c){
+  if(!c)return '';
+  return '<div class="co">'
+    +'<div class="co-row"><span class="co-k">Raison sociale</span><span class="co-v">'+esc(c.name)+(c.closed?' <span class="badge b-r">RADIÉE</span>':' <span class="badge b-g">Active</span>')+'</span></div>'
+    +'<div class="co-row"><span class="co-k">Forme juridique</span><span class="co-v">'+esc(c.legalFormLabel||'—')+'</span></div>'
+    +'<div class="co-row"><span class="co-k">SIRET</span><span class="co-v">'+esc(fmtSiret(c.siret))+'</span></div>'
+    +(c.vatNumber?'<div class="co-row"><span class="co-k">N° TVA</span><span class="co-v">'+esc(c.vatNumber)+'</span></div>':'')
+    +'<div class="co-row"><span class="co-k">Siège social</span><span class="co-v">'+esc(c.addressHidden?'à saisir ci-dessous':(c.addressLine||addrLine(c.address)))+'</span></div>'
+    +'</div>';
+}
+function renderCompany(){
+  if(S.coManual){hide('coSearchBox');hide('coSelected');show('coManual');show('coAddr');hide('coAddrNote');
+    $('coSelected').innerHTML='';refreshBar();return;}
+  hide('coManual');
+  if(!S.co){show('coSearchBox');hide('coSelected');hide('coAddr');refreshBar();return;}
+  hide('coSearchBox');show('coSelected');
+  var h=companyCard(S.co);
+  if(S.co.closed)h+='<div class="note note-r">Cette entreprise est indiquée comme <strong>radiée</strong> au registre : le contrat ne peut pas être signé en son nom. Contactez votre conseiller.</div>';
+  h+='<div style="margin-top:8px"><button class="btn btn-l" data-action="co-change">Changer de société</button></div>';
+  $('coSelected').innerHTML=h;
+  show('coAddr',!!S.co.addressHidden);show('coAddrNote');
+  /* Dirigeants publiés : un raccourci pour se désigner, rien de plus. */
+  var d=(S.co.dirigeants||[]),dh='';
+  if(d.length){dh='<div class="help" style="margin-top:0">Dirigeants publiés au registre — touchez votre nom pour le reprendre :</div><div class="chips">';
+    d.forEach(function(x,k){dh+='<button type="button" class="chip" data-action="dir-pick" data-k="'+k+'">'+esc((x.prenoms||'').split(' ')[0]+' '+x.nom)+' · '+esc(x.qualite||'')+'</button>';});dh+='</div>';}
+  $('dirChips').innerHTML=dh;
+  refreshBar();
+}
+function currentCompany(){
+  if(!S.content)return null;
+  if(!S.content.form.needsCompany)return S.content.form.company;
+  if(S.coManual)return {name:val('mName').trim(),legalFormLabel:$('mForm').value.trim(),siret:$('mSiret').value.replace(/\D/g,''),address:{line1:$('aL1').value.trim(),line2:$('aL2').value.trim(),postalCode:$('aCp').value.trim(),city:$('aCity').value.trim()}};
+  if(!S.co)return null;
+  var c=JSON.parse(JSON.stringify(S.co));
+  if(c.addressHidden)c.address={line1:$('aL1').value.trim(),line2:$('aL2').value.trim(),postalCode:$('aCp').value.trim(),city:$('aCity').value.trim()};
+  return c;
+}
+function luhn(d){var s=0;for(var i=0;i<d.length;i++){var n=+d.charAt(d.length-1-i);if(i%2){n*=2;if(n>9)n-=9;}s+=n;}return s%10===0;}
+function siretOk(s){s=String(s||'').replace(/\D/g,'');if(s.length!==14)return false;if(s.slice(0,9)==='356000000'){var t=0;for(var i=0;i<14;i++)t+=+s.charAt(i);return t%5===0;}return luhn(s)&&luhn(s.slice(0,9));}
+function qualite(){var q=$('rQual').value;return q==='Autre'?$('rQualAutre').value.trim():q;}
 
-  // Signatures & paraphes du signataire courant
-  var sigImg=sigText?await makeSigPng(doc,sigText,32):null;
-  var parImg=parapheText?await makeSigPng(doc,parapheText,20):null;
-
-  // Si je suis le signataire 2 → charger aussi les contribs du signataire 1
-  // (déjà sauvegardées dans REQ.signer1* lors de sa signature intermédiaire)
-  var prevSig=null,prevPar=null,prevFieldValues={};
-  if(IS_COSIGNER){
-    var prevSigText=REQ.signer1SignatureText||(PREV_SIGNER_DATA&&PREV_SIGNER_DATA.signatureText)||'';
-    var prevParText=REQ.signer1ParapheText||(PREV_SIGNER_DATA&&PREV_SIGNER_DATA.parapheText)||'';
-    if(prevSigText)prevSig=await makeSigPng(doc,prevSigText,32);
-    if(prevParText)prevPar=await makeSigPng(doc,prevParText,20);
-    prevFieldValues=REQ.signer1FieldValues||(PREV_SIGNER_DATA&&PREV_SIGNER_DATA.fieldsCompleted)||{};
+/* ═══ VALIDATION PAR ÉTAPE ═══
+   Le serveur revalide TOUT. Ici, on guide : le bouton dit ce qui manque. */
+function missing(step){
+  var m=[];
+  if(step===2){
+    if(S.read.count<S.read.total)m.push('Faites défiler tout le contrat ('+S.read.count+'/'+S.read.total+')');
+    else if(!S.read.end)m.push('Allez jusqu\'en bas du contrat');
   }
-
-  fields.forEach(function(f){
-    var pi=f.page-1;if(pi<0||pi>=pages.length)return;
-    var pg=pages[pi],ph=pg.getHeight();
-    var px=f.x/tplScale,py=ph-f.y/tplScale-f.h/tplScale,pw=f.w/tplScale,pfh=f.h/tplScale;
-    var fRole=f.signerRole===2?2:1;
-    var isMine=(fRole===myRole);
-    var fkey=fieldKey(f);
-
-    // Champs du signataire courant : écrits avec ses données
-    if(isMine){
-      if(f.fieldType==='signature'&&sigImg)pg.drawImage(sigImg,{x:px,y:py,width:pw,height:pfh});
-      else if(f.fieldType==='paraphe'&&parImg)pg.drawImage(parImg,{x:px,y:py,width:pw,height:pfh});
-      else if(f.fieldType==='case_cocher'||f.fieldType==='lu_approuve'){
-        if(fieldValues[fkey])pg.drawText('X',{x:px+pw*.3,y:py+pfh*.15,size:Math.min(pfh*.8,14),font:fontB,color:P.rgb(0,0,0)});
-      }else if(f.fieldType==='texte_libre'){
-        var tv=fieldValues[fkey]||'';if(!tv)return;
-        drawFreeText(pg,P,font,tv,px,py,pw,pfh);
-      }else{
-        var v=fieldValues[fkey]||'';if(!v)return;
-        pg.drawText(v,{x:px+2,y:py+pfh*.25,size:Math.min(pfh*.65,11),font:font,color:P.rgb(0,0,0)});
+  if(step===3){
+    var c=currentCompany();
+    if(S.content.form.needsCompany){
+      if(!c)m.push('Recherchez votre société');
+      else{
+        if(c.closed)m.push('Entreprise radiée');
+        if(S.coManual){if(!c.name)m.push('Raison sociale');if(!c.legalFormLabel)m.push('Forme juridique');if(!siretOk(c.siret))m.push('SIRET valide');}
+        if(!c.address||!c.address.line1||!/^\d{5}$/.test(c.address.postalCode||'')||!c.address.city)m.push('Adresse du siège');
       }
+    }
+    if($('rFirst').value.trim().length<2)m.push('Prénom');
+    if($('rLast').value.trim().length<2)m.push('Nom');
+    if(qualite().length<3)m.push('Qualité');
+    if(!S.decl.pouvoir)m.push('Certification d\'habilitation');
+  }
+  if(step===4){
+    S.content.form.checks.forEach(function(c){if(c.required&&!S.checks[c.id])m.push('Case obligatoire à cocher');});
+    S.content.form.texts.forEach(function(x){if(!x.locked&&x.required&&!($('tx_'+x.id)||{}).value)m.push(x.label);});
+    if($('mDate').value!==S.content.today)m.push('Date du jour');
+    if(fold($('mLu').value)!=='lu et approuve')m.push('« Lu et approuvé »');
+    if(S.content.form.paraphe&&!/^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\- ]{0,11}$/.test($('mPar').value.trim()))m.push('Paraphe');
+  }
+  if(step===5){
+    if(S.pad.points<20)m.push('Votre signature');
+    if(fold($('sigName').value)!==fold(repFull()))m.push('Nom sous la signature');
+    if(!S.decl.esign)m.push('Accord de signature électronique');
+  }
+  return m;
+}
+function repFull(){return ($('rFirst').value.trim()+' '+$('rLast').value.trim()).trim();}
+function refreshBar(){
+  if(!S.content||S.step<2)return;
+  var m=missing(S.step),n=$('nextBtn');
+  n.disabled=m.length>0;
+  n.className='btn '+(S.step===5?'btn-g':'btn-p');
+  n.textContent=S.step===2?'J\'ai lu le contrat →':(S.step===5?'✍️ Signer le contrat':'Continuer →');
+  $('barHint').textContent=m.length?('À compléter : '+m.slice(0,3).join(', ')+(m.length>3?'…':'')):(S.step===5?'Tout est prêt.':'');
+}
+function next(){
+  var m=missing(S.step);if(m.length)return;
+  if(S.step===2){
+    if(!S.read.done){S.read.done=true;track('lecture_terminee',{vues:S.read.count,total:S.read.total,duree:fmtDur(Date.now()-S.read.startedAt)});}
+    flush();go(3);return;
+  }
+  if(S.step===3){
+    track('representant_saisi',{nom:repFull(),qualite:qualite()},'rep:'+repFull()+qualite());
+    if(S.coManual){var c=currentCompany();track('entreprise_manuelle',{nom:c.name,siret:c.siret},'man:'+c.siret);}
+    saveDraft();refreshPlaceholders();go(4);return;
+  }
+  if(S.step===4){
+    track('mention_saisie',{nom:'date',valeur:$('mDate').value},'d:'+$('mDate').value);
+    track('mention_saisie',{nom:'lu_approuve',valeur:$('mLu').value.trim()},'l:'+$('mLu').value.trim());
+    if(S.content.form.paraphe)track('paraphe_saisi',{valeur:$('mPar').value.trim()},'p:'+$('mPar').value.trim());
+    S.content.form.texts.forEach(function(x){var e=$('tx_'+x.id);if(e&&e.value.trim())track('champ_rempli',{id:x.id,libelle:x.label,valeur:e.value.trim().slice(0,150)},'t:'+x.id+e.value);});
+    buildRecap();go(5);return;
+  }
+  if(S.step===5){submit();}
+}
+function back(){if(S.step>2)go(S.step-1);}
+function refreshPlaceholders(){
+  var ps=document.querySelectorAll('[data-ph]');
+  for(var i=0;i<ps.length;i++){var k=ps[i].getAttribute('data-ph');if(k==='date')continue;var v=phValue(k);if(v){ps[i].textContent=v;ps[i].className='ph ok';}}
+}
+
+/* ═══ ÉTAPE 4 — MENTIONS ═══ */
+$('mDate').addEventListener('input',function(){
+  var d=this.value.replace(/\D/g,'').slice(0,8),o=d;
+  if(d.length>4)o=d.slice(0,2)+'/'+d.slice(2,4)+'/'+d.slice(4);else if(d.length>2)o=d.slice(0,2)+'/'+d.slice(2);
+  this.value=o;
+  var ok=o===S.content.today;this.className='inp hand small'+(o.length===10?(ok?' ok':' bad'):'');
+  var e=$('mDateErr');if(o.length===10&&!ok){e.textContent='La date doit être celle d\'aujourd\'hui : '+S.content.today;show('mDateErr');}else hide('mDateErr');
+  refreshBar();
+});
+$('mLu').addEventListener('input',function(){
+  var v=fold(this.value),ok=v==='lu et approuve';
+  this.className='inp hand'+(this.value.length>=10?(ok?' ok':' bad'):'');
+  var e=$('mLuErr');if(this.value.length>=14&&!ok){e.textContent='Recopiez exactement : Lu et approuvé';show('mLuErr');}else hide('mLuErr');
+  refreshBar();
+});
+$('mPar').addEventListener('input',function(){$('parPrev').textContent=this.value.trim();refreshBar();});
+
+/* ═══ ÉTAPE 5 — SIGNATURE ═══ */
+var pad=null,pctx=null,drawing=false,last=null;
+function padSize(){
+  pad=$('pad');if(!pad)return;
+  var r=pad.getBoundingClientRect(),dpr=Math.max(window.devicePixelRatio||1,2);
+  if(pad.width===Math.round(r.width*dpr))return;
+  pad.width=Math.round(r.width*dpr);pad.height=Math.round(r.height*dpr);
+  pctx=pad.getContext('2d');pctx.scale(dpr,dpr);
+  pctx.lineCap='round';pctx.lineJoin='round';pctx.strokeStyle='#0f172a';pctx.lineWidth=2.4;
+  padReset(true);
+}
+function padReset(silent){
+  if(!pctx)return;
+  pctx.clearRect(0,0,pad.width,pad.height);
+  var had=S.pad.points>0;
+  S.pad={strokes:0,points:0,t0:0,t1:0,minX:1e9,minY:1e9,maxX:-1e9,maxY:-1e9};
+  show('padPh');$('padWrap').classList.remove('ok');
+  if(!silent&&had)track('signature_effacee',null);
+  refreshBar();
+}
+function ptOf(e){var r=pad.getBoundingClientRect();var t=e.touches?e.touches[0]:e;return {x:t.clientX-r.left,y:t.clientY-r.top};}
+function padDown(e){
+  if(!pctx)padSize();
+  e.preventDefault();drawing=true;last=ptOf(e);
+  S.pad.strokes++;if(!S.pad.t0)S.pad.t0=Date.now();
+  pctx.beginPath();pctx.arc(last.x,last.y,1.1,0,Math.PI*2);pctx.fillStyle='#0f172a';pctx.fill();
+  hide('padPh');
+}
+function padMove(e){
+  if(!drawing)return;e.preventDefault();
+  var p=ptOf(e);
+  pctx.beginPath();pctx.moveTo(last.x,last.y);pctx.lineTo(p.x,p.y);pctx.stroke();
+  last=p;S.pad.points++;S.pad.t1=Date.now();
+  if(p.x<S.pad.minX)S.pad.minX=p.x;if(p.y<S.pad.minY)S.pad.minY=p.y;if(p.x>S.pad.maxX)S.pad.maxX=p.x;if(p.y>S.pad.maxY)S.pad.maxY=p.y;
+}
+function padUp(){
+  if(!drawing)return;drawing=false;
+  if(S.pad.points>=20){$('padWrap').classList.add('ok');}
+  track('signature_tracee',{traits:S.pad.strokes,points:S.pad.points});
+  refreshBar();
+}
+(function(){
+  var c=$('pad');
+  if(window.PointerEvent){
+    c.addEventListener('pointerdown',function(e){try{c.setPointerCapture(e.pointerId);}catch(x){}padDown(e);});
+    c.addEventListener('pointermove',padMove);c.addEventListener('pointerup',padUp);c.addEventListener('pointercancel',padUp);
+  }else{
+    c.addEventListener('touchstart',padDown,{passive:false});c.addEventListener('touchmove',padMove,{passive:false});c.addEventListener('touchend',padUp);
+    c.addEventListener('mousedown',padDown);window.addEventListener('mousemove',padMove);window.addEventListener('mouseup',padUp);
+  }
+  window.addEventListener('resize',function(){if(S.step===5&&S.pad.points===0){pad.width=0;padSize();}});
+})();
+/* La signature est recadrée sur le tracé (marge comprise) avant envoi : elle
+   remplit ainsi proprement la zone prévue sur le contrat. */
+function padPng(){
+  var dpr=pad.width/pad.getBoundingClientRect().width,m=10;
+  var x=Math.max(0,(S.pad.minX-m)*dpr),y=Math.max(0,(S.pad.minY-m)*dpr);
+  var w=Math.min(pad.width-x,(S.pad.maxX-S.pad.minX+2*m)*dpr),h=Math.min(pad.height-y,(S.pad.maxY-S.pad.minY+2*m)*dpr);
+  if(w<20||h<20){x=0;y=0;w=pad.width;h=pad.height;}
+  var c=document.createElement('canvas');c.width=Math.round(w);c.height=Math.round(h);
+  c.getContext('2d').drawImage(pad,x,y,w,h,0,0,c.width,c.height);
+  return c.toDataURL('image/png');
+}
+/* Le paraphe : les initiales saisies, écrites dans une police manuscrite. */
+function parPng(){
+  var t=$('mPar').value.trim();if(!t)return '';
+  var c=document.createElement('canvas');c.width=360;c.height=140;
+  var x=c.getContext('2d');x.font='700 84px "Dancing Script", cursive';x.fillStyle='#0f172a';x.textAlign='center';x.textBaseline='middle';
+  var w=x.measureText(t).width;if(w>330){x.font='700 '+Math.floor(84*330/w)+'px "Dancing Script", cursive';}
+  x.fillText(t,180,72);
+  return c.toDataURL('image/png');
+}
+
+function formPayload(withSig){
+  var c=currentCompany()||{};
+  var texts={};S.content.form.texts.forEach(function(x){var e=$('tx_'+x.id);if(e)texts[x.id]=e.value.trim();});
+  var p={
+    company:S.content.form.needsCompany?{siren:c.siren||'',siret:c.siret||'',name:c.name||'',legalFormLabel:c.legalFormLabel||'',address:c.address||{}}:null,
+    representative:{firstName:$('rFirst').value.trim(),lastName:$('rLast').value.trim(),qualite:$('rQual').value,qualiteAutre:$('rQualAutre').value.trim()},
+    declarations:{pouvoir:S.decl.pouvoir,esign:S.decl.esign},
+    checks:S.checks,texts:texts,
+    date:$('mDate').value,luApprouve:$('mLu').value.trim(),
+    paraphe:$('mPar').value.trim(),paraphePng:S.content.form.paraphe?parPng():''
+  };
+  if(withSig&&S.pad.points>0)p.signature={png:padPng(),strokes:S.pad.strokes,points:S.pad.points,durationMs:(S.pad.t1-S.pad.t0)||0,name:$('sigName').value.trim()};
+  else p.signature={name:$('sigName').value.trim()};
+  return p;
+}
+function buildRecap(){
+  var c=currentCompany()||{},h='';
+  function row(k,v){h+='<div class="co-row"><span class="co-k">'+esc(k)+'</span><span class="co-v">'+esc(v||'—')+'</span></div>';}
+  row('Contrat',S.content.templateName);
+  row('Société',c.name);row('SIRET',fmtSiret(c.siret));row('Siège social',c.addressLine||addrLine(c.address));
+  row('Représentant',repFull()+(qualite()?', '+qualite():''));
+  S.content.form.checks.forEach(function(x){row(S.checks[x.id]?'☑ Coché':'☐ Non coché',x.label);});
+  S.content.form.texts.forEach(function(x){var e=$('tx_'+x.id);row(x.label,x.locked?x.value:(e&&e.value));});
+  row('Date',$('mDate').value);row('Mention',$('mLu').value.trim());
+  if(S.content.form.paraphe)row('Paraphe',$('mPar').value.trim());
+  $('recap').innerHTML=h;
+  if(!$('sigName').value)$('sigName').placeholder=repFull();
+}
+function preview(){
+  var b=$('pvBtn');b.disabled=true;b.innerHTML='<span class="spin"></span> Préparation de l\'aperçu…';
+  api('preview',{form:formPayload(true)}).then(function(o){
+    b.disabled=false;b.textContent='👁 Voir le contrat rempli (aperçu PDF)';
+    if(!o.ok){alert(o.j.error||'Aperçu indisponible.');return;}
+    openPdfModal('Aperçu du contrat rempli — non signé',o.j.pdf);
+  }).catch(function(){b.disabled=false;b.textContent='👁 Voir le contrat rempli (aperçu PDF)';alert('Connexion indisponible.');});
+}
+function submit(){
+  var n=$('nextBtn');n.disabled=true;n.innerHTML='<span class="spin w"></span> Signature et scellement…';
+  hide('submitErr');
+  flush().then(function(){return api('submit',{form:formPayload(true)});}).then(function(o){
+    if(!o.ok){
+      n.disabled=false;refreshBar();
+      var d=o.j.details||[];var e=$('submitErr');
+      e.innerHTML='<strong>'+esc(o.j.error||'La signature n\'a pas abouti.')+'</strong>'+(d.length?'<ul>'+d.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>':'');
+      show('submitErr');e.scrollIntoView({behavior:'smooth',block:'center'});
+      if(o.j.stage==='signed'){view('vSigned');hide('bar');}
       return;
     }
-
-    // Champs de l'autre signataire :
-    //   - Si je suis le signataire 2 → les champs du 1 ont déjà leur valeur
-    //     et je dois les apposer sur le PDF final.
-    //   - Si je suis le signataire 1 → ne rien écrire pour les champs du 2
-    //     (ils seront ajoutés par le 2e lors de sa signature).
-    if(!IS_COSIGNER)return;
-
-    if(f.fieldType==='signature'&&prevSig)pg.drawImage(prevSig,{x:px,y:py,width:pw,height:pfh});
-    else if(f.fieldType==='paraphe'&&prevPar)pg.drawImage(prevPar,{x:px,y:py,width:pw,height:pfh});
-    else if(f.fieldType==='case_cocher'||f.fieldType==='lu_approuve'){
-      if(prevFieldValues[fkey])pg.drawText('X',{x:px+pw*.3,y:py+pfh*.15,size:Math.min(pfh*.8,14),font:fontB,color:P.rgb(0,0,0)});
-    }else if(f.fieldType==='texte_libre'){
-      var ptv=prevFieldValues[fkey]||'';if(!ptv)return;
-      drawFreeText(pg,P,font,ptv,px,py,pw,pfh);
-    }else{
-      var pv=prevFieldValues[fkey]||'';if(!pv)return;
-      pg.drawText(pv,{x:px+2,y:py+pfh*.25,size:Math.min(pfh*.65,11),font:font,color:P.rgb(0,0,0)});
-    }
-  });
-  var bytes=await doc.save();
-  var bin='';var a=new Uint8Array(bytes);for(var i=0;i<a.length;i++)bin+=String.fromCharCode(a[i]);
-  return btoa(bin);
+    clearDraft();
+    done(o.j);
+  }).catch(function(){n.disabled=false;refreshBar();var e=$('submitErr');e.innerHTML='<strong>Connexion interrompue.</strong> Votre signature n\'a peut-être pas été enregistrée : rechargez la page pour vérifier.';show('submitErr');});
 }
-async function makeSigPng(doc,text,sz){
-  var c=document.createElement('canvas');c.width=500;c.height=80;
-  var ctx=c.getContext('2d');
-  ctx.fillStyle='#fff';ctx.fillRect(0,0,500,80);
-  ctx.font='bold '+sz+'px Dancing Script';ctx.fillStyle='#1a1a2e';
-  ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText(text,250,40);
-  var d=c.toDataURL('image/png').split(',')[1];
-  var raw=atob(d),arr=new Uint8Array(raw.length);
-  for(var i=0;i<raw.length;i++)arr[i]=raw.charCodeAt(i);
-  return doc.embedPng(arr);
+function done(r){
+  hide('bar');hide('steps');view('vDone');window.scrollTo(0,0);
+  $('doneRef').innerHTML='Référence de signature : <strong>'+esc(r.certificateId)+'</strong><br/>Le document signé est horodaté'+(r.sealed?' et scellé par une autorité tierce':'')+'. Conservez cet e-mail : il fait foi.';
+  if(!r.final){
+    $('doneTitle').textContent='Votre signature est enregistrée';
+    $('doneSub').innerHTML='Merci ! <strong>'+esc(r.nextSigner||'Le second signataire')+'</strong> va recevoir un SMS pour signer à son tour. Le contrat final vous sera envoyé par e-mail une fois toutes les signatures apposées.';
+    hide('doneDl');
+    fetch('/api/signature-send-link',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId:S.reqId,signerIndex:S.signerIndex+1,token:TOKEN})}).catch(function(){});
+    return;
+  }
+  /* Copie par e-mail et accès Academy : comme avant, la signature est déjà
+     enregistrée, ces envois ne la conditionnent pas. On dit la vérité. */
+  fetch('/api/signature-completed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId:S.reqId,token:TOKEN})})
+    .then(function(x){return x.json().catch(function(){return {};});})
+    .then(function(j){
+      $('doneSub').innerHTML=j&&j.ok?('Une copie du contrat signé vient d\'être envoyée à <strong>'+esc(j.sentTo||'votre adresse')+'</strong>.'):'<strong>Votre signature est bien enregistrée.</strong> L\'envoi de la copie par e-mail n\'a pas abouti : téléchargez votre exemplaire ci-dessous, ou demandez-le à votre conseiller.';
+    }).catch(function(){$('doneSub').innerHTML='<strong>Votre signature est bien enregistrée.</strong> Téléchargez votre exemplaire ci-dessous.';});
+  try{fetch('/api/academy-grant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId:S.reqId,token:TOKEN})}).catch(function(){});}catch(e){}
 }
-function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+function download(){
+  api('signed').then(function(o){
+    if(!o.ok){alert(o.j.error||'Téléchargement impossible.');return;}
+    var raw=atob(o.j.pdf),a=new Uint8Array(raw.length);for(var i=0;i<raw.length;i++)a[i]=raw.charCodeAt(i);
+    var url=URL.createObjectURL(new Blob([a],{type:'application/pdf'}));
+    var l=document.createElement('a');l.href=url;l.download=o.j.filename||'contrat_signe.pdf';document.body.appendChild(l);l.click();
+    setTimeout(function(){URL.revokeObjectURL(url);l.remove();},4000);
+  }).catch(function(){alert('Connexion indisponible.');});
+}
+
+/* ═══ MODALE PDF ═══ */
+function openPdfModal(title,b64){
+  $('mPdfTitle').textContent=title;$('mPdf').classList.add('on');document.body.style.overflow='hidden';
+  var b=$('mPdfBody');b.innerHTML='<div class="loading"><span class="spin"></span> Chargement…</div>';
+  setTimeout(function(){renderPdfInto(b,b64,false);},30);
+}
+function openOriginal(){
+  $('mPdfTitle').textContent='Document PDF original';$('mPdf').classList.add('on');document.body.style.overflow='hidden';
+  var b=$('mPdfBody');b.innerHTML='<div class="loading"><span class="spin"></span> Chargement…</div>';
+  api('pdf').then(function(o){if(!o.ok){b.innerHTML='<p class="note note-r">'+esc(o.j.error||'Indisponible.')+'</p>';return;}renderPdfInto(b,o.j.pdf,false);});
+}
+
+/* ═══ DÉLÉGATION D'ÉVÉNEMENTS ═══ */
+document.addEventListener('click',function(e){
+  var t=e.target.closest?e.target.closest('[data-action],[data-chk],#tocList a'):null;if(!t)return;
+  if(t.matches&&t.matches('#tocList a')){e.preventDefault();var s=$('sec_'+t.getAttribute('data-si'));if(s)s.scrollIntoView({behavior:'smooth'});return;}
+  var chk=t.getAttribute('data-chk');
+  if(chk){
+    e.preventDefault();
+    var on=!t.classList.contains('on');t.classList.toggle('on',on);
+    var parts=chk.split(':'),kind=parts[0],id=parts.slice(1).join(':');
+    if(kind==='decl'){S.decl[id]=on;track('consentement',{id:id,libelle:$(id==='pouvoir'?'txtPouvoir':'txtEsign').textContent,valeur:on});}
+    else{S.checks[id]=on;var c=findCheck(id);track(on?'case_cochee':'case_decochee',{id:id,libelle:c?c.label.slice(0,180):''});}
+    refreshBar();return;
+  }
+  var a=t.getAttribute('data-action');
+  if(a==='otp-send')otpSend();
+  else if(a==='otp-verify')otpVerify();
+  else if(a==='next')next();
+  else if(a==='back')back();
+  else if(a==='co-search')coSearch();
+  else if(a==='co-pick')coPick(+t.getAttribute('data-i'));
+  else if(a==='co-change'){S.co=null;S.coManual=false;$('coResults').innerHTML='';renderCompany();try{$('coQ').focus();}catch(x){}}
+  else if(a==='co-manual'){S.coManual=true;S.co=null;renderCompany();saveDraft();}
+  else if(a==='dir-pick'){var d=(S.co&&S.co.dirigeants||[])[+t.getAttribute('data-k')];if(d){$('rFirst').value=(d.prenoms||'').split(' ')[0];$('rLast').value=d.nom||'';var q=d.qualite||'';var opt=[].slice.call($('rQual').options).map(function(o){return o.value;});if(opt.indexOf(q)>=0)$('rQual').value=q;else if(q){$('rQual').value='Autre';$('rQualAutre').value=q;show('rQualAutre');}refreshBar();saveDraft();}}
+  else if(a==='pad-clear')padReset(false);
+  else if(a==='preview')preview();
+  else if(a==='pdf-open')openOriginal();
+  else if(a==='modal-close'){$('mPdf').classList.remove('on');document.body.style.overflow='';}
+  else if(a==='download')download();
+});
+document.addEventListener('input',function(e){
+  var id=e.target&&e.target.id;
+  if(id==='rFirst'||id==='rLast'||id==='rQualAutre'||id==='sigName'||id==='mName'||id==='mForm'||id==='mSiret'||id==='aL1'||id==='aL2'||id==='aCp'||id==='aCity'||(e.target.getAttribute&&e.target.getAttribute('data-tx'))){
+    if(id==='aCp')e.target.value=e.target.value.replace(/\D/g,'').slice(0,5);
+    if(id==='sigName'){var ok=fold(e.target.value)===fold(repFull());e.target.className='inp'+(e.target.value.length>3?(ok?' ok':' bad'):'');
+      var er=$('sigNameErr');if(e.target.value.length>3&&!ok){er.textContent='Saisissez : '+repFull();show('sigNameErr');}else hide('sigNameErr');}
+    refreshBar();
+    if(S.step===3)saveDraft();
+  }
+});
+document.addEventListener('change',function(e){if(e.target&&e.target.id==='rQual'){show('rQualAutre',e.target.value==='Autre');refreshBar();saveDraft();}});
+$('coQ').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();coSearch();}});
 </script>
 </body>
 </html>

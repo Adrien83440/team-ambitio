@@ -2,9 +2,17 @@
 // api/signature-otp.js — CODE SMS DE SIGNATURE (envoi + vérification)
 // ----------------------------------------------------------------------------
 // POST /api/signature-otp
-//   { action: 'send',   reqId, signerIndex? }  → 200 { ok:true, phoneHint, sid }
-//   { action: 'verify', reqId, code }          → 200 { ok:true } | 400 { error }
-//   { action: 'status', reqId }                → 200 { ok:true, etat, explication }
+//   { action: 'send',   token }        → 200 { ok:true, phoneHint, sid }
+//   { action: 'verify', token, code }  → 200 { ok:true } | 400 { error }
+//   { action: 'status', token }        → 200 { ok:true, etat, explication }
+//
+// 08/10/2026 — refonte signature : le TOKEN du lien remplace reqId +
+// signerIndex. La demande ET le signataire se déduisent du token, côté
+// serveur : un appelant ne peut plus viser le téléphone d'un autre
+// signataire en changeant un index. La validation est enregistrée par
+// signataire (otpBySigner.{i}) — c'est elle que api/sign-session.js exige
+// avant d'afficher le contrat — et chaque étape entre dans le journal de
+// preuve chaîné (envoi, échec, validation).
 //
 // « status » repond ce que Twilio a fini par faire du SMS : en_cours, livre
 // ou echec. Sans lui, un message filtre par l'operateur laissait le
@@ -26,8 +34,8 @@
 // - Le numero de destination vient TOUJOURS du document Firestore, JAMAIS du
 //   body : sinon n'importe qui pourrait faire envoyer un SMS a n'importe quel
 //   numero depuis notre compte Twilio.
-// - Le code ne transite ni ne se stocke dans signature_requests, qui est en
-//   `allow read: if true` — il vit dans signature_otp/{reqId}, une collection
+// - Le code ne transite ni ne se stocke dans signature_requests (lisible par
+//   l'équipe) — il vit dans signature_otp/{reqId}, une collection
 //   sans bloc `match` : refus par defaut pour les clients, l'Admin SDK passant
 //   outre les rules. Aucune modification de rules necessaire.
 // - Plafonds : 5 envois et 8 tentatives par demande, code valable 10 minutes.
@@ -38,6 +46,7 @@ const crypto = require('crypto');
 const { db, admin } = require('./_firebaseAdmin');
 const { getTwilioClient, getTwilioCreds } = require('./_twilioClient');
 const parseBody = require('./_parseBody');
+const core = require('./_sign-core');
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const MAX_SENDS = 5;
@@ -61,15 +70,6 @@ function phoneHint(e164) {
   return d.length >= 2 ? '•• •• •• ' + d.slice(-2) : '';
 }
 
-/* Le numero du signataire courant, pris dans le document et nulle part ailleurs. */
-function signerPhoneOf(reqData, signerIndex) {
-  const signers = Array.isArray(reqData.signers) ? reqData.signers : [];
-  const i = Number.isInteger(signerIndex) ? signerIndex : 0;
-  if (signers[i] && signers[i].phone) return signers[i].phone;
-  if (signers.length && signers[0].phone) return signers[0].phone;
-  return reqData.clientPhone || null;
-}
-
 function compareCode(a, b) {
   const x = Buffer.from(String(a || ''), 'utf8');
   const y = Buffer.from(String(b || ''), 'utf8');
@@ -87,26 +87,29 @@ module.exports = async (req, res) => {
 
   const body = parseBody(req) || {};
   const action = String(body.action || '');
-  const reqId = typeof body.reqId === 'string' ? body.reqId.trim() : '';
-  if (!reqId) { res.status(400).json({ error: 'reqId requis' }); return; }
   if (action !== 'send' && action !== 'verify' && action !== 'status') {
     res.status(400).json({ error: 'action doit valoir send, verify ou status' });
     return;
   }
 
   try {
-    const reqRef = db.collection('signature_requests').doc(reqId);
-    const reqSnap = await reqRef.get();
-    if (!reqSnap.exists) { res.status(404).json({ error: 'Demande introuvable' }); return; }
-    const R = reqSnap.data() || {};
+    const found = await core.findByToken(body.token);
+    if (!found) { res.status(404).json({ error: 'Lien invalide ou expiré.' }); return; }
+    const reqId = found.id;
+    const reqRef = found.ref;
+    const R = found.R;
+    const signerIndex = found.signerIndex;
+    const info = core.clientInfo(req);
     if (R.status === 'cancelled') { res.status(409).json({ error: 'Cette demande a été annulée.' }); return; }
+    if (R.status === 'signed' || (found.signer && found.signer.status === 'signed')) {
+      res.status(409).json({ error: 'Ce contrat est déjà signé.' }); return;
+    }
 
     const otpRef = db.collection('signature_otp').doc(reqId);
 
     // ─── ENVOI ─────────────────────────────────────────────────────────────
     if (action === 'send') {
-      const signerIndex = Number.isInteger(body.signerIndex) ? body.signerIndex : (R.currentSigner || 0);
-      const to = normalizePhone(signerPhoneOf(R, signerIndex));
+      const to = normalizePhone(found.signer.phone || R.clientPhone);
       if (!to) {
         res.status(400).json({ error: "Aucun numéro de téléphone valide sur cette demande." });
         return;
@@ -175,6 +178,8 @@ module.exports = async (req, res) => {
       console.log('[signature-otp] envoyé sid=' + (msg && msg.sid) + ' statut=' + (msg && msg.status)
         + ' from=' + smsFrom + ' vers=' + phoneHint(to));
       await otpRef.set({ sid: (msg && msg.sid) || null }, { merge: true }).catch(function () { /* trace seule */ });
+      await core.appendAudit(reqRef, [{ type: 'otp_envoye', signer: signerIndex, data: { tel: phoneHint(to), envoi: sends } }], info)
+        .catch(function (e) { console.error('[signature-otp] journal:', e && e.message); });
 
       res.status(200).json({ ok: true, phoneHint: phoneHint(to), sid: (msg && msg.sid) || null });
       return;
@@ -206,6 +211,10 @@ module.exports = async (req, res) => {
       return;
     }
     const O = otpSnap.data() || {};
+    if (Number.isInteger(O.signerIndex) && O.signerIndex !== signerIndex) {
+      res.status(400).json({ error: "Ce code a été demandé pour un autre signataire. Demandez un nouveau code." });
+      return;
+    }
 
     const attempts = (O.attempts || 0) + 1;
     await otpRef.set({ attempts }, { merge: true });
@@ -218,22 +227,27 @@ module.exports = async (req, res) => {
       return;
     }
     if (!compareCode(O.code, code)) {
+      await core.appendAudit(reqRef, [{ type: 'otp_echec', signer: signerIndex, data: { tentative: attempts } }], info).catch(function () {});
       res.status(400).json({ error: "Code incorrect." });
       return;
     }
 
     /* otpVerified alimente le certificat de signature (sign-certificate.html) :
        on le pose sur la demande, comme le faisait l'ancien traitement. */
+    const by = {};
+    by[String(signerIndex)] = { atMs: Date.now(), at: new Date().toISOString(), phone: O.phone || null, ip: info.ip };
     await reqRef.set({
       otpVerified: true,
       otpVerifiedAt: admin.firestore.FieldValue.serverTimestamp(),
       otpVerifiedPhone: O.phone || null,
+      otpBySigner: by,
       events: admin.firestore.FieldValue.arrayUnion({
         type: 'otp_verified',
         date: new Date().toISOString(),
-        by: 'signataire',
+        by: 'signer' + (signerIndex + 1),
       }),
     }, { merge: true });
+    await core.appendAudit(reqRef, [{ type: 'otp_verifie', signer: signerIndex, data: { tel: phoneHint(O.phone) } }], info);
 
     /* Code consomme : il ne doit plus pouvoir servir. */
     await otpRef.delete().catch((e) => console.error('[signature-otp] purge:', e && e.message));

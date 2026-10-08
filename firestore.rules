@@ -601,30 +601,50 @@ service cloud.firestore {
 
 
     // ═══ SIGNATURES ═══
-    // Accès admin + sales avec flag signaturesAccess == true sur users/{uid}.
-    // Les lectures + update restent ouvertes (signed_pdf créé par le prospect
-    // non-authentifié côté sign.html).
+    // Refonte du 08/10/2026 : la page publique sign.html ne lit ni n'écrit
+    // plus Firestore. Elle passe exclusivement par api/sign-session.js et
+    // api/signature-otp.js (Admin SDK, qui contourne ces règles), sur
+    // présentation du token de son lien. Avant, signature_requests était
+    // lisible ET modifiable par n'importe qui sans compte : un contrat signé
+    // pouvait être réécrit, ce qui ruinait sa valeur de preuve.
+    //   · lecture   : équipe (sales / admin / CSM — fiche lead, back-office)
+    //   · création  : équipe habilitée (signaturesAccess ou admin)
+    //   · modification : AUCUNE côté client — tout passe par le serveur
+    //   · suppression : équipe habilitée, JAMAIS une demande signée
+    // Les sous-collections ne cascadent pas : chacune a son bloc.
     match /signature_templates/{tplId} {
-      allow read:  if true;
+      allow read:  if isSalesOrAdminOrCsm();
       allow write: if canSignaturesAdmin();
     }
 
     match /signature_templates/{tplId}/pdf/{chunkId} {
-      allow read:  if true;
+      allow read:  if isSalesOrAdminOrCsm();
       allow write: if canSignaturesAdmin();
     }
 
     match /signature_requests/{reqId} {
-      allow read:   if true;
+      allow read:   if isSalesOrAdminOrCsm();
       allow create: if canSignaturesAdmin();
-      allow update: if true;
-      allow delete: if canSignaturesAdmin();
+      allow update: if false;
+      allow delete: if canSignaturesAdmin() && resource.data.status != 'signed';
     }
 
     match /signature_requests/{reqId}/signed_pdf/{chunkId} {
-      allow read:   if true;
-      allow create: if true;
-      allow delete: if canSignaturesAdmin();
+      allow read:   if isSalesOrAdminOrCsm();
+      allow create, update: if false;
+      allow delete: if false;
+    }
+
+    // Journal de preuve chaîné — écrit par le serveur uniquement.
+    match /signature_requests/{reqId}/audit/{entryId} {
+      allow read:  if isSalesOrAdminOrCsm();
+      allow write: if false;
+    }
+
+    // Données complètes de chaque signataire (tracé, mentions) — serveur.
+    match /signature_requests/{reqId}/signer_data/{signerId} {
+      allow read:  if canSignaturesAdmin();
+      allow write: if false;
     }
 
 
