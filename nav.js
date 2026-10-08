@@ -606,6 +606,10 @@
     const perms   = getUserModules();
     const modules = ALL_MODULES.filter(m => {
       if (m.perm === '_admin') return role === 'admin';
+      // Customer Success : un admin le voit TOUJOURS, quelle que soit la
+      // grille de modules enregistrée sur sa fiche (Adrien 08/10/2026 : le
+      // module avait disparu de son menu, csm_* à « none » dans son profil).
+      if (role === 'admin' && (m.perm === 'csm_dashboard' || m.perm === 'csm_clients')) return true;
       // "Rendez-vous" (sales-rdv.html) : liste des RDV pris par les clients
       // — module STRICTEMENT commercial.
       //  - coach : masqué (pas concerné par le suivi des RDV)

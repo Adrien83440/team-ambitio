@@ -73,6 +73,12 @@
       '.aib-a b{white-space:nowrap}' +
       '.aib-ft{margin-top:10px;font-size:11px;opacity:.55}' +
       '.aib-empty{font-size:13px;opacity:.8;line-height:1.5}' +
+      /* .aib-l : posée quand le fond de la page est clair (coaching.html est
+         crème sans être en « light-theme ») — même rendu que le thème clair. */
+      '.aib.aib-l{color:#1f2140;background:linear-gradient(135deg,rgba(99,102,241,.10),rgba(168,85,247,.07) 55%,rgba(236,72,153,.05));border-color:rgba(99,102,241,.25)}' +
+      '.aib.aib-l .aib-k{color:#5b5fc7}.aib.aib-l .aib-sec{background:rgba(255,255,255,.75);border-color:rgba(99,102,241,.14)}' +
+      '.aib.aib-l .aib-a{background:rgba(99,102,241,.07)}.aib.aib-l .aib-a.hi{background:rgba(220,38,38,.08);border-color:rgba(220,38,38,.25)}' +
+      '.aib.aib-l .aib-btn{background:rgba(255,255,255,.8);border-color:rgba(99,102,241,.25);color:#1f2140}.aib.aib-l .aib-ft{opacity:.7}' +
       'body.light-theme .aib{color:#1f2140;background:linear-gradient(135deg,rgba(99,102,241,.10),rgba(168,85,247,.07) 55%,rgba(236,72,153,.05));border-color:rgba(99,102,241,.25)}' +
       'body.light-theme .aib-k{color:#5b5fc7}' +
       'body.light-theme .aib-sec{background:rgba(255,255,255,.6);border-color:rgba(99,102,241,.14)}' +
@@ -82,6 +88,21 @@
     document.head.appendChild(s);
   }
 
+  // Fond de page clair ? (luminance de la première couleur de fond non
+  // transparente en remontant depuis le point de montage)
+  function pageIsLight() {
+    var n = mount;
+    while (n && n !== document.documentElement) {
+      var c = window.getComputedStyle(n).backgroundColor || '';
+      var m = c.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/);
+      if (m && (m[4] === undefined || Number(m[4]) > 0.5)) {
+        return (0.299 * m[1] + 0.587 * m[2] + 0.114 * m[3]) > 150;
+      }
+      n = n.parentElement;
+    }
+    return document.body.classList.contains('light-theme');
+  }
+
   function frDate() {
     return new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   }
@@ -89,7 +110,7 @@
   function render(doc, err) {
     var collapsed = isCollapsed();
     var b = doc && doc.brief;
-    var h = '<div class="aib' + (collapsed ? ' collapsed' : '') + '">';
+    var h = '<div class="aib' + (collapsed ? ' collapsed' : '') + (pageIsLight() ? ' aib-l' : '') + '">';
     h += '<div class="aib-hd" data-aib="toggle"><div class="aib-ic">☀️</div><div class="aib-tt"><div class="aib-k">Brief du matin · ' + esc(frDate()) + '</div>';
     h += '<div class="aib-t">' + esc(b ? b.titre : (err ? 'Brief indisponible' : 'Brief pas encore généré')) + '</div></div>';
     h += '<button type="button" class="aib-btn" data-aib="regen"' + (busy ? ' disabled' : '') + ' title="Régénérer avec les données actuelles">' + (busy ? '⏳' : '↻') + '</button>';
