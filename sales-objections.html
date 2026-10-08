@@ -193,7 +193,7 @@ document.addEventListener('change', function (e) { if (e.target && (e.target.id 
 firebase.auth().onAuthStateChanged(function (u) {
   if (!u) return;
   var role = localStorage.getItem('ambitio_role') || '';
-  if (role !== 'admin' && role !== 'sales') { $('lockedView').style.display = ''; return; }
+  if (['admin', 'sales', 'coach', 'csm'].indexOf(role) < 0) { $('lockedView').style.display = ''; return; }
   $('mainView').style.display = '';
   load();
 });

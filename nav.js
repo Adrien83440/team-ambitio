@@ -80,9 +80,6 @@
       { id: 'sales-setting',      icon: '📞', label: 'Set NB',       href: 'sales-setting.html' },
       { id: 'sales-closing',      icon: '🎯', label: 'Close SB',     href: 'sales-closing.html' },
       { id: 'sales-eod',          icon: '📝', label: 'EOD',          href: 'sales-eod.html' },
-      // Bibliothèque d'objections (programme IA 10/2026) : objections détectées
-      // par l'IA dans les closings et appels de setting, réponses qui marchent.
-      { id: 'sales-objections',   icon: '🛡️', label: 'Objections',   href: 'sales-objections.html' },
       { id: 'sales-commissions',  icon: '💰', label: 'Commissions',  href: 'sales-commissions.html', perm: 'sales_commissions' },
       { id: 'sales-projections',  icon: '📈', label: 'Projections',  href: 'sales-projections.html', perm: 'sales_projections' },
       { id: 'sales-equipe',       icon: '👥', label: 'Équipe Sales', href: 'sales-equipe.html', perm: 'sales_equipe' },
@@ -127,6 +124,11 @@
     // admin-users.html), admin d'office. Le flag est projeté dans
     // localStorage par initAlteoFormsAccessWatch().
     { id: 'formations',        icon: '🎓', label: 'Formations',   href: 'formations.html',        section: 'Outils', perm: 'formations' },
+    // Programme IA 10/2026 — ouverts à toute l'équipe (demande Adrien 08/10) :
+    // bibliothèque d'objections (détectées par l'IA dans closings et appels)
+    // et simulateur de closing contre un prospect joué par l'IA.
+    { id: 'sales-objections',  icon: '🛡️', label: 'Objections',   href: 'sales-objections.html',  section: 'Outils', perm: '_all' },
+    { id: 'training-closer',   icon: '🥊', label: 'Entraînement closer', href: 'training-closer.html', section: 'Outils', perm: '_all' },
     { id: 'documents',         icon: '📚', label: 'Documents',    href: 'documents.html',         section: 'Outils', perm: '_all' },
     // Mur de témoignages : ouvert à toute l'équipe connectée, coachs et CSM
     // compris — ce sont eux qui reçoivent le plus de retours clients. Chacun

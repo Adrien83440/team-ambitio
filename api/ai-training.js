@@ -65,7 +65,7 @@ module.exports = async function (req, res) {
   if (req.method !== 'POST') { res.status(405).json({ ok: false, error: 'method_not_allowed' }); return; }
   const auth = await requireAuth(req, res);
   if (!auth) return;
-  if (auth.role !== 'admin' && auth.role !== 'sales') { res.status(403).json({ ok: false, error: 'forbidden' }); return; }
+  if (['admin', 'sales', 'coach', 'csm'].indexOf(auth.role) < 0) { res.status(403).json({ ok: false, error: 'forbidden' }); return; } // ouvert à toute l'équipe (08/10/2026)
   const body = parseBody(req);
   const sc = body.scenario || {};
   const profil = PROFILS[sc.profil] || PROFILS.libre;

@@ -16,7 +16,7 @@ const { db } = require('./_firebaseAdmin');
 const { callClaude, humanError, cap } = require('./_ai');
 const { CATEGORIES } = require('./_aiObjections');
 
-const ROLES = ['admin', 'sales'];
+const ROLES = ['admin', 'sales', 'coach', 'csm']; // ouvert à toute l'équipe (08/10/2026)
 
 const PLAYBOOK_SCHEMA = {
   type: 'object',

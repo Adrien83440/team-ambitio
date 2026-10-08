@@ -31,6 +31,8 @@
 <script src="rdv-outcome.js" defer></script>
 <script src="whatsapp-lead.js" defer></script>
 <script src="close-wizard.js" defer></script>
+<!-- Programme IA 10/2026 : dossier de préparation au closing (bouton 📋 Dossier IA des RDV) -->
+<script src="ai-prep-modal.js" defer></script>
 <script>
   if (!firebase.apps.length) {
     firebase.initializeApp({
@@ -3237,6 +3239,9 @@ function paintLeadRdvBox(leadId, items) {
       h += '<a class="ld-rdvx-btn meet" href="' + escAttr(meetUrl) + '" target="_blank" rel="noopener" title="Rejoindre la visio">📹 Meet</a>';
       h += '<button class="ld-rdvx-btn ghost" data-action="copyMeet" data-url="' + escAttr(meetUrl) + '" title="Copier le lien de la visio">📋</button>';
     }
+    /* Dossier de préparation IA (programme IA 10/2026, ai-prep-modal.js) :
+       généré ~1 h avant le RDV, ou à la demande. */
+    h += '<button class="ld-rdvx-btn ghost" data-ai-prep="' + escAttr(b.id) + '" title="Dossier de préparation IA : douleurs, objections probables, plan d\'attaque">📋 Dossier IA</button>';
     /* Boutons TOUJOURS libellés — un crayon seul n'annonce pas ce qu'il fait
        (retour Adrien 26/07). Même action `rdvOutcome` partout, mais le libellé
        dit l'intention selon l'état du RDV. */

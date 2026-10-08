@@ -124,7 +124,7 @@ $('btnDeb').addEventListener('click', function () {
 firebase.auth().onAuthStateChanged(function (u) {
   if (!u) return;
   var r = localStorage.getItem('ambitio_role') || '';
-  if (r !== 'admin' && r !== 'sales') { $('lockedView').style.display = ''; return; }
+  if (['admin', 'sales', 'coach', 'csm'].indexOf(r) < 0) { $('lockedView').style.display = ''; return; }
   $('mainView').style.display = '';
 });
 })();
