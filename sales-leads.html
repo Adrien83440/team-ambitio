@@ -31,6 +31,7 @@
 <script src="rdv-outcome.js" defer></script>
 <script src="whatsapp-lead.js" defer></script>
 <script src="close-wizard.js" defer></script>
+<script src="close-pilot.js" defer></script>
 <!-- Programme IA 10/2026 : dossier de préparation au closing (bouton 📋 Dossier IA des RDV) -->
 <script src="ai-prep-modal.js" defer></script>
 <script>
@@ -1750,8 +1751,10 @@ function safeUrlLd(u) {
    la garantie d'une dérive. À la fermeture, les listeners de la fiche ont
    déjà mis le rail à jour tout seuls (onSnapshot). */
 var LD_MODULES = {
-  sig: { url: 'sales-signatures.html', title: '📝 Signatures' },
-  pay: { url: 'payments.html',         title: '💳 Paiements' }
+  sig:  { url: 'sales-signatures.html', title: '📝 Signatures' },
+  pay:  { url: 'payments.html',         title: '💳 Paiements' },
+  /* Pilote de closing (close-pilot.js) : RDV 72 h, réservé avec le client. */
+  book: { url: 'booking.html',          title: '📅 Réserver le RDV' }
 };
 
 function ldEnsureFrameDom() {
@@ -1775,13 +1778,19 @@ function ldEnsureFrameDom() {
   });
 }
 
-function ldOpenModule(mod, leadId) {
+/* params (facultatif) : pré-remplissage transmis au module par l'URL —
+   pilote de closing (close-pilot.js). */
+function ldOpenModule(mod, leadId, params) {
   var m = LD_MODULES[mod];
   if (!m || !leadId) return;
   ldEnsureFrameDom();
-  var url = m.url + '?embed=1&leadId=' + encodeURIComponent(leadId);
+  var extra = '';
+  Object.keys(params || {}).forEach(function (k) {
+    if (params[k] !== '' && params[k] != null) extra += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+  });
+  var url = m.url + '?embed=1&leadId=' + encodeURIComponent(leadId) + extra;
   document.getElementById('ldFrameTitle').textContent = m.title;
-  document.getElementById('ldFrameOpen').href = m.url + '?leadId=' + encodeURIComponent(leadId);
+  document.getElementById('ldFrameOpen').href = m.url + '?leadId=' + encodeURIComponent(leadId) + extra;
   document.getElementById('ldFrameIf').src = url;
   document.getElementById('ldFrameBg').classList.add('show');
 }
@@ -3069,6 +3078,8 @@ function attachLeadRdvListener(leadId) {
         // ldRdvItemsFor fusionne avec le repli email : la boîte affiche aussi
         // les bookings pas (encore) rattachés par leadId.
         paintLeadRdvBox(leadId, ldRdvItemsFor(leadId));
+        // Pilote de closing : le RDV 72 h vient peut-être d'être réservé.
+        if (_ldClosePilotOn()) paintCloseRail(leadId);
       }, function(err){
         console.warn('[ldRdv] snapshot error', leadId, err);
       });
@@ -3158,12 +3169,87 @@ function ldCloseSteps(l) {
   ];
 }
 
+/* ═══ PILOTE DE CLOSING (close-pilot.js) — demande Adrien 09/10/2026 ═══
+   Derrière l'interrupteur _config/sales_close_pilot.enabled (lu par les
+   sales, écrit par un admin) : un gros bouton « OK pour le closing, c'est
+   parti » remplace le rail ci-dessous et ouvre la suite de cartes. Les
+   réglages facultatifs du même document : typeElite / typeBusiness (types
+   de RDV 72 h, sinon détectés par libellé), closingGroupUrl (canal
+   WhatsApp closing). Interrupteur absent ou illisible → rail historique. */
+var _ldClosePilotCfg = null, _ldClosePilotAsked = false;
+function _ldLoadClosePilotCfg() {
+  if (_ldClosePilotAsked) return;
+  _ldClosePilotAsked = true;
+  db.collection('_config').doc('sales_close_pilot').get().then(function (snap) {
+    _ldClosePilotCfg = snap.exists ? (snap.data() || {}) : { enabled: false };
+    if (_ldClosePilotCfg.enabled) {
+      document.querySelectorAll('[data-close-rail]').forEach(function (el) { paintCloseRail(el.getAttribute('data-close-rail')); });
+    }
+  }).catch(function (e) { _ldClosePilotCfg = { enabled: false }; console.warn('[close-pilot] réglages illisibles :', e && e.message); });
+}
+function _ldClosePilotOn() { return !!(_ldClosePilotCfg && _ldClosePilotCfg.enabled && window.ClosePilot); }
+var _ldClosePilotHostSet = false;
+function _ldClosePilotHost() {
+  if (_ldClosePilotHostSet || !window.ClosePilot) return;
+  _ldClosePilotHostSet = true;
+  function leadOf(id) { for (var i = 0; i < allLeads.length; i++) if (allLeads[i].id === id) return allLeads[i]; return null; }
+  window.ClosePilot.configure({
+    lead: leadOf,
+    sigs: function (id) { return _ldSigCache[id] || []; },
+    pays: function (id) { return _ldPayCache[id] || []; },
+    bookings: function (id) { return ldRdvItemsFor(id); },
+    typeMap: function () { return _ldTypeMap || {}; },
+    cfg: function () { return _ldClosePilotCfg || {}; },
+    coaches: function () {
+      return (window.TEAM_MEMBERS_LIST || []).filter(function (m) { return m && m.role === 'coach' && m.active !== false && !m.archivedAt; })
+        .map(function (m) { return { slug: m.slug, nom: m.nom || m.displayName || m.shortName || m.slug }; });
+    },
+    me: function () {
+      var u = firebase.auth().currentUser, list = window.TEAM_MEMBERS_LIST || [];
+      for (var i = 0; u && i < list.length; i++) if (list[i] && list[i].firebaseUid === u.uid) return { nom: list[i].displayName || list[i].shortName || '' };
+      return { nom: localStorage.getItem('ambitio_name') || '' };
+    },
+    setterName: function (l) { var s = SETTERS[l && l.assignedTo]; return s ? s.name : ''; },
+    origin: function (l) { return decodeUtm(l.utm) || l.sourceDetail || ((typeof LEAD_TYPES !== 'undefined' && LEAD_TYPES[l.type]) ? LEAD_TYPES[l.type].label : '') || l.source || ''; },
+    sbSuggest: function (l) {
+      var AF = window.AlteoreFlow, rdvs = ldRdvItemsFor(l.id).filter(function (b) { return !AF || AF.classifyBooking(b, _ldTypeMap || {}) !== 'excluded'; });
+      if (AF && rdvs.length) return AF.isSB(rdvs[rdvs.length - 1], _ldTypeMap || {});
+      if (l.stage === 'rdv_self_booking' || l.status === 'rdv_self_booking' || l.type === 'self_booking') return true;
+      return l.assignedTo ? false : null;
+    },
+    openModule: function (kind, leadId, params) { ldOpenModule(kind, leadId, params); },
+    moduleOpen: function () { return !!document.querySelector('#ldFrameBg.show'); },
+    save: function (leadId, patch) { return db.collection('leads').doc(leadId).set({ closePilot: patch }, { merge: true }); },
+    recordClose: function (leadId, answers, opts) {
+      if (!window.CloseWizard || !window.CloseWizard.commit) return Promise.reject(new Error('close-wizard.js manquant — recharge la page'));
+      if (opts && opts.coachOnly) { window.CloseWizard.notifyCoach(leadId, answers); return Promise.resolve(); }
+      return window.CloseWizard.commit({ leadId: leadId, lead: leadOf(leadId), bookings: _ldRdvCache[leadId] || null, typeMap: _ldTypeMap || {}, a: answers });
+    },
+    bookingLink: function (typeId, l) {
+      var parts = String(l.nom || '').trim().split(/\s+/);
+      return location.origin + '/booking.html?' + (typeId ? 'type=' + encodeURIComponent(typeId) + '&' : '') + 'leadId=' + encodeURIComponent(l.id)
+        + '&prenom=' + encodeURIComponent(parts[0] || '') + '&nom=' + encodeURIComponent(parts.slice(1).join(' ')) + '&email=' + encodeURIComponent(l.email || '') + '&tel=' + encodeURIComponent(l.telephone || '');
+    },
+    toast: toast
+  });
+}
+
 function paintCloseRail(leadId) {
   var host = document.querySelector('[data-close-rail="' + leadId + '"]');
   if (!host) return;
   var l = (typeof allLeads !== 'undefined' ? allLeads : []).find
     ? (allLeads.find(function (x) { return x.id === leadId; }) || null) : null;
   if (!l) { host.innerHTML = ''; return; }
+  _ldLoadClosePilotCfg();
+  if (_ldClosePilotOn()) {
+    _ldClosePilotHost();
+    var hasRdv = ldRdvItemsFor(leadId).length > 0;
+    var started = !!(l.closePilot && l.closePilot.startedAt);
+    var isCli = l.isClient === true || String(l.stage || '').indexOf('closed_won') === 0;
+    if (hasRdv || started || isCli) window.ClosePilot.paint(leadId, host); else host.innerHTML = '';
+    window.ClosePilot.refresh(leadId);
+    return;
+  }
   var steps = ldCloseSteps(l);
   if (!steps) { host.innerHTML = ''; return; }
 
@@ -5172,6 +5258,12 @@ document.addEventListener('click', function(e) {
   if (cgBtn) {
     e.preventDefault(); e.stopPropagation();
     window.open('process-onboarding-elite-closer.html', '_blank', 'noopener');
+    return;
+  }
+  /* Pilote de closing : gros bouton / « Reprendre » de la fiche. */
+  var cpBtn = e.target.closest('[data-cp-lead]');
+  if (cpBtn && window.ClosePilot && window.ClosePilot.handle(cpBtn)) {
+    e.preventDefault(); e.stopPropagation();
     return;
   }
 

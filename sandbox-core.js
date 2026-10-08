@@ -550,6 +550,16 @@
       if (!signed || (signedAt && c.at < signedAt)) add(false, 'Ordre du parcours', 'Close confirmé AVANT la signature du contrat. La carte ① dit « contrat signé » : on ne close qu\'une fois le contrat signé.');
     }
 
+    /* Le pilote de closing (close-pilot.js) : RDV 72 h, WhatsApp, checklist. */
+    if (window.ClosePilot) {
+      var cp = l.closePilot || {}, stp = {};
+      try { window.ClosePilot.steps(leadId).forEach(function (x) { stp[x.k] = x.done; }); } catch (e) {}
+      var rdvBk = dbList('bookings', 'leadId', leadId).length > 0;
+      add(stp.rdv ? (rdvBk ? true : 'warn') : null, (E.offre === 'Elite' ? 'RDV Plan d\'Action' : 'RDV Urgent 72h') + ' calé', stp.rdv ? (rdvBk ? 'Réservé avec le client pendant l\'appel.' : '« Le client choisira lui-même » : à relancer — un client sans date, c\'est un démarrage qui glisse.') : 'Pilote → carte 📅 : on ne raccroche pas sans la date.', 2);
+      if (E.offre === 'Elite') add(stp.wa ? true : null, 'Groupe WhatsApp + messages de bienvenue et liens', stp.wa ? '' : 'Pilote → carte 💬.');
+      add(cp.doneAt ? true : null, 'Closing validé (checklist du pilote)', cp.doneAt ? '' : 'Pilote → carte ✅ → « Valider le closing ».');
+    }
+
     var max = 0, got = 0, done = true;
     items.forEach(function (it) {
       max += it.w;

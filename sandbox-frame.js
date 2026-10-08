@@ -18,7 +18,7 @@
 
   /* Pages que le bac à sable sait faire tourner. Toute autre page est
      bloquée : elle chargerait le VRAI Firebase. */
-  var MIRRORED = { 'sign.html': 1, 'sales-signatures.html': 1, 'payments.html': 1 };
+  var MIRRORED = { 'sign.html': 1, 'sales-signatures.html': 1, 'payments.html': 1, 'booking.html': 1 };
   var STATIC_HOSTS = { 'cdnjs.cloudflare.com': 1, 'fonts.googleapis.com': 1, 'fonts.gstatic.com': 1, 'cdn.jsdelivr.net': 1, 'unpkg.com': 1 };
 
   var params = new URLSearchParams(location.search);

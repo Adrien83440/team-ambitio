@@ -424,6 +424,15 @@ async function prefillFromLead(leadId) {
     document.getElementById('pmLeadEmail').value = l.email || '';
     document.getElementById('pmLeadPhone').value = l.telephone || '';
     document.getElementById('payModal').dataset.leadId = leadId;
+    /* Pilote de closing (close-pilot.js, Leads Live) : montant TTC, type et
+       mensualités retenus avec le client — &montant=&ptype=&nmens=&desc=.
+       Le closer vérifie avant de créer. */
+    const q = new URLSearchParams(window.location.search);
+    if (q.get('ptype') === 'installments' || q.get('ptype') === 'full') setPayType(q.get('ptype'));
+    if (q.get('nmens') && document.querySelector('#pmCount option[value="' + q.get('nmens') + '"]')) document.getElementById('pmCount').value = q.get('nmens');
+    if (q.get('montant')) document.getElementById('pmTotal').value = q.get('montant');
+    if (q.get('desc')) document.getElementById('pmDesc').value = q.get('desc');
+    updatePreview();
   } catch(e) {}
 }
 

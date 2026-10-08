@@ -505,6 +505,15 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // _config/sales_close_pilot (09/10/2026) : interrupteur du pilote de
+    // closing de Leads Live (close-pilot.js) — { enabled, typeElite,
+    // typeBusiness, closingGroupUrl }. Lu par le navigateur du closer
+    // (sales), basculé par un admin. Même motif que _config/commissions.
+    match /_config/sales_close_pilot {
+      allow read:  if isSalesOrAdmin();
+      allow write: if isAdmin();
+    }
+
     match /_config/{docId} {
       allow read:  if isAdmin();
       allow write: if isAdmin();

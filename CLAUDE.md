@@ -268,6 +268,10 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
 - **Setting / Closing** : `sales-setting.html` (**SET NB**), `sales-closing.html`
   (**Close SB**), moteur `alteore-flow.js`, modale résultat `rdv-outcome.js`,
   parcours de close `close-wizard.js`
+- **Pilote de closing** : `close-pilot.js` (cartes deal → contrat → paiement →
+  close/coach → RDV 72 h → WhatsApp → checklist → annonce), dans Leads Live
+  derrière `_config/sales_close_pilot.enabled` ; partagé avec le bac à sable.
+  Avancement sur `leads/{id}.closePilot`. Le close passe par `CloseWizard.commit`.
 - **Booking** : `booking.html` (public), `booking-admin.html` — la séparation
   Setting&Sales / Coaching passe par `classifyBooking`
 - **Facturation** : `admin-facturation.html`, `admin-invoice-edit.html`,

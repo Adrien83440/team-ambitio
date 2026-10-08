@@ -179,6 +179,8 @@
     else h += sheetAction(s, l);
     h += '</div>';
     $('sheet').innerHTML = h;
+    var cpHost = $('sheet').querySelector('[data-cp-host]');
+    if (cpHost && window.ClosePilot) window.ClosePilot.paint(l.id, cpHost);
     var nb = $('sheet').querySelector('.sh-body'); if (nb) nb.scrollTop = scroll;
   }
   function tabBtn(k, lbl) { return '<button class="sh-tab' + (ui.sheetTab === k ? ' on' : '') + '" data-a="sheetTab" data-t="' + k + '">' + lbl + '</button>'; }
@@ -200,19 +202,10 @@
     else h += '<button class="ld-rdvx-btn ghost" data-a="nosim" data-m="resched">📅 Replanifier</button><button class="ld-rdvx-btn ghost" data-a="outcome" data-id="' + l.id + '">🎯 Statut</button>';
     h += '</div><div class="ld-rdvx-info">⏱ 45 min · Europe/Paris' + (l.sb ? ' · réservé par le prospect' : ' · posé par ' + esc(l.setter.name)) + '<div class="url">' + esc(r.meetLink) + '</div></div></div>';
 
-    /* Rail */
-    var steps = closeSteps(s, l), nDone = steps.filter(function (x) { return x.done; }).length, next = -1;
-    for (var i = 0; i < steps.length; i++) if (!steps[i].done) { next = i; break; }
-    h += '<div class="ld-rail-block"><div class="ld-rail-head"><span class="t">🎯 Parcours de close</span><span class="n">' + nDone + '/' + steps.length + '</span></div><div class="ld-rail">';
-    steps.forEach(function (st, i) {
-      h += '<div class="ld-rail-step ' + (st.done ? 'done' : (i === next ? 'next' : '')) + '"><span class="dot">' + (st.done ? '✓' : (i === next ? '▶' : '')) + '</span><span class="lbl">' + esc(st.l) + '</span>';
-      if (!st.done && i === next) {
-        if (st.act) h += '<button class="ld-rail-btn" data-a="module" data-k="' + st.act + '" data-id="' + l.id + '"' + (st.k === 'pay' ? ' data-new="1"' : '') + '>' + esc(st.actLabel) + '</button>';
-        else if (st.hint) h += '<span class="hint">' + esc(st.hint) + '</span>';
-      }
-      h += '</div>';
-    });
-    h += '</div><div class="ld-rail-actions"><button class="ld-rail-btn ghost" data-a="module" data-k="sig" data-id="' + l.id + '">📝 Signatures</button><button class="ld-rail-btn ghost" data-a="module" data-k="pay" data-id="' + l.id + '">💳 Paiements</button><button class="ld-rail-btn" data-a="guide">🎯 Je close</button></div></div>';
+    /* Pilote de closing (close-pilot.js) — comme Leads Live quand
+       _config/sales_close_pilot.enabled est actif : le gros bouton remplace
+       le rail « Parcours de close ». Peint par renderSheet. */
+    h += '<div data-cp-host="' + l.id + '"></div>';
 
     /* Statut */
     h += '<div class="blk"><div class="blk-t">Statut</div>';
@@ -456,13 +449,16 @@
     });
   }
   /* Comme ?embed=1 depuis la fiche Leads Live (iframe de LD_MODULES). */
-  function openModule(kind, leadId) {
+  var MODULE_PAGES = { sig: ['sales-signatures.html', '📝 Signatures'], pay: ['payments.html', '💳 Paiements'], book: ['booking.html', '📅 Réserver le RDV'] };
+  function openModule(kind, leadId, params) {
     if (ui.cw) { ui.cw.closing = true; }
     closeForm();
-    var l = X.leadById(S(), leadId);
+    var l = X.leadById(S(), leadId), M = MODULE_PAGES[kind] || MODULE_PAGES.sig;
     ui.module = { kind: kind, leadId: leadId };
-    var src = mirrorSrc(kind === 'sig' ? 'sales-signatures.html' : 'payments.html', { embed: '1', leadId: leadId });
-    $('moModuleIn').innerHTML = '<div class="mo-h"><b>' + (kind === 'sig' ? '📝 Signatures' : '💳 Paiements') + '<small>' + esc(l ? l.nom : '') + '</small></b><button class="mo-x" data-a="moduleClose">✕</button></div>'
+    var q = { embed: '1', leadId: leadId };
+    Object.keys(params || {}).forEach(function (k) { if (params[k] !== '' && params[k] != null) q[k] = String(params[k]); });
+    var src = mirrorSrc(M[0], q);
+    $('moModuleIn').innerHTML = '<div class="mo-h"><b>' + M[1] + '<small>' + esc(l ? l.nom : '') + '</small></b><button class="mo-x" data-a="moduleClose">✕</button></div>'
       + '<div class="mo-b" style="padding:0">' + mirrorFrame(src) + '</div>';
     guardFrame($('moModuleIn').querySelector('iframe.mirror'));
     show('moModule');
@@ -666,6 +662,8 @@
       if (bg.id === 'moForm') closeForm(); else if (bg.id === 'moModule') closeModule(); else if (bg.id === 'moTop') closeTop();
       return;
     }
+    var cpBtn = e.target.closest ? e.target.closest('[data-cp-lead]') : null;
+    if (cpBtn && window.ClosePilot && window.ClosePilot.handle(cpBtn)) { e.preventDefault(); return; }
     var t = e.target.closest ? e.target.closest('[data-a]') : null;
     if (!t) return;
     var a = t.getAttribute('data-a'), id = t.getAttribute('data-id');
@@ -765,6 +763,73 @@
      tout sauf l'iframe elle-même (renderPhone ne la recharge pas). */
   X.onChange(function (st, local) { if (!local) { checkNewMessages(); renderAll(); } else checkNewMessages(); });
 
+  /* ═══ PILOTE DE CLOSING (close-pilot.js) — hôte du bac à sable ═══════
+     Même module que Leads Live ; seules les données viennent d'ici : la
+     fiche (état local), la fausse base (contrats, paiements, RDV) et les
+     vraies pages en miroir. */
+  function bookingTypeMap() {
+    var t = store().read('booking_config/_types'), map = {};
+    ((t && t.list) || []).forEach(function (x) { if (x && x.id) map[x.id] = { label: x.label || x.id, isCoaching: x.isCoaching === true, isSetterOnly: x.isSetterOnly === true }; });
+    return map;
+  }
+  function deepMerge(dst, src) {
+    Object.keys(src).forEach(function (k) {
+      var v = src[k];
+      if (v && typeof v === 'object' && !Array.isArray(v)) { if (!dst[k] || typeof dst[k] !== 'object') dst[k] = {}; deepMerge(dst[k], v); }
+      else dst[k] = v;
+    });
+    return dst;
+  }
+  /* La carte 🏆 du pilote enregistre le close comme les cartes du Close. */
+  function pilotRecordClose(leadId, a) {
+    var pc = X.PRICING[a.contrat] ? (a.paiement === 'pif' ? X.PRICING[a.contrat].pif : X.PRICING[a.contrat].mensualise) : { contracte: 0 };
+    X.update(function (s) {
+      var l = X.leadById(s, leadId); if (!l) return;
+      var upd = !!l.isClient;
+      l.close = { contrat: a.contrat, paiement: a.paiement, booking: a.booking, coachSlug: a.coachSlug || (l.close && l.close.coachSlug) || null, coachNom: a.coachNom || (l.close && l.close.coachNom) || null, encaisse: Number(a.encaisse) || 0, contracte: pc.contracte, at: (l.close && l.close.at) || Date.now() };
+      l.isClient = true; l.status = 'client'; l.stage = a.booking === 'sb' ? 'closed_won_self' : 'closed_won_setting';
+      l.rdv.outcome = 'close'; l.rdv.past = true;
+      X.log(s, leadId, 'close', '🏆 Close ' + (upd ? 'mis à jour' : 'enregistré') + ' (pilote) — ' + a.contrat + ' ' + (a.paiement === 'pif' ? 'PIF' : 'MENS') + ' · encaissé ' + euro(a.encaisse) + ' HT' + (a.coachNom ? ' · coach ' + a.coachNom + ' prévenu (simulé)' : ''));
+    });
+    renderAll();
+    return Promise.resolve();
+  }
+  function setupPilot() {
+    if (!window.ClosePilot) return;
+    window.ClosePilot.configure({
+      lead: function (id) {
+        var l = X.leadById(S(), id); if (!l) return null;
+        var o = JSON.parse(JSON.stringify(l));
+        o.utm = l.utm; o.assignedTo = l.setter ? l.setter.slug : '';
+        if (l.close && l.close.coachNom) o.coachAssigne = { slug: l.close.coachSlug, nom: l.close.coachNom };
+        return o;
+      },
+      sigs: function (id) { return X.leadSigs(id); },
+      pays: function (id) { return X.leadPays(id); },
+      bookings: function (id) { return X.dbList('bookings', 'leadId', id); },
+      typeMap: bookingTypeMap,
+      cfg: function () { return { enabled: true }; },
+      coaches: function () { return X.COACHS.map(function (c) { return { slug: c.slug, nom: c.nom }; }); },
+      me: function () { return { nom: window._sbxUser || '' }; },
+      setterName: function (l) { return l && l.setter ? l.setter.name : ''; },
+      origin: function (l) { return l.source || ''; },
+      sbSuggest: function (l) { return !!l.sb; },
+      openModule: function (kind, leadId, params) { openModule(kind, leadId, params); },
+      moduleOpen: function () { return !!ui.module; },
+      save: function (leadId, patch) {
+        X.update(function (s) { var l = X.leadById(s, leadId); if (l) { l.closePilot = deepMerge(l.closePilot || {}, JSON.parse(JSON.stringify(patch))); if (patch.startedAt) X.log(s, leadId, 'pilot_start', '🏆 Pilote de closing lancé'); if (patch.doneAt) X.log(s, leadId, 'pilot_done', '🎉 Closing validé (checklist)'); } });
+        renderSheet();
+        return Promise.resolve();
+      },
+      recordClose: function (leadId, a) { return pilotRecordClose(leadId, a); },
+      bookingLink: function (typeId, l) {
+        var parts = String(l.nom || '').trim().split(/\s+/);
+        return 'https://team.alteore.com/booking.html?' + (typeId ? 'type=' + encodeURIComponent(typeId) + '&' : '') + 'leadId=' + encodeURIComponent(l.id) + '&prenom=' + encodeURIComponent(parts[0] || '') + '&nom=' + encodeURIComponent(parts.slice(1).join(' ')) + '&email=' + encodeURIComponent(l.email || '') + '&tel=' + encodeURIComponent(l.telephone || '');
+      },
+      toast: toast
+    });
+  }
+
   /* ═══ « SIMULER LE CLIENT » (demande Adrien 09/10/2026) ═════════════
      Dès qu'un contrat part en signature (ou que c'est au tour de l'associé)
      et dès qu'un lien mandat GoCardless est envoyé, une carte propose
@@ -849,7 +914,7 @@
   var dbRender = null;
   function onDbChange() {
     clearTimeout(dbRender);
-    dbRender = setTimeout(function () { renderSheet(); if (ui.view === 'leads') renderMain(); renderBadge(); simCheck(); }, 150);
+    dbRender = setTimeout(function () { renderSheet(); if (ui.view === 'leads') renderMain(); renderBadge(); simCheck(); if (window.ClosePilot) window.ClosePilot.refresh(); }, 150);
   }
   function reloadMain() { var fr = $('main').querySelector('iframe.mirror'); if (fr) fr.removeAttribute('data-src'); }
 
@@ -869,10 +934,22 @@
         sn.forEach(function (d) { st.setOverlay(colPath + '/' + d.id, window.SBXDB.encode(d.data())); });
       });
     });
+    /* booking.html (RDV 72 h du pilote) : agendas et types de RDV réels, en
+       lecture seule — sinon la page de réservation n'aurait aucun créneau.
+       Les créneaux occupés (calendar_busy) suivent à la demande. */
+    st.addOverlayLoader(function (colPath) {
+      if (colPath !== 'calendar_busy') return Promise.resolve();
+      return real.collection('calendar_busy').get().then(function (sn) {
+        sn.forEach(function (d) { st.setOverlay('calendar_busy/' + d.id, window.SBXDB.encode(d.data())); });
+      }).catch(function () {});
+    });
+    var cfgP = real.collection('booking_config').get().then(function (sn) {
+      sn.forEach(function (d) { st.setOverlay('booking_config/' + d.id, window.SBXDB.encode(d.data())); });
+    }).catch(function (e) { if (window.console) console.warn('[sandbox] agendas illisibles', e && e.message); });
     return real.collection('signature_templates').get().then(function (sn) {
       var n = 0;
       sn.forEach(function (d) { st.setOverlay('signature_templates/' + d.id, window.SBXDB.encode(d.data())); n++; });
-      return n;
+      return cfgP.then(function () { return n; });
     });
   }
   function start(user) {
@@ -885,6 +962,7 @@
     $('vLock').innerHTML = 'Chargement des contrats du moment…';
     st.load().then(readRealTemplates).then(function (n) {
       X.seed(st.identity);
+      setupPilot();
       st.listen(onDbChange, window);
       simCheck();
       $('vLock').style.display = 'none'; $('vApp').style.display = '';

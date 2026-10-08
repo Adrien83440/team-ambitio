@@ -4763,7 +4763,12 @@ const FAKE = {
   '/api/payments-unpaid': function () { return [200, { ok: true, kpis: {}, items: [], events: [], note: '' }]; },
   '/api/user-activity': function () { return [200, { ok: true }]; },
   '/api/ai-followup': function () { return [200, { ok: true, items: [] }]; },
-  '/api/twilio-sms-status': function () { return [200, {}]; }
+  '/api/twilio-sms-status': function () { return [200, {}]; },
+  /* Réservation (booking.html) : attribution setting et quota coaching —
+     sans effet dans le bac à sable (le RDV est écrit dans la fausse base). */
+  '/api/booking-setter-attribution': function () { return [200, { ok: true, sandbox: true }]; },
+  '/api/booking-attribution': function () { return [200, { ok: true, sandbox: true }]; },
+  '/api/booking-check-coaching-quota': function () { return [200, { allowed: true }]; }
 };
 
 async function __handle(path, init) {

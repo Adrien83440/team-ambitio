@@ -339,28 +339,8 @@
     var btn = document.getElementById('cwConfirm');
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Enregistrement…'; }
 
-    var sb = state.a.booking === 'sb';
-    var actors = AF.resolveClosingActors(state.lead, state.booking);
-    var oc = offerCfg();
-    var pc = payCfg();
-    var closeData = {
-      offre: oc ? oc.commOffre : 'BP 12',                 // clé COMM_RULES ('Elite' | 'BP 12')
-      offreLabel: state.a.contrat,                        // libellé carte ('Elite' | 'Business')
-      subtype: state.a.paiement === 'pif' ? 'pif' : 'mensualise',
-      contracte: pc ? pc.contracte : 0,
-      collecte: Number(state.a.encaisse) || 0,
-      paiement: 'prelevement',
-      closerSlug: actors.closerSlug,
-      setterSlug: actors.setterSlug,
-      sb: sb
-    };
-
     var p;
-    if (state.booking) {
-      p = AF.setOutcome(state.booking, 'close', { closeData: closeData, lead: state.lead, typeMap: state.typeMap || {} });
-    } else {
-      p = AF.applyFicheClose(state.leadId, state.lead, closeData, { typeMap: state.typeMap, bookings: state.bookings });
-    }
+    try { p = persist(state); } catch (ePersist) { p = Promise.reject(ePersist); }
 
     p.then(function (res) {
       if (!state) return;
@@ -386,16 +366,44 @@
     });
   }
 
+  /* Écrit le close (fiche, RDV, commissions) à partir des réponses des
+     cartes. Partagé par les cartes ci-dessus et par le pilote de closing
+     (close-pilot.js, Leads Live) : UNE seule façon d'enregistrer un close.
+     o = { leadId, lead, booking, bookings, typeMap, a:{contrat, paiement,
+     booking:'sb'|'nb', encaisse} }. */
+  function persist(o) {
+    var AF = window.AlteoreFlow;
+    var oc = pricing()[o.a.contrat] || null;
+    var pc = oc ? (o.a.paiement === 'pif' ? oc.pif : oc.mensualise) : null;
+    var actors = AF.resolveClosingActors(o.lead, o.booking);
+    var closeData = {
+      offre: oc ? oc.commOffre : 'BP 12',                 // clé COMM_RULES ('Elite' | 'BP 12')
+      offreLabel: o.a.contrat,                            // libellé carte ('Elite' | 'Business')
+      subtype: o.a.paiement === 'pif' ? 'pif' : 'mensualise',
+      contracte: pc ? pc.contracte : 0,
+      collecte: Number(o.a.encaisse) || 0,
+      paiement: 'prelevement',
+      closerSlug: actors.closerSlug,
+      setterSlug: actors.setterSlug,
+      sb: o.a.booking === 'sb'
+    };
+    if (o.booking) return AF.setOutcome(o.booking, 'close', { closeData: closeData, lead: o.lead, typeMap: o.typeMap || {} });
+    return AF.applyFicheClose(o.leadId, o.lead, closeData, { typeMap: o.typeMap, bookings: o.bookings });
+  }
+
   /* Prévient le coach référent sur WhatsApp. Silencieux en cas d'échec côté
      interface — le détail part dans la console et dans `whatsapp_messages` —
      parce qu'un coach injoignable se corrige dans Admin → Utilisateurs, pas au
      milieu d'un close. */
   function notifierCoach() {
-    if (!state || !state.a.coachSlug || !state.leadId) return;
-    var leadId = state.leadId;
-    var coachSlug = state.a.coachSlug;
-    var coachNom = state.a.coachNom;
-    var programme = state.a.contrat;
+    if (!state) return;
+    notifyCoach(state.leadId, state.a);
+  }
+  function notifyCoach(leadId, a) {
+    if (!a || !a.coachSlug || !leadId) return;
+    var coachSlug = a.coachSlug;
+    var coachNom = a.coachNom;
+    var programme = a.contrat;
 
     /* Le choix est écrit sur la fiche AVANT l'envoi, et indépendamment de lui :
        c'est lui que relira le bouton « Créer le groupe de suivi ». Si Meta est
@@ -520,5 +528,15 @@
     render();
   }
 
-  window.CloseWizard = { open: open, close: close };
+  /* Enregistre un close sans les cartes (pilote de closing de Leads Live) :
+     même écriture que « ✅ Confirmer le close », puis coach prévenu. */
+  function commit(o) {
+    if (!window.AlteoreFlow) return Promise.reject(new Error('alteore-flow.js manquant'));
+    o = o || {}; o.a = o.a || {};
+    var p;
+    try { p = persist(o); } catch (e) { return Promise.reject(e); }
+    return p.then(function (res) { notifyCoach(o.leadId, o.a); return res; });
+  }
+
+  window.CloseWizard = { open: open, close: close, commit: commit, notifyCoach: notifyCoach };
 })();
