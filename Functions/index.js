@@ -580,10 +580,16 @@ exports.onNewLead = functions.firestore
       // ─── Écrasement des champs de tunnel (le dernier opt-in gagne) ───────
       // Avant : on préservait l'ancien type/utm. Maintenant : le dernier opt-in
       // gagne pour que Lead Live affiche le tunnel d'opt-in actuel.
-      if (type)              merge.type         = type;
-      if (lead.utm)          merge.utm          = lead.utm;
-      if (lead.source)       merge.source       = lead.source;
-      if (lead.sourceDetail) merge.sourceDetail = lead.sourceDetail;
+      // Client protégé : le tunnel du close reste. Un client qui repasse par
+      // une page d'opt-in (ex. Yann, VSL Élite pendant son appel de close du
+      // 07/10/2026) n'en change pas : la trace est dans engagementHistory,
+      // lastOptinType et la timeline.
+      if (!isClient) {
+        if (type)              merge.type         = type;
+        if (lead.utm)          merge.utm          = lead.utm;
+        if (lead.source)       merge.source       = lead.source;
+        if (lead.sourceDetail) merge.sourceDetail = lead.sourceDetail;
+      }
 
       // ─── Soft-reset stage/status (sauf clients protégés) ────────────────
       // L'ancien stage/status sont déjà capturés dans engagementSnapshot.
@@ -599,7 +605,7 @@ exports.onNewLead = functions.firestore
       // ─── types[] cumulatif (audit lifetime des tunnels touchés) ──────────
       // Sert au filtrage Lead Live et à l'analytics. Indépendant de
       // engagementHistory qui contient les snapshots complets datés.
-      if (type && type !== existing.type) {
+      if (!isClient && type && type !== existing.type) {
         const types = existing.types || (existing.type ? [existing.type] : []);
         if (types.indexOf(type) < 0) types.push(type);
         merge.types = types;
@@ -4552,9 +4558,9 @@ async function _step4bFlagAlert(type, data) {
 
 /* ═══════════════════════════════════════════════════════════════════════
    SYNC INTER-MODULES (Step 3+4+5) — module séparé _sync.js
-   6 Cloud Functions ajoutées :
+   7 Cloud Functions ajoutées :
      onPersonsUpdate, onLeadUpdate, onClientUpdate,
-     onInvoiceClientUpdate, onPaymentUpdate, onSubscriptionUpdate
+     onInvoiceClientUpdate, onPaymentUpdate, onPaymentCreated, onSubscriptionUpdate
    ═══════════════════════════════════════════════════════════════════════ */
 Object.assign(exports, require('./_sync'));
 

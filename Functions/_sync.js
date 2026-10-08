@@ -179,6 +179,56 @@ function valuesEqual(a, b) {
   return a === b;
 }
 
+/* Closeur effectif d'un lead. Le parcours de close (SET NB / Close SB) n'écrit
+   pas leads.closeurSlug mais closedData.closerSlug, et assignedTo porte le
+   propriétaire du RDV. leads.closeurSlug reste prioritaire : il n'existe que
+   s'il a été posé par la fiche person (correction manuelle dans Admin Persons). */
+function closeurSlugOf(lead) {
+  if (!lead) return null;
+  return lead.closeurSlug
+      || (lead.closedData && lead.closedData.closerSlug)
+      || lead.assignedTo
+      || null;
+}
+
+/* Nom affichable d'un membre depuis le roster _meta/team_members. */
+async function rosterNameOf(slug) {
+  if (!slug) return null;
+  try {
+    const snap = await db.collection('_meta').doc('team_members').get();
+    const raw = (snap.data() || {}).members;
+    const arr = Array.isArray(raw) ? raw : Object.keys(raw || {}).map(k => raw[k]);
+    const m = arr.find(x => x && x.slug === slug);
+    return m ? (m.fullName || m.shortName || m.slug) : null;
+  } catch (e) {
+    console.warn('[sync] roster illisible :', e.message);
+    return null;
+  }
+}
+
+/* Rattache à la person les paiements du lead qui n'ont pas encore de personId.
+   Admin Persons lit payments.personId : sans lui, le bloc Paiements reste vide. */
+async function linkLeadPaymentsToPerson(leadId, personId) {
+  const snap = await db.collection('payments').where('leadId', '==', leadId).get();
+  const linked = [];
+  for (const d of snap.docs) {
+    if (d.data().personId) continue;
+    await d.ref.update({
+      personId: personId,
+      _lastSyncedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    linked.push(d.id);
+  }
+  if (linked.length) {
+    await db.collection('persons').doc(personId).update({
+      paymentIds: admin.firestore.FieldValue.arrayUnion.apply(null, linked),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      _lastSyncedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    console.log('[sync.payments] ' + linked.length + ' paiement(s) du lead ' + leadId + ' rattaché(s) à persons/' + personId);
+  }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    STEP 3 — propagateFromPersons (hub → spokes)
    ═══════════════════════════════════════════════════════════════════════ */
@@ -413,17 +463,20 @@ async function createPersonOnIsClientTransition(leadId, leadData) {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       _lastSyncedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    await linkLeadPaymentsToPerson(leadId, existingPersonId);
     console.log('[sync.transitionIsClient] lead ' + leadId + ' attaché à persons existant ' + existingPersonId);
     return;
   }
 
   /* 3. Créer un nouveau persons */
+  const closeurSlug = closeurSlugOf(leadData);
+  const closeurName = leadData.closeurName || await rosterNameOf(closeurSlug);
   const newPerson = {
     nom:             leadData.nom || '',
     email:           email,
     telephone:       phoneE164,
     phoneNormalized: phoneN,
-    clientType:      'individual',
+    clientType:      'company',   /* 100 % B2B — voir CLAUDE.md */
     companyName:     null,
     companyLegalForm:null,
     companyRcs:      null,
@@ -434,10 +487,10 @@ async function createPersonOnIsClientTransition(leadId, leadData) {
     crmStatus:       leadData.clientStatus || 'active',
     coachingStatus:  null,
     isClient:        true,
-    closeurSlug:     leadData.closeurSlug || null,
-    closeurName:     leadData.closeurName || null,
+    closeurSlug:     closeurSlug,
+    closeurName:     closeurName || null,
     coachAssigned:   leadData.coachAssigned || null,
-    salesOwner:      leadData.closeurSlug || null,
+    salesOwner:      closeurSlug,
     gcCustomerId:    leadData.gcCustomerId || null,
     leadIds:         [leadId],
     primaryLeadId:   leadId,
@@ -458,6 +511,7 @@ async function createPersonOnIsClientTransition(leadId, leadData) {
     personId: ref.id,
     _lastSyncedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
+  await linkLeadPaymentsToPerson(leadId, ref.id);
   console.log('[sync.transitionIsClient] nouveau persons ' + ref.id + ' créé pour lead ' + leadId);
 }
 
@@ -490,9 +544,15 @@ exports.onLeadUpdate = functions.firestore
         /* Pas de propagateToHub immédiat — on vient de tout setup */
         return null;
       }
-      /* Step 4 : remontée vers hub */
+      /* Step 4 : remontée vers hub — le closeur est lu sous sa forme effective
+         (closedData.closerSlug / assignedTo), pas seulement leads.closeurSlug. */
       if (after.personId) {
-        await propagateToHub('leads', context.params.leadId, before, after);
+        const effBefore = Object.assign({}, before, { closeurSlug: closeurSlugOf(before) });
+        const effAfter = Object.assign({}, after, { closeurSlug: closeurSlugOf(after) });
+        if (effAfter.closeurSlug && effAfter.closeurSlug !== effBefore.closeurSlug && !after.closeurName) {
+          effAfter.closeurName = await rosterNameOf(effAfter.closeurSlug);
+        }
+        await propagateToHub('leads', context.params.leadId, effBefore, effAfter);
       }
     } catch (e) {
       console.error('[sync] onLeadUpdate error:', e.message, e.stack);
@@ -543,6 +603,25 @@ exports.onPaymentUpdate = functions.firestore
       }
     } catch (e) {
       console.error('[sync] onPaymentUpdate error:', e.message, e.stack);
+    }
+    return null;
+  });
+
+/* Paiement créé (payments.html, gocardless-lookup…) : on pose le personId du
+   lead s'il existe déjà. Le cas inverse (paiement créé avant la person) est
+   couvert par linkLeadPaymentsToPerson à la création de la person. */
+exports.onPaymentCreated = functions.firestore
+  .document('payments/{paymentId}')
+  .onCreate(async (snap, context) => {
+    const data = snap.data() || {};
+    if (data.personId || !data.leadId) return null;
+    try {
+      const leadSnap = await db.collection('leads').doc(data.leadId).get();
+      const personId = leadSnap.exists ? leadSnap.data().personId : null;
+      if (!personId) return null;
+      await linkLeadPaymentsToPerson(data.leadId, personId);
+    } catch (e) {
+      console.error('[sync] onPaymentCreated error:', e.message, e.stack);
     }
     return null;
   });
