@@ -207,6 +207,31 @@ function foldText(s) {
     .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+/* « iPhone · Safari », « Mac · Chrome »… pour le suivi côté équipe. */
+function device(ua) {
+  ua = String(ua || '');
+  const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android'
+    : /Macintosh/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : 'Appareil inconnu';
+  const br = /Edg\//.test(ua) ? 'Edge' : /CriOS|Chrome\//.test(ua) ? 'Chrome' : /FxiOS|Firefox/.test(ua) ? 'Firefox' : /Safari/.test(ua) ? 'Safari' : '';
+  return os + (br ? ' · ' + br : '');
+}
+
+/* SUIVI EN DIRECT (onglet Envois de sales-signatures) : résumé de l'avancée
+   du signataire, posé sur la demande à chaque action. Étapes :
+   0 envoyé · 1 lien ouvert · 2 identité vérifiée · 3 lecture · 4 société ·
+   5 mentions · 6 signature · 7 signé. Le détail fait foi dans `audit`. */
+const STEP_NAMES = ['Envoyé', 'Lien ouvert', 'Identité vérifiée', 'Lecture du contrat', 'Société et représentant', 'Choix et mentions', 'Signature', 'Signé'];
+async function setProgress(ref, signerIndex, patch, info) {
+  const u = {};
+  Object.keys(patch || {}).forEach(function (k) { u['progress.' + k] = patch[k]; });
+  if (patch && Number.isInteger(patch.etape)) u['progress.nom'] = STEP_NAMES[patch.etape] || '';
+  u['progress.at'] = new Date().toISOString();
+  u['progress.signer'] = signerIndex;
+  if (info && info.ua) u['progress.appareil'] = device(info.ua);
+  if (info && (info.city || info.country)) u['progress.lieu'] = [info.city, info.country].filter(Boolean).join(', ');
+  await ref.update(u).catch(function (e) { console.warn('[sign-core] progression :', e && e.message); });
+}
+
 function maskPhone(p) {
   const d = String(p || '').replace(/\D/g, '');
   return d.length >= 2 ? '•• •• •• ' + d.slice(-2) : '';
@@ -216,6 +241,6 @@ module.exports = {
   sha256Hex, findByToken, clientInfo,
   appendAudit, readAudit, entryHash,
   loadTemplate, webIsValid, webDigest,
-  otpOk, OTP_SESSION_MS,
+  otpOk, OTP_SESSION_MS, device, setProgress, STEP_NAMES,
   parisToday, parisDateTime, foldText, maskPhone,
 };

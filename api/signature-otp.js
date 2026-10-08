@@ -180,6 +180,7 @@ module.exports = async (req, res) => {
       await otpRef.set({ sid: (msg && msg.sid) || null }, { merge: true }).catch(function () { /* trace seule */ });
       await core.appendAudit(reqRef, [{ type: 'otp_envoye', signer: signerIndex, data: { tel: phoneHint(to), envoi: sends } }], info)
         .catch(function (e) { console.error('[signature-otp] journal:', e && e.message); });
+      await core.setProgress(reqRef, signerIndex, { derniere: 'Code SMS demandé', enLigne: true }, info);
 
       res.status(200).json({ ok: true, phoneHint: phoneHint(to), sid: (msg && msg.sid) || null });
       return;
@@ -248,6 +249,7 @@ module.exports = async (req, res) => {
       }),
     }, { merge: true });
     await core.appendAudit(reqRef, [{ type: 'otp_verifie', signer: signerIndex, data: { tel: phoneHint(O.phone) } }], info);
+    await core.setProgress(reqRef, signerIndex, { etape: 2, derniere: 'Téléphone vérifié par code SMS', enLigne: true }, info);
 
     /* Code consomme : il ne doit plus pouvoir servir. */
     await otpRef.delete().catch((e) => console.error('[signature-otp] purge:', e && e.message));

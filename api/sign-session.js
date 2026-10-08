@@ -29,7 +29,7 @@ const { db, admin } = require('./_firebaseAdmin');
 const parseBody = require('./_parseBody');
 const core = require('./_sign-core');
 const company = require('./_companyLookup');
-const { buildPreviewPdf, buildSignedPdf, finishSigned } = require('./_sign-pdf');
+const { buildPreviewPdf, buildSignedPdf, finishSigned, EVENT_LABELS } = require('./_sign-pdf');
 const render = require('./_contract-render');
 const { timestamp } = require('./_tsa');
 
@@ -39,7 +39,7 @@ const CLIENT_EVENTS = {
   section_vue: 1, lecture_terminee: 1, lecture_declaree: 1, pdf_original_ouvert: 1, page_pdf_vue: 1,
   etape: 1, entreprise_selectionnee: 1, entreprise_manuelle: 1, representant_saisi: 1,
   case_cochee: 1, case_decochee: 1, champ_rempli: 1, mention_saisie: 1, paraphe_saisi: 1,
-  signature_tracee: 1, signature_effacee: 1, consentement: 1,
+  signature_tracee: 1, signature_effacee: 1, signature_saisie: 1, signature_mode: 1, consentement: 1,
   page_masquee: 1, page_visible: 1,
 };
 
@@ -342,10 +342,16 @@ async function validate(body, found, ctx, strict) {
   /* Signature tracée */
   const sig = f.signature || {};
   out.signaturePng = pngFromDataUrl(sig.png, 600000);
-  out.trace = { strokes: Number(sig.strokes) || 0, points: Number(sig.points) || 0, durationMs: Number(sig.durationMs) || 0 };
+  /* Deux modes, au choix du signataire : tracée (souris, doigt, stylet) ou
+     saisie au clavier (nom tapé, rendu en écriture manuscrite). Les deux sont
+     des signatures électroniques au sens de l'article 1367 ; le mode est
+     inscrit au dossier de preuve. */
+  const mode = sig.mode === 'saisie' ? 'saisie' : 'dessin';
+  out.trace = { mode: mode, strokes: Number(sig.strokes) || 0, points: Number(sig.points) || 0, durationMs: Number(sig.durationMs) || 0 };
   out.signatureName = String(sig.name || '').trim().replace(/\s+/g, ' ').slice(0, 120);
   if (strict) {
-    if (!out.signaturePng || out.trace.points < 20) errs.push('Tracez votre signature dans le cadre prévu.');
+    if (!out.signaturePng) errs.push(mode === 'saisie' ? 'Tapez votre nom pour signer.' : 'Tracez votre signature dans le cadre prévu.');
+    else if (mode === 'dessin' && out.trace.points < 20) errs.push('Tracez votre signature dans le cadre prévu.');
     if (core.foldText(out.signatureName) !== core.foldText(out.rep.full)) errs.push('Le nom saisi sous la signature doit être celui du représentant : ' + out.rep.full + '.');
   }
   out.errors = errs;
@@ -417,6 +423,8 @@ module.exports = async (req, res) => {
         upd.events = admin.firestore.FieldValue.arrayUnion({ type: 'opened', by: 'signer' + (i + 1), date: new Date().toISOString() });
         await found.ref.update(upd);
         await core.appendAudit(found.ref, [{ type: 'lien_ouvert', signer: i, data: { geo: [info.city, info.country].filter(Boolean).join(', ') } }], info);
+        const cur = (R.progress && R.progress.etape) || 0;
+        await core.setProgress(found.ref, i, { etape: Math.max(cur, 1), derniere: 'Lien ouvert', enLigne: true, ouvertures: admin.firestore.FieldValue.increment(1), premiereOuverture: (R.progress && R.progress.premiereOuverture) || new Date().toISOString() }, info);
       }
       const name = String(found.signer.name || R.clientName || '');
       send(res, 200, {
@@ -455,6 +463,16 @@ module.exports = async (req, res) => {
         .filter(function (e) { return e && CLIENT_EVENTS[e.type]; })
         .map(function (e) { return { type: e.type, signer: i, data: smallData(e.data) }; });
       if (list.length) await core.appendAudit(found.ref, list, info);
+      if (list.length) {
+        const pg = { derniere: (EVENT_LABELS[list[list.length - 1].type] || list[list.length - 1].type), enLigne: list[list.length - 1].type !== 'page_masquee' };
+        const PAGE_TO_STEP = { 2: 3, 3: 4, 4: 5, 5: 6 };
+        list.forEach(function (e) { if (e.type === 'etape' && e.data && PAGE_TO_STEP[e.data.n]) pg.etape = PAGE_TO_STEP[e.data.n]; });
+        const vues = list.filter(function (e) { return e.type === 'section_vue'; }).length;
+        if (vues) pg.lectureVues = admin.firestore.FieldValue.increment(vues);
+        if (list.some(function (e) { return e.type === 'lecture_terminee'; })) pg.lectureOk = true;
+        if (list.some(function (e) { return e.type === 'lecture_declaree'; })) pg.lectureDeclaree = true;
+        await core.setProgress(found.ref, i, pg, info);
+      }
       const done = list.find(function (e) { return e.type === 'lecture_terminee'; });
       if (done) {
         const upd = {};
@@ -478,6 +496,7 @@ module.exports = async (req, res) => {
       if (!ctx.generated) { try { pages = (await require('pdf-lib').PDFDocument.load(ctx.tpl.pdf, { updateMetadata: false })).getPageCount(); } catch (e) { pages = 0; } }
       const shownWeb = ctx.generated ? ctx.signerWeb : ctx.web;
       await core.appendAudit(found.ref, [{ type: 'contenu_charge', signer: i, data: { mode: ctx.webMode ? 'texte' : 'pdf', version: ctx.web ? (ctx.web.version || 1) : null } }], info);
+      await core.setProgress(found.ref, i, { lectureTotal: ctx.webMode ? ((shownWeb && shownWeb.sections) || []).length : pages, derniere: 'Contrat affiché', enLigne: true }, info);
       const s0 = signers[0] || {};
       send(res, 200, {
         ok: true,
@@ -706,6 +725,7 @@ async function finalize(found, ctx, v, info, body) {
       events: admin.firestore.FieldValue.arrayUnion({ type: 'signed', by: 'signer' + (i + 1), date: nowIso }),
       submitLock: admin.firestore.FieldValue.delete(),
     });
+    await core.setProgress(found.ref, i, { etape: 7, derniere: 'Signé par le signataire ' + (i + 1) + ' — en attente du suivant', enLigne: false }, info);
     return { ok: true, final: false, certificateId: certId, nextSigner: (signers[i + 1] && signers[i + 1].name) || '' };
   }
 
@@ -753,7 +773,8 @@ async function finalize(found, ctx, v, info, body) {
         mentions: d.mentions,
         signaturePng: Buffer.from(d.signaturePngB64, 'base64'),
         paraphePng: d.paraphePngB64 ? Buffer.from(d.paraphePngB64, 'base64') : null,
-        traceInfo: d.trace.strokes + ' trait(s), ' + d.trace.points + ' points' + (d.trace.durationMs ? ', ' + fmtDuree(d.trace.durationMs) : ''),
+        sigLabel: d.trace.mode === 'saisie' ? 'Signature saisie au clavier par le signataire (« ' + d.signatureName + ' »), rendue en écriture manuscrite' : 'Signature manuscrite tracée à l\'écran',
+        traceInfo: d.trace.mode === 'saisie' ? 'mode : nom tapé' : (d.trace.strokes + ' trait(s), ' + d.trace.points + ' points' + (d.trace.durationMs ? ', ' + fmtDuree(d.trace.durationMs) : '')),
       };
     }),
     audit: audit.entries,
@@ -833,6 +854,7 @@ async function finalize(found, ctx, v, info, body) {
   });
   await found.ref.update(upd);
   await core.appendAudit(found.ref, [{ type: 'document_genere', signer: null, data: { sha256: finalSha, octets: out.bytes.length, sceau: out.seal ? out.seal.authority : 'aucun' } }], info);
+  await core.setProgress(found.ref, i, { etape: 7, derniere: 'Contrat signé et scellé', enLigne: false }, info);
 
   /* Passage du lead en client + webhook Make : traités par la Cloud Function
      onWebhookInbox (action publique signature_completed), comme avant. */

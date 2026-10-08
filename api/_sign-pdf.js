@@ -437,6 +437,8 @@ const EVENT_LABELS = {
   document_genere: 'Contrat signé généré et scellé',
   copie_telechargee: 'Exemplaire signé téléchargé',
   lecture_declaree: 'Déclaration : « J\'ai pris connaissance du document dans son intégralité »',
+  signature_saisie: 'Signature saisie au clavier',
+  signature_mode: 'Mode de signature choisi',
   copie_envoyee: 'Exemplaire signé envoyé par e-mail',
 };
 
@@ -529,7 +531,7 @@ async function proofPages(doc, fonts, P) {
     ]);
     F.text('Mentions saisies de sa main', { font: fonts.bold, size: 9, after: 4 });
     F.kv(S.mentions.map(function (m) { return [m.nom, '« ' + m.valeur + ' »' + (m.at ? '  —  ' + parisStamp(m.at) : '')]; }));
-    if (S.sigImg) F.image(S.sigImg, 260, 90, 'Signature manuscrite tracée à l\'écran — ' + S.traceInfo);
+    if (S.sigImg) F.image(S.sigImg, 260, 90, (S.sigLabel || 'Signature manuscrite tracée à l\'écran') + ' — ' + S.traceInfo);
     if (S.parImg) F.image(S.parImg, 120, 40, 'Paraphe');
   });
 
