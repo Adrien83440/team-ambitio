@@ -71,6 +71,10 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:inherit;}
 .inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,70,229,.13);}
 .inp.ok{border-color:var(--green);}
 .inp.bad{border-color:var(--red);}
+.inp.bad,.chk.bad{box-shadow:0 0 0 3px rgba(220,38,38,.12);}
+.chk.bad{border-color:var(--red);}
+.pad-wrap.bad{border-color:var(--red);}
+.ferr{font-size:12.5px;color:var(--red);margin-top:5px;font-weight:600;}
 .inp[readonly]{background:#f8fafc;color:var(--ink2);}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 .row3{display:grid;grid-template-columns:120px 1fr;gap:10px;}
@@ -880,16 +884,75 @@ function missing(step){
   return m;
 }
 function repFull(){return ($('rFirst').value.trim()+' '+$('rLast').value.trim()).trim();}
+/* ═══ ERREURS EN LIGNE ═══
+   Le bouton « Continuer » reste cliquable : au clic, chaque champ en défaut
+   passe en rouge avec son message, et la page descend jusqu'au premier. */
+function ferr(el,msg){
+  if(!el)return;
+  var id='fe_'+(el.id||Math.random().toString(36).slice(2));
+  var box=el.closest('.row2>div')||(el.parentNode&&el.parentNode.style&&el.parentNode.style.display==='flex'?el.parentNode:el);
+  var e=$(id);
+  if(!e){e=document.createElement('div');e.className='ferr';e.id=id;box.parentNode.insertBefore(e,box.nextSibling);if(box!==el)box.appendChild(e);}
+  e.textContent=msg;e.style.display='';
+  el.classList.add('bad');
+}
+function clearFerr(el){if(!el)return;el.classList.remove('bad');var e=$('fe_'+el.id);if(e)e.style.display='none';}
+function flagMissing(step){
+  var bad=[];
+  function f(id,msg){var el=$(id);if(el&&el.offsetParent!==null){ferr(el,msg);bad.push(el);}}
+  if(step===2){
+    var secs=document.querySelectorAll('#doc [data-si]');
+    for(var i=0;i<secs.length;i++){if(!S.read.seen[+secs[i].getAttribute('data-si')]){bad.push(secs[i]);break;}}
+    if(!bad.length)bad.push($('endmark'));
+  }
+  if(step===3){
+    var c=currentCompany();
+    if(S.content.form.needsCompany){
+      if(!c&&!S.coManual){f('coQ','Saisissez le SIRET ou le SIREN de votre société, puis « Rechercher ».');}
+      if(S.coManual){
+        if(!val('mName').trim())f('mName','Raison sociale obligatoire.');
+        if(!val('mForm').trim())f('mForm','Forme juridique obligatoire (SARL, SAS, EURL, EI…).');
+        var sr=val('mSiret').replace(/\D/g,'');
+        if(sr.length!==14)f('mSiret','Le SIRET compte 14 chiffres ('+sr.length+' saisis).');
+        else if(!siretOk(sr))f('mSiret','Ce SIRET n\'est pas valide : vérifiez les 14 chiffres (la clé de contrôle ne correspond pas).');
+      }
+      if(c&&c.closed)bad.push($('coSelected'));
+      if((S.coManual||(c&&c.addressHidden))){
+        if(!val('aL1').trim())f('aL1','Adresse du siège obligatoire.');
+        if(!/^\d{5}$/.test(val('aCp')))f('aCp','Code postal à 5 chiffres.');
+        if(!val('aCity').trim())f('aCity','Ville obligatoire.');
+      }
+    }
+    if(val('rFirst').trim().length<2)f('rFirst','Prénom obligatoire.');
+    if(val('rLast').trim().length<2)f('rLast','Nom obligatoire.');
+    if(qualite().length<3){if(val('rQual')==='Autre')f('rQualAutre','Précisez votre qualité.');else f('rQual','Choisissez votre qualité (gérant, président…).');}
+    if(!S.decl.pouvoir)f('chkPouvoir','Cochez cette case pour certifier pouvoir engager la société.');
+  }
+  if(step===4){
+    S.content.form.checks.forEach(function(c){if(c.required&&!S.checks[c.id]){var el=document.querySelector('[data-chk="c:'+c.id+'"]');if(el){ferr(el,'Case obligatoire.');bad.push(el);}}});
+    S.content.form.texts.forEach(function(x){if(!x.locked&&x.required&&!($('tx_'+x.id)||{}).value)f('tx_'+x.id,'Champ obligatoire.');});
+    if(val('mDate')!==S.content.today)f('mDate','Écrivez la date du jour : '+S.content.today+'.');
+    if(fold(val('mLu'))!=='lu et approuve')f('mLu','Recopiez exactement : Lu et approuvé');
+    if(S.content.form.paraphe&&!/^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\- ]{0,11}$/.test(val('mPar').trim()))f('mPar','Saisissez vos initiales (ex. J.D.).');
+  }
+  if(step===5){
+    if(S.pad.points<20){$('padWrap').classList.add('bad');bad.push($('padWrap'));}
+    if(fold(val('sigName'))!==fold(repFull()))f('sigName','Saisissez exactement : '+repFull());
+    if(!S.decl.esign)f('chkEsign','Cochez cette case pour accepter la signature électronique.');
+  }
+  if(bad[0]){bad[0].scrollIntoView({behavior:'smooth',block:'center'});try{if(bad[0].focus&&/INPUT|SELECT|TEXTAREA/.test(bad[0].tagName))setTimeout(function(){bad[0].focus();},350);}catch(e){}}
+}
+
 function refreshBar(){
   if(!S.content||S.step<2)return;
   var m=missing(S.step),n=$('nextBtn');
-  n.disabled=m.length>0;
+  n.disabled=false;n.style.opacity=m.length?'.72':'';
   n.className='btn '+(S.step===5?'btn-g':'btn-p');
   n.textContent=S.step===2?'J\'ai lu le contrat →':(S.step===5?'✍️ Signer le contrat':'Continuer →');
   $('barHint').textContent=m.length?('À compléter : '+m.slice(0,3).join(', ')+(m.length>3?'…':'')):(S.step===5?'Tout est prêt.':'');
 }
 function next(){
-  var m=missing(S.step);if(m.length)return;
+  var m=missing(S.step);if(m.length){flagMissing(S.step);return;}
   if(S.step===2){
     if(!S.read.done){S.read.done=true;track('lecture_terminee',{vues:S.read.count,vuesReelles:S.read.realCount||0,total:S.read.total,declaree:!!S.read.declaree,duree:fmtDur(Date.now()-S.read.startedAt)});}
     flush();go(3);return;
@@ -976,7 +1039,7 @@ function padMove(e){
 }
 function padUp(){
   if(!drawing)return;drawing=false;
-  if(S.pad.points>=20){$('padWrap').classList.add('ok');}
+  if(S.pad.points>=20){$('padWrap').classList.add('ok');$('padWrap').classList.remove('bad');}
   track('signature_tracee',{traits:S.pad.strokes,points:S.pad.points});
   refreshBar();
 }
@@ -1116,6 +1179,7 @@ document.addEventListener('click',function(e){
     e.preventDefault();
     var on=!t.classList.contains('on');t.classList.toggle('on',on);
     var parts=chk.split(':'),kind=parts[0],id=parts.slice(1).join(':');
+    t.classList.remove('bad');var fe=$('fe_'+t.id);if(fe)fe.style.display='none';
     if(kind==='decl'){S.decl[id]=on;track('consentement',{id:id,libelle:$(id==='pouvoir'?'txtPouvoir':'txtEsign').textContent,valeur:on});}
     else{S.checks[id]=on;var c=findCheck(id);track(on?'case_cochee':'case_decochee',{id:id,libelle:c?c.label.slice(0,180):''});if(c&&c.kind==='renonciation')renPanel(id);}
     refreshBar();return;
@@ -1139,6 +1203,8 @@ document.addEventListener('click',function(e){
 });
 document.addEventListener('input',function(e){
   var id=e.target&&e.target.id;
+  if(e.target&&e.target.classList&&e.target.classList.contains('bad'))clearFerr(e.target);
+  if(id==='mSiret'){var d=e.target.value.replace(/\D/g,'');if(d.length===14&&!siretOk(d))ferr(e.target,'Ce SIRET n\'est pas valide : vérifiez les 14 chiffres (la clé de contrôle ne correspond pas).');}
   if(id==='rFirst'||id==='rLast'||id==='rQualAutre'||id==='sigName'||id==='mName'||id==='mForm'||id==='mSiret'||id==='aL1'||id==='aL2'||id==='aCp'||id==='aCity'||(e.target.getAttribute&&e.target.getAttribute('data-tx'))){
     if(id==='aCp')e.target.value=e.target.value.replace(/\D/g,'').slice(0,5);
     if(id==='sigName'){var ok=fold(e.target.value)===fold(repFull());e.target.className='inp'+(e.target.value.length>3?(ok?' ok':' bad'):'');
@@ -1147,7 +1213,7 @@ document.addEventListener('input',function(e){
     if(S.step===3)saveDraft();
   }
 });
-document.addEventListener('change',function(e){if(e.target&&e.target.id==='rQual'){show('rQualAutre',e.target.value==='Autre');refreshBar();saveDraft();}});
+document.addEventListener('change',function(e){if(e.target&&e.target.id==='rQual'){clearFerr(e.target);show('rQualAutre',e.target.value==='Autre');refreshBar();saveDraft();}});
 $('coQ').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();coSearch();}});
 </script>
 </body>
