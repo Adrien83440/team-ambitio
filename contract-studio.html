@@ -159,6 +159,21 @@ textarea.inp{resize:vertical;line-height:1.5;}
       <!-- GAUCHE -->
       <div class="side">
         <div class="panel">
+          <div class="panel-t">⚙️ Après la signature</div>
+          <label style="display:flex;align-items:center;gap:8px;padding:8px;background:rgba(168,85,247,.07);border:1px solid rgba(168,85,247,.25);border-radius:8px;cursor:pointer">
+            <input type="checkbox" id="setAuto" style="accent-color:#a855f7"/><span style="font-size:12px;font-weight:700;color:#c084fc">Déclencher Make à la signature</span>
+          </label>
+          <div id="setAutoBox" style="display:none">
+            <div class="lbl">URL du webhook Make *</div><input class="inp" id="setUrl" type="url" placeholder="https://hook.eu2.make.com/..." style="font-family:monospace;font-size:11px"/>
+            <div class="lbl">Note (facultatif)</div><input class="inp" id="setNote" placeholder="Ex. Onboarding Elite"/>
+            <button class="btn btn-s" style="width:100%;justify-content:center;margin-top:8px" data-action="test-hook" id="testHookBtn">🧪 Tester le webhook</button>
+            <div id="testHookRes" style="font-size:11px;margin-top:5px"></div>
+          </div>
+          <div class="lbl">🎓 Formation AE Academy ouverte à la signature</div>
+          <select class="inp" id="setAcad"><option value="">🤖 Automatique (d'après le nom du contrat)</option><option value="__none__">🚫 Aucune — ce contrat n'ouvre pas d'accès</option></select>
+          <div id="setAcadHint" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
+        </div>
+        <div class="panel">
           <div class="panel-t">📑 Articles<span class="sp"></span><button class="btn btn-s" data-action="add-section">＋</button></div>
           <ul class="out" id="outline"></ul>
         </div>
@@ -302,6 +317,7 @@ function start(){
     if(!o.ok){$('gate').textContent=o.j.error||'Chargement impossible.';return;}
     var T=o.j.template;
     ST.version=T.version||0;
+    ST.settings=T.settings||null;
     init(T.web,T.name);
     if(T.converted){toast('Contrat converti en texte éditable — enregistrez pour passer au PDF généré.');dirty(true);}
   });
@@ -317,6 +333,7 @@ function init(web,name){
   $('dTitle').value=web.title||'';$('dSub').value=web.subtitle||'';$('dTag').value=web.tagline||'';$('dPlace').value=web.place||'FAYENCE';
   $('gate').style.display='none';$('app').style.display='';
   $('histBtn').disabled=!ST.id;$('dupBtn').disabled=!ST.id;
+  fillSettings();
   renderAll();dirty(false);
 }
 function exportWeb(){
@@ -449,6 +466,59 @@ function addSection(after){
   setTimeout(function(){var el=$('sec_'+at);if(el){el.scrollIntoView({behavior:'smooth',block:'center'});var i=el.querySelector('.sec-title');if(i)i.focus();}},50);
 }
 
+/* ═══ RÉGLAGES APRÈS SIGNATURE : Make + AE Academy ═══
+   Mêmes champs et même test que l'éditeur PDF historique
+   (automationEnabled / automationWebhookUrl / automationNote /
+   academyCourseId) : la Cloud Function signature_completed et
+   api/academy-grant les lisent sur le modèle. */
+var ACAD=null;
+function fillSettings(){
+  var st=ST.settings||{automationEnabled:false,automationWebhookUrl:'',automationNote:'',academyCourseId:''};
+  $('setAuto').checked=!!st.automationEnabled;$('setUrl').value=st.automationWebhookUrl||'';$('setNote').value=st.automationNote||'';
+  $('setAutoBox').style.display=st.automationEnabled?'':'none';
+  loadAcad(st.academyCourseId||'');
+}
+function loadAcad(selected){
+  var sel=$('setAcad'),hint=$('setAcadHint');
+  function render(){
+    var h='<option value="">🤖 Automatique (d\'après le nom du contrat)</option><option value="__none__">🚫 Aucune — ce contrat n\'ouvre pas d\'accès</option>';
+    (ACAD||[]).forEach(function(c){h+='<option value="'+esc(c.id)+'">🎓 '+esc(c.name)+'</option>';});
+    sel.innerHTML=h;sel.value=selected||'';
+    if(sel.value!==(selected||'')){sel.value='';hint.textContent='⚠️ La formation liée n\'existe plus — repassée en Automatique.';}
+  }
+  if(ACAD){render();return;}
+  render();hint.textContent='Chargement des formations…';
+  firebase.auth().currentUser.getIdToken().then(function(tok){return fetch('/api/academy-courses',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:'{}'});})
+    .then(function(r){return r.json();}).then(function(j){ACAD=(j&&j.ok&&Array.isArray(j.courses))?j.courses:[];hint.textContent=ACAD.length?'':'Formations indisponibles — le mode Automatique reste actif.';render();})
+    .catch(function(){ACAD=[];hint.textContent='Formations indisponibles — le mode Automatique reste actif.';render();});
+}
+function readSettings(){
+  var id=$('setAcad').value,c=(ACAD||[]).filter(function(x){return x.id===id;})[0];
+  return {automationEnabled:$('setAuto').checked,automationWebhookUrl:$('setUrl').value.trim(),automationNote:$('setNote').value.trim(),academyCourseId:id,academyCourseName:c?c.name:''};
+}
+function testHook(){
+  var url=$('setUrl').value.trim(),res=$('testHookRes'),b=$('testHookBtn');
+  if(!url){res.innerHTML='<span style="color:var(--red)">❌ URL vide</span>';return;}
+  b.disabled=true;b.textContent='⏳ Test en cours…';res.innerHTML='';
+  var payload={event:'signature_completed',test:true,signatureRequestId:'TEST_'+Date.now(),templateId:ST.id||'TEST_TEMPLATE',templateName:$('tplName').value||'Modèle de test',
+    client:{fullName:'Jean Dupont (test)',firstName:'Jean',lastName:'Dupont',email:'test@example.com',phone:'+33600000000',adresse:'12 rue Exemple, 75001 Paris'},
+    entreprise:{name:'Société Exemple SARL',type:'SARL',siret:'12345678900000',siegeSocial:'12 rue Exemple, 75001 Paris'},
+    leadId:null,lead:null,signedAt:new Date().toISOString(),fieldValues:{nom_prenom:'Jean Dupont',email:'test@example.com'},
+    signers:[{name:'Jean Dupont (test)',email:'test@example.com',status:'signed'}],metadata:{automationNote:$('setNote').value.trim(),isTest:true}};
+  function done(html){b.disabled=false;b.textContent='🧪 Tester le webhook';res.innerHTML=html;}
+  fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+    .then(function(r){done(r.ok?'<span style="color:var(--green)">✅ Webhook reçu (HTTP '+r.status+'). Vérifiez votre scénario Make.</span>':'<span style="color:var(--amber)">⚠️ HTTP '+r.status+'</span>');})
+    .catch(function(){fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+      .then(function(){done('<span style="color:var(--green)">✅ Envoyé (mode no-cors). Vérifiez l\'historique Make.</span>');})
+      .catch(function(e){done('<span style="color:var(--red)">❌ '+esc(e.message)+'</span>');});});
+}
+document.addEventListener('change',function(e){
+  var id=e.target&&e.target.id;
+  if(id==='setAuto'){$('setAutoBox').style.display=e.target.checked?'':'none';dirty();}
+  else if(id==='setAcad')dirty();
+});
+document.addEventListener('input',function(e){var id=e.target&&e.target.id;if(id==='setUrl'||id==='setNote')dirty();});
+
 /* ═══ SÉLECTEUR DE CHAMPS (@) ═══ */
 var PK={at:null,anchor:null,sel:0,items:[]};
 function pickOpen(fromAt){
@@ -559,7 +629,7 @@ function save(){
   var name=$('tplName').value.trim();if(!name){toast('Donnez un nom au contrat.');$('tplName').focus();return;}
   var note=prompt('Note pour cette version (facultatif) :','')||'';
   var b=$('saveBtn');b.disabled=true;b.textContent='Enregistrement…';
-  api('save',{templateId:ST.id,name:name,web:exportWeb(),note:note}).then(function(o){
+  api('save',{templateId:ST.id,name:name,web:exportWeb(),note:note,settings:readSettings()}).then(function(o){
     b.disabled=false;b.textContent='💾 Enregistrer';
     if(!o.ok){alert((o.j.error||'Enregistrement impossible.')+(o.j.details?'\n\n• '+o.j.details.join('\n• '):''));return;}
     ST.id=o.j.id;ST.version=o.j.version;dirty(false);
@@ -738,6 +808,7 @@ document.addEventListener('click',function(e){
   else if(a==='ai-var'){var v=ST.ai.variables[i];if(!varOf(v.key))ST.web.variables.push(v);v._done=true;renderSide();renderAi();dirty();}
   else if(a==='ai-check'){var c=ST.ai.clientChecks[i];ST.web.clientChecks.push(c);c._done=true;renderSide();renderAi();dirty();}
   else if(a==='import-go')importGo();
+  else if(a==='test-hook')testHook();
   else if(a==='pick-open'){var ta=t.closest('.blk')&&t.closest('.blk').querySelector('textarea');if(ta){ST.focus={si:secIdx(ta),bi:blkIdx(ta),el:ta};}pickOpen(false);}
   else if(a==='pick')pickChoose(+t.getAttribute('data-n'));
   else if(a==='blk-cond-here'){condDialog(si,bi);}

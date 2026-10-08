@@ -203,6 +203,10 @@ module.exports = async (req, res) => {
         id: snap.id, name: T.name || '', generated: !!(T.web && T.web.generated),
         converted: !!(T.web && !T.web.generated), version: (T.web && T.web.version) || 0,
         web: webOf(T), hasPdf: !!(T.pdfBase64 || T.pages),
+        settings: {
+          automationEnabled: !!T.automationEnabled, automationWebhookUrl: T.automationWebhookUrl || '', automationNote: T.automationNote || '',
+          academyCourseId: T.academyCourseId || '', academyCourseName: T.academyCourseName || '',
+        },
       } });
       return;
     }
@@ -212,6 +216,22 @@ module.exports = async (req, res) => {
       if (!name) { res.status(400).json({ error: 'Donnez un nom au contrat.' }); return; }
       const c = cleanWeb(body.web);
       if (c.errors.length) { res.status(400).json({ error: 'Le contrat contient des erreurs.', details: c.errors }); return; }
+      /* Réglages « après la signature » : webhook Make (lu par la Cloud
+         Function signature_completed) et formation AE Academy (lue par
+         api/academy-grant). Mêmes champs que l'éditeur PDF historique. */
+      const st = body.settings || null;
+      let settings = null;
+      if (st) {
+        const url = String(st.automationWebhookUrl || '').trim().slice(0, 500);
+        if (st.automationEnabled && !/^https:\/\/[^\s]+$/.test(url)) { res.status(400).json({ error: 'Make activé mais URL du webhook absente ou invalide (https://…).' }); return; }
+        settings = {
+          automationEnabled: !!st.automationEnabled,
+          automationWebhookUrl: st.automationEnabled ? url : '',
+          automationNote: st.automationEnabled ? String(st.automationNote || '').slice(0, 300) : '',
+          academyCourseId: String(st.academyCourseId || '').slice(0, 120),
+          academyCourseName: String(st.academyCourseName || '').slice(0, 200),
+        };
+      }
       const col = db.collection('signature_templates');
       const ref = body.templateId ? col.doc(String(body.templateId)) : col.doc();
       const out = await db.runTransaction(async function (tx) {
@@ -221,6 +241,7 @@ module.exports = async (req, res) => {
         const web = Object.assign({}, c.web, { version: version, savedAt: new Date().toISOString(), savedBy: who });
         const data = { name: name, web: web, generated: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() };
         if (!T) Object.assign(data, { createdAt: admin.firestore.FieldValue.serverTimestamp(), fields: [], pages: 0, isAdhoc: false, automationEnabled: false, automationWebhookUrl: '', automationNote: '', academyCourseId: '' });
+        if (settings) Object.assign(data, settings);
         tx.set(ref, data, { merge: true });
         tx.set(ref.collection('versions').doc(String(version).padStart(4, '0')), {
           version: version, name: name, web: web, note: String(body.note || '').slice(0, 300), by: who,
