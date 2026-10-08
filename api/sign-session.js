@@ -165,9 +165,14 @@ function specFor(ctx, role) {
 /* Données client pour composer un contrat de l'atelier. */
 function clientMap(d) {
   const c = d.company || {};
+  const a = c.address || {};
   return {
     entreprise: c.name || '', nom_prenom: (d.rep && d.rep.full) || '', qualite: (d.rep && d.rep.qualite) || '',
-    siege_social: c.addressLine || company.addressLine(c.address || {}), siret: c.siret || '', forme_juridique: c.legalFormLabel || '',
+    prenom: (d.rep && d.rep.first) || '', nom: (d.rep && d.rep.last) || '',
+    siege_social: c.addressLine || company.addressLine(a), siret: c.siret || '', siren: c.siren || String(c.siret || '').slice(0, 9),
+    tva: c.vatNumber || '', forme_juridique: c.legalFormLabel || '', activite: c.nafLabel || '',
+    adresse: [a.line1, a.line2].filter(Boolean).join(', '), code_postal: a.postalCode || '', ville: a.city || '',
+    date_creation: c.creationDate ? String(c.creationDate).split('-').reverse().join('/') : '',
     email: d.email || '', telephone: d.phone || '', date_signature: d.date || '',
   };
 }
@@ -257,6 +262,7 @@ async function validate(body, found, ctx, strict) {
       if (reg.closed && strict) errs.push('Cette entreprise est radiée au registre : le contrat ne peut pas être signé en son nom. Contactez votre conseiller.');
       C.name = reg.name; C.siren = reg.siren; C.siret = reg.siret; C.vatNumber = reg.vatNumber;
       C.legalForm = reg.legalForm; C.legalFormLabel = reg.legalFormLabel;
+      C.nafLabel = reg.nafLabel || ''; C.creationDate = reg.creationDate || '';
       C.address = reg.addressHidden ? manualAddr : reg.address;
       C.addressSource = reg.addressHidden ? 'saisie (adresse non diffusible au registre)' : 'registre';
       C.verification = 'Vérifiée dans l\'annuaire officiel des entreprises le ' + core.parisToday() + ' — ' + (reg.closed ? 'ENTREPRISE RADIÉE' : 'entreprise active') + (reg.creationDate ? ', créée le ' + reg.creationDate.split('-').reverse().join('/') : '') + ' — source : ' + company.SOURCE_LABEL;
@@ -531,7 +537,7 @@ module.exports = async (req, res) => {
           return {
             siren: x.siren, siret: x.siret, name: x.name, legalFormLabel: x.legalFormLabel,
             address: x.address, addressHidden: x.addressHidden, closed: x.closed,
-            vatNumber: x.vatNumber, creationDate: x.creationDate,
+            vatNumber: x.vatNumber, creationDate: x.creationDate, nafLabel: x.nafLabel,
             dirigeants: (x.dirigeants || []).filter(function (d) { return d.type === 'physique' && !d.masque; })
               .map(function (d) { return { prenoms: d.prenoms, nom: d.nom, qualite: d.qualite }; }),
             qualites: (x.dirigeants || []).map(function (d) { return d.qualite; }).filter(Boolean),
@@ -568,7 +574,7 @@ module.exports = async (req, res) => {
         const d0 = list[0];
         const b = await render.composeContract({
           web: ctx.web, prefill: ctx.prefill, texts: v.texts, checks: v.checks, preview: true,
-          client: clientMap({ company: d0.company, rep: { full: d0.repName, qualite: d0.repQualite }, email: found.signer.email, phone: found.signer.phone, date: d0.date }),
+          client: clientMap({ company: d0.company, rep: Object.assign({ full: d0.repName, qualite: d0.repQualite }, v.rep || {}), email: found.signer.email, phone: found.signer.phone, date: d0.date }),
           signers: list.map(function (x) { return { luApprouve: x.luApprouve, date: x.date, signaturePng: x.signaturePng, paraphePng: x.paraphePng, caption: 'Aperçu — non signé', repName: x.repName, repQualite: x.repQualite }; }),
         });
         pdf = Buffer.from(await b.doc.save());

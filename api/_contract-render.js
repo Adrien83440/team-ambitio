@@ -46,8 +46,10 @@ const LINE = rgb(0.86, 0.88, 0.92);
 const SIZE = 10.4, LH = 14.6;
 
 const CLIENT_KEYS = {
-  entreprise: 'raison sociale', nom_prenom: 'représentant', qualite: 'qualité', siege_social: 'siège social',
-  siret: 'SIRET', forme_juridique: 'forme juridique', email: 'e-mail', telephone: 'téléphone', date_signature: 'date',
+  entreprise: 'raison sociale', nom_prenom: 'représentant', prenom: 'prénom', nom: 'nom', qualite: 'qualité',
+  siege_social: 'siège social', adresse: 'adresse', code_postal: 'code postal', ville: 'ville',
+  siret: 'SIRET', siren: 'SIREN', tva: 'n° TVA', forme_juridique: 'forme juridique', activite: 'activité',
+  date_creation: 'date de création', email: 'e-mail', telephone: 'téléphone', date_signature: 'date',
 };
 
 /* ── Polices du document (Source Serif 4) ─────────────────────────────────── */
