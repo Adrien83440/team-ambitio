@@ -179,7 +179,9 @@ function runs(F, text, ctx, base) {
       if (/^\s+$/.test(w)) out.push({ sp: true });
       else {
         const prev = out[out.length - 1];
-        out.push(Object.assign({ t: w, glue: !!(prev && !prev.sp) }, st));
+        /* nb : ponctuation française précédée d'une espace (« ; », « : »,
+           « ? », « ! », « » ») — elle ne commence jamais une ligne. */
+        out.push(Object.assign({ t: w, glue: !!(prev && !prev.sp), nb: /^[;:!?»%]/.test(w) }, st));
       }
     });
   }
@@ -216,7 +218,7 @@ function layout(F, words, size, maxW) {
     const add = (cur.length && !w.glue ? spW : 0) + w.w;
     if (cur.length && curW + add > maxW) {
       let carry = [w];
-      while (w.glue && cur.length > 1 && carry[0].glue) carry.unshift(cur.pop());
+      while ((w.glue || w.nb) && cur.length > 1 && (carry[0].glue || carry[0].nb)) carry.unshift(cur.pop());
       const ww = function (arr) { return arr.reduce(function (a, x, i) { return a + x.w + (i && !x.glue ? spW : 0); }, 0); };
       lines.push({ words: cur, width: ww(cur) });
       cur = carry; curW = ww(carry);

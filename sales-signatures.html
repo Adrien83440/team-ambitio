@@ -398,21 +398,44 @@ function loadTemplates(){
 function renderTemplates(){
   var h='<div class="tpl-card tpl-card-new" onclick="createNewTpl()"><span style="font-size:28px">+</span><span style="font-size:13px;font-weight:700">Nouveau modèle</span></div>';
   h+='<div class="tpl-card tpl-card-new" style="border-color:rgba(245,158,11,.35);color:#f59e0b" onclick="createAdhocSend()"><span style="font-size:28px">⚡</span><span style="font-size:13px;font-weight:700">Envoi rapide</span><span style="font-size:10px;color:var(--muted);font-weight:600">Document unique, sans modèle</span></div>';
+  /* Atelier de contrats (08/10/2026) — admins : contrat rédigé en texte,
+     PDF composé automatiquement à la signature. */
+  if(window._currentRole==='admin'){
+    h+='<a class="tpl-card tpl-card-new" style="border-color:rgba(56,189,248,.35);color:#38bdf8;text-decoration:none" href="contract-studio.html"><span style="font-size:28px">✨</span><span style="font-size:13px;font-weight:700">Nouveau contrat (atelier)</span><span style="font-size:10px;color:var(--muted);font-weight:600">Texte éditable + Claude</span></a>';
+    h+='<a class="tpl-card tpl-card-new" style="border-color:rgba(52,211,153,.35);color:#34d399;text-decoration:none" href="contract-studio.html?import=1"><span style="font-size:28px">📄</span><span style="font-size:13px;font-weight:700">Importer un PDF</span><span style="font-size:10px;color:var(--muted);font-weight:600">Claude le transforme en modèle</span></a>';
+  }
   TPL.forEach(function(t){
     if(t.isAdhoc)return; // Envois rapides : modèles éphémères, cachés de la grille
-    h+='<div class="tpl-card" onclick="openTpl(\''+t.id+'\')">';
+    /* Un clic ouvre l'atelier (texte du contrat) pour les admins ; l'ancien
+       éditeur de PDF reste accessible par son bouton 📐. */
+    var gen=t.web&&t.web.generated;
+    var studio=window._currentRole==='admin'&&(gen||(t.web&&t.web.sections));
+    h+='<div class="tpl-card" data-tpl="'+esc(t.id)+'" data-studio="'+(studio?'1':'')+'">';
     h+='<div class="tpl-card-name">'+esc(t.name||'Sans nom')+'</div>';
-    h+='<div class="tpl-card-meta">'+((t.fields||[]).length)+' champs · '+(t.pages||0)+' pages</div>';
+    h+='<div class="tpl-card-meta">'+(gen?('✨ Atelier · texte v'+(t.web.version||1)+' · PDF généré'):(((t.fields||[]).length)+' champs · '+(t.pages||0)+' pages'+(t.web&&t.web.sections?' · texte web':'')))+'</div>';
     if(t.academyCourseId==='__none__'){h+='<div class="tpl-card-meta" style="color:#f59e0b">🚫 Sans accès Academy</div>';}
     else if(t.academyCourseId){h+='<div class="tpl-card-meta" style="color:#34d399">🎓 '+esc(t.academyCourseName||'Formation liée')+'</div>';}
     h+='<div style="display:flex;gap:6px;margin-top:10px">';
     h+='<button class="sig-btn sig-btn-g" style="font-size:11px;padding:4px 10px" onclick="event.stopPropagation();sendForSignatureFromList(\''+t.id+'\')">📨 Envoyer</button>';
     h+='<button class="sig-btn" style="font-size:11px;padding:4px 10px;border-color:rgba(245,158,11,.4);color:#fbbf24" onclick="event.stopPropagation();sosOpen(\''+t.id+'\')" title="Envoyer le contrat par email à imprimer et signer — sans signature électronique">🆘 Secours</button>';
+    if(!gen)h+='<button class="sig-btn" style="font-size:11px;padding:4px 10px" data-pdfedit="'+esc(t.id)+'" title="Éditeur PDF (emplacements des champs)">📐</button>';
     h+='<button class="sig-btn sig-btn-r" style="font-size:11px;padding:4px 10px" onclick="event.stopPropagation();deleteTpl(\''+t.id+'\')">🗑</button>';
     h+='</div></div>';
   });
   document.getElementById('tplGrid').innerHTML=h;
 }
+
+/* Clic sur une carte de modèle : atelier (admins, contrats avec texte) ou
+   éditeur PDF historique. Les boutons de la carte gardent leur propre clic. */
+document.addEventListener('click',function(e){
+  var pe=e.target.closest?e.target.closest('[data-pdfedit]'):null;
+  if(pe){e.stopPropagation();openTpl(pe.getAttribute('data-pdfedit'));return;}
+  var c=e.target.closest?e.target.closest('.tpl-card[data-tpl]'):null;
+  if(!c||e.target.closest('button'))return;
+  var id=c.getAttribute('data-tpl');
+  if(c.getAttribute('data-studio')==='1')location.href='contract-studio.html?id='+encodeURIComponent(id);
+  else openTpl(id);
+});
 
 /* ═══ CREATE / OPEN TEMPLATE ═══ */
 function createNewTpl(){_pickPdf(false);}
@@ -1085,9 +1108,40 @@ function _equipeFields(tpl){
       group:h.group||f.group||'',required:h.required===false?false:(f.required!==false),requiredIf:h.requiredIf||f.requiredIf||''};
   });
 }
+/* Variables « conseiller » d'un contrat de l'atelier (web.variables). */
+function _genFields(tpl){
+  return ((tpl.web&&tpl.web.variables)||[]).filter(function(v){return v.filledBy!=='client';});
+}
+function _openSendModalGen(box,vars){
+  var h='<div style="font-size:11px;font-weight:800;color:#0ea5e9;margin-bottom:4px">✎ CONDITIONS À RENSEIGNER AVANT L\'ENVOI</div>'
+    +'<div style="font-size:10px;color:var(--muted);margin-bottom:10px">Intégrées au contrat. Le client les voit mais ne peut pas les modifier.</div>';
+  vars.forEach(function(v){
+    var star=v.required?' *':'';
+    if(v.type==='choice'){
+      h+='<div style="margin-bottom:10px"><div class="ep-label">'+esc(v.label)+star+'</div>';
+      (v.options||[]).forEach(function(o){
+        h+='<label style="display:flex;gap:8px;align-items:flex-start;padding:7px 9px;border:1px solid var(--border);border-radius:8px;margin-top:5px;cursor:pointer;font-size:12px">'
+          +'<input type="radio" name="pv_'+esc(v.key)+'" value="'+esc(o.value)+'" data-prefill-choice="'+esc(v.key)+'" data-req="'+(v.required?'1':'')+'" data-label="'+esc(v.label)+'" style="margin-top:2px;accent-color:#0ea5e9"/><span>'+esc(o.label)+'</span></label>';
+      });
+      h+='</div>';
+    }else{
+      var it=v.type==='date'?'date':(v.type==='number'||v.type==='money'?'number':'text');
+      h+='<div style="margin-bottom:8px"><div class="ep-label">'+esc(v.label)+star+(v.type==='money'?' (€)':'')+'</div><input class="ep-input" type="'+it+'" data-prefill="'+esc(v.key)+'" data-req="'+(v.required?'1':'')+'" data-reqif="'+esc(v.requiredIf||'')+'" data-label="'+esc(v.label)+'"/>'
+        +(v.help?'<div style="font-size:10px;color:var(--muted);margin-top:3px">'+esc(v.help)+'</div>':'')+'</div>';
+    }
+  });
+  box.innerHTML=h;box.style.display='';
+}
 function openSendModal(){
   var box=document.getElementById('sendPrefill');
-  var list=_equipeFields(_sendTpl());
+  var tplS=_sendTpl();
+  if(tplS.web&&tplS.web.generated){
+    var gv=_genFields(tplS);
+    if(gv.length)_openSendModalGen(box,gv);else{box.innerHTML='';box.style.display='none';}
+    document.getElementById('sendModal').style.display='flex';
+    return;
+  }
+  var list=_equipeFields(tplS);
   if(list.length){
     var h='<div style="font-size:11px;font-weight:800;color:#0ea5e9;margin-bottom:4px">✎ CONDITIONS À RENSEIGNER AVANT L\'ENVOI</div>'
       +'<div style="font-size:10px;color:var(--muted);margin-bottom:10px">Imprimées sur le contrat. Le client les voit mais ne peut pas les modifier.</div>';
@@ -1125,11 +1179,21 @@ function _collectPrefill(){
     var g=inp.getAttribute('data-group');if(g){groups[g]=groups[g]||inp.checked;}
   });
   Object.keys(groups).forEach(function(g){if(!groups[g])manque.push(g);});
+  /* Choix uniques de l'atelier (radios data-prefill-choice). */
+  var choiceSeen={};
+  [].slice.call(document.querySelectorAll('#sendPrefill [data-prefill-choice]')).forEach(function(inp){
+    var k=inp.getAttribute('data-prefill-choice');
+    if(!choiceSeen[k])choiceSeen[k]={req:inp.getAttribute('data-req')==='1',label:inp.getAttribute('data-label'),val:''};
+    if(inp.checked)choiceSeen[k].val=inp.value;
+  });
+  Object.keys(choiceSeen).forEach(function(k){if(choiceSeen[k].val)prefill[k]=choiceSeen[k].val;else if(choiceSeen[k].req)manque.push(choiceSeen[k].label);});
   /* Champ obligatoire selon l'option choisie (ex. mensualités si paiement
      échelonné). */
   [].slice.call(document.querySelectorAll('#sendPrefill [data-reqif]')).forEach(function(inp){
-    var c=inp.getAttribute('data-reqif');
-    if(c&&prefill[c]===true&&!inp.value.trim())manque.push(inp.getAttribute('data-label'));
+    var c=inp.getAttribute('data-reqif');if(!c||inp.value.trim())return;
+    var m=/^([A-Za-z0-9_]+)=(.*)$/.exec(c);
+    var actif=m?(String(prefill[m[1]]||'')===m[2]):(prefill[c]===true);
+    if(actif)manque.push(inp.getAttribute('data-label'));
   });
   if(manque.length){alert('À renseigner avant l\'envoi :\n• '+manque.join('\n• '));return null;}
   return prefill;
@@ -1203,6 +1267,7 @@ function submitSend(){
     /* Texte web du contrat figé à l'envoi : si le modèle est réécrit ensuite,
        ce client lit et signe la version qu'on lui a envoyée. */
     webSnapshot:tpl.web||null,
+    generated:!!(tpl.web&&tpl.web.generated),
     currentSigner:0,           // index du signataire qui doit signer maintenant
     twoSigners:twoSigners,
     token:token1,              // tokenactif = celui du signataire courant

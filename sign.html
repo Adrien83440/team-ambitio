@@ -555,9 +555,14 @@ function phValue(key){
   if(key==='siret')return c&&c.siret;
   if(key==='siege_social')return c&&addrLine(c.address);
   if(key==='nom_prenom'){var f=$('rFirst').value.trim(),l=$('rLast').value.trim();return (f||l)?(f+' '+l).trim():'';}
+  if(key==='qualite')return qualite();
+  if(key==='forme_juridique')return c&&c.legalFormLabel;
+  if(key==='email')return S.content&&S.content.signer.email;
+  if(key==='telephone')return S.content&&S.content.signer.phone;
+  if(key==='date_signature')return $('mDate')&&$('mDate').value.length===10?$('mDate').value:'';
   return '';
 }
-var PH_LABEL={entreprise:'votre société',nom_prenom:'votre nom',siege_social:'adresse du siège',siret:'n° SIRET'};
+var PH_LABEL={entreprise:'votre société',nom_prenom:'votre nom',siege_social:'adresse du siège',siret:'n° SIRET',qualite:'votre qualité',forme_juridique:'forme juridique',email:'votre e-mail',telephone:'votre téléphone',date_signature:'date de signature'};
 function inline(s){
   var h=esc(s);
   h=h.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');

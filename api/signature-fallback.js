@@ -51,6 +51,14 @@ async function loadTemplatePdf(templateId) {
   if (!snap.exists) return { error: 'Modèle introuvable' };
   const T = snap.data() || {};
 
+  /* Contrat de l'atelier : pas de PDF d'origine, on compose la version
+     vierge (sans données client, conditions à compléter à la main). */
+  if (T.web && T.web.generated) {
+    const render = require('./_contract-render');
+    const built = await render.composeContract({ web: T.web, prefill: {}, client: {}, checks: {}, signers: [], blank: true });
+    return { name: T.name || 'Contrat', emailAccount: T.notifications && T.notifications.emailAccount, buffer: Buffer.from(await built.doc.save()) };
+  }
+
   let b64 = T.pdfBase64 || '';
   if (!b64) {
     const chunks = await ref.collection('pdf').orderBy('chunk').get();

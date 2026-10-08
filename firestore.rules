@@ -622,6 +622,13 @@ service cloud.firestore {
       allow write: if canSignaturesAdmin();
     }
 
+    // Versions du texte d'un contrat (atelier) — écrites par le serveur
+    // (api/contract-studio.js) uniquement.
+    match /signature_templates/{tplId}/versions/{versionId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
     match /signature_requests/{reqId} {
       allow read:   if isSalesOrAdminOrCsm();
       allow create: if canSignaturesAdmin();

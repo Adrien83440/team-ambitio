@@ -29,7 +29,8 @@ const { db, admin } = require('./_firebaseAdmin');
 const parseBody = require('./_parseBody');
 const core = require('./_sign-core');
 const company = require('./_companyLookup');
-const { buildPreviewPdf, buildSignedPdf } = require('./_sign-pdf');
+const { buildPreviewPdf, buildSignedPdf, finishSigned } = require('./_sign-pdf');
+const render = require('./_contract-render');
 const { timestamp } = require('./_tsa');
 
 /* Événements que la page peut journaliser. Tout le reste est ignoré : le
@@ -140,6 +141,37 @@ function formSpec(fields, role, hints, prefill) {
   return { checks: checks, texts: texts, conditions: conditions, paraphe: paraphe, dateField: dateField, signatureField: signature };
 }
 
+/* Contrats de l'atelier (texte, generated:true) : le formulaire se déduit des
+   variables et des cases du texte, plus des champs posés sur un PDF. */
+function genSpec(web, prefill) {
+  prefill = prefill || {};
+  const vars = web.variables || [];
+  const texts = vars.filter(function (v) { return v.filledBy === 'client'; }).map(function (v) {
+    return { id: v.key, label: v.label, help: v.help || '', required: !!v.required, locked: false, value: '', maxLength: 500 };
+  }).concat(vars.filter(function (v) { return v.filledBy !== 'client' && v.type !== 'choice'; }).map(function (v) {
+    return { id: v.key, label: v.label, help: v.help || '', required: false, locked: true, value: render.formatVar(v, prefill[v.key]), maxLength: 500 };
+  }));
+  const conditions = vars.filter(function (v) { return v.filledBy !== 'client' && v.type === 'choice' && prefill[v.key]; }).map(function (v) {
+    return { id: v.key, label: v.label + ' : ' + render.formatVar(v, prefill[v.key]), group: '', value: true };
+  });
+  const checks = (web.clientChecks || []).map(function (c) {
+    return { id: c.id, label: c.label, help: '', required: !!c.required, kind: c.kind || '' };
+  });
+  return { checks: checks, texts: texts, conditions: conditions, paraphe: true, dateField: true, signatureField: true };
+}
+function specFor(ctx, role) {
+  return ctx.generated ? genSpec(ctx.web, ctx.prefill) : formSpec(ctx.fields, role, ctx.hints, ctx.prefill);
+}
+/* Données client pour composer un contrat de l'atelier. */
+function clientMap(d) {
+  const c = d.company || {};
+  return {
+    entreprise: c.name || '', nom_prenom: (d.rep && d.rep.full) || '', qualite: (d.rep && d.rep.qualite) || '',
+    siege_social: c.addressLine || company.addressLine(c.address || {}), siret: c.siret || '', forme_juridique: c.legalFormLabel || '',
+    email: d.email || '', telephone: d.phone || '', date_signature: d.date || '',
+  };
+}
+
 function initials(first, last) {
   const w = (String(first || '') + ' ' + String(last || '')).trim().split(/[\s-]+/).filter(Boolean);
   return w.map(function (x) { return x.charAt(0).toUpperCase(); }).join('.') + (w.length ? '.' : '');
@@ -168,6 +200,16 @@ function dirigeantCheck(reg, first, last) {
 async function context(found) {
   const R = found.R;
   const tpl = await core.loadTemplate(R.templateId);
+  const gweb = R.webSnapshot && R.webSnapshot.generated ? R.webSnapshot : (!R.webSnapshot && tpl && tpl.T.web && tpl.T.web.generated ? tpl.T.web : null);
+  if (gweb) {
+    /* Contrat de l'atelier : pas de PDF d'origine, le texte figé à l'envoi
+       (webSnapshot) fait foi. */
+    return {
+      generated: true, tpl: tpl || { T: {}, pdf: null, pdfSha256: '' }, web: gweb, webMode: true,
+      fields: [], scale: 1.2, prefill: R.prefill || {}, hints: {},
+      signerWeb: render.resolveForSigner(gweb, R.prefill || {}),
+    };
+  }
   if (!tpl || !tpl.pdf) { const e = new Error('modele_introuvable'); e.status = 409; e.msg = 'Le document de ce contrat est introuvable. Contactez votre conseiller.'; throw e; }
   const frozen = R.frozen || null;
   if (frozen && frozen.templatePdfSha256 && frozen.templatePdfSha256 !== tpl.pdfSha256) {
@@ -190,7 +232,7 @@ async function context(found) {
 async function validate(body, found, ctx, strict) {
   const i = found.signerIndex;
   const role = roleOf(i);
-  const spec = formSpec(ctx.fields, role, ctx.hints, ctx.prefill);
+  const spec = specFor(ctx, role);
   const errs = [];
   const f = body.form || {};
   const out = { spec: spec };
@@ -428,19 +470,20 @@ module.exports = async (req, res) => {
     /* ── content ───────────────────────────────────────────────────────── */
     if (action === 'content') {
       const upd = {};
-      if (!R.frozen) upd.frozen = { templatePdfSha256: ctx.tpl.pdfSha256, webVersion: ctx.web ? (ctx.web.version || 1) : null, webDigest: core.webDigest(ctx.web), at: new Date().toISOString() };
+      if (!R.frozen) upd.frozen = { templatePdfSha256: ctx.generated ? '' : ctx.tpl.pdfSha256, generated: !!ctx.generated, webVersion: ctx.web ? (ctx.web.version || 1) : null, webDigest: core.webDigest(ctx.web), at: new Date().toISOString() };
       if (ctx.webMode && !R.webSnapshot) upd.webSnapshot = ctx.web;
       if (Object.keys(upd).length) await found.ref.update(upd);
-      const spec = formSpec(ctx.fields, roleOf(i), ctx.hints, ctx.prefill);
+      const spec = specFor(ctx, roleOf(i));
       let pages = 0;
-      try { pages = (await require('pdf-lib').PDFDocument.load(ctx.tpl.pdf, { updateMetadata: false })).getPageCount(); } catch (e) { pages = 0; }
+      if (!ctx.generated) { try { pages = (await require('pdf-lib').PDFDocument.load(ctx.tpl.pdf, { updateMetadata: false })).getPageCount(); } catch (e) { pages = 0; } }
+      const shownWeb = ctx.generated ? ctx.signerWeb : ctx.web;
       await core.appendAudit(found.ref, [{ type: 'contenu_charge', signer: i, data: { mode: ctx.webMode ? 'texte' : 'pdf', version: ctx.web ? (ctx.web.version || 1) : null } }], info);
       const s0 = signers[0] || {};
       send(res, 200, {
         ok: true,
         mode: ctx.webMode ? 'web' : 'pdf',
         templateName: R.templateName || 'Contrat',
-        web: ctx.webMode ? { title: ctx.web.title, subtitle: ctx.web.subtitle, tagline: ctx.web.tagline, sections: ctx.web.sections, version: ctx.web.version || 1 } : null,
+        web: ctx.webMode ? { title: shownWeb.title, subtitle: shownWeb.subtitle, tagline: shownWeb.tagline, sections: shownWeb.sections, version: shownWeb.version || 1 } : null,
         pages: pages,
         form: {
           needsCompany: i === 0,
@@ -482,6 +525,11 @@ module.exports = async (req, res) => {
     /* ── pdf original ──────────────────────────────────────────────────── */
     if (action === 'pdf') {
       await core.appendAudit(found.ref, [{ type: 'pdf_original_ouvert', signer: i, data: null }], info);
+      if (ctx.generated) {
+        const b = await render.composeContract({ web: ctx.web, prefill: ctx.prefill, client: {}, checks: {}, signers: [], blank: true });
+        send(res, 200, { ok: true, pdf: Buffer.from(await b.doc.save()).toString('base64') });
+        return;
+      }
       send(res, 200, { ok: true, pdf: ctx.tpl.pdf.toString('base64'), sha256: ctx.tpl.pdfSha256 });
       return;
     }
@@ -496,7 +544,18 @@ module.exports = async (req, res) => {
         const d0 = await found.ref.collection('signer_data').doc('0').get();
         if (d0.exists) list.unshift(storedToStamp(1, d0.data()));
       }
-      const pdf = await buildPreviewPdf({ templatePdf: ctx.tpl.pdf, fields: ctx.fields, scale: ctx.scale, signers: list, prefill: ctx.prefill });
+      let pdf;
+      if (ctx.generated) {
+        const d0 = list[0];
+        const b = await render.composeContract({
+          web: ctx.web, prefill: ctx.prefill, texts: v.texts, checks: v.checks, preview: true,
+          client: clientMap({ company: d0.company, rep: { full: d0.repName, qualite: d0.repQualite }, email: found.signer.email, phone: found.signer.phone, date: d0.date }),
+          signers: list.map(function (x) { return { luApprouve: x.luApprouve, date: x.date, signaturePng: x.signaturePng, paraphePng: x.paraphePng, caption: 'Aperçu — non signé', repName: x.repName, repQualite: x.repQualite }; }),
+        });
+        pdf = Buffer.from(await b.doc.save());
+      } else {
+        pdf = await buildPreviewPdf({ templatePdf: ctx.tpl.pdf, fields: ctx.fields, scale: ctx.scale, signers: list, prefill: ctx.prefill });
+      }
       await core.appendAudit(found.ref, [{ type: 'apercu_ouvert', signer: i, data: { manquants: v.errors.length } }], info);
       send(res, 200, { ok: true, pdf: pdf.toString('base64'), missing: v.errors });
       return;
@@ -666,7 +725,7 @@ async function finalize(found, ctx, v, info, body) {
   /* Conditions convenues, remplies par le conseiller à l'envoi : elles
      figurent au dossier de preuve, le client les a vues sans pouvoir les
      modifier. */
-  const spec0 = formSpec(ctx.fields, 1, ctx.hints, ctx.prefill);
+  const spec0 = specFor(ctx, 1);
   const conditions = spec0.conditions.filter(function (c) { return c.value; }).map(function (c) { return 'Retenu : ' + c.label; })
     .concat(spec0.texts.filter(function (t) { return t.locked && t.value; }).map(function (t) { return t.label + ' : ' + t.value; }));
   const renCheck = spec0.checks.find(function (c) { return c.kind === 'renonciation'; });
@@ -679,7 +738,8 @@ async function finalize(found, ctx, v, info, body) {
     certificateId: certId,
     webMode: ctx.webMode,
     webVersion: ctx.web ? (ctx.web.version || 1) : null,
-    templatePdfSha256: ctx.tpl.pdfSha256,
+    templatePdfSha256: ctx.generated ? '' : ctx.tpl.pdfSha256,
+    generated: !!ctx.generated,
     webDigest: core.webDigest(ctx.web),
     createdAt: R.createdAt && R.createdAt.toDate ? R.createdAt.toDate().toISOString() : '',
     createdBy: ((R.events || []).find(function (e) { return e && e.type === 'created'; }) || {}).by || '',
@@ -702,11 +762,23 @@ async function finalize(found, ctx, v, info, body) {
     auditTsa: auditTsa,
   };
 
-  const out = await buildSignedPdf({
-    templatePdf: ctx.tpl.pdf, fields: ctx.fields, scale: ctx.scale, prefill: ctx.prefill,
-    signers: all.map(function (d, k) { return storedToStamp(roleOf(k), d); }),
-    proof: proof,
-  });
+  let out;
+  if (ctx.generated) {
+    const d0g = all[0];
+    out = await finishSigned(function () {
+      return render.composeContract({
+        web: ctx.web, prefill: ctx.prefill, texts: d0g.texts || {}, checks: d0g.checks || {},
+        client: clientMap(d0g),
+        signers: all.map(function (d) { const st = storedToStamp(1, d); return { luApprouve: d.luApprouve, date: d.date, signaturePng: st.signaturePng, paraphePng: st.paraphePng, caption: d.caption, repName: d.rep.full, repQualite: d.rep.qualite }; }),
+      });
+    }, proof);
+  } else {
+    out = await buildSignedPdf({
+      templatePdf: ctx.tpl.pdf, fields: ctx.fields, scale: ctx.scale, prefill: ctx.prefill,
+      signers: all.map(function (d, k) { return storedToStamp(roleOf(k), d); }),
+      proof: proof,
+    });
+  }
   const finalSha = core.sha256Hex(out.bytes);
   const b64 = out.bytes.toString('base64');
 
