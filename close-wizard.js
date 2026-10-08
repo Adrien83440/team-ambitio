@@ -24,6 +24,9 @@
    API : CloseWizard.open({ leadId, lead, booking, typeMap, onDone })
      - booking fourni  → le close est posé sur CE RDV (carte ③ préréglée).
      - sinon           → AlteoreFlow.applyFicheClose (RDV à statuer ou direct).
+     - pilote actif (_config/sales_close_pilot) et fiche connue → renvoie au
+       pilote de closing de Leads Live au lieu d'ouvrir les cartes
+       (opts.forceCards pour passer outre).
    ═══════════════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
@@ -465,6 +468,42 @@
     if (b) b.addEventListener('click', close);
   }
 
+  /* ── Aiguillage vers le pilote de closing (Adrien 09/10/2026) ──
+     Quand _config/sales_close_pilot.enabled est actif, le close se fait dans
+     le pilote de Leads Live (close-pilot.js) : CRM, fiche contact et résultat
+     de RDV y renvoient au lieu d'ouvrir les cartes. Interrupteur coupé ou
+     illisible → cartes historiques, rien ne change.
+     Le réglage est lu dès la connexion : l'onglet doit s'ouvrir dans le
+     geste de l'utilisateur, sinon Safari bloque la fenêtre. */
+  var pilotFlag = null;   // null = pas encore lu
+  var pilotFlagP = null;
+  function loadPilotFlag() {
+    if (pilotFlagP) return pilotFlagP;
+    if (!window.firebase || !firebase.firestore) { pilotFlag = false; return Promise.resolve(false); }
+    pilotFlagP = firebase.firestore().collection('_config').doc('sales_close_pilot').get()
+      .then(function (s) { pilotFlag = !!(s.exists && (s.data() || {}).enabled === true); return pilotFlag; })
+      .catch(function (e) {
+        console.warn('[close-wizard] réglage pilote illisible :', e && e.message);
+        pilotFlag = false; pilotFlagP = null; return false;
+      });
+    return pilotFlagP;
+  }
+  try {
+    firebase.auth().onAuthStateChanged(function (u) { if (u && pilotFlag === null) loadPilotFlag(); });
+  } catch (e) { /* Firebase pas initialisé ici — lu au premier close */ }
+
+  /* Leads Live déclare window.ClosePilotRoute : le pilote s'ouvre sur place.
+     Ailleurs : Leads Live dans un nouvel onglet, fiche ouverte, pilote lancé. */
+  function routeToPilot(leadId) {
+    if (typeof window.ClosePilotRoute === 'function') {
+      try { if (window.ClosePilotRoute(leadId)) return; } catch (e) { console.warn('[close-wizard] pilote sur place', e && e.message); }
+    }
+    var url = 'sales-leads.html?leadId=' + encodeURIComponent(leadId) + '&closing=1';
+    var w = window.open(url, '_blank');
+    if (w) { try { w.opener = null; } catch (e) {} }
+    else location.href = url;
+  }
+
   /* ── Ouverture ── */
   function open(opts) {
     opts = opts || {};
@@ -477,6 +516,23 @@
       toastMsg('🎓 RDV coaching / client — hors périmètre Setting & Sales, pas de close ici.');
       return;
     }
+
+    /* Pilote actif → « Closing » / « Close » mène au pilote, plus aux cartes.
+       Sans fiche lead (RDV orphelin), les cartes restent le secours : le
+       pilote vit sur une fiche. opts.forceCards : échappatoire explicite. */
+    var pid = opts.leadId || (opts.booking && opts.booking.leadId) || (opts.lead && (opts.lead.id || opts.lead._id)) || null;
+    if (pid && !opts.forceCards) {
+      if (pilotFlag === true) { routeToPilot(pid); return; }
+      if (pilotFlag === null) {
+        loadPilotFlag().then(function (on) { if (on) routeToPilot(pid); else openCards(opts); });
+        return;
+      }
+    }
+    openCards(opts);
+  }
+
+  function openCards(opts) {
+    var AF = window.AlteoreFlow;
     /* typeMap vide → rechargé en fond : re-contrôle un coaching détectable
        uniquement via son type de consultation (même garde que RdvOutcome). */
     var tmEmpty = !(opts.typeMap && Object.keys(opts.typeMap).length);

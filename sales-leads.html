@@ -489,6 +489,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .l2fam { margin-bottom: 9px; }
 .l2fam-l { font-size: 9px; font-weight: 800; letter-spacing: 1.1px; text-transform: uppercase; color: var(--muted2); margin: 0 0 5px 2px; }
 .l2fam-row { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Pilote de closing actif : le gros bouton remplace la ligne « Closing ». */
+body.ld-pilot-on .l2fam[data-fam="closing"] { display: none; }
 .ld-status-btn {
   border: 1.5px solid var(--border); background: var(--bg3); color: var(--muted);
   font-family: var(--fb); font-size: 11.5px; font-weight: 700; padding: 8px 12px;
@@ -1649,7 +1651,7 @@ function _ldOuvrirEnAttente() {
   var id = _ldPendingOpen;
 
   for (var i = 0; i < allLeads.length; i++) {
-    if (allLeads[i].id === id) { _ldPendingOpen = null; l2OpenLead(id); return; }
+    if (allLeads[i].id === id) { _ldPendingOpen = null; l2OpenLead(id); _ldApresOuvertureDirecte(id); return; }
   }
 
   _ldPendingOpen = null;   /* une seule tentative, quoi qu'il arrive */
@@ -1661,6 +1663,7 @@ function _ldOuvrirEnAttente() {
     allLeads.unshift(d);
     renderFeed();
     l2OpenLead(id);
+    _ldApresOuvertureDirecte(id);
   }).catch(function (e) {
     if (window.console) console.warn('[leads] ouverture directe', e && e.message);
   });
@@ -3182,11 +3185,44 @@ function _ldLoadClosePilotCfg() {
   _ldClosePilotAsked = true;
   db.collection('_config').doc('sales_close_pilot').get().then(function (snap) {
     _ldClosePilotCfg = snap.exists ? (snap.data() || {}) : { enabled: false };
+    document.body.classList.toggle('ld-pilot-on', !!(_ldClosePilotCfg.enabled && window.ClosePilot));
     if (_ldClosePilotCfg.enabled) {
       document.querySelectorAll('[data-close-rail]').forEach(function (el) { paintCloseRail(el.getAttribute('data-close-rail')); });
     }
   }).catch(function (e) { _ldClosePilotCfg = { enabled: false }; console.warn('[close-pilot] réglages illisibles :', e && e.message); });
 }
+/* Lancer le pilote pour une fiche : depuis « Close » d'un RDV ou le statut
+   Closing (via CloseWizard.open → ClosePilotRoute), ou depuis un lien
+   ?leadId=…&closing=1 venu du CRM, de la fiche contact ou de l'agenda.
+   La fiche est ouverte d'abord : c'est elle qui branche les écoutes
+   signatures / paiements dont les cartes ont besoin pour avancer seules. */
+var _ldPendingClosing = new URLSearchParams(window.location.search).get('closing') === '1';
+function _ldStartClosePilot(leadId) {
+  if (!leadId || !window.ClosePilot) return false;
+  var known = false;
+  for (var i = 0; i < allLeads.length; i++) if (allLeads[i].id === leadId) { known = true; break; }
+  if (!known) {
+    /* Fiche hors fenêtre de 30 jours : chargée, puis pilote lancé. */
+    _ldPendingOpen = leadId; _ldPendingClosing = true;
+    _ldOuvrirEnAttente();
+    return true;
+  }
+  _ldLoadClosePilotCfg();
+  _ldClosePilotHost();
+  if (openCardId !== leadId) l2OpenLead(leadId);
+  var b = document.createElement('button');
+  b.setAttribute('data-cp', 'start');
+  b.setAttribute('data-cp-lead', leadId);
+  window.ClosePilot.handle(b);
+  return true;
+}
+window.ClosePilotRoute = _ldStartClosePilot;
+function _ldApresOuvertureDirecte(id) {
+  if (!_ldPendingClosing) return;
+  _ldPendingClosing = false;
+  _ldStartClosePilot(id);
+}
+
 function _ldClosePilotOn() { return !!(_ldClosePilotCfg && _ldClosePilotCfg.enabled && window.ClosePilot); }
 var _ldClosePilotHostSet = false;
 function _ldClosePilotHost() {
@@ -3243,10 +3279,9 @@ function paintCloseRail(leadId) {
   _ldLoadClosePilotCfg();
   if (_ldClosePilotOn()) {
     _ldClosePilotHost();
-    var hasRdv = ldRdvItemsFor(leadId).length > 0;
-    var started = !!(l.closePilot && l.closePilot.startedAt);
-    var isCli = l.isClient === true || String(l.stage || '').indexOf('closed_won') === 0;
-    if (hasRdv || started || isCli) window.ClosePilot.paint(leadId, host); else host.innerHTML = '';
+    /* Sur TOUTES les fiches (09/10/2026) : le bouton remplace le statut
+       « Closing », un close direct sans RDV doit donc aussi l'avoir. */
+    window.ClosePilot.paint(leadId, host);
     window.ClosePilot.refresh(leadId);
     return;
   }
@@ -4327,7 +4362,7 @@ function l2SegAction(l, id) {
   h += '<div class="ld-status-grid">';
   for (var f = 0; f < L2_FAMILIES.length; f++) {
     var fam = L2_FAMILIES[f];
-    h += '<div class="l2fam"><div class="l2fam-l">' + fam.l + '</div><div class="l2fam-row">';
+    h += '<div class="l2fam" data-fam="' + fam.l.toLowerCase() + '"><div class="l2fam-l">' + fam.l + '</div><div class="l2fam-row">';
     for (var si = 0; si < fam.k.length; si++) {
       var s = getStatusObj(fam.k[si]);
       var isActive = (l.status || 'nouveau') === s.key;

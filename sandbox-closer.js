@@ -35,8 +35,9 @@
     { t: 'Contact', k: ['nouveau', 'appele', 'decroche', 'messagerie'] },
     { t: 'Relances', k: ['nrp1', 'nrp2', 'nrp3', 'all_nrp', 'faux_numero', 'follow_up_pm'] },
     { t: 'Avancée', k: ['set', 'rdv_self_booking', 'rdv_pose'] },
-    { t: 'Sortie', k: ['pas_interesse', 'disqualifie', 'poubelle'] },
-    { t: 'Closing', k: ['client'] }
+    { t: 'Sortie', k: ['pas_interesse', 'disqualifie', 'poubelle'] }
+    /* Plus de ligne « Closing » (09/10/2026) : le gros bouton du pilote la
+       remplace, comme dans Leads Live. */
   ];
   var LEAD_TYPES = { vsl_elite: { l: 'VSL ÉLITE', c: '#fbbf24' }, self_booking: { l: 'Self-Booking', c: '#60a5fa' } };
   /* AlteoreFlow.OUTCOMES (alteore-flow.js:26) */
@@ -242,12 +243,12 @@
   }
 
   function setStatus(id, k) {
-    if (k === 'client') { openWizard(id); return; }
+    if (k === 'client') { startPilot(id); return; }
     X.update(function (s) { var l = X.leadById(s, id); if (!l || l.status === k) return; l.status = k; X.log(s, id, 'status', '→ Statut ' + STATUSES[k].i + ' ' + STATUSES[k].l); });
     renderAll();
   }
   function quickStatus(id) {
-    var s = S(), l = X.leadById(s, id), keys = ['nrp1', 'nrp2', 'nrp3', 'messagerie', 'set', 'pas_interesse', 'client'];
+    var s = S(), l = X.leadById(s, id), keys = ['nrp1', 'nrp2', 'nrp3', 'messagerie', 'set', 'pas_interesse'];
     var h = '<div class="mo-h"><b>⚡ Statut rapide<small>' + esc(l.nom) + '</small></b><button class="mo-x" data-a="formClose">✕</button></div><div class="mo-b"><div class="st-grid">';
     keys.forEach(function (k) { var st = STATUSES[k]; h += '<button class="st-b' + (l.status === k ? ' on' : '') + (k === 'client' ? ' win' : '') + '" data-a="setStatusQ" data-id="' + id + '" data-s="' + k + '">' + st.i + ' ' + esc(st.l) + '</button>'; });
     h += '</div></div>';
@@ -335,7 +336,7 @@
   function saveOutcome() {
     var r = ui.ro; if (!r) return;
     if (!r.sel) { toast('Choisis un résultat.'); return; }
-    if (r.sel === 'close') { var id = r.id; ui.ro = null; openWizard(id); return; }
+    if (r.sel === 'close') { var id = r.id; ui.ro = null; closeForm(); startPilot(id); return; }
     if (r.sel === 'replanifie') { toast('📅 La replanification ouvre l\'agenda en production — non simulée dans le bac à sable.'); return; }
     var note = val('roNote'), k = r.sel, lid = r.id;
     X.update(function (s) {
@@ -344,6 +345,17 @@
     });
     closeForm(); renderAll();
     toast('✅ Résultat enregistré : ' + OUTCOMES[k].icon + ' ' + OUTCOMES[k].label);
+  }
+
+  /* « Close » d'un RDV / statut Closing → pilote de closing, comme en
+     production quand _config/sales_close_pilot est actif (close-wizard.js
+     renvoie alors au pilote). Les cartes restent le secours sans pilote. */
+  function startPilot(id) {
+    if (!window.ClosePilot) { openWizard(id); return; }
+    var b = document.createElement('button');
+    b.setAttribute('data-cp', 'start');
+    b.setAttribute('data-cp-lead', id);
+    window.ClosePilot.handle(b);
   }
 
   /* ═══ CARTES DU CLOSE (close-wizard.js) ══════════════════════════════ */
