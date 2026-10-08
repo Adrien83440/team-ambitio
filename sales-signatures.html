@@ -98,6 +98,19 @@ body{background:var(--bg);color:var(--fg);font-family:var(--fm);min-height:100vh
 .req-table{width:100%;border-collapse:collapse;}
 .req-table th{text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:10px 14px;border-bottom:1px solid var(--border);}
 .req-table td{padding:12px 14px;border-bottom:1px solid var(--border);font-size:13px;}
+/* Suivi en direct de l'avancée du signataire */
+.pg-steps{display:flex;gap:3px;margin-bottom:5px;}
+.pg-dot{flex:1;min-width:14px;height:6px;border-radius:3px;background:rgba(255,255,255,.08);}
+.pg-dot.done{background:#34d399;}.pg-dot.cur{background:#60a5fa;}
+.pg-txt{font-size:12px;font-weight:700;}
+.pg-sub{font-size:10.5px;color:var(--muted);margin-top:2px;}
+.pg-live{display:inline-block;width:7px;height:7px;border-radius:50%;background:#34d399;margin-right:5px;box-shadow:0 0 0 0 rgba(52,211,153,.6);animation:pgp 1.6s infinite;}
+@keyframes pgp{0%{box-shadow:0 0 0 0 rgba(52,211,153,.6)}70%{box-shadow:0 0 0 7px rgba(52,211,153,0)}100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}}
+.tl{max-height:60vh;overflow:auto;}
+.tl-row{display:grid;grid-template-columns:86px 1fr;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px;}
+.tl-row .t{color:var(--muted);font-variant-numeric:tabular-nums;}
+.tl-row .d{color:var(--muted);font-size:11px;margin-top:2px;}
+.tl-row.key .l{color:#34d399;font-weight:800;}
 .req-status{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;}
 .req-status.pending{background:rgba(245,158,11,.1);color:#f59e0b;}
 .req-status.opened{background:rgba(96,165,250,.1);color:#60a5fa;}
@@ -148,7 +161,7 @@ try {
 <!-- ═══ REQUESTS TAB ═══ -->
 <div id="tabRequests" style="display:none">
   <table class="req-table" id="reqTable">
-    <thead><tr><th>Client</th><th>Modèle</th><th>Envoyé le</th><th>Statut</th><th></th></tr></thead>
+    <thead><tr><th>Client</th><th>Modèle</th><th>Envoyé le</th><th>Progression du client</th><th></th></tr></thead>
     <tbody id="reqBody"></tbody>
   </table>
   <div id="reqEmpty" style="text-align:center;padding:40px;color:var(--muted);font-size:13px">Aucun envoi en cours.</div>
@@ -297,6 +310,13 @@ try {
   </div>
 </div>
 
+</div>
+<!-- ═══ SUIVI EN DIRECT D'UN ENVOI ═══ -->
+<div id="suiviModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2147483000;backdrop-filter:blur(4px);align-items:center;justify-content:center">
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:94%;max-width:620px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.5);max-height:90vh;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><div style="font-size:20px">👁</div><div style="font-family:var(--fh);font-size:15px;font-weight:800;flex:1" id="suiviTitle">Suivi</div><button data-suivi-close="1" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button></div>
+    <div id="suiviBody" style="overflow:auto"></div>
+  </div>
 </div>
 <!-- ═══ ENVOI DE SECOURS ═══════════════════════════════════════════════
      Filet quand la signature électronique ne passe pas : le contrat part en
@@ -1373,8 +1393,9 @@ function renderRequests(){
     h+='<td style="font-weight:600">'+clientDisplay+'<div style="font-size:11px;color:var(--muted)">'+emailDisplay+'</div></td>';
     h+='<td>'+esc(r.templateName||'—')+_adhocBadge(r)+'</td>';
     h+='<td style="font-size:12px">'+dt+'</td>';
-    h+='<td><span class="req-status '+st+'"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+(stDots[st]||'#888')+';margin-right:5px"></span>'+(stLabels[st]||st)+'</span></td>';
+    h+='<td style="min-width:230px">'+_progressCell(r,st,stLabels,stDots)+'</td>';
     h+='<td style="white-space:nowrap">';
+    h+='<button class="sig-btn sig-btn-o" style="font-size:11px;padding:4px 10px" data-suivi="'+esc(r.id)+'">👁 Suivi</button> ';
     h+='<button class="sig-btn sig-btn-p" style="font-size:11px;padding:4px 10px" onclick="resendRequest(\''+r.id+'\')">🔄 Renvoyer</button> ';
     h+='<button class="sig-btn sig-btn-o" style="font-size:11px;padding:4px 10px" onclick="navigator.clipboard.writeText(\''+esc(r.signUrl||'')+'\');toast(\'📋 Lien copié !\')">🔗</button>';
     h+=' <button class="sig-btn sig-btn-r" style="font-size:11px;padding:4px 10px" onclick="deleteRequest(\''+r.id+'\',\''+esc(r.clientName)+'\')">🗑</button>';
@@ -1384,6 +1405,72 @@ function renderRequests(){
   // Also render completed tab if visible
   renderCompleted();
 }
+/* ═══ SUIVI EN DIRECT ═══
+   r.progress est posé par le serveur à chaque action du signataire
+   (api/_sign-core.js setProgress) ; la liste étant en temps réel
+   (onSnapshot), la barre avance toute seule. Le détail : bouton « Suivi ». */
+var PG_NAMES=['Envoyé','Lien ouvert','Identité vérifiée','Lecture','Société','Mentions','Signature','Signé'];
+function _ago(iso){
+  if(!iso)return '';var s=Math.round((Date.now()-new Date(iso).getTime())/1000);
+  if(s<60)return 'à l\'instant';if(s<3600)return 'il y a '+Math.round(s/60)+' min';if(s<86400)return 'il y a '+Math.round(s/3600)+' h';
+  return new Date(iso).toLocaleString('fr-FR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+}
+function _progressCell(r,st,stLabels,stDots){
+  var p=r.progress||{};
+  var e=Number(p.etape)||0;
+  var h='<div class="pg-steps" title="'+PG_NAMES.map(function(n,i){return (i+1)+'. '+n;}).join(' · ')+'">';
+  for(var i=1;i<=7;i++)h+='<span class="pg-dot'+(i<e?' done':(i===e?(e===7?' done':' cur'):''))+'"></span>';
+  h+='</div>';
+  var live=p.enLigne&&p.at&&(Date.now()-new Date(p.at).getTime()<180000);
+  var txt=e?(PG_NAMES[e]||p.nom):(stLabels[st]||'Envoyé');
+  if(e===3&&p.lectureTotal)txt+=' — '+Math.min(p.lectureVues||0,p.lectureTotal)+'/'+p.lectureTotal+(p.lectureDeclaree?' (lecture rapide)':'');
+  h+='<div class="pg-txt">'+(live?'<span class="pg-live" title="En ligne en ce moment"></span>':'')+esc(txt)+'</div>';
+  var sub=[];
+  if(p.derniere)sub.push(esc(p.derniere));
+  if(p.at)sub.push(_ago(p.at));
+  if(p.appareil)sub.push(esc(p.appareil));
+  if(p.ouvertures>1)sub.push(p.ouvertures+' ouvertures');
+  if(!e&&r.dernierEnvoi){sub.push('lien '+((r.dernierEnvoi.email&&r.dernierEnvoi.email.envoye)?'e-mail ':'')+((r.dernierEnvoi.sms&&r.dernierEnvoi.sms.envoye)?'SMS':'')+' envoyé');}
+  h+='<div class="pg-sub">'+sub.join(' · ')+'</div>';
+  return h;
+}
+setInterval(function(){if(document.getElementById('tabRequests')&&document.getElementById('tabRequests').style.display!=='none')renderRequests();},30000);
+
+var TL_LABELS={lien_envoye:'Lien envoyé',lien_ouvert:'Lien ouvert',otp_envoye:'Code SMS envoyé',otp_echec:'Code SMS incorrect',otp_verifie:'Téléphone vérifié par code SMS',contenu_charge:'Contrat affiché',section_vue:'Article lu',lecture_terminee:'Lecture terminée',lecture_declaree:'« J\'ai pris connaissance du document dans son intégralité »',pdf_original_ouvert:'PDF original consulté',etape:'Étape',entreprise_recherche:'Recherche d\'entreprise',entreprise_selectionnee:'Entreprise sélectionnée',entreprise_manuelle:'Entreprise saisie à la main',representant_saisi:'Représentant renseigné',case_cochee:'Case cochée',case_decochee:'Case décochée',champ_rempli:'Champ renseigné',mention_saisie:'Mention saisie',paraphe_saisi:'Paraphe saisi',signature_tracee:'Signature tracée',signature_effacee:'Signature effacée',signature_saisie:'Signature saisie au clavier',signature_mode:'Mode de signature',consentement:'Déclaration',apercu_ouvert:'Aperçu consulté',page_masquee:'A quitté la page',page_visible:'Est revenu sur la page',signature_validee:'SIGNATURE VALIDÉE',document_genere:'PDF signé généré et scellé',copie_envoyee:'Copie envoyée par e-mail',copie_telechargee:'Exemplaire téléchargé'};
+var ETAPE_NOMS={2:'Lecture du contrat',3:'Société et représentant',4:'Choix et mentions',5:'Signature'};
+var _suiviUnsub=null;
+function openSuivi(id){
+  var r=REQ.find(function(x){return x.id===id;});if(!r)return;
+  var m=document.getElementById('suiviModal');
+  document.getElementById('suiviTitle').textContent='Suivi — '+(r.clientName||'')+' · '+(r.templateName||'');
+  document.getElementById('suiviBody').innerHTML='<div style="padding:30px;text-align:center;color:var(--muted)">Chargement…</div>';
+  m.style.display='flex';
+  if(_suiviUnsub){_suiviUnsub();_suiviUnsub=null;}
+  _suiviUnsub=db.collection('signature_requests').doc(id).collection('audit').orderBy('seq').onSnapshot(function(sn){
+    var rr=REQ.find(function(x){return x.id===id;})||r;
+    var h='<div style="margin-bottom:12px">'+_progressCell(rr,rr.status||'pending',{},{})+'</div><div class="tl">';
+    var rows=[];
+    sn.forEach(function(d){rows.push(d.data());});
+    rows.reverse().forEach(function(e){
+      var x=e.data||{};var det=x.titre||x.libelle||x.nom||x.q||x.tel||x.canaux||x.mode||'';
+      if(e.type==='etape')det=ETAPE_NOMS[x.n]||x.nom||'';
+      if(e.type==='mention_saisie')det=(x.nom||'')+' : « '+(x.valeur||'')+' »';
+      var key=/signature_validee|otp_verifie|document_genere|lecture_terminee/.test(e.type);
+      var t=new Date(e.at);
+      h+='<div class="tl-row'+(key?' key':'')+'"><div class="t">'+t.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+'<br/>'+t.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+'</div>'
+        +'<div><div class="l">'+esc(TL_LABELS[e.type]||e.type)+(det?' <span style="color:var(--muted);font-weight:500">— '+esc(String(det).slice(0,140))+'</span>':'')+'</div>'
+        +'<div class="d">'+(e.signer===null||e.signer===undefined?'système':'signataire '+(e.signer+1))+' · IP '+esc(e.ip||'—')+(e.geo?' · '+esc(e.geo):'')+'</div></div></div>';
+    });
+    h+='</div>';
+    document.getElementById('suiviBody').innerHTML=rows.length?h:'<div style="padding:30px;text-align:center;color:var(--muted)">Aucune action enregistrée pour l\'instant (le suivi détaillé couvre les envois faits depuis le 08/10/2026).</div>';
+  },function(err){document.getElementById('suiviBody').innerHTML='<div style="padding:20px;color:#ef4444">Lecture impossible : '+esc(err.message)+'</div>';});
+}
+function closeSuivi(){document.getElementById('suiviModal').style.display='none';if(_suiviUnsub){_suiviUnsub();_suiviUnsub=null;}}
+document.addEventListener('click',function(e){
+  var b=e.target.closest?e.target.closest('[data-suivi]'):null;if(b){openSuivi(b.getAttribute('data-suivi'));return;}
+  if(e.target.closest&&e.target.closest('[data-suivi-close]'))closeSuivi();
+});
+
 function renderCompleted(){
   var el=document.getElementById('compBody');
   var empty=document.getElementById('compEmpty');

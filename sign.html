@@ -167,6 +167,11 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:inherit;}
 .pad-line{position:absolute;left:22px;right:22px;bottom:46px;border-bottom:1.5px solid #cbd5e1;pointer-events:none;}
 .pad-ph{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;color:#94a3b8;font-size:14px;pointer-events:none;font-weight:600;}
 .pad-x{position:absolute;top:8px;right:8px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--ink2);}
+.sigtabs{display:flex;gap:6px;background:#f1f5f9;border-radius:12px;padding:4px;margin-top:10px;}
+.sigtab{flex:1;border:none;background:none;padding:10px 8px;border-radius:9px;font-weight:700;font-size:13.5px;color:var(--muted);cursor:pointer;}
+.sigtab.on{background:#fff;color:var(--accent);box-shadow:0 1px 4px rgba(15,23,42,.1);}
+.typed-prev{font-family:var(--fsig);font-size:44px;color:#0f172a;text-align:center;min-height:78px;padding:14px;border:2px dashed var(--line2);border-radius:14px;margin-top:10px;background:#fff;line-height:1.15;word-break:break-word;}
+.typed-prev.ok{border-style:solid;border-color:var(--green);}
 .recap .co-row{border-bottom:1px solid var(--line);padding:8px 0;}
 .recap .co-row:last-child{border:none;}
 /* Modales */
@@ -358,14 +363,22 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:inherit;}
     </div>
     <div class="card">
       <div class="h2">Votre signature</div>
-      <p class="sub">Signez dans le cadre avec votre doigt, votre stylet ou votre souris.</p>
+      <p class="sub">Choisissez comment signer : tracez votre signature, ou tapez votre nom.</p>
+      <div class="sigtabs"><button type="button" class="sigtab on" data-action="sig-mode" data-m="dessin">✍️ Dessiner</button><button type="button" class="sigtab" data-action="sig-mode" data-m="saisie">⌨️ Taper mon nom</button></div>
+      <div id="sigDraw">
+      <p class="help" style="margin-top:8px">Avec votre doigt, votre stylet ou votre souris.</p>
       <div class="pad-wrap" id="padWrap">
         <canvas class="pad" id="pad"></canvas>
         <div class="pad-line"></div>
         <div class="pad-ph" id="padPh">✍️ Signez ici</div>
         <button class="pad-x" data-action="pad-clear">Effacer</button>
       </div>
-      <label class="lbl" for="sigName">Nom et prénom du signataire <small>— identiques au représentant</small></label>
+      </div>
+      <div id="sigType" style="display:none">
+        <p class="help" style="margin-top:8px">Tapez votre prénom et votre nom : ils constituent votre signature, reproduite en écriture manuscrite sur le contrat.</p>
+        <div class="typed-prev" id="typedPrev"></div>
+      </div>
+      <label class="lbl" for="sigName" id="sigNameLbl">Nom et prénom du signataire <small>— identiques au représentant</small></label>
       <input class="inp" id="sigName" autocomplete="name"/>
       <div class="err" id="sigNameErr" style="display:none"></div>
       <label class="chk" data-chk="decl:esign" id="chkEsign">
@@ -402,7 +415,7 @@ var S={step:0,reqId:'',signerIndex:0,load:null,content:null,
   read:{seen:{},count:0,total:0,end:false,startedAt:0,done:false},
   co:null,coManual:false,coResults:[],
   checks:{},decl:{pouvoir:false,esign:false},
-  pad:{strokes:0,points:0,t0:0,t1:0,minX:1e9,minY:1e9,maxX:-1e9,maxY:-1e9},
+  pad:{strokes:0,points:0,t0:0,t1:0,minX:1e9,minY:1e9,maxX:-1e9,maxY:-1e9},sigMode:'dessin',
   sent:{},queue:[],busy:false};
 
 /* ═══ OUTILS ═══ */
@@ -877,7 +890,7 @@ function missing(step){
     if(S.content.form.paraphe&&!/^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\- ]{0,11}$/.test($('mPar').value.trim()))m.push('Paraphe');
   }
   if(step===5){
-    if(S.pad.points<20)m.push('Votre signature');
+    if(S.sigMode==='dessin'&&S.pad.points<20)m.push('Votre signature');
     if(fold($('sigName').value)!==fold(repFull()))m.push('Nom sous la signature');
     if(!S.decl.esign)m.push('Accord de signature électronique');
   }
@@ -936,7 +949,7 @@ function flagMissing(step){
     if(S.content.form.paraphe&&!/^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\- ]{0,11}$/.test(val('mPar').trim()))f('mPar','Saisissez vos initiales (ex. J.D.).');
   }
   if(step===5){
-    if(S.pad.points<20){$('padWrap').classList.add('bad');bad.push($('padWrap'));}
+    if(S.sigMode==='dessin'&&S.pad.points<20){$('padWrap').classList.add('bad');bad.push($('padWrap'));}
     if(fold(val('sigName'))!==fold(repFull()))f('sigName','Saisissez exactement : '+repFull());
     if(!S.decl.esign)f('chkEsign','Cochez cette case pour accepter la signature électronique.');
   }
@@ -1065,6 +1078,26 @@ function padPng(){
   c.getContext('2d').drawImage(pad,x,y,w,h,0,0,c.width,c.height);
   return c.toDataURL('image/png');
 }
+/* Signature saisie au clavier : le nom tapé, rendu en écriture manuscrite
+   (même police que l'aperçu à l'écran). */
+function typedPng(t){
+  var c=document.createElement('canvas');c.width=900;c.height=220;
+  var x=c.getContext('2d');var size=120;x.font='700 '+size+'px "Dancing Script", cursive';
+  var w=x.measureText(t).width;if(w>860){size=Math.floor(size*860/w);x.font='700 '+size+'px "Dancing Script", cursive';}
+  x.fillStyle='#0f172a';x.textAlign='center';x.textBaseline='middle';x.fillText(t,450,112);
+  return c.toDataURL('image/png');
+}
+function setSigMode(m){
+  S.sigMode=m;
+  var tabs=document.querySelectorAll('.sigtab');for(var i=0;i<tabs.length;i++)tabs[i].classList.toggle('on',tabs[i].getAttribute('data-m')===m);
+  show('sigDraw',m==='dessin');show('sigType',m==='saisie');
+  $('sigNameLbl').innerHTML=m==='saisie'?'Tapez votre prénom et votre nom <small>— votre signature</small>':'Nom et prénom du signataire <small>— identiques au représentant</small>';
+  try{if(document.fonts&&document.fonts.load)document.fonts.load('700 120px "Dancing Script"');}catch(e){}
+  updTyped();track('signature_mode',{mode:m});refreshBar();
+  if(m==='saisie')setTimeout(function(){try{$('sigName').focus();}catch(e){}},50);else setTimeout(padSize,30);
+}
+function updTyped(){var v=$('sigName').value.trim(),el=$('typedPrev');if(!el)return;el.textContent=v;el.className='typed-prev'+(v&&fold(v)===fold(repFull())?' ok':'');}
+
 /* Le paraphe : les initiales saisies, écrites dans une police manuscrite. */
 function parPng(){
   var t=$('mPar').value.trim();if(!t)return '';
@@ -1086,7 +1119,8 @@ function formPayload(withSig){
     date:$('mDate').value,luApprouve:$('mLu').value.trim(),
     paraphe:$('mPar').value.trim(),paraphePng:S.content.form.paraphe?parPng():''
   };
-  if(withSig&&S.pad.points>0)p.signature={png:padPng(),strokes:S.pad.strokes,points:S.pad.points,durationMs:(S.pad.t1-S.pad.t0)||0,name:$('sigName').value.trim()};
+  if(withSig&&S.sigMode==='saisie'&&$('sigName').value.trim())p.signature={mode:'saisie',png:typedPng($('sigName').value.trim()),strokes:0,points:0,durationMs:0,name:$('sigName').value.trim()};
+  else if(withSig&&S.pad.points>0)p.signature={mode:'dessin',png:padPng(),strokes:S.pad.strokes,points:S.pad.points,durationMs:(S.pad.t1-S.pad.t0)||0,name:$('sigName').value.trim()};
   else p.signature={name:$('sigName').value.trim()};
   return p;
 }
@@ -1198,6 +1232,7 @@ document.addEventListener('click',function(e){
   else if(a==='preview')preview();
   else if(a==='pdf-open')openOriginal();
   else if(a==='fast-read')fastRead();
+  else if(a==='sig-mode')setSigMode(t.getAttribute('data-m'));
   else if(a==='modal-close'){$('mPdf').classList.remove('on');document.body.style.overflow='';}
   else if(a==='download')download();
 });
@@ -1207,7 +1242,7 @@ document.addEventListener('input',function(e){
   if(id==='mSiret'){var d=e.target.value.replace(/\D/g,'');if(d.length===14&&!siretOk(d))ferr(e.target,'Ce SIRET n\'est pas valide : vérifiez les 14 chiffres (la clé de contrôle ne correspond pas).');}
   if(id==='rFirst'||id==='rLast'||id==='rQualAutre'||id==='sigName'||id==='mName'||id==='mForm'||id==='mSiret'||id==='aL1'||id==='aL2'||id==='aCp'||id==='aCity'||(e.target.getAttribute&&e.target.getAttribute('data-tx'))){
     if(id==='aCp')e.target.value=e.target.value.replace(/\D/g,'').slice(0,5);
-    if(id==='sigName'){var ok=fold(e.target.value)===fold(repFull());e.target.className='inp'+(e.target.value.length>3?(ok?' ok':' bad'):'');
+    if(id==='sigName'){updTyped();var ok=fold(e.target.value)===fold(repFull());e.target.className='inp'+(e.target.value.length>3?(ok?' ok':' bad'):'');
       var er=$('sigNameErr');if(e.target.value.length>3&&!ok){er.textContent='Saisissez : '+repFull();show('sigNameErr');}else hide('sigNameErr');}
     refreshBar();
     if(S.step===3)saveDraft();
