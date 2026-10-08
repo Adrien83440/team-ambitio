@@ -1490,9 +1490,14 @@ function academyGrantRetry(id){
 function envoyerLien(requestId,signerIndex,apres){
   var payload={requestId:requestId};
   if(signerIndex!==null&&signerIndex!==undefined)payload.signerIndex=signerIndex;
-  var p=(window._auth&&window._auth.currentUser)
-    ? window._auth.currentUser.getIdToken()
-    : Promise.resolve('');
+  /* Jeton de l'utilisateur connecté (SDK compat : firebase.auth()). Avant le
+     08/10/2026, ce code lisait window._auth — variable qui n'existe pas sur
+     cette page : l'appel partait sans jeton, l'endpoint répondait 401, et
+     seules les Cloud Functions (webhook_inbox + fonction orpheline) envoyaient
+     en réalité le lien. Elles ont été coupées ; l'endpoint est désormais le
+     seul expéditeur, il doit donc recevoir le jeton. */
+  var cu=firebase.auth().currentUser;
+  var p=cu?cu.getIdToken():Promise.resolve('');
   p.then(function(tok){
     return fetch('/api/signature-send-link',{
       method:'POST',
