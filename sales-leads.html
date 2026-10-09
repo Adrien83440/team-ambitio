@@ -6248,49 +6248,26 @@ function isSelfBookingBornLead(l) {
   return l.source === 'booking_direct' || l.source === 'forms_self_booking';
 }
 
+/* Répartition (09/10/2026) : l'attribution passe par le SERVEUR
+   (api/lead-routing.js → api/_leadRouting.js), qui applique la règle réglée
+   par les admins (carte « 🎯 Répartition des leads », page Équipe Sales :
+   round-robin, une personne, ou pourcentages ; self-bookings à part). Sans
+   règle enregistrée, le serveur reproduit l'ancien comportement (round-robin
+   entre membres éligibles, self-bookings au porteur du drapeau). La Cloud
+   Function onNewLead attribue déjà à la création ; ceci est le filet de
+   secours pour les fiches restées sans attribution. */
 function assignLeadRoundRobin(leadId, callback, leadData) {
-  var owner = isSelfBookingBornLead(leadData) ? selfBookingOwnerSlug() : null;
-  if (owner) {
-    db.collection('leads').doc(leadId).update({ assignedTo: owner, assignedVia: 'self_booking_owner' })
-      .then(function() { if (callback) callback(owner); })
-      .catch(function(err) { console.error('[leads] self-booking owner assign error:', err); });
-    return;
-  }
-  var pool = getRoundRobinPool();
-  if (pool.length === 0) {
-    console.warn('[leads] roundrobin: aucun membre éligible, abandon');
-    if (callback) callback(null);
-    return;
-  }
-  // Si un seul membre éligible, lui attribuer directement (pas de RR nécessaire)
-  if (pool.length === 1) {
-    var only = pool[0].slug;
-    db.collection('leads').doc(leadId).update({ assignedTo: only })
-      .then(function() { if (callback) callback(only); })
-      .catch(function(err) { console.error('[leads] solo-assign error:', err); });
-    return;
-  }
-  var metaRef = db.collection('_meta').doc('roundrobin');
-  db.runTransaction(function(tx) {
-    return tx.get(metaRef).then(function(snap) {
-      var last = (snap.exists && snap.data().lastAssigned) || null;
-      // Trouver l'index du dernier dans le pool actuel (-1 si parti du pool)
-      var lastIdx = -1;
-      for (var i = 0; i < pool.length; i++) {
-        if (pool[i].slug === last) { lastIdx = i; break; }
-      }
-      // Le suivant = (lastIdx + 1) % nbPool
-      var nextIdx = (lastIdx + 1) % pool.length;
-      var next = pool[nextIdx].slug;
-      tx.set(metaRef, { lastAssigned: next }, { merge: true });
-      tx.update(db.collection('leads').doc(leadId), { assignedTo: next });
-      return next;
-    });
-  }).then(function(assigned) {
-    if (callback) callback(assigned);
-  }).catch(function(err) {
-    console.error('[leads] roundrobin error:', err);
-  });
+  var u = firebase.auth().currentUser;
+  if (!u) { if (callback) callback(null); return; }
+  u.getIdToken().then(function (tok) {
+    return fetch('/api/lead-routing', { method: 'POST', headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'assign', leadId: leadId }) });
+  }).then(function (r) { return r.json().catch(function () { return {}; }); })
+    .then(function (j) {
+      var who = j && j.ok && j.result ? j.result.assignedTo : null;
+      if (!who) console.warn('[leads] répartition : aucune attribution', j);
+      if (callback) callback(who);
+    })
+    .catch(function (err) { console.error('[leads] répartition error:', err); if (callback) callback(null); });
 }
 
 /* Leads déjà tentés en auto-attribution depuis les listeners parallèles
@@ -6314,7 +6291,7 @@ function maybeAutoAssignResurrect(d) {
   if (d._merged === true) return;           // doc fusionné → ignoré
   if (isCoachingOrClientLead(d)) return;    // client coaching / client → pas d'auto-attribution
   if (_resurrectAssignAttempted[d.id]) return;
-  if (getRoundRobinPool().length === 0) return; // pool pas prêt → retry au prochain tick
+  if (!(window.TEAM_MEMBERS_LIST && window.TEAM_MEMBERS_LIST.length)) return; // roster pas prêt → retry au prochain tick
   _resurrectAssignAttempted[d.id] = true;
   assignLeadRoundRobin(d.id, null, d);
 }

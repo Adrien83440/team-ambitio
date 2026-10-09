@@ -441,6 +441,86 @@ const PUBLIC_ACTIONS = ["signature_otp_send", "signature_otp_verify", "signature
    1. PUSH NOTIFICATIONS ON NEW LEAD + DEDUPLICATION
    ═══════════════════════════════════════════════════ */
 
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RÉPARTITION DES LEADS (09/10/2026) — MIROIR de api/_leadRouting.js
+   Règles réglées par les admins dans _config/lead_routing (carte « 🎯
+   Répartition des leads », page Équipe Sales) : round-robin, une personne,
+   ou pourcentages (pondération déterministe). Self-bookings : une personne ou
+   round-robin. Membres inactifs sautés. État : _meta/lead_routing_state.
+   Toute modification ici doit être reportée dans api/_leadRouting.js.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const _LR_DEPARTED = { guillaumes: 1 };
+async function _lrRoster() {
+  const s = await db.collection("_meta").doc("team_members").get();
+  const raw = (s.data() || {}).members;
+  const arr = Array.isArray(raw) ? raw : Object.keys(raw || {}).map((k) => raw[k]);
+  return arr.filter((m) => m && m.slug);
+}
+function _lrActive(m) { return m && m.active !== false && !m.archivedAt && !_LR_DEPARTED[m.slug]; }
+function _lrSelfBorn(l) {
+  if (!l) return false;
+  if (l.stage === "rdv_self_booking" || l.status === "rdv_self_booking") return true;
+  return l.source === "booking_direct" || l.source === "forms_self_booking";
+}
+function _lrCandidates(rule, members) {
+  const by = {};
+  members.forEach((m) => { by[m.slug] = m; });
+  const out = {};
+  if (!rule || !rule.mode) return out;
+  if (rule.mode === "single") { if (rule.single && _lrActive(by[rule.single])) out[rule.single] = 1; }
+  else if (rule.mode === "weighted") {
+    Object.keys(rule.weights || {}).forEach((k) => { const w = Number(rule.weights[k]) || 0; if (w > 0 && _lrActive(by[k])) out[k] = w; });
+  } else (rule.members || []).forEach((k) => { if (_lrActive(by[k])) out[k] = 1; });
+  return out;
+}
+function _lrSwrr(weights, current) {
+  const slugs = Object.keys(weights).sort();
+  const total = slugs.reduce((s, k) => s + weights[k], 0);
+  const cur = {};
+  let best = null;
+  slugs.forEach((k) => { cur[k] = (Number(current && current[k]) || 0) + weights[k]; if (best === null || cur[k] > cur[best]) best = k; });
+  cur[best] -= total;
+  return [best, cur];
+}
+/** Choisit dans une transaction (consomme la rotation). null si aucune règle. */
+async function _lrPickInTx(tx, kind, weights) {
+  const slugs = Object.keys(weights);
+  if (slugs.length === 1) return slugs[0];
+  if (!slugs.length) return null;
+  const stRef = db.collection("_meta").doc("lead_routing_state");
+  const st = (await tx.get(stRef)).data() || {};
+  const r = _lrSwrr(weights, (st[kind] || {}).current);
+  const patch = {};
+  patch[kind] = { current: r[1], lastAssigned: r[0], updatedAt: Date.now() };
+  tx.set(stRef, patch, { merge: true });
+  return r[0];
+}
+/** onNewLead : attribue un nouveau lead non attribué SI une règle existe. */
+async function _lrAssignLead(leadRef) {
+  const cfgSnap = await db.collection("_config").doc("lead_routing").get();
+  if (!cfgSnap.exists) return null; // pas de règle → comportement historique (navigateur)
+  const cfg = cfgSnap.data() || {};
+  const members = await _lrRoster();
+  return db.runTransaction(async (tx) => {
+    const ls = await tx.get(leadRef);
+    if (!ls.exists) return null;
+    const l = ls.data() || {};
+    if (l._merged || l.assignedTo) return null;
+    const kind = _lrSelfBorn(l) ? "selfBooking" : "leads";
+    const weights = _lrCandidates(cfg[kind], members);
+    // Les reads doivent précéder les writes dans une transaction.
+    const slug = await _lrPickInTx(tx, kind, weights);
+    if (!slug) return null;
+    tx.update(leadRef, {
+      assignedTo: slug, assignedVia: "routing:" + kind,
+      assignedAt: admin.firestore.FieldValue.serverTimestamp(),
+      timeline_history: admin.firestore.FieldValue.arrayUnion({ text: "📥 Attribution automatique : " + slug + (kind === "selfBooking" ? " (self-booking)" : ""), date: fmtNow(), color: "#22d3ee" })
+    });
+    return slug;
+  });
+}
+
 exports.onNewLead = functions.firestore
   .document("leads/{leadId}")
   .onCreate(async (snap, context) => {
@@ -661,8 +741,15 @@ exports.onNewLead = functions.firestore
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // NOUVEAU LEAD (aucun doublon trouvé) — comportement inchangé
+    // NOUVEAU LEAD (aucun doublon trouvé)
     // ═══════════════════════════════════════════════════════════════════════
+    // Répartition immédiate selon _config/lead_routing (09/10/2026), AVANT les
+    // notifications (qui peuvent sortir tôt s'il n'y a aucun token FCM).
+    try {
+      const assigned = await _lrAssignLead(snap.ref);
+      if (assigned) console.log("onNewLead: lead " + leadId + " attribué à " + assigned);
+    } catch (e) { console.warn("onNewLead: répartition impossible :", e.message); }
+
     const typeLabel = typeLabels[type] || type || "Lead";
     const title = "🔔 Nouveau lead : " + nom;
     let body = typeLabel;
@@ -2337,7 +2424,7 @@ async function _abIsSelfBooked(booking) {
   }
   return true;
 }
-async function _abSelfBookingOwner() {
+async function _abSelfBookingOwner(currentAssigned) {
   try {
     const snap = await db.collection('_meta').doc('team_members').get();
     const raw = (snap.data() || {}).members;
@@ -2347,6 +2434,20 @@ async function _abSelfBookingOwner() {
       const m = arr.find(x => x && x.slug === slug);
       return m ? (m.shortName || m.fullName || m.slug) : slug;
     };
+    // Règle « Self-bookings » de _config/lead_routing (09/10/2026) : une
+    // personne ou round-robin. Un lead déjà chez l'une des personnes de la
+    // règle y reste (pas de rotation consommée).
+    try {
+      const cfgSnap = await db.collection('_config').doc('lead_routing').get();
+      const rule = cfgSnap.exists ? (cfgSnap.data() || {}).selfBooking : null;
+      const weights = _lrCandidates(rule, arr.filter(x => x && x.slug));
+      const slugs = Object.keys(weights);
+      if (slugs.length) {
+        if (currentAssigned && weights[currentAssigned]) return { slug: currentAssigned, name: nameOf(currentAssigned), nameOf };
+        const slug = await db.runTransaction(tx => _lrPickInTx(tx, 'selfBooking', weights));
+        if (slug) return { slug, name: nameOf(slug), nameOf };
+      }
+    } catch (eR) { console.warn('[onBookingCreated] règle self-booking illisible, repli drapeau :', eR.message); }
     const owner = arr.find(x => x && x.selfBookingOwner === true && x.active !== false && !x.archivedAt && x.slug);
     return owner ? { slug: owner.slug, name: nameOf(owner.slug), nameOf } : null;
   } catch (e) {
@@ -2780,7 +2881,7 @@ exports.onBookingCreated = functions.firestore
         };
 
         // Self-booking → fiche au porteur du drapeau roster (cf. _abIsSelfBooked).
-        const sbOwner = (await _abIsSelfBooked(booking)) ? await _abSelfBookingOwner() : null;
+        const sbOwner = (await _abIsSelfBooked(booking)) ? await _abSelfBookingOwner(leadDoc ? ((leadDoc.data || {}).assignedTo || '') : '') : null;
 
         if (leadDoc) {
           const existing = leadDoc.data || {};
