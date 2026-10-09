@@ -1531,6 +1531,24 @@
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // COMPTES À ACTIVER — pop-up admin « X a créé son accès » (09/10/2026).
+  // alteore-pending-users.js ne s'active que pour les admins : il liste les
+  // users en status 'pending_activation' (mot de passe choisi via
+  // set-password.html, compte encore verrouillé).
+  // ─────────────────────────────────────────────────────────────────────────
+  function injectPendingUsersWidget() {
+    if (window.__pendingUsersWidgetInjected) return;
+    window.__pendingUsersWidgetInjected = true;
+    if (!document.querySelector('script[data-pending-users-widget]')) {
+      var script = document.createElement('script');
+      script.src = 'alteore-pending-users.js';
+      script.defer = true;
+      script.setAttribute('data-pending-users-widget', '1');
+      document.head.appendChild(script);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // RELANCES IA — pop-up « relance proposée » au closer du deal (programme IA
   // 10/2026). ai-followup-popup.js ne s'active que pour sales / admin et
   // n'envoie RIEN sans un clic « Envoyer » (règle d'or : l'IA propose).
@@ -1674,11 +1692,12 @@
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { injectInboxWidget(); injectInfosWidget(); injectCelebrationWidget(); injectAiFollowupWidget(); initActivityTracker(); });
+    document.addEventListener('DOMContentLoaded', function () { injectInboxWidget(); injectInfosWidget(); injectCelebrationWidget(); injectPendingUsersWidget(); injectAiFollowupWidget(); initActivityTracker(); });
   } else {
     injectInboxWidget();
     injectInfosWidget();
     injectCelebrationWidget();
+    injectPendingUsersWidget();
     injectAiFollowupWidget();
     initActivityTracker();
   }

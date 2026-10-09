@@ -25,6 +25,7 @@
 const { admin, db } = require('./_firebaseAdmin');
 const parseBody = require('./_parseBody');
 const { sendEmailFromAccount } = require('./_gmailSend');
+const { createInvite, sendInviteEmail } = require('./_userInvite');
 
 // Rate limit config
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
@@ -201,6 +202,30 @@ module.exports = async (req, res) => {
       error: 'No user found for this email or alias',
     });
     return res.status(200).json({ ok: true, sent: true });
+  }
+
+  // Compte encore en attente d'invitation (09/10/2026) : un reset Firebase
+  // poserait le mot de passe sans passer par l'étape d'activation admin. On
+  // renvoie donc une nouvelle invitation (set-password.html), qui suit le
+  // parcours complet.
+  try {
+    const uSnap = await db.collection('users').doc(user.uid).get();
+    if (uSnap.exists && (uSnap.data() || {}).status === 'invited') {
+      const invite = await createInvite({ uid: user.uid, email: user.officialEmail, displayName: user.displayName, createdBy: null });
+      const mail = await sendInviteEmail({ email: user.officialEmail, displayName: user.displayName, link: invite.link });
+      await logAudit({
+        action: 'password_reset_self_reinvite',
+        targetUid: user.uid,
+        targetEmail: user.officialEmail,
+        typedEmail,
+        matchedVia: user.matchedVia,
+        success: mail.emailSent,
+        error: mail.emailSent ? null : mail.emailError,
+      });
+      return res.status(200).json({ ok: true, sent: true });
+    }
+  } catch (e) {
+    console.warn('[user-password-reset] invited check failed:', e.message);
   }
 
   // Génère le lien de reset sur l'email officiel Firebase

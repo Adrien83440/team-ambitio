@@ -46,6 +46,15 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#08080f;col
 .u-b-csm{background:rgba(94,234,212,.12);color:#5eead4;border:1px solid rgba(94,234,212,.25)}
 .u-b-active{background:rgba(52,211,153,.08);color:#34d399;border:1px solid rgba(52,211,153,.15)}
 .u-b-invited{background:rgba(96,165,250,.08);color:#60a5fa;border:1px solid rgba(96,165,250,.15)}
+.u-b-pending{background:rgba(167,139,250,.1);color:#c4b5fd;border:1px solid rgba(167,139,250,.3)}
+.inv-box{margin:0 0 16px;padding:14px;border-radius:12px;font-size:12px;line-height:1.55}
+.inv-box b{font-weight:700}
+.inv-box.invited{background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.2);color:#bfdbfe}
+.inv-box.pending{background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.35);color:#ddd6fe}
+.inv-box .inv-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.inv-result{margin-top:10px}
+.inv-link{display:flex;gap:8px;margin-top:8px}
+.inv-link input{flex:1;min-width:0;font-family:'JetBrains Mono',monospace;font-size:11px}
 .u-b-disabled{background:rgba(239,68,68,.08);color:#fca5a5;border:1px solid rgba(239,68,68,.15)}
 .u-b-archived{background:rgba(148,163,184,.08);color:#94a3b8;border:1px solid rgba(148,163,184,.2)}
 .u-perms{font-size:11px;color:rgba(255,255,255,.3);flex-shrink:0;min-width:80px;text-align:right}
@@ -323,6 +332,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#08080f;col
       <option value="">Tous les statuts</option>
       <option value="active">✅ Actif</option>
       <option value="invited">📩 Invité</option>
+      <option value="pending_activation">⏳ À activer</option>
       <option value="disabled">🚫 Désactivé</option>
       <option value="archived">🗄 Archivé</option>
     </select>
@@ -397,7 +407,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#08080f;col
 <!-- Firebase -->
 <script type="module">
 import{initializeApp,deleteApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import{getAuth,onAuthStateChanged,signOut,createUserWithEmailAndPassword,sendPasswordResetEmail}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import{getAuth,onAuthStateChanged,signOut,createUserWithEmailAndPassword}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import{getFirestore, initializeFirestore, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, deleteField, query, where, orderBy, writeBatch, serverTimestamp, addDoc, arrayUnion}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const FBCFG={
@@ -599,8 +609,8 @@ const PRESET_SETTER={
 
 const ROLE_COLORS={admin:'#f59e0b',coach:'#8b5cf6',sales:'#10b981',csm:'#5eead4'};
 const ROLE_EMOJIS={admin:'👑',coach:'🎓',sales:'📈',csm:'💎'};
-const STATUS_LABELS={active:'✅ Actif',invited:'📩 Invité',disabled:'🚫 Désactivé',archived:'🗄 Archivé'};
-const STATUS_CLS={active:'u-b-active',invited:'u-b-invited',disabled:'u-b-disabled',archived:'u-b-archived'};
+const STATUS_LABELS={active:'✅ Actif',invited:'📩 Invité',pending_activation:'⏳ À activer',disabled:'🚫 Désactivé',archived:'🗄 Archivé'};
+const STATUS_CLS={active:'u-b-active',invited:'u-b-invited',pending_activation:'u-b-pending',disabled:'u-b-disabled',archived:'u-b-archived'};
 
 // Stages "clos" (utilisé par l'archivage : par défaut on ne transfère pas les leads dans ces stages)
 const CLOSED_STAGES=['closed_won_setting','closed_won_self','closed_lost','poubelle','disqualification','disqualifie_closing'];
@@ -620,7 +630,7 @@ onAuthStateChanged(auth,async user=>{
     const data=snap.exists()?snap.data():{};
     if(data.role!=='admin'){window.location.href='coaching.html';return;}
     currentUid=user.uid;
-    loadUsers();
+    loadUsers().then(openFromQuery);
     loadTeamColors();
     loadActivity();
   }catch(e){console.error(e);window.location.href='login.html';}
@@ -1581,13 +1591,10 @@ async function handleCreate(){
 
   if(!email){toast('⚠️ Email requis');return;}
 
-  var password;
-  if(method==='direct'){
-    password=document.getElementById('cPwd').value;
-    if(!password||password.length<6){toast('⚠️ Mot de passe min. 6 caractères');return;}
-  }else{
-    password=crypto.getRandomValues(new Uint8Array(16)).reduce(function(s,b){return s+b.toString(36);},'').slice(0,20);
-  }
+  if(method==='invite'){ await handleCreateInvite(email,displayName,role); return; }
+
+  var password=document.getElementById('cPwd').value;
+  if(!password||password.length<6){toast('⚠️ Mot de passe min. 6 caractères');return;}
 
   var btn=document.getElementById('cSubmit');
   btn.disabled=true;btn.textContent='⏳ Création…';
@@ -1612,7 +1619,7 @@ async function handleCreate(){
       email:email,
       displayName:displayName,
       role:role,
-      status:method==='invite'?'invited':'active',
+      status:'active',
       modules:modules,
       createdAt:new Date().toISOString(),
       createdBy:currentUid
@@ -1634,12 +1641,7 @@ async function handleCreate(){
       bkMsg=' · ⚠️ fiche Booking à créer manuellement';
     }
 
-    // Send password reset for invitation
-    if(method==='invite'){
-      await sendPasswordResetEmail(auth,email);
-    }
-
-    toast((method==='invite'?'✅ Invitation envoyée à '+email:'✅ Utilisateur créé')+bkMsg);
+    toast('✅ Utilisateur créé'+bkMsg);
     closeModal();
     await loadUsers();
   }catch(e){
@@ -1664,6 +1666,8 @@ function openEditModal(u){
   var isMe=u.uid===currentUid;
 
   var h='';
+  // Invitation en cours (09/10/2026) — voir api/user-invite.js
+  h+=inviteBoxHtml(u);
   // Info
   h+='<div class="mfr"><div class="mf"><label>Nom affiché</label><input class="bi" id="eName" value="'+esc(u.displayName||'')+'"/></div>';
   h+='<div class="mf"><label>Email</label><input class="bi" id="eEmail" value="'+esc(u.email||'')+'" disabled style="opacity:.5"/></div></div>';
@@ -1680,6 +1684,7 @@ function openEditModal(u){
   h+='<select class="bs" id="eStatus" style="width:100%"'+(isMe?' disabled':'')+'>'; 
   h+='<option value="active"'+(status==='active'?' selected':'')+'>✅ Actif</option>';
   h+='<option value="invited"'+(status==='invited'?' selected':'')+'>📩 Invité</option>';
+  if(status==='pending_activation')h+='<option value="pending_activation" selected>⏳ En attente d\'activation</option>';
   h+='<option value="disabled"'+(status==='disabled'?' selected':'')+'>🚫 Désactivé</option>';
   h+='</select></div>';
   // Activité de connexion (lecture seule, données de /api/user-activity)
@@ -1893,6 +1898,7 @@ function openEditModal(u){
 
   document.getElementById('moBody').innerHTML=h;
   document.getElementById('eSave').addEventListener('click',function(){handleSave(u.uid);});
+  bindInviteBox(u);
 
   // Bindings team_members : sync color picker ↔ hex input + aperçu live
   if (tmMember) {
@@ -2047,6 +2053,17 @@ async function handleSave(uid){
     if(fmMap!==null)upd.formationsAccess=fmMap;
     var fmEd=document.getElementById('eFmEditor');
     if(fmEd)upd.formationsEditor=fmEd.checked;
+    // Passage d'un compte invité / à activer vers « Actif » : le compte
+    // Firebase Auth est déverrouillé côté serveur (et la personne prévenue
+    // par email). Sans cet appel elle ne pourrait pas se connecter.
+    var prevU=USERS.find(function(x){return x.uid===uid;})||{};
+    var activationMsg='';
+    if(upd.status==='active'&&(prevU.status==='invited'||prevU.status==='pending_activation')){
+      var act=await callUserInvite({action:'activate',uid:uid});
+      activationMsg=act.passwordPending?' · 🔓 accès ouvert (mot de passe pas encore choisi)':(act.emailSent?' · 🔓 accès ouvert, email envoyé':' · 🔓 accès ouvert (email non envoyé)');
+    }
+    // Le statut « à activer » est posé par le serveur uniquement.
+    if(upd.status==='pending_activation'&&prevU.status!=='pending_activation')upd.status=prevU.status||'invited';
     await updateDoc(doc(db,'users',uid),upd);
 
     // ─── Sync vers _meta/team_members (visibilité Lead Live + identité équipe) ───
@@ -2111,13 +2128,149 @@ async function handleSave(uid){
       loadTeamColors();
     }
 
-    toast('✅ Utilisateur mis à jour');
+    toast('✅ Utilisateur mis à jour'+(activationMsg||''));
     closeModal();
     await loadUsers();
   }catch(e){
     console.error(e);toast('❌ Erreur: '+e.message);
     btn.disabled=false;btn.textContent='💾 Enregistrer';
   }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//   INVITATIONS — création, renvoi, activation (09/10/2026)
+// ════════════════════════════════════════════════════════════════════
+// Backend : POST /api/user-invite { action: create | resend | activate }
+// Parcours : compte Auth créé désactivé → email depuis strategie@ → la
+// personne choisit son mot de passe (set-password.html) → status
+// 'pending_activation' + pop-up admin (alteore-pending-users.js) → un admin
+// vérifie les droits et active ici.
+
+async function callUserInvite(payload){
+  var user=auth.currentUser;
+  if(!user)throw new Error('Session expirée — reconnecte-toi');
+  var idToken=await user.getIdToken();
+  var resp=await fetch('/api/user-invite',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+idToken},
+    body:JSON.stringify(payload)
+  });
+  var data=await resp.json().catch(function(){return {};});
+  if(!resp.ok)throw new Error(data.error||('HTTP '+resp.status));
+  return data;
+}
+
+function fmtDateTime(iso){
+  if(!iso)return '';
+  var d=new Date(iso);
+  if(isNaN(d.getTime()))return '';
+  return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'})+' à '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+}
+
+// Bloc lien + statut d'envoi, réutilisé après création et après renvoi.
+function inviteResultHtml(data,email){
+  var h='';
+  if(data.emailSent)h+='<div class="pw-email-status ok">✅ Invitation envoyée à '+esc(email||'')+'</div>';
+  else h+='<div class="pw-email-status warn">⚠️ Email non envoyé ('+esc(data.emailError||'erreur inconnue')+') — transmets le lien ci-dessous</div>';
+  h+='<div class="inv-link"><input type="text" class="bi" id="invLinkCopy" readonly value="'+esc(data.link||'')+'"/><button class="bb bb-o" id="invLinkBtn">📋 Copier</button></div>';
+  h+='<div class="pw-hint">Lien valable 7 jours. Tu peux aussi l\'envoyer par WhatsApp ou SMS.</div>';
+  return h;
+}
+function bindInviteCopy(){
+  var b=document.getElementById('invLinkBtn');
+  if(!b)return;
+  b.addEventListener('click',function(){
+    var input=document.getElementById('invLinkCopy');
+    input.select();
+    navigator.clipboard.writeText(input.value).then(function(){
+      b.textContent='✅ Copié';
+      setTimeout(function(){b.textContent='📋 Copier';},2000);
+    }).catch(function(){toast('❌ Impossible de copier — sélectionne manuellement');});
+  });
+}
+
+async function handleCreateInvite(email,displayName,role){
+  var btn=document.getElementById('cSubmit');
+  btn.disabled=true;btn.textContent='⏳ Création…';
+  try{
+    var data=await callUserInvite({action:'create',email:email,displayName:displayName,role:role,modules:readPermGrid('c')});
+    var bkMsg='';
+    try{
+      var bkRes=await ensureBookingExpert({uid:data.uid,displayName:displayName,email:email,role:role});
+      if(bkRes.created) bkMsg='📅 Fiche Booking créée.';
+      else if(bkRes.reason==='exists-unlinked') bkMsg='📅 Fiche Booking existante (non liée).';
+    }catch(bkErr){
+      console.error('[handleCreateInvite] booking expert auto-create failed:',bkErr);
+      bkMsg='⚠️ Fiche Booking à créer manuellement.';
+    }
+    var h='<div class="inv-box invited"><b>📩 Compte créé pour '+esc(displayName)+'</b><br>'+
+      'Il reste verrouillé jusqu\'à ce que la personne choisisse son mot de passe et que tu actives son accès. '+
+      'Tu recevras une pop-up et un email dès qu\'elle aura choisi son mot de passe.'+
+      (bkMsg?'<br>'+bkMsg:'')+
+      '<div class="inv-result">'+inviteResultHtml(data,email)+'</div></div>';
+    h+='<div style="display:flex;gap:10px;margin-top:16px"><button class="bb bb-p" id="invDone" style="flex:1">Terminé</button></div>';
+    document.getElementById('moBody').innerHTML=h;
+    bindInviteCopy();
+    document.getElementById('invDone').addEventListener('click',function(){closeModal();});
+    toast(data.emailSent?'✅ Invitation envoyée à '+email:'⚠️ Compte créé — email non envoyé, copie le lien');
+    await loadUsers();
+  }catch(e){
+    console.error('Invite error:',e);
+    toast('❌ '+e.message);
+    btn.disabled=false;btn.textContent='Créer l\'utilisateur';
+  }
+}
+
+function inviteBoxHtml(u){
+  var st=u.status||'active';
+  if(st==='invited'){
+    return '<div class="inv-box invited" id="invBox"><b>📩 Invitation en attente</b><br>'+
+      (u.invitedAt?'Dernier envoi le '+esc(fmtDateTime(u.invitedAt))+'. ':'')+
+      'La personne n\'a pas encore choisi son mot de passe ; son compte reste verrouillé.'+
+      '<div class="inv-actions"><button class="bb bb-o" id="invResend">📧 Renvoyer l\'invitation</button></div>'+
+      '<div class="inv-result" id="invResult"></div></div>';
+  }
+  if(st==='pending_activation'){
+    return '<div class="inv-box pending" id="invBox"><b>⏳ En attente de ton activation</b><br>'+
+      'Mot de passe choisi'+(u.passwordSetAt?' le '+esc(fmtDateTime(u.passwordSetAt)):'')+'. '+
+      'Vérifie son rôle et ses droits ci-dessous, puis active : la personne pourra se connecter et recevra un email.'+
+      '<div class="inv-actions"><button class="bb bb-p" id="invActivate">🔓 Activer l\'accès</button></div></div>';
+  }
+  return '';
+}
+
+function bindInviteBox(u){
+  var rs=document.getElementById('invResend');
+  if(rs)rs.addEventListener('click',async function(){
+    rs.disabled=true;rs.textContent='⏳ Envoi…';
+    try{
+      var data=await callUserInvite({action:'resend',uid:u.uid});
+      document.getElementById('invResult').innerHTML=inviteResultHtml(data,u.email);
+      bindInviteCopy();
+      toast(data.emailSent?'✅ Invitation renvoyée':'⚠️ Email non envoyé — copie le lien');
+    }catch(e){console.error(e);toast('❌ '+e.message);}
+    rs.disabled=false;rs.textContent='📧 Renvoyer l\'invitation';
+  });
+  var ac=document.getElementById('invActivate');
+  if(ac)ac.addEventListener('click',function(){
+    // Enregistre la fiche (rôle, droits…) avec le statut « Actif » : handleSave
+    // déclenche l'activation serveur.
+    var sel=document.getElementById('eStatus');
+    if(sel)sel.value='active';
+    ac.disabled=true;ac.textContent='⏳ Activation…';
+    handleSave(u.uid);
+  });
+}
+
+// admin-users.html?activate=<uid> (pop-up / email admin) → ouvre la fiche.
+function openFromQuery(){
+  var uid='';
+  try{uid=new URLSearchParams(window.location.search).get('activate')||'';}catch(e){}
+  if(!uid)return;
+  var u=USERS.find(function(x){return x.uid===uid;});
+  if(!u){toast('⚠️ Utilisateur introuvable');return;}
+  openEditModal(u);
+  try{history.replaceState(null,'',window.location.pathname);}catch(e){}
 }
 
 // ════════════════════════════════════════════════════════════════════
