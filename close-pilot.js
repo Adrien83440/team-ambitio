@@ -32,7 +32,7 @@
      typeMap() → { typeId: { label } }  ·  cfg() → réglages (_config)
      coaches() → [{ slug, nom }]  ·  me() → { nom }  ·  setterName(lead)
      origin(lead) → texte  ·  sbSuggest(lead) → true | false | null
-     openModule('sig'|'pay'|'book', leadId, params)
+     openModule('sig'|'pay'|'book', leadId, params)  ·  closeModule()
      save(leadId, patch) → Promise (fusion dans leads/{id}.closePilot)
      recordClose(leadId, answers) → Promise (CloseWizard.commit en prod)
      bookingLink(typeId, lead) → URL  ·  toast(msg)  ·  moduleOpen() → bool
@@ -234,6 +234,12 @@
       + '.cp-win h2{font-size:24px;font-weight:900;margin:10px 0 4px;background:linear-gradient(90deg,#fbbf24,#34d399,#5b7cfa);-webkit-background-clip:text;background-clip:text;color:transparent}'
       + '.cp-confetti{position:fixed;top:-12px;width:9px;height:14px;z-index:99999;pointer-events:none;animation:cpF 2.6s linear forwards}'
       + '@keyframes cpF{to{transform:translateY(105vh) rotate(720deg);opacity:.8}}'
+      + '#cpNotice{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);z-index:100002;width:min(440px,92vw);background:linear-gradient(165deg,#12301f,#0f1a16);border:1px solid rgba(52,211,153,.55);border-radius:18px;box-shadow:0 24px 70px rgba(0,0,0,.65),0 0 0 4px rgba(52,211,153,.12);padding:18px 18px 16px;color:#eef1fa;text-align:center;opacity:0;pointer-events:none;transition:all .25s ease;font-family:inherit}'
+      + '#cpNotice.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}'
+      + '#cpNotice .ic{font-size:34px;line-height:1;animation:cpB .7s ease}'
+      + '#cpNotice .t{font-size:16px;font-weight:900;margin:8px 0 4px}'
+      + '#cpNotice .d{font-size:12.5px;color:#a7b0c4;line-height:1.5;margin-bottom:14px}'
+      + '#cpNotice .cp-btn{width:100%;justify-content:center}'
       + '@media(max-width:560px){.cp-opts{grid-template-columns:1fr}.cp-mo{max-height:100vh;border-radius:0}#cpBg{padding:0}}';
     var st = document.createElement('style'); st.id = 'cpStyles'; st.textContent = css; document.head.appendChild(st);
   }
@@ -257,6 +263,47 @@
     return h;
   }
 
+  /* ═══ « Tu peux fermer cette fenêtre » (Adrien 09/10/2026) ═════════
+     Quand une carte ouvre un module (contrat, paiement, RDV) et que l'étape
+     se valide pendant qu'il est ouvert, une pop-up le dit et le ferme d'un
+     clic : retour à la carte, puis « Continuer ». Elle disparaît seule si
+     le module est fermé autrement (✕, Échap). Hôte : closeModule(). */
+  var NOTICE = {
+    contrat: { ic: '✍️', t: 'Contrat signé !', d: 'Le client a signé. Tu peux maintenant fermer cette fenêtre et revenir aux cartes.' },
+    paiement: { ic: '💳', t: 'Prélèvement déclenché !', d: 'Le paiement est en place. Tu peux maintenant fermer cette fenêtre et revenir aux cartes.' },
+    rdv: { ic: '📅', t: 'RDV 72 h réservé !', d: 'Le rendez-vous est calé. Tu peux maintenant fermer cette fenêtre et revenir aux cartes.' }
+  };
+  var noticeWatch = null;
+  function showNotice(k) {
+    var n = NOTICE[k]; if (!n) return;
+    var el = document.getElementById('cpNotice');
+    if (!el) {
+      el = document.createElement('div'); el.id = 'cpNotice';
+      el.addEventListener('click', function (e) {
+        if (!e.target.closest || !e.target.closest('[data-cp-notice]')) return;
+        hideNotice();
+        if (H && H.closeModule) H.closeModule();
+        render();
+      });
+      document.body.appendChild(el);
+    }
+    el.innerHTML = '<div class="ic">' + n.ic + '</div><div class="t">' + esc(n.t) + '</div><div class="d">' + esc(n.d) + '</div>'
+      + '<button class="cp-btn ok big" data-cp-notice="1">Fermer et revenir aux cartes</button>';
+    requestAnimationFrame(function () { el.classList.add('show'); });
+    clearInterval(noticeWatch);
+    noticeWatch = setInterval(function () { if (!(H && H.moduleOpen && H.moduleOpen())) hideNotice(); }, 500);
+  }
+  function hideNotice() {
+    clearInterval(noticeWatch); noticeWatch = null;
+    var el = document.getElementById('cpNotice'); if (el) el.classList.remove('show');
+  }
+  /* Module ouvert depuis une carte : on retient l'étape et son état à
+     l'ouverture — la pop-up ne salue qu'un passage « à faire » → « fait ». */
+  var MOD_STEP = { sig: 'contrat', pay: 'paiement', book: 'rdv' };
+  function stepDone(leadId, k) {
+    var r = false; steps(leadId).forEach(function (s) { if (s.k === k) r = s.done; }); return r;
+  }
+
   /* ═══ La modale ════════════════════════════════════════════════════ */
   function ensureDom() {
     ensureStyles();
@@ -278,7 +325,7 @@
     document.getElementById('cpBg').classList.add('show');
     render();
   }
-  function closeModal() { var bg = document.getElementById('cpBg'); if (bg) bg.classList.remove('show'); ui.leadId = null; }
+  function closeModal() { var bg = document.getElementById('cpBg'); if (bg) bg.classList.remove('show'); ui.leadId = null; ui.modStep = null; hideNotice(); }
 
   function render() {
     if (!ui.leadId) return;
@@ -557,7 +604,12 @@
     if (a === 'prev') { ui.step = keys[Math.max(0, idx - 1)]; render(); return; }
     if (a === 'next') { ui.step = keys[Math.min(keys.length - 1, idx + 1)]; render(); return; }
     if (a === 'copy') { copyText(t.getAttribute('data-txt') || ''); return; }
-    if (a === 'mod') { H.openModule(t.getAttribute('data-m'), leadId, moduleParams(t.getAttribute('data-m'), leadId)); return; }
+    if (a === 'mod') {
+      var mk = t.getAttribute('data-m'), ms = MOD_STEP[mk] || null;
+      ui.modStep = ms; ui.modWasDone = ms ? stepDone(leadId, ms) : true;
+      hideNotice();
+      H.openModule(mk, leadId, moduleParams(mk, leadId)); return;
+    }
     if (a === 'set') {
       var f = t.getAttribute('data-f'), v = t.getAttribute('data-v'), c = cpOf(leadId).choix || {}, patch = {};
       patch[f] = f === 'nmens' ? Number(v) : v;
@@ -634,7 +686,13 @@
       if (!ui.leadId || (leadId && leadId !== ui.leadId)) return;
       var list = steps(ui.leadId), cur = null;
       list.forEach(function (s) { if (s.k === ui.step) cur = s; });
-      if (cur && cur.done && (ui.step === 'contrat' || ui.step === 'paiement') && !ui['auto_' + ui.step]) {
+      var modOpen = !!(H.moduleOpen && H.moduleOpen());
+      if (ui.modStep && !ui.modWasDone && modOpen && stepDone(ui.leadId, ui.modStep)) {
+        /* L'étape vient de se valider dans le module ouvert. */
+        ui.modWasDone = true;
+        ui['auto_' + ui.modStep] = true;
+        showNotice(ui.modStep);
+      } else if (cur && cur.done && (ui.step === 'contrat' || ui.step === 'paiement') && !ui['auto_' + ui.step]) {
         ui['auto_' + ui.step] = true;
         H.toast(ui.step === 'contrat' ? '✅ Contrat signé !' : '✅ Paiement en place !');
       }

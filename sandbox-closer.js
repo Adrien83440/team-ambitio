@@ -828,6 +828,7 @@
       sbSuggest: function (l) { return !!l.sb; },
       openModule: function (kind, leadId, params) { openModule(kind, leadId, params); },
       moduleOpen: function () { return !!ui.module; },
+      closeModule: function () { if (ui.module) closeModule(); },
       save: function (leadId, patch) {
         X.update(function (s) { var l = X.leadById(s, leadId); if (l) { l.closePilot = deepMerge(l.closePilot || {}, JSON.parse(JSON.stringify(patch))); if (patch.startedAt) X.log(s, leadId, 'pilot_start', '🏆 Pilote de closing lancé'); if (patch.doneAt) X.log(s, leadId, 'pilot_done', '🎉 Closing validé (checklist)'); } });
         renderSheet();

@@ -449,6 +449,12 @@ function loadPayments() {
     snap.forEach(d => { allPayments.push({ id: d.id, ...d.data() }); });
     renderStats();
     applyFilters();
+    /* Le volet ouvert suit les données : mandat signé par le client →
+       « Mandat actif » et le bouton Déclencher apparaissent sans recharger
+       (avant le 09/10/2026, il restait figé sur « Mandat en attente »). */
+    if (currentPaymentId && document.getElementById('payDetail').classList.contains('show')) {
+      renderDetail(currentPaymentId);
+    }
   }, err => {
     // Rôle sans aucun droit (csm/coach non flaggés ouvrant la page en
     // direct) : les rules Firestore refusent la lecture → message clair
@@ -521,6 +527,27 @@ function renderTable() {
 }
 
 /* ══ DETAIL ══ */
+/* Mandat en attente, volet ouvert : synchro GoCardless silencieuse toutes
+   les 10 s pendant 20 min, le temps que le client saisisse son IBAN. Le
+   webhook reste la voie normale ; ceci couvre son retard (et le bac à
+   sable, qui n'a pas de webhook). L'onSnapshot redessine le volet. */
+let _mandatePoll = null;
+function watchMandate(id) {
+  if (_mandatePoll) { clearInterval(_mandatePoll); _mandatePoll = null; }
+  const until = Date.now() + 20 * 60 * 1000;
+  let busy = false;
+  _mandatePoll = setInterval(() => {
+    const p = allPayments.find(x => x.id === id);
+    const open = currentPaymentId === id && document.getElementById('payDetail').classList.contains('show');
+    if (!open || !p || p.status !== 'pending_mandate' || !p.gcBillingRequestId || p.gcMandateId || Date.now() > until) {
+      clearInterval(_mandatePoll); _mandatePoll = null; return;
+    }
+    if (busy || document.hidden) return;
+    busy = true;
+    finalizeMandate(id, { silent: true }).catch(() => {}).finally(() => { busy = false; });
+  }, 10000);
+}
+
 async function openDetail(id) {
   currentPaymentId = id;
   const p = allPayments.find(x => x.id === id);
@@ -530,12 +557,23 @@ async function openDetail(id) {
   el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
   // Auto-finalize : si le paiement attend encore le mandat mais n'a toujours
-  // pas reçu de gcMandateId, on déclenche une synchro silencieuse côté GC.
-  // L'onSnapshot sur allPayments rerendra automatiquement si quelque chose
-  // change. Filet de sécurité au cas où le webhook serait en retard.
+  // pas reçu de gcMandateId, on déclenche une synchro silencieuse côté GC,
+  // puis on la répète tant que le volet reste ouvert (watchMandate).
+  // L'onSnapshot sur allPayments redessine le volet quand ça change.
   if (p.status === 'pending_mandate' && p.gcBillingRequestId && !p.gcMandateId) {
     finalizeMandate(id, { silent: true }).catch(()=>{});
+    watchMandate(id);
   }
+  renderDetail(id);
+}
+
+function renderDetail(id) {
+  const p = allPayments.find(x => x.id === id);
+  if (!p) return;
+  const el = document.getElementById('payDetail');
+  // Lien mandat généré ou envoyé depuis ce volet : la surveillance démarre
+  // dès que le paiement passe en attente de mandat.
+  if (!_mandatePoll && p.status === 'pending_mandate' && p.gcBillingRequestId && !p.gcMandateId) watchMandate(id);
 
   const ini = (p.leadName || '💳')[0].toUpperCase();
   const canTrigger = (p.status === 'mandate_active') && (canTriggerAll || p.createdBy === currentUser.uid);

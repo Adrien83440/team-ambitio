@@ -3254,6 +3254,7 @@ function _ldClosePilotHost() {
       return l.assignedTo ? false : null;
     },
     openModule: function (kind, leadId, params) { ldOpenModule(kind, leadId, params); },
+    closeModule: function () { ldCloseModule(); },
     moduleOpen: function () { return !!document.querySelector('#ldFrameBg.show'); },
     save: function (leadId, patch) { return db.collection('leads').doc(leadId).set({ closePilot: patch }, { merge: true }); },
     recordClose: function (leadId, answers, opts) {
@@ -3272,7 +3273,12 @@ function _ldClosePilotHost() {
 
 function paintCloseRail(leadId) {
   var host = document.querySelector('[data-close-rail="' + leadId + '"]');
-  if (!host) return;
+  if (!host) {
+    /* Fiche sur un autre volet : pas de bandeau à peindre, mais les cartes
+       du pilote ouvertes doivent quand même suivre signature / paiement. */
+    if (_ldClosePilotOn()) window.ClosePilot.refresh(leadId);
+    return;
+  }
   var l = (typeof allLeads !== 'undefined' ? allLeads : []).find
     ? (allLeads.find(function (x) { return x.id === leadId; }) || null) : null;
   if (!l) { host.innerHTML = ''; return; }
