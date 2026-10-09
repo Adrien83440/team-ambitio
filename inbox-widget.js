@@ -1044,8 +1044,8 @@
           return;
         }
         const data = snap.data();
-        const comms = (data.communications || [])
-          .filter(c => c && c.type === 'sms')
+        const comms = iwDedupe((data.communications || []).filter(c => c && c.type === 'sms'),
+            c => c.content || '', c => tsToMs(c.date || c.createdAt), c => /^(in|entr)/.test(String(c.direction || '').toLowerCase()) ? 'in' : 'out')
           .sort((a, b) => tsToMs(a.date || a.createdAt) - tsToMs(b.date || b.createdAt))
           .slice(-30);
         if (comms.length === 0) {
@@ -1057,7 +1057,7 @@
           const time = formatTime(c.date || c.createdAt);
           return (
             '<div class="iw-comp-bubble ' + dir + '">' +
-              escapeHtml(c.content || '') +
+              escapeHtml(iwClean(c.content || '')) +
               '<span class="iw-comp-bubble-time">' + escapeHtml(time) + '</span>' +
             '</div>'
           );
@@ -1225,6 +1225,32 @@
   }
 
   // ---------- LISTENER FIRESTORE ----------
+  /* ── Doublons SMS (09/10/2026) ───────────────────────────────────────────
+     Un même SMS peut être tracé deux fois : par le webhook Ringover / l'envoi
+     Alteore ET par un scénario Make (préfixe « Message: »). Même sens + même
+     texte (préfixe retiré) à moins de 10 min = un seul affiché. On garde
+     l'entrée sans préfixe. Rien n'est supprimé en base. */
+  function iwClean(t) { return String(t || '').replace(/^\s*message\s*:\s*/i, ''); }
+  function iwDedupe(list, getText, getTime, getDir) {
+    const sorted = list.slice().sort((a, b) => (/^\s*message\s*:/i.test(getText(a)) ? 1 : 0) - (/^\s*message\s*:/i.test(getText(b)) ? 1 : 0));
+    const seen = [];
+    const keep = new Set();
+    sorted.forEach(x => {
+      const k = iwClean(getText(x)).replace(/\s+/g, ' ').trim().toLowerCase();
+      const t = getTime(x), d = getDir(x);
+      if (k && seen.some(y => y.k === k && y.d === d && Math.abs(y.t - t) < 10 * 60000)) return;
+      seen.push({ k, t, d });
+      keep.add(x);
+    });
+    return list.filter(x => keep.has(x));
+  }
+  function iwDedupeNotifs(list) {
+    return iwDedupe(list,
+      n => (n.type === 'sms' || !n.type) ? (n.text || n.content || '') : '',
+      n => tsToMs(n.createdAt),
+      n => (n.type || '') + ':' + (n.direction || '') + ':' + String(n.fromNumber || n.toNumber || ''));
+  }
+
   function startListening() {
     if (unsubscribeListener) { unsubscribeListener(); unsubscribeListener = null; }
 
@@ -1250,6 +1276,8 @@
         snap.docChanges().forEach(change => {
           if (change.type === 'added') {
             const notif = Object.assign({ id: change.doc.id }, change.doc.data());
+            // Doublon d'un SMS déjà affiché : pas de second « ding ».
+            if (iwDedupeNotifs(newNotifs).indexOf(newNotifs.find(n => n.id === notif.id)) < 0) return;
             if (isUnreadByMe(notif)) {
               playDing();
               showToast(notif);
@@ -1259,7 +1287,7 @@
         });
       }
 
-      notifications = newNotifs;
+      notifications = iwDedupeNotifs(newNotifs);
       initialSnapshotDone = true;
       updateBadge();
       renderList();
@@ -1289,7 +1317,7 @@
           }
         });
         _lastPollIds = new Set(newNotifs.map(n => n.id));
-        notifications = newNotifs;
+        notifications = iwDedupeNotifs(newNotifs);
         initialSnapshotDone = true;
         updateBadge();
         renderList();

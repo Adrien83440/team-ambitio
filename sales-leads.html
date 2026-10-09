@@ -4812,7 +4812,9 @@ function l2SegEch(l, id) {
      en base ; on garde l'entrée la plus riche, celle qui porte l'auteur). */
   var smsSeen = [];
   function smsNorm(t) { return String(t || '').replace(/^\s*message\s*:\s*/i, '').replace(/\s+/g, ' ').trim().toLowerCase(); }
-  var ordered = comms.slice().sort(function (a, b) { return (b.ownerName ? 1 : 0) - (a.ownerName ? 1 : 0); });
+  // Priorité à l'entrée la plus propre : sans préfixe « Message: », puis avec auteur.
+  function smsRank(c) { return (/^\s*message\s*:/i.test(String(c.content || '')) ? 0 : 2) + (c.ownerName ? 1 : 0); }
+  var ordered = comms.slice().sort(function (a, b) { return smsRank(b) - smsRank(a); });
   for (var ci = 0; ci < ordered.length; ci++) {
     var cm = ordered[ci];
     if (cm.type !== 'call' && cm.type !== 'sms') continue;

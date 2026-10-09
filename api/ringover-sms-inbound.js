@@ -38,7 +38,19 @@ function cleanSmsText(raw) {
 //   - si le lead a déjà une communication avec ce providerMessageId → déjà traité
 //   - sinon, si une notif inbox récente porte ce providerMessageId → déjà traité
 // Retourne true si le SMS a déjà été enregistré (donc à ignorer).
-async function alreadyProcessed(msgId, lead) {
+async function alreadyProcessed(msgId, lead, text) {
+  // Doublon par CONTENU (09/10/2026) : le scénario Make peut avoir déjà tracé
+  // ce SMS (sans providerMessageId, préfixe « Message: ») — même texte entrant
+  // reçu il y a moins de 10 min sur la fiche → déjà enregistré.
+  if (lead && Array.isArray(lead.communications) && text) {
+    const norm = t => String(t || '').replace(/^\s*message\s*:\s*/i, '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const k = norm(text);
+    const now = Date.now();
+    if (k && lead.communications.some(c => c && c.type === 'sms' && /^(in|entr)/.test(String(c.direction || '').toLowerCase()) &&
+        norm(c.content) === k && Math.abs(now - (Date.parse(c.date || '') || 0)) < 10 * 60000)) {
+      return true;
+    }
+  }
   if (!msgId) return false; // sans identifiant fiable, on ne peut pas dédupliquer ici
   const pid = String(msgId);
   try {
@@ -149,7 +161,7 @@ module.exports = async (req, res) => {
 
     // Idempotence : si ce SMS (providerMessageId) a déjà été enregistré, on sort
     // sans dupliquer ni en base lead ni en notification inbox.
-    if (await alreadyProcessed(msgId, lead)) {
+    if (await alreadyProcessed(msgId, lead, text)) {
       console.log('[sms-inbound] duplicate ignored, msgId:', String(msgId || ''));
       res.status(200).end();
       return;

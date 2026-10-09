@@ -988,6 +988,26 @@ exports.onWebhookInbox = functions.firestore
         const labels = { call: "Appel", sms: "SMS", email: "Email", note: "Note", other: "Activité" };
         const rawDir = (autoDirection || "").toLowerCase();
         const normDir = (rawDir === "out" || rawDir === "outbound") ? "outbound" : (rawDir === "in" || rawDir === "inbound") ? "inbound" : rawDir;
+
+        /* SMS en double (09/10/2026) : le scénario Make renvoie ici des SMS
+           déjà tracés par api/ringover-sms-inbound.js (entrants) ou
+           api/ringover-sms-send.js (sortants), avec un préfixe « Message: ».
+           Même sens + même texte (préfixe retiré) à moins de 10 min d'un SMS
+           déjà présent sur la fiche → ignoré. */
+        if (type === "sms") {
+          cleanContent = cleanContent.replace(/^\s*message\s*:\s*/i, "");
+          const smsNorm = (t) => String(t || "").replace(/^\s*message\s*:\s*/i, "").replace(/\s+/g, " ").trim().toLowerCase();
+          const isIn = (d) => /^(in|entr)/.test(String(d || "").toLowerCase());
+          const t0 = Date.parse(commDateIso) || Date.now();
+          const k = smsNorm(cleanContent);
+          const dupSms = k && (existing.communications || []).some((c) => c && c.type === "sms" &&
+            smsNorm(c.content) === k && isIn(c.direction) === (normDir === "inbound") &&
+            Math.abs((Date.parse(c.date || "") || 0) - t0) < 10 * 60000);
+          if (dupSms) {
+            await snap.ref.update({ status: "done", result: { skipped: "duplicate sms", leadId: leadId } });
+            return null;
+          }
+        }
         const dir = normDir === "outbound" ? " sortant" : normDir === "inbound" ? " entrant" : "";
         const src = data.source ? " (" + data.source + ")" : "";
         let tlText = (icons[type] || "📌") + " " + (labels[type] || type) + dir + src;
