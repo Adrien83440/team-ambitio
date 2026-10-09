@@ -159,7 +159,10 @@ textarea.inp{resize:vertical;line-height:1.5;}
       <!-- GAUCHE -->
       <div class="side">
         <div class="panel">
-          <div class="panel-t">⚙️ Après la signature</div>
+          <div class="panel-t">⚙️ Réglages</div>
+          <label style="display:flex;align-items:center;gap:8px;padding:8px;background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.25);border-radius:8px;cursor:pointer;margin-bottom:8px">
+            <input type="checkbox" id="setConf" style="accent-color:#ef4444"/><span style="font-size:12px;font-weight:700;color:#f87171">🔒 Confidentiel — espace admin<br/><span style="font-weight:500;color:var(--muted);font-size:10.5px">Invisible pour l'équipe (contrat interne)</span></span>
+          </label>
           <label style="display:flex;align-items:center;gap:8px;padding:8px;background:rgba(168,85,247,.07);border:1px solid rgba(168,85,247,.25);border-radius:8px;cursor:pointer">
             <input type="checkbox" id="setAuto" style="accent-color:#a855f7"/><span style="font-size:12px;font-weight:700;color:#c084fc">Déclencher Make à la signature</span>
           </label>
@@ -476,6 +479,7 @@ function fillSettings(){
   var st=ST.settings||{automationEnabled:false,automationWebhookUrl:'',automationNote:'',academyCourseId:''};
   $('setAuto').checked=!!st.automationEnabled;$('setUrl').value=st.automationWebhookUrl||'';$('setNote').value=st.automationNote||'';
   $('setAutoBox').style.display=st.automationEnabled?'':'none';
+  $('setConf').checked=ST.settings?st.audience==='admin':!!Q.get('confidential');
   loadAcad(st.academyCourseId||'');
 }
 function loadAcad(selected){
@@ -494,7 +498,7 @@ function loadAcad(selected){
 }
 function readSettings(){
   var id=$('setAcad').value,c=(ACAD||[]).filter(function(x){return x.id===id;})[0];
-  return {automationEnabled:$('setAuto').checked,automationWebhookUrl:$('setUrl').value.trim(),automationNote:$('setNote').value.trim(),academyCourseId:id,academyCourseName:c?c.name:''};
+  return {audience:$('setConf').checked?'admin':'equipe',automationEnabled:$('setAuto').checked,automationWebhookUrl:$('setUrl').value.trim(),automationNote:$('setNote').value.trim(),academyCourseId:id,academyCourseName:c?c.name:''};
 }
 function testHook(){
   var url=$('setUrl').value.trim(),res=$('testHookRes'),b=$('testHookBtn');
@@ -515,7 +519,7 @@ function testHook(){
 document.addEventListener('change',function(e){
   var id=e.target&&e.target.id;
   if(id==='setAuto'){$('setAutoBox').style.display=e.target.checked?'':'none';dirty();}
-  else if(id==='setAcad')dirty();
+  else if(id==='setAcad'||id==='setConf')dirty();
 });
 document.addEventListener('input',function(e){var id=e.target&&e.target.id;if(id==='setUrl'||id==='setNote')dirty();});
 

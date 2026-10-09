@@ -151,6 +151,7 @@ try {
   <button class="sig-tab on" data-tab="templates" onclick="switchTab('templates')">📄 Modèles</button>
   <button class="sig-tab" data-tab="requests" onclick="switchTab('requests')">📨 Envois</button>
   <button class="sig-tab" data-tab="completed" onclick="switchTab('completed')">✅ Documents signés</button>
+  <button class="sig-tab" data-tab="admin" id="tabAdminBtn" style="display:none" onclick="switchTab('admin')">🔒 Espace admin</button>
 </div>
 
 <!-- ═══ TEMPLATES TAB ═══ -->
@@ -166,6 +167,9 @@ try {
   </table>
   <div id="reqEmpty" style="text-align:center;padding:40px;color:var(--muted);font-size:13px">Aucun envoi en cours.</div>
 </div>
+
+<!-- ═══ ESPACE ADMIN (contrats internes : setters, closers, coachs…) ═══ -->
+<div id="tabAdmin" style="display:none"></div>
 
 <!-- ═══ COMPLETED DOCUMENTS TAB ═══ -->
 <div id="tabCompleted" style="display:none">
@@ -303,6 +307,10 @@ try {
     <!-- Champs remplis par l'équipe (refonte signature 08/10/2026) : nombre de
          mensualités, détail du plan de paiement… Le client les voit dans le
          contrat mais ne peut pas les modifier. -->
+    <label id="sendConfBox" style="display:none;align-items:center;gap:10px;padding:10px 12px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.25);border-radius:10px;cursor:pointer;margin-bottom:12px">
+      <input type="checkbox" id="sendConfidential" style="width:16px;height:16px;accent-color:#ef4444"/>
+      <div><div style="font-size:13px;font-weight:700;color:#f87171">🔒 Confidentiel — espace admin</div><div style="font-size:10px;color:var(--muted);margin-top:1px">Contrat interne (setter, closer, coach…) : invisible pour le reste de l'équipe, même une fois signé.</div></div>
+    </label>
     <div id="sendPrefill" style="display:none;margin-bottom:14px;padding:12px;background:rgba(14,165,233,.05);border:1px solid rgba(14,165,233,.2);border-radius:10px"></div>
 
     <div style="margin-bottom:16px"><div class="ep-label">Message personnalisé</div><textarea class="ep-input" id="sendMsg" rows="3" placeholder="Bonjour, veuillez trouver ci-joint votre contrat à signer…"></textarea></div>
@@ -401,16 +409,28 @@ function switchTab(tab){
   document.getElementById('tabTemplates').style.display=tab==='templates'?'':'none';
   document.getElementById('tabRequests').style.display=tab==='requests'?'':'none';
   document.getElementById('tabCompleted').style.display=tab==='completed'?'':'none';
+  document.getElementById('tabAdmin').style.display=tab==='admin'?'':'none';
   document.getElementById('editorView').style.display='none';
-  if(tab==='requests'||tab==='completed')loadRequests();
+  if(tab==='requests'||tab==='completed'||tab==='admin')loadRequests();
+  if(tab==='admin')renderAdmin();
   if(tab==='completed')renderCompleted();
 }
 
 /* ═══ TEMPLATES LIST ═══ */
+/* ESPACE ADMIN (09/10/2026) : chaque modèle et chaque demande porte
+   audience 'equipe' ou 'admin'. Les règles Firestore refusent à un
+   non-admin toute lecture d'un document 'admin' — et une requête n'est
+   acceptée que si elle filtre elle-même sur audience == 'equipe'. D'où deux
+   requêtes : complète pour les admins, filtrée pour l'équipe (tri local). */
+function _isAdm(){return window._currentRole==='admin';}
+function _tsSec(v){return v&&v.seconds?v.seconds:0;}
 function loadTemplates(){
-  db.collection('signature_templates').orderBy('createdAt','desc').get().then(function(sn){
+  var q=_isAdm()?db.collection('signature_templates').orderBy('createdAt','desc'):db.collection('signature_templates').where('audience','==','equipe');
+  q.get().then(function(sn){
     TPL=[];
     sn.forEach(function(d){var v=d.data();v.id=d.id;TPL.push(v);});
+    if(!_isAdm())TPL.sort(function(a,b){return _tsSec(b.createdAt)-_tsSec(a.createdAt);});
+    var ab=document.getElementById('tabAdminBtn');if(ab)ab.style.display=_isAdm()?'':'none';
     console.log('[SIG] Templates loaded:',TPL.length);
     renderTemplates();
   }).catch(function(err){console.error('[SIG] loadTemplates error:',err);renderTemplates();});
@@ -426,6 +446,7 @@ function renderTemplates(){
   }
   TPL.forEach(function(t){
     if(t.isAdhoc)return; // Envois rapides : modèles éphémères, cachés de la grille
+    if(t.audience==='admin')return; // Modèles confidentiels : onglet 🔒 Espace admin
     /* Un clic ouvre l'atelier (texte du contrat) pour les admins ; l'ancien
        éditeur de PDF reste accessible par son bouton 📐. */
     var gen=t.web&&t.web.generated;
@@ -459,7 +480,7 @@ document.addEventListener('click',function(e){
 
 /* ═══ CREATE / OPEN TEMPLATE ═══ */
 function createNewTpl(){_pickPdf(false);}
-function createAdhocSend(){_pickPdf(true);}
+function createAdhocSend(adm){window._nextAdhocAdmin=!!adm;_pickPdf(true);}
 function _pickPdf(adhoc){
   var inp=document.createElement('input');
   inp.type='file';inp.accept='.pdf';
@@ -525,7 +546,9 @@ function replaceTplPdf(){
    est encore en attente. On le dit avant, jamais après. */
 function _pendingRequestsFor(tplId){
   if(!tplId)return Promise.resolve(0);
-  return db.collection('signature_requests').where('templateId','==',tplId).get()
+  var q=db.collection('signature_requests').where('templateId','==',tplId);
+  if(!_isAdm())q=q.where('audience','==','equipe');
+  return q.get()
     .then(function(sn){
       var n=0;sn.forEach(function(d){if(((d.data()||{}).status||'')!=='signed')n++;});
       return n;
@@ -966,6 +989,7 @@ function _buildTplData(){
   }
   var data={
     name:currentTpl.name,
+    audience:currentTpl.audience||(currentTpl._adhoc&&window._nextAdhocAdmin&&_isAdm()?'admin':'equipe'),
     fields:currentTpl.fields||[],
     pages:currentTpl.pages||totalPages,
     automationEnabled:autoEnabled,
@@ -1178,6 +1202,9 @@ function _applyPresetSend(){
 function openSendModal(){
   var box=document.getElementById('sendPrefill');
   var tplS=_sendTpl();
+  var cb=document.getElementById('sendConfBox');
+  cb.style.display=_isAdm()?'flex':'none';
+  document.getElementById('sendConfidential').checked=_isAdm()&&(tplS.audience==='admin'||!!window._nextAdhocAdmin);
   if(tplS.web&&tplS.web.generated){
     var gv=_genFields(tplS);
     if(gv.length)_openSendModalGen(box,gv);else{box.innerHTML='';box.style.display='none';}
@@ -1291,7 +1318,11 @@ function submitSend(){
   /* Conditions remplies par l'équipe (prefill, lu plus haut) : figées dans
      la demande, imprimées sur le contrat, affichées au client en lecture
      seule. */
+  var audience=(_isAdm()&&document.getElementById('sendConfidential').checked)?'admin':'equipe';
+  /* Un envoi rapide confidentiel rend aussi son modèle (le PDF) confidentiel. */
+  if(audience==='admin'&&tpl.isAdhoc&&tpl.audience!=='admin'&&currentTpl.id){db.collection('signature_templates').doc(currentTpl.id).update({audience:'admin'}).catch(function(e){console.warn('audience modèle',e.message);});}
   var req={
+    audience:audience,
     templateId:currentTpl.id,
     templateName:tpl.name||(currentTpl.name||'Contrat'),
     leadId:_presetLeadId||null,
@@ -1335,6 +1366,7 @@ function submitSend(){
       else toast('⚠️ Contrat cree, mais ni email ni SMS n\'ont pu partir. Utilise « Renvoyer ».');
     },token1);
     btn.disabled=false;btn.textContent='📨 Envoyer le contrat';
+    window._nextAdhocAdmin=false;
     document.getElementById('sendModal').style.display='none';
     document.getElementById('sendName').value='';
     document.getElementById('sendEmail').value='';
@@ -1366,9 +1398,12 @@ var reqUnsubscribe=null;
 function loadRequests(){
   // Unsubscribe previous listener if any
   if(reqUnsubscribe){reqUnsubscribe();reqUnsubscribe=null;}
-  reqUnsubscribe=db.collection('signature_requests').orderBy('createdAt','desc').limit(50).onSnapshot(function(sn){
+  var q=_isAdm()?db.collection('signature_requests').orderBy('createdAt','desc').limit(200):db.collection('signature_requests').where('audience','==','equipe');
+  reqUnsubscribe=q.onSnapshot(function(sn){
     REQ=[];sn.forEach(function(d){var v=d.data();v.id=d.id;REQ.push(v);});
+    if(!_isAdm()){REQ.sort(function(a,b){return _tsSec(b.createdAt)-_tsSec(a.createdAt);});REQ=REQ.slice(0,200);}
     renderRequests();
+    if(document.getElementById('tabAdmin').style.display!=='none')renderAdmin();
   },function(err){
     console.error('[SIG] Requests listener error:',err);
   });
@@ -1399,7 +1434,7 @@ function renderRequests(){
   var el=document.getElementById('reqBody');
   var empty=document.getElementById('reqEmpty');
   // Filter: only non-signed requests
-  var pending=REQ.filter(function(r){return r.status!=='signed';});
+  var pending=REQ.filter(function(r){return r.status!=='signed'&&r.audience!=='admin';});
   if(!pending.length){el.innerHTML='';empty.style.display='';renderCompleted();return;}
   empty.style.display='none';
   var h='';
@@ -1496,11 +1531,46 @@ document.addEventListener('click',function(e){
   if(e.target.closest&&e.target.closest('[data-suivi-close]'))closeSuivi();
 });
 
+/* ═══ ESPACE ADMIN ═══ */
+function renderAdmin(){
+  var el=document.getElementById('tabAdmin');if(!el||!_isAdm())return;
+  var h='<div style="padding:12px 14px;border-radius:12px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.5">🔒 <b style="color:#f87171">Visible uniquement par les administrateurs.</b> Les setters, closers et coachs ne voient ni ces modèles, ni ces envois, ni ces contrats signés — verrouillé dans les règles Firestore, pas seulement masqué à l\'écran.</div>';
+  h+='<div class="tpl-grid" style="margin-bottom:22px">';
+  h+='<div class="tpl-card tpl-card-new" style="border-color:rgba(239,68,68,.35);color:#f87171" data-admin-adhoc="1"><span style="font-size:26px">⚡</span><span style="font-size:13px;font-weight:700">Envoi rapide confidentiel</span><span style="font-size:10px;color:var(--muted);font-weight:600">Contrat de setter, closer, coach…</span></div>';
+  h+='<a class="tpl-card tpl-card-new" style="border-color:rgba(239,68,68,.35);color:#f87171;text-decoration:none" href="contract-studio.html?confidential=1"><span style="font-size:26px">✨</span><span style="font-size:13px;font-weight:700">Nouveau modèle confidentiel</span><span style="font-size:10px;color:var(--muted);font-weight:600">Dans l\'atelier</span></a>';
+  TPL.filter(function(t){return t.audience==='admin'&&!t.isAdhoc;}).forEach(function(t){
+    var gen=t.web&&t.web.generated;
+    h+='<div class="tpl-card" data-tpl="'+esc(t.id)+'" data-studio="'+(gen||(t.web&&t.web.sections)?'1':'')+'"><div class="tpl-card-name">🔒 '+esc(t.name||'Sans nom')+'</div><div class="tpl-card-meta">'+(gen?'✨ Atelier · texte v'+(t.web.version||1):((t.fields||[]).length+' champs'))+'</div>'
+      +'<div style="display:flex;gap:6px;margin-top:10px"><button class="sig-btn sig-btn-g" style="font-size:11px;padding:4px 10px" onclick="event.stopPropagation();sendForSignatureFromList(\''+t.id+'\')">📨 Envoyer</button></div></div>';
+  });
+  h+='</div>';
+  var rows=REQ.filter(function(r){return r.audience==='admin';});
+  h+='<table class="req-table"><thead><tr><th>Signataire</th><th>Document</th><th>Envoyé le</th><th>Statut</th><th></th></tr></thead><tbody>';
+  if(!rows.length)h+='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:30px">Aucun document confidentiel pour l\'instant.</td></tr>';
+  rows.forEach(function(r){
+    var dt=r.createdAt?new Date(r.createdAt.seconds*1000).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}):'—';
+    var signed=r.status==='signed';
+    var sAt=r.signedAt&&r.signedAt.seconds?new Date(r.signedAt.seconds*1000).toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+    h+='<tr><td style="font-weight:600">'+esc(r.clientName||'')+'<div style="font-size:11px;color:var(--muted)">'+esc(r.clientEmail||'')+'</div></td><td>'+esc(r.templateName||'—')+'</td><td style="font-size:12px">'+dt+'</td>';
+    h+='<td style="min-width:200px">'+(signed?'<span style="color:#34d399;font-weight:700">✅ Signé</span><div style="font-size:10.5px;color:var(--muted)">'+esc(sAt)+'</div>':_progressCell(r,r.status||'pending',{},{}))+'</td><td style="white-space:nowrap">';
+    h+='<button class="sig-btn sig-btn-o" style="font-size:11px;padding:4px 10px" data-suivi="'+esc(r.id)+'">👁 Suivi</button> ';
+    if(signed){h+='<button class="sig-btn sig-btn-g" style="font-size:11px;padding:4px 10px" onclick="downloadSignedPdf(\''+r.id+'\')">📥 PDF</button> <a href="sign-certificate.html?id='+r.id+'" target="_blank" class="sig-btn sig-btn-p" style="font-size:11px;padding:4px 10px;text-decoration:none">📜</a>';}
+    else{h+='<button class="sig-btn sig-btn-p" style="font-size:11px;padding:4px 10px" onclick="resendRequest(\''+r.id+'\')">🔄</button> <button class="sig-btn sig-btn-r" style="font-size:11px;padding:4px 10px" onclick="deleteRequest(\''+r.id+'\',\''+esc(r.clientName)+'\')">🗑</button>';}
+    h+='</td></tr>';
+  });
+  h+='</tbody></table>';
+  el.innerHTML=h;
+}
+document.addEventListener('click',function(e){
+  var a=e.target.closest?e.target.closest('[data-admin-adhoc]'):null;
+  if(a)createAdhocSend(true);
+});
+
 function renderCompleted(){
   var el=document.getElementById('compBody');
   var empty=document.getElementById('compEmpty');
   if(!REQ||!REQ.length){el.innerHTML='';empty.style.display='';return;}
-  var signed=REQ.filter(function(r){return r.status==='signed';});
+  var signed=REQ.filter(function(r){return r.status==='signed'&&r.audience!=='admin';});
   // Search filter
   var searchEl=document.getElementById('compSearch');
   var q=searchEl?searchEl.value.toLowerCase().trim():'';

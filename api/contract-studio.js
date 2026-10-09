@@ -206,6 +206,7 @@ module.exports = async (req, res) => {
         settings: {
           automationEnabled: !!T.automationEnabled, automationWebhookUrl: T.automationWebhookUrl || '', automationNote: T.automationNote || '',
           academyCourseId: T.academyCourseId || '', academyCourseName: T.academyCourseName || '',
+          audience: T.audience === 'admin' ? 'admin' : 'equipe',
         },
       } });
       return;
@@ -230,6 +231,7 @@ module.exports = async (req, res) => {
           automationNote: st.automationEnabled ? String(st.automationNote || '').slice(0, 300) : '',
           academyCourseId: String(st.academyCourseId || '').slice(0, 120),
           academyCourseName: String(st.academyCourseName || '').slice(0, 200),
+          audience: st.audience === 'admin' ? 'admin' : 'equipe',
         };
       }
       const col = db.collection('signature_templates');
@@ -240,7 +242,7 @@ module.exports = async (req, res) => {
         const version = ((T && T.web && T.web.version) || 0) + 1;
         const web = Object.assign({}, c.web, { version: version, savedAt: new Date().toISOString(), savedBy: who });
         const data = { name: name, web: web, generated: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() };
-        if (!T) Object.assign(data, { createdAt: admin.firestore.FieldValue.serverTimestamp(), fields: [], pages: 0, isAdhoc: false, automationEnabled: false, automationWebhookUrl: '', automationNote: '', academyCourseId: '' });
+        if (!T) Object.assign(data, { createdAt: admin.firestore.FieldValue.serverTimestamp(), fields: [], pages: 0, isAdhoc: false, automationEnabled: false, automationWebhookUrl: '', automationNote: '', academyCourseId: '', audience: 'equipe' });
         if (settings) Object.assign(data, settings);
         tx.set(ref, data, { merge: true });
         tx.set(ref.collection('versions').doc(String(version).padStart(4, '0')), {
@@ -278,7 +280,7 @@ module.exports = async (req, res) => {
       const web = Object.assign({}, webOf(T), { version: 1, savedAt: new Date().toISOString(), savedBy: who, duplicatedFrom: src.id });
       const ref = db.collection('signature_templates').doc();
       await ref.set({
-        name: name, web: web, generated: true, fields: [], pages: 0, isAdhoc: false,
+        name: name, web: web, generated: true, fields: [], pages: 0, isAdhoc: false, audience: T.audience === 'admin' ? 'admin' : 'equipe',
         automationEnabled: !!T.automationEnabled, automationWebhookUrl: T.automationWebhookUrl || '', automationNote: T.automationNote || '',
         academyCourseId: T.academyCourseId || '', academyCourseName: T.academyCourseName || '',
         createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp(),

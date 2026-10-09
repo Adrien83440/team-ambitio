@@ -3103,8 +3103,11 @@ function detachLeadRdvListener(leadId) {
 function attachLeadDealListeners(leadId) {
   if (!leadId) return;
   if (!_ldSigUnsubs[leadId]) {
+    /* audience == 'equipe' : exigé par les règles Firestore (espace admin des
+       signatures, 09/10/2026) — un contrat interne n'apparaît jamais ici. */
     _ldSigUnsubs[leadId] = db.collection('signature_requests')
       .where('leadId', '==', leadId)
+      .where('audience', '==', 'equipe')
       .onSnapshot(function (snap) {
         var out = [];
         snap.forEach(function (doc) { var d = doc.data(); d.id = doc.id; out.push(d); });
