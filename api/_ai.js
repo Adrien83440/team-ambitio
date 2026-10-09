@@ -52,7 +52,8 @@ const DEFAULT_TASKS = {
   close_probability:{ model: HAIKU, maxTokens: 800 },
   call_summary:     { model: HAIKU, maxTokens: 2000 },
   call_rating:      { model: HAIKU, maxTokens: 2000 },
-  message_assist:   { model: HAIKU, maxTokens: 1500 },
+  // Opus effort bas : la justesse du ton prime (retour Adrien 09/10/2026).
+  message_assist:   { model: OPUS,  effort: 'low', maxTokens: 2500 },
   client_risk:      { model: HAIKU, maxTokens: 1200 },
   session_report:   { model: OPUS,  effort: 'medium', maxTokens: 4000 },
   csm_diagnostic:   { model: OPUS,  effort: 'medium', maxTokens: 4000 },
@@ -301,6 +302,19 @@ async function callClaude(o) {
 //  Helpers communs aux endpoints IA
 // ---------------------------------------------------------------------------
 
+// Règles de ton pour TOUT message destiné à un prospect / client (validées par
+// Adrien le 09/10/2026 après une suggestion trop familière) — à injecter dans
+// le system prompt des tâches qui rédigent SMS, emails, relances.
+const TONE_PROSPECT = [
+  'TON (non négociable) : nous écrivons à des chefs d\'entreprise, pas à des copains.',
+  '- Vouvoiement toujours. Jamais « Salut », « Coucou », « Hello », jamais de familiarité ni d\'emoji.',
+  '- Voix de l\'équipe : « nous », au nom d\'Alteore ; formules professionnelles et chaleureuses (« Bonjour Prénom, », « Belle journée, »).',
+  '- Signature : le prénom de l\'expéditeur suivi de « — équipe Alteore » (ou « L\'équipe Alteore » s\'il est inconnu).',
+  '- Respect absolu du choix du prospect : s\'il a annulé, dit non ou manque de temps, on PREND ACTE (l\'annulation est effective), on ne relance pas pour vendre, on ne culpabilise pas, aucune pression ni fausse urgence.',
+  '- Posture d\'AIDE : reconnaître sa situation avec empathie, rappeler en une phrase notre mission (aider les dirigeants à reprendre la main sur leur temps et leur entreprise), apporter de la VALEUR concrète (conseil actionnable lié à SA douleur), laisser la porte ouverte.',
+  '- Jamais de promesse de résultat chiffré, de réduction ou d\'offre non prévue dans le contexte Alteore.',
+].join('\n');
+
 function cap(s, n) { s = String(s == null ? '' : s); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
 
 function tsToMs(v) {
@@ -341,6 +355,7 @@ module.exports = {
   tsToMs: tsToMs,
   frDate: frDate,
   humanError: humanError,
+  TONE_PROSPECT: TONE_PROSPECT,
   DEFAULT_TASKS: DEFAULT_TASKS,
   DEFAULT_CONFIG: DEFAULT_CONFIG,
   OPUS: OPUS,

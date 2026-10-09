@@ -292,6 +292,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .l2sug-it b { display: block; font-size: 10.5px; color: #a5b4fc; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 2px; }
 .l2sug textarea { width: 100%; min-height: 90px; }
 .l2sug-row { display: flex; gap: 6px; justify-content: flex-end; }
+.l2sug-sit { font-size: 12.5px; line-height: 1.5; padding: 8px 10px; border-radius: 9px; background: rgba(251,191,36,0.07); border: 1px solid rgba(251,191,36,0.25); }
+.l2sug-sit span { color: var(--muted2); font-size: 11px; }
+.l2sug-mail { padding: 9px 10px; border-radius: 10px; border: 1px solid rgba(129,140,248,0.3); background: rgba(129,140,248,0.05); display: flex; flex-direction: column; gap: 6px; }
+.l2sug-mail-h, .l2sug-h { font-size: 10.5px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; color: #a5b4fc; }
+.l2sug-mail-h span { text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--muted2); }
+.l2sug-mail input, .l2sug-mail textarea { width: 100%; box-sizing: border-box; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: inherit; font-size: 12.5px; line-height: 1.5; padding: 7px 9px; }
 .ld-card-meta { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 3px; font-size: 11px; color: var(--muted); }
 .l2last { margin-top: 4px; font-size: 10.5px; font-family: var(--fm); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ld-card-time { display: none; }
@@ -4148,27 +4154,52 @@ function l2AiLastCallHTML(l, id) {
   return h;
 }
 
-/* Assistant SMS / DM (Lot 4) — api/ai-message.js. Les propositions vivent en
-   mémoire (l2AiSugg) pour survivre aux re-rendus de la fiche. */
+/* Assistant SMS / email / DM (Lot 4, revu le 09/10/2026) — api/ai-message.js.
+   1. « ✨ Suggérer » ouvre un champ « ce que vous savez en plus » (appel du
+      matin, email reçu dans Gmail…) : l'IA ne voit que ce qui est dans
+      Alteore, ce champ est PRIORITAIRE pour elle.
+   2. Réponse : la situation comprise (à vérifier d'un coup d'œil), un EMAIL
+      modifiable (Envoyer / Copier) et 3 SMS courts (clic = insérer).
+   Les propositions vivent en mémoire (l2AiSugg) pour survivre aux re-rendus
+   de la fiche ; les saisies en cours sont capturées avant chaque repeint. */
 var l2AiSugg = {};
+function l2AiCapture(id) {
+  var st = l2AiSugg[id];
+  if (!st) return;
+  var c = document.querySelector('[data-ai-ctx="' + id + '"]'); if (c) st.context = c.value;
+  var d = document.querySelector('[data-ai-dm="' + id + '"]'); if (d) st.convo = d.value;
+  var es = document.querySelector('[data-ai-esubj="' + id + '"]'); if (es && st.email) st.email.objet = es.value;
+  var eb = document.querySelector('[data-ai-ebody="' + id + '"]'); if (eb && st.email) st.email.corps = eb.value;
+}
 function l2AiSuggHTML(id) {
   var st = l2AiSugg[id];
   if (!st) return '';
   var h = '<div class="l2sug">';
-  if (st.mode === 'dmInput') {
+  if (st.channel === 'dm') {
     h += '<textarea data-ai-dm="' + id + '" placeholder="Colle ici la conversation Instagram (le dernier message du prospect en bas)…">' + escHtml(st.convo || '') + '</textarea>';
     h += '<div class="l2sug-row"><button type="button" class="l2tpl" data-l2="aiClose" data-id="' + id + '">Fermer</button><button type="button" class="l2tpl l2tpl-ai" data-l2="aiDmGo" data-id="' + id + '">' + (st.busy ? '⏳…' : '✨ Proposer 3 réponses') + '</button></div>';
+  } else {
+    h += '<textarea data-ai-ctx="' + id + '" placeholder="Ce que vous savez en plus (facultatif mais précieux) : appel de ce matin, email reçu, motif d\'annulation, ce qu\'il a dit…">' + escHtml(st.context || '') + '</textarea>';
+    h += '<div class="l2sug-row"><button type="button" class="l2tpl" data-l2="aiClose" data-id="' + id + '">Fermer</button><button type="button" class="l2tpl l2tpl-ai" data-l2="aiSmsGo" data-id="' + id + '">' + (st.busy ? '⏳ L\'IA rédige…' : (st.situation ? '↻ Reproposer' : '✨ Proposer email + SMS')) + '</button></div>';
   }
-  if (st.busy && st.mode !== 'dmInput') h += '<div class="l2ai-wait">⏳ L\'IA rédige…</div>';
   if (st.error) h += '<div class="l2ai-wait">⚠️ ' + escHtml(st.error) + '</div>';
+  if (st.situation) h += '<div class="l2sug-sit">🧭 <b>Compris :</b> ' + escHtml(st.situation) + '<span> — si c\'est faux, précise dans le champ ci-dessus et repropose.</span></div>';
+  if (st.email) {
+    h += '<div class="l2sug-mail"><div class="l2sug-mail-h">✉️ Email proposé <span>(modifiable)</span></div>';
+    h += '<input data-ai-esubj="' + id + '" value="' + escAttr(st.email.objet || '') + '"/>';
+    h += '<textarea data-ai-ebody="' + id + '" rows="9">' + escHtml(st.email.corps || '') + '</textarea>';
+    h += '<div class="l2sug-row"><button type="button" class="l2tpl" data-l2="aiMailCopy" data-id="' + id + '">📋 Copier</button>' +
+         '<button type="button" class="l2tpl l2tpl-ai" data-l2="aiMailSend" data-id="' + id + '"' + (st.sending ? ' disabled' : '') + '>' + (st.sending ? '⏳ Envoi…' : (st.sent ? '✅ Envoyé' : '✉️ Envoyer l\'email')) + '</button></div></div>';
+  }
+  if ((st.list || []).length) h += '<div class="l2sug-h">💬 SMS (cliquer pour ' + (st.channel === 'dm' ? 'copier' : 'insérer') + ')</div>';
   (st.list || []).forEach(function (sg, i) {
-    h += '<div class="l2sug-it" data-l2="aiUse" data-id="' + id + '" data-i="' + i + '"><b>' + escHtml(sg.intention) + (st.channel === 'dm' ? ' · cliquer pour copier' : ' · cliquer pour insérer') + '</b>' + escHtml(sg.texte) + '</div>';
+    h += '<div class="l2sug-it" data-l2="aiUse" data-id="' + id + '" data-i="' + i + '"><b>' + escHtml(sg.intention) + '</b>' + escHtml(sg.texte) + '</div>';
   });
-  if ((st.list || []).length && st.mode !== 'dmInput') h += '<div class="l2sug-row"><button type="button" class="l2tpl" data-l2="aiClose" data-id="' + id + '">Fermer</button></div>';
   h += '</div>';
   return h;
 }
 function l2AiSuggRepaint(id) {
+  l2AiCapture(id);
   var old = document.querySelector('.l2body[data-lead-id="' + id + '"] .l2sug');
   var anchor = document.querySelector('.l2body[data-lead-id="' + id + '"] .ld-sms-composer .l2tpl-row');
   if (old) old.parentNode.removeChild(old);
@@ -4177,20 +4208,22 @@ function l2AiSuggRepaint(id) {
   tmp.innerHTML = l2AiSuggHTML(id);
   if (tmp.firstChild) anchor.parentNode.insertBefore(tmp.firstChild, anchor.nextSibling);
 }
-function l2AiMessage(id, channel, convo) {
+function l2AiPost(body) {
   var u = firebase.auth().currentUser;
-  if (!u) return;
-  var st = l2AiSugg[id] = { mode: channel === 'dm' ? 'dmInput' : 'sms', channel: channel, convo: convo || '', busy: true, list: [] };
-  l2AiSuggRepaint(id);
-  u.getIdToken().then(function (tok) {
-    return fetch('/api/ai-message', { method: 'POST', headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify({ leadId: id, channel: channel, conversation: convo || '' }) });
+  if (!u) return Promise.reject(new Error('Session expirée'));
+  return u.getIdToken().then(function (tok) {
+    return fetch('/api/ai-message', { method: 'POST', headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   }).then(function (r) { return r.json().catch(function () { return {}; }); })
-    .then(function (j) {
-      st.busy = false;
-      if (!j || j.ok === false) st.error = (j && (j.message || j.error)) || 'Erreur IA';
-      else st.list = j.suggestions || [];
-      l2AiSuggRepaint(id);
-    })
+    .then(function (j) { if (!j || j.ok === false) throw new Error((j && (j.message || j.error)) || 'Erreur IA'); return j; });
+}
+function l2AiMessage(id) {
+  l2AiCapture(id);
+  var st = l2AiSugg[id];
+  if (!st || st.busy) return;
+  st.busy = true; st.error = null; st.sent = false;
+  l2AiSuggRepaint(id);
+  l2AiPost({ leadId: id, channel: st.channel, context: st.context || '', conversation: st.convo || '' })
+    .then(function (j) { st.busy = false; st.list = j.suggestions || []; st.situation = j.situation || ''; st.email = j.email || null; l2AiSuggRepaint(id); })
     .catch(function (e) { st.busy = false; st.error = e.message; l2AiSuggRepaint(id); });
 }
 
@@ -5177,13 +5210,32 @@ document.addEventListener('click', function (e) {
     l2AiRequest(id, true);
     return;
   }
-  if (a === 'aiMsg') { l2AiMessage(id, 'sms', ''); return; }
-  if (a === 'aiDm') { l2AiSugg[id] = { mode: 'dmInput', channel: 'dm', list: [] }; l2AiSuggRepaint(id); var dmTa = document.querySelector('[data-ai-dm="' + id + '"]'); if (dmTa) dmTa.focus(); return; }
+  if (a === 'aiMsg') { l2AiSugg[id] = { channel: 'sms', list: [] }; l2AiSuggRepaint(id); var cTa = document.querySelector('[data-ai-ctx="' + id + '"]'); if (cTa) cTa.focus(); return; }
+  if (a === 'aiDm') { l2AiSugg[id] = { channel: 'dm', list: [] }; l2AiSuggRepaint(id); var dmTa = document.querySelector('[data-ai-dm="' + id + '"]'); if (dmTa) dmTa.focus(); return; }
+  if (a === 'aiSmsGo') { l2AiMessage(id); return; }
   if (a === 'aiDmGo') {
     var dmBox = document.querySelector('[data-ai-dm="' + id + '"]');
-    var convo = dmBox ? dmBox.value.trim() : '';
-    if (convo.length < 10) { toast('⚠️ Colle d\'abord la conversation'); return; }
-    l2AiMessage(id, 'dm', convo);
+    if (!dmBox || dmBox.value.trim().length < 10) { toast('⚠️ Colle d\'abord la conversation'); return; }
+    l2AiMessage(id);
+    return;
+  }
+  if (a === 'aiMailCopy' || a === 'aiMailSend') {
+    l2AiCapture(id);
+    var stm = l2AiSugg[id];
+    if (!stm || !stm.email) return;
+    if (a === 'aiMailCopy') {
+      if (navigator.clipboard) navigator.clipboard.writeText((stm.email.objet ? 'Objet : ' + stm.email.objet + '\n\n' : '') + stm.email.corps).then(function () { toast('📋 Email copié'); });
+      return;
+    }
+    var lm = null;
+    for (var im = 0; im < allLeads.length; im++) { if (allLeads[im].id === id) { lm = allLeads[im]; break; } }
+    if (!lm || !lm.email) { toast('⚠️ Pas d\'email sur cette fiche'); return; }
+    if (stm.sent || stm.sending) return;
+    if (!confirm('Envoyer cet email à ' + lm.email + ' ?\n\nObjet : ' + stm.email.objet)) return;
+    stm.sending = true; l2AiSuggRepaint(id);
+    l2AiPost({ action: 'sendEmail', leadId: id, subject: stm.email.objet, body: stm.email.corps })
+      .then(function () { stm.sending = false; stm.sent = true; l2AiSuggRepaint(id); toast('✅ Email envoyé et tracé dans la fiche'); })
+      .catch(function (e) { stm.sending = false; l2AiSuggRepaint(id); toast('⚠️ ' + e.message); });
     return;
   }
   if (a === 'aiClose') { delete l2AiSugg[id]; l2AiSuggRepaint(id); return; }

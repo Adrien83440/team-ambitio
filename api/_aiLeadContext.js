@@ -175,6 +175,13 @@ function bundleToText(b, opts) {
     b.bookings.forEach(function (bk) {
       let t = '- ' + (bk.date || '?') + ' ' + (bk.time || '') + ' · ' + (bk.typeLabel || bk.type || 'RDV') + ' avec ' + (bk.personName || '?');
       t += ' · statut ' + (bk.outcome || bk.status || '?');
+      const ca = bk.cancellation || {};
+      const origin = ca.origin || bk.cancelledOrigin;
+      if (bk.status === 'cancelled' || bk.outcome === 'annule') {
+        t += ' — ANNULÉ' + (origin === 'prospect' ? ' PAR LE PROSPECT' : (origin ? ' (' + origin + ')' : ''));
+        if (ca.reason || bk.cancelledReason) t += ' — motif : ' + cap(ca.reason || bk.cancelledReason, 300);
+        if (ca.at || bk.cancelledAt) t += ' — le ' + frDate(tsToMs(ca.at || bk.cancelledAt));
+      }
       if (bk.outcomeNote) t += ' — ' + cap(bk.outcomeNote, 300);
       if (bk.closeData && bk.closeData.offre) t += ' — CLOSÉ ' + bk.closeData.offre + (bk.closeData.contracte ? ' (' + bk.closeData.contracte + ' €)' : '');
       L.push(t);
@@ -185,4 +192,39 @@ function bundleToText(b, opts) {
   return L.join('\n');
 }
 
-module.exports = { loadLeadBundle: loadLeadBundle, bundleToText: bundleToText, aiLeadKey: aiLeadKey, callTranscript: callTranscript };
+/**
+ * SITUATION ACTUELLE du prospect, calculée à partir des faits les plus
+ * récents — à placer EN TÊTE du prompt de toute rédaction de message : c'est
+ * elle qui doit dicter le message (une relance commerciale à quelqu'un qui
+ * vient d'annuler est la pire erreur possible).
+ */
+function situationText(b) {
+  const l = b.lead || {};
+  const L = [];
+  const today = new Date().toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' });
+  const bks = (b.bookings || []).slice().sort(function (x, y) { return String(y.date || '') + (y.time || '') < String(x.date || '') + (x.time || '') ? -1 : 1; });
+  const last = bks[0];
+  if (last) {
+    const ca = last.cancellation || {};
+    const origin = ca.origin || last.cancelledOrigin;
+    const future = String(last.date || '') >= today;
+    if (last.status === 'cancelled' || last.outcome === 'annule') {
+      L.push('- Son dernier RDV (' + last.date + ' ' + (last.time || '') + ') a été ANNULÉ' + (origin === 'prospect' ? ' PAR LE PROSPECT LUI-MÊME' : '') + (ca.reason || last.cancelledReason ? ' — motif : ' + cap(ca.reason || last.cancelledReason, 200) : '') + '.');
+    } else if (last.outcome === 'no_show' || last.status === 'no_show') L.push('- Il ne s\'est pas présenté à son dernier RDV (' + last.date + ').');
+    else if (last.outcome === 'non_close') L.push('- Son RDV de closing du ' + last.date + ' s\'est conclu sans signature.');
+    else if (last.outcome === 'offre') L.push('- Une offre lui a été faite le ' + last.date + ', il réfléchit.');
+    else if (last.outcome === 'close') L.push('- Il a SIGNÉ (' + last.date + ').');
+    else if (future) L.push('- Il a un RDV prévu le ' + last.date + ' à ' + (last.time || '?') + '.');
+  }
+  if (l.aiLastCall && l.aiLastCall.resume) L.push('- Dernier appel analysé (' + frDate(l.aiLastCall.callAt) + ') : ' + cap(l.aiLastCall.resume, 400) + ' [résultat : ' + (l.aiLastCall.resultat || '?') + ']');
+  const STAGE = { rdv_annules_prospect: 'RDV annulé par le prospect', closed_lost: 'perdu', pas_interesse: 'pas intéressé', disqualifie: 'disqualifié', follow_up_closing: 'en réflexion après closing', set: 'RDV posé' };
+  if (STAGE[l.stage] || STAGE[l.status]) L.push('- Étape CRM : ' + (STAGE[l.stage] || STAGE[l.status]) + '.');
+  const inbound = (l.communications || []).filter(function (c) { const d = String(c.direction || '').toLowerCase(); return d === 'inbound' || d === 'entrant' || d === 'in'; })
+    .sort(function (x, y) { return Date.parse(y.date || '') - Date.parse(x.date || ''); })[0];
+  if (inbound && inbound.content) L.push('- Dernier message reçu de lui (' + frDate(Date.parse(inbound.date)) + ', ' + inbound.type + ') : « ' + cap(inbound.content, 300) + ' »');
+  const notes = (l.notesHistory || []).slice(-2);
+  notes.forEach(function (n) { if (n && n.text) L.push('- Note récente de l\'équipe (' + (n.date || '') + ') : ' + cap(n.text, 250)); });
+  return L.length ? L.join('\n') : '- Aucun événement récent particulier.';
+}
+
+module.exports = { loadLeadBundle: loadLeadBundle, bundleToText: bundleToText, aiLeadKey: aiLeadKey, callTranscript: callTranscript, situationText: situationText };

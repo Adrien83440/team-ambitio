@@ -29,11 +29,11 @@
 const { requireAuth } = require('./_verifyFirebaseAuth');
 const parseBody = require('./_parseBody');
 const { db, admin } = require('./_firebaseAdmin');
-const { callClaude, humanError, cap, tsToMs, getAiConfig } = require('./_ai');
+const { callClaude, humanError, cap, tsToMs, TONE_PROSPECT } = require('./_ai');
+const { sendLeadEmail } = require('./_leadEmail');
 const { loadLeadBundle, bundleToText } = require('./_aiLeadContext');
 const { setOutcomeForBooking } = require('./_aiObjections');
 const { getRingoverCreds, ringoverFetch } = require('./_ringoverClient');
-const { sendEmailFromAccount } = require('./_gmailSend');
 
 const ROLES = ['admin', 'sales'];
 const STEP_OFFSETS_DAYS = [0, 3, 7];
@@ -58,6 +58,8 @@ const SYSTEM = [
   'Reprends les MOTS du prospect (ses douleurs, son objectif) tels qu\'ils apparaissent dans le dossier. Une seule idée par message, une seule question à la fin.',
   'Étape 1 (lendemain) : remerciement + rappel de SA douleur principale + question ouverte. Étape 2 (J+3) : apporte un élément nouveau qui répond à son frein principal. Étape 3 (J+7) : dernier message, porte ouverte, sans culpabiliser.',
   'Interdits : promesse de résultat chiffré, fausse urgence, réduction non prévue dans le contexte Alteore, tutoiement.',
+  'Si le prospect a explicitement dit non ou demandé à ne plus être relancé, l\'email prend acte, apporte un conseil utile et ferme la porte avec élégance — sans proposer de nouveau RDV.',
+  TONE_PROSPECT,
 ].join('\n');
 
 function parisDate(ms) { return new Date(ms).toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' }); }
@@ -259,33 +261,9 @@ async function sendSms(auth, leadId, lead, text) {
   });
 }
 
-function textToHtml(t) {
-  return String(t || '').split(/\n\s*\n/).map(function (p) {
-    return '<p>' + p.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br/>') + '</p>';
-  }).join('');
-}
-
 async function sendEmail(auth, leadId, lead, subject, bodyText) {
-  const to = String(lead.email || '').trim();
-  if (!to || to.indexOf('@') < 0) throw new Error('Email du prospect manquant');
-  const cfg = await getAiConfig();
-  const accountKey = cfg.followupEmailAccount || 'strategie';
-  const r = await sendEmailFromAccount({ accountKey: accountKey, to: to, subject: subject, bodyHtml: textToHtml(bodyText), bodyText: bodyText });
-  if (!r || !r.ok) throw new Error((r && r.error) || 'Envoi email impossible');
-  const me = await memberOf(auth.uid);
-  const nowIso = new Date().toISOString();
-  await db.collection('leads').doc(leadId).update({
-    communications: admin.firestore.FieldValue.arrayUnion({
-      type: 'email', direction: 'outbound', content: subject + '\n\n' + bodyText, source: 'gmail-' + accountKey,
-      date: nowIso, createdAt: nowIso, ownerUid: auth.uid, ownerName: me.name || auth.email, ownerSlug: me.slug || null, aiFollowup: true,
-    }),
-    timeline_history: admin.firestore.FieldValue.arrayUnion({
-      text: '✉️ Relance IA validée (email) — ' + subject.substring(0, 100),
-      date: new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }), color: '#f59e0b',
-    }),
-    lastContactAt: admin.firestore.FieldValue.serverTimestamp(), lastContactType: 'email',
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  // Helper partagé (api/_leadEmail.js) : même compte d'envoi, même traçabilité.
+  return sendLeadEmail(auth, leadId, subject, bodyText, { label: '✉️ Relance IA validée (email)', flag: 'aiFollowup' });
 }
 
 // ---------------------------------------------------------------------------
