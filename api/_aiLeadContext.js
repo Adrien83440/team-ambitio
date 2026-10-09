@@ -16,6 +16,16 @@
 
 const { db } = require('./_firebaseAdmin');
 const { cap, tsToMs, frDate } = require('./_ai');
+const { toE164 } = require('./_leadLookup');
+
+// Formes sous lesquelles un même numéro peut apparaître dans call_logs
+// (Ringover stocke en E.164, mais des fiches ont « 336… » sans « + »).
+function phoneVariants(raw) {
+  const e = toE164(raw);
+  const out = {};
+  [e, String(raw || '').replace(/\s+/g, ''), e.replace(/^\+/, ''), /^\+33\d{9}$/.test(e) ? '0' + e.slice(3) : ''].forEach(function (v) { if (v && v.length >= 9) out[v] = 1; });
+  return Object.keys(out).slice(0, 10);
+}
 
 function arr(v) { return Array.isArray(v) ? v : []; }
 
@@ -57,8 +67,17 @@ async function loadLeadBundle(leadId, opts) {
       .then(function (s) { const out = []; s.forEach(function (d) { out.push(d.data() || {}); }); return out; })
       .catch(function () { return []; }),
   ];
-  if (lead.telephone && /^\+\d{8,15}$/.test(String(lead.telephone))) {
-    tasks.push(db.collection('call_logs').where('toNumber', '==', String(lead.telephone)).limit(25).get()
+  // Appels sortants ET entrants, quel que soit le format du numéro sur la
+  // fiche (cas Jean-Charles 09/10/2026 : « 336… » sans « + » → aucun appel
+  // trouvé, synthèse de Valentin ignorée).
+  const variants = phoneVariants(lead.telephone);
+  if (variants.length) {
+    ['toNumber', 'fromNumber'].forEach(function (field) {
+      tasks.push(db.collection('call_logs').where(field, 'in', variants).limit(30).get()
+        .then(function (s) { s.forEach(function (d) { callsById[d.id] = Object.assign({ id: d.id }, d.data()); }); })
+        .catch(function () {}));
+    });
+    tasks.push(db.collection('call_logs').where('connectedLeadId', '==', leadId).limit(15).get()
       .then(function (s) { s.forEach(function (d) { callsById[d.id] = Object.assign({ id: d.id }, d.data()); }); })
       .catch(function () {}));
   }
@@ -216,7 +235,16 @@ function situationText(b) {
     else if (last.outcome === 'close') L.push('- Il a SIGNÉ (' + last.date + ').');
     else if (future) L.push('- Il a un RDV prévu le ' + last.date + ' à ' + (last.time || '?') + '.');
   }
-  if (l.aiLastCall && l.aiLastCall.resume) L.push('- Dernier appel analysé (' + frDate(l.aiLastCall.callAt) + ') : ' + cap(l.aiLastCall.resume, 400) + ' [résultat : ' + (l.aiLastCall.resultat || '?') + ']');
+  // Dernier appel décroché, avec sa synthèse (Réécoutes : résumé Ringover,
+  // analyse IA, sinon début de transcription).
+  const talked = (b.calls || []).filter(function (c) { return (Number(c.durationSec) || 0) > 20; });
+  const lc = talked[talked.length - 1];
+  if (lc) {
+    const sum = (lc.aiCall && lc.aiCall.resume) || (typeof lc.aiSummary === 'string' ? lc.aiSummary : (lc.aiSummary ? JSON.stringify(lc.aiSummary) : '')) || cap(callTranscript(lc), 900);
+    L.push('- Dernier appel (' + frDate(tsToMs(lc.initiatedAt || lc.startTime)) + ', ' + (lc.direction === 'inbound' ? 'entrant' : 'sortant') + ', ' + (lc.userName || lc.ringoverUserName || '?') + ', ' + Math.round((Number(lc.durationSec) || 0) / 60) + ' min) : ' + cap(sum, 1200));
+  } else if (l.aiLastCall && l.aiLastCall.resume) {
+    L.push('- Dernier appel analysé (' + frDate(l.aiLastCall.callAt) + ') : ' + cap(l.aiLastCall.resume, 400) + ' [résultat : ' + (l.aiLastCall.resultat || '?') + ']');
+  }
   const STAGE = { rdv_annules_prospect: 'RDV annulé par le prospect', closed_lost: 'perdu', pas_interesse: 'pas intéressé', disqualifie: 'disqualifié', follow_up_closing: 'en réflexion après closing', set: 'RDV posé' };
   if (STAGE[l.stage] || STAGE[l.status]) L.push('- Étape CRM : ' + (STAGE[l.stage] || STAGE[l.status]) + '.');
   const inbound = (l.communications || []).filter(function (c) { const d = String(c.direction || '').toLowerCase(); return d === 'inbound' || d === 'entrant' || d === 'in'; })

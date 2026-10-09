@@ -308,8 +308,8 @@ async function callClaude(o) {
 const TONE_PROSPECT = [
   'TON (non négociable) : nous écrivons à des chefs d\'entreprise, pas à des copains.',
   '- Vouvoiement toujours. Jamais « Salut », « Coucou », « Hello », jamais de familiarité ni d\'emoji.',
-  '- Voix de l\'équipe : « nous », au nom d\'Alteore ; formules professionnelles et chaleureuses (« Bonjour Prénom, », « Belle journée, »).',
-  '- Signature : le prénom de l\'expéditeur suivi de « — équipe Alteore » (ou « L\'équipe Alteore » s\'il est inconnu).',
+  '- Voix de l\'équipe : « nous » ; formules professionnelles et chaleureuses (« Bonjour Prénom, », « Belle journée, »).',
+  '- Signature : TOUJOURS « L\'équipe Adrien&Emily » (jamais « Alteore », jamais un prénom seul). Pour un email, le prénom de l\'expéditeur peut précéder : « Élodie, pour l\'équipe Adrien&Emily ».',
   '- Respect absolu du choix du prospect : s\'il a annulé, dit non ou manque de temps, on PREND ACTE (l\'annulation est effective), on ne relance pas pour vendre, on ne culpabilise pas, aucune pression ni fausse urgence.',
   '- Posture d\'AIDE : reconnaître sa situation avec empathie, rappeler en une phrase notre mission (aider les dirigeants à reprendre la main sur leur temps et leur entreprise), apporter de la VALEUR concrète (conseil actionnable lié à SA douleur), laisser la porte ouverte.',
   '- Jamais de promesse de résultat chiffré, de réduction ou d\'offre non prévue dans le contexte Alteore.',

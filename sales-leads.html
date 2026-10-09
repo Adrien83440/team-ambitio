@@ -4805,8 +4805,27 @@ function l2SegEch(l, id) {
   // ── Fil appels + SMS (ouvert par défaut dans la fiche v2) ──
   var comms = l.communications || [];
   var callsAndSms = [];
-  for (var ci = 0; ci < comms.length; ci++) {
-    if (comms[ci].type === 'call' || comms[ci].type === 'sms') callsAndSms.push(comms[ci]);
+  /* Dédoublonnage SMS (09/10/2026) : un SMS envoyé depuis Alteore est tracé
+     par l'envoi (source ringover-sms) PUIS renvoyé par le webhook Ringover
+     via Make (source sms, préfixe « Message: »). Même sens + même texte à
+     moins de 10 min d'écart = un seul message affiché (rien n'est supprimé
+     en base ; on garde l'entrée la plus riche, celle qui porte l'auteur). */
+  var smsSeen = [];
+  function smsNorm(t) { return String(t || '').replace(/^\s*message\s*:\s*/i, '').replace(/\s+/g, ' ').trim().toLowerCase(); }
+  var ordered = comms.slice().sort(function (a, b) { return (b.ownerName ? 1 : 0) - (a.ownerName ? 1 : 0); });
+  for (var ci = 0; ci < ordered.length; ci++) {
+    var cm = ordered[ci];
+    if (cm.type !== 'call' && cm.type !== 'sms') continue;
+    if (cm.type === 'sms') {
+      var nk = smsNorm(cm.content), tms = cm.date ? new Date(cm.date).getTime() : 0, dir = /^(in|entr)/.test(String(cm.direction || '').toLowerCase()) ? 'in' : 'out';
+      var dup = false;
+      for (var si = 0; si < smsSeen.length; si++) {
+        if (smsSeen[si].k === nk && smsSeen[si].d === dir && Math.abs(smsSeen[si].t - tms) < 10 * 60000) { dup = true; break; }
+      }
+      if (dup && nk) continue;
+      smsSeen.push({ k: nk, t: tms, d: dir });
+    }
+    callsAndSms.push(cm);
   }
   var callCount = 0, smsCount = 0;
   for (var cci = 0; cci < callsAndSms.length; cci++) {
