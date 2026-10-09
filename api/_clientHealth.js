@@ -341,7 +341,8 @@ async function evaluateClient(c, ctx, opts) {
 
 /** Écrit client_ai/{id} et crée une alerte si le niveau s'aggrave. */
 async function saveEvaluation(doc) {
-  await db.collection('client_ai').doc(doc.clientId).set(doc);
+  // merge : préserve les champs écrits ailleurs (diagnostic du cockpit CSM).
+  await db.collection('client_ai').doc(doc.clientId).set(doc, { merge: true });
   const before = LEVEL_RANK[doc.prevLevel] != null ? LEVEL_RANK[doc.prevLevel] : 0;
   const after = LEVEL_RANK[doc.risk.level];
   if (after > before) {
@@ -349,18 +350,30 @@ async function saveEvaluation(doc) {
       type: 'client_risk', clientId: doc.clientId, clientName: doc.nom, coach: doc.coach,
       level: doc.risk.level, reasons: doc.risk.reasons, status: 'open', createdAt: Date.now(),
     });
-  } else if (after === 0 && before > 0) {
-    const open = await db.collection('ai_alerts').where('clientId', '==', doc.clientId).get();
-    const batch = db.batch();
-    let n = 0;
-    open.forEach(function (d) { if (d.data().status === 'open') { batch.update(d.ref, { status: 'resolved', resolvedAt: Date.now() }); n++; } });
-    if (n) await batch.commit();
+  } else if (after < before) {
+    // Le client va mieux : on ferme les alertes plus graves que son niveau actuel.
+    await resolveAlerts(doc.clientId, after);
   }
+}
+
+/** Ferme les alertes ouvertes d'un client dont le niveau dépasse `maxRank` (-1 = toutes). */
+async function resolveAlerts(clientId, maxRank) {
+  const open = await db.collection('ai_alerts').where('clientId', '==', clientId).get();
+  const batch = db.batch();
+  let n = 0;
+  open.forEach(function (d) {
+    const a = d.data() || {};
+    if (a.status !== 'open') return;
+    if (maxRank >= 0 && (LEVEL_RANK[a.level] || 0) <= maxRank) return;
+    batch.update(d.ref, { status: 'resolved', resolvedAt: Date.now() });
+    n++;
+  });
+  if (n) await batch.commit();
 }
 
 module.exports = {
   DEFAULT_RULES: DEFAULT_RULES, LEVEL_RANK: LEVEL_RANK,
-  loadHealthContext: loadHealthContext, evaluateClient: evaluateClient, saveEvaluation: saveEvaluation,
+  loadHealthContext: loadHealthContext, evaluateClient: evaluateClient, saveEvaluation: saveEvaluation, resolveAlerts: resolveAlerts,
   isActiveClient: isActiveClient, paymentsOf: paymentsOf, invoiceClientsOf: invoiceClientsOf, bookingsOf: bookingsOf,
   allSessions: allSessions, parseProgramme: parseProgramme, addMonths: addMonths, daysBetween: daysBetween, lower: lower,
 };

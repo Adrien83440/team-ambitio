@@ -3419,6 +3419,9 @@ function toggleNewSession(){document.getElementById('newSessionForm').classList.
 //   • _id : identifiant local ajouté au chargement, redondant avec l'ID du doc.
 // Tous les autres champs (planAction, sessions, years, quotaOverrides, files…)
 // sont préservés à l'identique. À utiliser partout à la place de _setDoc(doc, c).
+// NB (programme IA 10/2026) : ai-risk-alerts.js enveloppe cette fonction pour
+// recalculer le feu tricolore du client juste après chaque sauvegarde réussie
+// (séance faite / modifiée / annulée) — alertes à jour en temps réel.
 function saveClientDoc(clientId, c){
   const { plans, _id, ...clean } = c;
   const ref = window._doc(window._db, 'clients', clientId);

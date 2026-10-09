@@ -69,7 +69,46 @@
     mount.innerHTML = h;
   }
 
+  function loadAlerts(keepOpen) {
+    return call({ action: 'alerts' }).then(function (j) {
+      items = j.items || [];
+      if (!keepOpen) open = items.length <= 3;
+      if (mount) render();
+    }).catch(function () {});
+  }
+
+  /* ── Temps réel (09/10/2026) ───────────────────────────────────────────
+     Après chaque sauvegarde réussie d'une fiche coaching (séance faite,
+     modifiée, annulée…), on recalcule le feu du client (mode « light » :
+     règles seules, quelques secondes) puis on recharge les alertes. Les
+     sauvegardes rapprochées d'un même client sont regroupées (1,5 s). */
+  var pending = {};
+  function aiRiskRefresh(clientId) {
+    if (!clientId) return;
+    clearTimeout(pending[clientId]);
+    pending[clientId] = setTimeout(function () {
+      delete pending[clientId];
+      call({ action: 'recompute', clientId: clientId, light: true })
+        .then(function () { return loadAlerts(true); })
+        .catch(function () {});
+    }, 1500);
+  }
+  window.aiRiskRefresh = aiRiskRefresh;
+
+  function wrapSave() {
+    var orig = window.saveClientDoc;
+    if (typeof orig !== 'function' || orig.__aiWrapped) return;
+    var wrapped = function (clientId, c) {
+      var p = orig.apply(this, arguments);
+      if (p && typeof p.then === 'function') p.then(function () { aiRiskRefresh(clientId); }, function () {});
+      return p;
+    };
+    wrapped.__aiWrapped = true;
+    window.saveClientDoc = wrapped;
+  }
+
   function start() {
+    wrapSave();
     mount = document.getElementById('aiRiskMount');
     var r = role();
     if (!mount || (r !== 'admin' && r !== 'csm' && r !== 'coach')) return;
@@ -94,7 +133,7 @@
     });
     var tries = 0;
     (function wait() {
-      if (user()) { call({ action: 'alerts' }).then(function (j) { items = j.items || []; open = items.length <= 3; render(); }).catch(function () {}); return; }
+      if (user()) { loadAlerts(false); return; }
       if (++tries > 60) return;
       setTimeout(wait, 500);
     })();

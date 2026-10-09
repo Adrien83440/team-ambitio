@@ -80,8 +80,16 @@ module.exports = async function (req, res) {
       const ctx = await H.loadHealthContext();
       const c = ctx.clients.find(function (x) { return x.id === id; });
       if (!c) { res.status(404).json({ ok: false, error: 'client_not_found' }); return; }
-      const doc = await H.evaluateClient(c, ctx, { withAcademy: true, withAi: true });
-      if (!doc) { res.status(200).json({ ok: true, inactive: true }); return; }
+      // light : recalcul « temps réel » après une sauvegarde de fiche coaching
+      // (règles seules — pas d'appel Academy ni IA ; le cron de nuit complète).
+      const light = body.light === true;
+      const doc = await H.evaluateClient(c, ctx, { withAcademy: !light, withAi: !light });
+      if (!doc) {
+        // Client devenu inactif : ses alertes n'ont plus lieu d'être.
+        await H.resolveAlerts(id, -1);
+        res.status(200).json({ ok: true, inactive: true });
+        return;
+      }
       await H.saveEvaluation(doc);
       res.status(200).json({ ok: true, ai: doc });
       return;
@@ -90,12 +98,43 @@ module.exports = async function (req, res) {
     if (body.action === 'alerts') {
       const snap = await db.collection('ai_alerts').where('status', '==', 'open').limit(200).get();
       const keys = auth.role === 'coach' ? await myCoachKeys(auth.uid) : null;
-      const items = [];
+      const raw = [];
       snap.forEach(function (d) {
         const a = d.data() || {};
         if (keys && !keys[H.lower(a.coach)]) return;
         if ((a.seenBy || []).indexOf(auth.uid) >= 0) return;
-        items.push({ id: d.id, type: a.type, clientId: a.clientId, clientName: a.clientName, coach: a.coach, level: a.level, reasons: a.reasons || [], createdAt: a.createdAt });
+        raw.push({ id: d.id, a: a });
+      });
+      // État ACTUEL du client (client_ai, mis à jour en temps réel à chaque
+      // sauvegarde de fiche) : une alerte dont le client est repassé au vert
+      // disparaît, et on affiche les raisons du moment, pas celles d'hier.
+      // Réévaluation « light » (règles seules) des clients concernés, à
+      // chaque ouverture : l'affichage reste juste même si le changement vient
+      // d'ailleurs (séance saisie dans un autre onglet, RDV, paiement…).
+      const ids = Array.from(new Set(raw.map(function (x) { return x.a.clientId; }).filter(Boolean)));
+      const cur = {};
+      if (ids.length) {
+        const ctx = await H.loadHealthContext();
+        for (const cid of ids) {
+          const c = ctx.clients.find(function (x) { return x.id === cid; });
+          if (!c) continue;
+          const doc = await H.evaluateClient(c, ctx, { withAcademy: false, withAi: false });
+          if (!doc) { await H.resolveAlerts(cid, -1); continue; }
+          const prev = ctx.ai[cid] && ctx.ai[cid].risk;
+          if (!prev || prev.level !== doc.risk.level || JSON.stringify(prev.reasons) !== JSON.stringify(doc.risk.reasons)) await H.saveEvaluation(doc);
+          cur[cid] = doc;
+        }
+      }
+      const items = [];
+      const seenClient = {};
+      raw.forEach(function (x) {
+        const a = x.a;
+        const now = cur[a.clientId] && cur[a.clientId].risk;
+        if (!now || now.level === 'vert') return;
+        if (seenClient[a.clientId]) return; // une seule ligne par client
+        seenClient[a.clientId] = 1;
+        items.push({ id: x.id, type: a.type, clientId: a.clientId, clientName: a.clientName, coach: a.coach,
+          level: now.level, reasons: now.reasons || a.reasons || [], createdAt: a.createdAt });
       });
       items.sort(function (a, b) { return (a.level === 'rouge' ? 0 : 1) - (b.level === 'rouge' ? 0 : 1) || (b.createdAt || 0) - (a.createdAt || 0); });
       res.status(200).json({ ok: true, items: items });
