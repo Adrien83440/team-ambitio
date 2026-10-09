@@ -56,13 +56,16 @@ facturation, réservation, formulaires, signatures électroniques, paiements, t�
 
 ## L'équipe (pour comprendre les rôles dans le code)
 
+> Photo au 09/10/2026. La source de vérité est `_meta/team_members` (Admin → Utilisateurs) : ne jamais coder une liste de noms en dur, la lire.
+
 | Personne | Rôle |
 |---|---|
 | Adrien, Emily | admin |
 | Vincent | Head of Sales / admin — **pas** setter, hors rotation dialer |
 | Élodie Vidotto Siarri | setter + closer — utilisatrice principale du dialer |
 | Marine | CSM |
-| Mickael, Edouard, Thomas | coachs — **jamais** concernés par le module Dialer |
+| Steven, Valentin | setters (Steven : setting écrit) |
+| Edouard, Flore, Thomas, Farah | coachs — **jamais** concernés par le module Dialer |
 | Guillaume Bilcke | **parti** — exclu en dur (`DEPARTED`) de tous les affichages, historique conservé en base |
 
 Rôles techniques : `admin`, `sales` (setter / closer / closer_setter), `coach`, `csm`.

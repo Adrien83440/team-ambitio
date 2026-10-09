@@ -54,13 +54,16 @@
     pifBonus: { 'Elite': 100, 'BP 12': 100 }
   };
 
-  /* Les coachs proposés par la carte « coach référent » (et l'annuaire de
-     la fausse base). En production : TEAM_MEMBERS_LIST, rôle coach. */
+  /* L'équipe RÉELLE (_meta/team_members), lue en lecture seule à l'ouverture
+     (sandbox-closer.js) puis posée par setTeam() : coachs proposés, setters
+     des leads No Booking, annuaire des vraies pages. Valeurs ci-dessous =
+     repli si la lecture échoue (09/10/2026). */
   var COACHS = [
-    { slug: 'mickael', nom: 'Mickael' },
-    { slug: 'edouard', nom: 'Edouard' },
-    { slug: 'thomas', nom: 'Thomas' }
+    { slug: 'edouard', nom: 'Edouard' }, { slug: 'flore', nom: 'Flore' },
+    { slug: 'thomas', nom: 'Thomas' }, { slug: 'jouffroyfarah', nom: 'Farah' }
   ];
+  var TEAM = [];
+  var SETTERS = [{ slug: 'elodie', name: 'Élodie' }];
 
   /* ═══ Outils ═══════════════════════════════════════════════════════════ */
   function esc(s) {
@@ -153,7 +156,7 @@
       sb: o.sb,
       status: o.sb ? 'rdv_self_booking' : 'rdv_pose',
       stage: o.sb ? 'rdv_self_booking' : 'rdv_confirmes',
-      setter: o.sb ? null : { slug: 'elodie', name: 'Élodie' },
+      setter: o.sb ? null : (o.setter || SETTERS[0]),
       source: o.sb ? 'VSL Élite — page de réservation' : 'Pub Meta — VSL Élite',
       utm: o.sb ? 'utm_source=youtube · utm_campaign=elite_vsl' : 'utm_source=facebook · utm_campaign=elite_leadform',
       tunnel: o.sb ? 'Tunnel Élite — Self Booking' : 'Tunnel Élite — Lead form',
@@ -173,7 +176,7 @@
         { q: 'Votre plus gros blocage aujourd\'hui ?', a: o.defi },
         { q: 'Prêt(e) à investir dans un accompagnement ?', a: 'Oui, si le programme est adapté' }
       ],
-      notes: o.sb ? [] : [{ at: now - 4 * 86400000, by: 'Élodie', txt: 'SET OK — dirigeant motivé, budget validé au téléphone. RDV closing posé.' }],
+      notes: o.sb ? [] : [{ at: now - 4 * 86400000, by: (o.setter || SETTERS[0]).name, txt: 'SET OK — dirigeant motivé, budget validé au téléphone. RDV closing posé.' }],
       rdv: {
         id: 'B' + uid(), date: isoDay(now), time: frTime(now - 3 * 60000),
         typeName: o.sb ? 'Appel découverte Élite' : 'RDV Closing Élite', personName: '',
@@ -190,7 +193,7 @@
       },
       call: { done: false, startedAt: null, endedAt: null, lines: [] },
       close: null,
-      timeline: [{ at: now - (o.sb ? 2 : 5) * 86400000, txt: o.sb ? '📆 RDV pris en autonomie (Self Booking)' : '🎯 SET par Élodie — RDV posé' }]
+      timeline: [{ at: now - (o.sb ? 2 : 5) * 86400000, txt: o.sb ? '📆 RDV pris en autonomie (Self Booking)' : '🎯 SET par ' + (o.setter || SETTERS[0]).name + ' — RDV posé' }]
     };
     lead.rdv.personName = 'Toi';
     lead.call.lines = callScript(lead);
@@ -218,7 +221,7 @@
     var C = makeLead({
       prenom: p.prenom, nom: p.nom, ent: p.ent, forme: co ? (p.forme === 'SASU' ? 'SAS' : p.forme) : p.forme,
       secteur: p.secteur, ca: p.ca, ville: p.ville, cp: p.cp, rue: p.rue, defi: p.defi,
-      tel: '+33600000303', sb: Math.random() < 0.5, paiement: pay, nbMens: pay === 'mensualise' ? pick([2, 4]) : null,
+      tel: '+33600000303', sb: Math.random() < 0.5, setter: pick(SETTERS), paiement: pay, nbMens: pay === 'mensualise' ? pick([2, 4]) : null,
       cosigner: co ? { prenom: co.prenom, nom: co.nom, qualite: co.qualite, tel: '+33600000304' } : null, score: 3
     });
     C.random = true;
@@ -236,9 +239,9 @@
     L.push({ who: 'p', t: 'Concrètement je suis à ' + s.heures + ' par semaine. Ma famille ne me voit plus.' });
     L.push({ who: 'c', t: '(Tu présentes le programme Elite Phénix : 6 mois, un coach référent, une séance par semaine.)' });
     L.push({ who: 'p', t: 'D\'accord… et ça coûte combien exactement ?' });
-    L.push({ who: 'c', t: '(Tu annonces : 12 000 € HT en une fois, ou 13 000 € HT en paiement échelonné.)' });
+    L.push({ who: 'c', t: '(Tu annonces : ' + euro(PRICING.Elite.pif.contracte) + ' HT en une fois, ou ' + euro(PRICING.Elite.mensualise.contracte) + ' HT en paiement échelonné.)' });
     if (s.paiement === 'pif') {
-      L.push({ who: 'p', t: 'Je préfère régler en une seule fois, autant profiter du meilleur tarif. Ça me fait donc 12 000 € HT.' });
+      L.push({ who: 'p', t: 'Je préfère régler en une seule fois, autant profiter du meilleur tarif. Ça me fait donc ' + euro(PRICING.Elite.pif.contracte) + ' HT.' });
     } else {
       L.push({ who: 'p', t: 'En une fois ça fait beaucoup d\'un coup pour ma trésorerie. Je pars sur le paiement échelonné, en ' + s.nbMens + ' mensualités.' });
     }
@@ -254,6 +257,31 @@
   /* ═══ État propre au bac à sable (leads, téléphone) ═══════════════════
      Les contrats et paiements, eux, vivent dans la fausse base, écrits par
      les vraies pages et le vrai code serveur. */
+  /* L'équipe réelle : coachs actifs, setters actifs. Les leads No Booking
+     déjà tirés dont le setter n'est plus dans l'équipe sont réattribués. */
+  function setTeam(list) {
+    list = (list || []).filter(function (m) { return m && m.slug; });
+    if (!list.length) return;
+    TEAM = list;
+    var alive = list.filter(function (m) { return m.active !== false && !m.archivedAt; });
+    var co = alive.filter(function (m) { return m.role === 'coach'; }).map(function (m) { return { slug: m.slug, nom: m.nom || m.shortName || m.displayName || m.slug }; });
+    if (co.length) { COACHS = co; window.SBX.COACHS = co; }
+    var se = alive.filter(function (m) { return /setter/.test(m.role || ''); }).map(function (m) { return { slug: m.slug, name: m.shortName || m.displayName || m.slug }; });
+    se.sort(function (a, b) { return a.slug === 'elodie' ? -1 : (b.slug === 'elodie' ? 1 : 0); });
+    if (se.length) SETTERS = se;
+    update(function (st) {
+      st.leads.forEach(function (l) {
+        if (!l.setter || SETTERS.some(function (x) { return x.slug === l.setter.slug; })) return;
+        var old = l.setter.name, nw = SETTERS[0];
+        l.setter = nw;
+        l.notes.forEach(function (n) { if (n.by === old) n.by = nw.name; });
+        l.timeline.forEach(function (t) { t.txt = String(t.txt).split(old).join(nw.name); });
+      });
+    });
+  }
+  /* Les vrais tarifs et commissions (alteore-flow.js, lu tel quel). */
+  function setPricing(p) { if (p && p.Elite && p.Business) { PRICING = p; window.SBX.PRICING = p; } }
+
   function fresh(prev) {
     return { v: 2, createdAt: Date.now(), welcomed: !!(prev && prev.welcomed), leads: scenarios(), inbox: [], outbox: [], log: [] };
   }
@@ -300,9 +328,11 @@
     var st = load(), A = window.SBXDB.encode, w = [];
     var I = identity;
     w.push({ op: 'set', path: 'users/' + I.uid, data: A({ email: I.email, name: I.name, displayName: I.name, role: I.role, signaturesAccess: true, paymentsAccess: true, paymentsTrigger: true, formationsAccess: false }) });
-    var members = [{ slug: 'moi', firebaseUid: I.uid, displayName: I.name, shortName: String(I.name).split(' ')[0], role: I.role === 'admin' ? 'admin' : 'closer', active: true, color: '#60a5fa' },
-      { slug: 'elodie', firebaseUid: 'sbx-elodie', displayName: 'Élodie Vidotto Siarri', shortName: 'Élodie', role: 'closer_setter', active: true, color: '#a78bfa' }]
-      .concat(COACHS.map(function (c) { return { slug: c.slug, firebaseUid: 'sbx-' + c.slug, displayName: c.nom, shortName: c.nom, nom: c.nom, role: 'coach', active: true }; }));
+    /* L'annuaire réel si on l'a lu, sinon un annuaire minimal. On s'assure
+       que le compte connecté y figure (les vraies pages le cherchent). */
+    var members = TEAM.length ? JSON.parse(JSON.stringify(TEAM)) : SETTERS.map(function (x) { return { slug: x.slug, displayName: x.name, shortName: x.name, role: 'setter', active: true }; })
+      .concat(COACHS.map(function (c) { return { slug: c.slug, displayName: c.nom, shortName: c.nom, nom: c.nom, role: 'coach', active: true }; }));
+    if (!members.some(function (m) { return m.firebaseUid === I.uid; })) members.unshift({ slug: 'moi', firebaseUid: I.uid, displayName: I.name, shortName: String(I.name).split(' ')[0], role: I.role === 'admin' ? 'admin' : 'closer', active: true, color: '#60a5fa' });
     w.push({ op: 'set', path: '_meta/team_members', data: A({ members: members }) });
     w.push({ op: 'set', path: '_config/telco_credentials', data: A({ twilio: { accountSid: 'AC-bac-a-sable', authToken: 'bac-a-sable', smsFromNumber: '+33939240397' }, ringover: { apiKey: 'bac-a-sable', fromNumber: '+33939240397' } }) });
     st.leads.forEach(function (l) {
@@ -577,7 +607,7 @@
     esc: esc, euro: euro, pad2: pad2, frDate: frDate, frTime: frTime, isoDay: isoDay, uid: uid,
     digits: digits, samePhone: samePhone, sameEmail: sameEmail, sameName: sameName, fold: fold,
     fmtPhone: fmtPhone, maskPhone: maskPhone, tsMs: tsMs, siretOk: siretOk, ibanOk: ibanOk, IBAN_TEST: 'FR14 2004 1010 0505 0001 3M02 606',
-    load: load, save: save, update: update, onChange: onChange, resetAll: resetAll, resetLead: resetLead, seed: seed,
+    load: load, save: save, update: update, onChange: onChange, resetAll: resetAll, resetLead: resetLead, seed: seed, setTeam: setTeam, setPricing: setPricing,
     leadById: leadById, log: log, contacts: contacts, findContact: findContact, deliver: deliver, routeLink: routeLink,
     registry: registry, leadSigs: leadSigs, leadPays: leadPays, dbList: dbList, readPrefill: readPrefill,
     expected: expected, bilan: bilan

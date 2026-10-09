@@ -389,7 +389,8 @@
     } else {
       title = 'Close — encaissé & signature';
       var pc = cwPay(), offre = X.PRICING[c.a.contrat].commOffre;
-      var cComm = X.COMM.closing[offre] || 0, cBonus = c.a.paiement === 'pif' ? (X.COMM.pifBonus[offre] || 0) : 0, sComm = (X.COMM.setting[offre] || {})[c.a.booking] || 0;
+      var AFc = window.AlteoreFlow;
+      var cComm = AFc ? AFc.calcClosingComm(offre, c.a.paiement) : (X.COMM.closing[offre] || 0), cBonus = AFc ? AFc.calcClosingBonus(offre, c.a.paiement) : (c.a.paiement === 'pif' ? (X.COMM.pifBonus[offre] || 0) : 0), sComm = AFc ? AFc.calcSettingComm(offre, c.a.booking === 'sb') : (X.COMM.setting[offre] || {})[c.a.booking] || 0;
       h += '<div class="cw-chips" style="margin-bottom:14px">'
         + '<button class="cw-chip sel" data-a="cwGoto" data-g="0">' + (c.a.contrat === 'Elite' ? '👑 Elite' : '🚀 Business') + '<small>✎</small></button>'
         + '<button class="cw-chip sel" data-a="cwGoto" data-g="1">' + (c.a.paiement === 'pif' ? '💎 PIF' : '📅 MENS') + '<small>✎</small></button>'
@@ -959,7 +960,10 @@
     var cfgP = real.collection('booking_config').get().then(function (sn) {
       sn.forEach(function (d) { st.setOverlay('booking_config/' + d.id, window.SBXDB.encode(d.data())); });
     }).catch(function (e) { if (window.console) console.warn('[sandbox] agendas illisibles', e && e.message); });
-    return real.collection('signature_templates').get().then(function (sn) {
+    /* Seulement les modèles de l'ÉQUIPE : les règles refusent à un sales une
+       lecture non filtrée (espace admin confidentiel, audience 'admin'), et
+       un contrat confidentiel n'a rien à faire dans l'entraînement. */
+    return real.collection('signature_templates').where('audience', '==', 'equipe').get().then(function (sn) {
       var n = 0;
       sn.forEach(function (d) { st.setOverlay('signature_templates/' + d.id, window.SBXDB.encode(d.data())); n++; });
       return cfgP.then(function () { return n; });
@@ -973,7 +977,13 @@
     st.host = { deliver: X.deliver, registry: X.registry };
     $('sideMe').textContent = '👤 ' + window._sbxUser;
     $('vLock').innerHTML = 'Chargement des contrats du moment…';
-    st.load().then(readRealTemplates).then(function (n) {
+    if (window.AlteoreFlow && window.AlteoreFlow.WIZARD_PRICING) X.setPricing(window.AlteoreFlow.WIZARD_PRICING);
+    /* L'équipe réelle (lecture seule) : coachs, setters, annuaire. */
+    var teamP = firebase.firestore().collection('_meta').doc('team_members').get().then(function (snap) {
+      var raw = (snap.exists && snap.data().members) || {};
+      X.setTeam(Array.isArray(raw) ? raw : Object.keys(raw).map(function (k) { return raw[k]; }));
+    }).catch(function (e) { if (window.console) console.warn('[sandbox] équipe illisible, repli', e && e.message); });
+    st.load().then(function () { return teamP; }).then(readRealTemplates).then(function (n) {
       X.seed(st.identity);
       setupPilot();
       st.listen(onDbChange, window);
