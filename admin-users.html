@@ -2160,7 +2160,7 @@ async function callUserInvite(payload){
   return data;
 }
 
-function fmtDateTime(iso){
+function fmtInviteDate(iso){
   if(!iso)return '';
   var d=new Date(iso);
   if(isNaN(d.getTime()))return '';
@@ -2225,14 +2225,14 @@ function inviteBoxHtml(u){
   var st=u.status||'active';
   if(st==='invited'){
     return '<div class="inv-box invited" id="invBox"><b>📩 Invitation en attente</b><br>'+
-      (u.invitedAt?'Dernier envoi le '+esc(fmtDateTime(u.invitedAt))+'. ':'')+
+      (u.invitedAt?'Dernier envoi le '+esc(fmtInviteDate(u.invitedAt))+'. ':'')+
       'La personne n\'a pas encore choisi son mot de passe ; son compte reste verrouillé.'+
       '<div class="inv-actions"><button class="bb bb-o" id="invResend">📧 Renvoyer l\'invitation</button></div>'+
       '<div class="inv-result" id="invResult"></div></div>';
   }
   if(st==='pending_activation'){
     return '<div class="inv-box pending" id="invBox"><b>⏳ En attente de ton activation</b><br>'+
-      'Mot de passe choisi'+(u.passwordSetAt?' le '+esc(fmtDateTime(u.passwordSetAt)):'')+'. '+
+      'Mot de passe choisi'+(u.passwordSetAt?' le '+esc(fmtInviteDate(u.passwordSetAt)):'')+'. '+
       'Vérifie son rôle et ses droits ci-dessous, puis active : la personne pourra se connecter et recevra un email.'+
       '<div class="inv-actions"><button class="bb bb-p" id="invActivate">🔓 Activer l\'accès</button></div></div>';
   }
