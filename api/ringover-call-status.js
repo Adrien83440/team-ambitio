@@ -256,13 +256,19 @@ module.exports = async (req, res) => {
         if (!prevData) clUpdate.createdAt = now;
       }
       if ((!prevData || !prevData.direction) && d.direction) {
-        clUpdate.direction = d.direction === 'out' ? 'outbound' : 'inbound';
+        /* 'out' (ancien format) ou 'outbound' (webhooks 2.0) — avant le
+           10/10/2026, un appel sortant passé depuis l'app était noté entrant. */
+        clUpdate.direction = /^out/i.test(String(d.direction)) ? 'outbound' : 'inbound';
       }
       if ((!prevData || !prevData.fromNumber) && d.from_number) clUpdate.fromNumber = addPlus(d.from_number);
       if ((!prevData || !prevData.toNumber)   && d.to_number)   clUpdate.toNumber   = addPlus(d.to_number);
       if (!prevData || !prevData.userId) {
-        const ruid = d.user_id != null ? String(d.user_id)
+        /* Webhooks 2.0 : « USER24143187 » ; phone_numbers.ringoverUserId et
+           /calls : « 24143187 ». Sans normalisation, aucun appel passé depuis
+           l'app n'était rattaché à son commercial avant le sync de nuit. */
+        const ruidRaw = d.user_id != null ? String(d.user_id)
           : (d.user && d.user.user_id != null ? String(d.user.user_id) : null);
+        const ruid = ruidRaw ? ruidRaw.replace(/^USER/i, '') : null;
         if (ruid) {
           clUpdate.ringoverUserId = ruid;
           const map = await getRingoverUserMap();

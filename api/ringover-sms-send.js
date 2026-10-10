@@ -1,7 +1,7 @@
 // api/ringover-sms-send.js  (v2 — endpoint /push/sms correct)
 const { db, admin } = require('./_firebaseAdmin');
 const { requireAuth }  = require('./_verifyFirebaseAuth');
-const { getRingoverCreds, ringoverFetch } = require('./_ringoverClient');
+const { getRingoverCredsForUser, ringoverFetch } = require('./_ringoverClient');
 const parseBody = require('./_parseBody');
 
 function normalizeE164(raw) {
@@ -45,7 +45,11 @@ module.exports = async (req, res) => {
 
     if (!toNumber) return res.status(400).json({ error: 'Numéro destinataire manquant ou invalide' });
 
-    const creds = await getRingoverCreds();
+    /* Clé du commercial s'il a son poste (10/10/2026) : Ringover n'envoie
+       un SMS que depuis un numéro du poste propriétaire de la clé. Avec la
+       clé partagée (poste admin), un envoi depuis la ligne d'Anthony
+       répondait 404 « not found » et le prospect ne recevait rien. */
+    const creds = await getRingoverCredsForUser(auth.uid);
 
     /* ── Numéro expéditeur : celui de l'AUTEUR s'il en a un ────────────────
        Chaque commercial a sa propre ligne Ringover, déclarée dans
@@ -89,6 +93,7 @@ module.exports = async (req, res) => {
     try {
       resp = await ringoverFetch('/push/sms', {
         method: 'POST',
+        apiKey: creds.apiKey,
         body: {
           from_number: fromNumber,  // E.164 string "+33..."
           to_number:   toNumber,    // E.164 string "+33..."
