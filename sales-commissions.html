@@ -916,6 +916,33 @@ function calcPoints(deals) {
     .reduce((t, d) => t + (POINTS[d.offre] || 0), 0);
 }
 
+/* Période de référence annuelle (contrat Full Cycle d'Anthony, art. 8.3 —
+   10/10/2026) : quand le contrat du roster porte bonusPeriod 'annuel', les
+   points ne se cumulent que sur la période de 12 mois en cours, ouverte à la
+   date anniversaire de startDate, puis repartent de zéro. Une vente compte
+   dans la période où le client a signé (date du deal). Sans ce réglage :
+   total carrière (historique, inchangé). */
+function _bonusPeriod(uid) {
+  const tm = (window.TEAM_MEMBERS || {})[uid];
+  const c = tm && tm.contract;
+  const sd = tm && tm.startDate;
+  if (!c || c.bonusPeriod !== 'annuel' || !/^\d{4}-\d{2}-\d{2}$/.test(sd || '')) return null;
+  const d = new Date();
+  const today = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  let y = Number(sd.slice(0, 4));
+  while ((y + 1) + sd.slice(4) <= today) y++;
+  return { start: y + sd.slice(4), end: (y + 1) + sd.slice(4) };
+}
+function _dealIso(d) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(d && d.date || ''));
+  return m ? m[3] + '-' + m[2] + '-' + m[1] : '';
+}
+function _ptsLabel(uid) {
+  const p = _bonusPeriod(uid);
+  if (!p) return 'Points cumulés (total carrière)';
+  return 'Points de la période (depuis le ' + p.start.slice(8) + '/' + p.start.slice(5, 7) + '/' + p.start.slice(0, 4) + ')';
+}
+
 function calcTotalPoints(uid) {
   // Total carrière = base historique + points de TOUS les mois connus :
   //   - mois hardcodés (MEMBERS_COMM[].data)
@@ -938,9 +965,12 @@ function calcTotalPoints(uid) {
       if (k && k.indexOf(prefix) === 0) monthsSet[k.slice(prefix.length)] = true;
     }
   } catch(e) {}
-  let total = m.careerPtsBase || 0; // Points historiques
+  const period = _bonusPeriod(uid);
+  let total = period ? 0 : (m.careerPtsBase || 0); // Points historiques (hors période annuelle)
   Object.keys(monthsSet).forEach(mo => {
-    total += calcPoints(getDeals(uid, mo));
+    let deals = getDeals(uid, mo);
+    if (period) deals = deals.filter(d => { const iso = _dealIso(d); return iso >= period.start && iso < period.end; });
+    total += calcPoints(deals);
   });
   return total;
 }
@@ -1205,7 +1235,7 @@ function renderListe() {
         </div>` : ''}
       </div>
       ${!_hasBonus(m) ? '' : `<div class="mc-points-row">
-        <div class="mc-pts-label">Points cumulés (total carrière)</div>
+        <div class="mc-pts-label">${_ptsLabel(m.uid)}</div>
         <div class="mc-pts-val">
           <span>${totalPts.toFixed(1)} pts</span>
           <span class="mc-pts-stars">${totalPts >= 100 ? '🌟' : totalPts >= 50 ? '⭐' : totalPts >= 10 ? '✨' : ''}</span>
@@ -1284,6 +1314,8 @@ function renderFiche() {
   document.getElementById('kpi-deals').textContent = deals.filter(d=>d.ok).length;
   document.getElementById('kpi-pts-month').textContent = pts.toFixed(1) + ' pts';
   document.getElementById('kpi-pts-total').textContent = totalPts.toFixed(1) + ' pts';
+  const ptsLbl = document.querySelector('#kpi-pts-total-card .kpi-label');
+  if (ptsLbl) ptsLbl.textContent = _bonusPeriod(m.uid) ? _ptsLabel(m.uid) : 'Points total carrière';
 
   // Programme de bonus : closers uniquement
   const hasBonus = _hasBonus(m);

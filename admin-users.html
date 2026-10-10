@@ -2101,7 +2101,13 @@ async function handleSave(uid){
         tmPatch.startDate = /^\d{4}-\d{2}-\d{2}$/.test(sdv) ? sdv : null;
       }
       var ctForm = readContractForm();
-      if (ctForm) tmPatch.contract = ctForm;
+      if (ctForm) {
+        /* Réglages du contrat sans champ dans le formulaire (période de bonus
+           annuelle, art. 8.3 du Full Cycle) : conservés tels quels. */
+        var _ctPrev = TEAM_MEMBERS_RAW_DATA[tmRawKey] && TEAM_MEMBERS_RAW_DATA[tmRawKey].contract;
+        if (_ctPrev && _ctPrev.bonusPeriod) ctForm.bonusPeriod = _ctPrev.bonusPeriod;
+        tmPatch.contract = ctForm;
+      }
       var slugVal = (document.getElementById('eTmSlug') || {}).value;
       var colorVal = (document.getElementById('eTmColorHex') || {}).value;
       var shortVal = (document.getElementById('eTmShortName') || {}).value;
