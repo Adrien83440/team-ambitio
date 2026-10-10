@@ -57,7 +57,7 @@
 
   /* Membres partis, exclus en dur même si le roster n'est pas à jour.
      Repris à l'identique de alteore-flow.js (DEPARTED). */
-  var DEPARTED = { guillaume: 1, guillaumes: 1 }; // slug réel du roster : guillaumes
+  var DEPARTED = { guillaume: 1, guillaumes: 1, elodie: 1 }; // slug réel du roster : guillaumes · Élodie : fin de mission 10/10/2026
 
   /* Repli quand le roster _meta/team_members ne porte AUCUN rôle sales.
      Ce n'est pas une hypothèse : alteore-flow.js et funnel-core.js portent

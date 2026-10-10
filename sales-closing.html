@@ -229,6 +229,9 @@
        personId → membre (RDV portés par un expert non relié, etc.). */
     if (S.members.length === 1) return true;
     if (b.closeData && b.closeData.closerSlug) return b.closeData.closerSlug === member.slug;
+    /* Fiche expert reprise par un autre membre (Élodie → Anthony, 10/10/2026) :
+       les RDV passés sans closeur gardent le membre de l'époque. */
+    if (b.expertSlug) return b.expertSlug === member.slug;
     if (b.personId && b.personId === member.slug) return true;
     var p = S.personsMap[b.personId];
     if (p && p.firebaseUid && member.firebaseUid) return p.firebaseUid === member.firebaseUid;

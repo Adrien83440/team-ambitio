@@ -1050,8 +1050,10 @@
      departed:true / active:false pour que l'historique (assignedTo,
      timeline, commissions passées) garde son nom. Rien n'est supprimé en
      base. */
-  var TEAM_DEPARTED = { guillaume: 1, guillaumes: 1 };
-  var TEAM_DEPARTED_UIDS = { uEE8DLaCNRZOiztmlBuHmWPSSx52: 1, uEE8DLaCNRZOOiztmlBuHmWPSSx52: 1 };
+  /* Élodie Vidotto Siarri : fin de mission le 10/10/2026, tout son
+     portefeuille repris par Anthony (scripts/transfer-elodie-anthony.js). */
+  var TEAM_DEPARTED = { guillaume: 1, guillaumes: 1, elodie: 1 };
+  var TEAM_DEPARTED_UIDS = { uEE8DLaCNRZOiztmlBuHmWPSSx52: 1, uEE8DLaCNRZOOiztmlBuHmWPSSx52: 1, IrL8bfOrUfMH2fEPFzuojPT8bQh1: 1 };
   window.TEAM_DEPARTED = TEAM_DEPARTED;
   window.isDepartedMember = function (m) {
     if (!m) return false;

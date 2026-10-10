@@ -30,7 +30,7 @@
 
 const { db, admin } = require('./_firebaseAdmin');
 
-const DEPARTED = { guillaumes: 1 };
+const DEPARTED = { guillaumes: 1, elodie: 1 };
 
 async function roster() {
   const s = await db.collection('_meta').doc('team_members').get();

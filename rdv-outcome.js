@@ -393,9 +393,24 @@
      sélecteur est forcé dessus et désactivé, sinon le verrou de la fiche se
      contournerait en un clic au moment du close. */
   function lockedSetter() {
+    if (setterGone()) return '';
     return (state.lead && state.lead.setterSlug) ? String(state.lead.setterSlug) : '';
   }
+  /* Setter parti (10/10/2026) : fiche settée par un membre parti, ou RDV posé
+     par lui → aucune commission Setting. Sélecteur forcé sur « aucun » et
+     verrouillé, sinon le repli prefillSetter la donnerait au repreneur. */
+  function setterGone() {
+    var AF = window.AlteoreFlow;
+    return !!(AF && AF.departedSetter && AF.departedSetter(state.lead, state.booking));
+  }
   function applySetterLock(sel) {
+    if (sel && setterGone()) {
+      sel.innerHTML = membersOptions('', true, '— aucun (setter parti : pas de commission setting) —');
+      sel.value = '';
+      sel.disabled = true;
+      sel.title = 'Fiche settée par un membre parti — pas de commission Setting';
+      return;
+    }
     var ls = lockedSetter();
     if (!sel || !ls) return;
     sel.innerHTML = membersOptions(ls, true, '— aucun (pas de commission setting) —');
@@ -407,6 +422,7 @@
     var AF = window.AlteoreFlow;
     var b = state.booking || {};
     if (lockedSetter()) return lockedSetter();
+    if (setterGone()) return '';
     if (b.closeData && b.closeData.setterSlug && AF.isSalesMember(b.closeData.setterSlug)) return b.closeData.setterSlug;
     if (b.bookedBySlug && AF.isSalesMember(b.bookedBySlug)) return b.bookedBySlug;
     if (state.lead && state.lead.setterSlug && AF.isSalesMember(state.lead.setterSlug)) return state.lead.setterSlug;

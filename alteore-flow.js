@@ -209,7 +209,7 @@
      closer_setter, membres actifs. Les admins, coachs et la CSM n'y
      apparaissent jamais. DEPARTED : membres partis de la société, exclus en
      dur même si le roster _meta/team_members n'est pas encore à jour. */
-  var DEPARTED = { guillaume: 1, guillaumes: 1 }; // Guillaume Bilcke — parti (07/2026) ; slug réel du roster : guillaumes
+  var DEPARTED = { guillaume: 1, guillaumes: 1, elodie: 1 }; // Guillaume Bilcke — parti (07/2026) ; slug réel du roster : guillaumes · Élodie — fin de mission 10/10/2026
   /* setter_ecrit (10/09/2026) : setter « écrit » — travaille les prospects
      par messages (DM Instagram / Meta), jamais au téléphone. Membre de
      l'équipe sales à part entière (Set NB, EOD, Commissions, Équipe), mais
@@ -237,6 +237,12 @@
       list = [{ slug: 'elodie', shortName: 'Elodie', displayName: 'Elodie Vidotto Siarri', role: 'closer_setter', color: '#60a5fa', firebaseUid: 'IrL8bfOrUfMH2fEPFzuojPT8bQh1', active: true }];
     }
     return list;
+  }
+  /* Le setter de la fiche (verrou setterSlug) ou, à défaut, le poseur du RDV
+     est un membre parti → vrai. */
+  function departedSetter(lead, booking) {
+    if (lead && lead.setterSlug) return !!DEPARTED[lead.setterSlug];
+    return !!(booking && booking.bookedBySlug && DEPARTED[booking.bookedBySlug]);
   }
   function isSalesMember(slug) {
     if (!slug || DEPARTED[slug]) return false;
@@ -994,6 +1000,11 @@
        Live) — il passe AVANT le poseur du RDV. Fiche à Valentin, RDV cliqué
        par Élodie, setter désigné = Valentin → commission Setting à Valentin. */
     if (lead && lead.setterSlug && isSalesMember(lead.setterSlug)) setter = lead.setterSlug;
+    /* SETTER PARTI (10/10/2026, décision Adrien) : la fiche a été settée par
+       un membre parti (fiche verrouillée sur lui, ou RDV posé par lui) →
+       AUCUNE commission Setting, ni pour lui ni pour le repreneur de la fiche.
+       Sans ce garde-fou, le repli assignedTo la donnerait au repreneur. */
+    if (!setter && departedSetter(lead, booking)) return { closerSlug: closer, setterSlug: null };
     if (!setter && booking && booking.bookedBySlug && isSalesMember(booking.bookedBySlug)) setter = booking.bookedBySlug;
     /* setterSlug (10/09/2026) : le setter qui a CRÉÉ et travaillé la fiche —
        posé à la création par un membre au rôle setting. Prime sur assignedTo :
@@ -1224,6 +1235,7 @@
     memberByFirebaseUid: memberByFirebaseUid,
     salesMembers: salesMembers,
     isSalesMember: isSalesMember,
+    departedSetter: departedSetter,
     isSetterRole: isSetterRole,
     isCloserRole: isCloserRole,
     roleLabel: roleLabel,

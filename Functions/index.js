@@ -450,7 +450,7 @@ const PUBLIC_ACTIONS = ["signature_otp_send", "signature_otp_verify", "signature
    round-robin. Membres inactifs sautés. État : _meta/lead_routing_state.
    Toute modification ici doit être reportée dans api/_leadRouting.js.
    ═══════════════════════════════════════════════════════════════════════════ */
-const _LR_DEPARTED = { guillaumes: 1 };
+const _LR_DEPARTED = { guillaumes: 1, elodie: 1 };
 async function _lrRoster() {
   const s = await db.collection("_meta").doc("team_members").get();
   const raw = (s.data() || {}).members;
