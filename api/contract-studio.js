@@ -31,6 +31,10 @@ const { callClaude } = require('./_ai');
 const render = require('./_contract-render');
 
 const KEY_RE = /^[A-Za-z0-9_]{1,40}$/;
+/* Longueur max d'une instruction à Claude. Refus explicite au-delà : une
+   coupure silencieuse (ancienne limite 4 000) faisait ignorer la fin des
+   consignes longues sans que personne ne le sache. */
+const AI_INSTRUCTION_MAX = 20000;
 const VAR_TYPES = { text: 1, number: 1, money: 1, date: 1, choice: 1 };
 
 /* ── Validation du modèle de texte ───────────────────────────────────────── */
@@ -306,8 +310,9 @@ module.exports = async (req, res) => {
     }
 
     if (action === 'ai') {
-      const instruction = String(body.instruction || '').trim().slice(0, 4000);
+      const instruction = String(body.instruction || '').trim();
       if (!instruction) { res.status(400).json({ error: 'Écrivez une instruction.' }); return; }
+      if (instruction.length > AI_INSTRUCTION_MAX) { res.status(400).json({ error: 'Instruction trop longue (' + instruction.length + ' caractères, ' + AI_INSTRUCTION_MAX + ' maximum). Découpez-la en plusieurs demandes.' }); return; }
       const c = cleanWeb(body.web);
       const focus = String(body.sectionId || '');
       const r = await callClaude({

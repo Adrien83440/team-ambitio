@@ -65,7 +65,7 @@ const DEFAULT_TASKS = {
   command:          { model: HAIKU, maxTokens: 600 },
   training_debrief: { model: OPUS,  effort: 'medium', maxTokens: 4000 },
   // Atelier de contrats (contract-studio.html) : réécriture et import PDF.
-  contract_edit:    { model: OPUS,  effort: 'medium', maxTokens: 16000 },
+  contract_edit:    { model: OPUS,  effort: 'medium', maxTokens: 32000 },
   contract_import:  { model: OPUS,  effort: 'medium', maxTokens: 32000 },
 };
 

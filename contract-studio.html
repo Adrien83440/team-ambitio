@@ -223,6 +223,7 @@ textarea.inp{resize:vertical;line-height:1.5;}
           <div class="panel-t">✨ Claude Opus 5.5</div>
           <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Décrivez la modification. Claude propose, vous acceptez ou refusez chaque changement, puis vous enregistrez.</div>
           <textarea class="inp" id="aiText" placeholder="Ex. « Fais-en la version paiement en une fois uniquement », « ajoute un article sur la confidentialité », « passe la mise en demeure à 8 jours »…"></textarea>
+          <div id="aiCount" style="font-size:10px;color:var(--muted);text-align:right;margin-top:3px">0 / 20 000 caractères</div>
           <div class="lbl">Article ciblé (facultatif)</div>
           <select class="inp" id="aiSec"></select>
           <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:10px" data-action="ai" id="aiBtn">Demander à Claude</button>
@@ -691,8 +692,17 @@ function renderPdf(box,b64){
 }
 
 /* ═══ CLAUDE ═══ */
+/* Même limite que AI_INSTRUCTION_MAX dans api/contract-studio.js. */
+var AI_MAX=20000;
+function aiCount(){
+  var n=$('aiText').value.trim().length,el=$('aiCount');
+  el.textContent=n.toLocaleString('fr-FR')+' / '+AI_MAX.toLocaleString('fr-FR')+' caractères'+(n>AI_MAX?' — trop long, découpez la demande':'');
+  el.style.color=n>AI_MAX?'var(--red)':'var(--muted)';
+}
+document.addEventListener('input',function(e){if(e.target&&e.target.id==='aiText')aiCount();});
 function askAi(){
   var txt=$('aiText').value.trim();if(!txt){toast('Écrivez une instruction.');return;}
+  if(txt.length>AI_MAX){toast('Instruction trop longue ('+txt.length+' caractères, '+AI_MAX+' maximum) : découpez-la.');return;}
   var b=$('aiBtn');b.disabled=true;b.innerHTML='<span class="spin"></span> Claude réfléchit… (jusqu\'à 1 min)';
   $('aiOut').innerHTML='';
   api('ai',{templateId:ST.id,web:exportWeb(),instruction:txt,sectionId:$('aiSec').value}).then(function(o){
