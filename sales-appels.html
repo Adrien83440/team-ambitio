@@ -76,6 +76,10 @@ body:not(.light-theme) .ca-in[type=date]{color-scheme:dark}
 .ca-main{min-width:0}
 .ca-nm{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:8px}
 .ca-nm .ca-dirico{font-size:12px;opacity:.6;flex-shrink:0}
+.ca-nm .ca-tel{font-family:var(--font-m);font-size:11.5px;font-weight:500;color:var(--muted);flex-shrink:0}
+.ca-top{display:flex;align-items:center;gap:8px}
+.ca-lead{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:rgba(96,165,250,.1);color:#60a5fa;border:1px solid rgba(96,165,250,.25);text-decoration:none;white-space:nowrap}
+.ca-lead:hover{background:rgba(96,165,250,.2)}
 .ca-meta{font-size:11.5px;color:var(--muted);margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .ca-meta .dot{opacity:.35}
 .ca-sum{font-size:12px;color:rgba(255,255,255,.58);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -453,6 +457,8 @@ function resultOf(c) {
 var RESULT_LABEL = { ok: 'Décroché', miss: 'Non décroché', vm: 'Répondeur', live: 'En cours' };
 function otherPhone(c) { return c.direction === 'inbound' ? (c.fromNumber || '') : (c.toNumber || ''); }
 function displayName(c) { return c.leadName || otherPhone(c) || 'Inconnu'; }
+/* Fiche Leads Live — même lien que csm-clients / admin-persons. */
+function leadHref(c) { return 'sales-leads.html?leadId=' + encodeURIComponent(c.leadId); }
 function initialOf(c) {
   var n = String(c.leadName || '').trim();
   if (n) return n.charAt(0).toUpperCase();
@@ -587,15 +593,18 @@ function cardHtml(c) {
   return '<div class="ca-card' + (CUR === c.id ? ' on' : '') + '" data-action="open" data-id="' + esc(c.id) + '">'
     + '<div class="ca-av' + avCls + '">' + esc(initialOf(c)) + '</div>'
     + '<div class="ca-main">'
-    +   '<div class="ca-nm"><span class="ca-dirico" title="' + (c.direction === 'inbound' ? 'Entrant' : 'Sortant') + '">' + (c.direction === 'inbound' ? '↙' : '↗') + '</span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis">' + esc(displayName(c)) + '</span></div>'
+    +   '<div class="ca-nm"><span class="ca-dirico" title="' + (c.direction === 'inbound' ? 'Entrant' : 'Sortant') + '">' + (c.direction === 'inbound' ? '↙' : '↗') + '</span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis">' + esc(displayName(c)) + '</span>'
+    +     (c.leadName && phone ? '<span class="ca-tel">' + esc(phone) + '</span>' : '')
+    +   '</div>'
     +   '<div class="ca-meta"><span>' + fmtTime(c._date) + '</span>'
-    +     (c.leadName && phone ? '<span class="dot">·</span><span>' + esc(phone) + '</span>' : '')
     +     '<span class="dot">·</span><span class="pill pill-' + r + '">' + RESULT_LABEL[r] + '</span>'
     +     (who ? who : '')
     +   '</div>'
     +   sub
     + '</div>'
-    + '<div class="ca-side"><div class="ca-dur">' + esc(dur) + '</div>'
+    + '<div class="ca-side"><div class="ca-top">'
+    +   (c.leadId ? '<a class="ca-lead" data-action="lead" href="' + esc(leadHref(c)) + '" target="_blank" rel="noopener" title="Ouvrir la fiche dans Leads Live">👤 Fiche</a>' : '')
+    +   '<div class="ca-dur">' + esc(dur) + '</div></div>'
     +   '<div class="ca-badges">'
     +     '<span class="ca-b' + (c.hasRecording ? '' : ' off') + '" title="Enregistrement">🎙</span>'
     +     '<span class="ca-b' + (c.hasTranscript ? '' : ' off') + '" title="Transcription">📝</span>'
@@ -720,7 +729,7 @@ function renderDetail(row, detail, isLoading, errMsg) {
     + '<span class="ca-who"><i style="background:' + esc(p.color) + '"></i>' + esc(p.label) + '</span>'
     + (phone ? '<span style="font-family:var(--font-m)">' + esc(phone) + '</span>' : '');
   var acts = '<button class="ca-btn ca-btn-o ca-btn-s ca-back" data-action="close">← Retour</button>';
-  if (row.leadId) acts += '<a class="ca-btn ca-btn-o ca-btn-s" href="sales-contact.html?id=' + encodeURIComponent(row.leadId) + '" target="_blank" rel="noopener">👤 Fiche lead</a>';
+  if (row.leadId) acts += '<a class="ca-btn ca-btn-o ca-btn-s" data-action="lead" href="' + esc(leadHref(row)) + '" target="_blank" rel="noopener">👤 Fiche Leads Live</a>';
   if (phone) acts += '<button class="ca-btn ca-btn-o ca-btn-s" data-action="call" data-phone="' + esc(phone) + '" data-lead="' + esc(row.leadId || '') + '" data-name="' + esc(row.leadName || '') + '">📞 Rappeler</button>';
 
   var h = '<div class="ca-dhead">'
@@ -878,6 +887,7 @@ document.addEventListener('click', function (e) {
   var el = e.target.closest ? e.target.closest('[data-action]') : null;
   if (!el) return;
   var act = el.getAttribute('data-action');
+  if (act === 'lead') return; // lien natif vers Leads Live : ne pas ouvrir l'appel
   if (act === 'open') { openCall(el.getAttribute('data-id')); return; }
   if (act === 'close') { closeDetail(); return; }
   if (act === 'more') { SHOWN += PAGE_SIZE; renderList(); return; }

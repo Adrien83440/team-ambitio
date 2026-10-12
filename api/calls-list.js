@@ -15,6 +15,7 @@
 //   → { ok, scope: 'all'|'own', viewerUid, from, to, limit, truncated, calls[] }
 //
 // Chaque entrée de calls[] : id, direction, status, leadId, leadName,
+// leadMatch ('id' | 'phone' | absent — voir resolveLeads),
 // fromNumber, toNumber, initiatedAt (ISO), answeredAt (ISO), durationSec,
 // totalDurationSec, ringingDurationSec, amd, hangupBy, userId, userName,
 // ringoverUserName, campaignId, provider, hasRecording, hasTranscript,
@@ -29,6 +30,7 @@
 const { admin, db } = require('./_firebaseAdmin');
 const { requireAuth } = require('./_verifyFirebaseAuth');
 const parseBody = require('./_parseBody');
+const { phoneNormalized, toE164 } = require('./_leadLookup');
 
 const DEFAULT_LIMIT = 400;
 const MAX_LIMIT = 500;
@@ -52,6 +54,89 @@ function parseDate(v) {
 }
 
 const toIso = t => (t && t.toDate ? t.toDate().toISOString() : null);
+
+// ── Rattachement des appels aux fiches Leads Live ──────────────────────────
+// Les appels synchronisés depuis Ringover n'ont presque jamais de leadId, et
+// leadNameSnapshot n'est posé que si le contact existe dans l'annuaire
+// Ringover : la page n'affichait que des numéros. On résout donc ici, en lot :
+//   1. leadId présent → la fiche (nom à jour) si elle est vivante ;
+//   2. sinon le numéro du correspondant → phoneNormalized (9 derniers
+//      chiffres), puis `telephone` en E.164 / format 0X pour les vieilles
+//      fiches sans phoneNormalized.
+// Les fiches `_merged: true` sont ignorées (motif pickAlive). Requêtes `in`
+// par paquets de 30 (limite Firestore) et projection sur les seuls champs
+// utiles : quelques lectures par chargement, pas une par appel.
+const LEAD_FIELDS = ['nom', 'telephone', 'phoneNormalized', '_merged'];
+
+function chunks(arr, n) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+  return out;
+}
+
+async function queryIn(field, values) {
+  const docs = [];
+  const parts = chunks(values, 30);
+  const snaps = await Promise.all(parts.map(part =>
+    db.collection('leads').where(field, 'in', part).select(...LEAD_FIELDS).get()));
+  snaps.forEach(sn => sn.docs.forEach(d => docs.push(d)));
+  return docs;
+}
+
+function otherNumber(c) {
+  return c.direction === 'inbound' ? c.fromNumber : c.toNumber;
+}
+
+async function resolveLeads(calls) {
+  const byId = {};
+  // 1. leadId connus
+  const ids = Array.from(new Set(calls.map(c => c.leadId).filter(Boolean)));
+  if (ids.length) {
+    const refs = ids.map(id => db.collection('leads').doc(id));
+    const snaps = await db.getAll(...refs, { fieldMask: LEAD_FIELDS });
+    snaps.forEach(d => {
+      if (d.exists && d.data()._merged !== true) byId[d.id] = d;
+    });
+  }
+
+  // 2. numéros des appels sans fiche vivante
+  const pending = calls.filter(c => !(c.leadId && byId[c.leadId]) && phoneNormalized(otherNumber(c)));
+  const byNorm = {};
+  if (pending.length) {
+    const norms = Array.from(new Set(pending.map(c => phoneNormalized(otherNumber(c))).filter(n => n.length === 9)));
+    (await queryIn('phoneNormalized', norms)).forEach(d => {
+      const x = d.data();
+      if (x._merged === true || !x.phoneNormalized) return;
+      if (!byNorm[x.phoneNormalized]) byNorm[x.phoneNormalized] = d;
+    });
+    const missing = norms.filter(n => !byNorm[n]);
+    if (missing.length) {
+      const tels = [];
+      missing.forEach(n => { tels.push('+33' + n, '0' + n); });
+      (await queryIn('telephone', tels)).forEach(d => {
+        const x = d.data();
+        if (x._merged === true) return;
+        const n = phoneNormalized(toE164(x.telephone));
+        if (n && !byNorm[n]) byNorm[n] = d;
+      });
+    }
+  }
+
+  calls.forEach(c => {
+    let d = c.leadId ? byId[c.leadId] : null;
+    let how = d ? 'id' : null;
+    if (!d) {
+      const n = phoneNormalized(otherNumber(c));
+      d = n ? byNorm[n] : null;
+      if (d) how = 'phone';
+    }
+    if (!d) return;
+    const nom = String(d.data().nom || '').trim();
+    c.leadId = d.id;
+    if (nom) c.leadName = nom;
+    c.leadMatch = how;
+  });
+}
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -127,6 +212,10 @@ module.exports = async (req, res) => {
         aiSummary:          aiSummary || null,
       };
     });
+
+    // Rattachement best effort : une panne ici ne doit pas vider la page.
+    try { await resolveLeads(calls); }
+    catch (e) { console.warn('[calls-list] resolveLeads:', e && e.message); }
 
     res.status(200).json({
       ok: true,
