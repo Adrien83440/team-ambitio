@@ -881,6 +881,116 @@ body.ld-pilot-on .l2fam[data-fam="closing"] { display: none; }
 .ld-delete-btn.confirming { background: rgba(239,68,68,0.15); color: var(--red3); border-color: var(--red2); animation: deletePulse 1s infinite; }
 @keyframes deletePulse { 0%,100% { border-color: var(--red2); } 50% { border-color: rgba(239,68,68,0.4); } }
 
+/* ═══ MES RDV DU JOUR (12/10/2026) ═══
+   Bouton d'en-tête + pop-up (feuille du bas sur mobile, panneau ancré en
+   haut à droite sur ordinateur). Évite l'aller-retour Booking ↔ Leads Live. */
+.l2agopen {
+  height: 34px; padding: 0 11px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--bg2); color: var(--text); font-family: var(--fb); font-size: 12px; font-weight: 800;
+  cursor: pointer; flex: none; display: inline-flex; align-items: center; gap: 6px; transition: all .15s;
+}
+.l2agopen:hover { border-color: var(--border2); }
+.l2agopen .n {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; display: none;
+  align-items: center; justify-content: center; font-family: var(--fm); font-size: 10.5px;
+  background: var(--red2); color: #fff;
+}
+.l2agopen.has .n { display: inline-flex; }
+.l2agopen.live { border-color: rgba(52,211,153,0.55); }
+.l2agopen.live .n { background: var(--green); color: #052e1f; }
+@media (max-width: 400px) { .l2agopen .t { display: none; } }
+
+.l2ag-backdrop { display: none; position: fixed; inset: 0; z-index: 300; background: rgba(3,4,10,0.6); }
+.l2ag-backdrop.on { display: block; }
+.l2ag {
+  position: fixed; z-index: 310; left: 0; right: 0; bottom: 0; max-height: 86dvh;
+  background: var(--bg2); border: 1px solid var(--border2); border-bottom: none;
+  border-radius: 22px 22px 0 0; transform: translateY(103%); visibility: hidden;
+  transition: transform .26s cubic-bezier(.32,.72,.25,1), visibility 0s linear .26s;
+  display: flex; flex-direction: column; box-shadow: 0 -18px 60px rgba(0,0,0,0.55);
+}
+.l2ag.on { transform: translateY(0); visibility: visible; transition: transform .26s cubic-bezier(.32,.72,.25,1); }
+@media (min-width: 980px) {
+  .l2ag {
+    left: auto; bottom: auto; top: 64px; right: max(16px, calc((100vw - 1440px) / 2 + 14px));
+    width: 440px; max-height: calc(100dvh - 90px); border-radius: 18px; border-bottom: 1px solid var(--border2);
+    transform: translateY(-8px); opacity: 0;
+    transition: transform .18s ease, opacity .18s ease, visibility 0s linear .18s;
+    box-shadow: 0 18px 60px rgba(0,0,0,0.55);
+  }
+  .l2ag.on { transform: translateY(0); opacity: 1; transition: transform .18s ease, opacity .18s ease; }
+  .l2ag .l2grab { display: none; }
+  .l2ag-backdrop { background: transparent; }
+}
+.l2ag-head { padding: 6px 16px 10px; border-bottom: 1px solid var(--border); }
+.l2ag-top { display: flex; align-items: center; gap: 8px; }
+.l2ag-top .t { font-family: var(--fh); font-size: 16px; font-weight: 700; }
+.l2ag-top .d { font-size: 12px; color: var(--muted); text-transform: capitalize; }
+.l2ag-x {
+  margin-left: auto; width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--border);
+  background: var(--bg3); color: var(--muted); font-size: 15px; cursor: pointer; flex: none;
+}
+.l2ag-x:hover { color: var(--text); border-color: var(--border2); }
+.l2ag-ctl { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.l2ag-nav { display: flex; align-items: center; gap: 4px; }
+.l2ag-nav button, .l2ag-seg button {
+  height: 30px; border: 1px solid var(--border); background: var(--bg3); color: var(--muted);
+  font-family: var(--fb); font-size: 11.5px; font-weight: 800; cursor: pointer;
+}
+.l2ag-nav button { min-width: 30px; padding: 0 9px; border-radius: 9px; }
+.l2ag-nav button:hover, .l2ag-seg button:hover { color: var(--text); }
+.l2ag-nav .day { min-width: 92px; color: var(--text); }
+.l2ag-seg { display: flex; margin-left: auto; }
+.l2ag-seg button { padding: 0 11px; }
+.l2ag-seg button:first-child { border-radius: 9px 0 0 9px; }
+.l2ag-seg button:last-child { border-radius: 0 9px 9px 0; border-left: none; }
+.l2ag-seg button.on { background: rgba(239,68,68,0.14); border-color: rgba(239,68,68,0.45); color: var(--red3); }
+.l2ag-body { overflow-y: auto; padding: 6px 10px calc(14px + var(--sab)); -webkit-overflow-scrolling: touch; }
+.l2ag-sec { font-size: 9.5px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--muted2); margin: 12px 6px 6px; }
+.l2ag-row {
+  display: flex; align-items: center; gap: 11px; width: 100%; text-align: left;
+  padding: 10px; margin-bottom: 4px; border-radius: 12px; border: 1px solid transparent;
+  background: none; color: var(--text); cursor: pointer; font-family: var(--fb);
+}
+.l2ag-row:hover { background: var(--bg3); border-color: var(--border); }
+.l2ag-row.now { background: rgba(52,211,153,0.07); border-color: rgba(52,211,153,0.35); }
+.l2ag-row.past { opacity: .72; }
+.l2ag-row.cancel { opacity: .5; }
+.l2ag-row.cancel .nm { text-decoration: line-through; }
+.l2ag-tm { flex: none; width: 46px; font-family: var(--fm); font-size: 14px; font-weight: 500; }
+.l2ag-main { flex: 1; min-width: 0; }
+.l2ag-main .nm { font-weight: 800; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.l2ag-main .mt { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.l2ag-tag {
+  display: inline-block; font-size: 9.5px; font-weight: 800; padding: 1px 7px; border-radius: 999px; margin-left: 4px;
+  color: var(--purple); border: 1px solid rgba(167,139,250,0.4); background: rgba(167,139,250,0.08); vertical-align: 1px;
+}
+.l2ag-side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+.l2ag-st { font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 999px; white-space: nowrap; color: var(--muted); border: 1px solid var(--border2); }
+.l2ag-st.now { color: var(--green); border-color: rgba(52,211,153,0.5); background: rgba(52,211,153,0.1); animation: pulse 2s infinite; }
+.l2ag-st.soon { color: var(--gold); border-color: rgba(251,191,36,0.45); background: rgba(251,191,36,0.08); }
+.l2ag-meet {
+  font-size: 10.5px; font-weight: 800; padding: 3px 9px; border-radius: 8px; text-decoration: none;
+  color: var(--green); border: 1px solid rgba(52,211,153,0.4); background: rgba(52,211,153,0.08);
+}
+.l2ag-empty { text-align: center; color: var(--muted); font-size: 13px; padding: 34px 16px; }
+.l2ag-empty button {
+  margin-top: 12px; padding: 7px 14px; border-radius: 10px; border: 1px solid var(--border2);
+  background: var(--bg3); color: var(--text); font-family: var(--fb); font-weight: 800; font-size: 12px; cursor: pointer;
+}
+.l2ag-cx { margin: 10px 6px 0; }
+.l2ag-cx summary { font-size: 11.5px; font-weight: 700; color: var(--muted2); cursor: pointer; list-style: none; padding: 4px 0; }
+.l2ag-cx summary::-webkit-details-marker { display: none; }
+.l2ag-cx[open] summary { margin-bottom: 6px; }
+/* Pastille « RDV aujourd'hui » sur la carte du feed */
+.l2agchip {
+  display: inline-block; margin-left: 6px; font-family: var(--fm); font-size: 10.5px; font-weight: 500;
+  padding: 1px 7px; border-radius: 999px; vertical-align: 1px;
+  color: var(--blue); border: 1px solid rgba(96,165,250,0.4); background: rgba(96,165,250,0.08);
+}
+.l2agchip.now { color: var(--green); border-color: rgba(52,211,153,0.5); background: rgba(52,211,153,0.1); }
+.l2agchip.past { color: var(--muted); border-color: var(--border2); background: none; }
+
 /* ═══ FEUILLE FILTRES ═══ */
 .l2fs-backdrop { display: none; position: fixed; inset: 0; z-index: 300; background: rgba(3,4,10,0.6); }
 .l2fs-backdrop.on { display: block; }
@@ -1050,6 +1160,7 @@ body.ld-pilot-on .l2fam[data-fam="closing"] { display: none; }
       <span class="ld-live-label">Live</span>
       <span id="ldPersonalBadge" style="display:none"></span>
       <span class="ld-count" id="ldCount">— leads</span>
+      <button class="l2agopen" id="l2AgBtn" type="button" title="Mes rendez-vous du jour" aria-label="Mes rendez-vous du jour"><span class="i">📅</span><span class="t">Mes RDV</span><span class="n" id="l2AgCount"></span></button>
       <button class="l2more" id="l2MoreBtn" type="button" title="Menu" aria-label="Menu">⋯</button>
     </div>
     <div class="l2hd-row2">
@@ -1098,6 +1209,31 @@ body.ld-pilot-on .l2fam[data-fam="closing"] { display: none; }
     <div id="shareLinksList"></div>
   </div>
 </div>
+
+<!-- ── MES RDV DU JOUR (pop-up : feuille du bas sur mobile, panneau sur ordinateur) ── -->
+<div class="l2ag-backdrop" id="l2agBackdrop"></div>
+<section class="l2ag" id="l2ag" aria-label="Mes rendez-vous" role="dialog">
+  <div class="l2grab" data-ag="close"></div>
+  <div class="l2ag-head">
+    <div class="l2ag-top">
+      <span class="t" id="l2agTitle">📅 Mes RDV</span>
+      <span class="d" id="l2agDate"></span>
+      <button class="l2ag-x" type="button" data-ag="close" aria-label="Fermer">✕</button>
+    </div>
+    <div class="l2ag-ctl">
+      <div class="l2ag-nav">
+        <button type="button" data-ag="prev" aria-label="Jour précédent">‹</button>
+        <button type="button" class="day" data-ag="today" id="l2agDay">Aujourd'hui</button>
+        <button type="button" data-ag="next" aria-label="Jour suivant">›</button>
+      </div>
+      <div class="l2ag-seg">
+        <button type="button" data-ag="me" id="l2agMe">Moi</button>
+        <button type="button" data-ag="team" id="l2agTeam">Équipe</button>
+      </div>
+    </div>
+  </div>
+  <div class="l2ag-body" id="l2agBody"></div>
+</section>
 
 <!-- ── FEUILLE FILTRES (les éléments/ids historiques vivent ici) ── -->
 <div class="l2fs-backdrop" id="l2fsBackdrop"></div>
@@ -4283,7 +4419,7 @@ function renderCard(l) {
     h += '<div class="ld-card-avatar" style="background:var(--bg4);color:var(--muted)">?</div>';
   }
   h += '<div class="ld-card-info">';
-  h += '<div class="ld-card-name">' + escHtml(l.nom || '—') + l2AiBadgeHTML(l) + '<span class="l2ago">' + ago + '</span></div>';
+  h += '<div class="ld-card-name">' + escHtml(l.nom || '—') + l2AiBadgeHTML(l) + ldAgCardChip(l) + '<span class="l2ago">' + ago + '</span></div>';
   h += '<div class="ld-card-meta">' + renderLeadTags(l, true) + '</div>';
   var lastAct = l2LastActivity(l);
   if (lastAct) h += '<div class="l2last">' + escHtml(lastAct) + '</div>';
@@ -6615,6 +6751,435 @@ function startSbNbBookingsListening() {
     });
 }
 
+/* ═══ MES RDV DU JOUR (12/10/2026) ═══════════════════════════════════════
+   Demande d'Adrien : le closeur ne doit plus jongler entre Booking et Leads
+   Live pour savoir qui il voit aujourd'hui. Bouton « 📅 Mes RDV » dans
+   l'en-tête → pop-up des RDV du jour (‹ › pour hier / demain), clic sur un
+   RDV = la fiche s'ouvre ici. Pastille « 📅 14:00 » sur les cartes du feed
+   des leads qui ont un RDV aujourd'hui.
+
+   Lecture seule. Une requête where('date','==',jour) — champ unique, aucun
+   index composite. Dates et heures des bookings en Europe/Paris (fuseau des
+   experts et du serveur), quel que soit le fuseau du navigateur.
+
+   « Mes » RDV = même règle que Close SB (memberMatchesBooking) : closeur du
+   close, sinon expertSlug, sinon personId → firebaseUid ; plus les RDV que
+   j'ai posés comme setter (bookedBySlug). Coaching exclu (classifyBooking). */
+var _ldAg = {
+  open: false, day: null, scope: 'me', scopeTouched: false,
+  todayKey: null, today: [], todayLoaded: false, unsubToday: null,
+  otherKey: null, other: [], otherLoaded: false, unsubOther: null,
+  persons: {}, personsAsked: false, timer: null, bound: false,
+  idx: null, chipSig: '', noLead: {}
+};
+var _ldAgFmt = null;
+
+function ldAgParisParts(ms) {
+  if (!_ldAgFmt) {
+    _ldAgFmt = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false
+    });
+  }
+  var o = {};
+  _ldAgFmt.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });
+  return o;
+}
+function ldAgDayKey(ms) {
+  var o = ldAgParisParts(ms);
+  return o.year + '-' + o.month + '-' + o.day;
+}
+function ldAgShiftDay(key, n) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key || '');
+  if (!m) return key;
+  var d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3] + n, 12));
+  return d.getUTCFullYear() + '-' + ('0' + (d.getUTCMonth() + 1)).slice(-2) + '-' + ('0' + d.getUTCDate()).slice(-2);
+}
+/* Instant réel d'un RDV saisi en heure de Paris. */
+function ldAgStartMs(b) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((b && b.date) || '');
+  var t = /^(\d{1,2}):(\d{2})/.exec((b && b.time) || '');
+  if (!m || !t) return NaN;
+  var guess = Date.UTC(+m[1], +m[2] - 1, +m[3], +t[1], +t[2]);
+  var o = ldAgParisParts(guess);
+  var asUtc = Date.UTC(+o.year, +o.month - 1, +o.day, o.hour === '24' ? 0 : +o.hour, +o.minute);
+  return guess - (asUtc - guess);
+}
+function ldAgEndMs(b) { return ldAgStartMs(b) + (Number(b.duration) || 30) * 60000; }
+function ldAgTime(b) {
+  var t = /^(\d{1,2}):(\d{2})/.exec((b && b.time) || '');
+  return t ? ('0' + t[1]).slice(-2) + ':' + t[2] : '—';
+}
+function ldAgCancelled(b) { return b.status === 'cancelled' || b.outcome === 'annule'; }
+function ldAgRelevant(b) {
+  var AF = window.AlteoreFlow;
+  if (b.isCoaching === true) return false;
+  return !AF || AF.classifyBooking(b, _ldTypeMap || {}) !== 'excluded';
+}
+function ldAgEmail(b) { return ((b.prospect && b.prospect.email) || b.email || '').trim().toLowerCase(); }
+function ldAgTel9(b) { return ldPhone9((b.prospect && b.prospect.telephone) || (b.prospect && b.prospect.phone) || b.telephone || ''); }
+
+/* 'host' = je reçois le RDV, 'set' = je l'ai posé, '' = pas à moi. */
+function ldAgRole(b) {
+  var me = myIdentitySlug;
+  if (!me || !b) return '';
+  var host = false;
+  if (b.closeData && b.closeData.closerSlug) host = b.closeData.closerSlug === me;
+  else if (b.expertSlug) host = b.expertSlug === me;
+  else if (b.personId && b.personId === me) host = true;
+  else {
+    var p = _ldAg.persons[b.personId];
+    var m = (window.TEAM_MEMBERS || {})[me];
+    host = !!(p && p.firebaseUid && m && m.firebaseUid && p.firebaseUid === m.firebaseUid);
+  }
+  if (host) return 'host';
+  if (b.bookedBySlug && b.bookedBySlug === me) return 'set';
+  return '';
+}
+
+/* Fiche Leads Live d'un RDV parmi les leads chargés : leadId (fiche vivante),
+   sinon email / téléphone — même repli que ldRdvItemsFor, fiches _merged ignorées. */
+function ldAgLeadFor(b) {
+  var i, l;
+  if (b.leadId) {
+    for (i = 0; i < allLeads.length; i++) {
+      if (allLeads[i].id === b.leadId) { if (allLeads[i]._merged !== true) return allLeads[i]; break; }
+    }
+  }
+  var em = ldAgEmail(b), t9 = ldAgTel9(b);
+  if (!em && !t9) return null;
+  for (i = 0; i < allLeads.length; i++) {
+    l = allLeads[i];
+    if (l._merged === true) continue;
+    if ((em && (l.email || '').trim().toLowerCase() === em) || (t9 && ldPhone9(l.telephone) === t9)) return l;
+  }
+  return null;
+}
+
+/* ── Écoute des RDV ── */
+function ldAgListen(dayKey, cb) {
+  return db.collection('bookings').where('date', '==', dayKey).onSnapshot(function (snap) {
+    var arr = [];
+    snap.forEach(function (doc) { var b = doc.data(); b.id = doc.id; arr.push(b); });
+    cb(arr);
+  }, function (err) {
+    console.warn('[mes-rdv] listener error:', err && err.message);
+    cb(null);
+  });
+}
+function ldAgWatchToday() {
+  var key = ldAgDayKey(Date.now());
+  if (key === _ldAg.todayKey && _ldAg.unsubToday) return;
+  if (_ldAg.unsubToday) { _ldAg.unsubToday(); _ldAg.unsubToday = null; }
+  var wasToday = !_ldAg.day || _ldAg.day === _ldAg.todayKey;
+  _ldAg.todayKey = key;
+  _ldAg.today = [];
+  _ldAg.todayLoaded = false;
+  if (wasToday) _ldAg.day = key;
+  _ldAg.unsubToday = ldAgListen(key, function (arr) {
+    _ldAg.today = arr || [];
+    _ldAg.todayLoaded = true;
+    ldAgRefresh();
+  });
+}
+function ldAgWatchOther(key) {
+  if (_ldAg.otherKey === key && _ldAg.unsubOther) return;
+  ldAgStopOther();
+  _ldAg.otherKey = key;
+  _ldAg.unsubOther = ldAgListen(key, function (arr) {
+    _ldAg.other = arr || [];
+    _ldAg.otherLoaded = true;
+    ldAgRender();
+  });
+}
+function ldAgStopOther() {
+  if (_ldAg.unsubOther) { _ldAg.unsubOther(); _ldAg.unsubOther = null; }
+  _ldAg.otherKey = null; _ldAg.other = []; _ldAg.otherLoaded = false;
+}
+
+function ldAgStart() {
+  ldAgBind();
+  _ldEnsureTypeMap();
+  if (!_ldAg.personsAsked && window.AlteoreFlow && window.AlteoreFlow.loadPersonsMap) {
+    _ldAg.personsAsked = true;
+    window.AlteoreFlow.loadPersonsMap().then(function (m) { _ldAg.persons = m || {}; ldAgRefresh(); });
+  }
+  ldAgWatchToday();
+  if (!_ldAg.timer) {
+    /* Battement : changement de jour à minuit, « dans X min », EN COURS. */
+    _ldAg.timer = setInterval(function () {
+      ldAgWatchToday();
+      if (!_ldAg.personsAsked) ldAgStart();
+      ldAgRefresh();
+    }, 30000);
+  }
+}
+function ldAgStop() {
+  if (_ldAg.unsubToday) { _ldAg.unsubToday(); _ldAg.unsubToday = null; }
+  ldAgStopOther();
+  if (_ldAg.timer) { clearInterval(_ldAg.timer); _ldAg.timer = null; }
+  _ldAg.todayKey = null; _ldAg.today = []; _ldAg.idx = null;
+  ldAgClose();
+}
+
+/* ── Index des RDV du jour pour les pastilles du feed ── */
+function ldAgRefresh() {
+  var idx = { lead: {}, em: {}, tel: {} }, sig = [], now = Date.now();
+  _ldAg.today.forEach(function (b) {
+    if (ldAgCancelled(b) || !ldAgRelevant(b)) return;
+    var st = ldAgStartMs(b), en = ldAgEndMs(b);
+    var state = now >= en ? 'past' : (now >= st ? 'now' : '');
+    var it = { b: b, st: st, state: state };
+    if (b.leadId) (idx.lead[b.leadId] = idx.lead[b.leadId] || []).push(it);
+    var em = ldAgEmail(b); if (em) (idx.em[em] = idx.em[em] || []).push(it);
+    var t9 = ldAgTel9(b); if (t9) (idx.tel[t9] = idx.tel[t9] || []).push(it);
+    sig.push(b.id + ':' + (b.leadId || '') + ':' + b.time + ':' + state);
+  });
+  _ldAg.idx = idx;
+  sig = sig.sort().join('|');
+  if (sig !== _ldAg.chipSig) {
+    _ldAg.chipSig = sig;
+    if (!isEditingLead && typeof renderFeed === 'function' && allLeads && allLeads.length) renderFeed();
+  }
+  ldAgPaintBadge();
+  ldAgRender();
+}
+function ldAgCardChip(l) {
+  if (!_ldAg || !_ldAg.idx || !l) return '';
+  var idx = _ldAg.idx;
+  var em = (l.email || '').trim().toLowerCase(), t9 = ldPhone9(l.telephone);
+  var arr = idx.lead[l.id] || (em && idx.em[em]) || (t9 && idx.tel[t9]);
+  if (!arr || !arr.length) return '';
+  var pick = null;
+  arr.forEach(function (it) { if (it.state !== 'past' && (!pick || it.st < pick.st)) pick = it; });
+  if (!pick) pick = arr[arr.length - 1];
+  var lbl = pick.state === 'now' ? 'RDV en cours' : (pick.state === 'past' ? 'RDV passé aujourd’hui' : 'RDV aujourd’hui');
+  return '<span class="l2agchip' + (pick.state ? ' ' + pick.state : '') + '" title="' + lbl + ' à ' + ldAgTime(pick.b) + '">📅 ' + ldAgTime(pick.b) + '</span>';
+}
+
+/* ── Pastille du bouton : mes RDV restants aujourd'hui ── */
+function ldAgMine(list) {
+  return (list || []).filter(function (b) { return !ldAgCancelled(b) && ldAgRelevant(b) && ldAgRole(b); });
+}
+function ldAgPaintBadge() {
+  var btn = document.getElementById('l2AgBtn'), n = document.getElementById('l2AgCount');
+  if (!btn || !n) return;
+  var now = Date.now(), left = 0, live = false;
+  ldAgMine(_ldAg.today).forEach(function (b) {
+    var st = ldAgStartMs(b), en = ldAgEndMs(b);
+    if (now < en) left++;
+    if (now >= st && now < en) live = true;
+  });
+  n.textContent = left ? String(left) : '';
+  btn.classList.toggle('has', left > 0);
+  btn.classList.toggle('live', live);
+  btn.title = live ? 'Un de tes RDV est en cours' : (left ? left + ' RDV à venir aujourd’hui' : 'Mes rendez-vous du jour');
+}
+
+/* ── Pop-up ── */
+function ldAgOpen() {
+  ldAgStart();
+  if (!_ldAg.scopeTouched) {
+    var isAdmin = window._currentRole === 'admin';
+    _ldAg.scope = (!myIdentitySlug || (isAdmin && ldAgMine(_ldAg.today).length === 0)) ? 'team' : 'me';
+  }
+  _ldAg.day = _ldAg.todayKey;
+  _ldAg.noLead = {};
+  ldAgStopOther();
+  _ldAg.open = true;
+  document.getElementById('l2ag').classList.add('on');
+  document.getElementById('l2agBackdrop').classList.add('on');
+  if (l2IsMobile()) document.body.classList.add('l2-lock');
+  ldAgRender();
+  var body = document.getElementById('l2agBody');
+  if (body) body.scrollTop = 0;
+}
+function ldAgClose() {
+  if (!_ldAg.open) return;
+  _ldAg.open = false;
+  var p = document.getElementById('l2ag'), bd = document.getElementById('l2agBackdrop');
+  if (p) p.classList.remove('on');
+  if (bd) bd.classList.remove('on');
+  ldAgStopOther();
+  var fs = document.getElementById('l2fs');
+  if (!(openCardId && l2IsMobile()) && !(fs && fs.classList.contains('on'))) document.body.classList.remove('l2-lock');
+}
+function ldAgSetDay(key) {
+  _ldAg.day = key;
+  if (key === _ldAg.todayKey) ldAgStopOther(); else ldAgWatchOther(key);
+  ldAgRender();
+}
+
+function ldAgRow(b, now, isToday) {
+  var role = ldAgRole(b);
+  var st = ldAgStartMs(b), en = ldAgEndMs(b);
+  var cx = ldAgCancelled(b), past = !cx && now >= en, live = !cx && now >= st && now < en;
+  var p = b.prospect || {};
+  var name = ((p.prenom || '') + ' ' + (p.nom || '')).trim() || b.nom || b.name || '';
+  var lead = ldAgLeadFor(b);
+  if (!name && lead) name = lead.nom || '';
+  var typeName = (b.consultation && b.consultation.label) || b.typeName || b.typeLabel || b.type || 'RDV';
+  var meta = escHtml(typeName);
+  if (_ldAg.scope === 'team' && b.personName) meta += ' · avec ' + escHtml(b.personName);
+  var noLead = _ldAg.noLead[b.id];
+  if (noLead) meta = 'Aucune fiche Leads Live liée à ce RDV';
+
+  var side = '';
+  if (cx) side = window.RdvOutcome ? window.RdvOutcome.chip(b) : '';
+  else if (live) side = '<span class="l2ag-st now">EN COURS</span>';
+  else if (past) side = window.RdvOutcome ? window.RdvOutcome.chip(b) : '';
+  else if (isToday) {
+    var mins = Math.max(1, Math.round((st - now) / 60000));
+    side = mins <= 60
+      ? '<span class="l2ag-st soon">dans ' + mins + ' min</span>'
+      : '<span class="l2ag-st">dans ' + Math.floor(mins / 60) + ' h' + (mins % 60 >= 5 ? ' ' + ('0' + (mins % 60)).slice(-2) : '') + '</span>';
+  } else side = '<span class="l2ag-st">à venir</span>';
+  var meetUrl = (!cx && !past) ? safeUrlLd(b.meetLink || b.meetUrl || b.calendarEventLink) : '';
+  if (meetUrl) side += '<a class="l2ag-meet" href="' + escAttr(meetUrl) + '" target="_blank" rel="noopener" title="Rejoindre la visio">📹 Meet</a>';
+  if (noLead) side += '<a class="l2ag-meet" href="booking-admin.html" target="_blank" rel="noopener">Booking ↗</a>';
+
+  var h = '<button type="button" class="l2ag-row' + (live ? ' now' : '') + (past ? ' past' : '') + (cx ? ' cancel' : '') + '" data-ag-booking="' + escAttr(b.id) + '">';
+  h += '<span class="l2ag-tm">' + ldAgTime(b) + '</span>';
+  h += '<span class="l2ag-main"><div class="nm">' + escHtml(name || 'Prospect') + (role === 'set' ? '<span class="l2ag-tag">posé par toi</span>' : '') + '</div>';
+  h += '<div class="mt">' + meta + '</div></span>';
+  h += '<span class="l2ag-side">' + side + '</span>';
+  h += '</button>';
+  return h;
+}
+
+function ldAgRender() {
+  if (!_ldAg.open) return;
+  var body = document.getElementById('l2agBody');
+  if (!body) return;
+  var day = _ldAg.day || _ldAg.todayKey;
+  var isToday = day === _ldAg.todayKey;
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day || '');
+  var dateLbl = m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12)).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'Europe/Paris' }) : '';
+  document.getElementById('l2agDate').textContent = dateLbl;
+  document.getElementById('l2agTitle').textContent = _ldAg.scope === 'me' ? '📅 Mes RDV' : '📅 RDV de l’équipe';
+  var dayBtn = document.getElementById('l2agDay');
+  dayBtn.textContent = isToday ? 'Aujourd’hui'
+    : (day === ldAgShiftDay(_ldAg.todayKey, 1) ? 'Demain'
+    : (day === ldAgShiftDay(_ldAg.todayKey, -1) ? 'Hier' : '↺ Aujourd’hui'));
+  document.getElementById('l2agMe').classList.toggle('on', _ldAg.scope === 'me');
+  document.getElementById('l2agTeam').classList.toggle('on', _ldAg.scope === 'team');
+
+  var loaded = isToday ? _ldAg.todayLoaded : (_ldAg.otherKey === day && _ldAg.otherLoaded);
+  if (!loaded) { body.innerHTML = '<div class="l2ag-empty">Chargement des RDV…</div>'; return; }
+  var all = (isToday ? _ldAg.today : _ldAg.other).filter(ldAgRelevant);
+  if (_ldAg.scope === 'me') all = all.filter(function (b) { return !!ldAgRole(b); });
+  all.sort(function (a, b) { return ldAgStartMs(a) - ldAgStartMs(b); });
+
+  var now = Date.now(), up = [], past = [], cx = [];
+  all.forEach(function (b) {
+    if (ldAgCancelled(b)) cx.push(b);
+    else if (now >= ldAgEndMs(b)) past.push(b);
+    else up.push(b);
+  });
+
+  var h = '';
+  if (!up.length && !past.length) {
+    h += '<div class="l2ag-empty">' + (_ldAg.scope === 'me' ? 'Aucun RDV pour toi ' : 'Aucun RDV ') + (isToday ? 'aujourd’hui.' : 'ce jour-là.');
+    if (_ldAg.scope === 'me') h += '<br/><button type="button" data-ag="team">Voir les RDV de l’équipe</button>';
+    h += '</div>';
+  } else {
+    if (up.length) {
+      h += '<div class="l2ag-sec">À venir · ' + up.length + '</div>';
+      up.forEach(function (b) { h += ldAgRow(b, now, isToday); });
+    }
+    if (past.length) {
+      h += '<div class="l2ag-sec">Passés · ' + past.length + '</div>';
+      past.forEach(function (b) { h += ldAgRow(b, now, isToday); });
+    }
+  }
+  if (cx.length) {
+    h += '<details class="l2ag-cx"><summary>▸ ' + cx.length + ' annulé' + (cx.length > 1 ? 's' : '') + '</summary>';
+    cx.forEach(function (b) { h += ldAgRow(b, now, isToday); });
+    h += '</details>';
+  }
+  body.innerHTML = h;
+}
+
+/* ── Clic sur un RDV : ouvrir la fiche ── */
+function ldAgFindBooking(id) {
+  var lists = [_ldAg.today, _ldAg.other];
+  for (var i = 0; i < lists.length; i++) {
+    for (var j = 0; j < lists[i].length; j++) if (lists[i][j].id === id) return lists[i][j];
+  }
+  return null;
+}
+function ldAgOpenLeadId(id) {
+  ldAgClose();
+  l2OpenLead(id);
+  var card = document.querySelector('#ldFeed .ld-card[data-lead-id="' + id + '"]');
+  if (card && !l2IsMobile() && card.scrollIntoView) card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+function ldAgOpenBooking(id) {
+  var b = ldAgFindBooking(id);
+  if (!b) return;
+  var l = ldAgLeadFor(b);
+  if (l) { ldAgOpenLeadId(l.id); return; }
+  /* Fiche hors de la fenêtre chargée (ou RDV sans leadId) : on la cherche
+     en base — leadId d'abord, puis email, puis téléphone E.164. */
+  var em = ldAgEmail(b);
+  var raw = String((b.prospect && (b.prospect.telephone || b.prospect.phone)) || '').replace(/[^\d+]/g, '');
+  var e164 = /^\+\d{8,15}$/.test(raw) ? raw : (/^0\d{9}$/.test(raw) ? '+33' + raw.slice(1) : '');
+  var qs = [];
+  if (b.leadId) qs.push(db.collection('leads').doc(b.leadId).get().then(function (s) { return s.exists ? [s] : []; }));
+  if (em) qs.push(db.collection('leads').where('email', '==', em).limit(5).get().then(function (s) { return s.docs; }));
+  if (e164) qs.push(db.collection('leads').where('telephone', '==', e164).limit(5).get().then(function (s) { return s.docs; }));
+  if (!qs.length) { _ldAg.noLead[id] = true; ldAgRender(); return; }
+  Promise.all(qs.map(function (q) { return q.catch(function () { return []; }); })).then(function (res) {
+    var found = null;
+    res.forEach(function (docs) {
+      docs.forEach(function (s) {
+        if (found) return;
+        var d = s.data() || {};
+        if (d._merged === true) return;
+        d.id = s.id;
+        found = d;
+      });
+    });
+    if (!found) { _ldAg.noLead[id] = true; ldAgRender(); return; }
+    var known = false;
+    for (var i = 0; i < allLeads.length; i++) if (allLeads[i].id === found.id) { known = true; break; }
+    if (!known) { allLeads.unshift(found); renderFeed(); }
+    ldAgOpenLeadId(found.id);
+  });
+}
+
+function ldAgBind() {
+  if (_ldAg.bound) return;
+  var btn = document.getElementById('l2AgBtn'), panel = document.getElementById('l2ag');
+  if (!btn || !panel) return;
+  _ldAg.bound = true;
+  btn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (_ldAg.open) ldAgClose(); else ldAgOpen();
+  });
+  document.getElementById('l2agBackdrop').addEventListener('click', ldAgClose);
+  panel.addEventListener('click', function (e) {
+    if (e.target.closest('a')) return; // Meet / Booking : lien natif
+    var row = e.target.closest('[data-ag-booking]');
+    if (row) { ldAgOpenBooking(row.getAttribute('data-ag-booking')); return; }
+    var act = e.target.closest('[data-ag]');
+    if (!act) return;
+    var a = act.getAttribute('data-ag');
+    if (a === 'close') ldAgClose();
+    else if (a === 'prev') ldAgSetDay(ldAgShiftDay(_ldAg.day || _ldAg.todayKey, -1));
+    else if (a === 'next') ldAgSetDay(ldAgShiftDay(_ldAg.day || _ldAg.todayKey, 1));
+    else if (a === 'today') ldAgSetDay(_ldAg.todayKey);
+    else if (a === 'me' || a === 'team') { _ldAg.scope = a; _ldAg.scopeTouched = true; ldAgRender(); }
+  });
+  /* Capture : Échap ferme la pop-up sans fermer aussi la fiche mobile dessous. */
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && _ldAg.open) { e.stopPropagation(); ldAgClose(); }
+  }, true);
+  /* Après onTeamMembersReady (enregistré plus bas) : myIdentitySlug est alors résolu. */
+  window.addEventListener('team-members-loaded', function () { setTimeout(ldAgRefresh, 0); });
+}
+ldAgBind();
+
 function startCoachingBookingsListening() {
   if (_coachingBookingsUnsub) { _coachingBookingsUnsub(); _coachingBookingsUnsub = null; }
   _coachingBookingsUnsub = db.collection('bookings')
@@ -7429,6 +7994,7 @@ window.addEventListener('team-members-loaded', onTeamMembersReady);
           startBookingBridge();
           startCoachingBookingsListening();
           startSbNbBookingsListening();
+          ldAgStart();
         }
       }).catch(function() {
         if (!_leadsListenersStarted) {
@@ -7439,6 +8005,7 @@ window.addEventListener('team-members-loaded', onTeamMembersReady);
           startBookingBridge();
           startCoachingBookingsListening();
           startSbNbBookingsListening();
+          ldAgStart();
         }
       });
     } else {
@@ -7448,6 +8015,7 @@ window.addEventListener('team-members-loaded', onTeamMembersReady);
       if (_bookingBridgeUnsub) { _bookingBridgeUnsub(); _bookingBridgeUnsub = null; }
       if (_coachingBookingsUnsub) { _coachingBookingsUnsub(); _coachingBookingsUnsub = null; }
       if (_sbnbBookingsUnsub) { _sbnbBookingsUnsub(); _sbnbBookingsUnsub = null; }
+      ldAgStop();
       _leadsListenersStarted = false;
       // Show login overlay
       var overlay = document.getElementById('appLoginOverlay');
