@@ -86,6 +86,17 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
 .fb-rte-bar button{background:none;border:1px solid transparent;color:var(--muted);min-width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit;padding:0 7px;font-weight:700}
 .fb-rte-bar button:hover{color:var(--text);background:var(--bg3);border-color:var(--border)}
 .fb-rte-bar .sp{width:1px;background:var(--border);margin:4px 3px}
+.fb-rte-bar{position:relative}
+.fb-rte-col{position:relative;display:inline-flex}
+.fb-rte-col .a{display:inline-block;line-height:1;border-bottom:3px solid var(--gold,#d4a017);padding-bottom:1px}
+.fb-rte-pop{display:none;position:absolute;top:100%;left:0;z-index:30;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.35);width:206px}
+.fb-rte-pop.open{display:block}
+.fb-rte-pop .sw{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
+.fb-rte-bar .fb-rte-pop .sw button{width:24px;min-width:24px;height:24px;padding:0;border-radius:6px;border:1px solid var(--border)}
+.fb-rte-bar .fb-rte-pop .sw button:hover{transform:scale(1.1)}
+.fb-rte-pop .row{display:flex;gap:6px;align-items:center;font-size:11.5px;color:var(--muted)}
+.fb-rte-bar .fb-rte-pop .row button{flex:1;font-weight:600;border-color:var(--border)}
+.fb-rte-pop input[type=color]{width:30px;height:26px;padding:0;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer}
 .fb-rte{min-height:220px;max-height:60vh;overflow:auto;background:var(--bg);border:1px solid var(--border);border-radius:0 0 9px 9px;padding:14px 16px;font-size:14px;line-height:1.65;color:var(--text);outline:none}
 .fb-rte:focus{border-color:rgba(91,124,250,.55)}
 .fb-rte p{margin:0 0 10px}.fb-rte h2{font-size:19px;margin:16px 0 8px}.fb-rte h3{font-size:15.5px;margin:14px 0 6px}
@@ -558,8 +569,16 @@ table.fb-stats{width:100%;border-collapse:collapse;font-size:12.5px}
   /* ─── Éditeur de texte riche (barre + zone contenteditable + vue HTML) ─ */
   // Utilisé pour le corps des leçons, le texte d'accueil et les widgets.
   // Les ids <id> et <id>Html sont lus par les fonctions read*Form().
-  function rteHtml(id, html, minH) {
-    return '<div class="fb-rte-wrap"><div class="fb-rte-bar">' +
+  // Couleurs lisibles sur le fond sombre comme sur le thème clair.
+  var RTE_COLORS = [['#d4a017', 'Or'], ['#f08c3a', 'Orange'], ['#e5484d', 'Rouge'], ['#22a06b', 'Vert'], ['#5b7cfa', 'Bleu'], ['#8e6cf0', 'Violet'], ['#e0569b', 'Rose'], ['#8a8fa3', 'Gris']];
+  // noColor : widgets et texte d'accueil, dont le rendu retire les couleurs (widgetBodyHtml).
+  function rteHtml(id, html, minH, noColor) {
+    var colorBtn = noColor ? '' : '<span class="fb-rte-col"><button type="button" data-rte-pop="1" title="Couleur du texte"><span class="a">A</span> ▾</button>' +
+      '<div class="fb-rte-pop"><div class="sw">' +
+      RTE_COLORS.map(function (c) { return '<button type="button" data-cmd="foreColor" data-arg="' + c[0] + '" title="' + c[1] + '" style="background:' + c[0] + '"></button>'; }).join('') +
+      '</div><div class="row"><button type="button" data-cmd="rte-color-auto" title="Retire la couleur forcée : le texte suit le thème. Sans sélection, s\'applique à tout le contenu.">Auto (thème)</button>' +
+      '<input type="color" class="fb-rte-custom" value="#d4a017" title="Autre couleur"></div></div></span><span class="sp"></span>';
+    return '<div class="fb-rte-wrap"><div class="fb-rte-bar">' + colorBtn +
       '<button type="button" data-cmd="bold" title="Gras"><b>B</b></button><button type="button" data-cmd="italic" title="Italique"><i>I</i></button><button type="button" data-cmd="underline" title="Souligné"><u>U</u></button><span class="sp"></span>' +
       '<button type="button" data-cmd="formatBlock" data-arg="H2">H2</button><button type="button" data-cmd="formatBlock" data-arg="H3">H3</button><button type="button" data-cmd="formatBlock" data-arg="P">¶</button><button type="button" data-cmd="formatBlock" data-arg="BLOCKQUOTE">❝</button><span class="sp"></span>' +
       '<button type="button" data-cmd="insertUnorderedList" title="Liste">• Liste</button><button type="button" data-cmd="insertOrderedList" title="Liste numérotée">1. Liste</button><span class="sp"></span>' +
@@ -573,6 +592,30 @@ table.fb-stats{width:100%;border-collapse:collapse;font-size:12.5px}
     var v = C.sanitizeHtml(ta && ta.style.display !== 'none' ? ta.value : (rte ? rte.innerHTML : ''));
     return /^(<p><br><\/p>|<br>|<div><br><\/div>|\s)*$/.test(v) ? '' : v;
   }
+  // Retire la couleur forcée (style inline ou <font color>) des éléments
+  // touchés par la sélection, ou de tout l'éditeur si rien n'est sélectionné :
+  // un texte collé en « color: black » redevient lisible sur le fond sombre.
+  function rteClearColor(ed) {
+    var sel = window.getSelection(), r = sel && sel.rangeCount ? sel.getRangeAt(0) : null;
+    var all = !r || r.collapsed || !ed.contains(r.commonAncestorContainer);
+    var els = ed.querySelectorAll('[style],font[color]');
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      if (!all && !r.intersectsNode(el)) continue;
+      if (el.style && el.style.color) { el.style.color = ''; if (!el.getAttribute('style')) el.removeAttribute('style'); }
+      if (el.tagName === 'FONT') el.removeAttribute('color');
+    }
+  }
+  function rteClosePops(except) {
+    var pops = document.querySelectorAll('.fb-rte-pop.open');
+    for (var i = 0; i < pops.length; i++) if (pops[i] !== except) pops[i].classList.remove('open');
+  }
+  function rteAfterEdit() {
+    if (VIEW === 'apparence') scheduleThemeSave(); else scheduleFormRead(VIEW === 'binder' ? readBinderForm : readLessonForm);
+  }
+  // Sélection mémorisée à l'ouverture de la palette : le sélecteur de couleur
+  // natif prend le focus, il faut la restaurer avant d'appliquer.
+  var RTE_SAVED = null;
 
   /* ─── Rendu : apparence (bannière, accueil, widgets latéraux) ───────── */
   function widgetHtml(w, i) {
@@ -582,7 +625,7 @@ table.fb-stats{width:100%;border-collapse:collapse;font-size:12.5px}
       '<input class="fb-title" data-wf="title" value="' + esc(w.title) + '" placeholder="Titre du widget">' +
       '<span class="fb-tools"><button type="button" class="fb-ib" data-act="w-up" data-idx="' + i + '" title="Monter">↑</button><button type="button" class="fb-ib" data-act="w-down" data-idx="' + i + '" title="Descendre">↓</button><button type="button" class="fb-ib danger" data-act="w-del" data-idx="' + i + '" title="Retirer">✕</button></span></div>' +
       '<div class="fb-f"><label>Image</label><div class="fb-upl"><label class="fb-chk"><input type="checkbox" data-wf="showImage"' + (w.showImage ? ' checked' : '') + '> Afficher</label><input type="url" data-wf="image" id="wImage_' + i + '" value="' + esc(w.image) + '" placeholder="https://…"><button type="button" class="au-btn" data-upload="wImage" data-idx="' + i + '" title="Envoyer une image">⤒</button></div></div>' +
-      '<div class="fb-f"><label>Texte</label>' + rteHtml('wBody_' + i, C.widgetBodyHtml(w.body), 90) + '<div class="hint">Liens : sélectionne le texte puis 🔗. Les numéros et adresses restent en texte.</div></div>' +
+      '<div class="fb-f"><label>Texte</label>' + rteHtml('wBody_' + i, C.widgetBodyHtml(w.body), 90, true) + '<div class="hint">Liens : sélectionne le texte puis 🔗. Les numéros et adresses restent en texte.</div></div>' +
       '<div class="fb-f"><label class="fb-chk" style="text-transform:none;letter-spacing:0;font-size:12px"><input type="checkbox" data-wf="showCta"' + (w.showCta ? ' checked' : '') + '> Bouton d\'action</label></div>' +
       '<div class="fb-row3"><div class="fb-f"><label>Libellé du bouton</label><input type="text" data-wf="ctaText" value="' + esc(w.ctaText) + '" placeholder="Envoyer ma facture"></div>' +
       '<div class="fb-f"><label>Lien du bouton</label><input type="url" data-wf="ctaUrl" value="' + esc(w.ctaUrl) + '" placeholder="https://…"></div>' +
@@ -606,7 +649,7 @@ table.fb-stats{width:100%;border-collapse:collapse;font-size:12.5px}
     h += '<div class="fb-row2">' + uploadField('thImage', 'Image de fond', t.hero.image, 'heroImage', 'Format large (1600×600 conseillé).', false) +
       '<div class="fb-f"><label for="thOverlay">Assombrissement (' + Math.round(t.hero.overlay * 100) + ' %)</label><input type="range" id="thOverlay" min="0" max="0.9" step="0.05" value="' + t.hero.overlay + '" style="width:100%"></div></div></div>';
     h += '</div><div>';
-    h += '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Texte d\'accueil</div><div class="au-card-note">Sous la bannière, au-dessus des modules. Vide = rien.</div></div>' + rteHtml('thWelcome', C.widgetBodyHtml(t.welcome), 220) + '</div>';
+    h += '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Texte d\'accueil</div><div class="au-card-note">Sous la bannière, au-dessus des modules. Vide = rien.</div></div>' + rteHtml('thWelcome', C.widgetBodyHtml(t.welcome), 220, true) + '</div>';
     h += '</div></div>';
     h += '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Widgets latéraux</div><div class="au-card-note">Facture de fin de mois, identifiants, point hebdo… affichés à droite du plan, dans cet ordre.</div></div><div id="thWidgets" class="fb-wdg-grid">' +
       t.sidebar.map(widgetHtml).join('') + '</div><button type="button" class="fb-add" data-act="w-add">＋ Widget</button></div>';
@@ -708,7 +751,7 @@ table.fb-stats{width:100%;border-collapse:collapse;font-size:12.5px}
       '<input type="text" id="edHtmlTitle" value="' + esc(l.htmlTitle || '') + '" placeholder="Titre affiché au-dessus du document (optionnel)" style="margin-top:8px">' +
       '<div id="edHtmlPrev">' + htmlPreviewHtml(l.html) + '</div>' +
       '<div class="hint">Une page HTML autonome (guide interactif, simulateur, support de cours…) affichée dans la leçon, entre la vidéo et le texte. Envoie le fichier avec ⤒ ou colle son code avec &lt;/&gt; : il est hébergé sur le Storage du projet. Un lien externe fonctionne si le site autorise l\'intégration.</div></div>';
-    h += '<div class="fb-f"><label>Contenu de la leçon</label>' + rteHtml('edBody', C.sanitizeHtml(C.plainToHtml(l.body)), 220) +
+    h += '<div class="fb-f"><label>Contenu de la leçon</label>' + rteHtml('edBody', C.sanitizeHtml(C.plainToHtml(l.body)), 220, false) +
       '<div class="hint">Colle du texte, mets en forme avec la barre. Le HTML est stocké tel quel (compatible avec les leçons migrées d\'Academy).</div></div>';
     h += '<div class="fb-f"><label>Ressources téléchargeables</label><div id="edRes">' + resourcesHtml(l.resources) + '</div><div class="hint">Titre + lien, ou envoie un fichier (PDF, doc…) avec ⤒ — il est hébergé sur le Storage du projet.</div></div>';
     h += '</div><div>';
@@ -1061,14 +1104,29 @@ table.fb-stats{width:100%;border-collapse:collapse;font-size:12.5px}
       fi.click();
       return;
     }
+    var popBtn = t.closest('[data-rte-pop]');
+    if (popBtn) {
+      var pop = popBtn.parentNode.querySelector('.fb-rte-pop');
+      rteClosePops(pop);
+      if (!pop.classList.contains('open')) {
+        var edP = popBtn.closest('.fb-rte-wrap').querySelector('.fb-rte'), selP = window.getSelection();
+        RTE_SAVED = selP && selP.rangeCount && edP.contains(selP.getRangeAt(0).commonAncestorContainer) ? { ed: edP, range: selP.getRangeAt(0).cloneRange() } : { ed: edP, range: null };
+      }
+      pop.classList.toggle('open');
+      return;
+    }
+    if (!t.closest('.fb-rte-pop')) rteClosePops(null);
     var cmd = t.closest('[data-cmd]');
     if (cmd) {
       var c = cmd.getAttribute('data-cmd'), arg = cmd.getAttribute('data-arg') || null;
       var wrap = cmd.closest('.fb-rte-wrap'), ed = wrap && wrap.querySelector('.fb-rte');
       if (ed) ed.focus();
       if (c === 'createLink') { var url = window.prompt('Adresse du lien (https://…)'); if (!url) return; document.execCommand('createLink', false, url); }
+      else if (c === 'rte-color-auto') { if (ed) rteClearColor(ed); }
+      else if (c === 'foreColor') { document.execCommand('styleWithCSS', false, true); document.execCommand(c, false, arg); }
       else document.execCommand(c, false, arg);
-      if (VIEW === 'apparence') scheduleThemeSave(); else scheduleFormRead(VIEW === 'binder' ? readBinderForm : readLessonForm);
+      if (cmd.closest('.fb-rte-pop')) rteClosePops(null);
+      rteAfterEdit();
       return;
     }
 
@@ -1112,7 +1170,7 @@ table.fb-stats{width:100%;border-collapse:collapse;font-size:12.5px}
   });
 
   // Barre d'outils du texte riche : ne pas voler la sélection au clic.
-  document.addEventListener('mousedown', function (e) { if (e.target.closest('[data-cmd]')) e.preventDefault(); });
+  document.addEventListener('mousedown', function (e) { if (e.target.closest('[data-cmd],[data-rte-pop]')) e.preventDefault(); });
 
   document.addEventListener('input', function (e) {
     var t = e.target;
@@ -1135,6 +1193,16 @@ table.fb-stats{width:100%;border-collapse:collapse;font-size:12.5px}
   });
   document.addEventListener('change', function (e) {
     var t = e.target;
+    if (t.classList && t.classList.contains('fb-rte-custom')) {
+      var edC = t.closest('.fb-rte-wrap').querySelector('.fb-rte');
+      edC.focus();
+      if (RTE_SAVED && RTE_SAVED.ed === edC && RTE_SAVED.range) { var sC = window.getSelection(); sC.removeAllRanges(); sC.addRange(RTE_SAVED.range); }
+      document.execCommand('styleWithCSS', false, true);
+      document.execCommand('foreColor', false, t.value);
+      rteClosePops(null);
+      rteAfterEdit();
+      return;
+    }
     if (t.id === 'fileInput') {
       var file = t.files && t.files[0]; t.value = '';
       if (!file || !UPLOAD) return;
