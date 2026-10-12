@@ -119,10 +119,16 @@
     if (signed.length) return signed[signed.length - 1];
     return list.sort(function (a, b) { return ms(a.createdAt) - ms(b.createdAt); })[list.length - 1] || null;
   }
+  /* Le paiement qui compte : le plus avancé, puis le plus récent (12/10/2026).
+     Un 2ᵉ paiement créé par erreur (brouillon) ne doit pas masquer celui
+     dont le prélèvement est parti — la carte affichait « génère le lien ». */
+  var PAY_RANK = { completed: 5, active: 5, mandate_active: 4, pending_mandate: 3, draft: 2 };
   function lastPay(leadId) {
     var list = (H.pays(leadId) || []).filter(function (p) { return p.status !== 'cancelled'; });
-    return list.sort(function (a, b) { return ms(a.createdAt) - ms(b.createdAt); })[list.length - 1] || null;
+    return list.sort(function (a, b) { return ((PAY_RANK[a.status] || 1) - (PAY_RANK[b.status] || 1)) || (ms(a.createdAt) - ms(b.createdAt)); })[list.length - 1] || null;
   }
+  /* Prélèvement réellement parti (et pas seulement « IBAN plus tard »). */
+  function payTriggered(leadId) { var p = lastPay(leadId); return !!(p && (p.status === 'active' || p.status === 'completed')); }
   /* Le type de RDV 72 h : réglage (_config) sinon détection par libellé. */
   function rdvType(offre) {
     var cfg = H.cfg() || {}, tm = H.typeMap() || {};
@@ -303,6 +309,11 @@
   function stepDone(leadId, k) {
     var r = false; steps(leadId).forEach(function (s) { if (s.k === k) r = s.done; }); return r;
   }
+  /* Pour la pop-up et le toast : ce que le CLIENT a réellement fait. Avant
+     le 12/10/2026, « Le client finira son IBAN plus tard » cochait l'étape
+     paiement : le prélèvement déclenché ensuite ne passait plus « à faire »
+     → « fait », et la pop-up « Tu peux fermer » ne sortait jamais. */
+  function realDone(leadId, k) { return k === 'paiement' ? payTriggered(leadId) : stepDone(leadId, k); }
 
   /* ═══ La modale ════════════════════════════════════════════════════ */
   function ensureDom() {
@@ -526,7 +537,7 @@
     it(trig, 'Premier prélèvement déclenché', '', cp.payLater);
     it(!!(cp.closeAt || l.isClient === true), 'Close enregistré (fiche + commissions)', '');
     if (elite) it(!!coach, 'Coach référent attribué et prévenu', coach);
-    it(!!(b || cp.rdvClient), rdvLabel(d ? d.offre : 'Elite') + ' calé', b ? (b.date || '').split('-').reverse().join('/') + ' à ' + (b.time || '') : (cp.rdvClient ? 'le client choisit lui-même — à relancer' : ''), !b && cp.rdvClient);
+    it(!!b, rdvLabel(d ? d.offre : 'Elite') + ' calé', b ? (b.date || '').split('-').reverse().join('/') + ' à ' + (b.time || '') : (cp.rdvClient ? 'le client choisit lui-même — à relancer' : ''), !b && cp.rdvClient);
     if (elite) {
       it(!!wa.groupe, 'Groupe WhatsApp créé', '');
       it(!!wa.bienvenue, 'Message de bienvenue posté', '');
@@ -606,7 +617,7 @@
     if (a === 'copy') { copyText(t.getAttribute('data-txt') || ''); return; }
     if (a === 'mod') {
       var mk = t.getAttribute('data-m'), ms = MOD_STEP[mk] || null;
-      ui.modStep = ms; ui.modWasDone = ms ? stepDone(leadId, ms) : true;
+      ui.modStep = ms; ui.modWasDone = ms ? realDone(leadId, ms) : true;
       hideNotice();
       H.openModule(mk, leadId, moduleParams(mk, leadId)); return;
     }
@@ -687,12 +698,12 @@
       var list = steps(ui.leadId), cur = null;
       list.forEach(function (s) { if (s.k === ui.step) cur = s; });
       var modOpen = !!(H.moduleOpen && H.moduleOpen());
-      if (ui.modStep && !ui.modWasDone && modOpen && stepDone(ui.leadId, ui.modStep)) {
+      if (ui.modStep && !ui.modWasDone && modOpen && realDone(ui.leadId, ui.modStep)) {
         /* L'étape vient de se valider dans le module ouvert. */
         ui.modWasDone = true;
         ui['auto_' + ui.modStep] = true;
         showNotice(ui.modStep);
-      } else if (cur && cur.done && (ui.step === 'contrat' || ui.step === 'paiement') && !ui['auto_' + ui.step]) {
+      } else if (cur && (ui.step === 'contrat' || ui.step === 'paiement') && realDone(ui.leadId, ui.step) && !ui['auto_' + ui.step]) {
         ui['auto_' + ui.step] = true;
         H.toast(ui.step === 'contrat' ? '✅ Contrat signé !' : '✅ Paiement en place !');
       }

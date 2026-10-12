@@ -826,11 +826,20 @@ async function sendLink(id, via) {
     return;
   }
 
-  await db.collection('payments').doc(id).update({
-    mandateSentAt: firebase.firestore.FieldValue.serverTimestamp(),
-    mandateSentVia: via,
-    status: 'pending_mandate',
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  /* Le statut ne repasse à « lien envoyé » que si le mandat n'existe pas
+     encore (12/10/2026) : un renvoi au moment où le client valide son IBAN
+     écrasait 'mandate_active' — le bouton Déclencher disparaissait et la
+     surveillance du mandat ne reprenait plus (gcMandateId déjà posé). */
+  const ref = db.collection('payments').doc(id);
+  await db.runTransaction(async t => {
+    const cur = (await t.get(ref)).data() || {};
+    const upd = {
+      mandateSentAt: firebase.firestore.FieldValue.serverTimestamp(),
+      mandateSentVia: via,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    if (!cur.gcMandateId && (!cur.status || cur.status === 'draft' || cur.status === 'pending_mandate')) upd.status = 'pending_mandate';
+    t.update(ref, upd);
   });
 }
 

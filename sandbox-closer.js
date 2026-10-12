@@ -623,7 +623,11 @@
         var p = payBy('gcBillingRequestId', g.id);
         w.push({ op: 'set', merge: true, path: '_sandbox_gc/' + g.id, data: { webhooked: true } });
         if (p) {
-          w.push({ op: 'update', path: 'payments/' + p.id, data: A({ gcLastSyncAt: new Date(), updatedAt: new Date(), gcCustomerId: g.links.customer, gcMandateId: g.links.mandate_request_mandate, status: 'mandate_active', mandateCreatedAt: new Date() }) });
+          /* Comme onWebhookInbox : jamais de retour en arrière d'un
+             prélèvement déjà déclenché (ou d'un paiement annulé). */
+          var mUpd = { gcLastSyncAt: new Date(), updatedAt: new Date(), gcCustomerId: g.links.customer, gcMandateId: g.links.mandate_request_mandate, mandateCreatedAt: new Date() };
+          if (!(p.status === 'active' || p.status === 'completed' || p.status === 'cancelled' || p.gcPaymentId || p.gcSubscriptionId)) mUpd.status = 'mandate_active';
+          w.push({ op: 'update', path: 'payments/' + p.id, data: A(mUpd) });
           msgs.push('✅ Webhook GoCardless : mandat actif pour <strong>' + esc(p.leadName) + '</strong>');
         }
       }

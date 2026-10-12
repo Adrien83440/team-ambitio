@@ -4267,7 +4267,20 @@ module.exports = async (req, res) => {
       update.status = 'pending_mandate';
     }
 
-    await paySnap.ref.update(update);
+    /* Jamais de retour en arrière (12/10/2026) : finalize tourne en
+       tâche de fond (retour du flow, surveillance toutes les 10 s) et
+       pouvait réécrire 'mandate_active' — voire 'pending_mandate' — sur un
+       paiement dont le prélèvement venait d'être déclenché. Le statut
+       n'avance que depuis draft / pending_mandate / mandate_failed, relu
+       dans la transaction. Les identifiants GC sont toujours synchronisés. */
+    await db.runTransaction(async (t) => {
+      const cur = (await t.get(paySnap.ref)).data() || {};
+      const movable = !cur.status || ['draft', 'pending_mandate', 'mandate_failed'].includes(cur.status);
+      if (!movable || cur.gcPaymentId || cur.gcSubscriptionId) delete update.status;
+      else if (update.status !== 'mandate_active' && cur.gcMandateId) delete update.status;
+      t.update(paySnap.ref, update);
+    });
+    if (!update.status) update.status = (await paySnap.ref.get()).data().status;
 
     console.log('[gocardless-finalize] ✅', {
       paymentId,

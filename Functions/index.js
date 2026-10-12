@@ -1443,7 +1443,23 @@ exports.onWebhookInbox = functions.firestore
             else if (gcAction === "cancelled") update.status = "cancelled";
           }
 
-          await paymentRef.update(update);
+          /* Jamais de retour en arrière (12/10/2026). GoCardless envoie les
+             événements du mandat (created → submitted → active) pendant
+             plusieurs jours, souvent APRÈS le déclenchement du prélèvement :
+             ils ramenaient un paiement 'active' à 'mandate_active', et la
+             fiche comme le pilote de closing affichaient « déclenche le
+             prélèvement » alors qu'il était parti. Le statut n'est relu
+             qu'ici, dans une transaction, pour ne rien rater entre la
+             lecture et l'écriture. Les identifiants GC restent synchronisés. */
+          await db.runTransaction(async function (t) {
+            const curSnap = await t.get(paymentRef);
+            const cur = curSnap.exists ? (curSnap.data() || {}) : {};
+            if (update.status === "mandate_active" &&
+                (["active", "completed", "cancelled"].indexOf(cur.status) >= 0 || cur.gcPaymentId || cur.gcSubscriptionId)) {
+              delete update.status;
+            }
+            t.update(paymentRef, update);
+          });
           console.log("onWebhookInbox [gocardless_event]: " + eventType + "." + gcAction + " → payment " + paymentRef.id + " (via " + matchedBy + ")");
         }
 

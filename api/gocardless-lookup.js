@@ -209,6 +209,13 @@ module.exports = async (req, res) => {
     };
 
     if (!existingPays.empty) {
+      /* Sans abonnement, le calcul ci-dessus donne 'mandate_active' même
+         quand le prélèvement unique est déjà parti : on ne fait jamais
+         reculer un paiement déclenché, terminé ou annulé (12/10/2026). */
+      const cur = existingPays.docs[0].data() || {};
+      if (gcFields.status === 'mandate_active' && (['active', 'completed', 'cancelled'].includes(cur.status) || cur.gcPaymentId)) {
+        gcFields.status = cur.status;
+      }
       // Mettre à jour le premier doc et supprimer les doublons
       await existingPays.docs[0].ref.update(gcFields);
       result.paymentDocId = existingPays.docs[0].id;
