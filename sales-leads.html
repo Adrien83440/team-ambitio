@@ -3289,7 +3289,8 @@ function ldCloseSteps(l) {
   });
   if (!rdvs.length) return null;
 
-  var sigs = _ldSigCache[l.id] || [];
+  /* Contrat annulé (même après signature) = jamais envoyé, pour le parcours. */
+  var sigs = (_ldSigCache[l.id] || []).filter(function (r) { return r.status !== 'cancelled'; });
   var pays = (_ldPayCache[l.id] || []).filter(function (p) { return p.status !== 'cancelled'; });
   var anyRdv = function (fn) { for (var i = 0; i < rdvs.length; i++) if (fn(rdvs[i])) return rdvs[i]; return null; };
 
@@ -8159,43 +8160,56 @@ window.addEventListener('message', function(e) {
   if (data.rescheduledFromId) return;
   var leadId = data.leadId || _bookingLeadId;
   if (!leadId) return;
-
-  // ── Journal : un RDV posé par le setter = un SET réel (refonte 07/2026) ──
-  var bkLead = allLeads.find(function (l) { return l.id === leadId; });
-  if (window.AlteoreFlow) {
-    window.AlteoreFlow.recordLeadAction(leadId, bkLead || null, 'set_booking', {
-      prevStatus: bkLead ? (bkLead.status || null) : null,
-      origin: 'leads_live',
-      bookingId: data.bookingId || null
-    });
-  }
-
-  // Update lead: status → rdv_pose, stage → rdv_confirmes, add RDV info + note
   var dateFr = data.date ? data.date.split('-').reverse().join('/') : '';
-  var updates = {
-    status: 'rdv_pose',
-    stage: 'set',
-    rdvDate: data.date || '',
-    rdvHeure: data.time || '',
-    dateRdv: dateFr + ' à ' + (data.time || ''),
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  };
+  var noteText = '📅 RDV posé — ' + (data.typeLabel || '') + ' avec ' + (data.personName || '') + ' le ' + dateFr + ' à ' + (data.time || '') + ' (' + (data.duration || 30) + 'min)';
 
-  // Update local state
-  var lead = allLeads.find(function(l) { return l.id === leadId; });
-  if (lead) {
-    lead.status = 'rdv_pose';
-    lead.stage = 'set';
-    lead.rdvDate = data.date || '';
-    lead.rdvHeure = data.time || '';
-    // Add note
-    if (!lead.notesHistory) lead.notesHistory = [];
-    var noteText = '📅 RDV posé — ' + (data.typeLabel || '') + ' avec ' + (data.personName || '') + ' le ' + dateFr + ' à ' + (data.time || '') + ' (' + (data.duration || 30) + 'min)';
-    lead.notesHistory.push({ text: noteText, date: new Date().toLocaleString('fr-FR') });
-    updates.notesHistory = lead.notesHistory;
-  }
+  /* Fiche relue en base, pas dans le cache : il faut savoir à coup sûr si le
+     prospect est DÉJÀ client. Un RDV posé pour un client (RDV 72 h du pilote
+     de closing) n'est ni un set ni un RDV commercial : avant le 13/10/2026,
+     il repassait la fiche en « set / RDV posé » (Hugo Michel sorti des
+     clients), écrasait la date du RDV commercial et comptait un faux SET au
+     closer dans le journal. Pour un client : la note, rien d'autre. */
+  db.collection('leads').doc(leadId).get().then(function (snap) {
+    var fresh = snap.exists ? (snap.data() || {}) : {};
+    var lead = allLeads.find(function(l) { return l.id === leadId; });
+    var isClient = fresh.isClient === true || fresh.status === 'client' || String(fresh.stage || '').indexOf('closed_won') === 0;
 
-  db.collection('leads').doc(leadId).update(updates).then(function() {
+    // ── Journal : un RDV posé par le setter = un SET réel (refonte 07/2026) ──
+    if (!isClient && window.AlteoreFlow) {
+      window.AlteoreFlow.recordLeadAction(leadId, lead || null, 'set_booking', {
+        prevStatus: fresh.status || (lead ? (lead.status || null) : null),
+        origin: 'leads_live',
+        bookingId: data.bookingId || null
+      });
+    }
+
+    var updates = { updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+    if (!isClient) {
+      // Update lead: status → rdv_pose, stage → set, add RDV info + note
+      updates.status = 'rdv_pose';
+      updates.stage = 'set';
+      updates.rdvDate = data.date || '';
+      updates.rdvHeure = data.time || '';
+      updates.dateRdv = dateFr + ' à ' + (data.time || '');
+    }
+
+    var notes = (fresh.notesHistory || (lead && lead.notesHistory) || []).slice();
+    notes.push({ text: noteText, date: new Date().toLocaleString('fr-FR') });
+    updates.notesHistory = notes;
+
+    // Update local state
+    if (lead) {
+      if (!isClient) {
+        lead.status = 'rdv_pose';
+        lead.stage = 'set';
+        lead.rdvDate = data.date || '';
+        lead.rdvHeure = data.time || '';
+      }
+      lead.notesHistory = notes;
+    }
+
+    return db.collection('leads').doc(leadId).update(updates);
+  }).then(function() {
     toast('✅ RDV confirmé — ' + (data.personName || '') + ' le ' + dateFr + ' à ' + (data.time || ''));
     openCardId = leadId;
     renderFeed();

@@ -10,6 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <script src="nav.js"></script>
+<script src="funnel-core.js"></script>
 <style>
 /* ═══ Reset & base ═══ */
 *{margin:0;padding:0;box-sizing:border-box}
@@ -829,17 +830,16 @@ function renderDetail(){
     + '</div>'
     + '</div>';
 
-  /* Contrat signé (détecté à la conversion client — sert de source au programme coaching) */
-  if(p.signedContractTemplateName){
-    html += '<div class="ap-card">'
-      + '<div style="display:flex;align-items:center;gap:7px;margin-bottom:14px;font-size:13px;font-weight:600;color:var(--ap-text-muted)"><i class="ti ti-file-text"></i>Contrat signé</div>'
-      + '<div class="ap-attr" style="grid-template-columns:repeat(3,1fr)">'
-      +   '<div><div class="ap-attr-label">Contrat</div><div class="ap-attr-value">'+esc(p.signedContractTemplateName)+'</div></div>'
-      +   '<div><div class="ap-attr-label">Programme coaching</div><div class="ap-attr-value">'+esc(p.detectedProgramme||'— (à compléter)')+'</div></div>'
-      +   '<div><div class="ap-attr-label">Signé le</div><div class="ap-attr-value">'+fmtDate(p.signedContractSignedAt)+'</div></div>'
-      + '</div>'
-      + '</div>';
-  }
+  /* Contrats — lus EN DIRECT dans signature_requests (fiche lead + e-mail),
+     plus dans les champs signedContract* de la persons : ceux-ci n'étaient
+     posés que par une Cloud Function disparue le 26/09/2026, et un contrat
+     annulé doit apparaître comme tel. Rempli par apLoadContracts(). */
+  html += '<div class="ap-card" id="apContracts">'
+    + '<div style="display:flex;align-items:center;gap:7px;margin-bottom:14px;font-size:13px;font-weight:600;color:var(--ap-text-muted)"><i class="ti ti-file-text"></i>Contrats'
+    + (p.detectedProgramme ? '<span class="ap-badge info" style="margin-left:auto" title="Programme coaching détecté">'+esc(p.detectedProgramme)+'</span>' : '')
+    + '</div>'
+    + '<div class="ap-grid-empty" data-ap-contracts-body="1">Chargement des contrats…</div>'
+    + '</div>';
 
   /* Société (si applicable) */
   if(p.clientType === 'company' || p.companyName || p.siret){
@@ -891,6 +891,11 @@ function renderDetail(){
     + '</div>';
   if(!coaching){
     html += '<div class="ap-grid-empty">Aucun suivi coaching.</div>';
+    /* Rattrapage : client sans fiche coaching (création au close ratée, ou
+       close antérieur au 13/10/2026). Même endpoint que le close. */
+    if(STATE.canEdit && p.isClient && apPrimaryLeadId(p, leads)){
+      html += '<button class="ap-btn primary" style="margin-top:10px" data-ap-coaching="'+attr(p._id)+'"><i class="ti ti-school"></i>Créer la fiche coaching</button>';
+    }
   } else {
     html += '<div class="ap-grid-line"><span class="lbl">programme :</span> '+esc(coaching.programme||'—')+'</div>'
       + '<div class="ap-grid-line"><span class="lbl">date entrée :</span> '+esc(coaching.dateEntree||'—')+'</div>'
@@ -916,9 +921,12 @@ function renderDetail(){
   }
   html += '</div>';
 
-  /* Payments */
-  var totalPaid = 0;
-  payments.forEach(function(pay){ totalPaid += (pay.totalAmount || pay.totalAmountTtc || 0); });
+  /* Payments — règle REVENUE commune (FunnelCore.revClient, 13/10/2026) :
+     contracté = paiements NON annulés, encaissé = prélèvements réellement
+     passés. Avant : somme brute de tous les paiements, annulés compris
+     (Hugo Michel affiché à 28 800 € pour 7 200 € réellement contractés). */
+  var nCancelled = payments.filter(function(pay){ return pay.status === 'cancelled'; }).length;
+  var rv = (window.FunnelCore && window.FunnelCore.revClient) ? window.FunnelCore.revClient(payments.filter(function(pay){ return pay.status !== 'draft'; }), leads[0] || null, null) : null;
   html += '<div class="ap-grid-card">'
     + '<div class="ap-grid-head">'
     +   '<i class="ti ti-credit-card"></i>'
@@ -928,7 +936,11 @@ function renderDetail(){
   if(payments.length === 0){
     html += '<div class="ap-grid-empty">Aucun paiement enregistré.</div>';
   } else {
-    html += '<div class="ap-grid-line"><span class="lbl">montant total :</span> '+totalPaid.toFixed(2)+' €</div>'
+    html += (rv
+        ? '<div class="ap-grid-line"><span class="lbl">contracté :</span> '+fmtEuroHT(rv.con)+(rv.cancelled ? ' <span class="ap-badge warn">close annulé</span>' : '')+'</div>'
+          + '<div class="ap-grid-line"><span class="lbl">encaissé :</span> '+fmtEuroHT(rv.paid)+(rv.pending > 0 ? ' · à encaisser '+fmtEuroHT(rv.pending) : '')+'</div>'
+        : '<div class="ap-grid-line"><span class="lbl">contracté :</span> '+(function(){ var t=0; payments.forEach(function(pay){ if(pay.status!=='cancelled') t += (pay.totalAmount || pay.totalAmountTtc || 0); }); return t.toFixed(2); })()+' € TTC</div>')
+      + (nCancelled ? '<div class="ap-grid-line"><span class="lbl">annulé'+(nCancelled>1?'s':'')+' :</span> '+nCancelled+' paiement'+(nCancelled>1?'s':'')+' (non comptés)</div>' : '')
       + '<div class="ap-grid-line"><span class="lbl">dernier :</span> '+esc(fmtDate(payments[payments.length-1].createdAt))+'</div>'
       + '<a href="payments.html?personId='+attr(p._id)+'" class="ap-grid-link">Voir les paiements <i class="ti ti-external-link"></i></a>';
   }
@@ -1037,7 +1049,138 @@ function renderDetail(){
     + '</div>'; /* end card historique */
 
   document.getElementById('apMain').innerHTML = html;
+  apLoadContracts(p, leads);
 }
+
+function fmtEuroHT(n){
+  return (Math.round((Number(n)||0)*100)/100).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}).replace(/[\u202F\u00A0]/g,' ')+' € HT';
+}
+
+/* Lead principal d'une persons : primaryLeadId, sinon le premier lié. */
+function apPrimaryLeadId(p, leads){
+  return p.primaryLeadId || (p.leadIds && p.leadIds[0]) || (leads && leads[0] && leads[0]._id) || null;
+}
+
+/* ═══ Contrats d'une persons ═══
+   Une requête par lead lié + une par e-mail (égalités seules, aucun index
+   composite). Hors admin, les règles exigent audience == 'equipe' dans la
+   requête — sinon refus global (même piège que Paiements le 12/10/2026). */
+function apLoadContracts(p, leads){
+  var box = document.querySelector('#apContracts [data-ap-contracts-body]');
+  if(!box) return;
+  var pid = p._id;
+  var col = db.collection('signature_requests');
+  function q(field, val){
+    var x = col.where(field, '==', val);
+    if(STATE.currentRole !== 'admin') x = x.where('audience', '==', 'equipe');
+    return x.get();
+  }
+  var ids = {};
+  (p.leadIds || []).forEach(function(id){ if(id) ids[id] = 1; });
+  (leads || []).forEach(function(l){ if(l && l._id) ids[l._id] = 1; });
+  var reqs = Object.keys(ids).map(function(id){ return q('leadId', id); });
+  if(p.email) reqs.push(q('clientEmail', p.email));
+  Promise.all(reqs.map(function(pr){ return pr.catch(function(e){ console.warn('[admin-persons] contrats:', e && e.message); return null; }); }))
+    .then(function(snaps){
+      if(STATE.selectedId !== pid) return;
+      var seen = {}, list = [];
+      snaps.forEach(function(sn){
+        if(!sn) return;
+        sn.forEach(function(d){
+          if(seen[d.id]) return; seen[d.id] = 1;
+          var x = d.data() || {};
+          if(x.status === 'signed' || x.cancelledAfterSigning === true) list.push(Object.assign({_id: d.id}, x));
+        });
+      });
+      apContracts[pid] = list;
+      list.sort(function(a, b){ return apTsMs(b.signedAt) - apTsMs(a.signedAt); });
+      var b2 = document.querySelector('#apContracts [data-ap-contracts-body]');
+      if(!b2) return;
+      if(!list.length){ b2.textContent = 'Aucun contrat signé.'; return; }
+      var h = '';
+      list.forEach(function(r){
+        var annule = r.status === 'cancelled';
+        h += '<div class="ap-grid-line" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0">'
+          + '<span style="font-weight:600'+(annule?';text-decoration:line-through;opacity:.6':'')+'">'+esc(r.templateName||'Contrat')+'</span>'
+          + (annule
+              ? '<span class="ap-badge warn" title="'+attr((r.cancelledBy?'par '+r.cancelledBy+' — ':'')+(r.cancelReason||''))+'">🚫 Annulé'+(r.cancelledAt?' le '+esc(fmtDate(r.cancelledAt)):'')+'</span>'
+              : '<span class="ap-badge success">✅ Signé le '+esc(fmtDate(r.signedAt))+'</span>')
+          + (annule && r.cancelReason ? '<span style="font-size:11.5px;color:var(--ap-text-muted)">'+esc(r.cancelReason)+'</span>' : '')
+          + '<span style="margin-left:auto;display:flex;gap:6px">'
+          +   '<a class="ap-btn" href="sign-certificate.html?id='+attr(r._id)+'" target="_blank"><i class="ti ti-certificate"></i>Certificat</a>'
+          + (!annule && STATE.canEdit ? '<button class="ap-btn danger" data-ap-cancel-sig="'+attr(r._id)+'" title="Contrat caduc : ne vaut plus signé, accès Academy retiré — PDF conservé"><i class="ti ti-ban"></i>Annuler</button>' : '')
+          + '</span>'
+          + '</div>';
+      });
+      b2.className = '';
+      b2.innerHTML = h;
+    });
+}
+var apContracts = {};
+function apTsMs(v){
+  if(!v) return 0;
+  if(v.toMillis) return v.toMillis();
+  if(v.seconds) return v.seconds * 1000;
+  var t = Date.parse(v); return isNaN(t) ? 0 : t;
+}
+
+function apAuthFetch(url, payload){
+  return firebase.auth().currentUser.getIdToken().then(function(tok){
+    return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok }, body: JSON.stringify(payload) });
+  }).then(function(r){ return r.json().catch(function(){ return {}; }); });
+}
+
+/* Annuler un contrat signé (admin) — api/signature-cancel.js. */
+function apCancelContract(reqId){
+  var list = apContracts[STATE.selectedId] || [];
+  var r = list.find(function(x){ return x._id === reqId; });
+  if(!r) return;
+  var motif = window.prompt('Annuler le contrat « '+(r.templateName||'')+' » ?\n\nIl ne comptera plus comme signé (pilote, paiements, coaching) et l\'accès Academy qu\'il a ouvert sera retiré. Le PDF et le certificat sont conservés.\n\nMotif (obligatoire) :', '');
+  if(motif === null) return;
+  motif = String(motif).trim();
+  if(motif.length < 3){ toast('Motif obligatoire (3 caractères minimum)', 'error'); return; }
+  toast('Annulation du contrat…');
+  apAuthFetch('/api/signature-cancel', { requestId: reqId, reason: motif }).then(function(j){
+    if(!j || !j.ok){ toast('Annulation impossible : '+((j && j.error) || 'erreur serveur'), 'error'); return; }
+    var ac = j.academy || {};
+    toast('Contrat annulé'+(ac.status === 'ok' ? ' · accès « '+(ac.courseName||ac.courseId||'')+' » retiré' : (ac.status === 'error' ? ' · ⚠️ retrait Academy en échec' : '')));
+    var p = STATE.personsById[STATE.selectedId];
+    if(p) apLoadContracts(p, STATE.leadsByPerson[p._id] || []);
+  }).catch(function(e){ toast('Annulation impossible : '+(e && e.message), 'error'); });
+}
+
+/* Créer la fiche coaching manquante — api/coaching-client-ensure.js :
+   aperçu d'abord (programme détecté), création après confirmation. */
+function apCreateCoaching(personId){
+  var p = STATE.personsById[personId];
+  if(!p) return;
+  var leadId = apPrimaryLeadId(p, STATE.leadsByPerson[personId] || []);
+  if(!leadId){ toast('Aucun lead lié à cette fiche', 'error'); return; }
+  apAuthFetch('/api/coaching-client-ensure', { leadId: leadId, dryRun: true }).then(function(d){
+    if(!d || !d.ok){
+      var m = { programme_inconnu: 'programme inconnu (ni le close ni un contrat signé ne disent Elite ou Business)', not_client: 'le lead n\'est pas client', lead_merged: 'lead fusionné' };
+      toast('Création impossible : '+((d && (m[d.error] || d.error)) || 'erreur serveur'), 'error');
+      return;
+    }
+    var txt = d.existing
+      ? 'Une fiche coaching existe déjà ('+(d.existing.programme||'?')+') : elle sera reliée à cette personne, sans en créer une nouvelle.'
+      : 'Créer la fiche coaching de '+d.nom+' ?\n\nProgramme : '+d.label+' ('+d.programme+')\nDate d\'entrée : '+d.dateEntree+(d.coach ? '\nCoach : '+d.coach : '')+(d.contrat ? '\nContrat : '+d.contrat : '');
+    if(!window.confirm(txt)) return;
+    return apAuthFetch('/api/coaching-client-ensure', { leadId: leadId }).then(function(j){
+      if(!j || !j.ok){ toast('Création impossible : '+((j && j.error) || 'erreur serveur'), 'error'); return; }
+      toast(j.created ? 'Fiche coaching créée — '+j.label : 'Fiche coaching reliée');
+      loadAll();
+    });
+  }).catch(function(e){ toast('Création impossible : '+(e && e.message), 'error'); });
+}
+
+document.addEventListener('click', function(e){
+  if(!e.target.closest) return;
+  var c = e.target.closest('[data-ap-cancel-sig]');
+  if(c){ apCancelContract(c.getAttribute('data-ap-cancel-sig')); return; }
+  var k = e.target.closest('[data-ap-coaching]');
+  if(k){ apCreateCoaching(k.getAttribute('data-ap-coaching')); }
+});
 
 function formatAddress(addr){
   if(!addr || typeof addr !== 'object') return '—';

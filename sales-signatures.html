@@ -550,7 +550,7 @@ function _pendingRequestsFor(tplId){
   if(!_isAdm())q=q.where('audience','==','equipe');
   return q.get()
     .then(function(sn){
-      var n=0;sn.forEach(function(d){if(((d.data()||{}).status||'')!=='signed')n++;});
+      var n=0;sn.forEach(function(d){var st=((d.data()||{}).status||'');if(st!=='signed'&&st!=='cancelled')n++;});
       return n;
     })
     .catch(function(e){console.error('[SIG] pending check failed:',e.message);return -1;});
@@ -1434,7 +1434,7 @@ function renderRequests(){
   var el=document.getElementById('reqBody');
   var empty=document.getElementById('reqEmpty');
   // Filter: only non-signed requests
-  var pending=REQ.filter(function(r){return r.status!=='signed'&&r.audience!=='admin';});
+  var pending=REQ.filter(function(r){return r.status!=='signed'&&!r.cancelledAfterSigning&&r.audience!=='admin';});
   if(!pending.length){el.innerHTML='';empty.style.display='';renderCompleted();return;}
   empty.style.display='none';
   var h='';
@@ -1570,7 +1570,9 @@ function renderCompleted(){
   var el=document.getElementById('compBody');
   var empty=document.getElementById('compEmpty');
   if(!REQ||!REQ.length){el.innerHTML='';empty.style.display='';return;}
-  var signed=REQ.filter(function(r){return r.status==='signed'&&r.audience!=='admin';});
+  /* Terminés = signés + annulés APRÈS signature (contrat caduc, gardé avec
+     son PDF et son certificat — signature-cancel.js). */
+  var signed=REQ.filter(function(r){return (r.status==='signed'||(r.status==='cancelled'&&r.cancelledAfterSigning))&&r.audience!=='admin';});
   // Search filter
   var searchEl=document.getElementById('compSearch');
   var q=searchEl?searchEl.value.toLowerCase().trim():'';
@@ -1604,16 +1606,87 @@ function renderCompleted(){
     }
     var dt=d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
     h+='<tr>';
-    h+='<td style="font-weight:600">'+esc(r.clientName)+_autoBadge(r)+_copieBadge(r)+'<div style="font-size:11px;color:var(--muted)">'+esc(r.clientEmail)+'</div></td>';
-    h+='<td>'+esc(r.templateName||'—')+_adhocBadge(r)+_academyPill(r)+'</td>';
+    var annule=r.status==='cancelled';
+    h+='<td style="font-weight:600'+(annule?';opacity:.6':'')+'">'+esc(r.clientName)+(annule?_annuleBadge(r):_autoBadge(r)+_copieBadge(r))+'<div style="font-size:11px;color:var(--muted)">'+esc(r.clientEmail)+'</div></td>';
+    h+='<td'+(annule?' style="text-decoration:line-through;opacity:.6"':'')+'>'+esc(r.templateName||'—')+_adhocBadge(r)+(annule?'':_academyPill(r))+'</td>';
     h+='<td style="font-size:12px">'+dt+'</td>';
     h+='<td style="white-space:nowrap">';
     h+='<button class="sig-btn sig-btn-g" style="font-size:11px;padding:4px 10px" onclick="downloadSignedPdf(\''+r.id+'\')">📥 PDF</button> ';
-    h+='<a href="sign-certificate.html?id='+r.id+'" target="_blank" class="sig-btn sig-btn-p" style="font-size:11px;padding:4px 10px;text-decoration:none">📜 Certificat</a>'+_copieBtn(r)+_academyBtn(r);
+    h+='<a href="sign-certificate.html?id='+r.id+'" target="_blank" class="sig-btn sig-btn-p" style="font-size:11px;padding:4px 10px;text-decoration:none">📜 Certificat</a>'+(annule?'':_copieBtn(r)+_academyBtn(r))+_annulerBtn(r);
     h+='</td></tr>';
   });
   el.innerHTML=h;
 }
+/* ═══ ANNULER UN CONTRAT SIGNÉ (admin) ═══
+   Contrat devenu caduc (client reparti sur une autre offre, paiement jamais
+   fait). Rien n'est supprimé : PDF, certificat et journal restent ; le
+   contrat ne vaut plus « signé » nulle part et l'accès Academy qu'il avait
+   ouvert est retiré. Tout se fait côté serveur (api/signature-cancel.js) —
+   les règles interdisent toute écriture sur une demande depuis le
+   navigateur. */
+function _annuleBadge(r){
+  var css='display:inline-block;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;margin-left:6px;color:#ef4444;background:rgba(239,68,68,.12)';
+  var quand=r.cancelledAt&&r.cancelledAt.seconds?new Date(r.cancelledAt.seconds*1000).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}):'';
+  var t='Annulé'+(quand?' le '+quand:'')+(r.cancelledBy?' par '+r.cancelledBy:'')+(r.cancelReason?' — '+r.cancelReason:'');
+  var ac=r.academyRevoke||null;
+  if(ac&&ac.status==='ok')t+=' · accès Academy retiré';
+  else if(ac&&ac.status==='error')t+=' · ⚠️ retrait Academy en échec ('+(ac.reason||'')+')';
+  return '<span style="'+css+'" title="'+esc(t)+'">🚫 Annulé</span>';
+}
+function _annulerBtn(r){
+  if(!_isAdm())return '';
+  if(r.status==='cancelled'&&r.academyRevoke&&r.academyRevoke.status==='error')
+    return ' <button class="sig-btn sig-btn-o" style="font-size:11px;padding:4px 10px" data-sig-revoke="'+esc(r.id)+'">🎓 Relancer le retrait</button>';
+  if(r.status!=='signed')return '';
+  return ' <button class="sig-btn sig-btn-r" style="font-size:11px;padding:4px 10px" data-sig-cancel="'+esc(r.id)+'" title="Contrat caduc : ne vaut plus signé, accès Academy retiré — le PDF est conservé">🚫 Annuler</button>';
+}
+function cancelSignedRequest(id){
+  var r=REQ.find(function(x){return x.id===id;});
+  if(!r)return;
+  var motif=window.prompt('Annuler le contrat « '+(r.templateName||'')+' » de '+(r.clientName||'')+' ?\n\nLe contrat ne comptera plus comme signé (pilote, paiements, coaching) et l\'accès Academy qu\'il a ouvert sera retiré. Le PDF et le certificat sont conservés.\n\nMotif (obligatoire) :','');
+  if(motif===null)return;
+  motif=String(motif).trim();
+  if(motif.length<3){alert('Le motif est obligatoire (3 caractères minimum).');return;}
+  var u=firebase.auth().currentUser;
+  if(!u){alert('Session expirée, reconnecte-toi.');return;}
+  toast('🚫 Annulation du contrat…');
+  u.getIdToken().then(function(tok){
+    return fetch('/api/signature-cancel',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:JSON.stringify({requestId:id,reason:motif})});
+  }).then(function(res){return res.json().catch(function(){return {};});})
+  .then(function(j){
+    if(!j||!j.ok){
+      var m={not_signed:'Ce contrat n\'est pas signé — une demande en attente se supprime avec 🗑.',reason_required:'Le motif est obligatoire.',request_not_found:'Demande introuvable.'};
+      alert('Annulation impossible : '+((j&&m[j.error])||(j&&j.error)||'erreur serveur'));return;
+    }
+    var ac=j.academy||{};
+    var acTxt=ac.status==='ok'?' · accès « '+(ac.courseName||ac.courseId||'')+' » retiré'
+      :(ac.status==='kept'?' · accès Academy conservé ('+(ac.reason==='acces_anterieur'?'il l\'avait déjà':'autre contrat signé')+')'
+      :(ac.status==='error'?' · ⚠️ retrait Academy en échec — relance « Annuler » plus tard':''));
+    toast('✅ Contrat annulé'+acTxt);
+  }).catch(function(e){alert('Annulation impossible : '+(e&&e.message));});
+}
+/* Contrat déjà annulé dont le retrait Academy a échoué : le serveur ne
+   rejoue que ce retrait (aucun motif demandé, l'annulation est acquise). */
+function retryAcademyRevoke(id){
+  var u=firebase.auth().currentUser;
+  if(!u){alert('Session expirée, reconnecte-toi.');return;}
+  toast('🎓 Nouvelle tentative de retrait Academy…');
+  u.getIdToken().then(function(tok){
+    return fetch('/api/signature-cancel',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:JSON.stringify({requestId:id})});
+  }).then(function(res){return res.json().catch(function(){return {};});})
+  .then(function(j){
+    var ac=(j&&j.academy)||{};
+    if(ac.status==='ok')toast('✅ Accès « '+(ac.courseName||ac.courseId||'')+' » retiré');
+    else if(ac.status==='error')toast('❌ Retrait Academy toujours en échec ('+(ac.reason||'')+')');
+    else toast('ℹ️ Rien à retirer');
+  }).catch(function(e){alert('Échec : '+(e&&e.message));});
+}
+document.addEventListener('click',function(e){
+  var b=e.target.closest?e.target.closest('[data-sig-cancel]'):null;
+  if(b){cancelSignedRequest(b.getAttribute('data-sig-cancel'));return;}
+  var b2=e.target.closest?e.target.closest('[data-sig-revoke]'):null;
+  if(b2)retryAcademyRevoke(b2.getAttribute('data-sig-revoke'));
+});
 /* ═══ COPIE DU CONTRAT SIGNÉ ═══
    Le client reçoit sa copie automatiquement dès qu'il signe : sign.html
    appelle /api/signature-completed à la fin du parcours. Ce bloc-ci est le

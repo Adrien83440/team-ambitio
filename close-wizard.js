@@ -390,8 +390,36 @@
       setterSlug: actors.setterSlug,
       sb: o.a.booking === 'sb'
     };
-    if (o.booking) return AF.setOutcome(o.booking, 'close', { closeData: closeData, lead: o.lead, typeMap: o.typeMap || {} });
-    return AF.applyFicheClose(o.leadId, o.lead, closeData, { typeMap: o.typeMap, bookings: o.bookings });
+    var leadId = o.leadId || (o.booking && o.booking.leadId) || null;
+    var p = o.booking
+      ? AF.setOutcome(o.booking, 'close', { closeData: closeData, lead: o.lead, typeMap: o.typeMap || {} })
+      : AF.applyFicheClose(o.leadId, o.lead, closeData, { typeMap: o.typeMap, bookings: o.bookings });
+    return p.then(function (res) { ensureCoaching(leadId, o.a && o.a.coachNom); return res; });
+  }
+
+  /* Fiche coaching (Coaching + CSM) créée À LA VALIDATION DU CLOSE — décision
+     Adrien 13/10/2026. Côté serveur (/api/coaching-client-ensure) : les règles
+     réservent la création de `clients` aux coachs/admins. Idempotent : un
+     close mis à jour ou un coach choisi après coup relie la fiche existante,
+     n'en crée jamais une deuxième. Jamais bloquant — le close est acquis ;
+     un échec se rattrape depuis la fiche admin persons. */
+  function ensureCoaching(leadId, coachNom) {
+    if (!leadId) return;
+    try {
+      var auth = (window.firebase && firebase.auth) ? firebase.auth() : null;
+      if (!auth || !auth.currentUser) return;
+      auth.currentUser.getIdToken().then(function (t) {
+        return fetch('/api/coaching-client-ensure', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + t },
+          body: JSON.stringify({ leadId: leadId, coachNom: coachNom || '' })
+        });
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        if (d && d.ok && d.created) toastMsg('🎓 Fiche coaching créée — ' + (d.label || d.programme || ''));
+        else if (d && d.error === 'programme_inconnu') toastMsg('⚠️ Fiche coaching non créée : programme inconnu — à faire depuis la fiche admin', 7000);
+        else if (!d || !d.ok) console.warn('[close-wizard] fiche coaching :', d && d.error);
+      }).catch(function (e) { console.warn('[close-wizard] fiche coaching', e && e.message); });
+    } catch (e) { console.warn('[close-wizard] fiche coaching', e && e.message); }
   }
 
   /* Prévient le coach référent sur WhatsApp. Silencieux en cas d'échec côté
@@ -420,6 +448,10 @@
         });
       }
     } catch (e) { console.warn('[close-wizard] coach non enregistré', e && e.message); }
+
+    /* Coach choisi après le close (pilote : carte coach seule) : il est
+       reporté sur la fiche coaching — créée au besoin. */
+    ensureCoaching(leadId, coachNom);
 
     try {
       var auth = (window.firebase && firebase.auth) ? firebase.auth() : null;
