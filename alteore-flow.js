@@ -1047,11 +1047,19 @@
       /* Re-close d'une fiche DÉJÀ cliente (pastille restée cliquable, correction
          des cartes…) : on met à jour le close SANS dupliquer les commissions ni
          réécrire clientSince — promesse du récap « aucune commission dupliquée ». */
-      var alreadyClient = !!(lead && (lead.isClient === true || lead.clientSince ||
-        lead.stage === 'closed_won_self' || lead.stage === 'closed_won_setting'));
-      var cands = bookings.filter(function (b) {
+      /* 13/10/2026 : « déjà client » ne veut PAS dire « close déjà enregistré ».
+         La signature du contrat passe la fiche en client toute seule
+         (onWebhookInbox, signature_completed) AVANT que le closer valide le
+         close : le close de Charlotte (Anthony) est parti sans aucune
+         commission et sans résultat sur le RDV. Un close est enregistré quand
+         la fiche porte closedData ou qu'un RDV est statué « close ». */
+      var alreadyClient = !!((lead && lead.closedData) ||
+        bookings.some(function (b) { return b && b.outcome === 'close'; }));
+      /* Le RDV qui porte le close : sans résultat, ou resté sur « Offre »
+         (pitché, client revenu signer) — un close remplace l'offre. */
+      var cands = alreadyClient ? [] : bookings.filter(function (b) {
         return classifyBooking(b, typeMap) !== 'excluded' && classifyBooking(b, typeMap) !== 'admin'
-          && !b.outcome && b.status !== 'cancelled' && b.status !== 'no_show';
+          && (!b.outcome || b.outcome === 'offre') && b.status !== 'cancelled' && b.status !== 'no_show';
       });
       cands.sort(function (a, b2) {
         var ka = (a.date || '') + 'T' + (a.time || ''), kb = (b2.date || '') + 'T' + (b2.time || '');

@@ -140,6 +140,16 @@
     for (i = 0; i < ids.length; i++) if (/plan d.?action/.test(fold(tm[ids[i]].label))) return ids[i];
     return 'rdv_plan_action_adrien';
   }
+  /* Close VRAIMENT enregistré (fiche + commissions) — 13/10/2026. La
+     signature du contrat passe la fiche en client toute seule (isClient,
+     stage closed_won_*) : s'y fier cochait l'étape Close sans que le closer
+     ait rien validé — close de Charlotte : aucune commission, RDV sans
+     résultat, closer affiché = le setter. Preuves : le pilote (closeAt), la
+     fiche (closedData, écrit par CloseWizard.commit) ou un RDV statué close. */
+  function closeRecorded(leadId, l, cp) {
+    if (cp.closeAt || (l && l.closedData)) return true;
+    return (H.bookings(leadId) || []).some(function (b) { return b && b.outcome === 'close'; });
+  }
   function rdvLabel(offre) { return offre === 'Business' ? 'RDV Urgent 72h' : 'RDV Plan d\'Action'; }
   function rdvBooking(leadId, offre) {
     var t = rdvType(offre);
@@ -153,7 +163,7 @@
     var elite = !d || d.offre === 'Elite';
     var sig = lastSig(leadId), pay = lastPay(leadId);
     var paid = pay && (pay.status === 'active' || pay.status === 'completed');
-    var closed = !!(cp.closeAt || l.isClient === true || String(l.stage || '').indexOf('closed_won') === 0);
+    var closed = closeRecorded(leadId, l, cp);
     var coach = (cp.coach && cp.coach.nom) || (l.coachAssigne && l.coachAssigne.nom) || '';
     var wa = cp.wa || {};
     var list = [
@@ -261,6 +271,9 @@
     }
     var next = firstTodo(list), cur = null;
     list.forEach(function (s) { if (s.k === next) cur = s; });
+    /* Validé par la checklist mais une étape est retombée (close jamais
+       enregistré, cf. closeRecorded) : on ne l'annonce pas bouclé. */
+    if (cp.doneAt && next !== 'bravo') { cp = JSON.parse(JSON.stringify(cp)); delete cp.doneAt; }
     var h = '<div class="cp-strip"><div class="cp-prog">';
     list.forEach(function (s) { h += '<i class="' + (s.done ? 'd' : (s.k === next ? 'n' : '')) + '" title="' + esc(s.l) + '"></i>'; });
     h += '</div><div class="cp-row"><div class="t">' + (cp.doneAt ? '🎉 Closing bouclé' : '🏆 Closing en cours · ' + done + '/' + list.length)
@@ -453,7 +466,7 @@
 
   function cardClose(leadId, l, cp, d) {
     var elite = !d || d.offre === 'Elite', h = '<div class="cp-h">🏆 ' + (elite ? 'Le close et le coach référent' : 'Le close') + '</div>';
-    var closed = !!(cp.closeAt || l.isClient === true || String(l.stage || '').indexOf('closed_won') === 0);
+    var closed = closeRecorded(leadId, l, cp);
     var coach = (cp.coach && cp.coach.nom) || (l.coachAssigne && l.coachAssigne.nom) || '';
     if (closed && (!elite || coach)) {
       h += '<div class="cp-box g">✅ <b>Close enregistré</b>' + (cp.closeAt ? ' le ' + frDate(cp.closeAt) : '') + ' — fiche passée en Closing, commissions créées.'
@@ -535,7 +548,7 @@
     it(mand, 'Mandat SEPA actif', mand ? '' : (cp.payLater ? 'le client finit son IBAN plus tard — à relancer' : ''), cp.payLater);
     var trig = p && (p.status === 'active' || p.status === 'completed');
     it(trig, 'Premier prélèvement déclenché', '', cp.payLater);
-    it(!!(cp.closeAt || l.isClient === true), 'Close enregistré (fiche + commissions)', '');
+    it(closeRecorded(leadId, l, cp), 'Close enregistré (fiche + commissions)', '');
     if (elite) it(!!coach, 'Coach référent attribué et prévenu', coach);
     it(!!b, rdvLabel(d ? d.offre : 'Elite') + ' calé', b ? (b.date || '').split('-').reverse().join('/') + ' à ' + (b.time || '') : (cp.rdvClient ? 'le client choisit lui-même — à relancer' : ''), !b && cp.rdvClient);
     if (elite) {
@@ -662,7 +675,7 @@
     if (!d) return;
     var elite = d.offre === 'Elite';
     var coachSlug = ui.coachSlug || (cp.coach && cp.coach.slug) || '', coachNom = ui.coachNom || (cp.coach && cp.coach.nom) || '';
-    var already = !!(cp.closeAt || l.isClient === true || String(l.stage || '').indexOf('closed_won') === 0);
+    var already = closeRecorded(leadId, l, cp);
     ui.busy = true; render();
     var answers = { contrat: d.offre, paiement: d.paiement, booking: d.booking, encaisse: d.encaisse, coachSlug: elite ? coachSlug : null, coachNom: elite ? coachNom : null };
     Promise.resolve(already && !elite ? null : H.recordClose(leadId, answers, { coachOnly: already })).then(function () {
