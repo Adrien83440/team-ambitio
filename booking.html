@@ -899,7 +899,10 @@ function initBooking() {
 
   // Presets
   if (presetType) {
-    S.selType = S.types.find(function(t) { return t.id === presetType; });
+    /* Lien court (13/10/2026) : ?type= accepte l'id technique OU le lien court
+       (slug) de la consultation. Le RDV est toujours enregistré avec l'id. */
+    S.selType = S.types.find(function(t) { return t.id === presetType; })
+      || S.types.find(function(t) { return t.slug && t.slug === presetType; });
     if (S.selType) {
       if (presetPerson) {
         S.selPerson = S.persons.find(function(p) { return p.id === presetPerson; });
