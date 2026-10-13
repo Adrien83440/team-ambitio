@@ -113,6 +113,45 @@ async function contratsSignes(leadId, email) {
   return out;
 }
 
+function vide(v) {
+  return v == null || String(v).trim() === '';
+}
+
+/* Identité société du dernier contrat signé : le signataire la choisit dans
+   l'annuaire officiel pendant la signature (sign.html, recherche-entreprises
+   .api.gouv.fr) — SIRET, TVA, forme, adresse du siège. */
+function identiteSociete(contrat) {
+  const c = contrat && contrat.company;
+  if (!c || (vide(c.name) && vide(c.siret))) return null;
+  const a = c.address || {};
+  return {
+    companyName: String(c.name || '').trim(),
+    companyLegalForm: String(c.legalFormLabel || '').trim(),
+    siret: String(c.siret || '').replace(/\s+/g, ''),
+    vatNumber: String(c.vatNumber || '').replace(/\s+/g, ''),
+    address: { line1: a.line1 || '', line2: a.line2 || '', postalCode: a.postalCode || '', city: a.city || '', country: a.country || 'France' },
+    nafLabel: String(c.nafLabel || '').trim(),
+  };
+}
+
+/* Nom complet du représentant signataire (« Marie Charlotte DESTOUT »). */
+function nomRepresentant(contrat) {
+  const r = contrat && contrat.representative;
+  if (!r) return '';
+  return (String(r.firstName || '').trim() + ' ' + String(r.lastName || '').trim()).trim();
+}
+
+/* Le lead ne porte souvent qu'un prénom (opt-in) : on prend le nom complet
+   du représentant quand il CONTIENT ce prénom — jamais un autre nom. */
+function meilleurNom(nomLead, contrat) {
+  const n = String(nomLead || '').trim();
+  const rep = nomRepresentant(contrat);
+  if (!rep) return n;
+  if (!n) return rep;
+  if (n.split(/\s+/).length === 1 && fold(rep).split(/\s+/).indexOf(fold(n)) >= 0) return rep;
+  return n;
+}
+
 async function trouverPersons(leadId, L, email) {
   if (L.personId) {
     const s = await db.collection('persons').doc(L.personId).get();
@@ -191,7 +230,10 @@ module.exports = async function (req, res) {
     const P = await trouverPersons(leadId, L, email);
     const existante = await ficheExistante(leadId, L, P, email);
     const coach = coachNom || (L.coachAssigne && L.coachAssigne.nom) || '';
-    const nom = String(L.nom || '').trim() || (P && P.data.nom) || email;
+    const nom = meilleurNom(String(L.nom || '').trim() || (P && P.data.nom) || '', contrat) || email;
+    const soc = identiteSociete(contrat);
+    const activite = String(L.secteur || '').trim()
+      || (soc ? (soc.companyName + (soc.nafLabel ? ' — ' + soc.nafLabel : '')) : '');
     const dateEntree = dayParis(new Date(ms(L.clientSince) || Date.now()));
 
     if (dryRun) {
@@ -199,15 +241,39 @@ module.exports = async function (req, res) {
         ok: true, dryRun: true, nom: nom, email: email,
         programme: PG.programme, label: PG.label, dateEntree: dateEntree, coach: coach || null,
         personId: P ? P.id : null, contrat: contrat ? contrat.templateName || null : null,
+        activite: activite || null, societe: soc ? soc.companyName + (soc.siret ? ' (SIRET ' + soc.siret + ')' : '') : null,
         existing: existante ? { clientId: existante.id, programme: existante.data.programme || null } : null,
       });
       return;
     }
 
-    /* Champs de la persons : contrat signé + programme détecté — ce que
-       l'ancienne fonction posait et que la fiche admin affiche. */
+    /* Paiements du lead sans personId : rattachés après coup (paiement créé
+       hors fiche puis relié au lead), ils restaient invisibles de la fiche
+       admin — Charlotte, 13/10/2026. La synchro ne pose personId qu'à la
+       création du paiement ou de la persons. */
+    async function rattacherPaiements() {
+      if (!P) return 0;
+      const snap = await db.collection('payments').where('leadId', '==', leadId).get();
+      const ids = [];
+      for (const d of snap.docs) {
+        if ((d.data() || {}).personId) continue;
+        await d.ref.update({ personId: P.id, _lastSyncedAt: admin.firestore.FieldValue.serverTimestamp() });
+        ids.push(d.id);
+      }
+      snap.docs.forEach(function (d) { if (ids.indexOf(d.id) < 0 && d.data().personId === P.id) ids.push(d.id); });
+      if (ids.length) {
+        await db.collection('persons').doc(P.id).update({ paymentIds: admin.firestore.FieldValue.arrayUnion.apply(null, ids) });
+      }
+      return ids.length;
+    }
+
+    /* Champs de la persons : contrat signé, programme détecté, identité
+       société du contrat (champs VIDES seulement — une saisie à la main
+       n'est jamais écrasée ; la synchro la recopie vers la fiche
+       facturation reliée) et nom complet. */
     async function majPersons(clientId, statut) {
       if (!P) return;
+      const PD = P.data || {};
       const upd = {
         coachingId: clientId,
         coachingStatus: statut || 'actif',
@@ -220,7 +286,17 @@ module.exports = async function (req, res) {
         upd.signedContractRequestId = contrat._id;
         upd.signedContractSignedAt = contrat.signedAt || null;
       }
+      if (soc) {
+        if (vide(PD.companyName) && soc.companyName) upd.companyName = soc.companyName;
+        if (vide(PD.companyLegalForm) && soc.companyLegalForm) upd.companyLegalForm = soc.companyLegalForm;
+        if (vide(PD.siret) && soc.siret) upd.siret = soc.siret;
+        if (vide(PD.vatNumber) && soc.vatNumber) upd.vatNumber = soc.vatNumber;
+        if ((!PD.address || vide(PD.address.line1)) && soc.address.line1) upd.address = soc.address;
+        if (vide(PD.clientType)) upd.clientType = 'company';
+      }
+      if (nom && nom !== PD.nom && meilleurNom(PD.nom, contrat) === nom) upd.nom = nom;
       await db.collection('persons').doc(P.id).update(upd);
+      await rattacherPaiements();
     }
 
     if (existante) {
@@ -230,8 +306,9 @@ module.exports = async function (req, res) {
       const fix = {};
       if (P && !existante.data.personId) fix.personId = P.id;
       if (coach && !existante.data.coach) fix.coach = coach;
+      if (activite && vide(existante.data.activite)) fix.activite = activite;
       if (Object.keys(fix).length) await db.collection('clients').doc(existante.id).update(fix);
-      if (P && P.data.coachingId !== existante.id) await majPersons(existante.id, existante.data.statut);
+      await majPersons(existante.id, existante.data.statut);
       res.status(200).json({ ok: true, created: false, linked: true, clientId: existante.id, programme: existante.data.programme || null, label: PG.label });
       return;
     }
@@ -261,7 +338,7 @@ module.exports = async function (req, res) {
         email: email,
         tel: tel,
         telephone: tel,
-        activite: '',
+        activite: activite,
         programme: PG.programme,
         dateEntree: dateEntree,
         nbCoachingsTotal: PG.nb,

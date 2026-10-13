@@ -754,6 +754,20 @@ async function createPayment() {
     if (!confirm('Aucun contrat signé trouvé pour ce client (lead ou e-mail).\n\nCréer le paiement quand même ? (exception admin)')) return;
   }
 
+  /* Paiement déjà en cours pour ce client (même fiche ou même e-mail, non
+     annulé) : un second, c'est un second mandat et un second SMS au client.
+     Hugo Michel, 13/10/2026 : deux paiements identiques à 1 min 23 d'écart,
+     corrigés en recréant au lieu de modifier. On prévient, sans bloquer
+     (un complément de paiement reste possible). Liste déjà chargée par la
+     page — périmètre des règles du membre connecté. */
+  const mailLow = email.toLowerCase();
+  const enCours = allPayments.filter(x => x.status !== 'cancelled'
+    && ((leadId && x.leadId === leadId) || String(x.leadEmail || '').trim().toLowerCase() === mailLow));
+  if (enCours.length) {
+    const lignes = enCours.slice(0, 3).map(x => '• ' + (x.description || 'Paiement') + ' — ' + (Number(x.totalAmount) || 0).toLocaleString('fr-FR') + ' € — ' + (x.status || 'brouillon')).join('\n');
+    if (!confirm('⚠️ Ce client a déjà ' + enCours.length + ' paiement' + (enCours.length > 1 ? 's' : '') + ' en cours :\n\n' + lignes + '\n\nPour corriger un montant ou une date : annule d\'abord l\'ancien (son détail → Annuler), sinon le client reçoit deux mandats et deux SMS.\n\nCréer quand même un NOUVEAU paiement ?')) return;
+  }
+
   btn.disabled = true; btn.textContent = 'Création…';
   try {
     const memberSnap = await db.collection('_meta').doc('team_members').get();

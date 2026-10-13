@@ -515,10 +515,16 @@ async function loadAll(){
       if(data.personId) STATE.icsByPerson[data.personId] = Object.assign({_id:d.id}, data);
     });
 
+    /* Un paiement relié au lead APRÈS la création de la persons n'a pas de
+       personId (Charlotte, 13/10/2026) : repli par le lead lié. */
+    var personOfLead = {};
+    Object.keys(STATE.leadsByPerson).forEach(function(pid){
+      STATE.leadsByPerson[pid].forEach(function(l){ personOfLead[l._id] = pid; });
+    });
     STATE.paymentsByPerson = {};
     paySnap.forEach(function(d){
       var data = d.data();
-      var pid = data.personId;
+      var pid = data.personId || (data.leadId && personOfLead[data.leadId]) || null;
       if(!pid) return;
       if(!STATE.paymentsByPerson[pid]) STATE.paymentsByPerson[pid] = [];
       STATE.paymentsByPerson[pid].push(Object.assign({_id:d.id}, data));
