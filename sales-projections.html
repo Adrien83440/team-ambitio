@@ -3,15 +3,75 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Ambitio — Projections</title>
-<link rel="stylesheet" href="sales.css"/>
+<meta name="theme-color" content="#07080f"/>
+<title>Alteore — Projections</title>
+<link rel="stylesheet" href="alteore-ui.css"/>
+<style>
+/* ── Projections (refonte 13/10/2026) ── */
+.pj-hero { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.pj-kpi { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; position: relative; overflow: hidden; }
+.pj-kpi::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--pj-kc, var(--blue)); }
+.pj-kpi .l { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.pj-kpi .v { font-family: var(--fh); font-size: 26px; font-weight: 700; margin: 6px 0 2px; font-variant-numeric: tabular-nums; }
+.pj-kpi .s { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+.pj-bar { height: 7px; background: rgba(148, 163, 214, .1); border-radius: 99px; overflow: hidden; margin-top: 10px; }
+.pj-bar i { display: block; height: 100%; border-radius: 99px; background: var(--pj-kc, var(--blue)); }
+.pj-row { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 14px; margin-bottom: 16px; }
+.pj-row > .au-card { margin-bottom: 0; }
+.pj-big { font-family: var(--fh); font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pj-lead { font-size: 13px; line-height: 1.7; color: var(--text); margin-bottom: 12px; }
+.pj-lead b { color: var(--gold); }
+.pj-steps { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.pj-steps th { text-align: left; font-size: 10.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; padding: 7px 8px; border-bottom: 1px solid var(--border); }
+.pj-steps td { padding: 9px 8px; border-bottom: 1px solid var(--border-soft); font-family: var(--fm); }
+.pj-steps td:first-child { font-family: var(--fb); font-weight: 600; }
+.pj-steps .need { color: var(--gold); font-weight: 600; }
+.pj-steps .ok { color: var(--green); }
+.pj-scen { display: flex; flex-direction: column; gap: 10px; }
+.pj-scen-i { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 10px 12px; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; font-size: 12.5px; }
+.pj-scen-i b { font-family: var(--fm); font-size: 14px; }
+.pj-tag { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 20px; border: 1px solid var(--border2); color: var(--muted); white-space: nowrap; }
+.pj-tag.ok { color: var(--green); border-color: rgba(52, 211, 153, .35); }
+.pj-tag.wait { color: var(--gold); border-color: rgba(251, 191, 36, .35); }
+.pj-tag.ko { color: var(--red); border-color: rgba(239, 68, 68, .35); }
+.pj-tag.legacy { color: var(--purple); border-color: rgba(167, 139, 250, .35); }
+.pj-cancel td { text-decoration: line-through; color: var(--muted); }
+.pj-cancel td:last-child { text-decoration: none; }
+.pj-chart { display: flex; align-items: flex-end; gap: 6px; height: 170px; padding: 6px 2px 0; }
+.pj-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; height: 100%; justify-content: flex-end; position: relative; }
+.pj-col .bars { display: flex; align-items: flex-end; gap: 2px; width: 100%; height: 140px; }
+.pj-col .b { flex: 1; border-radius: 4px 4px 0 0; min-height: 2px; }
+.pj-col .b.real { background: linear-gradient(180deg, #5b7cfa, #3b4fb0); }
+.pj-col .b.real.legacy { background: linear-gradient(180deg, #a78bfa, #6d4fc4); }
+.pj-col .b.obj { background: rgba(251, 191, 36, .2); border: 1px dashed rgba(251, 191, 36, .55); border-bottom: none; }
+.pj-col .lbl { font-size: 10px; color: var(--muted); font-weight: 600; }
+.pj-col.cur .lbl { color: var(--text); }
+.pj-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+.pj-legend span::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; background: var(--pj-lc); }
+.pj-obj-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 10px 0 14px; }
+.pj-obj-grid label { font-size: 11px; color: var(--muted); display: block; margin-bottom: 3px; }
+.pj-obj-grid input, .pj-obj-annual input { width: 100%; background: var(--bg2); border: 1px solid var(--border2); color: var(--text); border-radius: 8px; padding: 7px 9px; font-family: var(--fm); font-size: 13px; }
+.pj-obj-annual { margin-bottom: 6px; }
+.pj-obj-annual label { font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px; }
+.pj-note { background: rgba(255, 255, 255, .025); border-radius: 10px; padding: 16px 18px; border-left: 3px solid var(--gold); font-size: 13px; line-height: 1.8; color: var(--muted); }
+.pj-note b { color: var(--text); }
+@media (max-width: 1000px) {
+  .pj-hero { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pj-row { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .pj-hero { grid-template-columns: minmax(0, 1fr); }
+  .pj-obj-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pj-col .lbl { font-size: 8.5px; }
+}
+</style>
 
 <!-- ── Firebase v9 compat ── -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script>
-  if (!firebase.apps.length) {
+  if (typeof firebase !== 'undefined' && !firebase.apps.length) {
     firebase.initializeApp({
       apiKey:            "AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
       authDomain:        "ambitio-team.firebaseapp.com",
@@ -19,455 +79,20 @@
       storageBucket:     "ambitio-team.firebasestorage.app",
       messagingSenderId: "1079366902268",
       appId:             "1:1079366902268:web:b4ec1691dba54230339279"
-    }); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }
+    }); try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { console.warn('[firestore]', e && e.message); }
   }
 </script>
-
-<script>
-/* === sales-data.js inlined === */
-/**
- * sales-data.js — Data Store + Firebase + Utilitaires
- * Les données "a" (actuelles) viennent de Firestore en temps réel.
- * Les données "p" (projections) sont les références fixes.
- */
-
-/* ═══════════════════════════════════════════════════════════
-   PROJECTIONS FIXES — modifier ici pour changer les cibles
-═══════════════════════════════════════════════════════════ */
-const PROJECTIONS = {
-  closing: {
-    s1: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    s2: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    s3: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    s4: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    livesP:0.75, offresP:0.667, engP:0.5, cOffP:0.4, cCallP:0.2, cashLive:666.7,
-  },
-  setting: {
-    s1: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    s2: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    s3: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    s4: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    decrochesP:0.12, engP:0.222, setP:0.5, showupP:0.8, cCallP:0.8,
-  },
-};
-
-/* ═══════════════════════════════════════════════════════════
-   DATA STORE
-═══════════════════════════════════════════════════════════ */
-const ALL_WEEKS = ['s1','s2','s3','s4','s5','s6'];
-
-const DB = {
-  months: ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'],
-
-  // Données brutes saisies (remplacées par Firestore)
-  _raw: {
-    closing: {
-      s1: { calls:8,  lives:2, offres:1, closes:0, hc:0, fu:0, contracte:0,     collecte:0    },
-      s2: { calls:8,  lives:4, offres:2, closes:2, hc:2, fu:0, contracte:12000, collecte:1000 },
-      s3: { calls:9,  lives:6, offres:3, closes:1, hc:1, fu:0, contracte:5400,  collecte:400  },
-      s4: { calls:9,  lives:7, offres:2, closes:0, hc:0, fu:0, contracte:1800,  collecte:200  },
-    },
-    setting: {
-      s1: { leads:133, calls:231, decroches:56, propRdv:13, sets:9,  presents:2, closes:0 },
-      s2: { leads:191, calls:324, decroches:54, propRdv:17, sets:11, presents:4, closes:2 },
-      s3: { leads:127, calls:178, decroches:38, propRdv:16, sets:11, presents:4, closes:1 },
-      s4: { leads:100, calls:150, decroches:28, propRdv:15, sets:10, presents:4, closes:0 },
-    },
-    deals: [
-      { client:'Julie Berchoux',     email:'julieberchoux@icloud.com',         offre:'BP 12', type:'Closing', date:'24/01/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting après self booking', ok:true  },
-      { client:'Corinne Alaga',      email:'contact@lestabliersgourmands.com', offre:'BP 12', type:'Setting', date:'27/01/2026', cHT:null, coHT:null,  comm:125, bonus:0, notes:"Setting d'un close d'Elodie", ok:true  },
-      { client:'Belinda Giangiulio', email:'lesdemoisellesduvrac@gmail.com',   offre:'BP 12', type:'Closing', date:'30/01/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-      { client:'Cecile Auneau',      email:'domcecile@gmail.com',              offre:'BP 12', type:'Closing', date:'09/02/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-      { client:'Justine Biton',      email:'lephildesidees@hotmail.com',       offre:'BP 12', type:'Closing', date:'09/02/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-    ],
-  },
-
-  // Calculé depuis _raw
-  closing: null,
-  setting: null,
-  commissions: {
-    'Janvier 2026': { contracte:12000, collecte:0,    totalComm:0,    statut:'Validé',     deals:[] },
-    'Février 2026': { contracte:24000, collecte:2000, totalComm:2125, statut:'En attente', deals:[] },
-    'Mars 2026':    { contracte:0,     collecte:0,    totalComm:1625, statut:'En attente', deals:[] },
-  },
-  team: {
-    week: [
-      { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:22748, collecte:13629, calls:29, lives:24, offres:19, closes:7, showup:0.83, txOffre:0.792, txTransfoShow:0.292, txTransfoOffre:0.368, caCall:784.4  },
-    ],
-    month: [
-      { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:34069, collecte:3966, calls:46, lives:28, offres:13, closes:7, showup:0.609, txOffre:0.464, txTransfoShow:0.25,  txTransfoOffre:0.538, caCall:617.2 },
-    ],
-  },
-
-  // Recalcule toutes les métriques depuis _raw
-  compute() {
-    const rc = DB._raw.closing;
-    const rs = DB._raw.setting;
-    const pc = PROJECTIONS.closing;
-    const ps = PROJECTIONS.setting;
-
-    const sumC  = k => ALL_WEEKS.reduce((t,w) => t + ((rc[w]||{})[k]||0), 0);
-    const sumS  = k => ALL_WEEKS.reduce((t,w) => t + ((rs[w]||{})[k]||0), 0);
-    const projC = k => ALL_WEEKS.reduce((t,w) => t + ((pc[w]||{})[k]||0), 0);
-    const projS = k => ALL_WEEKS.reduce((t,w) => t + ((ps[w]||{})[k]||0), 0);
-
-    const ca=sumC('calls'), la=sumC('lives'), oa=sumC('offres'), cla=sumC('closes');
-    const cta=sumC('contracte'), cola=sumC('collecte');
-    const cp=projC('calls'), lp=projC('lives'), op=projC('offres'), clp=projC('closes');
-    const ctp=projC('contracte'), colp=projC('collecte');
-
-    DB.closing = {
-      mois: {
-        calls:     {a:ca,  p:cp  },
-        lives:     {a:la,  p:lp  },
-        offres:    {a:oa,  p:op  },
-        closes:    {a:cla, p:clp },
-        hc:        {a:sumC('hc'), p:clp},
-        fu:        {a:sumC('fu'), p:0  },
-        contracte: {a:cta, p:ctp },
-        collecte:  {a:cola,p:colp},
-        livesP:  {a:ca>0  ? la/ca   : 0, p:pc.livesP  },
-        offresP: {a:la>0  ? oa/la   : 0, p:pc.offresP },
-        engP:    {a:oa>0  ? cla/oa  : 0, p:pc.engP    },
-        cOffP:   {a:oa>0  ? cla/oa  : 0, p:pc.cOffP   },
-        cCallP:  {a:ca>0  ? cla/ca  : 0, p:pc.cCallP  },
-        cashLive:{a:la>0  ? cta/la  : 0, p:pc.cashLive},
-        atteinte: ctp>0 ? cta/ctp : 0,
-        delta:    Math.max(0, ctp-cta),
-      },
-      ...Object.fromEntries(ALL_WEEKS.filter(w => rc[w]).map(w => [w, DB._cw(w)])),
-    };
-
-    const sca=sumS('calls'), da=sumS('decroches'), pa=sumS('propRdv');
-    const sa=sumS('sets'), pra=sumS('presents'), sca2=sumS('closes');
-
-    DB.setting = {
-      mois: {
-        leads:     {a:sumS('leads'),  p:projS('leads')    },
-        calls:     {a:sca,            p:projS('calls')    },
-        decroches: {a:da,             p:projS('decroches')},
-        propRdv:   {a:pa,             p:projS('propRdv')  },
-        sets:      {a:sa,             p:projS('sets')     },
-        presents:  {a:pra,            p:projS('presents') },
-        closes:    {a:sca2,           p:projS('closes')   },
-        decrochesP:{a:sca>0?da/sca:0,  p:ps.decrochesP },
-        engP:      {a:da>0 ?pa/da:0,    p:ps.engP       },
-        setP:      {a:pa>0 ?sa/pa:0,    p:ps.setP       },
-        showupP:   {a:sa>0 ?pra/sa:0,   p:ps.showupP    },
-        cCallP:    {a:sca>0?sca2/sca:0, p:ps.cCallP     },
-      },
-      ...Object.fromEntries(ALL_WEEKS.filter(w => rs[w]).map(w => [w, DB._sw(w)])),
-    };
-
-    // Sync deals dans commissions
-    try {
-      const cmk = (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026';
-      if (DB.commissions[cmk]) DB.commissions[cmk].deals = DB._raw.deals;
-    } catch(e) {}
-  },
-
-  _cw(w) {
-    const d=DB._raw.closing[w]||{}, p=PROJECTIONS.closing[w]||PROJECTIONS.closing.s1||{};
-    return {
-      calls:{a:d.calls||0,p:p.calls||0}, lives:{a:d.lives||0,p:p.lives||0},
-      offres:{a:d.offres||0,p:p.offres||0}, closes:{a:d.closes||0,p:p.closes||0},
-      hc:{a:d.hc||0,p:p.closes||0}, fu:{a:d.fu||0,p:0},
-      contracte:{a:d.contracte||0,p:p.contracte||0}, collecte:{a:d.collecte||0,p:p.collecte||0},
-    };
-  },
-  _sw(w) {
-    const d=DB._raw.setting[w]||{}, p=PROJECTIONS.setting[w]||PROJECTIONS.setting.s1||{};
-    return {
-      leads:{a:d.leads||0,p:p.leads||0}, calls:{a:d.calls||0,p:p.calls||0},
-      decroches:{a:d.decroches||0,p:p.decroches||0}, propRdv:{a:d.propRdv||0,p:p.propRdv||0},
-      sets:{a:d.sets||0,p:p.sets||0}, presents:{a:d.presents||0,p:p.presents||0},
-      closes:{a:d.closes||0,p:p.closes||0},
-    };
-  },
-};
-
-DB.compute();
-
-/* ═══════════════════════════════════════════════════════════
-   FIREBASE — couche temps réel
-   Initialisé après que firebase SDK soit chargé + auth ready
-═══════════════════════════════════════════════════════════ */
-const Fire = {
-  db:  null,
-  uid: null,
-  _unsubs: [],
-
-  init(firestore, uid) {
-    Fire.db  = firestore;
-    Fire.uid = uid;
-  },
-
-  _key(label) {
-    const p = label.split(' ');
-    const m = DB.months.indexOf(p[0]);
-    return `${p[1]}-${String(m+1).padStart(2,'0')}`;
-  },
-
-  // Écoute en temps réel les données d'un user pour un mois
-  watchUser(userId, monthLabel, callback) {
-    if (!Fire.db) return () => {};
-    const ref = Fire.db
-      .collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    const unsub = ref.onSnapshot(snap => callback(snap.exists ? snap.data() : null));
-    Fire._unsubs.push(unsub);
-    return unsub;
-  },
-
-  // Sauvegarde une semaine de closing
-  async saveClosing(userId, monthLabel, week, data) {
-    if (!Fire.db) throw new Error('Firebase non init');
-    const ref = Fire.db.collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    await ref.set({ closing: { [week]: data } }, { merge: true });
-  },
-
-  // Sauvegarde une semaine de setting
-  async saveSetting(userId, monthLabel, week, data) {
-    if (!Fire.db) throw new Error('Firebase non init');
-    const ref = Fire.db.collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    await ref.set({ setting: { [week]: data } }, { merge: true });
-  },
-
-  // Sauvegarde un deal (append)
-  async saveDeal(userId, monthLabel, deal) {
-    if (!Fire.db) throw new Error('Firebase non init');
-    const ref = Fire.db.collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    const snap = await ref.get();
-    const deals = snap.exists ? (snap.data().deals || []) : [];
-    deals.push({ ...deal, _ts: Date.now() });
-    await ref.set({ deals }, { merge: true });
-  },
-
-  // Applique un snapshot Firestore dans DB puis recalcule
-  apply(data) {
-    if (!data) return;
-    if (data.closing) ALL_WEEKS.forEach(w => {
-      if (data.closing[w]) Object.assign(DB._raw.closing[w]||(DB._raw.closing[w]={}), data.closing[w]);
-    });
-    if (data.setting) ALL_WEEKS.forEach(w => {
-      if (data.setting[w]) Object.assign(DB._raw.setting[w]||(DB._raw.setting[w]={}), data.setting[w]);
-    });
-    if (data.deals) DB._raw.deals = data.deals;
-    DB.compute();
-    document.dispatchEvent(new CustomEvent('db:updated'));
-  },
-
-  stop() { Fire._unsubs.forEach(u => u()); Fire._unsubs = []; },
-};
-
-/* ═══════════════════════════════════════════════════════════
-   UTILITIES
-═══════════════════════════════════════════════════════════ */
-const U = {
-  euro:  v => v == null ? '—' : '€\u202f' + Number(v).toLocaleString('fr-FR'),
-  pct:   v => v == null ? '—' : (v * 100).toFixed(1) + '%',
-  num:   v => v == null ? '—' : Number(v).toLocaleString('fr-FR'),
-  pp:  (a, p) => p > 0 ? Math.min((a / p) * 100, 200) : 0,
-  ppv: (a, p) => p > 0 ? ((a / p) * 100).toFixed(0) + '%' : '—',
-  cb:  (a, p) => { const r = p > 0 ? a / p : 0; return r >= 1 ? '#34d399' : r >= 0.65 ? '#f59e0b' : '#ef4444'; },
-  g:   id => document.getElementById(id),
-  getCurrentMonth: () => (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026',
-  getCurrentUser:  () => ({
-    /* Aucun repli sur une personne : un utilisateur non identifie prenait
-       l'identite d'un membre parti. */
-    uid:  window._currentUserUid  || localStorage.getItem('ambitio_uid')  || '',
-    name: window._currentUserName || localStorage.getItem('ambitio_name') || 'Utilisateur',
-    role: window._currentRole     || localStorage.getItem('ambitio_role') || 'sales',
-  }),
-
-  progRow: (label, a, p, isEuro = false) => {
-    const col = U.cb(a, p);
-    return `<div class="pr">
-      <div class="pr-l">${label}</div>
-      <div class="pr-track"><div class="pr-fill" style="width:${Math.min(U.pp(a,p),100)}%;background:${col}"></div></div>
-      <div class="pr-val">${isEuro ? `${U.euro(a)} / ${U.euro(p)}` : `${a} / ${p}`}</div>
-      <div class="pr-pct" style="color:${col}">${U.ppv(a,p)}</div>
-    </div>`;
-  },
-
-  kpiCard: ({ label, val, sub, rawA, proj, color='#ef4444', pct:fp }) => {
-    const pc = fp!=null ? fp : (proj!=null ? U.pp(rawA??0, proj) : null);
-    return `<div class="kpi" style="--kc:${color}">
-      <div class="kpi-label">${label}</div>
-      <div class="kpi-value">${val}</div>
-      ${sub ? `<div class="kpi-sub">${sub}</div>` : ''}
-      ${pc!=null ? `<div class="kpi-prog">
-        <div class="kpi-prog-row"><span>Atteinte</span><span>${pc.toFixed(0)}%</span></div>
-        <div class="kpi-prog-track"><div class="kpi-prog-fill" style="width:${Math.min(pc,100)}%;background:${color}"></div></div>
-      </div>` : ''}
-    </div>`;
-  },
-
-  funnelStep: (label, val, max, isFirst=false, isEuro=false) => {
-    const ratio = max > 0 ? val / max : 0;
-    return `<div class="fs">
-      <div class="fs-label">${label}</div>
-      <div class="fs-track"><div class="fs-fill" style="width:${Math.min(ratio*100,100)}%"></div></div>
-      <div class="fs-val">${isEuro ? U.euro(val) : val}</div>
-      <div class="fs-rate">${!isFirst ? U.pct(ratio) : ''}</div>
-    </div>`;
-  },
-
-  weekCard: (label, mainVal, mainLabel, minis, isCurrent, dateRange) => `
-    <div class="wc${isCurrent?' wc-active':''}">
-      <div class="wc-label">${label}</div>
-      ${dateRange ? `<div class="wc-dates">${dateRange}</div>` : ''}
-      <div class="wc-main">${mainVal}</div>
-      <div class="wc-sub">${mainLabel}</div>
-      <div class="wc-grid">${minis.map(m=>`
-        <div class="wc-mini">
-          <div class="wc-mini-v"${m.color?` style="color:${m.color}"`:''} >${m.val}</div>
-          <div class="wc-mini-l">${m.label}</div>
-        </div>`).join('')}</div>
-    </div>`,
-
-  barChart: (labels, actuals, projs, unit='') => {
-    const mx = Math.max(...actuals, ...projs, 1);
-    return `<div class="chart-legend">
-        <span class="cl-dot cl-real"></span>Réel
-        <span class="cl-dot cl-proj" style="margin-left:14px"></span>Projection
-      </div>
-      <div class="chart-bars">
-        ${labels.map((l,i)=>`<div class="chart-col">
-          <div class="chart-pair">
-            <div class="chart-bar bar-real" style="height:${(actuals[i]/mx*100).toFixed(1)}%" title="${actuals[i]}${unit}"></div>
-            <div class="chart-bar bar-proj" style="height:${(projs[i]/mx*100).toFixed(1)}%" title="Proj:${projs[i]}${unit}"></div>
-          </div>
-          <div class="chart-lbl">${l}</div>
-        </div>`).join('')}
-      </div>`;
-  },
-
-  toast: (msg, type='success') => {
-    let t = document.getElementById('_toast');
-    if (!t) { t=document.createElement('div'); t.id='_toast'; document.body.appendChild(t); }
-    const s = { success:'background:#1a2e1a;border:1px solid rgba(52,211,153,.3);color:#6ee7b7', error:'background:#2e1a1a;border:1px solid rgba(239,68,68,.3);color:#fca5a5', info:'background:#1a1a2e;border:1px solid rgba(96,165,250,.3);color:#93c5fd' };
-    t.style.cssText = `position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(0);font-size:12px;font-weight:600;padding:9px 18px;border-radius:10px;z-index:9999;opacity:1;transition:all .28s;white-space:nowrap;font-family:var(--font-b);${s[type]||s.success}`;
-    t.textContent = msg;
-    clearTimeout(t._t);
-    t._t = setTimeout(()=>{ t.style.opacity='0'; t.style.transform='translateX(-50%) translateY(20px)'; }, 2800);
-  },
-};
-
-
-/* ═══════════════════════════════════════════════════════════
-   SEMAINES DU MOIS
-   Avant Mars 2026 : semaines lun→dim classiques (peuvent déborder)
-   À partir de Mars 2026 : semaines strictement dans le mois
-     - Segments ≤ 3 jours fusionnés avec la semaine adjacente
-═══════════════════════════════════════════════════════════ */
-function getMonthWeeks(monthLabel) {
-  const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin',
-                     'Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-  const parts = monthLabel.split(' ');
-  const month = MONTHS_FR.indexOf(parts[0]);
-  const year  = parseInt(parts[1]);
-  if (month === -1 || isNaN(year)) return [];
-
-  const pad = n => String(n).padStart(2,'0');
-  function fmt(d) { return pad(d.getDate()) + '/' + pad(d.getMonth()+1); }
-  function fmtShort(d) {
-    const M = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
-    return d.getDate() + ' ' + M[d.getMonth()];
-  }
-  function dayCount(a, b) { return Math.round((b - a) / 86400000) + 1; }
-
-  /* ── Ancien mode (avant Mars 2026) : semaines lun→dim, débordement OK ── */
-  if (year < 2026 || (year === 2026 && month < 2)) {
-    const firstOfMonth = new Date(year, month, 1);
-    const dayOfWeek = firstOfMonth.getDay();
-    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    let monday = new Date(year, month, 1 + daysToMonday);
-    const weeks = [];
-    while (true) {
-      const sunday = new Date(monday.getTime() + 6 * 86400000);
-      if (monday.getMonth() === month || sunday.getMonth() === month) {
-        weeks.push({
-          id: 's' + (weeks.length + 1), label: 'S' + (weeks.length + 1),
-          start: new Date(monday), end: new Date(sunday),
-          range: fmt(monday) + ' \u2192 ' + fmt(sunday),
-          short: fmtShort(monday) + ' \u2013 ' + fmtShort(sunday),
-          tab:   fmt(monday) + '\u2192' + fmt(sunday),
-        });
-      }
-      monday = new Date(monday.getTime() + 7 * 86400000);
-      if (monday.getMonth() !== month && monday.getMonth() !== (month === 0 ? 11 : month - 1)) {
-        if (monday.getMonth() !== month) break;
-      }
-      if (monday.getFullYear() > year + 1) break;
-      if (weeks.length >= 6) break;
-    }
-    return weeks;
-  }
-
-  /* ── Nouveau mode (Mars 2026+) : semaines dans le mois, fusion si ≤ 3j ── */
-  const lastDay = new Date(year, month + 1, 0);
-  const segs    = [];
-  let cursor    = new Date(year, month, 1);
-
-  while (cursor <= lastDay) {
-    const dow = cursor.getDay();
-    let end;
-    if (dow === 1) { end = new Date(cursor.getTime() + 6 * 86400000); }
-    else { end = new Date(cursor.getTime() + (dow === 0 ? 0 : 7 - dow) * 86400000); }
-    if (end > lastDay) end = new Date(lastDay);
-    segs.push({ start: new Date(cursor), end: new Date(end) });
-    cursor = new Date(end.getTime() + 86400000);
-  }
-
-  // Fusion début si ≤ 3 jours
-  if (segs.length >= 2 && dayCount(segs[0].start, segs[0].end) <= 3) {
-    segs[1].start = segs[0].start;
-    segs.shift();
-  }
-  // Fusion fin si ≤ 3 jours
-  if (segs.length >= 2 && dayCount(segs[segs.length-1].start, segs[segs.length-1].end) <= 3) {
-    segs[segs.length-2].end = segs[segs.length-1].end;
-    segs.pop();
-  }
-
-  return segs.map((s, i) => ({
-    id:    's' + (i + 1),
-    label: 'S' + (i + 1),
-    start: s.start,
-    end:   s.end,
-    range: fmt(s.start) + ' \u2192 ' + fmt(s.end),
-    short: fmtShort(s.start) + ' \u2013 ' + fmtShort(s.end),
-    tab:   fmt(s.start) + '\u2192' + fmt(s.end),
-  }));
-}
-
-window.DB=DB; window.U=U; window.Fire=Fire; window.PROJECTIONS=PROJECTIONS;
-window.getMonthWeeks=getMonthWeeks; window.ALL_WEEKS=ALL_WEEKS;
-
-/* === end sales-data.js === */
-
-/* sync-bridge loaded externally */
-</script>
-<script src="sync-bridge.js"></script>
-<script src="sales-hist-data.js"></script>
-<script src="nav.js"></script>
-<script>(function(){var r=localStorage.getItem('ambitio_role');if(r==='coach')window.location.href='coaching.html';if(!r)window.location.href='login.html';})();</script>
 <script>
 /* ═══ GARDE D'ACCÈS MODULE ═══════════════════════════════════════════════
-   Masquer une entrée du menu (nav.js) ne protège PAS l'URL : n'importe qui
-   pouvait ouvrir cette page en la tapant. On relit ici la même permission
-   que la sidebar — snapshot `ambitio_modules` écrit au login — et on renvoie
-   l'utilisateur vers un module qu'il possède réellement.
+   Masquer une entrée du menu (nav.js) ne protège PAS l'URL : on relit ici la
+   même permission que la sidebar — snapshot `ambitio_modules` écrit au
+   login — et on renvoie l'utilisateur vers un module qu'il possède.
    Clé contrôlée : sales_projections */
 (function () {
   var r = localStorage.getItem('ambitio_role');
   if (!r) { window.location.href = 'login.html'; return; }
   if (r === 'coach') { window.location.href = 'coaching.html'; return; }
-  if (r === 'admin') return;                    // admin : accès d'office
+  if (r === 'admin') return;
   var mods = null;
   try { mods = JSON.parse(localStorage.getItem('ambitio_modules') || 'null'); } catch (e) { mods = null; }
   function perm(cle, defautSales) {
@@ -480,517 +105,711 @@ window.getMonthWeeks=getMonthWeeks; window.ALL_WEEKS=ALL_WEEKS;
   window.location.replace((crm && crm !== 'none') ? 'sales-leads.html' : 'documents.html');
 })();
 </script>
-
+<script src="funnel-core.js"></script>
+<script src="sales-hist-data.js"></script>
+<script src="nav.js" defer></script>
 </head>
-<body>
 
-<div class="topbar">
-  <div class="tb-logo">S</div>
-  <div class="tb-title">Ambitio <em>Sales</em></div>
-  <div class="tb-sep"></div>
-  <div class="tb-page">📈 Projections</div>
-  <div class="tb-right">
-    <div class="tb-month" id="year-nav">
-      <button onclick="prevYear()">&#9664;</button>
-      <span id="year-lbl" style="min-width:50px;text-align:center">2026</span>
-      <button onclick="nextYear()">&#9654;</button>
+<body class="au-page">
+<div class="au-main" id="app">
+
+  <div class="au-head">
+    <div class="au-head-ico">📈</div>
+    <div>
+      <h1 class="au-title">Projections <span style="color:var(--muted);font-weight:500">· objectif &amp; ce qui manque</span></h1>
+      <div class="au-sub">Closes, contracté et encaissé <strong>réels</strong> : fiches gagnées, RDV closés et module Paiements. Un close annulé (paiement annulé ou client stoppé sans prélèvement) ne compte pas ; seul un prélèvement passé est de l'encaissé.</div>
     </div>
-    <div class="tb-user">
-      <div class="tb-av" id="tb-av">G</div>
-      <div><div class="tb-nm" id="tb-nm"></div></div>
+    <div class="au-head-right">
+      <span class="au-badge-auto"><span class="dot"></span> Données automatiques</span>
     </div>
   </div>
+
+  <div class="au-toolbar">
+    <div class="au-mnav">
+      <button id="btnPrev" title="Mois précédent">‹</button>
+      <span class="au-mlabel" id="monthLbl">—</span>
+      <button id="btnNext" title="Mois suivant">›</button>
+    </div>
+    <button class="au-btn" id="btnToday">Ce mois-ci</button>
+    <div style="flex:1"></div>
+    <button class="au-btn ghost" id="btnObj" style="display:none">🎯 Objectifs</button>
+    <button class="au-btn" id="btnRefresh">⟳ Actualiser</button>
+  </div>
+
+  <div class="au-members" id="memberTabs"></div>
+
+  <div id="content"><div class="au-loading"><div class="au-spinner"></div>Chargement des projections…</div></div>
+
 </div>
 
-<style>
-/* === PROJECTIONS YEAR STYLES === */
-.yr-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:13px; margin-bottom:18px; }
-.yr-kpi { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); padding:18px; position:relative; overflow:hidden; }
-.yr-kpi::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--kc,var(--red2)); }
-.yr-kpi-label { font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
-.yr-kpi-val { font-size:26px; font-weight:800; font-family:var(--font-d); color:var(--text); line-height:1.1; }
-.yr-kpi-sub { font-size:11px; color:var(--muted); margin-top:4px; }
-.yr-kpi-prog { margin-top:10px; }
-.yr-kpi-prog-track { height:6px; background:rgba(255,255,255,.06); border-radius:99px; overflow:hidden; }
-.yr-kpi-prog-fill { height:100%; border-radius:99px; transition:width .5s; }
-.yr-kpi-prog-lbl { display:flex; justify-content:space-between; font-size:10px; color:var(--muted); margin-top:3px; }
+<div id="auToast"></div>
 
-.yr-row { display:grid; grid-template-columns:1fr 1fr; gap:13px; margin-bottom:18px; }
-.yr-row-wide { display:grid; grid-template-columns:2fr 1fr; gap:13px; margin-bottom:18px; }
-.yr-card { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius2); padding:20px; }
-.yr-card-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
-.yr-card-title { font-size:14px; font-weight:700; color:var(--text); }
-.yr-card-badge { font-size:10px; font-weight:700; color:var(--muted); background:var(--bg4); padding:4px 10px; border-radius:20px; border:1px solid var(--border); }
-
-/* Chart */
-.proj-chart { position:relative; height:240px; display:flex; align-items:flex-end; gap:3px; padding:0 4px 26px; }
-.proj-chart-col { flex:1; display:flex; flex-direction:column; align-items:center; gap:0; position:relative; }
-.proj-chart-bars { display:flex; align-items:flex-end; gap:2px; width:100%; height:210px; }
-.proj-chart-bar { flex:1; border-radius:4px 4px 0 0; min-height:2px; transition:height .4s; position:relative; }
-.proj-chart-bar.bar-real { background:linear-gradient(180deg,#ef4444,#991b1b); }
-.proj-chart-bar.bar-obj { background:rgba(251,191,36,.25); border:1px dashed rgba(251,191,36,.5); border-bottom:none; }
-.proj-chart-bar.bar-proj-end { background:linear-gradient(180deg,rgba(96,165,250,.5),rgba(96,165,250,.15)); border:1px dashed rgba(96,165,250,.4); border-bottom:none; }
-.proj-chart-lbl { font-size:9px; color:var(--muted); font-weight:600; margin-top:4px; }
-.proj-chart-tooltip { position:absolute; bottom:100%; left:50%; transform:translateX(-50%); background:var(--bg); border:1px solid var(--border2); padding:6px 10px; border-radius:8px; font-size:11px; color:var(--text); white-space:nowrap; pointer-events:none; opacity:0; transition:opacity .15s; z-index:10; }
-.proj-chart-col:hover .proj-chart-tooltip { opacity:1; }
-
-.chart-legend-row { display:flex; gap:16px; justify-content:center; margin-bottom:12px; flex-wrap:wrap; }
-.chart-legend-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--muted); font-weight:600; }
-.chart-legend-dot { width:10px; height:10px; border-radius:3px; }
-.chart-legend-dot.dashed { border:1.5px dashed; background:transparent !important; }
-
-/* Gap rows */
-.gap-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid rgba(255,255,255,.04); }
-.gap-row:last-child { border:none; }
-.gap-label { width:90px; font-size:12px; font-weight:600; color:var(--muted); }
-.gap-track { flex:1; height:24px; background:rgba(255,255,255,.03); border-radius:6px; position:relative; overflow:hidden; }
-.gap-fill { height:100%; border-radius:6px; transition:width .5s; display:flex; align-items:center; padding-left:8px; }
-.gap-fill.good { background:linear-gradient(90deg,#065f46,#34d399); }
-.gap-fill.bad { background:linear-gradient(90deg,#991b1b,#ef4444); }
-.gap-val { width:100px; text-align:right; font-size:12px; font-weight:700; color:var(--text); font-family:var(--font-m); }
-.gap-delta { width:80px; text-align:right; font-size:11px; font-weight:700; font-family:var(--font-m); }
-
-/* Table */
-.yr-table { width:100%; border-collapse:collapse; }
-.yr-table th { font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; padding:8px 10px; text-align:left; border-bottom:1px solid var(--border); }
-.yr-table td { font-size:12px; font-weight:600; color:var(--text); padding:9px 10px; border-bottom:1px solid rgba(255,255,255,.03); font-family:var(--font-m); }
-.yr-table tr:last-child td { border-bottom:none; }
-.yr-table .tr-total td { color:var(--gold); font-weight:800; border-top:1px solid var(--border2); }
-.yr-table .td-good { color:var(--green); }
-.yr-table .td-bad { color:var(--red2); }
-
-/* Objective gauge */
-.obj-gauge { text-align:center; padding:10px 0; }
-.obj-gauge-val { font-size:40px; font-weight:800; font-family:var(--font-d); }
-.obj-gauge-track { height:10px; background:rgba(255,255,255,.06); border-radius:99px; overflow:hidden; margin:12px 0 6px; }
-.obj-gauge-fill { height:100%; border-radius:99px; transition:width .6s; }
-.obj-gauge-labels { display:flex; justify-content:space-between; font-size:10px; color:var(--muted); }
-
-/* Manager note */
-.mgr-note { background:rgba(255,255,255,0.025); border-radius:10px; padding:18px 20px; border-left:3px solid var(--red2); }
-.mgr-note-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:var(--muted); margin-bottom:10px; }
-.mgr-note-body { font-size:13px; line-height:1.8; color:rgba(255,255,255,0.65); }
-
-/* Month grid */
-.month-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; margin-bottom:18px; }
-.month-btn { padding:8px 4px; border:1px solid var(--border); border-radius:8px; background:var(--bg2); color:var(--muted); font-size:11px; font-weight:600; text-align:center; cursor:pointer; transition:all .15s; font-family:var(--font-b); }
-.month-btn:hover { background:var(--bg4); color:var(--text); border-color:var(--border2); }
-.month-btn.has-data { color:var(--text); }
-.month-btn.has-data::after { content:''; display:block; width:4px; height:4px; border-radius:50%; background:var(--green); margin:3px auto 0; }
-
-@media(max-width:1100px) {
-  .yr-grid { grid-template-columns:repeat(2,1fr); }
-  .yr-row, .yr-row-wide { grid-template-columns:1fr; }
-  .month-grid { grid-template-columns:repeat(4,1fr); }
-}
-@media(max-width:600px) {
-  .yr-grid { grid-template-columns:1fr; }
-  .month-grid { grid-template-columns:repeat(3,1fr); }
-}
-</style>
-
-<div class="page">
-
-  <div class="page-header-row" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
-    <div>
-      <div class="page-title" style="font-size:18px;font-weight:800;color:var(--text)">Projections — Analyse & Objectif annuel</div>
-      <div class="page-sub" style="font-size:12px;color:var(--muted)">Objectif <span id="yr-obj-text">2026</span> : <b style="color:var(--gold)" id="yr-obj-val">1 000 000 €</b> CA HT contracté</div>
+<!-- ── Modale objectifs (admin) ── -->
+<div class="au-modal-bg" id="objModal">
+  <div class="au-modal">
+    <h3 id="objTitle">🎯 Objectifs</h3>
+    <div class="hint">Contracté HT. Un mois laissé vide reprend l'objectif annuel ÷ 12. Stocké dans <code>_config/sales_objectives</code>.</div>
+    <div class="pj-obj-annual"><label for="objAnnual">Objectif annuel (€ HT)</label><input type="number" id="objAnnual" min="0" step="1000"/></div>
+    <div class="pj-obj-grid" id="objMonths"></div>
+    <div class="au-modal-actions">
+      <button class="au-btn" id="objCancel">Annuler</button>
+      <button class="au-btn primary" id="objSave">💾 Enregistrer</button>
     </div>
   </div>
-
-  <!-- Month indicator -->
-  <div class="month-grid" id="month-grid"></div>
-
-  <!-- KPIs -->
-  <div class="yr-grid" id="proj-kpis"></div>
-
-  <!-- Objective gauge + Projection end of year -->
-  <div class="yr-row">
-    <div class="yr-card">
-      <div class="yr-card-hdr">
-        <div class="yr-card-title">Objectif annuel — CA HT Contracté</div>
-        <div class="yr-card-badge" id="obj-badge">2026</div>
-      </div>
-      <div class="obj-gauge" id="obj-gauge"></div>
-    </div>
-    <div class="yr-card">
-      <div class="yr-card-hdr">
-        <div class="yr-card-title">Projection fin d'année</div>
-      </div>
-      <div id="proj-forecast"></div>
-    </div>
-  </div>
-
-  <!-- Chart: Contracté par mois vs rythme objectif -->
-  <div class="yr-card" style="margin-bottom:18px">
-    <div class="yr-card-hdr">
-      <div class="yr-card-title" id="chart-title">Contracté mensuel vs Rythme objectif — 2026</div>
-    </div>
-    <div class="chart-legend-row">
-      <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#ef4444"></div>Contracté réel</div>
-      <div class="chart-legend-item"><div class="chart-legend-dot dashed" style="border-color:#f59e0b"></div>Rythme objectif</div>
-      <div class="chart-legend-item"><div class="chart-legend-dot dashed" style="border-color:#60a5fa"></div>Projection</div>
-    </div>
-    <div class="proj-chart" id="proj-chart"></div>
-  </div>
-
-  <!-- Funnel year + Month table -->
-  <div class="yr-row">
-    <div class="yr-card">
-      <div class="yr-card-hdr">
-        <div class="yr-card-title">Écarts vs Objectif — Funnel annuel</div>
-      </div>
-      <div id="proj-gaps"></div>
-    </div>
-    <div class="yr-card">
-      <div class="yr-card-hdr">
-        <div class="yr-card-title">Contracté mois par mois</div>
-      </div>
-      <div id="proj-months"></div>
-    </div>
-  </div>
-
-  <!-- Manager note -->
-  <div class="yr-card" style="margin-bottom:18px">
-    <div class="yr-card-hdr"><div class="yr-card-title">Note du manager</div></div>
-    <div class="mgr-note">
-      <div class="mgr-note-label">Message du manager</div>
-      <div class="mgr-note-body">
-        Ce que tu as écrit, ce sont tes <b style="color:var(--text)">projections</b>, pas tes objectifs.<br><br>
-        Une projection, c'est ce que tu es censé atteindre dans <b style="color:var(--text)">75 à 80% des cas</b>.
-        C'est ce que tu atteins sans te forcer.<br><br>
-        Un objectif, c'est ta projection augmentée de <b style="color:var(--gold)">33 à 50%</b>.
-        C'est ce que tu vises pour sortir de ta zone de confort.<br><br>
-        <b style="color:var(--gold)">Objectif 2026 : 1 000 000 € CA HT contracté</b> — soit ~83 333 €/mois en moyenne.<br><br>
-        <span style="color:var(--red3)">
-          Projection = zone de confort &nbsp;·&nbsp; Objectif = zone de progression
-        </span>
-      </div>
-    </div>
-  </div>
-
 </div>
 
 <script>
-/* ═══════════════════════════════════════════════════════════
-   PROJECTIONS — VUE ANNUELLE
-═══════════════════════════════════════════════════════════ */
-const MF = DB.months;
-let _year = 2026;
+(function () {
+  'use strict';
+  /* ═══════════════════════════════════════════════════════════════════════
+     PROJECTIONS — refonte du 13/10/2026
+     ─────────────────────────────────────────────────────────────────────
+     L'ancienne page lisait saisies/{uid}/mois (saisie hebdo à la main),
+     abandonnée depuis que Close SB / SET NB calculent tout seuls : tout
+     tombait à zéro. Désormais :
+     · closes = fiches passées clientes (clientSince) + RDV closés sans fiche
+       + paiements sans fiche gagnée — les trois chemins du Funnel ;
+     · montants et closes annulés = règle REVENUE de funnel-core.js
+       (FunnelCore.revClient) — JAMAIS recopiée ici ;
+     · mois antérieurs à AUTO_FROM : saisie manuelle historique (saisies,
+       repli sales-hist-data.js), affichée comme telle ;
+     · objectifs = _config/sales_objectives (admin), contracté HT.
+     ═══════════════════════════════════════════════════════════════════════ */
+  var FC = window.FunnelCore;
+  var db = firebase.firestore();
+  var $ = function (s) { return document.querySelector(s); };
 
-/* Objectif annuel par année (CA HT contracté) */
-const YEAR_OBJECTIVES = {
-  2025: 500000,   // pas d'objectif formel, estimation
-  2026: 1000000,
-  2027: 1500000,
-};
+  var MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  var AUTO_FROM = '2026-07';             // 1er mois calculé automatiquement (closes RDV + Paiements complets)
+  var DEFAULT_OBJ = { '2025': 500000, '2026': 1000000, '2027': 1500000 };
+  var DEFAULT_TICKET = 6000;             // panier HT de repli si aucun close récent
+  var RATE_WINDOW_DAYS = 90;             // fenêtre des taux de conversion
+  var DAY = 86400000;
+  var IS_ADMIN = localStorage.getItem('ambitio_role') === 'admin';
 
-function prevYear() { _year--; refreshProj(); }
-function nextYear() { _year++; refreshProj(); }
+  var S = {
+    year: 0, month: 0,                   // mois affiché (month 0-11)
+    slug: '_all',
+    objectives: {},                      // { 'YYYY': { annual, months: { '1'..'12': n|null } } }
+    data: null, loading: false
+  };
+  (function initPeriod() {
+    var now = new Date();
+    S.year = now.getFullYear(); S.month = now.getMonth();
+    try { var sl = localStorage.getItem('proj_v2_member'); if (sl) S.slug = sl; } catch (e) {}
+  })();
 
-/* ── HIST_DATA — données hardcodées (miroir du dashboard) ── */
-/* HIST_DATA vit maintenant dans sales-hist-data.js, chargé plus haut et
-   partagé avec l'autre page. Les deux copies précédentes avaient divergé
-   sur les champs `leads` et `tempsAppel` — ne pas en recréer une ici. */
+  /* ── Formats ── */
+  function pad2(n) { return String(n).padStart(2, '0'); }
+  function ymOf(ms) { var d = new Date(ms); return d.getFullYear() + '-' + pad2(d.getMonth() + 1); }
+  function isoOf(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+  function fmtEuro(n) { return (Math.round(Number(n) || 0)).toLocaleString('fr-FR') + ' €'; }
+  function fmtPct(n, dec) { if (n == null || !isFinite(n)) return '—'; var f = Math.pow(10, dec == null ? 1 : dec); return (Math.round(n * f) / f).toLocaleString('fr-FR') + ' %'; }
+  function fmtNum(n) { return (Math.round(Number(n) || 0)).toLocaleString('fr-FR'); }
+  function fmtDay(ms) { var d = new Date(ms); return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1); }
+  function esc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function toast(msg, err) {
+    var t = $('#auToast'); t.textContent = msg; t.className = err ? 'err show' : 'show';
+    clearTimeout(window.__auTo); window.__auTo = setTimeout(function () { t.className = ''; }, 3200);
+  }
+  function memberName(slug) {
+    var m = window.TEAM_MEMBERS && window.TEAM_MEMBERS[slug];
+    return m ? (m.shortName || m.displayName || slug) : (slug || '—');
+  }
+  function isDeparted(slug) { return !!(window.TEAM_DEPARTED && window.TEAM_DEPARTED[slug]); }
 
-function _mToFs(mk) {
-  const p = mk.split(' '); const m = MF.indexOf(p[0]);
-  return m < 0 ? null : `${p[1]}-${String(m+1).padStart(2,'0')}`;
-}
+  /* Jours ouvrés (lun-ven) entre deux dates incluses. */
+  function workdays(from, to) {
+    var n = 0;
+    for (var d = new Date(from.getFullYear(), from.getMonth(), from.getDate()); d <= to; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) {
+      var w = d.getDay(); if (w !== 0 && w !== 6) n++;
+    }
+    return n;
+  }
 
-/* ── Charger toute l'année ── */
-async function loadYearData() {
-  const db = (typeof Fire !== 'undefined' && Fire.db) ? Fire.db : null;
-  const results = {};
+  /* ── Objectifs ── */
+  function objYear(y) {
+    var o = S.objectives[String(y)] || {};
+    var annual = (o.annual != null && o.annual !== '') ? Number(o.annual) || 0 : (DEFAULT_OBJ[String(y)] || 0);
+    return { annual: annual, months: o.months || {} };
+  }
+  function objMonth(y, m) {
+    var o = objYear(y);
+    var v = o.months[String(m + 1)];
+    return (v != null && v !== '') ? Number(v) || 0 : o.annual / 12;
+  }
+  function loadObjectives() {
+    return db.collection('_config').doc('sales_objectives').get().then(function (snap) {
+      S.objectives = (snap.exists && snap.data().years) || {};
+    }).catch(function (e) { console.warn('[projections] objectifs', e && e.message); S.objectives = {}; });
+  }
 
-  for (let m = 0; m < 12; m++) {
-    const mk = MF[m] + ' ' + _year;
-    const fsKey = `${_year}-${String(m+1).padStart(2,'0')}`;
-    results[mk] = {};
+  /* ══ CHARGEMENT ══════════════════════════════════════════════════════════ */
+  function snapList(snap) {
+    var out = [];
+    snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; out.push(d); });
+    return out;
+  }
 
-    for (const uid of SYNC_UIDS) {
-      let data = null;
-      if (db) {
-        try {
-          const ref = db.collection('saisies').doc(uid).collection('mois').doc(fsKey);
-          const snap = await ref.get();
-          if (snap.exists) {
-            const raw = snap.data();
-            data = { closing: null, setting: null };
-            if (raw.closing_total) data.closing = raw.closing_total;
-            else if (raw.closing) {
-              const t = {}; ['calls','lives','offres','closes','hardClose','followUp','contracte','collecte'].forEach(k => t[k] = 0);
-              ALL_WEEKS.forEach(w => { if (raw.closing[w]) Object.keys(t).forEach(k => t[k] += (raw.closing[w][k]||0)); });
-              data.closing = t;
-            }
-            if (raw.setting_total) data.setting = raw.setting_total;
-            else if (raw.setting) {
-              const t = {}; ['leads','calls','decroches','propRdv','sets','presents','closes','collecte'].forEach(k => t[k] = 0);
-              ALL_WEEKS.forEach(w => { if (raw.setting[w]) Object.keys(t).forEach(k => t[k] += (raw.setting[w][k]||0)); });
-              data.setting = t;
-            }
-          }
-        } catch(e) {}
-      }
-      // Fallback HIST_DATA
-      if (!data) {
-        const h = HIST_DATA[uid];
-        if (h) {
-          data = { closing: null, setting: null };
-          if (h.closing && h.closing[mk]) data.closing = h.closing[mk];
-          if (h.closing_weekly && h.closing_weekly[mk]) {
-            const t = {}; ['calls','lives','offres','closes','hardClose','followUp','contracte','collecte'].forEach(k => t[k] = 0);
-            Object.values(h.closing_weekly[mk]).forEach(w => Object.keys(t).forEach(k => t[k] += (w[k]||0)));
-            data.closing = t;
-          }
-          if (h.setting && h.setting[mk]) data.setting = h.setting[mk];
-          if (h.setting_weekly && h.setting_weekly[mk]) {
-            const t = {}; ['leads','calls','decroches','propRdv','sets','presents','closes','collecte'].forEach(k => t[k] = 0);
-            Object.values(h.setting_weekly[mk]).forEach(w => Object.keys(t).forEach(k => t[k] += (w[k]||0)));
-            data.setting = t;
-          }
-          if (!data.closing && !data.setting) data = null;
+  /* Saisie manuelle historique d'un mois (avant AUTO_FROM) : somme des
+     membres — saisies/{slug}/mois/{YYYY-MM}, repli sales-hist-data.js. */
+  function legacySlugs() {
+    var seen = {}, out = [];
+    function add(s) { if (s && !seen[s]) { seen[s] = 1; out.push(s); } }
+    Object.keys(window.HIST_DATA || {}).forEach(add);
+    (window.TEAM_MEMBERS_LIST || []).forEach(function (m) { add(m.slug); });
+    ['elodie', 'guillaume'].forEach(add);
+    return out;
+  }
+  function sumWeeks(obj) {
+    var t = { closes: 0, contracte: 0, collecte: 0 };
+    Object.keys(obj || {}).forEach(function (w) {
+      var x = obj[w] || {};
+      t.closes += Number(x.closes) || 0; t.contracte += Number(x.contracte) || 0; t.collecte += Number(x.collecte) || 0;
+    });
+    return t;
+  }
+  function loadLegacyMonth(y, m) {
+    var key = y + '-' + pad2(m + 1);
+    var mk = MONTHS_FR[m] + ' ' + y;
+    var slugs = legacySlugs();
+    return Promise.all(slugs.map(function (slug) {
+      return db.collection('saisies').doc(slug).collection('mois').doc(key).get().then(function (s) {
+        if (s.exists) {
+          var raw = s.data() || {};
+          if (raw.closing_total) return { slug: slug, closes: Number(raw.closing_total.closes) || 0, contracte: Number(raw.closing_total.contracte) || 0 };
+          if (raw.closing) { var t = sumWeeks(raw.closing); return { slug: slug, closes: t.closes, contracte: t.contracte }; }
+        }
+        var h = window.HIST_DATA && window.HIST_DATA[slug];
+        if (h && h.closing && h.closing[mk]) return { slug: slug, closes: Number(h.closing[mk].closes) || 0, contracte: Number(h.closing[mk].contracte) || 0 };
+        if (h && h.closing_weekly && h.closing_weekly[mk]) { var t2 = sumWeeks(h.closing_weekly[mk]); return { slug: slug, closes: t2.closes, contracte: t2.contracte }; }
+        return null;
+      }).catch(function () { return null; });
+    })).then(function (rows) {
+      var out = { closes: 0, contracte: 0, bySlug: {}, has: false };
+      rows.forEach(function (r) {
+        if (!r) return;
+        out.has = true; out.closes += r.closes; out.contracte += r.contracte;
+        out.bySlug[r.slug] = { closes: r.closes, contracte: r.contracte };
+      });
+      return out;
+    });
+  }
+
+  function loadAll() {
+    var y = S.year;
+    var now = new Date();
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var winStart = new Date(today.getTime() - RATE_WINDOW_DAYS * DAY);
+    var winEnd = new Date(today.getTime() - 1);              // hier 23:59:59
+    var yStart = new Date(y, 0, 1), yEnd = new Date(y, 11, 31, 23, 59, 59, 999);
+    var qStart = winStart < yStart ? winStart : yStart;
+    var qEnd = yEnd > today ? yEnd : today;
+    var P = { start: qStart, end: qEnd };
+    var TS = firebase.firestore.Timestamp;
+    var mEnd = new Date(S.year, S.month + 1, 0);
+
+    var legacyMonths = [];
+    for (var m = 0; m < 12; m++) { if ((y + '-' + pad2(m + 1)) < AUTO_FROM) legacyMonths.push(m); }
+
+    var DATA = { payments: [], closedLeads: [] };
+    return Promise.all([
+      FC.loadTypeMap(db).catch(function () { return {}; }),
+      db.collection('payments').get().then(snapList),
+      db.collection('leads').where('clientSince', '>=', TS.fromDate(qStart)).where('clientSince', '<=', TS.fromDate(qEnd)).limit(800).get().then(snapList),
+      db.collection('bookings').where('outcome', '==', 'close').get().then(snapList).catch(function () { return []; }),
+      /* Taux de conversion : RDV ayant eu lieu sur la fenêtre glissante */
+      db.collection('bookings').where('date', '>=', isoOf(winStart)).where('date', '<=', isoOf(winEnd)).get().then(snapList).catch(function () { return []; }),
+      /* RDV à venir jusqu'à la fin du mois affiché (pipeline) */
+      (mEnd >= today
+        ? db.collection('bookings').where('date', '>=', isoOf(today)).where('date', '<=', isoOf(mEnd)).get().then(snapList).catch(function () { return []; })
+        : Promise.resolve([])),
+      /* Leads entrés sur la fenêtre (ratio RDV / lead) */
+      db.collection('leads').where('createdAt', '>=', TS.fromDate(winStart)).where('createdAt', '<=', TS.fromDate(winEnd)).limit(FC.LEADS_QUERY_LIMIT).get().then(function (snap) {
+        var n = 0;
+        snap.forEach(function (doc) {
+          var d = doc.data();
+          if (d._merged === true) return;
+          var re = FC.realEntryMs(d);
+          if (re != null && re >= winStart.getTime() && re <= winEnd.getTime()) n++;
+        });
+        return { n: n, truncated: snap.size >= FC.LEADS_QUERY_LIMIT };
+      }).catch(function () { return { n: 0, truncated: false }; }),
+      Promise.all(legacyMonths.map(function (mm) { return loadLegacyMonth(y, mm).then(function (r) { r.month = mm; return r; }); }))
+    ]).then(function (res) {
+      DATA.payments = res[1];
+      DATA.closedLeads = res[2].filter(function (l) { return l._merged !== true; });
+      var pack = {
+        typeMap: res[0] || {}, payments: res[1], closedLeads: DATA.closedLeads,
+        closeBookings: res[3], winBookings: res[4], upcoming: res[5], winLeads: res[6],
+        legacy: {}, P: P, winStart: winStart, winEnd: winEnd, today: today
+      };
+      res[7].forEach(function (r) { pack.legacy[r.month] = r; });
+      /* Paiements sans fiche gagnée : même résolution que le Funnel. */
+      return FC.resolvePaymentLeads(db, P, DATA).then(function () { return pack; }, function () { return pack; });
+    });
+  }
+
+  /* ══ CALCUL ══════════════════════════════════════════════════════════════
+     Liste des closes (trois chemins du Funnel) avec verdict REVENUE. */
+  function buildCloses(pack) {
+    var idx = FC.revIndex(pack.payments);
+    pack.payments.forEach(function (p) { p._matched = false; });
+    function paysFor(leadId, email, phone) {
+      var list = FC.revPaymentsFor(idx, leadId, email, phone).filter(function (p) { return !p._matched; });
+      list.forEach(function (p) { p._matched = true; });
+      return list;
+    }
+    var declByLead = {}, closerByLead = {};
+    pack.closeBookings.forEach(function (b) {
+      if (!b.leadId || !b.closeData) return;
+      declByLead[b.leadId] = b.closeData;
+      if (b.closeData.closerSlug) closerByLead[b.leadId] = b.closeData.closerSlug;
+    });
+    function closerOfPays(pays) { for (var i = 0; i < pays.length; i++) if (pays[i].closerSlug) return pays[i].closerSlug; return null; }
+    var out = [];
+    var ps = pack.P.start.getTime(), pe = pack.P.end.getTime();
+
+    /* ① fiches gagnées */
+    pack.closedLeads.forEach(function (l) {
+      var ms = FC.parseFlexMs(l.clientSince);
+      if (ms == null) return;
+      var pays = paysFor(l._id, l.email, l.telephone || l.phone);
+      var decl = declByLead[l._id] || l.closedData || null;
+      var rv = FC.revClient(pays, l, decl);
+      out.push({
+        ms: ms, name: l.nom || l.email || l._id, leadId: l._id,
+        closer: (l.closedData && l.closedData.closerSlug) || closerByLead[l._id] || l.closeurSlug || closerOfPays(pays) || null,
+        sb: l.stage === 'closed_won_self', rv: rv, pays: pays
+      });
+    });
+    /* ② RDV closés sans fiche */
+    pack.closeBookings.forEach(function (b) {
+      if (b.leadId) return;
+      var ms = FC.parseFlexMs(b.date);
+      if (ms == null || ms < ps || ms > pe) return;
+      var pr = b.prospect || {};
+      var pays = paysFor(null, pr.email, pr.telephone || pr.phone);
+      var rv = FC.revClient(pays, null, b.closeData || null);
+      out.push({ ms: ms, name: pr.nom || pr.email || b._id, leadId: null, closer: (b.closeData && b.closeData.closerSlug) || closerOfPays(pays), sb: FC.classifyBooking(b, pack.typeMap) === 'self', rv: rv, pays: pays });
+    });
+    /* ③ paiements sans fiche gagnée de la même période */
+    pack.payments.forEach(function (p) {
+      if (!p._payClose || p._matched || p._payClose.kind !== 'count') return;
+      var ms = FC.parseFlexMs(p.createdAt);
+      if (ms == null) return;
+      p._matched = true;
+      var pc = p._payClose;
+      var rv = FC.revClient([p], pc.lead || null, null);
+      out.push({ ms: ms, name: pc.name, leadId: pc.lead ? pc.lead._id : null, closer: p.closerSlug || null, sb: !!pc.sb, rv: rv, pays: [p], viaPayment: true });
+    });
+    out.sort(function (a, b) { return a.ms - b.ms; });
+    return out;
+  }
+
+  /* Cash encaissé daté par mois (tous clients, tous paiements). */
+  function cashByMonth(payments, slug) {
+    var m = {};
+    payments.forEach(function (p) {
+      if (slug !== '_all' && p.closerSlug !== slug) return;
+      FC.revPaidEntries(p).forEach(function (e) {
+        if (e.ms == null) return;
+        var k = ymOf(e.ms);
+        m[k] = (m[k] || 0) + e.ht;
+      });
+    });
+    return m;
+  }
+
+  /* Taux de conversion sur la fenêtre glissante (équipe). */
+  function computeRates(pack, closes) {
+    var rdv = 0, presents = 0, pitched = 0;
+    pack.winBookings.forEach(function (b) {
+      if (FC.classifyBooking(b, pack.typeMap) === 'excluded') return;
+      var oc = b.outcome || null;
+      var resched = oc === 'replanifie' || (!oc && b.status === 'cancelled' && b.rescheduled === true);
+      if (resched) return;
+      rdv++;
+      var present = oc ? (oc === 'offre' || oc === 'close' || oc === 'non_close' || oc === 'disqualifie') : b.status === 'completed';
+      if (present) presents++;
+      if (oc === 'offre' || oc === 'close' || oc === 'non_close') pitched++;
+    });
+    var ws = pack.winStart.getTime(), we = pack.winEnd.getTime();
+    var nCloses = 0, sumCon = 0;
+    closes.forEach(function (c) {
+      if (c.rv.cancelled || c.ms < ws || c.ms > we) return;
+      nCloses++; sumCon += c.rv.con;
+    });
+    var ticket = nCloses > 0 && sumCon > 0 ? sumCon / nCloses : null;
+    if (ticket == null) {
+      var n2 = 0, s2 = 0;
+      closes.forEach(function (c) { if (!c.rv.cancelled && c.rv.con > 0) { n2++; s2 += c.rv.con; } });
+      ticket = n2 > 0 ? s2 / n2 : DEFAULT_TICKET;
+    }
+    var upcoming = 0;
+    pack.upcoming.forEach(function (b) {
+      if (FC.classifyBooking(b, pack.typeMap) === 'excluded') return;
+      if (b.outcome) return;
+      if (b.status === 'cancelled' || b.status === 'no_show' || b.status === 'completed') return;
+      if (b.date < isoOf(pack.today)) return;
+      upcoming++;
+    });
+    return {
+      rdv: rdv, presents: presents, pitched: pitched, closes: nCloses, leads: pack.winLeads.n, leadsTruncated: pack.winLeads.truncated,
+      ticket: ticket, upcoming: upcoming,
+      closeParRdv: rdv > 0 ? nCloses / rdv : null,
+      closeParOffre: pitched > 0 ? nCloses / pitched : null,
+      offreParPresent: presents > 0 ? pitched / presents : null,
+      presentParRdv: rdv > 0 ? presents / rdv : null,
+      rdvParLead: pack.winLeads.n > 0 ? rdv / pack.winLeads.n : null
+    };
+  }
+
+  /* Agrégat par mois de l'année affichée. */
+  function computeYear(pack, closes, slug) {
+    var y = S.year;
+    var cash = cashByMonth(pack.payments, slug);
+    var months = [];
+    for (var m = 0; m < 12; m++) {
+      var key = y + '-' + pad2(m + 1);
+      var auto = key >= AUTO_FROM;
+      var row = { m: m, key: key, auto: auto, closes: 0, cancelled: 0, contracte: 0, encaisseCloses: 0, pending: 0, cash: cash[key] || 0, list: [], has: false, obj: objMonth(y, m) };
+      if (auto) {
+        closes.forEach(function (c) {
+          if (ymOf(c.ms) !== key) return;
+          if (slug !== '_all' && c.closer !== slug) return;
+          row.list.push(c);
+          row.has = true;
+          if (c.rv.cancelled) { row.cancelled++; return; }
+          row.closes++; row.contracte += c.rv.con; row.encaisseCloses += c.rv.paid; row.pending += c.rv.pending;
+        });
+      } else {
+        var lg = pack.legacy[m];
+        if (lg && lg.has) {
+          var src = slug === '_all' ? lg : (lg.bySlug[slug] || null);
+          if (src) { row.closes = src.closes; row.contracte = src.contracte; row.has = src.closes > 0 || src.contracte > 0; }
         }
       }
-      results[mk][uid] = data;
+      if (row.cash > 0) row.has = true;
+      months.push(row);
     }
+    return months;
   }
-  return results;
-}
 
-/* ── Agréger ── */
-function aggregate(yearData) {
-  const T = { calls:0, lives:0, offres:0, closes:0, contracte:0, collecte:0, sets:0, presents:0 };
-  const perMonth = {};
-  let monthsWithData = 0;
-
-  for (let m = 0; m < 12; m++) {
-    const mk = MF[m] + ' ' + _year;
-    const mData = yearData[mk] || {};
-    const mt = { calls:0, lives:0, offres:0, closes:0, contracte:0, collecte:0, sets:0, presents:0, hasData:false };
-
-    SYNC_UIDS.forEach(uid => {
-      const d = mData[uid]; if (!d) return;
-      if (d.closing) {
-        mt.hasData = true;
-        ['calls','lives','offres','closes','contracte','collecte'].forEach(k => { mt[k] += (d.closing[k]||0); T[k] += (d.closing[k]||0); });
-      }
-      if (d.setting) {
-        mt.hasData = true;
-        mt.sets += (d.setting.sets||0); T.sets += (d.setting.sets||0);
-        mt.presents += (d.setting.presents||0); T.presents += (d.setting.presents||0);
-      }
+  /* ══ RENDU ═══════════════════════════════════════════════════════════════ */
+  function refresh() {
+    if (S.loading) return;
+    S.loading = true;
+    $('#monthLbl').textContent = MONTHS_FR[S.month] + ' ' + S.year;
+    $('#content').innerHTML = '<div class="au-loading"><div class="au-spinner"></div>Calcul des closes, paiements et taux de conversion…</div>';
+    Promise.all([loadObjectives(), loadAll()]).then(function (res) {
+      var pack = res[1];
+      var closes = buildCloses(pack);
+      S.data = { pack: pack, closes: closes, rates: computeRates(pack, closes) };
+      S.loading = false;
+      render();
+    }).catch(function (e) {
+      S.loading = false;
+      console.error('[projections]', e);
+      $('#content').innerHTML = '<div class="au-empty"><span class="i">⚠️</span>' + esc(e && e.message || 'Erreur de chargement') + '</div>';
     });
-    perMonth[mk] = mt;
-    if (mt.hasData) monthsWithData++;
   }
-  return { T, perMonth, monthsWithData };
-}
 
-/* ── RENDER ── */
-let _yearData = null;
-let _agg = null;
+  function renderMembers() {
+    if (!S.data) { $('#memberTabs').innerHTML = ''; return; }
+    var seen = {}, slugs = [];
+    S.data.closes.forEach(function (c) {
+      if (!c.closer || seen[c.closer] || isDeparted(c.closer)) return;
+      if (new Date(c.ms).getFullYear() !== S.year) return;
+      seen[c.closer] = 1; slugs.push(c.closer);
+    });
+    if (S.slug !== '_all' && !seen[S.slug]) S.slug = '_all';
+    if (!slugs.length) { $('#memberTabs').innerHTML = ''; return; }
+    var h = '<button class="au-member' + (S.slug === '_all' ? ' active' : '') + '" style="--au-mc:#5b7cfa" data-slug="_all"><span class="au-member-av">Σ</span><span><span class="au-member-n">Équipe</span><br/><span class="au-member-r">tous les closes</span></span></button>';
+    slugs.forEach(function (sl) {
+      var m = (window.TEAM_MEMBERS && window.TEAM_MEMBERS[sl]) || {};
+      var name = memberName(sl);
+      h += '<button class="au-member' + (S.slug === sl ? ' active' : '') + '" style="--au-mc:' + esc(m.color || '#5b7cfa') + '" data-slug="' + esc(sl) + '">' +
+        '<span class="au-member-av">' + esc((m.initials || name.slice(0, 2)).toUpperCase()) + '</span>' +
+        '<span><span class="au-member-n">' + esc(name) + '</span><br/><span class="au-member-r">closes signés</span></span></button>';
+    });
+    $('#memberTabs').innerHTML = h;
+  }
 
-async function refreshProj() {
-  document.getElementById('year-lbl').textContent = _year;
-  document.getElementById('obj-badge').textContent = _year;
-  document.getElementById('yr-obj-text').textContent = _year;
-  const obj = YEAR_OBJECTIVES[_year] || 0;
-  document.getElementById('yr-obj-val').textContent = obj > 0 ? U.euro(obj) : 'Non défini';
+  function kpi(label, val, sub, color, pct) {
+    return '<div class="pj-kpi" style="--pj-kc:' + color + '"><div class="l">' + label + '</div><div class="v">' + val + '</div>' +
+      (sub ? '<div class="s">' + sub + '</div>' : '') +
+      (pct != null ? '<div class="pj-bar"><i style="width:' + Math.max(2, Math.min(100, pct)) + '%"></i></div>' : '') + '</div>';
+  }
 
-  _yearData = await loadYearData();
-  _agg = aggregate(_yearData);
-  renderProj();
-}
+  function statusTag(c) {
+    var rv = c.rv;
+    if (rv.cancelled) return '<span class="pj-tag ko">🚫 annulé — ' + esc(rv.reason) + '</span>';
+    if (!rv.hasPay) return '<span class="pj-tag wait">💶 sans paiement' + (rv.declCol > 0 ? ' (déclaré ' + fmtEuro(rv.declCol) + ')' : '') + '</span>';
+    if (rv.paid <= 0) return '<span class="pj-tag wait">⏳ 1er prélèvement en attente</span>';
+    return '<span class="pj-tag ok">✅ encaissé</span>';
+  }
 
-function renderProj() {
-  if (!_agg) return;
-  const { T, perMonth, monthsWithData } = _agg;
-  const obj = YEAR_OBJECTIVES[_year] || 0;
-  const objMensuel = obj > 0 ? obj / 12 : 0;
-  const atteinte = obj > 0 ? T.contracte / obj : 0;
-  const now = new Date();
-  const currentMonth = (now.getFullYear() === _year) ? now.getMonth() : (_year < now.getFullYear() ? 12 : 0);
-  const avgPerMonth = monthsWithData > 0 ? T.contracte / monthsWithData : 0;
-  const projFin = avgPerMonth * 12;
-  const deltaObj = obj - T.contracte;
-  const remainingMonths = Math.max(12 - currentMonth, 1);
-  const neededPerMonth = deltaObj > 0 ? deltaObj / remainingMonths : 0;
+  function render() {
+    renderMembers();
+    if (!S.data) return;
+    var pack = S.data.pack, rates = S.data.rates;
+    var slug = S.slug;
+    var months = computeYear(pack, S.data.closes, slug);
+    var cur = months[S.month];
+    var today = pack.today;
+    var mStart = new Date(S.year, S.month, 1), mEnd = new Date(S.year, S.month + 1, 0);
+    var isCurrent = today >= mStart && today <= mEnd;
+    var isPast = mEnd < today;
+    var team = slug === '_all';
+    var objM = cur.obj;
+    var objY = objYear(S.year).annual;
 
-  // Month grid
-  document.getElementById('month-grid').innerHTML = MF.map((m, i) => {
-    const mk = m + ' ' + _year;
-    const md = perMonth[mk];
-    return `<div class="month-btn${md && md.hasData ? ' has-data' : ''}">${m.slice(0,3)}</div>`;
-  }).join('');
-
-  // KPIs
-  document.getElementById('proj-kpis').innerHTML = [
-    { label:'Contracté YTD', val:U.euro(T.contracte), sub:`${T.closes} closes en ${monthsWithData} mois`, color:'#ef4444' },
-    { label:'Atteinte objectif', val:(atteinte*100).toFixed(1)+'%', sub:obj > 0 ? `sur ${U.euro(obj)}` : 'Pas d\'objectif', color: atteinte >= 0.5 ? '#34d399' : atteinte >= 0.25 ? '#f59e0b' : '#ef4444' },
-    { label:'Projection fin année', val:U.euro(projFin), sub:projFin >= obj ? '✅ Au-dessus objectif' : `⚠️ Manque ${U.euro(obj-projFin)}`, color: projFin >= obj ? '#34d399' : '#f59e0b' },
-    { label:'Rythme nécessaire', val:neededPerMonth > 0 ? U.euro(neededPerMonth) + '/mois' : '✅ Objectif atteint', sub:`${remainingMonths} mois restants`, color:'#60a5fa' },
-  ].map(k => `<div class="yr-kpi" style="--kc:${k.color}"><div class="yr-kpi-label">${k.label}</div><div class="yr-kpi-val">${k.val}</div><div class="yr-kpi-sub">${k.sub}</div></div>`).join('');
-
-  // Objective gauge
-  const pct = Math.min(atteinte * 100, 100);
-  const gColor = pct >= 75 ? 'var(--green)' : pct >= 40 ? 'var(--gold)' : 'var(--red2)';
-  document.getElementById('obj-gauge').innerHTML = `
-    <div class="obj-gauge-val" style="color:${gColor}">${(atteinte*100).toFixed(1)}%</div>
-    <div style="font-size:12px;color:var(--muted);margin:4px 0">${U.euro(T.contracte)} / ${U.euro(obj)}</div>
-    <div class="obj-gauge-track"><div class="obj-gauge-fill" style="width:${pct}%;background:linear-gradient(90deg,${gColor},${gColor}88)"></div></div>
-    <div class="obj-gauge-labels"><span>0 €</span><span>${U.euro(obj/2)}</span><span>${U.euro(obj)}</span></div>
-    <div style="margin-top:14px;font-size:11px;color:var(--muted)">
-      Delta: <b style="color:${deltaObj > 0 ? 'var(--red2)' : 'var(--green)'}">${deltaObj > 0 ? '−' : '+'} ${U.euro(Math.abs(deltaObj))}</b>
-    </div>`;
-
-  // Forecast
-  document.getElementById('proj-forecast').innerHTML = `
-    <div style="text-align:center;padding:8px 0">
-      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Si le rythme actuel continue</div>
-      <div style="font-size:36px;font-weight:800;font-family:var(--font-d);color:${projFin >= obj ? 'var(--green)' : 'var(--gold)'}">${U.euro(projFin)}</div>
-      <div style="font-size:12px;color:var(--muted);margin:8px 0">Basé sur ${U.euro(avgPerMonth)}/mois (${monthsWithData} mois)</div>
-      <div style="margin-top:12px;padding:10px;background:rgba(255,255,255,.03);border-radius:8px">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">SCÉNARIOS</div>
-        <div style="font-size:12px;color:var(--text);margin-bottom:4px">
-          📈 Optimiste (+30%): <b style="color:var(--green)">${U.euro(projFin * 1.3)}</b>
-        </div>
-        <div style="font-size:12px;color:var(--text);margin-bottom:4px">
-          📊 Réaliste: <b style="color:var(--gold)">${U.euro(projFin)}</b>
-        </div>
-        <div style="font-size:12px;color:var(--text)">
-          📉 Pessimiste (−20%): <b style="color:var(--red2)">${U.euro(projFin * 0.8)}</b>
-        </div>
-      </div>
-    </div>`;
-
-  // Chart — contracté par mois vs objectif mensuel
-  const chartData = [];
-  MF.forEach((m, i) => {
-    const mk = m + ' ' + _year;
-    const md = perMonth[mk];
-    const isPast = md && md.hasData;
-    const isFuture = !isPast && i >= currentMonth;
-    chartData.push({ label: m.slice(0,3), ct: isPast ? md.contracte : 0, obj: objMensuel, proj: isFuture ? avgPerMonth : 0, hasData: isPast, isFuture });
-  });
-  const maxC = Math.max(...chartData.map(c => Math.max(c.ct, c.obj, c.proj)), 1);
-
-  document.getElementById('chart-title').textContent = `Contracté mensuel vs Rythme objectif — ${_year}`;
-  document.getElementById('proj-chart').innerHTML = chartData.map(c => {
-    const hReal = (c.ct / maxC * 200).toFixed(0);
-    const hObj = (c.obj / maxC * 200).toFixed(0);
-    const hProj = (c.proj / maxC * 200).toFixed(0);
-    return `<div class="proj-chart-col">
-      <div class="proj-chart-tooltip">${c.label}: ${c.hasData ? U.euro(c.ct) : c.isFuture ? 'Proj: '+U.euro(c.proj) : '—'} · Obj: ${U.euro(c.obj)}</div>
-      <div class="proj-chart-bars">
-        ${c.hasData ? `<div class="proj-chart-bar bar-real" style="height:${hReal}px"></div>` : ''}
-        ${c.isFuture ? `<div class="proj-chart-bar bar-proj-end" style="height:${hProj}px"></div>` : ''}
-        <div class="proj-chart-bar bar-obj" style="height:${hObj}px"></div>
-      </div>
-      <div class="proj-chart-lbl">${c.label}</div>
-    </div>`;
-  }).join('');
-
-  // Gap analysis
-  const objCloses = obj > 0 ? Math.ceil(obj / 6000) : 0; // ~6000€ par close en moyenne
-  const objCalls = Math.ceil(objCloses / 0.15); // ~15% close rate
-  const objLives = Math.ceil(objCalls * 0.5);
-  const objOffres = Math.ceil(objLives * 0.5);
-
-  const gaps = [
-    { l:'Contracté', a:T.contracte, p:obj, eu:true },
-    { l:'Collecté', a:T.collecte, p:obj*0.083, eu:true },
-    { l:'Closes', a:T.closes, p:objCloses },
-    { l:'Offres', a:T.offres, p:objOffres },
-    { l:'Calls closing', a:T.calls, p:objCalls },
-    { l:'Sets (setting)', a:T.sets, p:objCloses*3 },
-  ];
-  document.getElementById('proj-gaps').innerHTML = gaps.map(g => {
-    const pct = g.p > 0 ? Math.min(g.a / g.p * 100, 100) : 0;
-    const delta = g.a - g.p;
-    const isGood = delta >= 0;
-    return `<div class="gap-row">
-      <div class="gap-label">${g.l}</div>
-      <div class="gap-track"><div class="gap-fill ${isGood?'good':'bad'}" style="width:${Math.max(pct,3)}%"></div></div>
-      <div class="gap-val">${g.eu ? U.euro(g.a) : g.a} / ${g.eu ? U.euro(g.p) : g.p}</div>
-      <div class="gap-delta" style="color:${isGood?'var(--green)':'var(--red2)'}">${isGood?'+':'−'}${g.eu ? U.euro(Math.abs(delta)) : Math.abs(delta)}</div>
-    </div>`;
-  }).join('');
-
-  // Months table
-  const monthsData = MF.map((m, i) => {
-    const mk = m + ' ' + _year;
-    const md = perMonth[mk];
-    return { name: m, ...md, mk };
-  }).filter(m => m.hasData);
-
-  let cumul = 0;
-  document.getElementById('proj-months').innerHTML = `<table class="yr-table">
-    <thead><tr><th>Mois</th><th>Contracté</th><th>Cumulé</th><th>vs Objectif</th><th>Closes</th></tr></thead>
-    <tbody>
-      ${monthsData.map((m, i) => {
-        cumul += m.contracte;
-        const objCumul = objMensuel * (MF.indexOf(m.name) + 1);
-        const delta = cumul - objCumul;
-        return `<tr>
-          <td style="font-family:var(--font-b)">${m.name}</td>
-          <td>${U.euro(m.contracte)}</td>
-          <td>${U.euro(cumul)}</td>
-          <td class="${delta >= 0 ? 'td-good' : 'td-bad'}">${delta >= 0 ? '+' : '−'}${U.euro(Math.abs(delta))}</td>
-          <td>${m.closes}</td>
-        </tr>`;
-      }).join('')}
-      <tr class="tr-total">
-        <td style="font-family:var(--font-b)">Total</td>
-        <td>${U.euro(T.contracte)}</td>
-        <td>${U.euro(cumul)}</td>
-        <td class="${cumul - objMensuel * monthsData.length >= 0 ? 'td-good' : 'td-bad'}">${cumul >= objMensuel*monthsData.length ? '+' : '−'}${U.euro(Math.abs(cumul - objMensuel*monthsData.length))}</td>
-        <td>${T.closes}</td>
-      </tr>
-    </tbody>
-  </table>`;
-}
-
-/* ── INIT ── */
-document.addEventListener('DOMContentLoaded', async function() {
-  const nmCache = localStorage.getItem('ambitio_name') || '';
-  document.getElementById('tb-nm').textContent = nmCache;
-  document.getElementById('tb-av').textContent = nmCache[0].toUpperCase();
-
-  // ── Attendre Firebase Auth ──
-  let fbUser = null;
-  try {
-    fbUser = await Promise.race([
-      new Promise(resolve => {
-        const unsub = firebase.auth().onAuthStateChanged(u => { unsub(); resolve(u); });
-      }),
-      new Promise(resolve => setTimeout(() => resolve(null), 5000))
-    ]);
-  } catch(e) { console.warn('[projections] Auth error:', e); }
-
-  if (fbUser) {
-    try {
-      const uSnap = await firebase.firestore().collection('users').doc(fbUser.uid).get();
-      const uData = uSnap.exists ? uSnap.data() : {};
-      const role  = uData.role || localStorage.getItem('ambitio_role') || 'sales';
-      const name  = fbUser.displayName || fbUser.email.split('@')[0];
-      window._currentUserUid  = fbUser.uid;
-      window._currentRole     = role;
-      window._currentUserName = name;
-      localStorage.setItem('ambitio_role', role);
-      localStorage.setItem('ambitio_auth_uid', fbUser.uid); // auth UID séparé, ne pas écraser ambitio_uid
-      localStorage.setItem('ambitio_name', name);
-      document.getElementById('tb-nm').textContent = name;
-      document.getElementById('tb-av').textContent = name[0].toUpperCase();
-    } catch(e) { console.warn('[projections] Firestore user read:', e); }
-
-    if (!Fire.db) {
-      Fire.init(firebase.firestore(), fbUser.uid);
+    /* ── Hero du mois ── */
+    var pctObj = objM > 0 ? cur.contracte / objM * 100 : null;
+    var h = '';
+    if (!cur.auto) {
+      h += '<div class="au-card" style="border-color:rgba(167,139,250,.35);background:rgba(167,139,250,.05);padding:12px 16px;font-size:12.5px">📜 ' + MONTHS_FR[S.month] + ' ' + S.year + ' est antérieur au calcul automatique (' + AUTO_FROM.slice(5) + '/' + AUTO_FROM.slice(0, 4) + ') : closes et contracté viennent de l\'ancienne <strong>saisie manuelle</strong>. Seul le cash encaissé (prélèvements GoCardless) est réel.</div>';
     }
+    h += '<div class="pj-hero">' +
+      kpi('Contracté HT — ' + MONTHS_FR[S.month], fmtEuro(cur.contracte),
+        (team ? 'objectif ' + fmtEuro(objM) + ' · ' + (pctObj != null ? fmtPct(pctObj, 0) : '—') : 'objectif équipe ' + fmtEuro(objM)),
+        '#5b7cfa', team ? pctObj : null) +
+      kpi('Closes', fmtNum(cur.closes),
+        (cur.cancelled ? '<span style="color:var(--red)">' + cur.cancelled + ' annulé(s) déduit(s)</span> · ' : '') + 'panier moyen ' + (cur.closes > 0 ? fmtEuro(cur.contracte / cur.closes) : '—'),
+        '#34d399') +
+      kpi('Encaissé — closes du mois', fmtEuro(cur.encaisseCloses),
+        cur.auto ? ((cur.pending > 0 ? '⏳ ' + fmtEuro(cur.pending) + ' à encaisser (1er prélèvement pas encore passé)' : 'prélèvements réellement passés') ) : 'non disponible (saisie manuelle)',
+        '#fbbf24') +
+      kpi('Cash encaissé dans le mois', fmtEuro(cur.cash),
+        'tous les prélèvements datés du mois' + (team ? '' : ' (paiements de ce closer)') + ' — mensualités des anciens clients comprises',
+        '#2dd4bf') +
+      '</div>';
+
+    /* ── Ce qui manque + projection fin de mois ── */
+    if (cur.auto) h += '<div class="pj-row">' + missingCard(cur, rates, objM, today, mStart, mEnd, isCurrent, isPast, team) + forecastCard(cur, rates, objM, today, mStart, mEnd, isCurrent, isPast, team) + '</div>';
+
+    /* ── Closes du mois ── */
+    if (cur.auto) h += closesCard(cur);
+
+    /* ── Année ── */
+    h += yearCard(months, objY, today, team);
+
+    h += '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Note du manager</div></div><div class="pj-note">' +
+      'Une <b>projection</b>, c\'est ce que tu atteins dans 75 à 80 % des cas, sans te forcer. Un <b>objectif</b>, c\'est ta projection augmentée de 33 à 50 % : ce que tu vises pour sortir de ta zone de confort.<br/>' +
+      '<b style="color:var(--gold)">Objectif ' + S.year + ' : ' + fmtEuro(objY) + ' HT contracté</b> — soit ~' + fmtEuro(objY / 12) + ' par mois en moyenne.</div></div>';
+
+    $('#content').innerHTML = h;
   }
 
-  await refreshProj();
-});
+  function missingCard(cur, r, objM, today, mStart, mEnd, isCurrent, isPast, team) {
+    var title = '<div class="au-card-head"><div class="au-card-title">🎯 Ce qui manque pour l\'objectif du mois</div><div class="au-card-note">taux réels des ' + RATE_WINDOW_DAYS + ' derniers jours · équipe</div></div>';
+    if (!team) {
+      return '<div class="au-card">' + title + '<div class="pj-lead">L\'objectif est un objectif <b>d\'équipe</b> : repasse sur l\'onglet « Équipe » pour voir ce qui manque. Ce closer pèse <b>' + fmtEuro(cur.contracte) + '</b> sur ' + fmtEuro(objM) + '.</div></div>';
+    }
+    var reste = Math.max(0, objM - cur.contracte);
+    if (isPast) {
+      var ecart = cur.contracte - objM;
+      return '<div class="au-card">' + title + '<div class="pj-lead">Mois terminé : <b>' + fmtEuro(cur.contracte) + '</b> contracté pour ' + fmtEuro(objM) + ' d\'objectif — ' +
+        (ecart >= 0 ? '<span style="color:var(--green)">objectif dépassé de ' + fmtEuro(ecart) + '</span>' : '<span style="color:var(--red)">il a manqué ' + fmtEuro(-ecart) + '</span>') + '.</div></div>';
+    }
+    if (reste <= 0) {
+      return '<div class="au-card">' + title + '<div class="pj-lead"><span style="color:var(--green)">✅ Objectif du mois atteint</span> (' + fmtEuro(cur.contracte) + ' / ' + fmtEuro(objM) + '). Tout close supplémentaire est du bonus.</div></div>';
+    }
+    var from = isCurrent ? today : mStart;
+    var wdLeft = workdays(from, mEnd);
+    var closesNeeded = Math.ceil(reste / r.ticket);
+    function need(n, rate) { return (rate && rate > 0) ? Math.ceil(n / rate) : null; }
+    var offres = need(closesNeeded, r.closeParOffre);
+    var presents = offres != null ? need(offres, r.offreParPresent) : null;
+    var rdv = presents != null ? need(presents, r.presentParRdv) : null;
+    var rdvEncore = rdv != null ? Math.max(0, rdv - r.upcoming) : null;
+    var leads = (rdvEncore != null && r.rdvParLead) ? Math.ceil(rdvEncore / r.rdvParLead) : null;
+    function perDay(n) { return (n == null || !wdLeft) ? '—' : (Math.round(n / wdLeft * 10) / 10).toLocaleString('fr-FR'); }
+    function cell(n) { return n == null ? '<td>—</td>' : '<td class="need">' + fmtNum(n) + '</td>'; }
+
+    var h = '<div class="au-card">' + title +
+      '<div class="pj-lead">Il reste <b>' + fmtEuro(reste) + '</b> à contracter en <b>' + wdLeft + ' jour(s) ouvré(s)</b>. Au panier moyen de ' + fmtEuro(r.ticket) + ', il faut encore <b>' + closesNeeded + ' close(s)</b>' +
+      (rdv != null ? ', soit environ <b>' + fmtNum(rdv) + ' RDV tenus</b> au total — <b>' + fmtNum(r.upcoming) + '</b> déjà posés d\'ici la fin du mois, donc <b>' + fmtNum(rdvEncore) + ' RDV de plus</b> à poser' : '') + '.</div>' +
+      '<table class="pj-steps"><thead><tr><th>Étape</th><th>Il faut encore</th><th>Par jour ouvré</th><th>Taux utilisé (' + RATE_WINDOW_DAYS + ' j)</th></tr></thead><tbody>' +
+      '<tr><td>Closes</td>' + cell(closesNeeded) + '<td>' + perDay(closesNeeded) + '</td><td>panier ' + fmtEuro(r.ticket) + ' (' + r.closes + ' closes)</td></tr>' +
+      '<tr><td>Offres pitchées</td>' + cell(offres) + '<td>' + perDay(offres) + '</td><td>close / offre ' + fmtPct(r.closeParOffre != null ? r.closeParOffre * 100 : null) + '</td></tr>' +
+      '<tr><td>Présents (live)</td>' + cell(presents) + '<td>' + perDay(presents) + '</td><td>offre / présent ' + fmtPct(r.offreParPresent != null ? r.offreParPresent * 100 : null) + '</td></tr>' +
+      '<tr><td>RDV tenus</td>' + cell(rdv) + '<td>' + perDay(rdv) + '</td><td>présent / RDV ' + fmtPct(r.presentParRdv != null ? r.presentParRdv * 100 : null) + '</td></tr>' +
+      '<tr><td>RDV encore à poser</td>' + cell(rdvEncore) + '<td>' + perDay(rdvEncore) + '</td><td>' + fmtNum(r.upcoming) + ' RDV sales déjà au planning</td></tr>' +
+      '<tr><td>Leads à faire entrer</td>' + cell(leads) + '<td>' + perDay(leads) + '</td><td>RDV / lead ' + fmtPct(r.rdvParLead != null ? r.rdvParLead * 100 : null) + (r.leadsTruncated ? ' ⚠ tronqué' : '') + '</td></tr>' +
+      '</tbody></table>' +
+      '<div class="au-card-note" style="margin-top:10px">Base ' + RATE_WINDOW_DAYS + ' j : ' + fmtNum(r.leads) + ' leads · ' + fmtNum(r.rdv) + ' RDV sales (replanifiés exclus, coaching exclu) · ' + fmtNum(r.presents) + ' présents · ' + fmtNum(r.pitched) + ' offres · ' + fmtNum(r.closes) + ' closes non annulés.</div>' +
+      '</div>';
+    return h;
+  }
+
+  function forecastCard(cur, r, objM, today, mStart, mEnd, isCurrent, isPast, team) {
+    var h = '<div class="au-card"><div class="au-card-head"><div class="au-card-title">🔮 Projection fin de mois</div></div>';
+    if (isPast) return h + '<div class="pj-lead">Mois terminé — résultat final : <b>' + fmtEuro(cur.contracte) + '</b>.</div></div>';
+    var wdTotal = workdays(mStart, mEnd);
+    var wdDone = isCurrent ? workdays(mStart, new Date(today.getTime() - DAY)) : 0;
+    var rythme = wdDone > 0 ? cur.contracte / wdDone * wdTotal : cur.contracte;
+    var pipeline = team && r.closeParRdv != null ? cur.contracte + r.upcoming * r.closeParRdv * r.ticket : null;
+    function line(lbl, v, sub) {
+      var col = objM > 0 ? (v >= objM ? 'var(--green)' : v >= objM * 0.75 ? 'var(--gold)' : 'var(--red)') : 'var(--text)';
+      return '<div class="pj-scen-i"><span>' + lbl + (sub ? '<br/><span style="color:var(--muted);font-size:11px">' + sub + '</span>' : '') + '</span><b style="color:' + col + '">' + fmtEuro(v) + '</b></div>';
+    }
+    h += '<div class="pj-scen">' +
+      line('📊 Au rythme actuel', rythme, wdDone > 0 ? fmtEuro(cur.contracte) + ' en ' + wdDone + ' j ouvrés, prolongé sur ' + wdTotal + ' j' : 'pas encore de jour ouvré écoulé') +
+      (pipeline != null ? line('📅 Avec les RDV déjà posés', pipeline, fmtEuro(cur.contracte) + ' + ' + fmtNum(r.upcoming) + ' RDV × ' + fmtPct(r.closeParRdv * 100) + ' de close × ' + fmtEuro(r.ticket)) : '') +
+      line('🎯 Objectif du mois', objM, team ? 'reste ' + fmtEuro(Math.max(0, objM - cur.contracte)) : 'objectif d\'équipe') +
+      '</div>' +
+      (cur.pending > 0 ? '<div class="au-card-note" style="margin-top:10px">⏳ ' + fmtEuro(cur.pending) + ' signés attendent leur 1er prélèvement : comptés en contracté, pas en encaissé.</div>' : '') +
+      '</div>';
+    return h;
+  }
+
+  function closesCard(cur) {
+    var h = '<div class="au-card" style="padding:0;overflow:hidden"><div class="au-card-head" style="padding:16px 18px 0;margin-bottom:10px"><div class="au-card-title">Closes de ' + MONTHS_FR[S.month] + ' ' + S.year + '</div>' +
+      '<div class="au-card-note">fiche gagnée, RDV closé ou paiement créé · montants HT</div></div>';
+    if (!cur.list.length) return h + '<div class="au-empty" style="padding:22px"><span class="i">🗒️</span>Aucun close sur ce mois' + (S.slug !== '_all' ? ' pour ce closer' : '') + '.</div></div>';
+    h += '<div class="au-twrap" style="border:none;border-radius:0"><table class="au-table"><thead><tr><th>Date</th><th>Client</th><th>Closer</th><th>Canal</th><th>Contracté</th><th>Encaissé</th><th>À encaisser</th><th>Statut</th></tr></thead><tbody>';
+    cur.list.slice().sort(function (a, b) { return b.ms - a.ms; }).forEach(function (c) {
+      var link = c.leadId ? '<a href="sales-contact.html?id=' + encodeURIComponent(c.leadId) + '" target="_blank" style="color:#b6c3ff">' + esc(c.name) + '</a>' : esc(c.name);
+      h += '<tr' + (c.rv.cancelled ? ' class="pj-cancel"' : '') + '><td>' + fmtDay(c.ms) + '</td><td>' + link + '</td><td>' + esc(c.closer ? memberName(c.closer) : '—') + '</td>' +
+        '<td>' + (c.sb ? 'SB' : 'NB') + (c.viaPayment ? ' · via paiement' : '') + '</td>' +
+        '<td>' + fmtEuro(c.rv.con) + '</td><td>' + fmtEuro(c.rv.paid) + '</td><td>' + (c.rv.pending > 0 ? fmtEuro(c.rv.pending) : '·') + '</td><td>' + statusTag(c) + '</td></tr>';
+    });
+    h += '</tbody></table></div></div>';
+    return h;
+  }
+
+  function yearCard(months, objY, today, team) {
+    var y = S.year;
+    var curIdx = today.getFullYear() === y ? today.getMonth() : (today.getFullYear() > y ? 12 : -1);
+    var ytd = 0, cashY = 0, closesY = 0, cancelledY = 0;
+    months.forEach(function (r) { ytd += r.contracte; cashY += r.cash; closesY += r.closes; cancelledY += r.cancelled; });
+    /* Projection fin d'année : cumul + moyenne des 3 derniers mois complets
+       (ou du mois en cours seul si rien avant) sur les mois restants. */
+    var done = [];
+    for (var i = Math.min(curIdx, 12) - 1; i >= 0 && done.length < 3; i--) done.push(months[i].contracte);
+    var avg = done.length ? done.reduce(function (a, b) { return a + b; }, 0) / done.length : 0;
+    var monthsLeft = curIdx < 0 ? 12 : Math.max(0, 12 - curIdx - 1);
+    var projY = curIdx >= 12 ? ytd : ytd + avg * monthsLeft + (curIdx >= 0 && curIdx < 12 ? Math.max(0, avg - months[curIdx].contracte) : 0);
+    var monthsForNeed = curIdx < 0 ? 12 : Math.max(1, 12 - Math.min(curIdx, 11));
+    var needPerMonth = Math.max(0, objY - ytd) / monthsForNeed;
+    var pct = objY > 0 ? ytd / objY * 100 : null;
+
+    var h = '<div class="pj-hero">' +
+      kpi('Contracté ' + y, fmtEuro(ytd), closesY + ' closes' + (cancelledY ? ' · ' + cancelledY + ' annulé(s)' : '') + (team ? ' · ' + fmtPct(pct, 1) + ' de l\'objectif' : ''), '#5b7cfa', team ? pct : null) +
+      kpi('Objectif ' + y, fmtEuro(objY), team ? 'reste ' + fmtEuro(Math.max(0, objY - ytd)) : 'objectif d\'équipe', '#fbbf24') +
+      kpi('Projection fin d\'année', fmtEuro(projY), 'cumul + moyenne des ' + done.length + ' derniers mois (' + fmtEuro(avg) + '/mois)' + (team && objY > 0 ? (projY >= objY ? ' · ✅ au-dessus' : ' · ⚠ manque ' + fmtEuro(objY - projY)) : ''), projY >= objY ? '#34d399' : '#ef4444') +
+      kpi('Rythme nécessaire', team ? (needPerMonth > 0 ? fmtEuro(needPerMonth) + '/mois' : '✅ atteint') : '—', team ? monthsForNeed + ' mois restants, mois en cours compris' : 'objectif d\'équipe', '#a78bfa') +
+      '</div>';
+
+    var mx = 1;
+    months.forEach(function (r) { mx = Math.max(mx, r.contracte, r.obj); });
+    h += '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Contracté mois par mois — ' + y + '</div></div>' +
+      '<div class="pj-legend"><span style="--pj-lc:#5b7cfa">Contracté (auto)</span><span style="--pj-lc:#a78bfa">Contracté (saisie manuelle)</span><span style="--pj-lc:rgba(251,191,36,.5)">Objectif du mois</span></div>' +
+      '<div class="pj-chart">';
+    months.forEach(function (r) {
+      h += '<div class="pj-col' + (r.m === curIdx ? ' cur' : '') + '" title="' + MONTHS_FR[r.m] + ' : ' + fmtEuro(r.contracte) + ' / objectif ' + fmtEuro(r.obj) + '"><div class="bars">' +
+        '<div class="b real' + (r.auto ? '' : ' legacy') + '" style="height:' + (r.contracte / mx * 100).toFixed(1) + '%"></div>' +
+        '<div class="b obj" style="height:' + (r.obj / mx * 100).toFixed(1) + '%"></div></div><div class="lbl">' + MONTHS_FR[r.m].slice(0, 3) + '</div></div>';
+    });
+    h += '</div></div>';
+
+    var cumul = 0, cumObj = 0;
+    h += '<div class="au-card" style="padding:0;overflow:hidden"><div class="au-card-head" style="padding:16px 18px 0;margin-bottom:10px"><div class="au-card-title">Détail ' + y + '</div><div class="au-card-note">contracté HT · encaissé = prélèvements réellement passés</div></div>' +
+      '<div class="au-twrap" style="border:none;border-radius:0"><table class="au-table"><thead><tr><th>Mois</th><th>Source</th><th>Closes</th><th>Annulés</th><th>Contracté</th><th>Objectif</th><th>Écart cumulé</th><th>Encaissé closes du mois</th><th>Cash du mois</th></tr></thead><tbody>';
+    months.forEach(function (r) {
+      var future = r.m > curIdx;
+      if (!future) { cumul += r.contracte; cumObj += r.obj; }
+      var d = cumul - cumObj;
+      h += '<tr' + (r.m === curIdx ? ' class="today"' : future ? ' class="future"' : '') + '><td>' + MONTHS_FR[r.m] + '</td>' +
+        '<td>' + (r.auto ? '<span class="pj-tag ok">auto</span>' : '<span class="pj-tag legacy">saisie</span>') + '</td>' +
+        '<td>' + (r.has || r.closes ? r.closes : '·') + '</td><td>' + (r.cancelled ? '<span style="color:var(--red)">' + r.cancelled + '</span>' : '·') + '</td>' +
+        '<td>' + (r.contracte ? fmtEuro(r.contracte) : '·') + '</td><td>' + fmtEuro(r.obj) + '</td>' +
+        '<td>' + (future || !team ? '·' : '<span style="color:' + (d >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (d >= 0 ? '+' : '−') + fmtEuro(Math.abs(d)) + '</span>') + '</td>' +
+        '<td>' + (r.auto ? (r.encaisseCloses ? fmtEuro(r.encaisseCloses) : '·') : '—') + '</td><td>' + (r.cash ? fmtEuro(r.cash) : '·') + '</td></tr>';
+    });
+    h += '<tr class="au-total"><td>Total</td><td></td><td>' + closesY + '</td><td>' + (cancelledY || '·') + '</td><td>' + fmtEuro(ytd) + '</td><td>' + fmtEuro(objY) + '</td><td></td><td></td><td>' + fmtEuro(cashY) + '</td></tr>';
+    h += '</tbody></table></div></div>';
+    return h;
+  }
+
+  /* ══ OBJECTIFS (admin) ═══════════════════════════════════════════════════ */
+  function openObjectives() {
+    var o = S.objectives[String(S.year)] || {};
+    $('#objTitle').textContent = '🎯 Objectifs ' + S.year;
+    $('#objAnnual').value = (o.annual != null && o.annual !== '') ? o.annual : (DEFAULT_OBJ[String(S.year)] || '');
+    var h = '';
+    for (var m = 0; m < 12; m++) {
+      var v = o.months && o.months[String(m + 1)];
+      h += '<div><label for="objM' + (m + 1) + '">' + MONTHS_FR[m] + '</label><input type="number" min="0" step="1000" id="objM' + (m + 1) + '" data-m="' + (m + 1) + '" value="' + (v != null && v !== '' ? esc(v) : '') + '" placeholder="annuel ÷ 12"/></div>';
+    }
+    $('#objMonths').innerHTML = h;
+    $('#objModal').classList.add('show');
+  }
+  function saveObjectives() {
+    var annual = $('#objAnnual').value;
+    var months = {};
+    document.querySelectorAll('#objMonths input[data-m]').forEach(function (inp) {
+      var v = inp.value.trim();
+      months[inp.getAttribute('data-m')] = v === '' ? null : Math.max(0, Number(v) || 0);
+    });
+    var yearObj = { annual: annual === '' ? null : Math.max(0, Number(annual) || 0), months: months };
+    var years = {}; years[String(S.year)] = yearObj;
+    var u = firebase.auth().currentUser;
+    db.collection('_config').doc('sales_objectives').set({
+      years: years,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: u ? u.uid : null
+    }, { merge: true }).then(function () {
+      S.objectives[String(S.year)] = yearObj;
+      $('#objModal').classList.remove('show');
+      toast('Objectifs ' + S.year + ' enregistrés');
+      render();
+    }).catch(function (e) { toast('Erreur : ' + (e && e.message), true); });
+  }
+
+  /* ══ ÉVÉNEMENTS ══════════════════════════════════════════════════════════ */
+  /* Rechargement complet à chaque mois : le pipeline (RDV à venir jusqu'à
+     la fin du mois affiché) dépend du mois. */
+  function shiftMonth(delta) {
+    var d = new Date(S.year, S.month + delta, 1);
+    S.year = d.getFullYear(); S.month = d.getMonth();
+    refresh();
+  }
+  $('#btnPrev').addEventListener('click', function () { shiftMonth(-1); });
+  $('#btnNext').addEventListener('click', function () { shiftMonth(1); });
+  $('#btnToday').addEventListener('click', function () { var n = new Date(); S.year = n.getFullYear(); S.month = n.getMonth(); refresh(); });
+  $('#btnRefresh').addEventListener('click', refresh);
+  $('#memberTabs').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('.au-member') : null;
+    if (!b) return;
+    S.slug = b.getAttribute('data-slug') || '_all';
+    try { localStorage.setItem('proj_v2_member', S.slug); } catch (er) {}
+    render();
+  });
+  if (IS_ADMIN) $('#btnObj').style.display = '';
+  $('#btnObj').addEventListener('click', openObjectives);
+  $('#objCancel').addEventListener('click', function () { $('#objModal').classList.remove('show'); });
+  $('#objSave').addEventListener('click', saveObjectives);
+  $('#objModal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('show'); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') $('#objModal').classList.remove('show'); });
+  /* Noms / couleurs des closers : nav.js charge l'équipe après coup. */
+  window.addEventListener('team-members-loaded', function () { if (S.data) render(); });
+
+  /* ══ INIT : attendre l'auth Firebase ══ */
+  if (!FC || typeof FC.revClient !== 'function') {
+    $('#content').innerHTML = '<div class="au-empty"><span class="i">⚠️</span>funnel-core.js introuvable — rechargement nécessaire.</div>';
+    return;
+  }
+  var started = false;
+  firebase.auth().onAuthStateChanged(function (u) {
+    if (!u) { window.location.href = 'login.html'; return; }
+    if (started) return;
+    started = true;
+    refresh();
+  });
+})();
 </script>
 </body>
 </html>

@@ -987,6 +987,122 @@
       }).catch(function (e) { console.warn('[funnel] closedLeads', e.message); DATA.closedLeads = []; });
   }
 
+  /* ══ REVENUE — close annulé, encaissé réel (validé Adrien 13/10/2026) ══
+     Règles COMMUNES au Funnel, à SET NB, à Close SB et aux Projections —
+     ne jamais les recopier dans une page, appeler FunnelCore.revClient & co.
+     · ENCAISSÉ = prélèvements réellement passés : paymentsHistory (statuts
+       paid_out / confirmed / paid), daté du jour du prélèvement. Un mandat
+       signé sans prélèvement n'est PAS de l'encaissé : il va en
+       « à encaisser » (pending).
+     · CLOSE ANNULÉ = 0 € encaissé ET (tous les paiements du client annulés
+       OU fiche client stoppée — clientStatus 'stopped'). Il sort de tous les
+       compteurs (closes, contracté) et s'affiche à part. Un client qui
+       arrête après avoir payé reste un close de son mois.
+       Fiche stoppée SANS aucun paiement GoCardless : annulé seulement si
+       l'arrêt suit le close de moins de 60 jours (formerClientAt) — les
+       anciens clients importés, payés hors GoCardless, restent des closes.
+     · CONTRACTÉ = totalAmount des paiements non annulés, sinon tarif
+       déclaré aux cartes du close (déjà HT).
+     Module Paiements en TTC : ÷ 1,2 sauf vatType 'ht'. */
+  var REV_PAID_STATUSES = { paid_out: 1, confirmed: 1, paid: 1 };
+  var REV_STOP_WINDOW_MS = 60 * 86400000;
+
+  function revHT(p, amount) {
+    var a = Number(amount) || 0;
+    return p && p.vatType === 'ht' ? a : a / 1.2;
+  }
+
+  /* Index des paiements utilisables (brouillons exclus) par fiche / email /
+     téléphone. */
+  function revIndex(payments) {
+    var idx = { byLead: {}, byEmail: {}, byP9: {} };
+    (payments || []).forEach(function (p) {
+      if (!p || p.status === 'draft') return;
+      if (p.leadId) (idx.byLead[p.leadId] = idx.byLead[p.leadId] || []).push(p);
+      var em = (p.leadEmail || '').toLowerCase().trim();
+      if (em) (idx.byEmail[em] = idx.byEmail[em] || []).push(p);
+      var p9 = phone9(p.leadPhone);
+      if (p9) (idx.byP9[p9] = idx.byP9[p9] || []).push(p);
+    });
+    return idx;
+  }
+
+  function revPaymentsFor(idx, leadId, email, phone) {
+    var seen = {}, out = [];
+    function add(arr) {
+      (arr || []).forEach(function (p) {
+        var key = p._id || p.gcPaymentId || p;
+        if (seen[key]) return;
+        seen[key] = 1; out.push(p);
+      });
+    }
+    if (leadId) add(idx.byLead[leadId]);
+    var em = (email || '').toLowerCase().trim();
+    if (em) add(idx.byEmail[em]);
+    var p9 = phone9(phone);
+    if (p9) add(idx.byP9[p9]);
+    return out;
+  }
+
+  /* Prélèvements réellement passés d'un paiement : [{ ms, ht }]. Un
+     paidAmount supérieur à l'historique (anciens docs) donne un reliquat
+     daté du dernier recalage GoCardless (undated: true). */
+  function revPaidEntries(p) {
+    var out = [], sum = 0;
+    var hist = (p && Array.isArray(p.paymentsHistory)) ? p.paymentsHistory : [];
+    hist.forEach(function (h) {
+      if (!h || (h.status && !REV_PAID_STATUSES[h.status])) return;
+      var amt = Number(h.amount) || 0;
+      if (amt <= 0) return;
+      sum += amt;
+      out.push({ ms: parseFlexMs(h.date || h.eventAt), ht: revHT(p, amt) });
+    });
+    var paid = Number(p && p.paidAmount) || 0;
+    if (paid - sum > 0.5) {
+      out.push({ ms: parseFlexMs(p.gcLastSyncAt || p.updatedAt || p.createdAt), ht: revHT(p, paid - sum), undated: true });
+    }
+    return out;
+  }
+
+  function revPaidHT(p) {
+    var t = 0;
+    revPaidEntries(p).forEach(function (e) { t += e.ht; });
+    return t;
+  }
+
+  /* Bilan d'UN client à partir de SES paiements (déjà rattachés).
+     lead = fiche CRM (ou null) · decl = { contracte, collecte } des cartes.
+     → { cancelled, reason, paid, con, pending, hasPay, declCol } — HT. */
+  function revClient(pays, lead, decl) {
+    pays = pays || [];
+    var paid = 0, con = 0, pending = 0, nActive = 0;
+    pays.forEach(function (p) {
+      var ph = revPaidHT(p);
+      paid += ph;
+      if (p.status === 'cancelled') return;
+      nActive++;
+      con += revHT(p, p.totalAmount);
+      if (ph <= 0) {
+        var due1 = p.type === 'installments' ? (Number(p.installmentAmount) || 0) : (Number(p.totalAmount) || 0);
+        pending += revHT(p, due1);
+      }
+    });
+    var declCon = decl ? (Number(decl.contracte) || 0) : 0;
+    var declCol = decl ? (Number(decl.collecte) || 0) : 0;
+    var allCancelled = pays.length > 0 && nActive === 0;
+    var stopped = !!lead && lead.clientStatus === 'stopped';
+    if (stopped && !pays.length) {
+      var sinceMs = parseFlexMs(lead.clientSince), stopMs = parseFlexMs(lead.formerClientAt);
+      stopped = sinceMs != null && stopMs != null && stopMs - sinceMs <= REV_STOP_WINDOW_MS;
+    }
+    if (paid <= 0.005 && (allCancelled || stopped)) {
+      return { cancelled: true, reason: allCancelled ? 'paiement annulé' : 'client stoppé', paid: 0, con: 0, pending: 0, hasPay: pays.length > 0, declCol: declCol };
+    }
+    if (!nActive) con = pays.length ? paid : declCon;   // paiements tous annulés après encaissement : on garde ce qui a été payé
+    var r2 = function (n) { return Math.round(n * 100) / 100; };
+    return { cancelled: false, reason: null, paid: r2(paid), con: r2(con), pending: r2(pending), hasPay: pays.length > 0, declCol: declCol };
+  }
+
   /* MODULE PAIEMENTS (collection payments — GoCardless) : LA vérité du cash
      (validé Adrien 14/07). Chaque doc : totalAmount (contrat TTC),
      paidAmount (encaissé réel à date), paymentsHistory[] (chaque
@@ -1832,116 +1948,86 @@
        ③ paiements créés dans la période sans client gagné correspondant
           (règle Adrien 14/07 : un paiement = un close commercial, sauf
           rattrapage d'un client gagné dans une autre période — résolu au
-          chargement par resolvePaymentLeads). ── */
-    var closedLeads = (DATA.closedLeads || []).filter(function (l) { return tunnelMatch(leadTunnel(l)) && srcMatch(leadSource(l, TMETA)); });
-    var closesNoLeadSB = 0, closesNoLeadNB = 0;
-    due.forEach(function (b) {
-      if (b.outcome !== 'close' || b.leadId) return;
-      if (b._class === 'self') closesNoLeadSB++; else closesNoLeadNB++;
-    });
-    var wonSelfLeads = closedLeads.filter(function (l) { return l.stage === 'closed_won_self'; }).length;
+          chargement par resolvePaymentLeads).
 
-    /* ── Montants — MODULE PAIEMENTS d'abord (règle Adrien 14/07) :
-       collecté  = ① prélèvements passés (paidAmount) s'il y en a
-                   ② sinon, dès que le paiement existe (hors annulé /
-                     brouillon) : 1 mensualité pour un fractionné (« la
-                     mensualité correspond à l'encaissé »), la totalité pour
-                     un intégral — suivi « à prélever (mandat) »
-                   ③ sinon l'encaissé DÉCLARÉ aux cartes du Close
-                   ④ sinon « close sans montant » — alerte nominative, jamais
-                     un zéro muet
-       contracté = totalAmount (hors annulés/brouillons), sinon tarif des
-                   cartes. TTC → HT ÷ 1,2 (sauf vatType 'ht').
+       Montants — règles REVENUE (validées Adrien 13/10/2026, voir revClient) :
+       · collecté  = prélèvements RÉELLEMENT passés (paymentsHistory) — plus
+         de repli sur l'encaissé déclaré aux cartes, plus de mensualité
+         comptée dès la signature du mandat (→ k.collecteMandat « à encaisser »).
+       · contracté = totalAmount des paiements non annulés, sinon tarif des
+         cartes. TTC → HT ÷ 1,2 (sauf vatType 'ht').
+       · CLOSE ANNULÉ (0 € encaissé + paiements annulés ou fiche stoppée) :
+         retiré des closes, du contracté et du collecté, listé à part
+         (k.closesCancelledNames).
        Rattachement paiement → client : leadId → email → téléphone.
        Un paiement déjà rattaché ne compte JAMAIS deux fois (_matched). ── */
-    function payHT(p, amount) {
-      var a = Number(amount) || 0;
-      return p && p.vatType === 'ht' ? a : a / 1.2; // module Paiements = TTC par défaut
+    var payIdx = revIndex(DATA.payments);
+    (DATA.payments || []).forEach(function (p) { if (p) p._matched = false; });
+    function payListFor(leadId, email, phone) {
+      var list = revPaymentsFor(payIdx, leadId, email, phone).filter(function (p) { return !p._matched; });
+      list.forEach(function (p) { p._matched = true; });
+      return list;
     }
-    var declByLead = {};   // encaissé/contracté déclarés aux cartes (closeData des RDV)
+    function declOf(cd) { return cd ? { contracte: Number(cd.contracte) || 0, collecte: Number(cd.collecte) || 0 } : null; }
+    var declByLead = {};   // tarif / encaissé déclarés aux cartes (closeData des RDV)
     (DATA.bookings || []).forEach(function (b) {
       if (b.outcome !== 'close' || !b.closeData || !b.leadId) return;
-      declByLead[b.leadId] = { col: Number(b.closeData.collecte) || 0, con: Number(b.closeData.contracte) || 0 };
+      declByLead[b.leadId] = declOf(b.closeData);
     });
-    var paysByLead = {}, paysByEmail = {}, paysByP9 = {};
-    (DATA.payments || []).forEach(function (p) {
-      if (!p) return;
-      p._matched = false;
-      if (p.leadId) { (paysByLead[p.leadId] = paysByLead[p.leadId] || []).push(p); }
-      var pem = (p.leadEmail || '').toLowerCase().trim();
-      if (pem) { (paysByEmail[pem] = paysByEmail[pem] || []).push(p); }
-      var pp9 = phone9(p.leadPhone);
-      if (pp9) { (paysByP9[pp9] = paysByP9[pp9] || []).push(p); }
-    });
-    /* Contribution d'UN paiement : {col, con, mandat}. */
-    function payMoney(p) {
-      var out = { col: 0, con: 0, mandat: 0 };
-      var active = p.status !== 'cancelled' && p.status !== 'draft';
-      var paid = payHT(p, p.paidAmount);
-      if (paid > 0) out.col = paid;
-      else if (active) {
-        var due1 = p.type === 'installments' ? (Number(p.installmentAmount) || 0) : (Number(p.totalAmount) || 0);
-        out.col = payHT(p, due1);
-        out.mandat = out.col;
-      }
-      if (active) out.con = payHT(p, p.totalAmount);
-      return out;
-    }
-    function payForClient(leadId, email, p9) {
-      var seen = {}, list = [];
-      function add(arr) { (arr || []).forEach(function (p) { if (!seen[p._id] && !p._matched) { seen[p._id] = 1; list.push(p); } }); }
-      add(paysByLead[leadId]);
-      if (email) add(paysByEmail[email]);
-      if (p9) add(paysByP9[p9]);
-      var col = 0, con = 0, mandat = 0;
-      list.forEach(function (p) {
-        p._matched = true;
-        var m = payMoney(p);
-        col += m.col; con += m.con; mandat += m.mandat;
-      });
-      return { n: list.length, col: Math.round(col * 100) / 100, con: Math.round(con * 100) / 100, mandat: Math.round(mandat * 100) / 100 };
-    }
+
+    k.closesCancelledNames = [];
     var wonColSB = 0, wonConSB = 0, wonColNB = 0, wonConNB = 0;
     /* Collecté isolé de la PUBLICITÉ PAYANTE — seul numérateur légitime
        d'un ROAS, puisque le dénominateur est la dépense pub. */
     var wonColAds = 0, wonConAds = 0, closesAds = 0;
     var wonColHorsPub = 0, closesHorsPub = 0;
     var colMissing = 0, noPayCount = 0, mandatSum = 0, colMissingNames = [];
-    closedLeads.forEach(function (l) {
-      var sb2 = l.stage === 'closed_won_self';
+
+    /* ① Fiches gagnées — les closes annulés sortent ICI de closedLeads, donc
+       de tous les compteurs en aval (créatives comprises). */
+    var closedLeadsAll = (DATA.closedLeads || []).filter(function (l) { return tunnelMatch(leadTunnel(l)) && srcMatch(leadSource(l, TMETA)); });
+    var closedLeads = [];
+    closedLeadsAll.forEach(function (l) {
       var lem = (l.email || '').toLowerCase().trim();
-      var pay = payForClient(l._id, lem, phone9(l.telephone || l.phone));
-      var decl = declByLead[l._id] || (l.closedData ? { col: Number(l.closedData.collecte) || 0, con: Number(l.closedData.contracte) || 0 } : null);
-      if (!pay.n) noPayCount++;
-      var col = null, con = 0;
-      if (pay.n && pay.col > 0) { col = pay.col; mandatSum += pay.mandat; }
-      else if (decl && decl.col > 0) col = decl.col;
-      if (pay.con > 0) con = pay.con;
-      else if (decl) con = decl.con;
-      if (col == null) { colMissing++; colMissingNames.push(l.nom || lem || l._id); }
-      l._wonCol = (col || 0);   /* collecté consolidé par fiche — réutilisé par la section « par créative » */
+      var pays = payListFor(l._id, lem, l.telephone || l.phone);
+      var decl = declByLead[l._id] || declOf(l.closedData);
+      var rv = revClient(pays, l, decl);
+      if (rv.cancelled) { k.closesCancelledNames.push((l.nom || lem || l._id) + ' (' + rv.reason + ')'); return; }
+      closedLeads.push(l);
+      var sb2 = l.stage === 'closed_won_self';
+      if (!rv.hasPay) {
+        noPayCount++; colMissing++;
+        colMissingNames.push((l.nom || lem || l._id) + (rv.declCol > 0 ? ' — déclaré ' + Math.round(rv.declCol) + ' €' : ''));
+      }
+      mandatSum += rv.pending;
+      var col = rv.paid, con = rv.con;
+      l._wonCol = col;   /* collecté consolidé par fiche — réutilisé par la section « par créative » */
       /* Ventilation pub / hors pub — le ROAS global divisait TOUT le
          collecté par la dépense publicitaire, créditant donc les pubs du
          chiffre venu d'Instagram organique, du setting téléphonique et des
          liens partagés à la main. Sur août : 8 600 € au numérateur dont
          5 650 € hors publicité. */
-      if (isAdvertisingLead(l)) { wonColAds += (col || 0); wonConAds += con; closesAds++; }
-      else { wonColHorsPub += (col || 0); closesHorsPub++; }
-      if (sb2) { wonColSB += (col || 0); wonConSB += con; } else { wonColNB += (col || 0); wonConNB += con; }
+      if (isAdvertisingLead(l)) { wonColAds += col; wonConAds += con; closesAds++; }
+      else { wonColHorsPub += col; closesHorsPub++; }
+      if (sb2) { wonColSB += col; wonConSB += con; } else { wonColNB += col; wonConNB += con; }
     });
-    /* Closes RDV sans fiche liée : Paiements par email/téléphone, repli cartes. */
+    var wonSelfLeads = closedLeads.filter(function (l) { return l.stage === 'closed_won_self'; }).length;
+
+    /* ② Closes RDV sans fiche liée : Paiements par email/téléphone, repli cartes. */
+    var closesNoLeadSB = 0, closesNoLeadNB = 0;
     due.forEach(function (b) {
       if (b.outcome !== 'close' || b.leadId) return;
       var bem = (b.prospect && b.prospect.email || '').toLowerCase().trim();
-      var pay3 = payForClient('__none__', bem, phone9(b.prospect && (b.prospect.telephone || b.prospect.phone)));
-      var col3 = null, con3 = 0;
-      if (pay3.n && pay3.col > 0) { col3 = pay3.col; mandatSum += pay3.mandat; }
-      else if (b.closeData && Number(b.closeData.collecte) > 0) col3 = Number(b.closeData.collecte);
-      if (pay3.con > 0) con3 = pay3.con;
-      else if (b.closeData) con3 = Number(b.closeData.contracte) || 0;
-      if (col3 == null) { colMissing++; colMissingNames.push((b.prospect && b.prospect.nom) || bem || b._id); }
-      if (b._class === 'self') { wonColSB += (col3 || 0); wonConSB += con3; } else { wonColNB += (col3 || 0); wonConNB += con3; }
+      var pays3 = payListFor(null, bem, b.prospect && (b.prospect.telephone || b.prospect.phone));
+      var rv3 = revClient(pays3, null, declOf(b.closeData));
+      var nm3 = (b.prospect && b.prospect.nom) || bem || b._id;
+      if (rv3.cancelled) { k.closesCancelledNames.push(nm3 + ' (' + rv3.reason + ')'); return; }
+      if (!rv3.hasPay) { colMissing++; colMissingNames.push(nm3 + (rv3.declCol > 0 ? ' — déclaré ' + Math.round(rv3.declCol) + ' €' : '')); }
+      mandatSum += rv3.pending;
+      if (b._class === 'self') { closesNoLeadSB++; wonColSB += rv3.paid; wonConSB += rv3.con; }
+      else { closesNoLeadNB++; wonColNB += rv3.paid; wonConNB += rv3.con; }
     });
+
     /* ③ Closes détectés via Paiements (fiche jamais gagnée / introuvable). */
     k.payCloseNames = []; k.payCloseOther = [];
     var payClosesSB = 0, payClosesNB = 0;
@@ -1953,16 +2039,18 @@
       if (!pc.tunnel && tunnelFilter !== 'all') return;
       if (!srcMatch(pc.lead ? leadSource(pc.lead, TMETA) : 'other')) return;
       p._matched = true;
-      var m3 = payMoney(p);
-      mandatSum += m3.mandat;
-      if (pc.sb) { payClosesSB++; wonColSB += m3.col; wonConSB += m3.con; }
-      else { payClosesNB++; wonColNB += m3.col; wonConNB += m3.con; }
+      var rv4 = revClient([p], pc.lead || null, null);
+      if (rv4.cancelled) { k.closesCancelledNames.push(pc.name + ' (' + rv4.reason + ')'); return; }
+      mandatSum += rv4.pending;
+      if (pc.sb) { payClosesSB++; wonColSB += rv4.paid; wonConSB += rv4.con; }
+      else { payClosesNB++; wonColNB += rv4.paid; wonConNB += rv4.con; }
       k.payCloseNames.push(pc.name + (pc.noLead ? ' (aucune fiche trouvée)' : ''));
     });
 
     k.wonSelf = wonSelfLeads + closesNoLeadSB + payClosesSB;
     k.wonSetting = (closedLeads.length - wonSelfLeads) + closesNoLeadNB + payClosesNB;
     k.closesWonTotal = k.wonSelf + k.wonSetting;
+    k.closesCancelled = k.closesCancelledNames.length;
     k.wonCollecteSB = Math.round(wonColSB * 100) / 100; k.wonCollecteNB = Math.round(wonColNB * 100) / 100;
     k.wonContracteSB = Math.round(wonConSB * 100) / 100; k.wonContracteNB = Math.round(wonConNB * 100) / 100;
     k.wonCollecte = Math.round((wonColSB + wonColNB) * 100) / 100;
@@ -2428,6 +2516,9 @@
     classifyLegacyLabel: classifyLegacyLabel,
     realEntryMs: realEntryMs, pad2: pad2, isoDate: isoDate, median: median,
     phone9: phone9, leadTunnel: leadTunnel, frDateMs: frDateMs,
+    /* REVENUE — close annulé / encaissé réel (SET NB, Close SB, Projections) */
+    revHT: revHT, revIndex: revIndex, revPaymentsFor: revPaymentsFor,
+    revPaidEntries: revPaidEntries, revPaidHT: revPaidHT, revClient: revClient,
     isYoutubeSource: isYoutubeSource, leadSource: leadSource,
     bookingSource: bookingSource, pageSource: pageSource,
     effectiveCosts: effectiveCosts, classifyBooking: classifyBooking,

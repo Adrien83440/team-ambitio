@@ -1372,10 +1372,10 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.kept) + '</div><div class="l">Kept Call</div><div class="s">RDV − annulés − no-show − replanifiés' + (k.keptPct != null ? ' · <span class="pct">' + fmtPct(k.keptPct, 0) + '</span>' : '') + '</div></div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + numOrDash(k.ocDue.present, k.ocDue.sansDetail) + '</div><div class="l">Live du mois</div><div class="s">présents (résultats RDV)' + (k.ocDue.sansDetail ? ' · ⚠ ' + k.ocDue.sansDetail + ' sans détail' : '') + '</div></div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + numOrDash(k.ocDue.pitched, k.ocDue.sansDetail) + '</div><div class="l">Pitchés du mois</div><div class="s">offres faites (résultats RDV)</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.closesWonTotal) + '</div><div class="l">Closes</div><div class="s">clients gagnés — fiches + RDV + Paiements</div></div>';
-    var heroColSub = 'encaissé à date';
-    if (k.collecteMandat > 0) heroColSub += ' · dont ' + fmtEuro(k.collecteMandat) + ' à prélever (mandat)';
-    if (k.collecteMissing > 0) heroColSub += ' · <span style="color:var(--orange,#e8a13c)">⚠ ' + k.collecteMissing + ' close(s) sans montant</span>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.closesWonTotal) + '</div><div class="l">Closes</div><div class="s">clients gagnés — fiches + RDV + Paiements' + (k.closesCancelled ? ' · <span style="color:var(--orange,#e8a13c)">' + k.closesCancelled + ' annulé(s) déduit(s)</span>' : '') + '</div></div>';
+    var heroColSub = 'prélèvements réellement passés';
+    if (k.collecteMandat > 0) heroColSub += ' · ⏳ ' + fmtEuro(k.collecteMandat) + ' à encaisser (1er prélèvement pas encore passé)';
+    if (k.collecteMissing > 0) heroColSub += ' · <span style="color:var(--orange,#e8a13c)">⚠ ' + k.collecteMissing + ' close(s) sans paiement</span>';
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtEuro(k.wonCollecte) + '</div><div class="l">Collecté (HT)</div><div class="s">' + heroColSub + '</div></div>';
     /* Contracté = valeur totale des contrats signés sur la période (module
        Paiements : totalAmount, repli tarif des cartes du Close). Le collecté
@@ -1526,7 +1526,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
        la période », chaînes de replanification dédupliquées, résultat de
        FIN DE CHAÎNE — kept ne peut plus dépasser pris. Plus aucune saisie
        manuelle : données logiciel uniquement, « — » + explication sinon. */
-    h += stageOpen('📅', 'Prise de RDV — Self Booking / No Booking', 'RDV <strong>pris</strong> sur la période, peu importe quand ils ont lieu (replanif. dédupliqués, résultat de fin de chaîne) · collecté = module Paiements (HT), repli cartes du Close · coaching &amp; CSM exclus');
+    h += stageOpen('📅', 'Prise de RDV — Self Booking / No Booking', 'RDV <strong>pris</strong> sur la période, peu importe quand ils ont lieu (replanif. dédupliqués, résultat de fin de chaîne) · collecté = prélèvements GoCardless réellement passés (HT), closes annulés déduits · coaching &amp; CSM exclus');
     if (k.dueCreatedBefore > 0 || k.createdDueLater > 0) {
       h += '<div class="fn-stage-note" style="margin-top:6px">🔁 <strong>Deux questions, deux totaux — les deux sont justes.</strong> « Combien de RDV a-t-on <strong>pris</strong> sur la période ? » → ' + fmtNum(k.chAll.n) + (k.createdDueLater ? ' (dont ' + fmtNum(k.createdDueLater) + ' qui auront lieu après)' : '') + ' · « Combien de RDV <strong>ont lieu</strong> sur la période ? » (héro L2 · Tenue) → ' + fmtNum(k.rdvMois) + ', dont ' + fmtNum(k.dueCreatedBefore) + ' pris avant la période. Un RDV pris le mois dernier pour cette période compte dans le 2ᵉ total, pas dans le 1ᵉʳ.</div>';
     }
@@ -1542,7 +1542,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     h += kpiCard(numOrDash(k.chSB.present, k.chSB.sansDetail), 'Live SB (présents)', (k.chSB.kept > 0 && k.chSB.present > 0 ? 'show-up ' + fmtPct(k.chSB.present / k.chSB.kept * 100, 0) + ' (live ÷ kept)' : 'résultats RDV') + (k.chSB.sansDetail ? ' · ⚠ ' + k.chSB.sansDetail + ' sans détail' : ''));
     h += kpiCard(numOrDash(k.chSB.pitched, k.chSB.sansDetail), 'Pitchés SB', 'offres faites' + (k.chSB.disqua ? ' · ' + k.chSB.disqua + ' disqualifiés' : '') + (k.chSB.nonCloses ? ' · ' + k.chSB.nonCloses + ' non closes' : ''));
     h += kpiCard(fmtNum(k.wonSelf), 'Closes SB', 'clients gagnés SB' + (k.chSB.pitched > 0 ? ' · ' + fmtPct(k.wonSelf / k.chSB.pitched * 100, 0) + ' des offres' : ''));
-    h += kpiCard(fmtEuro(k.wonCollecteSB), 'Collecté SB (HT)', 'contracté ' + fmtEuro(k.wonContracteSB) + ' · Paiements, repli cartes du Close');
+    h += kpiCard(fmtEuro(k.wonCollecteSB), 'Collecté SB (HT)', 'contracté ' + fmtEuro(k.wonContracteSB) + ' · prélèvements réellement passés');
     h += kpiCard(fmtEuro2(k.cprSB), 'CPR', 'dépense ÷ ' + fmtNum(k.chSB.n) + ' RDV SB pris (annulés inclus)');
     h += kpiCard(fmtEuro2(k.cprKept), 'CPR KEPT', 'dépense ÷ ' + fmtNum(k.chSB.kept) + ' RDV SB kept');
     h += kpiCard(fmtEuro2(k.cprLive), 'CPR Live', 'dépense ÷ ' + fmtNum(k.chSB.present) + ' RDV SB présents');
@@ -1582,9 +1582,9 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     if (k.bookedAdmin > 0) h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + k.bookedAdmin + ' RDV manuels (admin) — hors LTB / hors funnel.</div>';
     if (k.unknownLeadBookings > 0 && tunnelFilter === 'all') h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + k.unknownLeadBookings + ' RDV de leads hors période (non rattachés à la cohorte) — inclus dans les totaux « Tous », hors taux de récupération.</div>';
     if (k.ocDue.aStatuer > 0) h += '<div class="fn-alert">⏳ <strong>' + k.ocDue.aStatuer + ' RDV passé(s) sans résultat</strong> — à statuer dans <a href="sales-rdv.html">Rendez-vous</a> ou depuis la fiche prospect pour des lignes SB / NB exactes.</div>';
-    if (k.collecteMissing > 0) h += '<div class="fn-alert">💶 <strong>' + k.collecteMissing + ' close(s) sans montant</strong>' + (k.collecteMissingNames.length ? ' (' + esc(k.collecteMissingNames.join(', ')) + ')' : '') + ' — le client est compté mais aucun paiement (module Paiements) ni encaissé déclaré (cartes du Close) ne lui correspond. Valide les cartes du close ou crée le paiement GoCardless : le collecté remontera automatiquement.</div>';
+    if (k.closesCancelled > 0) h += '<div class="fn-alert">🚫 <strong>' + k.closesCancelled + ' close(s) annulé(s)</strong>' + (k.closesCancelledNames && k.closesCancelledNames.length ? ' (' + esc(k.closesCancelledNames.join(', ')) + ')' : '') + ' — paiement annulé ou client stoppé sans aucun prélèvement : retiré(s) des closes, du contracté et du collecté.</div>';
+    if (k.collecteMissing > 0) h += '<div class="fn-alert">💶 <strong>' + k.collecteMissing + ' close(s) sans paiement</strong>' + (k.collecteMissingNames.length ? ' (' + esc(k.collecteMissingNames.join(', ')) + ')' : '') + ' — le client est compté mais aucun paiement GoCardless (module Paiements) ne lui correspond : son encaissé déclaré n\'est PAS compté dans le collecté. Crée le paiement : le collecté remontera automatiquement.</div>';
     if (k.payCloseNames && k.payCloseNames.length) h += '<div class="fn-alert">💳 <strong>' + k.payCloseNames.length + ' close(s) compté(s) via le module Paiements</strong> (' + esc(k.payCloseNames.join(', ')) + ') — paiement créé dans la période sans fiche gagnée correspondante. Valide les cartes du close sur la fiche pour un rattachement propre.</div>';
-    if (k.closesNoPayment > 0) h += '<div class="fn-stage-note" style="margin-top:8px">💳 ' + k.closesNoPayment + ' client(s) gagné(s) sans paiement GoCardless créé — leur collecté vient de l\'encaissé déclaré aux cartes du Close. Crée le paiement dans le module Paiements pour que le réel prenne le relais.</div>';
     h += '</div>';
     h += '<div class="fn-arrow">▼</div>';
 
@@ -1671,10 +1671,10 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
       + ' — ≠ « CPA » Meta (achat, RDV ou lead selon la campagne)', null, k.cacAds == null);
     var aovHint;
     if (k.closesWonTotal > 0 && !k.wonCollecte) {
-      aovHint = fmtNum(k.closesWonTotal) + ' client(s) mais collecté manquant — valide les cartes du Close ou crée le paiement GoCardless (module Paiements)';
+      aovHint = fmtNum(k.closesWonTotal) + ' client(s) mais aucun prélèvement passé pour l\'instant' + (k.collecteMandat > 0 ? ' — ' + fmtEuro(k.collecteMandat) + ' à encaisser' : '');
     } else {
       aovHint = 'collecté ' + fmtEuro(k.wonCollecte) + ' ÷ ' + fmtNum(k.closesWonTotal) + ' client(s)';
-      if (k.collecteMissing > 0) aovHint += ' · <span style="color:var(--orange,#e8a13c)">⚠ ' + k.collecteMissing + ' sans montant (AOV sous-estimé)</span>';
+      if (k.collecteMissing > 0 || k.collecteMandat > 0) aovHint += ' · <span style="color:var(--orange,#e8a13c)">⚠ prélèvements à venir non comptés (AOV sous-estimé)</span>';
     }
     h += kpiCard(k.aovAll != null ? fmtEuro2(k.aovAll) : '—', 'AOV', aovHint, null, k.aovAll == null);
     var cs2;

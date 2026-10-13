@@ -1210,6 +1210,54 @@
     }).catch(function () { return {}; });
   }
 
+  /* ── Closes : annulés + encaissé réel (13/10/2026) ──
+     Règle REVENUE de funnel-core.js (FunnelCore.revClient) — jamais recopiée
+     ici. Charge les paiements (collection entière : quelques dizaines de
+     docs) et les fiches des RDV closés, puis renvoie revOf(booking) →
+     { cancelled, reason, paid, con, pending, hasPay, declCol } en HT, ou
+     null quand funnel-core.js n'est pas chargé ou que les paiements sont
+     illisibles (la page retombe alors sur les montants des cartes).
+     Un client n'est chiffré qu'UNE fois : un 2ᵉ RDV closé du même client
+     renvoie le même verdict avec des montants à 0. */
+  function loadCloseRevenue(bookings) {
+    var FC = window.FunnelCore;
+    var none = function () { return null; };
+    if (!FC || typeof FC.revClient !== 'function') return Promise.resolve(none);
+    var _db = db();
+    var leadIds = {};
+    (bookings || []).forEach(function (b) { if (b && b.outcome === 'close' && b.leadId) leadIds[b.leadId] = 1; });
+    var ids = Object.keys(leadIds).slice(0, 200);
+    return Promise.all([
+      _db.collection('payments').get().then(function (snap) {
+        var out = [];
+        snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; out.push(d); });
+        return out;
+      }).catch(function (e) { console.warn('[AlteoreFlow] payments:', e && e.message); return null; }),
+      Promise.all(ids.map(function (id) {
+        return _db.collection('leads').doc(id).get().catch(function () { return null; });
+      }))
+    ]).then(function (res) {
+      if (!res[0]) return none;
+      var idx = FC.revIndex(res[0]);
+      var leads = {};
+      res[1].forEach(function (s) { if (s && s.exists) { var d = s.data() || {}; d._id = s.id; leads[s.id] = d; } });
+      var memo = {};
+      return function revOf(b) {
+        if (!b || b.outcome !== 'close') return null;
+        var lead = b.leadId ? (leads[b.leadId] || null) : null;
+        var pr = b.prospect || {};
+        var email = (lead && lead.email) || pr.email || '';
+        var emKey = String(email || '').toLowerCase().trim();
+        var key = b.leadId || (emKey ? 'em_' + emKey : 'bk_' + b.id);
+        if (memo[key]) return { cancelled: memo[key].cancelled, reason: memo[key].reason, paid: 0, con: 0, pending: 0, hasPay: memo[key].hasPay, declCol: 0, dup: true };
+        var pays = FC.revPaymentsFor(idx, b.leadId || null, email, (lead && (lead.telephone || lead.phone)) || pr.telephone || pr.phone);
+        var rv = FC.revClient(pays, lead, b.closeData || (lead && lead.closedData) || null);
+        memo[key] = rv;
+        return rv;
+      };
+    }).catch(function (e) { console.warn('[AlteoreFlow] revenue:', e && e.message); return none; });
+  }
+
   function fmtDuration(sec) {
     sec = Math.round(Number(sec) || 0);
     if (sec <= 0) return '0min';
@@ -1282,6 +1330,7 @@
     loadActions: loadActions,
     loadCallsForMember: loadCallsForMember,
     loadBookingsRange: loadBookingsRange,
-    loadPersonsMap: loadPersonsMap
+    loadPersonsMap: loadPersonsMap,
+    loadCloseRevenue: loadCloseRevenue
   };
 })();

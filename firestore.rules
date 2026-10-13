@@ -514,6 +514,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // _config/sales_objectives (13/10/2026) : objectifs de contracté HT
+    // { years: { 'YYYY': { annual, months: { '1'..'12': n|null } } } } —
+    // lus par la page Projections (sales + admin), modifiés par un admin.
+    match /_config/sales_objectives {
+      allow read:  if isSalesOrAdmin();
+      allow write: if isAdmin();
+    }
+
     match /_config/{docId} {
       allow read:  if isAdmin();
       allow write: if isAdmin();

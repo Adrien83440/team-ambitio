@@ -67,6 +67,7 @@ const CACHE_TTL_MS = 120 * 1000;
 const AGENCY_EXCLUDE = {
   /* Nominatifs clients / prospects */
   collecteMissingNames: 1,
+  closesCancelledNames: 1,
   payCloseNames: 1,
   payCloseOther: 1,
   /* Équipe, par personne */

@@ -32,6 +32,7 @@
   }
 </script>
 <script>(function(){var r=localStorage.getItem('ambitio_role');if(!r)window.location.href='login.html';if(r==='coach')window.location.href='coaching.html';})()</script>
+<script src="funnel-core.js"></script>
 <script src="alteore-flow.js"></script>
 <script src="nav.js" defer></script>
 </head>
@@ -135,7 +136,7 @@
     { key: 'noshowNb',      label: 'No-show',    grp: 'rdv', fmt: 'bad' },
     { key: 'presentsNb',    label: 'Présents',   grp: 'rdv', fmt: 'good' },
     { key: 'closesNb',      label: 'Closes',     grp: 'rdv', fmt: 'good' },
-    { key: 'collecteNb',    label: 'Collecté',   grp: 'rdv', fmt: 'eur' }
+    { key: 'collecteNb',    label: 'Collecté',   grp: 'rdv', fmt: 'eur', title: 'Prélèvements GoCardless réellement passés pour les clients closés (HT) — closes annulés exclus' }
   ];
   var COLS_ECRIT = [
     { key: 'dmOut',      label: 'DM envoyés',  grp: 'dm',  fmt: 'n',    title: 'Messages Instagram sortants (échos Meta), comptés le jour de l\'envoi' },
@@ -151,7 +152,7 @@
     { key: 'noshowNb',   label: 'No-show',     grp: 'rdv', fmt: 'bad' },
     { key: 'presentsNb', label: 'Présents',    grp: 'rdv', fmt: 'good' },
     { key: 'closesNb',   label: 'Closes',      grp: 'rdv', fmt: 'good' },
-    { key: 'collecteNb', label: 'Collecté',    grp: 'rdv', fmt: 'eur' }
+    { key: 'collecteNb', label: 'Collecté',    grp: 'rdv', fmt: 'eur', title: 'Prélèvements GoCardless réellement passés pour les clients closés (HT) — closes annulés exclus' }
   ];
 
   var S = {
@@ -368,6 +369,10 @@
         .catch(function () { return null; }),
       ecrit ? loadDm(fromDay, toDay, from, to) : Promise.resolve(null)
     ]).then(function (res) {
+      return AF.loadCloseRevenue(res[2]).then(function (revOf) { return { res: res, revOf: revOf }; });
+    }).then(function (pack) {
+      var res = pack.res, revOf = pack.revOf;
+      var rev = { cancelled: [], pending: 0, noPay: [] };
       var calls = res[0], actions = res[1], bookings = res[2];
       S.overrides = res[3] || {};
       S.typeMap = res[4] || {};
@@ -485,8 +490,19 @@
         else if (oc === 'no_show' || (!oc && b.status === 'no_show')) bump(row, 'noshowNb');
         if (oc ? AF.isPresent(oc) : b.status === 'completed') bump(row, 'presentsNb');
         if (oc === 'close') {
-          bump(row, 'closesNb');
-          bump(row, 'collecteNb', (b.closeData && Number(b.closeData.collecte)) || 0);
+          /* Règle REVENUE (13/10/2026) : close annulé retiré, collecté =
+             prélèvements réellement passés, mandat non prélevé à part. */
+          var rv = revOf(b);
+          var nmC = (b.prospect && b.prospect.nom) || b.leadName || b.id;
+          if (rv && rv.cancelled) { if (!rv.dup) rev.cancelled.push(nmC + ' (' + rv.reason + ')'); }
+          else {
+            bump(row, 'closesNb');
+            if (rv) {
+              bump(row, 'collecteNb', rv.paid);
+              rev.pending += rv.pending;
+              if (!rv.hasPay && !rv.dup) rev.noPay.push(nmC + (rv.declCol > 0 ? ' — déclaré ' + fmtEuro(rv.declCol) : ''));
+            } else bump(row, 'collecteNb', (b.closeData && Number(b.closeData.collecte)) || 0);
+          }
         }
       });
 
@@ -496,6 +512,7 @@
 
       S.data = {
         days: days,
+        rev: rev,
         callsOk: ecrit ? true : (canSeeCalls || calls.length > 0),
         dmOk: !dm || dm.ok !== false,
         dmError: dm && dm.ok === false ? dm.error : null,
@@ -607,7 +624,7 @@
         kpi(String(tot.leads), 'Leads travaillés', '1ʳᵉ action fiche · jamais recomptés', '#5b7cfa') +
         kpi(String(tot.sets), 'Sets (NB)', 'Set % réponses ' + fmtPct(txSetConv), '#a78bfa') +
         kpi(String(tot.presentsNb), 'Présents NB', 'Show-up ' + fmtPct(txShowE) + ' · ' + tot.annulesNb + ' annulés · ' + tot.noshowNb + ' no-show', '#34d399') +
-        kpi(String(tot.closesNb), 'Closes NB', fmtEuro(tot.collecteNb) + ' collecté', '#34d399');
+        kpi(String(tot.closesNb), 'Closes NB', fmtEuro(tot.collecteNb) + ' collecté HT' + (S.data.rev.pending > 0 ? ' · ⏳ ' + fmtEuro(S.data.rev.pending) + ' à encaisser' : ''), '#34d399');
       fun = funnel([
         { l: 'DM envoyés', v: tot.dmOut },
         { l: 'Conv. ouvertes', v: tot.convOut },
@@ -626,7 +643,7 @@
         kpi(String(tot.leads), 'Leads travaillés', '1ʳᵉ action fiche · jamais recomptés', '#5b7cfa') +
         kpi(String(tot.sets), 'Sets (NB)', 'Set % décro ' + fmtPct(txSet), '#a78bfa') +
         kpi(String(tot.presentsNb), 'Présents NB', 'Show-up ' + fmtPct(txShow) + ' · ' + tot.annulesNb + ' annulés · ' + tot.noshowNb + ' no-show', '#34d399') +
-        kpi(String(tot.closesNb), 'Closes NB', fmtEuro(tot.collecteNb) + ' collecté', '#34d399');
+        kpi(String(tot.closesNb), 'Closes NB', fmtEuro(tot.collecteNb) + ' collecté HT' + (S.data.rev.pending > 0 ? ' · ⏳ ' + fmtEuro(S.data.rev.pending) + ' à encaisser' : ''), '#34d399');
       fun = funnel([
         { l: 'Leads', v: tot.leads },
         { l: 'Décrochés', v: tot.decroches },
@@ -681,7 +698,7 @@
     }
 
     var h =
-      startNote + journalNote +
+      startNote + journalNote + revBanner(S.data.rev) +
       '<div class="au-kpis">' + kpis + '</div>' +
       '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Funnel ' + (ecrit ? 'Setting écrit' : 'Set NB') + ' — ' + periodLabel() + '</div>' +
         '<div class="au-card-note">' + (ecrit ? 'DM = webhook Instagram (Meta) · ' : '') + 'sets = statuts SET/RDV posé + RDV setter créés (uniques par lead/jour)</div></div>' + fun + '</div>' +
@@ -700,6 +717,18 @@
     document.querySelectorAll('.au-day-edit').forEach(function (b) {
       b.addEventListener('click', function () { openOverride(b.getAttribute('data-day')); });
     });
+  }
+
+  /* Closes annulés / à encaisser / sans paiement — règle REVENUE (13/10/2026). */
+  function revBanner(rev) {
+    if (!rev) return '';
+    var esc = function (t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+    var parts = [];
+    if (rev.cancelled.length) parts.push('🚫 <strong>' + rev.cancelled.length + ' close(s) annulé(s)</strong> — ' + esc(rev.cancelled.join(', ')) + ' : retiré(s) des closes et du collecté.');
+    if (rev.pending > 0) parts.push('⏳ <strong>' + fmtEuro(rev.pending) + ' à encaisser</strong> — mandat signé, 1er prélèvement pas encore passé : non compté dans le collecté.');
+    if (rev.noPay.length) parts.push('💶 <strong>' + rev.noPay.length + ' close(s) sans paiement GoCardless</strong> — ' + esc(rev.noPay.join(', ')) + ' : encaissé déclaré non compté, crée le paiement dans le module Paiements.');
+    if (!parts.length) return '';
+    return '<div class="au-card" style="border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.05);padding:12px 16px;font-size:12.5px;line-height:1.7">' + parts.join('<br/>') + '</div>';
   }
 
   function kpi(v, l, s, color) {

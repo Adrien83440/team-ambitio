@@ -31,6 +31,7 @@
   }
 </script>
 <script>(function(){var r=localStorage.getItem('ambitio_role');if(!r)window.location.href='login.html';if(r==='coach')window.location.href='coaching.html';})()</script>
+<script src="funnel-core.js"></script>
 <script src="alteore-flow.js"></script>
 <script src="nav.js" defer></script>
 </head>
@@ -117,8 +118,8 @@
     { key: 'closes',     label: 'Closes',    grp: 'c', fmt: 'good' },
     { key: 'nonCloses',  label: 'Non close', grp: 'c', fmt: 'bad' },
     { key: 'aStatuer',   label: '⏳',        grp: 'c', fmt: 'warn', title: 'RDV passés sans résultat — à statuer' },
-    { key: 'contracte',  label: 'Contracté', grp: 'd', fmt: 'eur' },
-    { key: 'collecte',   label: 'Collecté',  grp: 'd', fmt: 'eur' }
+    { key: 'contracte',  label: 'Contracté', grp: 'd', fmt: 'eur', title: 'Contrats des clients closés ce jour (module Paiements, HT) — closes annulés exclus' },
+    { key: 'collecte',   label: 'Collecté',  grp: 'd', fmt: 'eur', title: 'Prélèvements GoCardless réellement passés pour ces clients (HT) — un mandat signé non prélevé ne compte pas' }
   ];
   var OV_KEYS = ['rdvSb','annules','noshow','replanifies','presents','disqua','offres','closes','nonCloses','contracte','collecte'];
 
@@ -264,7 +265,11 @@
         ? db.collection('saisies').doc(member.slug).collection('mois').doc(monthKey()).get().catch(function () { return { exists: false }; })
         : Promise.resolve({ exists: false })
     ]).then(function (res) {
+      return AF.loadCloseRevenue(res[0]).then(function (revOf) { return { res: res, revOf: revOf }; });
+    }).then(function (pack) {
+      var res = pack.res, revOf = pack.revOf;
       var bookings = res[0];
+      var rev = { cancelled: [], pending: 0, noPay: [] };
       S.typeMap = res[1] || {};
       S.personsMap = res[2] || {};
       S.overrides = res[3] || {};
@@ -291,16 +296,31 @@
         if (oc === 'disqualifie') row.disqua++;
         if (oc ? AF.isPitched(oc) : false) row.offres++;
         if (oc === 'close') {
-          row.closes++;
-          row.contracte += (b.closeData && Number(b.closeData.contracte)) || 0;
-          row.collecte += (b.closeData && Number(b.closeData.collecte)) || 0;
+          /* Règle REVENUE (13/10/2026) : close annulé (paiement annulé ou
+             client stoppé, 0 € encaissé) retiré ; collecté = prélèvements
+             réellement passés ; mandat non prélevé = « à encaisser ». */
+          var rv = revOf(b);
+          var nmC = (b.prospect && b.prospect.nom) || b.leadName || b.id;
+          if (rv && rv.cancelled) { if (!rv.dup) rev.cancelled.push(nmC + ' (' + rv.reason + ')'); }
+          else {
+            row.closes++;
+            if (rv) {
+              row.contracte += rv.con;
+              row.collecte += rv.paid;
+              rev.pending += rv.pending;
+              if (!rv.hasPay && !rv.dup) rev.noPay.push(nmC + (rv.declCol > 0 ? ' — déclaré ' + fmtEuro(rv.declCol) : ''));
+            } else {
+              row.contracte += (b.closeData && Number(b.closeData.contracte)) || 0;
+              row.collecte += (b.closeData && Number(b.closeData.collecte)) || 0;
+            }
+          }
         }
         if (oc === 'non_close') row.nonCloses++;
         var isPastNoResult = !oc && (b.status === 'confirmed' || b.status === 'pending') && b.date < todayIso;
         if (isPastNoResult) row.aStatuer++;
       });
 
-      S.data = { days: days, createdSb: createdSb };
+      S.data = { days: days, createdSb: createdSb, rev: rev };
       S.loading = false;
       render();
     }).catch(function (e) {
@@ -379,7 +399,7 @@
       kpi(String(tot.presents), 'Présents (Live)', 'Show-up ' + fmtPct(txShow), '#5b7cfa') +
       kpi(String(tot.offres), 'Offres pitchées', fmtPct(txOffre) + ' des présents', '#a78bfa') +
       kpi(String(tot.closes), 'Closes SB', fmtPct(txCloseOffre) + ' / offres · ' + fmtPct(txCloseLive) + ' / live', '#34d399') +
-      kpi(fmtEuro(tot.collecte), 'Collecté', 'Contracté ' + fmtEuro(tot.contracte) + (aov != null ? ' · AOV ' + fmtEuro(aov) : ''), '#34d399');
+      kpi(fmtEuro(tot.collecte), 'Collecté (HT)', 'Contracté ' + fmtEuro(tot.contracte) + (S.data.rev.pending > 0 ? ' · ⏳ ' + fmtEuro(S.data.rev.pending) + ' à encaisser' : '') + (aov != null ? ' · AOV ' + fmtEuro(aov) : ''), '#34d399');
 
     var fun = funnel([
       { l: 'RDV SB', v: tot.rdvSb },
@@ -406,6 +426,7 @@
     }
 
     var h =
+      revBanner(S.data.rev) +
       '<div class="au-kpis">' + kpis + '</div>' +
       '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Funnel Close SB — ' + periodLabel() + '</div>' +
         '<div class="au-card-note">résultats saisis sur les RDV (module RDV / fiche prospect) — Self Booking uniquement</div></div>' + fun + '</div>' +
@@ -423,6 +444,18 @@
     document.querySelectorAll('.au-day-edit').forEach(function (b) {
       b.addEventListener('click', function () { openOverride(b.getAttribute('data-day')); });
     });
+  }
+
+  /* Closes annulés / à encaisser / sans paiement — règle REVENUE (13/10/2026). */
+  function revBanner(rev) {
+    if (!rev) return '';
+    var esc = function (t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+    var parts = [];
+    if (rev.cancelled.length) parts.push('🚫 <strong>' + rev.cancelled.length + ' close(s) annulé(s)</strong> — ' + esc(rev.cancelled.join(', ')) + ' : retiré(s) des closes, du contracté et du collecté.');
+    if (rev.pending > 0) parts.push('⏳ <strong>' + fmtEuro(rev.pending) + ' à encaisser</strong> — mandat signé, 1er prélèvement pas encore passé : non compté dans le collecté.');
+    if (rev.noPay.length) parts.push('💶 <strong>' + rev.noPay.length + ' close(s) sans paiement GoCardless</strong> — ' + esc(rev.noPay.join(', ')) + ' : encaissé déclaré non compté, crée le paiement dans le module Paiements.');
+    if (!parts.length) return '';
+    return '<div class="au-card" style="border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.05);padding:12px 16px;font-size:12.5px;line-height:1.7">' + parts.join('<br/>') + '</div>';
   }
 
   function kpi(v, l, s, color) {
