@@ -1133,7 +1133,7 @@
         /* formFields : sert à sales-leads pour retrouver le libellé des
            réponses de formulaire des RDV antérieurs au champ formAnswers
            (posé sur les bookings depuis le 02/09/2026). */
-        if (t && t.id) map[t.id] = { isSetterOnly: t.isSetterOnly === true, isCoaching: t.isCoaching === true, label: t.label || t.id, formFields: t.formFields || [] };
+        if (t && t.id) map[t.id] = { isSetterOnly: t.isSetterOnly === true, isCoaching: t.isCoaching === true, label: t.label || t.id, formFields: t.formFields || [], slug: t.slug || '' };
       });
       return map;
     }).catch(function () { return {}; });

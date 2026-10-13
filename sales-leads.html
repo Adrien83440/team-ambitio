@@ -3409,7 +3409,9 @@ function _ldClosePilotHost() {
     },
     bookingLink: function (typeId, l) {
       var parts = String(l.nom || '').trim().split(/\s+/);
-      return location.origin + '/booking.html?' + (typeId ? 'type=' + encodeURIComponent(typeId) + '&' : '') + 'leadId=' + encodeURIComponent(l.id)
+      /* Lien court de la consultation s'il existe (13/10/2026) — l'id reste résolu par booking.html. */
+      var linkKey = (typeId && _ldTypeMap && _ldTypeMap[typeId] && _ldTypeMap[typeId].slug) || typeId;
+      return location.origin + '/booking.html?' + (linkKey ? 'type=' + encodeURIComponent(linkKey) + '&' : '') + 'leadId=' + encodeURIComponent(l.id)
         + '&prenom=' + encodeURIComponent(parts[0] || '') + '&nom=' + encodeURIComponent(parts.slice(1).join(' ')) + '&email=' + encodeURIComponent(l.email || '') + '&tel=' + encodeURIComponent(l.telephone || '');
     },
     toast: toast
