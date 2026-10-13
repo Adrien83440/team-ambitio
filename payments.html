@@ -676,16 +676,40 @@ function updatePreview() {
 
 /* Un contrat signé existe-t-il pour ce client ? Requêtes à un seul champ
    (pas d'index composite) : par lead d'abord, sinon par e-mail du client. */
-async function hasSignedContract(leadId, email) {
+/* Retourne la demande de signature SIGNÉE de ce client (par fiche, puis par
+   e-mail), ou null. Filtre audience == 'equipe' obligatoire : depuis l'espace
+   admin des signatures (09/10/2026), les règles refusent à un sales toute
+   requête qui ne le porte pas — la vérification échouait et le paiement était
+   bloqué pour « contrat non signé » (close d'Anthony, 12/10/2026). Un contrat
+   client est toujours 'equipe' : le filtre vaut aussi pour les admins.
+   Égalités seules : aucun index composite. */
+async function findSignedContract(leadId, email) {
   const col = db.collection('signature_requests');
-  const isSigned = snap => snap.docs.some(d => (d.data() || {}).status === 'signed');
-  if (leadId && isSigned(await col.where('leadId', '==', leadId).get())) return true;
+  const signed = snap => { const d = snap.docs.find(x => (x.data() || {}).status === 'signed'); return d ? { id: d.id, ...d.data() } : null; };
+  let r = null;
+  if (leadId) r = signed(await col.where('leadId', '==', leadId).where('audience', '==', 'equipe').get());
   const mail = String(email || '').trim();
-  if (mail) {
-    if (isSigned(await col.where('clientEmail', '==', mail).get())) return true;
-    if (mail.toLowerCase() !== mail && isSigned(await col.where('clientEmail', '==', mail.toLowerCase()).get())) return true;
+  if (!r && mail) {
+    r = signed(await col.where('clientEmail', '==', mail).where('audience', '==', 'equipe').get());
+    if (!r && mail.toLowerCase() !== mail) r = signed(await col.where('clientEmail', '==', mail.toLowerCase()).where('audience', '==', 'equipe').get());
   }
-  return false;
+  return r;
+}
+
+/* Fiche lead d'un paiement créé hors fiche (page Paiements ouverte seule) :
+   sans leadId, le paiement est invisible du pilote de closing et de la fiche
+   (close de Charlotte, 12/10/2026). On cherche par e-mail, fiches fusionnées
+   ignorées (pickAlive). */
+async function findLeadIdByEmail(email) {
+  const mail = String(email || '').trim();
+  if (!mail) return null;
+  const variants = mail.toLowerCase() !== mail ? [mail, mail.toLowerCase()] : [mail];
+  for (const m of variants) {
+    const sn = await db.collection('leads').where('email', '==', m).limit(5).get();
+    const alive = sn.docs.find(d => (d.data() || {})._merged !== true);
+    if (alive) return alive.id;
+  }
+  return null;
 }
 
 async function createPayment() {
@@ -697,7 +721,7 @@ async function createPayment() {
   const desc = document.getElementById('pmDesc').value.trim();
   const count = payType === 'installments' ? parseInt(document.getElementById('pmCount').value) : 1;
   const startDate = document.getElementById('pmStartDate').value || new Date().toISOString().slice(0, 10);
-  const leadId = document.getElementById('payModal').dataset.leadId || null;
+  let leadId = document.getElementById('payModal').dataset.leadId || null;
 
   if (!name || !email || !total) { toast('❌ Nom, email et montant requis', false); return; }
 
@@ -707,11 +731,22 @@ async function createPayment() {
      Un admin peut passer outre (renouvellement, contrat papier…) après
      confirmation explicite ; un sales, jamais. */
   btn.disabled = true; btn.textContent = 'Vérification du contrat…';
-  let contratSigne = false;
-  try { contratSigne = await hasSignedContract(leadId, email); }
-  catch (e) { console.warn('[payments] vérification du contrat :', e && e.message); }
+  let contrat = null, verifErr = null;
+  try { contrat = await findSignedContract(leadId, email); }
+  catch (e) { verifErr = e; console.warn('[payments] vérification du contrat :', e && e.message); }
+  /* Paiement créé hors fiche : rattaché à la fiche du contrat signé, sinon
+     à la fiche de même e-mail. */
+  if (!leadId && contrat && contrat.leadId) leadId = contrat.leadId;
+  if (!leadId) { try { leadId = await findLeadIdByEmail(email); } catch (e) { console.warn('[payments] recherche de la fiche :', e && e.message); } }
   btn.disabled = false; btn.textContent = '✅ Créer le paiement';
-  if (!contratSigne) {
+  /* Une vérification qui ÉCHOUE n'est pas un contrat non signé : on le dit,
+     au lieu d'accuser le closer d'un contrat manquant. */
+  if (verifErr && !contrat) {
+    toast('❌ Vérification du contrat impossible (' + ((verifErr && verifErr.message) || 'erreur') + '). Recharge la page et réessaie ; si ça persiste, préviens Adrien.', false);
+    return;
+  }
+  if (!leadId && !confirm('Ce paiement n\'est relié à AUCUNE fiche lead (aucune fiche trouvée pour ' + email + ').\n\nIl n\'apparaîtra ni dans la fiche ni dans le pilote de closing. Mieux vaut le créer depuis la fiche du client (bouton Paiement).\n\nCréer quand même ?')) return;
+  if (!contrat) {
     if (currentRole !== 'admin') {
       toast('🔒 Contrat non signé — le paiement ne peut être créé qu\'après la signature du contrat par le client.', false);
       return;
