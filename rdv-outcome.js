@@ -440,7 +440,10 @@
     var h = '';
 
     if (k === 'close') {
-      var offres = AF.OFFRES.map(function (o) { return '<option' + ((cd.offre || 'BP 12') === o ? ' selected' : '') + '>' + o + '</option>'; }).join('');
+      /* Valeur = clé stockée ('BP 12', 'Elite'…) ; libellé = nomenclature
+         du 14/10/2026 (Business Phénix BP / Elite Phénix EP). */
+      var OFFRE_LBL = { 'BP 12': 'Business Phénix (BP)', 'Elite': 'Elite Phénix (EP)' };
+      var offres = AF.OFFRES.map(function (o) { return '<option value="' + o + '"' + ((cd.offre || 'BP 12') === o ? ' selected' : '') + '>' + (OFFRE_LBL[o] || o) + '</option>'; }).join('');
       var paiements = AF.PAIEMENTS.map(function (p) { return '<option value="' + p.key + '"' + (cd.paiement === p.key ? ' selected' : '') + '>' + p.label + '</option>'; }).join('');
       h +=
         '<div class="rvo-frow">' +

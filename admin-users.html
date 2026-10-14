@@ -474,10 +474,12 @@ const TEAM_ROLES_SALES=[
    Cycle Art.3 + avenant Elite) — miroir d'alteore-flow.js COMM_RULES. */
 /* BP 6 retiré des formulaires le 10/09/2026 (offre disparue). Élodie
    (closer + setter) garde tout le reste : closing, setting NB / SB, Titan. */
+/* l = libellé affiché (nomenclature du 14/10/2026) ; o = clé stockée,
+   inchangée (les barèmes de l'équipe sont indexés dessus). */
 const CONTRACT_OFFRES=[
-  {k:'bp12', o:'BP 12'},
-  {k:'elite',o:'Elite'},
-  {k:'titan',o:'Titan'}
+  {k:'bp12', o:'BP 12', l:'Business Phénix (BP)'},
+  {k:'elite',o:'Elite', l:'Elite Phénix (EP)'},
+  {k:'titan',o:'Titan', l:'Titan'}
 ];
 const CONTRACT_DEFAULT={
   closing:{'BP 6':{mensualise:200,pif:200},'BP 12':{mensualise:500,pif:500},'Elite':{mensualise:800,pif:800},'Titan':{mensualise:1200,pif:1200}},
@@ -547,7 +549,7 @@ function renderContractBlock(tmMember){
   h+='<thead><tr style="color:rgba(255,255,255,.45)"><th style="text-align:left;padding:4px 2px">Offre</th><th style="padding:4px 2px">Closing mensu.</th><th style="padding:4px 2px">Closing PIF</th><th style="padding:4px 2px">Prime PIF</th><th style="padding:4px 2px">Setting NB</th><th style="padding:4px 2px">Setting SB</th></tr></thead><tbody>';
   CONTRACT_OFFRES.forEach(function(x){
     var inp=function(id,val){return '<td style="padding:2px"><input type="number" min="0" step="1" class="bi" id="'+id+'" value="'+esc(String(val))+'" style="width:100%;padding:5px 6px;font-size:11px;text-align:right"/></td>';};
-    h+='<tr><td style="padding:4px 2px;font-weight:700;white-space:nowrap">'+esc(x.o)+'</td>';
+    h+='<tr><td style="padding:4px 2px;font-weight:700;white-space:nowrap">'+esc(x.l||x.o)+'</td>';
     h+=inp('eCt_'+x.k+'_cm',_ctVal(ct,'closing',x.o,'mensualise'));
     h+=inp('eCt_'+x.k+'_cp',_ctVal(ct,'closing',x.o,'pif'));
     h+=inp('eCt_'+x.k+'_pb',_ctPif(ct,x.o));

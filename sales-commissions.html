@@ -1083,6 +1083,16 @@ function autoCalcBonus(offre, type, subtype, uid) {
   return 0;
 }
 
+/* Nomenclature affichée (14/10/2026) : BP PIF / BP MENS / EP PIF / EP MENS.
+   La clé stockée ne change pas ('BP 12', 'Elite') — barèmes et historique
+   intacts ; un deal de setting n'a pas de modalité de paiement (« BP »). */
+function offreDisplay(offre, subtype) {
+  if (window.AlteoreFlow && AlteoreFlow.offreCode) return AlteoreFlow.offreCode(offre, subtype);
+  if (offre === 'BP 6') return 'BP 6 (ancienne offre 2 000 €)';
+  const fam = offre === 'BP 12' ? 'BP' : (offre === 'Elite' ? 'EP' : null);
+  if (!fam) return offre;
+  return fam + (subtype === 'pif' ? ' PIF' : (subtype === 'mensualise' ? ' MENS' : ''));
+}
 function offreClass(offre) {
   if (offre === 'BP 6') return 'offre-bp6';
   if (offre === 'BP 12') return 'offre-bp12';
@@ -1157,7 +1167,7 @@ function renderDashboard() {
           <div class="top-deal-client">${d.client}</div>
           <div class="top-deal-meta">
             <span class="deal-type-tag ${d.type === 'Closing' ? 'tag-closing' : 'tag-setting'}" style="padding:1px 5px;font-size:10px">${d.type}</span>
-            &nbsp;<span class="deal-offre ${offreClass(d.offre)}" style="padding:1px 5px;font-size:10px">${d.offre}</span>
+            &nbsp;<span class="deal-offre ${offreClass(d.offre)}" style="padding:1px 5px;font-size:10px">${offreDisplay(d.offre, d.subtype)}</span>
             &nbsp;· ${d._member.name}
           </div>
         </div>
@@ -1176,7 +1186,7 @@ function renderDashboard() {
   const maxCount = Math.max(...Object.values(offreCounts), 1);
   const distHtml = offres.map(o => `
     <div class="offre-dist-row">
-      <div class="offre-dist-label"><span class="deal-offre ${offreClass(o)}" style="padding:2px 6px;font-size:10px">${o}</span></div>
+      <div class="offre-dist-label"><span class="deal-offre ${offreClass(o)}" style="padding:2px 6px;font-size:10px">${offreDisplay(o)}</span></div>
       <div class="offre-dist-track">
         <div class="offre-dist-fill" style="width:${Math.round((offreCounts[o]/maxCount)*100)}%;background:${colors[o]}"></div>
       </div>
@@ -1365,7 +1375,7 @@ function renderDealsTable(deals) {
           <div class="deal-client">${d.client}${d.auto ? ' <span style="display:inline-block;margin-left:5px;font-size:8.5px;font-weight:800;letter-spacing:.5px;color:#2dd4bf;border:1px solid rgba(45,212,191,.4);background:rgba(45,212,191,.08);border-radius:999px;padding:1px 7px;vertical-align:middle" title="Créé automatiquement au Close (RDV)">⚡ AUTO</span>' : ''}</div>
           <div class="deal-email">${d.email}</div>
         </td>
-        <td><span class="deal-offre ${offreClass(d.offre)}">${d.offre}</span></td>
+        <td><span class="deal-offre ${offreClass(d.offre)}">${offreDisplay(d.offre, d.subtype)}</span></td>
         <td><span class="deal-type-tag ${d.type === 'Closing' ? 'tag-closing' : 'tag-setting'}">${d.type}</span>${d.subtype ? `<div style="font-size:9.5px;color:var(--muted);margin-top:3px">${subLabel[d.subtype] || d.subtype}</div>` : ''}</td>
         <td style="font-size:12px;color:var(--muted)">${d.date || '—'}${
           /* Commission de setting versée sur un autre mois que son close :
@@ -1406,8 +1416,8 @@ function renderDealsTable(deals) {
 /* Offres proposées dans le formulaire d'ajout. Les setters n'ont que les deux
    formules de leur contrat (pas de Titan) ; Élodie garde Titan. Les options
    sont RECONSTRUITES et non masquées : Safari ignore `hidden` sur <option>. */
-const OFFER_OPTIONS_ALL = [['BP 12', 'Business Phénix (BP 12)'], ['Elite', 'Elite Phénix'], ['Titan', 'Titan']];
-const OFFER_OPTIONS_SETTER = [['BP 12', 'Business Phénix (BP 12)'], ['Elite', 'Elite Phénix']];
+const OFFER_OPTIONS_ALL = [['BP 12', 'Business Phénix (BP PIF / BP MENS)'], ['Elite', 'Elite Phénix (EP PIF / EP MENS)'], ['Titan', 'Titan']];
+const OFFER_OPTIONS_SETTER = [['BP 12', 'Business Phénix (BP PIF / BP MENS)'], ['Elite', 'Elite Phénix (EP PIF / EP MENS)']];
 function _applyDealFormMode() {
   const setter = _isSetterMember(currentMember);
   const typeSel = document.getElementById('f-type');
@@ -2000,8 +2010,8 @@ document.addEventListener('DOMContentLoaded', function() {
           <div class="form-field">
             <label class="form-label">Offre</label>
             <select class="form-select" id="f-offre" onchange="updateCommPreview()">
-              <option value="BP 12">Business Phénix (BP 12)</option>
-              <option value="Elite">Elite Phénix</option>
+              <option value="BP 12">Business Phénix (BP PIF / BP MENS)</option>
+              <option value="Elite">Elite Phénix (EP PIF / EP MENS)</option>
               <option value="Titan">Titan</option>
             </select>
           </div>

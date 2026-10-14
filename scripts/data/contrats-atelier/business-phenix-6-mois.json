@@ -1,0 +1,304 @@
+{
+  "_lisezMoi": "Contrat client Business Phénix 6 mois, au format ATELIER (signature_templates/{id}.web, generated:true) : aucun PDF d'origine, le PDF est composé par api/_contract-render.js. Créé en base par scripts/bp-create-contract-template.js (à blanc par défaut). Ce fichier n'est PAS lu par scripts/sign-web-import.js (format transcription PDF). Après création, le texte vit dans l'atelier (contract-studio.html) : c'est lui qui fait foi, ce fichier n'est que la version de départ. Le bloc noteRelecture n'est jamais envoyé au client : il est posé au niveau du document (hors web), dans la note de la version 1 de l'atelier, et affiché par le script.",
+  "name": "Business Phénix 6 mois — BP PIF / BP MENS",
+  "audience": "equipe",
+  "academyCourseId": "parcours-v2-business",
+  "academyCourseName": "★ Business Phénix — Nouveau parcours (6 mois)",
+  "noteRelecture": {
+    "statut": "a_relire",
+    "titre": "NOTE DE RELECTURE AVOCAT — à traiter avant la mise en service du modèle",
+    "resume": "⚖️ À FAIRE RELIRE PAR L'AVOCAT AVANT MISE EN SERVICE : rétractation des professionnels ≤ 5 salariés (L221-3), portée de la renonciation par accès immédiat sur 6 mois, identification du prestataire sans adresse, durée comptée depuis la signature. Détail : champ noteRelecture du modèle.",
+    "points": [
+      "1. Article L221-3 du Code de la consommation. La cible Business (1 à 3 salariés) peut, lorsque l'accompagnement n'entre pas dans le champ de son activité principale, bénéficier des règles protectrices des consommateurs, dont le droit de rétractation de 14 jours. Le texte vise les contrats conclus hors établissement, alors que le closing se fait en visioconférence (contrat à distance) : dire si l'extension s'applique et, plus largement, si le CLIENT est fondé à se prévaloir des articles L221-18 et suivants. Le contrat applique la règle actuelle à tous les clients (droit de rétractation de 14 jours ouvert, sauf accès immédiat).",
+      "2. Portée de la renonciation par « accès immédiat » (art. 5.2) pour une prestation de services qui dure 6 mois. L'article L221-28 1° vise les services pleinement exécutés avant la fin du délai ; pour un service seulement commencé à la demande du client, l'article L221-25 prévoit le paiement d'un montant proportionné en cas de rétractation, et non la perte du droit. Valider la rédaction « renonciation définitive, aucun remboursement, prix intégral dû », la référence au 13° (contenu numérique) et le récapitulatif envoyé par email à l'ouverture des accès.",
+      "3. Rétractation en deux étapes (art. 5.1, reprise du contrat Elite en vigueur) : l'entretien téléphonique est présenté comme « indispensable » et le remboursement court à compter de l'entretien. Vérifier la compatibilité avec l'article L221-21 (une déclaration dénuée d'ambiguïté suffit) et l'article L221-24 (remboursement sous 14 jours à compter de la décision de rétractation).",
+      "4. Identification du prestataire sans adresse du siège : dénomination, forme, capital, RCS de Draguignan, SIRET. Vérifier les mentions d'information précontractuelle (L221-5, L111-1 et R111-1 : adresse géographique de l'établissement et coordonnées du professionnel) et des actes de la société (R123-237 du Code de commerce) ; à défaut, dire où l'adresse doit figurer (CGV, email de confirmation). Le lieu « Fait à FAYENCE » du bloc de signatures (repris du contrat Elite) est conservé : dire s'il doit être remplacé (par exemple « Fait à distance, par voie électronique »).",
+      "5. Durée (art. 3) : tranché par Adrien le 14/10/2026 — les 180 jours partent du DÉMARRAGE (signature avec accès immédiat, sinon fin du délai de rétractation). Rédaction à valider.",
+      "6. Séances consommées (absence, report à moins de 48 h) et séances non tenues perdues à 180 jours (art. 3 et 6) : vérifier le caractère non abusif de ces clauses si le CLIENT est assimilé à un consommateur (L212-1, R212-1 et R212-2).",
+      "7. Article « Force majeure » (art. 15) : absent du contrat Elite, ajouté sur le modèle de l'article 1218 du Code civil. À valider.",
+      "8. Les Conditions Générales de Vente citées aux articles 3 et 19 (https://www.ambitiocorp.com/cgv) doivent être à jour du nouveau format avant la mise en service : plus de Titan, plus de garantie, plus de mention « formation »."
+    ]
+  },
+  "web": {
+    "generated": true,
+    "title": "CONTRAT D’ACCOMPAGNEMENT",
+    "subtitle": "PROGRAMME BUSINESS PHÉNIX",
+    "tagline": "Accompagnement de dirigeant — 6 mois, 10 coachings individuels",
+    "place": "FAYENCE",
+    "variables": [
+      {
+        "key": "formule",
+        "label": "Formule de paiement",
+        "type": "choice",
+        "options": [
+          {
+            "value": "integral",
+            "label": "Paiement comptant à la signature — 5 000 € HT (6 000 € TTC)"
+          },
+          {
+            "value": "echelonne",
+            "label": "Paiement échelonné — 6 000 € HT (7 200 € TTC), en 6 mensualités au plus"
+          }
+        ],
+        "filledBy": "equipe",
+        "required": true,
+        "requiredIf": "",
+        "help": ""
+      },
+      {
+        "key": "mensualites",
+        "label": "Nombre de mensualités",
+        "type": "number",
+        "filledBy": "equipe",
+        "required": false,
+        "requiredIf": "formule=echelonne",
+        "help": "De 1 à 6. Obligatoire en paiement échelonné."
+      }
+    ],
+    "clientChecks": [
+      {
+        "id": "renonciation_retractation",
+        "label": "« Je renonce expressément au délai de rétractation et je demande l’accès immédiat et le démarrage, dès la signature, de mon accompagnement Business Phénix. »",
+        "required": false,
+        "kind": "renonciation"
+      }
+    ],
+    "sections": [
+      {
+        "id": "parties",
+        "title": "ENTRE LES SOUSSIGNÉS",
+        "blocks": [
+          "ol:1. **Ambitio Corp**, société à responsabilité limitée (SARL) au capital de 1 000 €, immatriculée au registre du commerce et des sociétés de Draguignan sous le numéro **943 098 707** (SIRET **943 098 707 00012**), représentée par **Emily Ughetto et Adrien François**, ci-après dénommée « LE PRESTATAIRE »,",
+          "h:ET",
+          "ol:2. {{entreprise}}, représenté(e) par {{nom_prenom}}, ayant son siège social {{siege_social}} et immatriculé(e) sous le numéro SIRET {{siret}}, ci-après dénommé(e) **« LE CLIENT »**,",
+          "p:Il est convenu ce qui suit :"
+        ]
+      },
+      {
+        "id": "art1",
+        "title": "ARTICLE 1 — OBJET DU CONTRAT",
+        "blocks": [
+          "p:Le présent contrat définit les conditions dans lesquelles LE PRESTATAIRE fournit au CLIENT le programme **Business Phénix**, un accompagnement individuel de dirigeant d’une durée de **six (6) mois, soit cent quatre-vingts (180) jours**, consacré au pilotage de l’entreprise, à sa rentabilité, à la rémunération du dirigeant et au développement de ses ventes.",
+          "p:Le programme est délivré exclusivement à distance, sous forme numérique : visioconférence, plateforme de suivi et ressources dématérialisées. Il ne comporte aucun module vidéo ni bibliothèque de contenus à consommer : sa valeur repose sur les séances individuelles avec un coach référent, sur le plan d’action écrit et sur le suivi des jalons du parcours.",
+          "p:Le programme constitue une prestation de conseil et d’accompagnement à la direction d’entreprise. Il ne relève pas de l’article L6313-1 du Code du travail et ne peut faire l’objet d’aucune prise en charge par un OPCO, le CPF ou tout autre organisme financeur."
+        ]
+      },
+      {
+        "id": "art2",
+        "title": "ARTICLE 2 — CONTENU DE L’ACCOMPAGNEMENT",
+        "blocks": [
+          "h:2.1. RDV audit business",
+          "p:Dans les soixante-douze (72) heures suivant le démarrage de l’accompagnement défini à l’article 5, un **RDV audit business** de trente (30) minutes est planifié avec un coach du programme. Ce rendez-vous dresse un premier état des lieux de l’entreprise du CLIENT et prépare le cadrage de son parcours. Il s’ajoute aux dix séances individuelles prévues à l’article 2.2 et n’est pas décompté de celles-ci.",
+          "h:2.2. Coach référent et coachings individuels",
+          "p:Un coach référent unique est attribué au CLIENT pour toute la durée de l’accompagnement. Il conduit ses séances, tient à jour son plan d’action et valide ses jalons sur la plateforme de suivi. Son remplacement est organisé dans les conditions de l’article 7.",
+          "p:Le CLIENT bénéficie de **dix (10) coachings individuels de soixante (60) minutes** chacun, en visioconférence, avec son coach référent. La première séance, consacrée au diagnostic et au cadrage — point de départ, dit « point A », et objectif de fin de parcours, dit « point B » —, a vocation à se tenir dans les sept (7) jours suivant le démarrage de l’accompagnement. La dixième séance est consacrée au bilan.",
+          "p:Entre la séance de cadrage et la séance de bilan, le parcours est organisé autour de jalons et de trois axes de travail : piloter l’entreprise, dégager la rentabilité qui permet au dirigeant de se rémunérer, puis vendre.",
+          "p:Chaque séance donne lieu à un compte rendu écrit et à trois (3) actions datées au maximum, déposés par le coach sur la plateforme de suivi.",
+          "h:2.3. Coachings de groupe",
+          "p:Le CLIENT accède sans limitation aux coachings de groupe du programme, à raison d’une à deux sessions par semaine, aux jours et horaires qui lui sont communiqués à son arrivée.",
+          "h:2.4. Communauté Business",
+          "p:Le CLIENT rejoint la communauté Business, espace d’échange réservé aux clients du programme et animé par l’équipe de suivi client du PRESTATAIRE. Les coachs n’y interviennent pas.",
+          "h:2.5. Plateforme de suivi et outils de pilotage",
+          "p:Le CLIENT accède à une plateforme personnelle regroupant son point A et son point B, ses jalons et leur état d’avancement, les comptes rendus de ses séances, ses actions et ses documents, ainsi qu’aux outils de pilotage du programme : tableaux de bord, trames et modèles.",
+          "h:2.6. Ce qui n’est pas compris dans l’accompagnement",
+          "p:Ne font pas partie du périmètre du présent contrat et ne peuvent être exigés à aucun titre :",
+          "li:les modules vidéo et toute bibliothèque de contenus en ligne ;",
+          "li:l’accès à un groupe de messagerie privé avec les fondateurs du PRESTATAIRE, Adrien François et Emily Ughetto ;",
+          "li:tout échange avec le coach en dehors des séances individuelles, quel qu’en soit le support : messagerie, appel ou email. Les questions d’organisation (report d’une séance, dépôt de documents, accès) sont traitées par l’équipe de suivi client ;",
+          "li:les calls experts et toute séance animée par un intervenant extérieur ;",
+          "li:les séminaires, ateliers, masterminds et tout dispositif d’accès étendu.",
+          "p:Toute prestation non expressément énumérée au présent article est exclue du périmètre."
+        ]
+      },
+      {
+        "id": "art3",
+        "title": "ARTICLE 3 — DURÉE",
+        "blocks": [
+          "p:Le présent contrat prend effet à la date de sa signature ou, si elle est antérieure, à la date du premier paiement — laquelle vaut acceptation pleine et entière des présentes conditions, même en l’absence de signature. Il emporte également acceptation des Conditions Générales de Vente d’Ambitio Corp, consultables sur https://www.ambitiocorp.com/cgv.",
+          "p:L’accompagnement couvre une période de **six (6) mois, soit cent quatre-vingts (180) jours calendaires, à compter de son démarrage** : le jour de la signature lorsque le CLIENT demande l’accès immédiat prévu à l’article 5.2, à défaut le lendemain de l’expiration du délai de rétractation (article 5.3). Il prend fin de plein droit au terme de cette période, sans reconduction.",
+          "p:Lorsque le CLIENT ne demande pas l’accès immédiat prévu à l’article 5.2, l’accompagnement démarre à l’expiration du délai de rétractation ; la période de cent quatre-vingts jours est alors comptée à partir de ce démarrage.",
+          "p:Les séances individuelles qui n’ont pas été tenues au terme de cette période sont perdues : elles ne donnent lieu ni à prolongation, ni à report, ni à remboursement.",
+          "p:L’accès aux séances, à la plateforme et aux ressources est conditionné au respect par le CLIENT de ses obligations financières définies à l’article 4."
+        ]
+      },
+      {
+        "id": "art4",
+        "title": "ARTICLE 4 — PRIX ET MODALITÉS DE PAIEMENT",
+        "blocks": [
+          "h:4.1. Prix de l’accompagnement",
+          "p:Le prix de l’accompagnement est fixé, selon la formule de paiement retenue à la signature :",
+          "if:formule=integral:p:— **5 000 € HT** (soit 6 000 € TTC), en paiement comptant à la signature.",
+          "if:formule=echelonne:p:— **6 000 € HT** (soit 7 200 € TTC), en paiement échelonné en {{var:mensualites}} mensualité(s), le nombre de mensualités ne pouvant excéder six (6).",
+          "h:4.2. Modalités de règlement",
+          "p:Les règlements sont encaissés par prélèvement SEPA. Le CLIENT signe le mandat de prélèvement le jour de la signature du contrat. Le premier prélèvement est lancé à cette même date ; les suivants, le cas échéant, à la même date des mois suivants.",
+          "p:L’accompagnement démarre dans les conditions de l’article 5, sans attendre la compensation bancaire du premier prélèvement.",
+          "h:4.3. Caractère ferme de l’engagement",
+          "p:Le prix est convenu pour la totalité de la période d’accompagnement. Il est dû dans son intégralité, quel que soit le nombre de séances effectivement honorées par le CLIENT. L’échelonnement constitue une facilité de paiement et non un abonnement mensuel résiliable.",
+          "h:4.4. Incidents de paiement",
+          "p:En cas de rejet d’un prélèvement, LE PRESTATAIRE en informe le CLIENT et procède à une nouvelle présentation. Les séances sont maintenues pendant cette phase de régularisation.",
+          "p:À défaut de régularisation et de réponse du CLIENT, le dossier peut être transmis à un organisme de recouvrement. Les séances sont alors suspendues jusqu’à régularisation, sans que cette suspension ne proroge la durée du contrat ni ne restitue les séances non tenues pendant cette période.",
+          "p:Conformément à l’article L441-10 du Code de commerce, toute somme non réglée à son échéance porte intérêt au taux de trois fois le taux d’intérêt légal, majoré d’une indemnité forfaitaire de recouvrement de 40 €.",
+          "h:4.5. Annulation ou résiliation à l’initiative du CLIENT",
+          "p:Hors exercice du droit de rétractation dans les conditions de l’article 5.1, toute demande d’annulation ou de résiliation formulée par le CLIENT :",
+          "li:n’ouvre droit à aucun remboursement des sommes déjà versées ;",
+          "li:laisse exigible l’intégralité du solde restant dû, selon l’échéancier initialement convenu ;",
+          "li:entraîne, à sa date d’effet, la coupure de l’ensemble des accès : plateforme de suivi, outils de pilotage, coachings de groupe et communauté Business."
+        ]
+      },
+      {
+        "id": "art5",
+        "title": "ARTICLE 5 — DROIT DE RÉTRACTATION",
+        "blocks": [
+          "h:5.1. Délai et modalités",
+          "p:Le CLIENT dispose d’un délai de quatorze (14) jours calendaires à compter de la conclusion du contrat pour se rétracter, sauf s’il a demandé l’accès immédiat dans les conditions de l’article 5.2.",
+          "p:La rétractation se déroule obligatoirement en deux étapes :",
+          "ol:1. **Une demande écrite**, envoyée avant l’expiration du délai, uniquement par email à **contact@adrienemily.com**, depuis l’adresse email communiquée lors de la souscription, en reprenant les informations du présent contrat : dénomination sociale et SIRET du CLIENT, nom du signataire, programme souscrit et date de signature. La date de réception de cet email fait foi pour le respect du délai.",
+          "ol:2. **Un entretien téléphonique** avec un membre de l’équipe du PRESTATAIRE, destiné à comprendre le motif de la rétractation. LE PRESTATAIRE propose au CLIENT un créneau dans les cinq (5) jours ouvrés suivant la réception de sa demande. Cet entretien est indispensable : la demande n’est instruite qu’après sa tenue.",
+          "p:Les sommes versées sont remboursées sous quatorze (14) jours à compter de l’entretien, et le mandat de prélèvement est révoqué.",
+          "h:5.2. Accès immédiat : renonciation définitive",
+          "p:Le programme est délivré exclusivement à distance, sous forme numérique, et son exécution mobilise dès son ouverture le coach référent et les intervenants rémunérés par LE PRESTATAIRE.",
+          "p:En cochant la case ci-dessous, le CLIENT demande l’ouverture immédiate de ses accès et le démarrage de l’accompagnement, et **renonce expressément et définitivement à son droit de rétractation**, conformément à l’article L221-28 1° et 13° du Code de la consommation. Cette renonciation est irrévocable : aucune rétractation, aucune annulation et aucun remboursement, total ou partiel, ne sont plus possibles, et le CLIENT reste tenu de l’intégralité du prix, échéances à venir comprises.",
+          "p:Un email de confirmation, adressé au CLIENT à l’ouverture de ses accès, récapitule sa demande.",
+          "h:5.3. Sans accès immédiat",
+          "p:Si le CLIENT ne coche pas la case, aucune prestation n’est exécutée pendant le délai de rétractation, y compris le RDV audit business. Ses accès sont ouverts et l’accompagnement démarre à l’expiration du délai de quatorze (14) jours.",
+          "check:renonciation_retractation"
+        ]
+      },
+      {
+        "id": "art6",
+        "title": "ARTICLE 6 — RYTHME DES SÉANCES, REPORTS ET SÉANCES CONSOMMÉES",
+        "blocks": [
+          "p:Les séances individuelles se tiennent sur un **créneau fixe toutes les deux semaines** — même jour, même heure —, convenu avec le coach lors de la première séance et inscrit dans les agendas du CLIENT et du coach pour toute la durée de l’accompagnement. Le CLIENT n’a aucune réservation à effectuer.",
+          "p:Ce rythme offre treize (13) créneaux sur la période pour dix (10) séances : les créneaux restants permettent d’absorber les congés et les imprévus du CLIENT. Ils ne se cumulent pas et ne prolongent pas la période d’accompagnement.",
+          "p:Le CLIENT peut reporter une séance à condition d’en informer l’équipe de suivi client du PRESTATAIRE **au moins quarante-huit (48) heures** avant son horaire. La séance reportée est replacée sur un créneau ultérieur, dans la limite de la période d’accompagnement.",
+          "p:Toute séance annulée ou reportée par le CLIENT moins de quarante-huit (48) heures avant son horaire, ainsi que toute séance à laquelle il ne se présente pas, est **consommée** : elle est décomptée des dix séances et ne donne lieu ni à report, ni à remplacement, ni à remboursement.",
+          "p:Le coach attend le CLIENT dix (10) minutes au-delà de l’heure convenue ; passé ce délai, la séance est close et consommée.",
+          "p:Toute séance annulée ou reportée à l’initiative du PRESTATAIRE est reprogrammée sans être décomptée.",
+          "p:Les séances qui n’ont pas été tenues au terme des cent quatre-vingts (180) jours sont perdues, conformément à l’article 3."
+        ]
+      },
+      {
+        "id": "art7",
+        "title": "ARTICLE 7 — COACH RÉFÉRENT ET REMPLACEMENT",
+        "blocks": [
+          "p:Le coach référent accompagne le CLIENT pendant toute la durée du contrat.",
+          "p:Pendant les congés du coach référent, ou en cas d’indisponibilité ponctuelle, LE PRESTATAIRE désigne un coach remplaçant, qui assure les séances concernées à partir des comptes rendus déposés sur la plateforme de suivi.",
+          "p:En cas d’indisponibilité durable du coach référent, LE PRESTATAIRE attribue au CLIENT un nouveau coach référent pour la suite de l’accompagnement."
+        ]
+      },
+      {
+        "id": "art8",
+        "title": "ARTICLE 8 — OBLIGATIONS DU PRESTATAIRE",
+        "blocks": [
+          "p:LE PRESTATAIRE s’engage à :",
+          "ol:1. Attribuer au CLIENT un coach référent unique pour toute la durée de l’accompagnement, et assurer son remplacement dans les conditions de l’article 7.",
+          "ol:2. Tenir les dix (10) séances individuelles prévues, sur le créneau fixe convenu, dans les conditions de l’article 6.",
+          "ol:3. Déposer après chaque séance, sur la plateforme de suivi, un compte rendu écrit et trois (3) actions datées au maximum.",
+          "ol:4. Maintenir, pendant toute la durée du contrat, l’accès aux coachings de groupe, à la communauté Business, à la plateforme de suivi et aux outils de pilotage."
+        ]
+      },
+      {
+        "id": "art9",
+        "title": "ARTICLE 9 — OBLIGATIONS DU CLIENT",
+        "blocks": [
+          "p:Le CLIENT s’engage à :",
+          "ol:1. Régler les sommes dues aux échéances convenues.",
+          "ol:2. Déposer sur la plateforme de suivi, dans les délais demandés, les documents et informations nécessaires à l’accompagnement — notamment, avant la première séance, ses derniers comptes annuels, son chiffre d’affaires mensuel des six derniers mois, la liste de ses produits ou services et de leurs prix, ses charges fixes mensuelles et sa rémunération actuelle — et les tenir à jour.",
+          "ol:3. Réaliser les actions décidées en séance dans les délais convenus — la valeur de l’accompagnement repose sur cette exécution.",
+          "ol:4. Être présent sur les créneaux convenus et informer de tout report dans le délai prévu à l’article 6.",
+          "ol:5. Respecter les règles d’utilisation des ressources : ne pas partager ni diffuser à des tiers les contenus, outils et supports remis ; ne pas les reproduire, modifier ou exploiter sans autorisation écrite.",
+          "ol:6. Adopter un comportement respectueux envers les coachs, les intervenants et les autres membres, dans les séances collectives comme dans les espaces communautaires."
+        ]
+      },
+      {
+        "id": "art10",
+        "title": "ARTICLE 10 — OBLIGATION DE MOYENS",
+        "blocks": [
+          "p:LE PRESTATAIRE est tenu d’une **obligation de moyens**. Il ne prend aucun engagement quant aux résultats obtenus par le CLIENT, lesquels dépendent notamment de sa situation de départ, de son marché et de la mise en œuvre des actions décidées en séance.",
+          "p:Le point B formalisé lors de la séance de cadrage constitue un objectif de travail. Sa non-atteinte, totale ou partielle, n’ouvre droit à aucune réclamation, prolongation ou indemnité."
+        ]
+      },
+      {
+        "id": "art11",
+        "title": "ARTICLE 11 — LIMITATION DE RESPONSABILITÉ",
+        "blocks": [
+          "p:LE PRESTATAIRE ne peut être tenu responsable :",
+          "li:des résultats obtenus par le CLIENT, lesquels dépendent de sa situation de départ, de son marché et de son exécution ;",
+          "li:des décisions de gestion, commerciales, sociales, fiscales ou juridiques prises par le CLIENT, qui en conserve l’entière responsabilité ;",
+          "li:des pertes de données ou interruptions de service dues à des problèmes techniques hors de son contrôle.",
+          "p:L’accompagnement ne constitue ni un conseil juridique, ni un conseil fiscal, ni un conseil comptable réglementé. Le CLIENT reste tenu de consulter ses propres conseils sur ces sujets, notamment son expert-comptable pour la forme et les effets de sa rémunération.",
+          "p:En tout état de cause, la responsabilité du PRESTATAIRE est limitée au montant effectivement versé par le CLIENT au titre du présent contrat."
+        ]
+      },
+      {
+        "id": "art12",
+        "title": "ARTICLE 12 — FIN DE L’ACCOMPAGNEMENT ET CLÔTURE DES ACCÈS",
+        "blocks": [
+          "p:La dixième séance, dite de bilan, formalise par écrit le point d’arrivée du CLIENT au regard du point A et du point B définis lors de la séance de cadrage, ainsi que son plan d’action pour la suite. Ce bilan est déposé sur sa plateforme de suivi. Il doit se tenir avant le terme de la période d’accompagnement.",
+          "p:Le présent contrat ne se reconduit pas tacitement. Toute nouvelle prestation fait l’objet d’un contrat distinct.",
+          "p:L’ensemble des accès est clôturé à la date de fin du contrat : plateforme de suivi, outils de pilotage, coachings de groupe et communauté Business. Le CLIENT ne conserve aucun accès aux ressources du programme au-delà de cette date. Il lui appartient de récupérer avant le terme les livrables qu’il souhaite conserver."
+        ]
+      },
+      {
+        "id": "art13",
+        "title": "ARTICLE 13 — CLAUSE RÉSOLUTOIRE",
+        "blocks": [
+          "p:En cas de non-respect par le CLIENT des obligations prévues au contrat, notamment en cas de non-paiement, le contrat sera résilié de plein droit après mise en demeure restée infructueuse pendant **quinze (15) jours**. La résiliation n’ouvre droit à aucun remboursement et laisse exigible l’intégralité des sommes restant dues."
+        ]
+      },
+      {
+        "id": "art14",
+        "title": "ARTICLE 14 — PROPRIÉTÉ INTELLECTUELLE ET CONFIDENTIALITÉ",
+        "blocks": [
+          "p:L’ensemble des supports, trames, outils, scripts, méthodes et livrables mis à disposition demeure la propriété exclusive du PRESTATAIRE. Le CLIENT en reçoit un droit d’usage personnel, non exclusif et non transférable, limité aux besoins de sa propre entreprise.",
+          "p:Les échanges tenus dans le cadre des séances collectives et des espaces communautaires sont confidentiels. Chaque partie s’interdit de divulguer à des tiers les informations relatives à l’activité des autres membres."
+        ]
+      },
+      {
+        "id": "art15",
+        "title": "ARTICLE 15 — FORCE MAJEURE",
+        "blocks": [
+          "p:Aucune des parties ne peut être tenue responsable d’un manquement à ses obligations causé par un événement de force majeure au sens de l’article 1218 du Code civil. La partie empêchée en informe l’autre sans délai. Les obligations concernées sont suspendues pendant la durée de l’empêchement ; l’obligation de payer le prix n’est pas suspendue. Si l’empêchement dure plus de trente (30) jours consécutifs, chaque partie peut résilier le contrat par écrit, sans indemnité."
+        ]
+      },
+      {
+        "id": "art16",
+        "title": "ARTICLE 16 — UTILISATION À DES FINS PROMOTIONNELLES",
+        "blocks": [
+          "p:Le CLIENT autorise expressément la SARL Ambitio Corp à enregistrer, capturer ou retranscrire tout ou partie des échanges réalisés dans le cadre des coachings individuels ou de groupe (incluant également les messages partagés dans la communauté Business), et à les utiliser dans un but exclusivement promotionnel, pédagogique ou de témoignage.",
+          "p:Ces extraits pourront être diffusés sur des supports de communication tels que : réseaux sociaux, sites internet, pages de vente, webinaires ou documents marketing.",
+          "p:LE PRESTATAIRE s’engage à ne jamais porter atteinte à la vie privée du CLIENT ni à divulguer d’informations sensibles ou confidentielles sans accord préalable.",
+          "p:Le CLIENT pourra, à tout moment, demander le retrait d’un contenu le concernant s’il estime que celui-ci porte atteinte à son image ou à sa confidentialité."
+        ]
+      },
+      {
+        "id": "art17",
+        "title": "ARTICLE 17 — PROTECTION DES DONNÉES",
+        "blocks": [
+          "p:Les données personnelles collectées dans le cadre de l’accompagnement sont utilisées exclusivement pour les besoins du contrat et conformément au RGPD. Le CLIENT dispose d’un droit d’accès, de rectification, d’effacement et d’opposition, qu’il peut exercer à l’adresse relationclient@ambitiocorp.com."
+        ]
+      },
+      {
+        "id": "art18",
+        "title": "ARTICLE 18 — LITIGES",
+        "blocks": [
+          "p:En cas de litige, les parties s’engagent à rechercher une solution amiable avant d’engager toute procédure judiciaire.",
+          "p:À défaut d’accord, le tribunal compétent sera celui de **Draguignan**, même en cas de pluralité de défendeurs."
+        ]
+      },
+      {
+        "id": "art_cgv",
+        "title": "ARTICLE 19 — CONDITIONS GÉNÉRALES DE VENTE",
+        "blocks": [
+          "p:Le présent contrat est complété par les Conditions Générales de Vente d’Ambitio Corp, consultables sur https://www.ambitiocorp.com/cgv, dont le CLIENT reconnaît avoir pris connaissance. En cas de contradiction, les stipulations du présent contrat prévalent."
+        ]
+      },
+      {
+        "id": "art_sign",
+        "title": "ARTICLE 20 — SIGNATURES",
+        "signatures": true,
+        "blocks": []
+      }
+    ]
+  }
+}

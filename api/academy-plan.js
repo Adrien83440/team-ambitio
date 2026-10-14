@@ -39,6 +39,7 @@
 
 const { requireAuth } = require('./_verifyFirebaseAuth');
 const { db } = require('./_firebaseAdmin');
+const BP = require('../bp-credits.js');
 
 const ACADEMY_URL = (process.env.ACADEMY_BRIDGE_URL || 'https://academy.adrienemily.com').replace(/\/$/, '');
 const ROLES = ['admin', 'coach', 'csm'];
@@ -114,6 +115,41 @@ module.exports = async (req, res) => {
 
     const email = String(c.email || '').trim().toLowerCase();
     if (!email) { res.status(200).json({ ok: false, error: 'email_client_absent' }); return; }
+
+    /* Business Phénix nouveau format (14/10/2026) : plan propre
+       (clients/{id}.planBP) — point A, point B et les 10 jalons J1–J10 du
+       programme « business-phenix ». Pas de verrou, pas d'ordre d'étapes :
+       le parcours Business suit les séances. Repère de chaque jalon : la
+       séance n tombe en moyenne à J0 + 7 + 14 × (n − 1). */
+    if (BP.isBusinessV2(c.programme)) {
+      const pb = (c.planBP && typeof c.planBP === 'object') ? c.planBP : {};
+      const jalonsBP = {};
+      BP.SEANCES.forEach(function (se) {
+        const jx = (pb.jalons && pb.jalons[se.jalon]) || {};
+        /* Libellé CLIENT (J10 : sans la mention Elite, décision 14/10/2026). */
+        jalonsBP[se.jalon] = { titre: txt(se.jalonTitreClient || se.jalonTitre, 300), j: 7 + 14 * (se.n - 1), preuve: txt(jx.commentaire || '', 1200) || undefined };
+      });
+      const chargeBP = {
+        email: email,
+        programme: 'business-phenix',
+        pointA: txt(pb.pointA, 4000),
+        pointB: txt(pb.pointB, 4000),
+        coach: txt(pb.coach || c.coach, 120),
+        lienRdv: /^https?:\/\//i.test(txt(pb.coachRdvUrl, 600)) ? txt(pb.coachRdvUrl, 600) : '',
+        jalons: jalonsBP,
+        majLe: txt(pb.updatedAt, 40),
+        revision: Number(pb.version) || 0,
+      };
+      const rb = await fetch(ACADEMY_URL + '/api/bridge/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-bridge-key': key },
+        body: JSON.stringify(chargeBP),
+      });
+      let jb = null;
+      try { jb = await rb.json(); } catch (e) { jb = null; }
+      res.status(200).json(jb && typeof jb === 'object' ? jb : { ok: false, error: 'academy_unreachable' });
+      return;
+    }
 
     const plan = c.planV2;
     if (!plan || typeof plan !== 'object') { res.status(200).json({ ok: false, error: 'plan_absent' }); return; }

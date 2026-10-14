@@ -48,6 +48,7 @@ const Dispo = require('../dispo-core.js');
    casser chez les appelants (R.isEliteNewWeekly, R.totalSessionsOf…) —
    toute correction de la règle se fait là-bas, jamais ici. */
 const Q = require('./_coaching-quota');
+const BP = require('../bp-credits.js');
 const DEFAULT_TOTAL_SESSIONS = Q.DEFAULT_TOTAL_SESSIONS;
 
 /* Semaines de réserve calculées en plus de la série demandée. Quand le client
@@ -171,6 +172,43 @@ async function findClientByEmail(rawEmail) {
   if (snap.empty) return null;
   if (snap.size > 1) console.warn('[recurrence-core] plusieurs fiches clients pour', email);
   return { id: snap.docs[0].id, data: snap.docs[0].data() || {} };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RÈGLE DE SÉRIE PAR PROGRAMME (14/10/2026)
+   ──────────────────────────────────────────────────────────────────────────
+   Elite NEW : une séance par semaine, plafond = séances du libellé.
+   Business Phénix nouveau format : une séance toutes les DEUX semaines,
+   10 séances maximum (+ ajouts d'Adrien / Emily), jamais après J0 + 180 —
+   compteur de ../bp-credits.js (absences et reports tardifs consommés).
+   Autres programmes : pas de série.
+   ══════════════════════════════════════════════════════════════════════════ */
+async function seriesRule(client, rawEmail) {
+  const c = (client && client.data) || {};
+  const programme = c.programme || '';
+  if (isEliteNewWeekly(programme)) {
+    const upcoming = await countUpcomingCoachingBookings(rawEmail);
+    return { kind: 'elite', interval: 7, total: totalSessionsOf(programme), done: countDoneSessions(c) + upcoming.count, fin: null };
+  }
+  if (BP.isBusinessV2(programme)) {
+    const ajouts = [];
+    if (client.id) {
+      const aj = await db.collection('clients').doc(client.id).collection('seances_ajouts').get();
+      aj.forEach((d) => ajouts.push(d.data() || {}));
+    }
+    const raw = String(rawEmail || '').trim(), lower = raw.toLowerCase();
+    const seen = {}, all = [];
+    for (const v of (raw && raw !== lower ? [lower, raw] : [lower])) {
+      if (!v) continue;
+      const snap = await db.collection('bookings').where('prospect.email', '==', v).get();
+      snap.forEach((d) => { if (seen[d.id]) return; seen[d.id] = 1; const b = d.data() || {}; if (b.isCoaching === true) all.push(Object.assign({ id: d.id }, b)); });
+    }
+    const credits = BP.compute(c, { bookings: all, ajouts: ajouts });
+    const today = Dispo.todayParis();
+    const upcoming = all.filter((b) => b.status === 'confirmed' && typeof b.date === 'string' && b.date.slice(0, 10) >= today && !BP.isAuditBooking(b)).length;
+    return { kind: 'business', interval: BP.PERIODE_JOURS, total: credits.total, done: credits.consumed + upcoming, fin: credits.fin, expired: credits.expired };
+  }
+  return null;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -483,12 +521,15 @@ function nearestSlots(slots, targetTime, limit) {
  *   'busy'   — le coach travaille ce jour-là mais pas à cette heure
  *   'closed' — le coach ne reçoit pas ce jour-là (congé, férié, planning)
  */
-function buildOccurrences(ctx, firstDs, time, count) {
+function buildOccurrences(ctx, firstDs, time, count, intervalDays, maxDate) {
+  const step = intervalDays || 7;
   const wanted = Math.min(count + RESERVE_WEEKS, MAX_HORIZON_WEEKS);
   const out = [];
 
   for (let i = 1; i <= wanted; i++) {
-    const ds = Dispo.addDays(firstDs, 7 * i);
+    const ds = Dispo.addDays(firstDs, step * i);
+    /* Business : jamais après la fin d'accompagnement (J0 + 180). */
+    if (maxDate && ds > maxDate) break;
     const slots = freeSlotsForDate(ctx, ds);
     const free = slots.indexOf(time) >= 0;
 
@@ -545,4 +586,5 @@ module.exports = {
 
   nearestSlots,
   buildOccurrences,
+  seriesRule,
 };

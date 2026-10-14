@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Communautés Phénix — textes</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  /* Charte des documents Phénix : orange = Business Phénix, violet = Elite Phénix. */
+  :root{
+    --ink:#151A2D; --soft:#3A4258; --mut:#667089; --line:#E4E6EE; --bg:#F6F5F2; --card:#FFFFFF;
+    --bp:#E8620C; --bp-dk:#B04A06; --bp-soft:#FFF2E8; --bp-line:#F6C9A3;
+    --ep:#6A3FD4; --ep-dk:#4C2AA6; --ep-soft:#F3EEFF; --ep-line:#D3C4FA;
+    --ok:#1B7F5A;
+    --display:'Sora',system-ui,sans-serif;
+    --body:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+  body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.6}
+  .wrap{max-width:900px;margin:0 auto;padding:0 20px}
+
+  .hero{background:linear-gradient(115deg,#2A1406 0%,#3A1A08 38%,#24164A 62%,#170F33 100%);color:#fff;padding:48px 0 40px}
+  .eyebrow{display:inline-block;font-family:var(--display);font-size:11.5px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:#FFD9BF;border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:6px 14px;margin-bottom:18px}
+  .hero h1{font-family:var(--display);font-weight:800;font-size:clamp(28px,4.6vw,42px);line-height:1.08;margin-bottom:12px}
+  .hero h1 .b{color:#FF9A57} .hero h1 .e{color:#B9A2FF}
+  .hero p{max-width:680px;color:#E4DEEF}
+
+  .toc{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0 0}
+  .toc a{font-family:var(--display);font-size:12px;font-weight:600;color:var(--soft);text-decoration:none;background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 13px}
+
+  section{padding:40px 0 4px}
+  .kick{font-family:var(--display);font-size:12px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;margin-bottom:6px;color:var(--mut)}
+  .kick.b{color:var(--bp)} .kick.e{color:var(--ep)}
+  h2{font-family:var(--display);font-weight:800;font-size:clamp(21px,3vw,28px);line-height:1.2;margin-bottom:10px}
+  .lead{color:var(--soft);margin-bottom:16px;max-width:760px}
+
+  .rules{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px}
+  .rule{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;font-size:14.5px;color:var(--soft)}
+  .rule strong{display:block;color:var(--ink);font-family:var(--display);font-size:14px;margin-bottom:2px}
+  .rule.b{border-left:4px solid var(--bp)} .rule.e{border-left:4px solid var(--ep)}
+
+  .script{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-bottom:16px}
+  .script .head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 18px;border-bottom:1px solid var(--line)}
+  .script.b .head{background:var(--bp-soft);border-bottom-color:var(--bp-line)}
+  .script.e .head{background:var(--ep-soft);border-bottom-color:var(--ep-line)}
+  .script.n .head{background:#EEF0F5}
+  .script .head span{font-family:var(--display);font-weight:700;font-size:14px}
+  .script pre{padding:20px;font-family:var(--body);font-size:15px;line-height:1.65;color:var(--ink);white-space:pre-wrap;word-break:break-word}
+  .script pre mark{background:#FFE08A;color:#5A3B00;padding:1px 5px;border-radius:4px;font-weight:700}
+  .copy{font-family:var(--display);font-size:12.5px;font-weight:700;color:#fff;background:var(--ink);border:0;border-radius:999px;padding:8px 18px;cursor:pointer}
+  .script.b .copy{background:var(--bp)} .script.e .copy{background:var(--ep)}
+  .copy.done{background:var(--ok) !important}
+  .copy:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+
+  .code{background:#151A2D;color:#E9ECF5;border-radius:12px;padding:14px 16px;font-family:var(--mono);font-size:13px;line-height:1.6;overflow-x:auto;white-space:pre;margin:8px 0 14px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px 22px}
+  .card ul{padding-left:1.1em;color:var(--soft)}
+  .card li{margin-bottom:6px}
+  .card code{font-family:var(--mono);font-size:13px;background:#EEF0F5;border-radius:4px;padding:1px 5px}
+
+  footer{margin-top:50px;padding:22px 0 50px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--mut)}
+
+  @media (max-width:720px){ .rules{grid-template-columns:1fr} }
+  @media print{
+    @page{size:A4;margin:13mm}
+    html,body{background:#fff}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .toc,.copy{display:none}
+    .hero{padding:22px 0 18px}
+    .script,.rule,.card{break-inside:avoid;page-break-inside:avoid}
+    .code{white-space:pre-wrap}
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow">Document interne · Textes prêts à poster</span>
+    <h1>Deux communautés :<br><span class="e">Elite</span> et <span class="b">Business</span>.</h1>
+    <p>La communauté se scinde : Le Cercle reste réservé aux clients Elite Phénix, et une communauté Business Phénix accueille tous les clients Business, nouveaux et anciens. Les coachings de groupe du lundi et du jeudi restent communs. Les groupes WhatsApp sont créés par l'équipe : cette page fournit les textes et la façon d'obtenir la liste de migration.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <nav class="toc" aria-label="Sommaire">
+    <a href="#elite">Communauté Elite</a>
+    <a href="#business">Communauté Business</a>
+    <a href="#annonce">Annonce de la scission</a>
+    <a href="#migration">Liste de migration</a>
+  </nav>
+
+  <!-- ============ ELITE ============ -->
+  <section id="elite">
+    <div class="kick e">Communauté Elite · Le Cercle</div>
+    <h2>Présentation de la communauté Elite.</h2>
+    <div class="rules">
+      <div class="rule e"><strong>Qui</strong>Les clients Elite Phénix uniquement. Plus aucun client Business dans Le Cercle.</div>
+      <div class="rule e"><strong>Organisation</strong>Deux sous-groupes au maximum : Général ; Urgences / management.</div>
+    </div>
+
+    <div class="script e">
+      <div class="head"><span>Description du groupe WhatsApp — Le Cercle</span><button class="copy" type="button" data-target="t-elite-desc">Copier</button></div>
+      <pre id="t-elite-desc">Le Cercle — la communauté des dirigeants accompagnés en Elite Phénix. Un espace entre pairs pour partager vos avancées, demander un avis et avancer ensemble sur la délégation, l'équipe et le pilotage. Deux espaces : Général, et Urgences / management.</pre>
+    </div>
+
+    <div class="script e">
+      <div class="head"><span>Message de présentation — à épingler dans Le Cercle</span><button class="copy" type="button" data-target="t-elite-pres">Copier</button></div>
+      <pre id="t-elite-pres">Bienvenue dans Le Cercle 👋
+
+Le Cercle est la communauté des dirigeants accompagnés en Elite Phénix. Vous y retrouvez des dirigeants qui vivent les mêmes sujets que vous : délégation, équipe, recrutement, temps.
+
+Deux espaces, pas plus :
+• Général : vos avancées, vos questions, vos retours d'expérience.
+• Urgences / management : quand une situation d'équipe demande un avis rapide.
+
+Votre suivi avec votre coach reste dans votre groupe privé. Ici, c'est l'espace entre pairs.
+
+Une règle simple : ce qui se dit dans Le Cercle reste dans Le Cercle.
+
+Adrien &amp; Emily</pre>
+    </div>
+  </section>
+
+  <!-- ============ BUSINESS ============ -->
+  <section id="business">
+    <div class="kick b">Communauté Business Phénix</div>
+    <h2>Présentation et charte de la communauté Business.</h2>
+    <div class="rules">
+      <div class="rule b"><strong>Qui</strong>Tous les clients Business Phénix : nouveau format et ancienne formule.</div>
+      <div class="rule b"><strong>Animation</strong>Marine anime et modère (annonces, règles). Adrien et Emily peuvent y répondre. Les coachs n'y interviennent pas.</div>
+    </div>
+
+    <div class="script b">
+      <div class="head"><span>Description du groupe WhatsApp — Communauté Business Phénix</span><button class="copy" type="button" data-target="t-biz-desc">Copier</button></div>
+      <pre id="t-biz-desc">Communauté Business Phénix — l'espace d'échange des dirigeants accompagnés en Business Phénix. Chiffres, prix, marge, trésorerie, ventes : on partage, on s'entraide, on avance. Animée par Marine ; Adrien et Emily y répondent aussi.</pre>
+    </div>
+
+    <div class="script b">
+      <div class="head"><span>Message de présentation — à épingler</span><button class="copy" type="button" data-target="t-biz-pres">Copier</button></div>
+      <pre id="t-biz-pres">Bienvenue dans la communauté Business Phénix 👋
+
+Cette communauté réunit les dirigeants accompagnés en Business Phénix. On y partage ses avancées, ses questions et ses bonnes pratiques sur ce qui fait tourner une entreprise : chiffres, prix, marge, trésorerie, ventes.
+
+Elle est animée par Marine. Adrien et Emily y passent et répondent aussi.
+
+Le travail sur votre entreprise se fait avec votre coach référent, pendant vos séances. Ici, c'est l'espace entre dirigeants.
+
+Les coachings de groupe du lundi et du jeudi restent ouverts à tous : les liens sont épinglés dans le groupe.
+
+Merci de prendre une minute pour lire la charte ci-dessous 👇
+
+Marine</pre>
+    </div>
+
+    <div class="script b">
+      <div class="head"><span>Charte de la communauté Business — à épingler</span><button class="copy" type="button" data-target="t-biz-charte">Copier</button></div>
+      <pre id="t-biz-charte">📌 La charte de la communauté Business Phénix
+
+1. Bienveillance et respect : on échange entre dirigeants, sans jugement.
+
+2. Confidentialité : ce qui est partagé ici (chiffres, situations, noms) reste ici. Pas de capture d'écran ni de transfert hors du groupe.
+
+3. Pas de prospection : pas de vente, pas de publicité, pas de démarchage des autres membres.
+
+4. Des sujets utiles : vos avancées, vos questions, vos réussites, vos ressources. Le hors-sujet passe en message privé.
+
+5. Chaque chose à sa place : les questions de fond sur votre entreprise se travaillent avec votre coach, en séance ; les questions pratiques (accès, planning, plateforme) se posent à Marine en message privé.
+
+6. Fiscalité et droit : les avis entre membres ne remplacent pas votre expert-comptable ni votre conseil, qui restent la référence sur ces sujets.
+
+7. Modération : Marine veille au respect de la charte. Un message hors charte peut être retiré ; un manquement répété entraîne la sortie du groupe.
+
+Bonne communauté à tous !</pre>
+    </div>
+  </section>
+
+  <!-- ============ ANNONCE ============ -->
+  <section id="annonce">
+    <div class="kick">Annonce de la scission</div>
+    <h2>Les messages aux clients existants.</h2>
+    <p class="lead">Ordre conseillé : 1) annonce dans la communauté actuelle, 2) envoi individuel du lien aux clients Business, 3) message dans Le Cercle une fois les clients Business partis. Remplacer les zones surlignées avant l'envoi.</p>
+
+    <div class="script n">
+      <div class="head"><span>1 · Annonce dans la communauté actuelle (tous les clients)</span><button class="copy" type="button" data-target="t-annonce">Copier</button></div>
+      <pre id="t-annonce">Bonjour à tous 👋
+
+La communauté évolue pour vous offrir des échanges plus ciblés.
+
+À partir du <mark>[DATE — À REMPLIR]</mark>, nous ouvrons deux communautés distinctes :
+• la communauté Business Phénix, pour les dirigeants accompagnés en Business Phénix ;
+• Le Cercle, réservé aux dirigeants accompagnés en Elite Phénix.
+
+Pourquoi ? Parce que les sujets ne sont pas les mêmes : rentabilité, prix et pilotage d'un côté ; délégation, équipe et recrutement de l'autre. Chacun aura des échanges qui lui ressemblent.
+
+Rien ne change pour votre accompagnement : votre coach, vos séances et votre plateforme restent les mêmes. Les coachings de groupe du lundi et du jeudi restent ouverts à tous.
+
+Marine vous ajoute dans les prochains jours à la communauté qui correspond à votre accompagnement : vous n'avez rien à faire. Pour toute question, elle reste disponible en message privé.
+
+Adrien &amp; Emily</pre>
+    </div>
+
+    <div class="script b">
+      <div class="head"><span>2 · Message individuel aux clients Business, avec le lien</span><button class="copy" type="button" data-target="t-annonce-biz">Copier</button></div>
+      <pre id="t-annonce-biz">Bonjour <mark>[Prénom]</mark>,
+
+Comme annoncé, la communauté Business Phénix est ouverte. Voici le lien pour la rejoindre :
+<mark>[LIEN DE LA COMMUNAUTÉ BUSINESS — À REMPLIR]</mark>
+
+Vous y retrouvez les dirigeants accompagnés en Business Phénix ; Adrien et Emily y répondent aussi. Votre accompagnement, lui, ne change pas.
+
+À très vite,
+Marine</pre>
+    </div>
+
+    <div class="script e">
+      <div class="head"><span>3 · Message dans Le Cercle, une fois la scission faite</span><button class="copy" type="button" data-target="t-annonce-elite">Copier</button></div>
+      <pre id="t-annonce-elite">Bonjour à tous 👋
+
+Le Cercle est désormais réservé aux dirigeants accompagnés en Elite Phénix. Les clients Business ont rejoint leur propre communauté, avec des échanges centrés sur leurs sujets.
+
+Pour garder Le Cercle simple, deux espaces seulement :
+• Général : vos avancées, vos questions, vos retours d'expérience.
+• Urgences / management : quand une situation d'équipe demande un avis rapide.
+
+Les coachings de groupe du lundi et du jeudi ne changent pas.
+
+Adrien &amp; Emily</pre>
+    </div>
+  </section>
+
+  <!-- ============ MIGRATION ============ -->
+  <section id="migration">
+    <div class="kick">Liste de migration</div>
+    <h2>Qui va où.</h2>
+    <p class="lead">La liste est produite à partir des fiches clients de la plateforme par un script en lecture seule : il ne modifie rien, ni dans Firestore, ni dans WhatsApp. L'équipe exécute ensuite la migration à la main.</p>
+    <div class="card">
+      <p style="margin-bottom:8px">Depuis le dossier du repo, avec la clé de service account hors du repo :</p>
+      <div class="code">GOOGLE_APPLICATION_CREDENTIALS=~/.secrets/ambitio-team-sa.json \
+  node scripts/bp-liste-migration-communautes.js                       # clients actifs → ./migration-communautes-AAAA-MM-JJ.csv
+  node scripts/bp-liste-migration-communautes.js ~/Desktop/liste.csv   # chemin de sortie choisi
+  node scripts/bp-liste-migration-communautes.js --tous                # inclut inactifs et anciens clients</div>
+      <ul>
+        <li>Colonnes : nom, email, téléphone, programme, statut, coach, communauté cible.</li>
+        <li>Communauté cible : <strong>Elite</strong> si le programme contient « elite », sinon <strong>Business</strong> (nouveau format et ancienne formule).</li>
+        <li>Par défaut, les fiches inactives et les anciens clients sont ignorés ; <code>--tous</code> les inclut.</li>
+        <li>Le CSV contient des données personnelles : le garder hors du repo et le supprimer une fois la migration faite.</li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  <span>Communautés Elite Phénix · Business Phénix — Ambitio Corp</span>
+  <span>Document interne · version du 14 octobre 2026</span>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+  function copieSecours(texte) {
+    var zone = document.createElement('textarea');
+    zone.value = texte;
+    zone.setAttribute('readonly', '');
+    zone.style.position = 'fixed';
+    zone.style.top = '-1000px';
+    document.body.appendChild(zone);
+    zone.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(zone);
+    return ok;
+  }
+  function retour(btn, ok) {
+    var initial = btn.getAttribute('data-libelle') || btn.textContent;
+    btn.setAttribute('data-libelle', initial);
+    btn.textContent = ok ? 'Copié ✓' : 'Sélectionner le texte';
+    if (ok) btn.className = btn.className + ' done';
+    setTimeout(function () {
+      btn.textContent = initial;
+      btn.className = btn.className.replace(/\s*done/g, '');
+    }, 1800);
+  }
+  document.addEventListener('click', function (e) {
+    var btn = e.target;
+    while (btn && btn !== document && !(btn.getAttribute && btn.getAttribute('data-target'))) btn = btn.parentNode;
+    if (!btn || btn === document) return;
+    var el = document.getElementById(btn.getAttribute('data-target'));
+    if (!el) return;
+    var texte = el.textContent;
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(texte).then(
+        function () { retour(btn, true); },
+        function () { retour(btn, copieSecours(texte)); }
+      );
+    } else {
+      retour(btn, copieSecours(texte));
+    }
+  });
+})();
+</script>
+</body>
+</html>

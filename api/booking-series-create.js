@@ -317,14 +317,17 @@ module.exports = async (req, res) => {
     if (c.ancienClient === true || c.statut === 'inactif') { json(res, 403, { error: 'client_inactive' }); return; }
 
     const programme = c.programme || '';
-    if (!R.isEliteNewWeekly(programme)) { json(res, 403, { error: 'programme_not_eligible' }); return; }
+    /* Elite NEW (hebdomadaire) ou Business nouveau format (toutes les deux
+       semaines, 10 séances maximum, jamais après J0 + 180) — R.seriesRule. */
+    const rule = await R.seriesRule(client, emailRaw);
+    if (!rule) { json(res, 403, { error: 'programme_not_eligible' }); return; }
+    if (rule.expired) { json(res, 403, { error: 'accompagnement_termine', fin: rule.fin }); return; }
 
     // Plafond serveur. `done` inclut déjà le premier RDV (créé juste avant,
     // donc compté comme RDV coaching à venir) : ce qui reste à poser est
     // exactement total - done.
-    const total = R.totalSessionsOf(programme);
-    const upcoming = await R.countUpcomingCoachingBookings(emailRaw);
-    const done = R.countDoneSessions(c) + upcoming.count;
+    const total = rule.total;
+    const done = rule.done;
     const allowed = Math.max(0, total - done);
     if (allowed <= 0) { json(res, 409, { error: 'series_complete', total, done }); return; }
 
@@ -365,6 +368,7 @@ module.exports = async (req, res) => {
       if (seenKeys[key]) { return; }               // doublon envoyé par le front
       seenKeys[key] = 1;
       if (o.date <= first.date) { skipped.push({ date: o.date, time: o.time, reason: 'avant_le_premier_rdv' }); return; }
+      if (rule.fin && o.date > rule.fin) { skipped.push({ date: o.date, time: o.time, reason: 'apres_fin_accompagnement' }); return; }
       const free = R.freeSlotsForDate(slotCtx, o.date);
       if (free.indexOf(o.time) < 0) { skipped.push({ date: o.date, time: o.time, reason: 'creneau_pris' }); return; }
       retained.push({ date: o.date, time: o.time });

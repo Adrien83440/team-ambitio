@@ -522,6 +522,16 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // _config/business_phenix (14/10/2026) : nouveau format Business Phénix
+    // 6 mois — { active, activatedAt/By/ByName, history[], templateIds[],
+    // communityUrl, sessionGranters[] (uid autorisés à ajouter des séances) }.
+    // Lu par les closers (pilote, Signatures, Paiements), les coachs et la
+    // CSM (fiche coaching) ; seul un admin bascule (admin-offres.html).
+    match /_config/business_phenix {
+      allow read:  if isAuth();
+      allow write: if isAdmin();
+    }
+
     match /_config/{docId} {
       allow read:  if isAdmin();
       allow write: if isAdmin();

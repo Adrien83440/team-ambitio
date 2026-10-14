@@ -4,10 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Process onboarding Business Phénix 12 mois</title>
+<title>Process onboarding Business Phénix</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!--
+  Process d'onboarding Business Phénix — nouveau format (6 mois, 10 séances).
+  L'ancienne version (formule 12 mois) est archivée, à l'identique, dans
+  _archives/2026-10-14-process-onboarding-business-closer-ancienne-formule-12-mois.html
+  Tous les liens de la page sont dans l'objet LIENS du script en bas de page.
+-->
 <style>
   :root{
     --navy:#0F2440;
@@ -21,6 +27,8 @@
     --muted:#55677F;
     --line:#CBD8E8;
     --ok:#1B7F5A;
+    --red:#B42318;
+    --red-soft:#FEF0EE;
     --display:"Bricolage Grotesque","Instrument Sans",system-ui,sans-serif;
     --body:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   }
@@ -45,6 +53,10 @@
     font-weight:700;font-size:.95rem;padding:4px 12px;border-radius:999px;margin-bottom:18px;
   }
   .top p{margin:0;max-width:56ch;color:#C9D6E8}
+  .top .prix{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:22px;max-width:600px}
+  .top .prix div{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:12px 14px}
+  .top .prix b{display:block;font-family:var(--display);font-size:1.25rem}
+  .top .prix span{font-size:.88rem;color:#C9D6E8}
 
   /* ---------- Personnalisation ---------- */
   .perso{
@@ -60,6 +72,7 @@
     border:1.5px solid var(--line);border-radius:9px;padding:10px 12px;
   }
   .field input:focus-visible{outline:3px solid var(--orange);outline-offset:1px;border-color:var(--navy)}
+  .field .aide{display:block;font-size:.82rem;color:var(--muted);margin-top:4px}
 
   /* ---------- Étapes ---------- */
   .avancement{font-weight:600;color:var(--muted);margin:0 0 18px;font-size:.95rem}
@@ -82,6 +95,7 @@
     font-family:var(--display);font-weight:800;font-size:1.55rem;line-height:1.15;
     letter-spacing:-.01em;margin:9px 0 10px;
   }
+  .corps h3{font-family:var(--display);font-weight:800;font-size:1.12rem;margin:18px 0 8px}
   .corps p{margin:0 0 14px}
   .corps ul{margin:0 0 14px;padding-left:1.15em}
   .corps li{margin-bottom:4px}
@@ -150,9 +164,22 @@
     border-left:4px solid var(--orange);background:var(--orange-soft);
     padding:12px 16px;border-radius:0 10px 10px 0;margin:0 0 16px;font-size:.96rem;
   }
+  .a-remplir{
+    border:2px dashed var(--red);background:var(--red-soft);color:#5C1710;
+    padding:12px 16px;border-radius:10px;margin:0 0 16px;font-size:.96rem;font-weight:600;
+  }
+  .a-remplir code{font-size:.85rem;background:#fff;border-radius:4px;padding:1px 5px}
   details{margin:0 0 16px}
   summary{cursor:pointer;font-weight:700;color:var(--blue);padding:4px 0}
   details .message{margin-top:10px}
+
+  /* ---------- Parcours ---------- */
+  .parcours{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:6px 0;margin:4px 0 28px}
+  .parcours h2{font-family:var(--display);font-size:1.15rem;margin:14px 22px 6px}
+  .parcours table{width:100%;border-collapse:collapse;font-size:.93rem}
+  .parcours td{padding:9px 22px;border-top:1px solid var(--line);vertical-align:top}
+  .parcours td:first-child{font-weight:700;white-space:nowrap;color:var(--blue);width:1%}
+  .parcours td span{display:block;color:var(--muted);font-size:.88rem}
 
   /* ---------- Pied ---------- */
   .aussi{
@@ -161,25 +188,30 @@
   }
   .aussi h2{font-family:var(--display);font-size:1.15rem;margin:0 0 8px}
   .aussi ul{margin:0;padding-left:1.15em}
+  .aussi li{margin-bottom:5px}
+  .jamais{border-color:#F3C5BF}
+  .jamais li::marker{content:"✕  ";color:var(--red);font-weight:700}
   footer{color:var(--muted);font-size:.88rem;padding:0 0 44px}
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 
   @media (max-width:560px){
     body{font-size:16px}
-    .fields{grid-template-columns:1fr}
+    .fields,.top .prix{grid-template-columns:1fr}
     .etape{grid-template-columns:40px 1fr;column-gap:12px}
     .num{width:40px;height:40px;font-size:1.2rem}
     .etape::before{left:19px;top:40px}
     .corps h2{font-size:1.3rem;margin-top:5px}
     .message{padding:14px 12px}
     .message-actions .btn{width:100%;text-align:center}
+    .parcours td{padding:9px 14px}
   }
   @media print{
     body{background:#fff}
     .top{background:#fff;color:var(--ink);padding:0 0 12px}
-    .top p{color:var(--ink)}
+    .top p,.top .prix span{color:var(--ink)}
+    .top .prix div{border-color:var(--line)}
     .perso,.btn,.fait,.choix,.avancement{display:none !important}
-    .etape{break-inside:avoid}
+    .etape,.parcours tr,.aussi{break-inside:avoid}
     details{display:block}
   }
 </style>
@@ -188,9 +220,13 @@
 
 <header class="top">
   <div class="wrap">
-    <span class="formule">Formule 5K / 6K avec coaching 1:1</span>
-    <h1>Process onboarding Business Phénix 12 mois</h1>
-    <p>Ce process permet, une fois le paiement effectué, de simplifier pour le closer la phase d’onboarding du client. Trois actions, puis Marine prend le relais.</p>
+    <span class="formule">Nouveau format · 6 mois · 10 coachings individuels</span>
+    <h1>Process onboarding Business Phénix</h1>
+    <p>Une fois le contrat signé (case d’accès immédiat cochée) et le paiement en place, trois actions pour le closer, puis Marine prend le relais. Le client a son RDV audit business sous 72 h et sa séance 1 sous 7 jours.</p>
+    <div class="prix">
+      <div><b>BP PIF · 5 000 € HT</b><span>Paiement comptant</span></div>
+      <div><b>BP MENS · 6 000 € HT</b><span>6 mensualités maximum, soit 1 000 € HT par mois</span></div>
+    </div>
   </div>
 </header>
 
@@ -198,7 +234,7 @@
 
   <section class="perso" aria-labelledby="perso-titre">
     <h2 id="perso-titre">Personnaliser les messages</h2>
-    <p>Renseigner les deux prénoms : les messages WhatsApp ci-dessous se mettent à jour, prêts à copier-coller.</p>
+    <p>Renseigner les prénoms (et la date de démarrage pour afficher la date de fin) : les messages WhatsApp ci-dessous se mettent à jour, prêts à copier-coller.</p>
     <div class="fields">
       <div class="field">
         <label for="in-client">Prénom du client</label>
@@ -207,6 +243,11 @@
       <div class="field">
         <label for="in-closer">Prénom du closer</label>
         <input id="in-closer" type="text" autocomplete="off" placeholder="Ex. Thomas">
+      </div>
+      <div class="field">
+        <label for="in-j0">Date de démarrage (J0 : signature si accès immédiat coché, sinon J+15)</label>
+        <input id="in-j0" type="date" autocomplete="off">
+        <span class="aide">Facultatif : sert à annoncer la date de fin (J0 + 180 jours).</span>
       </div>
     </div>
   </section>
@@ -219,11 +260,11 @@
     <li class="etape" data-etape>
       <div class="num" aria-hidden="true">1</div>
       <div class="corps">
-        <h2>Caler le RDV 72h pendant le closing</h2>
-        <p class="quand">Juste après le paiement, avant de raccrocher</p>
-        <p>Réserver le RDV 72h avec le client, comme indiqué dans les étapes de closing du logiciel. S’il n’a pas son agenda sous la main, il réservera lui-même avec le lien envoyé à l’étape 2.</p>
+        <h2>Caler le RDV audit business pendant le closing</h2>
+        <p class="quand">Juste après la signature et le paiement, avant de raccrocher</p>
+        <p>Réserver avec le client son <strong>RDV audit business avec un coach</strong> (30 minutes), dans les <strong>72 heures</strong>. C’est la séance 0 : elle ne compte pas dans les 10 séances. S’il n’a pas son agenda sous la main, il réservera lui-même avec le lien envoyé à l’étape 2.</p>
         <p>Lui annoncer le questionnaire de démarrage : il est <strong>obligatoire</strong> et doit être rempli avant ce rendez-vous.</p>
-        <p><a class="btn btn-lien" href="https://team.alteore.com/booking.html?type=rdv_urgent_post" target="_blank" rel="noopener">Ouvrir la réservation du RDV 72h</a></p>
+        <p><a class="btn btn-lien" id="lien-rdv" href="https://team.alteore.com/booking.html?type=rdv_audit_business" target="_blank" rel="noopener">Ouvrir la réservation du RDV audit business</a></p>
         <label class="fait"><input type="checkbox" data-fait> Étape faite</label>
       </div>
     </li>
@@ -234,15 +275,15 @@
       <div class="corps">
         <h2>Envoyer le WhatsApp des liens</h2>
         <p class="quand">En message privé au client, dans la foulée du call</p>
-        <p>Un seul message qui contient tout ce dont le client a besoin pour démarrer : le questionnaire obligatoire, le RDV 72h, le livret d’accueil et la page qui regroupe tous les liens d’onboarding.</p>
+        <p>Un seul message qui contient tout ce dont le client a besoin pour démarrer : le questionnaire obligatoire, le RDV audit business et la page qui regroupe ses liens.</p>
 
-        <p class="choix-titre" id="choix-titre">Le RDV 72h est…</p>
+        <p class="choix-titre" id="choix-titre">Le RDV audit business est…</p>
         <div class="choix" role="radiogroup" aria-labelledby="choix-titre">
           <label><input type="radio" name="rdv" value="a-reserver" checked><span>à réserver par le client</span></label>
           <label><input type="radio" name="rdv" value="reserve"><span>déjà réservé pendant le call</span></label>
         </div>
         <div class="field" id="champ-date" hidden>
-          <label for="in-date">Jour et heure du RDV 72h</label>
+          <label for="in-date">Jour et heure du RDV audit business</label>
           <input id="in-date" type="text" autocomplete="off" placeholder="Ex. jeudi 15 octobre à 10h">
         </div>
 
@@ -270,32 +311,26 @@
           <li>
             <span class="nom">Page des liens d’onboarding<span class="detail">Tous les liens du client au même endroit</span></span>
             <span class="actions">
-              <a class="btn btn-mini" href="https://www.adrienemily.com/ressources-business-phenix" target="_blank" rel="noopener">Ouvrir</a>
-              <button class="btn btn-mini" type="button" data-lien="https://www.adrienemily.com/ressources-business-phenix">Copier le lien</button>
+              <a class="btn btn-mini" data-href="page" href="https://www.adrienemily.com/ressources-business-phenix" target="_blank" rel="noopener">Ouvrir</a>
+              <button class="btn btn-mini" type="button" data-cle="page">Copier le lien</button>
             </span>
           </li>
           <li>
-            <span class="nom">Questionnaire de démarrage<span class="detail">Obligatoire, avant le RDV 72h</span></span>
+            <span class="nom">Questionnaire de démarrage<span class="detail">Obligatoire, avant le RDV audit business</span></span>
             <span class="actions">
-              <a class="btn btn-mini" href="https://team.alteore.com/alteoforms-render.html?id=6sYCUup0lDdz6mWAPlIg" target="_blank" rel="noopener">Ouvrir</a>
-              <button class="btn btn-mini" type="button" data-lien="https://team.alteore.com/alteoforms-render.html?id=6sYCUup0lDdz6mWAPlIg">Copier le lien</button>
+              <a class="btn btn-mini" data-href="questionnaire" href="https://team.alteore.com/alteoforms-render.html?id=6sYCUup0lDdz6mWAPlIg" target="_blank" rel="noopener">Ouvrir</a>
+              <button class="btn btn-mini" type="button" data-cle="questionnaire">Copier le lien</button>
             </span>
           </li>
           <li>
-            <span class="nom">Prise du RDV 72h<span class="detail">Après le questionnaire</span></span>
+            <span class="nom">Prise du RDV audit business<span class="detail">Avec un coach, sous 72 h, après le questionnaire</span></span>
             <span class="actions">
-              <a class="btn btn-mini" href="https://team.alteore.com/booking.html?type=rdv_urgent_post" target="_blank" rel="noopener">Ouvrir</a>
-              <button class="btn btn-mini" type="button" data-lien="https://team.alteore.com/booking.html?type=rdv_urgent_post">Copier le lien</button>
-            </span>
-          </li>
-          <li>
-            <span class="nom">Livret d’accueil Business Phénix<span class="detail">Fonctionnement du programme et règles des coachings</span></span>
-            <span class="actions">
-              <a class="btn btn-mini" href="https://www.canva.com/design/DAG7BizCAd8/hV4AalNcP13RBg-xNpEDvA/view?utm_content=DAG7BizCAd8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=ha64287c23d" target="_blank" rel="noopener">Ouvrir</a>
-              <button class="btn btn-mini" type="button" data-lien="https://www.canva.com/design/DAG7BizCAd8/hV4AalNcP13RBg-xNpEDvA/view?utm_content=DAG7BizCAd8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=ha64287c23d">Copier le lien</button>
+              <a class="btn btn-mini" data-href="rdv" href="https://team.alteore.com/booking.html?type=rdv_audit_business" target="_blank" rel="noopener">Ouvrir</a>
+              <button class="btn btn-mini" type="button" data-cle="rdv">Copier le lien</button>
             </span>
           </li>
         </ul>
+        <p class="note">Le livret d’accueil Canva décrit l’ancienne formule : il ne part plus dans le message tant qu’il n’a pas été refait au nouveau format. Le lien reste dans l’objet <code>LIENS</code> du script (clé <code>livret</code>).</p>
         <label class="fait"><input type="checkbox" data-fait> Étape faite</label>
       </div>
     </li>
@@ -306,7 +341,7 @@
       <div class="corps">
         <h2>Créer le groupe WhatsApp de bienvenue</h2>
         <p class="quand">Une fois le message des liens envoyé</p>
-        <p>Créer un groupe avec le client, Adrien, Emily et Marine, puis y poster le message de bienvenue qui présente Marine, la CSM.</p>
+        <p>Créer un groupe avec le client, Adrien, Emily et Marine, puis y poster le message de bienvenue : il présente Marine, la CSM, et explique simplement le cadre des 6 mois.</p>
 
         <ul class="lignes">
           <li>
@@ -335,7 +370,7 @@
           </div>
         </div>
 
-        <p class="note">Ce groupe sert uniquement à la bienvenue : il est supprimé ensuite. Ne pas y traiter les questions de fond, elles passent par Marine.</p>
+        <p class="note">Ce groupe sert uniquement à la bienvenue : il est temporaire et supprimé une fois l’onboarding fait. Ne pas y traiter les questions de fond, elles passent par Marine. Le coach n’est pas ajouté au groupe : pour Business, il n’y a pas d’échange avec le coach en dehors des séances.</p>
         <label class="fait"><input type="checkbox" data-fait> Étape faite</label>
       </div>
     </li>
@@ -345,18 +380,55 @@
       <div class="num" aria-hidden="true">4</div>
       <div class="corps">
         <h2>Marine prend le relais</h2>
-        <p class="quand">Plus rien à faire côté closer</p>
-        <p>À partir de là, c’est Marine qui s’occupe du client et qui l’ajoute partout :</p>
+        <p class="quand">De J0 à J+3 — plus rien à faire côté closer</p>
+        <p>À partir de là, c’est Marine qui s’occupe du client :</p>
         <ul>
-          <li>le groupe WhatsApp de la communauté Business Phénix ;</li>
-          <li>les coachings de groupe du lundi 14h et du jeudi 12h30 ;</li>
-          <li>le coaching individuel ;</li>
-          <li>la plateforme de formation.</li>
+          <li>création du compte sur la plateforme de suivi, au nouveau format Business ;</li>
+          <li>attribution du coach référent ;</li>
+          <li>ajout à la communauté Business ;</li>
+          <li>envoi des liens des coachings de groupe du lundi 14h et du jeudi 12h30 ;</li>
+          <li>explication du cadre et envoi de la liste des documents à déposer avant la séance 1 ;</li>
+          <li>séance 1 avec le coach référent sous 7 jours, où le créneau fixe toutes les deux semaines est posé.</li>
         </ul>
+
+        <div id="communaute-vide" class="a-remplir" hidden>⚠️ Lien du groupe WhatsApp « Communauté Business » : <strong>À REMPLIR</strong>. Adrien le renseigne dans l’objet <code>LIENS</code> (clé <code>communaute</code>) en bas de cette page.</div>
+        <ul class="lignes" id="communaute-ok" hidden>
+          <li>
+            <span class="nom">Communauté Business<span class="detail">Groupe WhatsApp animé par Marine</span></span>
+            <span class="actions">
+              <a class="btn btn-mini" data-href="communaute" href="#" target="_blank" rel="noopener">Ouvrir</a>
+              <button class="btn btn-mini" type="button" data-cle="communaute">Copier le lien</button>
+            </span>
+          </li>
+        </ul>
+
+        <h3>Les documents à déposer avant la séance 1</h3>
+        <p>Envoyés par Marine pendant l’onboarding. Pour information, ou à transmettre si le client pose la question.</p>
+        <div class="message">
+          <p class="message-titre">Message — documents de la séance 1</p>
+          <div class="bulle" id="msg-documents"></div>
+          <div class="message-actions">
+            <button class="btn btn-copier" type="button" data-copier="documents">Copier le message</button>
+          </div>
+        </div>
       </div>
     </li>
 
   </ol>
+
+  <section class="parcours" aria-labelledby="parcours-titre">
+    <h2 id="parcours-titre">Le parcours du client, en bref</h2>
+    <table>
+      <tr><td>J0</td><td>Closing : une seule offre, prix HT, contrat signé avec la case d’accès immédiat, paiement (BP PIF, ou BP MENS en 6 fois maximum). Récap de closing dans Lead Live avec le libellé BP PIF / BP MENS.<span>Closer</span></td></tr>
+      <tr><td>J0</td><td>Passation : groupe de bienvenue temporaire, présentation de Marine.<span>Closer → Marine</span></td></tr>
+      <tr><td>J0 → J+3</td><td>Onboarding : plateforme, coach référent, communauté Business, coachings de groupe, cadre, documents de la séance 1.<span>Marine</span></td></tr>
+      <tr><td>Sous 72 h</td><td>RDV audit business, hors des 10 séances.<span>Un coach</span></td></tr>
+      <tr><td>Sous 7 jours</td><td>Séance 1 : point A, point B, créneau fixe toutes les deux semaines.<span>Coach référent</span></td></tr>
+      <tr><td>Séances 2 à 9</td><td>Piloter (2–3), Se rémunérer (4–6), Vendre (7–9).<span>Coach référent</span></td></tr>
+      <tr><td>Avant J+180</td><td>Séance 10 : bilan et plan autonome.<span>Coach référent</span></td></tr>
+      <tr><td>J+180</td><td>Fin de l’accompagnement ; les séances non prises sont perdues.<span>Plateforme · Marine</span></td></tr>
+    </table>
+  </section>
 
   <section class="aussi" aria-labelledby="aussi-titre">
     <h2 id="aussi-titre">Le client reçoit également</h2>
@@ -367,7 +439,18 @@
     </ul>
   </section>
 
-  <footer>Document interne Ambitio Corp, réservé à l’équipe commerciale. Ne pas transmettre au client.</footer>
+  <section class="aussi jamais" aria-labelledby="jamais-titre">
+    <h2 id="jamais-titre">À ne jamais faire</h2>
+    <ul>
+      <li>Proposer plus de 6 mensualités sur Business.</li>
+      <li>Proposer les deux offres, ou replier un profil Elite sur Business.</li>
+      <li>Promettre un résultat, une séance offerte ou une séance en plus.</li>
+      <li>Annoncer des vidéos ou un suivi WhatsApp avec le coach : ils ne font pas partie de Business.</li>
+      <li>Parler de « formation » : c’est un accompagnement.</li>
+    </ul>
+  </section>
+
+  <footer>Document interne Ambitio Corp, réservé à l’équipe commerciale. Ne pas transmettre au client. Ancienne formule 12 mois : <a href="_archives/2026-10-14-process-onboarding-business-closer-ancienne-formule-12-mois.html">version archivée</a>.</footer>
   <span class="sr" id="annonce" aria-live="polite"></span>
 </main>
 
@@ -376,13 +459,18 @@
   var LIENS = {
     page: "https://www.adrienemily.com/ressources-business-phenix",
     questionnaire: "https://team.alteore.com/alteoforms-render.html?id=6sYCUup0lDdz6mWAPlIg",
-    rdv: "https://team.alteore.com/booking.html?type=rdv_urgent_post",
-    livret: "https://www.canva.com/design/DAG7BizCAd8/hV4AalNcP13RBg-xNpEDvA/view?utm_content=DAG7BizCAd8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=ha64287c23d"
+    rdv: "https://team.alteore.com/booking.html?type=rdv_audit_business",
+    livret: "https://www.canva.com/design/DAG7BizCAd8/hV4AalNcP13RBg-xNpEDvA/view?utm_content=DAG7BizCAd8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=ha64287c23d",
+    plateforme: "https://academy.adrienemily.com",
+    /* À REMPLIR : lien d'invitation du groupe WhatsApp « Communauté Business ».
+       Tant qu'il est vide, la page affiche un encadré rouge « À REMPLIR ». */
+    communaute: ""
   };
 
   var inClient = document.getElementById("in-client");
   var inCloser = document.getElementById("in-closer");
   var inDate = document.getElementById("in-date");
+  var inJ0 = document.getElementById("in-j0");
   var champDate = document.getElementById("champ-date");
   var annonce = document.getElementById("annonce");
 
@@ -394,42 +482,80 @@
     return document.querySelector('input[name="rdv"]:checked').value === "reserve";
   }
 
+  /* J0 + 180 jours, en toutes lettres (« 12 avril 2027 »). '' si pas de date. */
+  function dateFin() {
+    var v = inJ0.value;
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || "");
+    if (!m) return "";
+    var d = new Date(+m[1], +m[2] - 1, +m[3]);
+    d.setDate(d.getDate() + 180);
+    var mois = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet",
+      "août", "septembre", "octobre", "novembre", "décembre"];
+    return d.getDate() + " " + mois[d.getMonth()] + " " + d.getFullYear();
+  }
+
   /* ---- Textes des messages (c'est ce texte brut qui est copié) ---- */
   function textes() {
     var client = val(inClient, "[Prénom]");
     var closer = val(inCloser, "[Votre prénom]");
     var date = val(inDate, "[jour et heure]");
+    var fin = dateFin();
 
     var blocRdv = rdvReserve()
-      ? "2️⃣ Votre RDV 72h est réservé : " + date + ".\nNous y cadrons votre situation et vos priorités pour lancer le plan d’action."
-      : "2️⃣ Votre RDV 72h, à réserver dès que le questionnaire est rempli :\n" + LIENS.rdv;
+      ? "2️⃣ Votre RDV audit business est réservé : " + date + ".\nUn coach y fait avec vous un premier état des lieux de votre entreprise."
+      : "2️⃣ Votre RDV audit business (30 minutes) avec un coach, à réserver dans les 72 heures, dès que le questionnaire est rempli :\n" + LIENS.rdv;
 
     var liens =
       "Bonjour " + client + " 👋\n\n" +
       "Bienvenue dans Business Phénix ! Comme convenu, voici vos liens pour bien démarrer.\n\n" +
-      "1️⃣ Le questionnaire de démarrage — *obligatoire*, à remplir avant votre RDV 72h :\n" + LIENS.questionnaire + "\n\n" +
+      "1️⃣ Le questionnaire de démarrage — *obligatoire*, à remplir avant votre RDV audit business :\n" + LIENS.questionnaire + "\n\n" +
       blocRdv + "\n\n" +
-      "3️⃣ Votre livret d’accueil :\n" + LIENS.livret + "\n\n" +
-      "Et la page qui regroupe tous vos liens (coachings de groupe, coaching individuel, communauté), à garder sous la main :\n" + LIENS.page + "\n\n" +
+      "3️⃣ La page qui regroupe vos liens (coachings de groupe, plateforme de suivi), à garder sous la main :\n" + LIENS.page + "\n\n" +
       "Plus vos réponses au questionnaire sont précises, plus ce premier rendez-vous vous sera utile.\n\n" +
       "Je reste disponible si besoin.\n" + closer;
 
     var relance =
       "Bonjour " + client + ",\n\n" +
-      "Petit rappel : votre questionnaire de démarrage n’est pas encore rempli. Il est *obligatoire* avant votre RDV 72h, c’est lui qui nous permet de préparer ce rendez-vous sur votre situation réelle.\n\n" +
+      "Petit rappel : votre questionnaire de démarrage n’est pas encore rempli. Il est *obligatoire* avant votre RDV audit business : c’est lui qui permet à votre coach de préparer ce rendez-vous sur votre situation réelle.\n\n" +
       "Le lien :\n" + LIENS.questionnaire + "\n\n" +
       "Merci d’avance,\n" + closer;
+
+    var ligneRdv = rdvReserve()
+      ? "• Votre *RDV audit business* avec un coach : " + date + "."
+      : "• Votre *RDV audit business* avec un coach, dans les 72 heures (lien envoyé en message privé).";
 
     var bienvenue =
       "Bonjour " + client + " 👋\n\n" +
       "Bienvenue officiellement dans Business Phénix !\n\n" +
-      "Ce groupe est là pour vous souhaiter la bienvenue avec Adrien et Emily, et pour vous présenter *Marine*, notre CSM. C’est elle qui vous accompagne à partir de maintenant : elle vous ajoute à la communauté et aux coachings, et elle reste votre interlocutrice pour toutes vos questions pratiques.\n\n" +
-      "Ce groupe sera supprimé une fois votre intégration faite : la suite se passe avec Marine et la communauté.\n\n" +
+      "Ce groupe est là pour vous souhaiter la bienvenue avec Adrien et Emily, et pour vous présenter *Marine*, notre CSM. C’est elle qui vous accompagne à partir de maintenant : elle ouvre votre accès à la plateforme de suivi, vous présente votre coach référent, vous ajoute à la communauté Business et vous envoie les liens des coachings de groupe.\n\n" +
+      "Vos 6 mois, en bref :\n" +
+      ligneRdv + "\n" +
+      "• Votre *séance 1* dans les 7 jours : on y pose votre point de départ, votre objectif et votre créneau.\n" +
+      "• Ensuite, *un créneau fixe toutes les deux semaines* avec votre coach référent : même jour, même heure.\n" +
+      "• *10 séances* au total, sur *180 jours* à compter du démarrage de votre accompagnement" + (fin ? " (jusqu’au " + fin + ")" : "") + ".\n" +
+      "• Un empêchement ? Prévenez *au moins 48 h avant* : la séance est replacée. En dessous de 48 h, ou en cas d’absence, la séance est comptée comme utilisée.\n" +
+      "• Les séances non utilisées à la fin des 180 jours ne sont pas reportées.\n" +
+      "• Entre les séances : les coachings de groupe du lundi et du jeudi, et la communauté Business.\n\n" +
+      "Avant la séance 1, Marine vous enverra la liste des documents à déposer sur la plateforme : c’est ce qui permet de partir de vos chiffres réels.\n\n" +
+      "Ce groupe sera supprimé une fois votre intégration faite : la suite se passe avec Marine, votre coach et la communauté.\n\n" +
       "Très bon démarrage à vous !\n" + closer;
+
+    var documents =
+      "Bonjour " + client + ",\n\n" +
+      "Pour que votre séance 1 parte de vos chiffres réels, merci de déposer sur votre plateforme de suivi, avant la séance :\n" +
+      "• votre dernier bilan et votre compte de résultat (à défaut, l’export comptable de l’année) ;\n" +
+      "• votre chiffre d’affaires mois par mois sur les 6 derniers mois ;\n" +
+      "• la liste de vos produits ou services, avec leurs prix ;\n" +
+      "• la liste de vos charges fixes mensuelles ;\n" +
+      "• votre rémunération actuelle ;\n" +
+      "• votre semaine type.\n\n" +
+      "Plateforme de suivi : " + LIENS.plateforme + "\n\n" +
+      "S’il vous manque un document, déposez ce que vous avez : nous ferons le point en séance.\n\n" +
+      "Marine";
 
     var groupe = "Bienvenue " + client + " – Business Phénix";
 
-    return { liens: liens, relance: relance, bienvenue: bienvenue, groupe: groupe };
+    return { liens: liens, relance: relance, bienvenue: bienvenue, documents: documents, groupe: groupe };
   }
 
   /* ---- Affichage : échappement + *gras* façon WhatsApp ---- */
@@ -444,8 +570,21 @@
     document.getElementById("msg-liens").innerHTML = versHtml(t.liens);
     document.getElementById("msg-relance").innerHTML = versHtml(t.relance);
     document.getElementById("msg-bienvenue").innerHTML = versHtml(t.bienvenue);
+    document.getElementById("msg-documents").innerHTML = versHtml(t.documents);
     document.getElementById("nom-groupe").textContent = t.groupe;
     champDate.hidden = !rdvReserve();
+  }
+
+  /* ---- Les liens affichés suivent l'objet LIENS (une seule source) ---- */
+  function appliquerLiens() {
+    document.getElementById("lien-rdv").setAttribute("href", LIENS.rdv);
+    Array.prototype.forEach.call(document.querySelectorAll("a[data-href]"), function (a) {
+      var url = LIENS[a.getAttribute("data-href")];
+      if (url) a.setAttribute("href", url);
+    });
+    var aCommunaute = !!LIENS.communaute;
+    document.getElementById("communaute-vide").hidden = aCommunaute;
+    document.getElementById("communaute-ok").hidden = !aCommunaute;
   }
 
   /* ---- Copie ---- */
@@ -489,11 +628,13 @@
   }
 
   document.addEventListener("click", function (e) {
-    var bouton = e.target.closest("button[data-copier], button[data-lien]");
+    var bouton = e.target.closest("button[data-copier], button[data-lien], button[data-cle]");
     if (!bouton) return;
     if (bouton.hasAttribute("data-copier")) {
       var cle = bouton.getAttribute("data-copier");
       copier(textes()[cle], bouton, cle === "groupe" ? "Nom copié" : "Message copié");
+    } else if (bouton.hasAttribute("data-cle")) {
+      copier(LIENS[bouton.getAttribute("data-cle")] || "", bouton, "Lien copié");
     } else {
       var estNumero = /^[0-9 ]+$/.test(bouton.getAttribute("data-lien"));
       copier(bouton.getAttribute("data-lien"), bouton, estNumero ? "Numéro copié" : "Lien copié");
@@ -516,12 +657,14 @@
     }
   }
 
-  [inClient, inCloser, inDate].forEach(function (i) { i.addEventListener("input", rendre); });
+  [inClient, inCloser, inDate, inJ0].forEach(function (i) { i.addEventListener("input", rendre); });
+  inJ0.addEventListener("change", rendre);
   Array.prototype.forEach.call(document.querySelectorAll('input[name="rdv"]'), function (r) {
     r.addEventListener("change", rendre);
   });
   cases.forEach(function (c) { c.addEventListener("change", avancement); });
 
+  appliquerLiens();
   rendre();
   avancement();
 })();

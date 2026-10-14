@@ -144,7 +144,22 @@
   }
 
   /* ── Helpers pricing ── */
-  function pricing() { return (window.AlteoreFlow && window.AlteoreFlow.WIZARD_PRICING) || {}; }
+  /* Tarifs du moment — suivent l'interrupteur du nouveau format Business
+     (_config/business_phenix, 14/10/2026) via AlteoreFlow.wizardPricing(). */
+  function pricing() {
+    var AF = window.AlteoreFlow;
+    if (AF && AF.wizardPricing) return AF.wizardPricing();
+    return (AF && AF.WIZARD_PRICING) || {};
+  }
+  /* Libellé d'une offre sur la carte ① : prix HT, nomenclature BP/EP, max ×. */
+  function offerLine(key) {
+    var oc = pricing()[key], AF = window.AlteoreFlow;
+    if (!oc) return '';
+    var code = function (st) { return AF && AF.offreCode ? AF.offreCode(oc.commOffre, st) : ''; };
+    return (oc.format === 'v2_6mois' ? '6 mois<br>' : '')
+      + (code('pif') ? code('pif') + ' ' : 'PIF ') + euro(oc.pif.contracte) + ' HT<br>'
+      + (code('mensualise') ? code('mensualise') + ' ' : 'MENS ') + euro(oc.mensualise.contracte) + ' HT (≤ ' + oc.mensualise.maxX + '×)';
+  }
   function offerCfg() { return pricing()[state.a.contrat] || null; }
   function payCfg() {
     var oc = offerCfg();
@@ -190,8 +205,8 @@
       document.getElementById('cwTitle').textContent = 'Close — contrat signé';
       h += '<div class="cw-q">Quel type de contrat a été signé ?</div>';
       h += '<div class="cw-opts">';
-      h += opt('contrat', 'Elite', '👑', 'ELITE', 'PIF 12 000 € HT<br>MENS 13 000 € HT (≤ 4×)');
-      h += opt('contrat', 'Business', '🚀', 'BUSINESS', 'PIF 5 000 € HT<br>MENS 6 000 € HT (≤ 10×)');
+      h += opt('contrat', 'Elite', '👑', 'ELITE', offerLine('Elite'));
+      h += opt('contrat', 'Business', '🚀', 'BUSINESS', offerLine('Business'));
       h += '</div>';
     } else if (key === 'paiement') {
       document.getElementById('cwTitle').textContent = 'Close — paiement';
@@ -239,7 +254,7 @@
          reste modifiable d'un clic, sans étape en plus) */
       h += '<div class="cw-chips" style="margin-bottom:14px">'
         + '<button class="cw-chip sel" data-goto="0">' + (state.a.contrat === 'Elite' ? '👑 Elite' : '🚀 Business') + '<small>✎</small></button>'
-        + '<button class="cw-chip sel" data-goto="1">' + (state.a.paiement === 'pif' ? '💎 PIF' : '📅 MENS') + '<small>✎</small></button>'
+        + '<button class="cw-chip sel" data-goto="1">' + (state.a.paiement === 'pif' ? '💎 ' : '📅 ') + (AF2 && AF2.offreCode ? AF2.offreCode(commOffre, state.a.paiement) : (state.a.paiement === 'pif' ? 'PIF' : 'MENS')) + '<small>✎</small></button>'
         + '<button class="cw-chip sel" data-goto="2">' + (state.a.booking === 'sb' ? '🔗 Self Booking' : '📞 No Booking') + '<small>✎</small></button>'
         + '<button class="cw-chip' + (state.a.coachNom ? ' sel' : '') + '" data-goto="3">'
         +   (state.a.coachNom ? '🎓 ' + esc(state.a.coachNom) : '🎓 Coach à décider') + '<small>✎</small></button>'

@@ -47,14 +47,36 @@ const { admin, db } = require('./_firebaseAdmin');
 const { requireAuth } = require('./_verifyFirebaseAuth');
 const parseBody = require('./_parseBody');
 
+const BP = require('../bp-credits.js');
+
 const ROLES = ['admin', 'sales'];
 
 /* Mêmes valeurs que le sélecteur « Nouveau client coaching » de coaching.html
    et que les fiches créées automatiquement jusqu'au 18/09/2026. */
 const PROGRAMMES = {
   elite: { programme: 'Elite NEW - 6 Mois - 24C', nb: 24, label: 'Elite Phénix' },
-  business: { programme: 'BP 12 Mois - 12C', nb: 12, label: 'Business Phénix' },
+  business: { programme: 'BP 12 Mois - 12C', nb: 12, label: 'Business Phénix — ancienne formule 12 mois' },
+  /* Nouveau format (14/10/2026) : RDV audit business + 10 séances sur
+     180 jours à compter de la signature — règles dans ../bp-credits.js. */
+  business_v2: { programme: BP.PROGRAMME, nb: BP.TOTAL, label: BP.LIBELLE, v2: true },
 };
+
+/* Business : nouveau format ou ancienne formule ? Le CONTRAT SIGNÉ décide
+   (décision Adrien 14/10/2026) : le modèle « Business Phénix 6 mois »
+   (_config/business_phenix.templateIds, sinon nom « business … 6 mois »)
+   → nouveau format ; un contrat Business 12 mois (BP12…) → ancienne
+   formule. Sans contrat Business signé : l'interrupteur du moment. */
+function estModeleBpV2(contrat, cfg) {
+  if (!contrat) return false;
+  if ((cfg.templateIds || []).indexOf(contrat.templateId) >= 0) return true;
+  const n = fold(contrat.templateName);
+  return n.indexOf('business') >= 0 && /6\s*mois/.test(n);
+}
+function formatBusiness(contrat, cfg) {
+  if (estModeleBpV2(contrat, cfg)) return 'business_v2';
+  if (contrat && programmeKey(contrat.templateName) === 'business') return 'business';
+  return cfg.active === true ? 'business_v2' : 'business';
+}
 
 function fold(s) {
   return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
@@ -225,7 +247,12 @@ module.exports = async function (req, res) {
       res.status(422).json({ ok: false, error: 'programme_inconnu', message: 'Ni le close ni un contrat signé n\'indiquent Elite Phénix ou Business Phénix.' });
       return;
     }
-    const PG = PROGRAMMES[key];
+    let pgKey = key;
+    if (key === 'business') {
+      const cfgSnap = await db.collection('_config').doc('business_phenix').get();
+      pgKey = formatBusiness(contrat, cfgSnap.exists ? (cfgSnap.data() || {}) : {});
+    }
+    const PG = PROGRAMMES[pgKey];
 
     const P = await trouverPersons(leadId, L, email);
     const existante = await ficheExistante(leadId, L, P, email);
@@ -235,11 +262,18 @@ module.exports = async function (req, res) {
     const activite = String(L.secteur || '').trim()
       || (soc ? (soc.companyName + (soc.nafLabel ? ' — ' + soc.nafLabel : '')) : '');
     const dateEntree = dayParis(new Date(ms(L.clientSince) || Date.now()));
+    /* J0 du nouveau format Business = DÉMARRAGE de l'accompagnement
+       (décision Adrien 14/10/2026) : la signature si le client a renoncé au
+       délai de rétractation, sinon J+15 — demarragePossibleLe, posé par
+       sign-session. À défaut : date de signature, puis date d'entrée. */
+    const demarrage = (function (s) { const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(s || '').trim()); return m ? m[3] + '-' + m[2] + '-' + m[1] : ''; })(contrat && contrat.demarragePossibleLe);
+    const j0 = PG.v2 ? (demarrage || (contrat && ms(contrat.signedAt) ? dayParis(new Date(ms(contrat.signedAt))) : dateEntree)) : null;
 
     if (dryRun) {
       res.status(200).json({
         ok: true, dryRun: true, nom: nom, email: email,
         programme: PG.programme, label: PG.label, dateEntree: dateEntree, coach: coach || null,
+        j0: j0, finAccompagnement: j0 ? BP.addDays(j0, BP.DUREE_JOURS) : null,
         personId: P ? P.id : null, contrat: contrat ? contrat.templateName || null : null,
         activite: activite || null, societe: soc ? soc.companyName + (soc.siret ? ' (SIRET ' + soc.siret + ')' : '') : null,
         existing: existante ? { clientId: existante.id, programme: existante.data.programme || null } : null,
@@ -313,7 +347,7 @@ module.exports = async function (req, res) {
       return;
     }
 
-    const sessions = sessionsTemplate(PG.nb);
+    const sessions = PG.v2 ? BP.sessionsTemplate() : sessionsTemplate(PG.nb);
     const tel = String(L.telephone || (P && P.data.telephone) || '').trim();
     /* Lien déjà présent à la lecture mais non retenu plus haut : fiche
        inactive ou disparue — il sera remplacé. Tout AUTRE lien apparu
@@ -358,6 +392,11 @@ module.exports = async function (req, res) {
         _updatedAt: Date.now(),
       };
       if (coach) fiche.coach = coach;
+      if (PG.v2) {
+        fiche.j0 = j0;
+        fiche.finAccompagnement = BP.addDays(j0, BP.DUREE_JOURS);
+        fiche.formatOffre = 'bp_v2_6mois';
+      }
       tx.set(db.collection('clients').doc(clientId), fiche);
       tx.update(leadRef, { coachingClientId: clientId });
       return { created: true, clientId: clientId };

@@ -100,6 +100,10 @@
     // Attribution IA (programme IA 10/2026) : provenance → RDV → close → CA.
     { id: 'admin-attribution', icon: '📈', label: 'Attribution IA', href: 'admin-attribution.html', section: 'Funnel & Site', perm: '_admin' },
     { id: 'admin-users',       icon: '🔑', label: 'Utilisateurs', href: 'admin-users.html',      section: 'Admin', perm: '_admin' },
+    // Offres & formules (14/10/2026) : interrupteur du nouveau format
+    // Business Phénix 6 mois (_config/business_phenix), modèle de contrat,
+    // lien de la communauté Business, personnes autorisées à ajouter des séances.
+    { id: 'admin-offres',      icon: '🔥', label: 'Offres & formules', href: 'admin-offres.html', section: 'Admin', perm: '_admin' },
     { id: 'admin-persons',     icon: '👤', label: 'Persons',      href: 'admin-persons.html',    section: 'Admin', perm: '_admin' },
     { id: 'admin-numbers',     icon: '📞', label: 'Numéros',      href: 'admin-numbers.html',     section: 'Admin', perm: '_admin' },
     { id: 'admin-billing',     icon: '🧾', label: 'Facturation',  href: 'admin-facturation.html', section: 'Admin', perm: '_admin' },

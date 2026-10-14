@@ -23,6 +23,7 @@
 // ============================================================================
 
 const { db } = require('./_firebaseAdmin');
+const BP = require('../bp-credits.js');
 const { callClaude, cap, tsToMs, getAiConfig } = require('./_ai');
 
 const DEFAULT_RULES = { redDays: 21, orangeDays: 14, missedStreak: 2, homeworkMissed: 2, newClientGraceDays: 10 };
@@ -239,6 +240,10 @@ function ruleLevel(f, rules, aiSignal) {
   if (f.missedStreak >= rules.missedStreak) red.push('🚫 ' + f.missedStreak + ' séances annulées / manquées d\'affilée');
   if (f.academy && f.academy.devoirsNonFaits >= rules.homeworkMissed) orange.push('📝 ' + f.academy.devoirsNonFaits + ' devoirs non faits');
   if (f.academy && f.academy.seancesNonHonorees >= rules.missedStreak) red.push('🚫 ' + f.academy.seancesNonHonorees + ' séances non honorées (Academy)');
+  (f.bp && f.bp.alertes || []).forEach(function (a) {
+    if (a.code === 'seance1_j7') red.push('🔥 ' + a.texte);
+    else if (a.code === 'deux_non_tenus' || a.code === 'retard') orange.push('🔥 ' + a.texte);
+  });
   if (aiSignal && aiSignal.signalNegatif) orange.push('🤖 ' + aiSignal.raison);
   const level = red.length ? 'rouge' : (orange.length ? 'orange' : 'vert');
   return { level: level, reasons: red.concat(orange) };
@@ -301,6 +306,18 @@ async function evaluateClient(c, ctx, opts) {
   f.payments = pf.payments;
   f.missedStreak = bf.missedStreak;
   f.nextSession = bf.nextSession;
+  /* Business Phénix nouveau format (14/10/2026) : compteur de 10 séances,
+     fin à J0 + 180, alertes CSM du cahier des charges (séance 1 non tenue à
+     J+7, 2 créneaux consécutifs non tenus, séances restantes > créneaux). */
+  if (BP.isBusinessV2(c.programme)) {
+    const k = BP.compute(c, { bookings: bookingsOf(c, ctx) });
+    f.bp = { consumed: k.consumed, total: k.total, restantes: k.restantes, creneauxRestants: k.creneauxRestants, j0: k.j0, fin: k.fin,
+      alertes: k.alertes.map(function (a) { return { code: a.code, niveau: a.niveau, texte: a.texte }; }) };
+    f.sessionsDone = k.consumed;
+    f.sessionsTotal = k.total;
+    f.contractEnd = k.fin || f.contractEnd;
+    f.daysToEnd = k.fin ? daysBetween(ctx.today, k.fin) : f.daysToEnd;
+  }
   f.academy = opts.withAcademy ? await academyFacts(c) : ((ctx.ai[c.id] && ctx.ai[c.id].risk && ctx.ai[c.id].risk.facts && ctx.ai[c.id].risk.facts.academy) || null);
 
   const prev = ctx.ai[c.id] || {};

@@ -172,7 +172,11 @@ module.exports = async (req, res) => {
       // La fiche ne synchronise que les séances faites : le crédit est
       // consommé. Absent (undefined → retiré du JSON) sinon : l'Academy garde
       // le statut qu'elle connaît (report, non honorée…).
-      statut: s.statut === 'fait' ? 'tenue' : undefined,
+      /* Business nouveau format (14/10/2026) : une séance consommée
+         (absence / report < 48 h) part « consommee » — l'Academy la range en
+         « non honorée », qui compte dans les 10 séances. */
+      statut: s.statut === 'fait' ? 'tenue' : (s.statut === 'consommee' ? 'consommee' : undefined),
+      consoMotif: s.statut === 'consommee' ? (s.consoMotif || 'absence') : undefined,
       // Ce que l'élève LIT.
       resumePartage: cap(s.resume || '', 4000),
       // Ce qu'il ne verra jamais : l'Academy le range dans une zone séparée.

@@ -293,6 +293,33 @@ let filteredPayments = [];
 let members = [];
 let currentPaymentId = null;
 
+/* ══ BUSINESS PHÉNIX — NOUVEAU FORMAT 6 MOIS (14/10/2026) ══
+   Le contrat signé décide du format : un client qui a signé le modèle
+   « Business Phénix 6 mois » (_config/business_phenix.templateIds) se paie
+   en 6 mensualités maximum. Le pilote de closing transmet aussi &maxmens=
+   pour limiter la liste dès l'ouverture. Les anciens clients (contrat BP12)
+   gardent leurs modalités. */
+const BP_MAX_MENS = 6;
+let bpCfg = {};
+function loadBusinessCfg() {
+  return db.collection('_config').doc('business_phenix').get()
+    .then(s => { bpCfg = s.exists ? (s.data() || {}) : {}; })
+    .catch(e => { console.warn('[payments] _config/business_phenix illisible :', e && e.message); });
+}
+function isBpV2Contract(c) {
+  if (!c) return false;
+  if ((bpCfg.templateIds || []).indexOf(c.templateId) >= 0) return true;
+  const n = String(c.templateName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return n.indexOf('business') >= 0 && /6\s*mois/.test(n);
+}
+/* Limite la liste des mensualités (les options au-delà sont désactivées,
+   pas retirées : la liste reste la même pour les anciens clients). */
+function capInstallments(max) {
+  const sel = document.getElementById('pmCount');
+  Array.prototype.forEach.call(sel.options, o => { o.disabled = !!max && Number(o.value) > max; });
+  if (max && Number(sel.value) > max) sel.value = String(max);
+}
+
 const STATUS_LABELS = {
   draft: '📝 Brouillon',
   pending_mandate: '⏳ Mandat en attente',
@@ -325,6 +352,7 @@ firebase.auth().onAuthStateChanged(async u => {
   }
 
   currentUser = u;
+  loadBusinessCfg();
   const snap = await db.collection('users').doc(u.uid).get();
   const userData = snap.exists ? snap.data() : {};
   currentRole = userData.role || 'sales';
@@ -429,6 +457,7 @@ async function prefillFromLead(leadId) {
        Le closer vérifie avant de créer. */
     const q = new URLSearchParams(window.location.search);
     if (q.get('ptype') === 'installments' || q.get('ptype') === 'full') setPayType(q.get('ptype'));
+    if (Number(q.get('maxmens')) > 1) capInstallments(Number(q.get('maxmens')));
     if (q.get('nmens') && document.querySelector('#pmCount option[value="' + q.get('nmens') + '"]')) document.getElementById('pmCount').value = q.get('nmens');
     if (q.get('montant')) document.getElementById('pmTotal').value = q.get('montant');
     if (q.get('desc')) document.getElementById('pmDesc').value = q.get('desc');
@@ -753,6 +782,16 @@ async function createPayment() {
     }
     if (!confirm('Aucun contrat signé trouvé pour ce client (lead ou e-mail).\n\nCréer le paiement quand même ? (exception admin)')) return;
   }
+  /* Business Phénix nouveau format : 6 mensualités maximum (BP MENS). */
+  const bpV2 = isBpV2Contract(contrat);
+  if (bpV2 && payType === 'installments' && count > BP_MAX_MENS) {
+    if (currentRole !== 'admin') {
+      capInstallments(BP_MAX_MENS);
+      toast('🔒 Business Phénix (contrat 6 mois) : ' + BP_MAX_MENS + ' mensualités maximum. Ajuste le nombre de mensualités.', false);
+      return;
+    }
+    if (!confirm('Contrat Business Phénix 6 mois : ' + BP_MAX_MENS + ' mensualités maximum prévues.\n\nCréer quand même en ' + count + ' fois ? (exception admin)')) return;
+  }
 
   /* Paiement déjà en cours pour ce client (même fiche ou même e-mail, non
      annulé) : un second, c'est un second mandat et un second SMS au client.
@@ -790,6 +829,12 @@ async function createPayment() {
       installmentsCount: count,
       installmentAmount: monthly,
       description: desc || 'Programme Business Phénix',
+      // Contrat qui fonde le paiement (14/10/2026) — format Business lisible
+      // sans relire signature_requests ; absent sur les paiements antérieurs.
+      contractRequestId: contrat ? contrat.id : null,
+      contractTemplateId: contrat ? (contrat.templateId || null) : null,
+      contractTemplateName: contrat ? (contrat.templateName || null) : null,
+      formule: bpV2 ? 'bp_v2_6mois' : null,
       status: 'draft',
       gcCustomerId: null, gcBillingRequestId: null, gcBillingRequestFlowUrl: null,
       gcMandateId: null, gcSubscriptionId: null, gcPaymentId: null,

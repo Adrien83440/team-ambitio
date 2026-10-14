@@ -72,7 +72,21 @@
   function ms(v) { if (!v) return 0; if (typeof v === 'number') return v; if (v.toMillis) return v.toMillis(); if (v.seconds) return v.seconds * 1000; var t = Date.parse(v); return isNaN(t) ? 0 : t; }
   function prenomOf(nom) { return String(nom || '').trim().split(/\s+/)[0] || ''; }
   function telFr(t) { var d = String(t || '').replace(/\D/g, ''); if (d.indexOf('33') === 0 && d.length === 11) d = '0' + d.slice(2); return d; }
-  function pricing() { return (window.AlteoreFlow && window.AlteoreFlow.WIZARD_PRICING) || FALLBACK_PRICING; }
+  /* Tarifs du moment : AlteoreFlow.wizardPricing() suit l'interrupteur du
+     nouveau format Business (_config/business_phenix, 14/10/2026). */
+  function pricing() {
+    var AF = window.AlteoreFlow;
+    if (AF && AF.wizardPricing) return AF.wizardPricing();
+    return (AF && AF.WIZARD_PRICING) || FALLBACK_PRICING;
+  }
+  /* Business nouveau format (6 mois, RDV audit business avec un coach). */
+  function bpV2() { var b = pricing().Business; return !!(b && b.format === 'v2_6mois'); }
+  /* BP PIF / BP MENS / EP PIF / EP MENS (nomenclature du 14/10/2026). */
+  function offreCode(offre, paiement) {
+    var AF = window.AlteoreFlow, P = pricing()[offre], key = P ? P.commOffre : offre;
+    if (AF && AF.offreCode) return AF.offreCode(key, paiement);
+    return (offre === 'Elite' ? 'EP' : 'BP') + (paiement === 'pif' ? ' PIF' : (paiement === 'mensualise' ? ' MENS' : ''));
+  }
   function copyText(txt) {
     function fallback() {
       var ta = document.createElement('textarea'); ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
@@ -110,7 +124,7 @@
     var n = c.paiement === 'pif' ? 1 : (Number(c.nmens) || 0);
     var ttc = Math.round(pc.contracte * (1 + TVA) * 100) / 100;
     var encaisse = c.encaisse != null && c.encaisse !== '' ? Number(c.encaisse) : (c.paiement === 'pif' ? pc.contracte : (n ? Math.round(pc.contracte / n) : 0));
-    return { offre: c.offre, label: c.offre === 'Elite' ? 'Élite Phénix' : 'Business Phénix', paiement: c.paiement, n: n, ht: pc.contracte, ttc: ttc,
+    return { offre: c.offre, label: c.offre === 'Elite' ? 'Élite Phénix' : 'Business Phénix', code: offreCode(c.offre, c.paiement), paiement: c.paiement, n: n, ht: pc.contracte, ttc: ttc,
       mensTTC: n > 1 ? Math.round(ttc / n * 100) / 100 : ttc, encaisse: encaisse, booking: c.booking };
   }
   function lastSig(leadId) {
@@ -132,9 +146,16 @@
   /* Le type de RDV 72 h : réglage (_config) sinon détection par libellé. */
   function rdvType(offre) {
     var cfg = H.cfg() || {}, tm = H.typeMap() || {};
+    var ids = Object.keys(tm), i;
+    /* Business nouveau format : RDV audit business, fait par un coach
+       (14/10/2026) — réglage typeBusinessAudit, sinon libellé « audit
+       business », sinon le type Business historique. */
+    if (offre === 'Business' && bpV2()) {
+      if (cfg.typeBusinessAudit) return cfg.typeBusinessAudit;
+      for (i = 0; i < ids.length; i++) if (/audit/.test(fold(tm[ids[i]].label)) && /business/.test(fold(tm[ids[i]].label))) return ids[i];
+    }
     var forced = offre === 'Business' ? cfg.typeBusiness : cfg.typeElite;
     if (forced) return forced;
-    var ids = Object.keys(tm), i;
     if (offre === 'Business') { for (i = 0; i < ids.length; i++) if (/urgent/.test(fold(tm[ids[i]].label)) && /72/.test(tm[ids[i]].label)) return ids[i]; for (i = 0; i < ids.length; i++) if (/urgent/.test(fold(tm[ids[i]].label))) return ids[i]; return ''; }
     if (tm.rdv_plan_action_adrien || !ids.length) return 'rdv_plan_action_adrien';
     for (i = 0; i < ids.length; i++) if (/plan d.?action/.test(fold(tm[ids[i]].label))) return ids[i];
@@ -150,7 +171,7 @@
     if (cp.closeAt || (l && l.closedData)) return true;
     return (H.bookings(leadId) || []).some(function (b) { return b && b.outcome === 'close'; });
   }
-  function rdvLabel(offre) { return offre === 'Business' ? 'RDV Urgent 72h' : 'RDV Plan d\'Action'; }
+  function rdvLabel(offre) { return offre === 'Business' ? (bpV2() ? 'RDV audit business' : 'RDV Urgent 72h') : 'RDV Plan d\'Action'; }
   function rdvBooking(leadId, offre) {
     var t = rdvType(offre);
     var list = (H.bookings(leadId) || []).filter(function (b) { return b && b.status !== 'cancelled' && b.outcome !== 'annule' && (t ? b.type === t : false); });
@@ -391,11 +412,11 @@
     h += '<div class="cp-h">🤝 Ce que le client a choisi</div><div class="cp-sub">Tout le reste se pré-remplit à partir d\'ici : le contrat, le paiement, l\'annonce.</div>';
     h += '<div class="cp-lb">Offre</div><div class="cp-opts">'
       + opt('offre', 'Elite', c.offre, '👑 Élite Phénix', 'Intégral ' + euro(P.Elite.pif.contracte) + ' HT · échelonné ' + euro(P.Elite.mensualise.contracte) + ' HT (≤ ' + (P.Elite.mensualise.maxX || 4) + '×)')
-      + opt('offre', 'Business', c.offre, '🚀 Business Phénix', 'Intégral ' + euro(P.Business.pif.contracte) + ' HT · échelonné ' + euro(P.Business.mensualise.contracte) + ' HT (≤ ' + (P.Business.mensualise.maxX || 10) + '×)') + '</div>';
+      + opt('offre', 'Business', c.offre, '🚀 Business Phénix', (bpV2() ? '6 mois · ' : '') + 'Intégral ' + euro(P.Business.pif.contracte) + ' HT · échelonné ' + euro(P.Business.mensualise.contracte) + ' HT (≤ ' + (P.Business.mensualise.maxX || 10) + '×)') + '</div>';
     if (c.offre) {
       h += '<div class="cp-lb">Paiement</div><div class="cp-opts">'
-        + opt('paiement', 'pif', c.paiement, '💎 En une fois', euro(P[c.offre].pif.contracte) + ' HT — le meilleur tarif')
-        + opt('paiement', 'mensualise', c.paiement, '📅 Échelonné', euro(P[c.offre].mensualise.contracte) + ' HT, prélevé chaque mois') + '</div>';
+        + opt('paiement', 'pif', c.paiement, '💎 En une fois · ' + offreCode(c.offre, 'pif'), euro(P[c.offre].pif.contracte) + ' HT — le meilleur tarif')
+        + opt('paiement', 'mensualise', c.paiement, '📅 Échelonné · ' + offreCode(c.offre, 'mensualise'), euro(P[c.offre].mensualise.contracte) + ' HT, prélevé chaque mois') + '</div>';
     }
     if (c.offre && c.paiement === 'mensualise') {
       var max = P[c.offre].mensualise.maxX || 4;
@@ -474,7 +495,7 @@
       return h;
     }
     h += '<div class="cp-sub">Enregistre la vente : la fiche passe en Closing et les commissions se créent' + (elite ? ', puis le coach est prévenu sur WhatsApp.' : '.') + '</div>';
-    if (d) h += '<div class="cp-box">' + esc(d.label) + ' · ' + (d.paiement === 'pif' ? 'en une fois' : d.n + ' fois') + ' · ' + (d.booking === 'sb' ? 'Self Booking' : 'No Booking') + ' · encaissé ' + euro(d.encaisse) + ' HT</div>';
+    if (d) h += '<div class="cp-box">' + esc(d.code) + ' — ' + esc(d.label) + ' · ' + (d.paiement === 'pif' ? 'en une fois' : d.n + ' fois') + ' · ' + (d.booking === 'sb' ? 'Self Booking' : 'No Booking') + ' · encaissé ' + euro(d.encaisse) + ' HT</div>';
     if (elite) {
       var cs = H.coaches() || [], sel = (cp.coach && cp.coach.slug) || ui.coachSlug || '';
       h += '<div class="cp-lb">Coach référent</div>';
@@ -490,7 +511,7 @@
   function cardRdv(leadId, l, cp, d) {
     var offre = d ? d.offre : 'Elite', t = rdvType(offre), b = rdvBooking(leadId, offre), lab = rdvLabel(offre);
     var h = '<div class="cp-h">📅 ' + lab + '</div>';
-    h += '<div class="cp-sub">' + (offre === 'Elite' ? 'Dans les 72 h, au plus tard avant J7. Tu ouvres l\'agenda et vous choisissez la date ensemble, pendant l\'appel. Un client qui raccroche sans date, c\'est un démarrage qui glisse d\'une semaine.' : 'Le RDV Urgent 72h se cale avant de raccrocher, ensemble.') + '</div>';
+    h += '<div class="cp-sub">' + (offre === 'Elite' ? 'Dans les 72 h, au plus tard avant J7. Tu ouvres l\'agenda et vous choisissez la date ensemble, pendant l\'appel. Un client qui raccroche sans date, c\'est un démarrage qui glisse d\'une semaine.' : (bpV2() ? 'Le RDV audit business se fait avec un coach, dans les 72 h : calez-le avant de raccrocher, ensemble. Marine attribue ensuite le coach référent et le créneau fixe des 10 séances.' : 'Le RDV Urgent 72h se cale avant de raccrocher, ensemble.')) + '</div>';
     if (b) {
       h += '<div class="cp-box g">✅ <b>Calé le ' + esc((b.date || '').split('-').reverse().join('/')) + ' à ' + esc(b.time || '') + '</b>' + (b.personName ? ' avec ' + esc(b.personName) : '') + '</div>';
       return h;
@@ -541,7 +562,7 @@
     var coach = (cp.coach && cp.coach.nom) || (l.coachAssigne && l.coachAssigne.nom) || '';
     var b = rdvBooking(leadId, d ? d.offre : 'Elite'), wa = cp.wa || {}, out = [];
     function it(ok, label, detail, soft) { out.push({ ok: ok ? 'ok' : (soft ? 'wa' : 'ko'), label: label, detail: detail || '' }); }
-    it(!!d, 'Deal renseigné', d ? d.label + ' · ' + (d.paiement === 'pif' ? 'en une fois' : d.n + ' fois') : '');
+    it(!!d, 'Deal renseigné', d ? d.code + ' — ' + d.label + ' · ' + (d.paiement === 'pif' ? 'en une fois' : d.n + ' fois') : '');
     it(sig && sig.status === 'signed', 'Contrat signé', sig ? '« ' + (sig.templateName || '') + ' »' : 'pas encore envoyé');
     it(!!p, 'Paiement GoCardless créé', p ? euro(p.totalAmount) + ' TTC' : '');
     var mand = p && /mandate_active|active|completed/.test(p.status || '');
@@ -579,7 +600,7 @@
       + 'Client : ' + (l.nom || '') + '\n'
       + 'E mail: ' + (l.email || '') + '\n'
       + 'Tel : ' + telFr(l.telephone) + '\n'
-      + 'Deal (offre & modalité) :   ' + (d ? d.label + (d.paiement === 'pif' ? ' en paiement intégral' : ' en ' + d.n + ' fois') : '') + '\n'
+      + 'Deal (offre & modalité) :   ' + (d ? d.code + ' — ' + d.label + (d.paiement === 'pif' ? ' en paiement intégral' : ' en ' + d.n + ' fois') : '') + '\n'
       + 'Date d’encaissement : ' + dateEnc + '\n'
       + 'Contrat (signé et rétractation ok) : ' + (sig && sig.status === 'signed' ? 'Oui' : 'Non') + '\n'
       + 'Origine du Lead: ' + (H.origin(l) || '—') + '\n\n'
@@ -614,7 +635,7 @@
   function moduleParams(kind, leadId) {
     var l = H.lead(leadId) || {}, cp = cpOf(leadId), d = deal(cp);
     if (kind === 'sig') return { sn: l.nom || '', se: l.email || '', sp: l.telephone || '', formule: d ? d.paiement : '', nmens: d && d.n > 1 ? d.n : '' };
-    if (kind === 'pay') return d ? { montant: d.ttc, ptype: d.paiement === 'pif' ? 'full' : 'installments', nmens: d.n > 1 ? d.n : '', desc: 'Programme ' + d.label } : {};
+    if (kind === 'pay') return d ? { montant: d.ttc, ptype: d.paiement === 'pif' ? 'full' : 'installments', nmens: d.n > 1 ? d.n : '', maxmens: d.offre === 'Business' && bpV2() ? pricing().Business.mensualise.maxX : '', desc: 'Programme ' + d.label } : {};
     var parts = String(l.nom || '').trim().split(/\s+/);
     return { type: rdvType(d ? d.offre : 'Elite'), prenom: parts[0] || '', nom: parts.slice(1).join(' '), email: l.email || '', tel: l.telephone || '' };
   }

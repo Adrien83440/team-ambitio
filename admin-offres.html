@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Offres & formules</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}
+</script>
+<link rel="stylesheet" href="sales.css"/>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   admin-offres.html — Offres & formules (14/10/2026)
+   Interrupteur du nouveau format Business Phénix (6 mois, 10 séances) :
+   _config/business_phenix. Tant qu'il est éteint, rien ne change pour
+   personne. Allumé : les closers voient le modèle de contrat 6 mois, les
+   prix BP PIF / BP MENS et 6 mensualités maximum. Un client est en nouveau
+   format quand il a signé le nouveau modèle (définitif, même si on éteint).
+   Admin uniquement (règle Firestore _config/business_phenix).
+   ═══════════════════════════════════════════════════════════════════════ */
+.of{padding:20px 24px 80px;max-width:1080px;margin:0 auto;font-family:'Figtree',sans-serif}
+.of-top{display:flex;align-items:center;gap:14px;margin-bottom:20px;flex-wrap:wrap}
+.of-top h1{font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:800;letter-spacing:-.3px}
+.of-top small{font-size:12px;color:rgba(255,255,255,.48);display:block;margin-top:2px}
+.of-ic{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#fb923c,#f97316);display:flex;align-items:center;justify-content:center;font-size:19px;box-shadow:0 3px 12px rgba(249,115,22,.35);flex-shrink:0}
+.card{background:var(--bg2,#0f0f1a);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:16px 18px;margin-bottom:16px}
+.card h2{font-size:12px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card h2 .sp{flex:1}
+.hint{font-size:12px;color:rgba(255,255,255,.45);line-height:1.6}
+.bb{padding:9px 16px;border:none;border-radius:8px;font-family:'Figtree',sans-serif;font-size:12.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s;line-height:1.3}
+.bb-go{background:#f97316;color:#140a02}.bb-go:hover{background:#fb923c}
+.bb-o{background:0;border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.65)}.bb-o:hover{color:#fff;border-color:rgba(255,255,255,.28)}
+.bb-p{background:#818cf8;color:#0b0b14}.bb-p:hover{background:#a5b4fc}
+.bb[disabled]{opacity:.4;cursor:not-allowed}
+.bi{padding:8px 12px;background:var(--bg3,#141420);border:1.5px solid rgba(255,255,255,.07);border-radius:8px;color:#fff;font-family:'Figtree',sans-serif;font-size:13px;outline:0;box-sizing:border-box;width:100%}
+.bi:focus{border-color:#f97316}
+.state{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:14px 16px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.02);margin-bottom:14px}
+.state.on{border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.06)}
+.state .dot{width:12px;height:12px;border-radius:50%;background:#94a3b8;flex-shrink:0}
+.state.on .dot{background:#34d399;box-shadow:0 0 0 4px rgba(52,211,153,.15)}
+.state .t{font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:800}
+.state .d{font-size:12.5px;color:rgba(255,255,255,.55);margin-top:2px}
+.state .sp{flex:1}
+.cmp{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin-bottom:14px}
+.cmp > div{border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:12px 14px;font-size:12.5px;line-height:1.7}
+.cmp b{display:block;font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:6px}
+.cmp .new{border-color:rgba(249,115,22,.35)}
+.chk{list-style:none;padding:0;margin:0 0 14px}
+.chk li{display:flex;gap:10px;align-items:flex-start;font-size:13px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.chk li:last-child{border-bottom:0}
+.chk .i{width:20px;flex-shrink:0;text-align:center}
+.chk .ok{color:#34d399}.chk .ko{color:#f87171}.chk .wa{color:#fbbf24}
+.row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px}
+.row:last-child{border-bottom:0}
+.row input[type=checkbox]{width:16px;height:16px;accent-color:#f97316}
+.row .m{color:rgba(255,255,255,.45);font-size:11.5px}
+.hist{font-size:12px;color:rgba(255,255,255,.6);line-height:1.8}
+.locked{padding:80px 24px;text-align:center;color:rgba(255,255,255,.5);font-family:'Figtree',sans-serif}
+.of-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;background:#1f2937;color:#fff;padding:10px 18px;border-radius:10px;font-family:'Figtree',sans-serif;font-size:13px;transition:all .25s;z-index:9999;pointer-events:none}
+.of-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.of-toast.err{background:#7f1d1d}
+@media (max-width:720px){.of{padding:14px 16px 80px}.cmp{grid-template-columns:minmax(0,1fr)}}
+</style>
+</head>
+<body>
+<div class="of" id="mainView" style="display:none">
+  <div class="of-top">
+    <div class="of-ic">🔥</div>
+    <div><h1>Offres &amp; formules</h1><small>Démarrage du nouveau format Business Phénix — tous les prochains clients Business partent sur 6 mois</small></div>
+  </div>
+
+  <div class="card">
+    <h2>🚀 Business Phénix — nouveau format</h2>
+    <div class="state" id="bpState"><span class="dot"></span><div><div class="t" id="bpStateT">Chargement…</div><div class="d" id="bpStateD"></div></div><span class="sp"></span><span id="bpBtn"></span></div>
+
+    <div class="cmp">
+      <div><b>Ancienne formule 12 mois</b>12 mois · 1 coaching par mois · vidéos<br>Clients déjà inscrits : <strong>inchangés</strong>, jusqu'au bout de leur contrat.</div>
+      <div class="new"><b>Nouveau format — 6 mois</b>RDV audit business + 10 coachings toutes les deux semaines · coach référent · parcours à jalons · sans vidéo<br>BP PIF 5 000 € HT · BP MENS 6 000 € HT en 6 mensualités max</div>
+    </div>
+
+    <div class="hint" style="margin-bottom:8px">Avant de démarrer :</div>
+    <ul class="chk" id="bpChecklist"></ul>
+    <div class="hint">Une fois démarré : les closers voient le modèle de contrat 6 mois (les modèles BP12 sont masqués pour eux, pas supprimés), les prix et 6 mensualités maximum ; tout client qui signe ce modèle devient « Business Phénix » (fiche coaching 10 séances, parcours Academy Business). Revenir en arrière ne change rien pour les clients déjà signés.</div>
+  </div>
+
+  <div class="card">
+    <h2>✍️ Modèle de contrat du nouveau format</h2>
+    <div class="hint" style="margin-bottom:8px">Le contrat signé décide du format du client. Coche le (ou les) modèle(s) « Business Phénix 6 mois ».</div>
+    <div id="tplList"><div class="hint">Chargement…</div></div>
+  </div>
+
+  <div class="card">
+    <h2>💬 Communauté Business</h2>
+    <div class="hint" style="margin-bottom:8px">Lien du groupe WhatsApp « Communauté Business » (envoyé par Marine à l'onboarding). À remplir quand le groupe existe.</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap"><input class="bi" id="communityUrl" type="url" placeholder="https://chat.whatsapp.com/…" style="flex:1;min-width:220px"/><button class="bb bb-p" data-action="saveCommunity">Enregistrer</button></div>
+  </div>
+
+  <div class="card">
+    <h2>➕ Ajout de séances (Business)</h2>
+    <div class="hint" style="margin-bottom:8px">Personnes autorisées à rajouter des séances à un client Business au-delà des 10 prévues (avec motif obligatoire et historique). Rien n'apparaît côté client hormis le compteur.</div>
+    <div id="granterList"><div class="hint">Chargement…</div></div>
+  </div>
+
+  <div class="card">
+    <h2>🕓 Historique</h2>
+    <div class="hist" id="bpHist">—</div>
+  </div>
+</div>
+<div class="locked" id="lockedView" style="display:none">🔒 Réservé aux administrateurs</div>
+<div class="of-toast" id="toast"></div>
+
+<script>
+(function () {
+var REF = function () { return firebase.firestore().collection('_config').doc('business_phenix'); };
+var state = { cfg: {}, templates: [], members: [] };
+
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function toast(msg, err) {
+  var t = $('toast'); t.textContent = msg; t.className = 'of-toast show' + (err ? ' err' : '');
+  clearTimeout(toast._t); toast._t = setTimeout(function () { t.className = 'of-toast'; }, 3200);
+}
+function pad2(n) { return (n < 10 ? '0' : '') + n; }
+function frDateTime(v) {
+  var d = v && v.toDate ? v.toDate() : (v ? new Date(v) : null);
+  if (!d || isNaN(d.getTime())) return '—';
+  return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear() + ' à ' + pad2(d.getHours()) + 'h' + pad2(d.getMinutes());
+}
+function me() {
+  var u = firebase.auth().currentUser || {};
+  var name = localStorage.getItem('ambitio_name') || u.displayName || u.email || '';
+  return { uid: u.uid || '', name: name };
+}
+function stamp() {
+  var m = me();
+  return { updatedAt: firebase.firestore.FieldValue.serverTimestamp(), updatedBy: m.uid, updatedByName: m.name };
+}
+function save(patch) {
+  var p = stamp();
+  for (var k in patch) if (patch.hasOwnProperty(k)) p[k] = patch[k];
+  return REF().set(p, { merge: true });
+}
+function looksLikeBp6m(name) {
+  var n = String(name || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return n.indexOf('business') >= 0 && /6\s*mois/.test(n);
+}
+
+/* ═══ RENDU ═══ */
+function render() {
+  var c = state.cfg || {};
+  var on = c.active === true;
+  var tpl = (c.templateIds || []).length;
+  $('bpState').className = 'state' + (on ? ' on' : '');
+  $('bpStateT').textContent = on ? 'Nouveau format actif' : 'Ancienne formule en vigueur';
+  $('bpStateD').textContent = on
+    ? 'Démarré le ' + frDateTime(c.activatedAt) + (c.activatedByName ? ' par ' + c.activatedByName : '')
+    : 'Les closers vendent encore la formule 12 mois. Rien ne change tant que tu n\'as pas démarré.';
+  $('bpBtn').innerHTML = on
+    ? '<button class="bb bb-o" data-action="deactivate">Revenir à l\'ancienne formule</button>'
+    : '<button class="bb bb-go" data-action="activate"' + (tpl ? '' : ' disabled title="Choisis d\'abord le modèle de contrat"') + '>🚀 Démarrer le nouveau format</button>';
+
+  var items = [
+    { s: tpl ? 'ok' : 'ko', t: tpl ? 'Modèle de contrat 6 mois choisi (' + tpl + ')' : 'Aucun modèle de contrat 6 mois choisi — démarrage bloqué' },
+    { s: c.communityUrl ? 'ok' : 'wa', t: c.communityUrl ? 'Lien de la communauté Business renseigné' : 'Lien de la communauté Business à renseigner (non bloquant)' },
+    { s: (c.sessionGranters || []).length ? 'ok' : 'wa', t: (c.sessionGranters || []).length ? 'Personnes autorisées à ajouter des séances : ' + (c.sessionGranters || []).length : 'Personne n\'est autorisé à ajouter des séances (non bloquant)' },
+    { s: 'wa', t: 'Côté Academy : le cours « Business Phénix » (sans vidéo) doit exister et être choisi dans les réglages du parcours Business' }
+  ];
+  $('bpChecklist').innerHTML = items.map(function (it) {
+    var ic = it.s === 'ok' ? '✓' : (it.s === 'ko' ? '✕' : '!');
+    return '<li><span class="i ' + it.s + '">' + ic + '</span><span>' + esc(it.t) + '</span></li>';
+  }).join('');
+
+  $('communityUrl').value = c.communityUrl || '';
+  renderTemplates();
+  renderGranters();
+
+  var h = (c.history || []).slice().reverse();
+  $('bpHist').innerHTML = h.length ? h.map(function (e) {
+    var lbl = e.action === 'activate' ? '🚀 Nouveau format démarré' : (e.action === 'deactivate' ? '↩︎ Retour à l\'ancienne formule' : esc(e.action));
+    return lbl + ' — ' + frDateTime(e.at) + (e.byName ? ' · ' + esc(e.byName) : '');
+  }).join('<br>') : 'Aucune bascule pour l\'instant.';
+}
+
+function renderTemplates() {
+  var sel = state.cfg.templateIds || [];
+  if (!state.templates.length) { $('tplList').innerHTML = '<div class="hint">Aucun modèle de contrat trouvé.</div>'; return; }
+  var list = state.templates.slice().sort(function (a, b) {
+    var sa = looksLikeBp6m(a.name) ? 0 : 1, sb = looksLikeBp6m(b.name) ? 0 : 1;
+    return sa - sb || String(a.name).localeCompare(String(b.name));
+  });
+  $('tplList').innerHTML = list.map(function (t) {
+    var checked = sel.indexOf(t.id) >= 0;
+    return '<label class="row"><input type="checkbox" data-tpl="' + esc(t.id) + '"' + (checked ? ' checked' : '') + '/>'
+      + '<span>' + esc(t.name || t.id) + (looksLikeBp6m(t.name) ? ' <span class="m">· suggéré</span>' : '') + '</span>'
+      + '<span class="m" style="margin-left:auto">' + esc(t.audience || '') + '</span></label>';
+  }).join('');
+}
+
+function renderGranters() {
+  var sel = state.cfg.sessionGranters || [];
+  var admins = state.members.filter(function (m) { return m.firebaseUid && (m.role === 'admin' || m.appRole === 'admin' || sel.indexOf(m.firebaseUid) >= 0); });
+  if (!admins.length) admins = state.members.filter(function (m) { return m.firebaseUid; });
+  if (!admins.length) { $('granterList').innerHTML = '<div class="hint">Équipe en cours de chargement…</div>'; return; }
+  $('granterList').innerHTML = admins.map(function (m) {
+    var checked = sel.indexOf(m.firebaseUid) >= 0;
+    return '<label class="row"><input type="checkbox" data-granter="' + esc(m.firebaseUid) + '"' + (checked ? ' checked' : '') + '/>'
+      + '<span>' + esc(m.name || m.slug) + '</span><span class="m" style="margin-left:auto">' + esc(m.role || '') + '</span></label>';
+  }).join('');
+}
+
+/* ═══ DONNÉES ═══ */
+function loadMembers() {
+  var list = window.TEAM_MEMBERS_ACTIVE || window.TEAM_MEMBERS_LIST || [];
+  state.members = list.map(function (m) { return { slug: m.slug || m.id, name: m.name || m.displayName, role: m.role, appRole: m.appRole, firebaseUid: m.firebaseUid }; });
+  renderGranters();
+}
+function load() {
+  REF().onSnapshot(function (s) { state.cfg = s.exists ? s.data() : {}; render(); },
+    function (e) { toast('Lecture impossible : ' + e.message, true); });
+  firebase.firestore().collection('signature_templates').get().then(function (qs) {
+    state.templates = [];
+    qs.forEach(function (d) { var x = d.data() || {}; state.templates.push({ id: d.id, name: x.name || x.title || '', audience: x.audience || '' }); });
+    renderTemplates();
+  }).catch(function (e) { $('tplList').innerHTML = '<div class="hint">Lecture des modèles impossible : ' + esc(e.message) + '</div>'; });
+  loadMembers();
+  window.addEventListener('team-members-loaded', loadMembers);
+}
+
+/* ═══ ACTIONS ═══ */
+document.addEventListener('change', function (e) {
+  var t = e.target;
+  if (t.hasAttribute('data-tpl')) {
+    var ids = (state.cfg.templateIds || []).slice(), id = t.getAttribute('data-tpl'), i = ids.indexOf(id);
+    if (t.checked && i < 0) ids.push(id);
+    if (!t.checked && i >= 0) ids.splice(i, 1);
+    if (!ids.length && state.cfg.active === true && !confirm('Le nouveau format est actif : sans modèle coché, les closers n\'auront plus de contrat Business à faire signer. Continuer ?')) { t.checked = true; return; }
+    save({ templateIds: ids }).then(function () { toast('Modèles enregistrés'); }).catch(function (er) { toast(er.message, true); });
+  }
+  if (t.hasAttribute('data-granter')) {
+    var g = (state.cfg.sessionGranters || []).slice(), uid = t.getAttribute('data-granter'), j = g.indexOf(uid);
+    if (t.checked && j < 0) g.push(uid);
+    if (!t.checked && j >= 0) g.splice(j, 1);
+    save({ sessionGranters: g }).then(function () { toast('Autorisations enregistrées'); }).catch(function (er) { toast(er.message, true); });
+  }
+});
+
+document.addEventListener('click', function (e) {
+  var b = e.target.closest ? e.target.closest('[data-action]') : null;
+  if (!b || b.disabled) return;
+  var a = b.getAttribute('data-action');
+  var m = me();
+  if (a === 'activate') {
+    if (!(state.cfg.templateIds || []).length) { toast('Choisis d\'abord le modèle de contrat 6 mois', true); return; }
+    var typed = prompt('Démarrer le nouveau format Business Phénix ?\n\nÀ partir de maintenant, les closers vendent la formule 6 mois (BP PIF 5 000 € HT / BP MENS 6 000 € HT, 6 mensualités max). Les clients déjà inscrits ne changent pas.\n\nTape DÉMARRER pour confirmer.');
+    if (typed == null) return;
+    if (String(typed).trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') !== 'DEMARRER') { toast('Confirmation incorrecte — rien n\'a changé', true); return; }
+    var nowIso = new Date().toISOString();
+    var patch = { active: true, history: firebase.firestore.FieldValue.arrayUnion({ action: 'activate', at: nowIso, by: m.uid, byName: m.name }) };
+    if (!state.cfg.activatedAt) { patch.activatedAt = firebase.firestore.FieldValue.serverTimestamp(); patch.activatedBy = m.uid; patch.activatedByName = m.name; }
+    else { patch.reactivatedAt = firebase.firestore.FieldValue.serverTimestamp(); }
+    b.disabled = true;
+    save(patch).then(function () { toast('🚀 Nouveau format démarré'); }).catch(function (er) { toast(er.message, true); b.disabled = false; });
+    return;
+  }
+  if (a === 'deactivate') {
+    if (!confirm('Revenir à l\'ancienne formule 12 mois pour les PROCHAINS closes ?\n\nLes clients qui ont déjà signé le contrat 6 mois restent en nouveau format.')) return;
+    b.disabled = true;
+    save({ active: false, deactivatedAt: firebase.firestore.FieldValue.serverTimestamp(), history: firebase.firestore.FieldValue.arrayUnion({ action: 'deactivate', at: new Date().toISOString(), by: m.uid, byName: m.name }) })
+      .then(function () { toast('Retour à l\'ancienne formule'); }).catch(function (er) { toast(er.message, true); b.disabled = false; });
+    return;
+  }
+  if (a === 'saveCommunity') {
+    var url = $('communityUrl').value.trim();
+    if (url && !/^https?:\/\//i.test(url)) { toast('Le lien doit commencer par https://', true); return; }
+    save({ communityUrl: url }).then(function () { toast('Lien enregistré'); }).catch(function (er) { toast(er.message, true); });
+  }
+});
+
+/* ═══ BOOT ═══ */
+firebase.auth().onAuthStateChanged(function (u) {
+  if (!u) return;
+  var role = localStorage.getItem('ambitio_role') || 'coach';
+  if (role !== 'admin') { $('lockedView').style.display = ''; return; }
+  $('mainView').style.display = '';
+  load();
+});
+})();
+</script>
+<script src="nav.js"></script>
+</body>
+</html>

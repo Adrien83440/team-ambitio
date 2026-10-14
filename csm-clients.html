@@ -697,6 +697,7 @@ body {
 <div class="csm-toast" id="toast"></div>
 
 <script src="nav.js"></script>
+<script src="bp-credits.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════════════════════
    csm-dashboard.html — Customer Success Manager
@@ -1940,6 +1941,22 @@ function computeSignals(c){
       desc: 'Le lead "' + esc(c._lead.nom||c._lead.email) + '" existe mais isClient=false',
       actionLabel: 'Marquer client',
       actionFn: 'csmMarkLeadAsClient(\'' + c.id + '\')'
+    });
+  }
+
+  // 1 bis. Business Phénix nouveau format (14/10/2026) : alertes du compteur
+  // de séances, lues sur la fiche (les absences détectées dans l'agenda et
+  // les 2 créneaux consécutifs manqués sont dans le Cockpit CSM / la fiche
+  // coaching, qui chargent les RDV).
+  if(coachingDoc && window.BPCredits && BPCredits.isBusinessV2(coachingDoc.programme)){
+    var bpk = BPCredits.compute(coachingDoc, {});
+    bpk.alertes.forEach(function(a){
+      signals.push({
+        level: a.niveau === 'rouge' ? 'crit' : (a.niveau === 'orange' ? 'warn' : 'info'), icon: '🔥',
+        title: 'Business Phénix — ' + (a.code === 'seance1_j7' ? 'séance 1 non tenue' : a.code === 'retard' ? 'séances en retard' : a.code === 'deux_non_tenus' ? 'créneaux non tenus' : 'accompagnement terminé'),
+        desc: esc(a.texte) + ' · ' + bpk.consumed + '/' + bpk.total + ' séances',
+        actionLabel: '', actionFn: ''
+      });
     });
   }
 

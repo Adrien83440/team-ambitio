@@ -93,6 +93,58 @@
     }
   };
 
+  /* ═══ Business Phénix — nouveau format 6 mois (14/10/2026) ═══════════
+     Interrupteur _config/business_phenix.active (page Offres & formules).
+     Éteint : WIZARD_PRICING ci-dessus, inchangé. Allumé : Business en
+     6 mensualités maximum, 1 000 € HT encaissés par mois en MENS. La clé de
+     commission reste 'BP 12' (montants identiques, barèmes de l'équipe
+     indexés dessus) : seul l'AFFICHAGE devient BP PIF / BP MENS. Les
+     lecteurs passent par wizardPricing(), jamais par la constante. */
+  var WIZARD_PRICING_BP_V2 = {
+    'Elite': WIZARD_PRICING.Elite,
+    'Business': {
+      commOffre: 'BP 12',
+      format: 'v2_6mois',
+      pif:        { contracte: 5000, encaisse: [5000] },
+      mensualise: { contracte: 6000, maxX: 6, encaisse: [1000] }
+    }
+  };
+  var BP_CFG = { data: {}, loaded: false, unsub: null };
+  function startBusinessConfig() {
+    if (BP_CFG.started) return;
+    BP_CFG.started = true;
+    try {
+      firebase.auth().onAuthStateChanged(function (u) {
+        if (!u) { if (BP_CFG.unsub) { BP_CFG.unsub(); BP_CFG.unsub = null; } return; }
+        if (BP_CFG.unsub) return;
+        BP_CFG.unsub = db().collection('_config').doc('business_phenix').onSnapshot(function (snap) {
+          BP_CFG.data = snap.exists ? (snap.data() || {}) : {};
+          BP_CFG.loaded = true;
+          try { window.dispatchEvent(new CustomEvent('business-config-changed', { detail: BP_CFG.data })); } catch (e) {}
+        }, function (e) {
+          BP_CFG.loaded = true;
+          if (window.console) console.warn('[AlteoreFlow] _config/business_phenix illisible :', e && e.message);
+        });
+      });
+    } catch (e) { if (window.console) console.warn('[AlteoreFlow] config Business non chargée :', e && e.message); }
+  }
+  function businessConfig() { return BP_CFG.data || {}; }
+  function businessV2Active() { return !!(BP_CFG.data && BP_CFG.data.active === true); }
+  function wizardPricing() { return businessV2Active() ? WIZARD_PRICING_BP_V2 : WIZARD_PRICING; }
+  /* Nomenclature affichée (14/10/2026) : BP PIF / BP MENS / EP PIF / EP MENS,
+     calculée depuis la clé stockée + subtype — l'historique n'est jamais
+     réécrit. Un deal de setting (subtype selfBooking/noBooking) n'a pas de
+     modalité de paiement : « BP » / « EP ». */
+  function offreCode(offre, subtype) {
+    var o = String(offre || '');
+    var fam = (o === 'BP 12' || o === 'Business') ? 'BP' : ((o === 'Elite' || o === 'EP') ? 'EP' : null);
+    if (o === 'BP 6') return 'BP 6 (ancienne offre 2 000 €)';
+    if (!fam) return o;
+    if (subtype === 'pif') return fam + ' PIF';
+    if (subtype === 'mensualise') return fam + ' MENS';
+    return fam;
+  }
+
   /* Statuts fiche comptés comme « SET » dans le rapport Setting.
      set_booking = action posée quand un RDV setter est réellement créé. */
   var SET_ACTIONS = { set: 1, set_booking: 1, rdv_pose: 1 };
@@ -1093,7 +1145,7 @@
         closedBy: m.uid, closedByName: m.name,
         updatedAt: ts(),
         timeline_history: arrayUnion({
-          text: (alreadyClient ? '✎ Close mis à jour ' : '🏆 Close ') + (sb ? '(Self Booking)' : '(Setting NB)') + ' — ' + cd.offre + ' · '
+          text: (alreadyClient ? '✎ Close mis à jour ' : '🏆 Close ') + (sb ? '(Self Booking)' : '(Setting NB)') + ' — ' + offreCode(cd.offre, cd.subtype) + ' · '
             + (cd.subtype === 'pif' ? 'PIF' : 'Mensualisé') + ' · encaissé ' + cd.collecte + ' € HT',
           date: frDateTime(), color: '#10b981'
         })
@@ -1275,6 +1327,8 @@
   }
 
   /* ═══ Export ═══════════════════════════════════════════════════════════ */
+  startBusinessConfig();
+
   window.AlteoreFlow = {
     OUTCOMES: OUTCOMES,
     OUTCOME_ORDER: OUTCOME_ORDER,
@@ -1324,6 +1378,11 @@
     cancellationLabel: cancellationLabel,
     roleLabelAny: roleLabelAny,
     WIZARD_PRICING: WIZARD_PRICING,
+    WIZARD_PRICING_BP_V2: WIZARD_PRICING_BP_V2,
+    wizardPricing: wizardPricing,
+    businessConfig: businessConfig,
+    businessV2Active: businessV2Active,
+    offreCode: offreCode,
     resolveClosingActors: resolveClosingActors,
     applyFicheClose: applyFicheClose,
     createCommissionDeals: createCommissionDeals,

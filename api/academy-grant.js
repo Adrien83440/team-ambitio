@@ -57,6 +57,12 @@ function tokenMatches(reqData, token) {
   return false;
 }
 
+/* « 29/10/2026 » → « 2026-10-29 » (demarragePossibleLe de sign-session). */
+function frToIso(s) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(s || '').trim());
+  return m ? m[3] + '-' + m[2] + '-' + m[1] : '';
+}
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'method_not_allowed' });
@@ -136,7 +142,10 @@ module.exports = async (req, res) => {
       const fRes = await fetch(ACADEMY_URL + '/api/bridge/grant-access', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-bridge-key': key },
-        body: JSON.stringify({ email: clientEmail, name: clientName, contractName: templateName, signedAt: signedAtIso, courseId: templateCourseId || undefined }),
+        /* demarrageLe (14/10/2026) : date de démarrage posée à la signature
+           (signature si renonciation au délai de rétractation, sinon J+15) —
+           l'Academy y fait partir les 180 jours du Business nouveau format. */
+        body: JSON.stringify({ email: clientEmail, name: clientName, contractName: templateName, signedAt: signedAtIso, demarrageLe: frToIso(r.demarragePossibleLe) || undefined, courseId: templateCourseId || undefined }),
       });
       j = await fRes.json().catch(() => null);
     } catch (e) {

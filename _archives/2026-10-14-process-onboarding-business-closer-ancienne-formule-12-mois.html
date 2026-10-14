@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Process onboarding Business Phénix 12 mois</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#0F2440;
+    --blue:#1F4E9E;
+    --blue-soft:#DDE8F8;
+    --bg:#EEF3F9;
+    --surface:#FFFFFF;
+    --orange:#F47B20;
+    --orange-soft:#FFE8D4;
+    --ink:#0F2440;
+    --muted:#55677F;
+    --line:#CBD8E8;
+    --ok:#1B7F5A;
+    --display:"Bricolage Grotesque","Instrument Sans",system-ui,sans-serif;
+    --body:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:var(--body);font-size:17px;line-height:1.55;
+  }
+  a{color:var(--blue)}
+  .wrap{max-width:780px;margin:0 auto;padding:0 20px}
+
+  /* ---------- En-tête ---------- */
+  .top{background:var(--navy);color:#fff;padding:44px 0 40px}
+  .top h1{
+    font-family:var(--display);font-weight:800;
+    font-size:clamp(2rem,6vw,3.1rem);line-height:1.04;letter-spacing:-.02em;
+    margin:0 0 10px;
+  }
+  .top .formule{
+    display:inline-block;background:var(--orange);color:var(--navy);
+    font-weight:700;font-size:.95rem;padding:4px 12px;border-radius:999px;margin-bottom:18px;
+  }
+  .top p{margin:0;max-width:56ch;color:#C9D6E8}
+
+  /* ---------- Personnalisation ---------- */
+  .perso{
+    background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    padding:20px 22px;margin:-22px 0 34px;position:relative;
+  }
+  .perso h2{font-family:var(--display);font-size:1.15rem;margin:0 0 4px}
+  .perso > p{margin:0 0 14px;color:var(--muted);font-size:.95rem}
+  .fields{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .field label{display:block;font-weight:600;font-size:.9rem;margin-bottom:5px}
+  .field input{
+    width:100%;font:inherit;color:var(--ink);background:#fff;
+    border:1.5px solid var(--line);border-radius:9px;padding:10px 12px;
+  }
+  .field input:focus-visible{outline:3px solid var(--orange);outline-offset:1px;border-color:var(--navy)}
+
+  /* ---------- Étapes ---------- */
+  .avancement{font-weight:600;color:var(--muted);margin:0 0 18px;font-size:.95rem}
+  .avancement strong{color:var(--ink)}
+  ol.etapes{list-style:none;margin:0;padding:0}
+  .etape{display:grid;grid-template-columns:52px 1fr;column-gap:18px;position:relative;padding-bottom:40px}
+  .etape::before{
+    content:"";position:absolute;left:25px;top:52px;bottom:0;width:2px;background:var(--line);
+  }
+  .etape:last-child::before{display:none}
+  .num{
+    width:52px;height:52px;border-radius:50%;background:var(--orange);color:var(--navy);
+    font-family:var(--display);font-weight:800;font-size:1.5rem;
+    display:grid;place-items:center;position:relative;z-index:1;
+  }
+  .etape.faite .num{background:var(--ok);color:#fff}
+  .etape.relais .num{background:var(--navy);color:#fff}
+  .corps{min-width:0}
+  .corps h2{
+    font-family:var(--display);font-weight:800;font-size:1.55rem;line-height:1.15;
+    letter-spacing:-.01em;margin:9px 0 10px;
+  }
+  .corps p{margin:0 0 14px}
+  .corps ul{margin:0 0 14px;padding-left:1.15em}
+  .corps li{margin-bottom:4px}
+  .quand{color:var(--muted);font-weight:600;font-size:.95rem;margin:0 0 6px !important}
+
+  .fait{
+    display:inline-flex;align-items:center;gap:9px;margin-top:6px;
+    font-weight:600;font-size:.95rem;cursor:pointer;user-select:none;
+  }
+  .fait input{width:20px;height:20px;accent-color:var(--ok);cursor:pointer}
+
+  /* ---------- Boutons ---------- */
+  .btn{
+    font:inherit;font-weight:700;border:0;border-radius:10px;cursor:pointer;
+    padding:11px 18px;text-decoration:none;display:inline-block;line-height:1.2;
+  }
+  .btn-copier{background:var(--orange);color:var(--navy)}
+  .btn-copier:hover{background:#FF8A33}
+  .btn-copier.copie{background:var(--ok);color:#fff}
+  .btn-lien{background:var(--navy);color:#fff}
+  .btn-lien:hover{background:var(--blue)}
+  .btn-mini{
+    background:transparent;color:var(--blue);border:1.5px solid var(--line);
+    padding:6px 12px;font-size:.88rem;border-radius:8px;
+  }
+  .btn-mini:hover{border-color:var(--blue)}
+  .btn-mini.copie{color:var(--ok);border-color:var(--ok)}
+  .btn:focus-visible,.choix input:focus-visible + span{outline:3px solid var(--navy);outline-offset:2px}
+
+  /* ---------- Choix RDV ---------- */
+  .choix{display:inline-flex;background:var(--blue-soft);border-radius:10px;padding:4px;margin:0 0 14px;flex-wrap:wrap}
+  .choix label{cursor:pointer}
+  .choix input{position:absolute;opacity:0;pointer-events:none}
+  .choix span{display:block;padding:8px 14px;border-radius:7px;font-weight:600;font-size:.93rem;color:var(--blue)}
+  .choix input:checked + span{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(15,36,64,.18)}
+  .choix-titre{font-weight:600;font-size:.95rem;margin:0 0 6px !important}
+  #champ-date{max-width:340px;margin:0 0 14px}
+
+  /* ---------- Message WhatsApp ---------- */
+  .message{
+    background:var(--blue-soft);border-radius:14px;padding:18px 18px 16px;margin:0 0 16px;
+  }
+  .message-titre{font-weight:700;font-size:.95rem;margin:0 0 12px;color:var(--blue)}
+  .bulle{
+    background:var(--surface);border-radius:16px 16px 4px 16px;
+    padding:14px 16px;margin-left:auto;max-width:560px;
+    white-space:pre-wrap;overflow-wrap:anywhere;font-size:.96rem;line-height:1.5;
+    box-shadow:0 1px 1px rgba(15,36,64,.12);
+  }
+  .message-actions{display:flex;justify-content:flex-end;margin-top:12px}
+
+  /* ---------- Liens & contacts ---------- */
+  .lignes{list-style:none !important;padding:0 !important;margin:0 0 16px !important;
+    background:var(--surface);border:1px solid var(--line);border-radius:12px}
+  .lignes li{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:11px 14px;margin:0;border-top:1px solid var(--line);flex-wrap:wrap;
+  }
+  .lignes li:first-child{border-top:0}
+  .lignes .nom{font-weight:600}
+  .lignes .detail{color:var(--muted);font-size:.9rem;display:block;font-weight:400}
+  .lignes .tel{font-variant-numeric:tabular-nums;font-weight:600;margin-right:10px}
+  .lignes .actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+  .note{
+    border-left:4px solid var(--orange);background:var(--orange-soft);
+    padding:12px 16px;border-radius:0 10px 10px 0;margin:0 0 16px;font-size:.96rem;
+  }
+  details{margin:0 0 16px}
+  summary{cursor:pointer;font-weight:700;color:var(--blue);padding:4px 0}
+  details .message{margin-top:10px}
+
+  /* ---------- Pied ---------- */
+  .aussi{
+    background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    padding:20px 22px;margin:4px 0 28px;
+  }
+  .aussi h2{font-family:var(--display);font-size:1.15rem;margin:0 0 8px}
+  .aussi ul{margin:0;padding-left:1.15em}
+  footer{color:var(--muted);font-size:.88rem;padding:0 0 44px}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+  @media (max-width:560px){
+    body{font-size:16px}
+    .fields{grid-template-columns:1fr}
+    .etape{grid-template-columns:40px 1fr;column-gap:12px}
+    .num{width:40px;height:40px;font-size:1.2rem}
+    .etape::before{left:19px;top:40px}
+    .corps h2{font-size:1.3rem;margin-top:5px}
+    .message{padding:14px 12px}
+    .message-actions .btn{width:100%;text-align:center}
+  }
+  @media print{
+    body{background:#fff}
+    .top{background:#fff;color:var(--ink);padding:0 0 12px}
+    .top p{color:var(--ink)}
+    .perso,.btn,.fait,.choix,.avancement{display:none !important}
+    .etape{break-inside:avoid}
+    details{display:block}
+  }
+</style>
+</head>
+<body>
+<div style="background:#3A4258;color:#fff;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:15px;line-height:1.5;padding:12px 20px;text-align:center"><strong>Archivé le 14/10/2026</strong> — ancienne formule 12 mois, référence des clients existants. Pour un nouveau client Business : <a href="../process-onboarding-business-closer.html" style="color:#FFD9BF">process d’onboarding actuel</a>.</div>
+
+<header class="top">
+  <div class="wrap">
+    <span class="formule">Formule 5K / 6K avec coaching 1:1</span>
+    <h1>Process onboarding Business Phénix 12 mois</h1>
+    <p>Ce process permet, une fois le paiement effectué, de simplifier pour le closer la phase d’onboarding du client. Trois actions, puis Marine prend le relais.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="perso" aria-labelledby="perso-titre">
+    <h2 id="perso-titre">Personnaliser les messages</h2>
+    <p>Renseigner les deux prénoms : les messages WhatsApp ci-dessous se mettent à jour, prêts à copier-coller.</p>
+    <div class="fields">
+      <div class="field">
+        <label for="in-client">Prénom du client</label>
+        <input id="in-client" type="text" autocomplete="off" placeholder="Ex. Sophie">
+      </div>
+      <div class="field">
+        <label for="in-closer">Prénom du closer</label>
+        <input id="in-closer" type="text" autocomplete="off" placeholder="Ex. Thomas">
+      </div>
+    </div>
+  </section>
+
+  <p class="avancement" id="avancement" aria-live="polite"></p>
+
+  <ol class="etapes">
+
+    <!-- ============ ÉTAPE 1 ============ -->
+    <li class="etape" data-etape>
+      <div class="num" aria-hidden="true">1</div>
+      <div class="corps">
+        <h2>Caler le RDV 72h pendant le closing</h2>
+        <p class="quand">Juste après le paiement, avant de raccrocher</p>
+        <p>Réserver le RDV 72h avec le client, comme indiqué dans les étapes de closing du logiciel. S’il n’a pas son agenda sous la main, il réservera lui-même avec le lien envoyé à l’étape 2.</p>
+        <p>Lui annoncer le questionnaire de démarrage : il est <strong>obligatoire</strong> et doit être rempli avant ce rendez-vous.</p>
+        <p><a class="btn btn-lien" href="https://team.alteore.com/booking.html?type=rdv_urgent_post" target="_blank" rel="noopener">Ouvrir la réservation du RDV 72h</a></p>
+        <label class="fait"><input type="checkbox" data-fait> Étape faite</label>
+      </div>
+    </li>
+
+    <!-- ============ ÉTAPE 2 ============ -->
+    <li class="etape" data-etape>
+      <div class="num" aria-hidden="true">2</div>
+      <div class="corps">
+        <h2>Envoyer le WhatsApp des liens</h2>
+        <p class="quand">En message privé au client, dans la foulée du call</p>
+        <p>Un seul message qui contient tout ce dont le client a besoin pour démarrer : le questionnaire obligatoire, le RDV 72h, le livret d’accueil et la page qui regroupe tous les liens d’onboarding.</p>
+
+        <p class="choix-titre" id="choix-titre">Le RDV 72h est…</p>
+        <div class="choix" role="radiogroup" aria-labelledby="choix-titre">
+          <label><input type="radio" name="rdv" value="a-reserver" checked><span>à réserver par le client</span></label>
+          <label><input type="radio" name="rdv" value="reserve"><span>déjà réservé pendant le call</span></label>
+        </div>
+        <div class="field" id="champ-date" hidden>
+          <label for="in-date">Jour et heure du RDV 72h</label>
+          <input id="in-date" type="text" autocomplete="off" placeholder="Ex. jeudi 15 octobre à 10h">
+        </div>
+
+        <div class="message">
+          <p class="message-titre">Message WhatsApp — les liens de démarrage</p>
+          <div class="bulle" id="msg-liens"></div>
+          <div class="message-actions">
+            <button class="btn btn-copier" type="button" data-copier="liens">Copier le message</button>
+          </div>
+        </div>
+
+        <details>
+          <summary>Si le questionnaire tarde : message de relance</summary>
+          <div class="message">
+            <p class="message-titre">Message WhatsApp — relance questionnaire</p>
+            <div class="bulle" id="msg-relance"></div>
+            <div class="message-actions">
+              <button class="btn btn-copier" type="button" data-copier="relance">Copier le message</button>
+            </div>
+          </div>
+        </details>
+
+        <p>Les liens du message, pour vérification ou envoi à l’unité :</p>
+        <ul class="lignes">
+          <li>
+            <span class="nom">Page des liens d’onboarding<span class="detail">Tous les liens du client au même endroit</span></span>
+            <span class="actions">
+              <a class="btn btn-mini" href="https://www.adrienemily.com/ressources-business-phenix" target="_blank" rel="noopener">Ouvrir</a>
+              <button class="btn btn-mini" type="button" data-lien="https://www.adrienemily.com/ressources-business-phenix">Copier le lien</button>
+            </span>
+          </li>
+          <li>
+            <span class="nom">Questionnaire de démarrage<span class="detail">Obligatoire, avant le RDV 72h</span></span>
+            <span class="actions">
+              <a class="btn btn-mini" href="https://team.alteore.com/alteoforms-render.html?id=6sYCUup0lDdz6mWAPlIg" target="_blank" rel="noopener">Ouvrir</a>
+              <button class="btn btn-mini" type="button" data-lien="https://team.alteore.com/alteoforms-render.html?id=6sYCUup0lDdz6mWAPlIg">Copier le lien</button>
+            </span>
+          </li>
+          <li>
+            <span class="nom">Prise du RDV 72h<span class="detail">Après le questionnaire</span></span>
+            <span class="actions">
+              <a class="btn btn-mini" href="https://team.alteore.com/booking.html?type=rdv_urgent_post" target="_blank" rel="noopener">Ouvrir</a>
+              <button class="btn btn-mini" type="button" data-lien="https://team.alteore.com/booking.html?type=rdv_urgent_post">Copier le lien</button>
+            </span>
+          </li>
+          <li>
+            <span class="nom">Livret d’accueil Business Phénix<span class="detail">Fonctionnement du programme et règles des coachings</span></span>
+            <span class="actions">
+              <a class="btn btn-mini" href="https://www.canva.com/design/DAG7BizCAd8/hV4AalNcP13RBg-xNpEDvA/view?utm_content=DAG7BizCAd8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=ha64287c23d" target="_blank" rel="noopener">Ouvrir</a>
+              <button class="btn btn-mini" type="button" data-lien="https://www.canva.com/design/DAG7BizCAd8/hV4AalNcP13RBg-xNpEDvA/view?utm_content=DAG7BizCAd8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=ha64287c23d">Copier le lien</button>
+            </span>
+          </li>
+        </ul>
+        <label class="fait"><input type="checkbox" data-fait> Étape faite</label>
+      </div>
+    </li>
+
+    <!-- ============ ÉTAPE 3 ============ -->
+    <li class="etape" data-etape>
+      <div class="num" aria-hidden="true">3</div>
+      <div class="corps">
+        <h2>Créer le groupe WhatsApp de bienvenue</h2>
+        <p class="quand">Une fois le message des liens envoyé</p>
+        <p>Créer un groupe avec le client, Adrien, Emily et Marine, puis y poster le message de bienvenue qui présente Marine, la CSM.</p>
+
+        <ul class="lignes">
+          <li>
+            <span class="nom">Adrien</span>
+            <span class="actions"><span class="tel">07 66 83 36 32</span><button class="btn btn-mini" type="button" data-lien="07 66 83 36 32" data-libelle="Copier le numéro">Copier le numéro</button></span>
+          </li>
+          <li>
+            <span class="nom">Emily</span>
+            <span class="actions"><span class="tel">07 67 11 63 82</span><button class="btn btn-mini" type="button" data-lien="07 67 11 63 82" data-libelle="Copier le numéro">Copier le numéro</button></span>
+          </li>
+          <li>
+            <span class="nom">Marine<span class="detail">CSM, elle reprend le client après la bienvenue</span></span>
+            <span class="actions"><span class="tel">07 72 08 97 92</span><button class="btn btn-mini" type="button" data-lien="07 72 08 97 92" data-libelle="Copier le numéro">Copier le numéro</button></span>
+          </li>
+          <li>
+            <span class="nom">Nom du groupe<span class="detail" id="nom-groupe"></span></span>
+            <span class="actions"><button class="btn btn-mini" type="button" data-copier="groupe" data-libelle="Copier le nom">Copier le nom</button></span>
+          </li>
+        </ul>
+
+        <div class="message">
+          <p class="message-titre">Message WhatsApp — bienvenue dans le groupe</p>
+          <div class="bulle" id="msg-bienvenue"></div>
+          <div class="message-actions">
+            <button class="btn btn-copier" type="button" data-copier="bienvenue">Copier le message</button>
+          </div>
+        </div>
+
+        <p class="note">Ce groupe sert uniquement à la bienvenue : il est supprimé ensuite. Ne pas y traiter les questions de fond, elles passent par Marine.</p>
+        <label class="fait"><input type="checkbox" data-fait> Étape faite</label>
+      </div>
+    </li>
+
+    <!-- ============ RELAIS ============ -->
+    <li class="etape relais">
+      <div class="num" aria-hidden="true">4</div>
+      <div class="corps">
+        <h2>Marine prend le relais</h2>
+        <p class="quand">Plus rien à faire côté closer</p>
+        <p>À partir de là, c’est Marine qui s’occupe du client et qui l’ajoute partout :</p>
+        <ul>
+          <li>le groupe WhatsApp de la communauté Business Phénix ;</li>
+          <li>les coachings de groupe du lundi 14h et du jeudi 12h30 ;</li>
+          <li>le coaching individuel ;</li>
+          <li>la plateforme de formation.</li>
+        </ul>
+      </div>
+    </li>
+
+  </ol>
+
+  <section class="aussi" aria-labelledby="aussi-titre">
+    <h2 id="aussi-titre">Le client reçoit également</h2>
+    <ul>
+      <li>ses accès et informations par email ;</li>
+      <li>les différents documents et liens, en doublon du WhatsApp ;</li>
+      <li>le contrat signé.</li>
+    </ul>
+  </section>
+
+  <footer>Document interne Ambitio Corp, réservé à l’équipe commerciale. Ne pas transmettre au client.</footer>
+  <span class="sr" id="annonce" aria-live="polite"></span>
+</main>
+
+<script>
+(function () {
+  var LIENS = {
+    page: "https://www.adrienemily.com/ressources-business-phenix",
+    questionnaire: "https://team.alteore.com/alteoforms-render.html?id=6sYCUup0lDdz6mWAPlIg",
+    rdv: "https://team.alteore.com/booking.html?type=rdv_urgent_post",
+    livret: "https://www.canva.com/design/DAG7BizCAd8/hV4AalNcP13RBg-xNpEDvA/view?utm_content=DAG7BizCAd8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=ha64287c23d"
+  };
+
+  var inClient = document.getElementById("in-client");
+  var inCloser = document.getElementById("in-closer");
+  var inDate = document.getElementById("in-date");
+  var champDate = document.getElementById("champ-date");
+  var annonce = document.getElementById("annonce");
+
+  function val(input, defaut) {
+    var v = input.value.trim();
+    return v || defaut;
+  }
+  function rdvReserve() {
+    return document.querySelector('input[name="rdv"]:checked').value === "reserve";
+  }
+
+  /* ---- Textes des messages (c'est ce texte brut qui est copié) ---- */
+  function textes() {
+    var client = val(inClient, "[Prénom]");
+    var closer = val(inCloser, "[Votre prénom]");
+    var date = val(inDate, "[jour et heure]");
+
+    var blocRdv = rdvReserve()
+      ? "2️⃣ Votre RDV 72h est réservé : " + date + ".\nNous y cadrons votre situation et vos priorités pour lancer le plan d’action."
+      : "2️⃣ Votre RDV 72h, à réserver dès que le questionnaire est rempli :\n" + LIENS.rdv;
+
+    var liens =
+      "Bonjour " + client + " 👋\n\n" +
+      "Bienvenue dans Business Phénix ! Comme convenu, voici vos liens pour bien démarrer.\n\n" +
+      "1️⃣ Le questionnaire de démarrage — *obligatoire*, à remplir avant votre RDV 72h :\n" + LIENS.questionnaire + "\n\n" +
+      blocRdv + "\n\n" +
+      "3️⃣ Votre livret d’accueil :\n" + LIENS.livret + "\n\n" +
+      "Et la page qui regroupe tous vos liens (coachings de groupe, coaching individuel, communauté), à garder sous la main :\n" + LIENS.page + "\n\n" +
+      "Plus vos réponses au questionnaire sont précises, plus ce premier rendez-vous vous sera utile.\n\n" +
+      "Je reste disponible si besoin.\n" + closer;
+
+    var relance =
+      "Bonjour " + client + ",\n\n" +
+      "Petit rappel : votre questionnaire de démarrage n’est pas encore rempli. Il est *obligatoire* avant votre RDV 72h, c’est lui qui nous permet de préparer ce rendez-vous sur votre situation réelle.\n\n" +
+      "Le lien :\n" + LIENS.questionnaire + "\n\n" +
+      "Merci d’avance,\n" + closer;
+
+    var bienvenue =
+      "Bonjour " + client + " 👋\n\n" +
+      "Bienvenue officiellement dans Business Phénix !\n\n" +
+      "Ce groupe est là pour vous souhaiter la bienvenue avec Adrien et Emily, et pour vous présenter *Marine*, notre CSM. C’est elle qui vous accompagne à partir de maintenant : elle vous ajoute à la communauté et aux coachings, et elle reste votre interlocutrice pour toutes vos questions pratiques.\n\n" +
+      "Ce groupe sera supprimé une fois votre intégration faite : la suite se passe avec Marine et la communauté.\n\n" +
+      "Très bon démarrage à vous !\n" + closer;
+
+    var groupe = "Bienvenue " + client + " – Business Phénix";
+
+    return { liens: liens, relance: relance, bienvenue: bienvenue, groupe: groupe };
+  }
+
+  /* ---- Affichage : échappement + *gras* façon WhatsApp ---- */
+  function versHtml(texte) {
+    var echappe = texte
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return echappe.replace(/\*([^*\n]+)\*/g, "<strong>$1</strong>");
+  }
+
+  function rendre() {
+    var t = textes();
+    document.getElementById("msg-liens").innerHTML = versHtml(t.liens);
+    document.getElementById("msg-relance").innerHTML = versHtml(t.relance);
+    document.getElementById("msg-bienvenue").innerHTML = versHtml(t.bienvenue);
+    document.getElementById("nom-groupe").textContent = t.groupe;
+    champDate.hidden = !rdvReserve();
+  }
+
+  /* ---- Copie ---- */
+  function copieSecours(texte) {
+    var zone = document.createElement("textarea");
+    zone.value = texte;
+    zone.setAttribute("readonly", "");
+    zone.style.position = "fixed";
+    zone.style.top = "-1000px";
+    document.body.appendChild(zone);
+    zone.select();
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(zone);
+    return ok;
+  }
+
+  function copier(texte, bouton, libelleOk) {
+    var initial = bouton.getAttribute("data-libelle") || bouton.textContent;
+    bouton.setAttribute("data-libelle", initial);
+
+    function retour(ok) {
+      bouton.textContent = ok ? libelleOk : "Copie impossible, sélectionner le texte";
+      bouton.classList.toggle("copie", ok);
+      annonce.textContent = ok ? libelleOk : "La copie a échoué";
+      clearTimeout(bouton._minuteur);
+      bouton._minuteur = setTimeout(function () {
+        bouton.textContent = initial;
+        bouton.classList.remove("copie");
+      }, 2200);
+    }
+
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(texte).then(
+        function () { retour(true); },
+        function () { retour(copieSecours(texte)); }
+      );
+    } else {
+      retour(copieSecours(texte));
+    }
+  }
+
+  document.addEventListener("click", function (e) {
+    var bouton = e.target.closest("button[data-copier], button[data-lien]");
+    if (!bouton) return;
+    if (bouton.hasAttribute("data-copier")) {
+      var cle = bouton.getAttribute("data-copier");
+      copier(textes()[cle], bouton, cle === "groupe" ? "Nom copié" : "Message copié");
+    } else {
+      var estNumero = /^[0-9 ]+$/.test(bouton.getAttribute("data-lien"));
+      copier(bouton.getAttribute("data-lien"), bouton, estNumero ? "Numéro copié" : "Lien copié");
+    }
+  });
+
+  /* ---- Avancement ---- */
+  var cases = Array.prototype.slice.call(document.querySelectorAll("[data-fait]"));
+  function avancement() {
+    var faites = 0;
+    cases.forEach(function (c) {
+      c.closest("[data-etape]").classList.toggle("faite", c.checked);
+      if (c.checked) faites++;
+    });
+    var el = document.getElementById("avancement");
+    if (faites === cases.length) {
+      el.innerHTML = "<strong>Les 3 étapes sont faites.</strong> Marine prend le relais.";
+    } else {
+      el.innerHTML = "<strong>" + faites + " étape" + (faites > 1 ? "s" : "") + " sur " + cases.length + "</strong> " + (faites > 1 ? "faites" : "faite");
+    }
+  }
+
+  [inClient, inCloser, inDate].forEach(function (i) { i.addEventListener("input", rendre); });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="rdv"]'), function (r) {
+    r.addEventListener("change", rendre);
+  });
+  cases.forEach(function (c) { c.addEventListener("change", avancement); });
+
+  rendre();
+  avancement();
+})();
+</script>
+</body>
+</html>

@@ -639,6 +639,33 @@
     .dp-alert-box.red{background:var(--red-soft-2);color:var(--red-2);border-color:#fed7aa}
     .dp-alert-box.orange{background:var(--amber-soft-2);color:var(--amber-2);border-color:#fcd34d}
     .dp-alert-box.green{background:var(--green-soft-2);color:var(--green-2);border-color:#bbf7d0}
+    /* Business Phénix nouveau format — compteur de séances (14/10/2026) */
+    .bp-credits{margin:12px 28px 0;padding:14px 16px;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;font-size:12px;line-height:1.6;color:#431407}
+    .bp-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:13px;color:#9a3412}
+    .bp-nums{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:8px}
+    .bp-nums div{font-size:12px;color:#7c2d12}
+    .bp-nums span{font-size:22px;font-weight:800;color:#ea580c;margin-right:2px}
+    .bp-nums small{display:block;font-size:10.5px;color:#9a3412;opacity:.8}
+    .bp-bar{height:7px;border-radius:99px;background:#fde3c8;overflow:hidden;margin-bottom:8px}
+    .bp-bar i{display:block;height:100%;border-radius:99px;transition:width .5s}
+    .bp-sub{font-size:11.5px;color:#7c2d12}
+    .bp-al{margin-top:8px;padding:7px 10px;border-radius:8px;font-size:11.5px;font-weight:600}
+    .bp-al.rouge{background:#fee2e2;color:#991b1b}
+    .bp-al.orange{background:#fef3c7;color:#92400e}
+    .bp-al.info{background:#e0e7ff;color:#3730a3}
+    .bp-docs{margin-top:10px;font-size:11.5px;color:#7c2d12}
+    .bp-docs ul{margin:4px 0 0 18px;padding:0}
+    .bp-list{margin-top:10px;font-size:11.5px}
+    .bp-li{padding:4px 0;border-top:1px dashed #fed7aa;color:#7c2d12}
+    .bp-li.bp-annule{opacity:.5;text-decoration:line-through}
+    .bp-ab label{display:block;font-size:10.5px;font-weight:700;color:#9a3412;text-transform:uppercase;letter-spacing:.5px;margin:8px 0 4px}
+    .bp-ab textarea{width:100%;box-sizing:border-box;border:1px solid #fed7aa;border-radius:8px;padding:8px 10px;font:inherit;font-size:12px;background:#fff}
+    .bp-jalons{margin-top:12px;border-top:1px solid #fed7aa}
+    .bp-jal{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-bottom:1px dashed #fed7aa;font-size:12px}
+    .bp-jal-t{flex:1;min-width:200px}
+    .bp-jal-t small{display:block;font-size:10.5px;color:#9a3412;opacity:.8}
+    .bp-jal-b{display:flex;gap:4px}
+    .bp-chip{border:1px solid #fed7aa;background:#fff;color:#7c2d12;border-radius:999px;padding:3px 10px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit}
 
     /* ── QUOTA DETAIL ── */
     .dp-quota-section{
@@ -1307,8 +1334,9 @@
   </div>
   <select class="select-ambitio" id="filterProg" onchange="applyFilters()">
     <option value="">Tous les programmes</option>
-    <option value="BP 12 Mois - 12C">BP 12M — 12C</option>
-    <option value="BP 12 Mois - 24C">BP 12M — 24C</option>
+    <option value="Business NEW - 6 Mois - 10C">Business Phénix — 6M · 10C</option>
+    <option value="BP 12 Mois - 12C">BP 12M — 12C (ancienne formule)</option>
+    <option value="BP 12 Mois - 24C">BP 12M — 24C (ancienne formule)</option>
     <!-- « BP 6 Mois - 6C » retiré le 13/08/2026 : programme arrêté, plus aucun
          client dessus. Les dossiers d'archive qui le portent encore restent
          visibles (colonne « Autres programmes » du kanban). -->
@@ -1390,8 +1418,12 @@
         <div class="mf">
           <label>Programme *</label>
           <select id="nc-programme">
-            <option value="BP 12 Mois - 12C">BP 12 Mois - 12C</option>
-            <option value="BP 12 Mois - 24C">BP 12 Mois - 24C</option>
+            <!-- Business Phénix nouveau format (14/10/2026) : RDV audit
+                 business + 10 séances sur 180 jours. Les BP 12 restent pour
+                 les clients de l'ancienne formule. -->
+            <option value="Business NEW - 6 Mois - 10C">Business Phénix — 6 mois · 10 séances</option>
+            <option value="BP 12 Mois - 12C">BP 12 Mois - 12C (ancienne formule)</option>
+            <option value="BP 12 Mois - 24C">BP 12 Mois - 24C (ancienne formule)</option>
             <!-- « BP 6 Mois - 6C » retiré le 13/08/2026 : programme arrêté. -->
             <option value="Elite - 12 Mois - 24C">Elite - 12 Mois - 24C</option>
             <option value="Elite NEW - 6 Mois - 24C">Elite NEW - 6 Mois - 24C</option>
@@ -1430,8 +1462,9 @@
         <div class="mf">
           <label>Programme *</label>
           <select id="ec-programme">
-            <option value="BP 12 Mois - 12C">BP 12 Mois - 12C</option>
-            <option value="BP 12 Mois - 24C">BP 12 Mois - 24C</option>
+            <option value="Business NEW - 6 Mois - 10C">Business Phénix — 6 mois · 10 séances</option>
+            <option value="BP 12 Mois - 12C">BP 12 Mois - 12C (ancienne formule)</option>
+            <option value="BP 12 Mois - 24C">BP 12 Mois - 24C (ancienne formule)</option>
             <!-- « BP 6 Mois - 6C » retiré le 13/08/2026 : programme arrêté.
                  editClient() réinjecte une option « (archivé) » à la volée si
                  un dossier porte encore un programme absent de cette liste. -->
@@ -1455,6 +1488,8 @@
   </div>
 </div>
 
+<!-- Business Phénix nouveau format : compteur de séances partagé (14/10/2026) -->
+<script src="bp-credits.js"></script>
 <!-- Firebase -->
 <script type="module">
   import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -1959,6 +1994,9 @@ function render(){
 // Les "Autres" programmes (hors programmes standards) sont agrégés dans une colonne "custom".
 function renderKanban(){
   const PROG_CONFIG = [
+    /* Business Phénix nouveau format (14/10/2026) : 10 séances toutes les
+       deux semaines sur 180 jours, créneau fixe. */
+    { key: 'bp-new',  prog: 'Business NEW - 6 Mois - 10C', title: 'Business Phénix ★', sub: '10 séances sur 6 mois' },
     { key: 'bp12-12', prog: 'BP 12 Mois - 12C',      title: 'BP 12 Mois',               sub: '12 coachings sur 12 mois' },
     { key: 'bp12-24', prog: 'BP 12 Mois - 24C',      title: 'BP 12 Mois · Premium',     sub: '24 coachings sur 12 mois' },
     /* « BP 6 Mois - 6C » retiré le 13/08/2026 : programme arrêté, plus aucun
@@ -2165,7 +2203,10 @@ function setView(v, btn){
    de bord vidéo chez un client qui n'a pas de vidéos.
    ══════════════════════════════════════════════════════════════════════ */
 function estParcoursEtapes(c){
-  return /^\s*elite\s+new\b/i.test(String((c && c.programme) || ''));
+  const p = String((c && c.programme) || '');
+  /* Business nouveau format (14/10/2026) : même parcours à jalons que
+     l'Elite NEW, programme « business-phenix » côté Academy. */
+  return /^\s*elite\s+new\b/i.test(p) || (window.BPCredits && BPCredits.isBusinessV2(p));
 }
 
 /* Bloc Academy des clients du parcours à étapes. Volontairement sobre : le
@@ -2931,7 +2972,7 @@ function openDetail(id){
         </div>
       </div>
       <div class="dp-meta">
-        <span class="dp-badge">${c.programme}</span>
+        <span class="dp-badge">${escHtml(window.BPCredits ? BPCredits.libelleProgramme(c.programme) : c.programme)}</span>
         ${c.activite?`<span class="dp-badge">${escHtml(c.activite)}</span>`:''}
         ${c.dateEntree?`<span class="dp-badge">Depuis ${formatDate(c.dateEntree)}</span>`:''}
       </div>
@@ -2943,6 +2984,7 @@ function openDetail(id){
     </div>
 
     ${alert==='alert'?`<div class="dp-alert-box red">🔴 ${alertText} — Relancez ce client !</div>`:alert==='warning'?`<div class="dp-alert-box orange">🟡 ${alertText}</div>`:`<div class="dp-alert-box green">✅ Client à jour</div>`}
+    ${window.BPCredits && BPCredits.isBusinessV2(c.programme) ? `<div id="bpCredits-${id}" class="bp-credits">🔥 Business Phénix — compteur de séances en chargement…</div>` : ''}
 
     <!-- BRIEF COACH — continuité entre séances (dernier coaching + synthèse IA) -->
     <div style="margin-top:12px;padding:14px 16px;background:linear-gradient(135deg,#eff6ff,#eef2ff);border:1px solid #c7d2fe;border-radius:12px">
@@ -3040,8 +3082,10 @@ function openDetail(id){
       </div>
 
       ${questionnaireBlock(c, id)}
-      <!-- PLAN D'ACTION ELITE PHÉNIX (structuré — coaching-plan.js) -->
-      <div class="dp-plan-section${c.planV2 && planSectionCollapsed() ? ' collapsed' : ''}" style="margin: 0 0 16px" data-plan-section="${id}">
+      ${window.BPCredits && BPCredits.isBusinessV2(c.programme) ? bpPlanSectionHtml(c, id) : ''}
+      <!-- PLAN D'ACTION ELITE PHÉNIX (structuré — coaching-plan.js) — masqué
+           (pas retiré) pour Business nouveau format, qui a son propre plan. -->
+      <div class="dp-plan-section${c.planV2 && planSectionCollapsed() ? ' collapsed' : ''}" style="margin: 0 0 16px${window.BPCredits && BPCredits.isBusinessV2(c.programme) ? ';display:none' : ''}" data-plan-section="${id}">
         <div class="dp-plan-header">
           <div class="dp-plan-title">🎯 Plan d'action — Elite Phénix
             ${c.planV2 ? '<span class="dp-plan-badge">✅ Généré</span>' : '<span class="dp-plan-badge" style="background:#fef3c7;color:#92400e">À générer</span>'}
@@ -3149,11 +3193,12 @@ function openDetail(id){
         </div>
       </div>
 
-      ${renderYearTabs(c, id)}
+      <div id="yearTabs-${id}">${renderYearTabs(c, id)}</div>
     </div>
   `;
   document.getElementById('detailOverlay').classList.add('show');
   loadAcademyBlock(c, id);
+  if(window.BPCredits && BPCredits.isBusinessV2(c.programme)) bpLoadCredits(c, id);
   // Résumé du parcours à étapes + pop-up « Gérer le parcours » (academy-parcours.js).
   if(window.AcademyParcours) window.AcademyParcours.summary(document.getElementById('apSummary-'+id), acadParcoursOpts(c, id));
 
@@ -3468,6 +3513,9 @@ function closeNewClientModal(){document.getElementById('newClientModal').classLi
 
 // ── GENERATE SESSIONS TEMPLATE ──
 function generateSessionsTemplate(programme, nbTotal){
+  /* Business nouveau format : RDV audit business + 10 séances titrées
+     (cahier des charges §6.3) — même gabarit que api/coaching-client-ensure. */
+  if(window.BPCredits && BPCredits.isBusinessV2(programme)) return BPCredits.sessionsTemplate();
   const sessions = [];
 
   // Session 72H urgente en premier (numero = 0)
@@ -3525,6 +3573,12 @@ async function createClient(){
     planAction: '',
     statut: 'actif'
   };
+  if(window.BPCredits && BPCredits.isBusinessV2(programme)){
+    /* J0 = signature du contrat ; à défaut, la date d'entrée saisie. */
+    client.j0 = client.dateEntree;
+    client.finAccompagnement = BPCredits.addDays(client.j0, BPCredits.DUREE_JOURS);
+    client.formatOffre = 'bp_v2_6mois';
+  }
 
   try{
     client._updatedAt = Date.now();
@@ -4887,6 +4941,7 @@ function toggleNsfYear(yi){
 async function addSessToYear(clientId,yi){
   var c=_clients.find(function(x){return x._id===clientId;});
   if(!c||!c.years||!c.years[yi])return;
+  if(!bpGuard(c, null))return;
   var y=c.years[yi];
   var date=(document.getElementById('nsfy-date-'+yi)||{}).value||'';
   var coach=normalizeCoach((document.getElementById('nsfy-coach-'+yi)||{}).value||'');
@@ -4918,11 +4973,12 @@ async function markYrDone(clientId,yi,sn){
   if(!c||!c.years||!c.years[yi])return;
   var s=(c.years[yi].sessions||[]).find(function(x){return x.numero===sn;});
   if(!s)return;
+  if(!bpGuard(c, s))return;
   var k='y'+yi+'s'+sn;
   var date=(document.getElementById('qsd-'+k)||{}).value||'';
   var coach=normalizeCoach((document.getElementById('qsc-'+k)||{}).value||'');
   if(!date||!coach){showToast('Date et coach requis','error');return;}
-  s.date=date;s.coach=coach;s.statut='fait';
+  s.date=date;s.coach=coach;s.statut='fait';delete s.consoMotif;
   s.visioUrl=((document.getElementById('qsv-'+k)||{}).value||'').trim();
   s.driveUrl=((document.getElementById('qsg-'+k)||{}).value||'').trim();
   s.resume=((document.getElementById('qsr-'+k)||{}).value||'').trim();
@@ -5274,9 +5330,11 @@ function renderYearTabs(c,id){
     for(var si=0;si<sess.length;si++){
       var s=sess[si];
       var done=s.statut==='fait';
+      var conso=s.statut==='consommee';
       var is72=s.numero===0||s.type==='rdv72h';
+      var bpv2=!!(window.BPCredits&&BPCredits.isBusinessV2(c.programme));
       var k='y'+yi+'s'+s.numero;
-      var numL=is72?'72H':'#'+s.numero;
+      var numL=is72?(bpv2?'AUDIT':'72H'):'#'+s.numero;
       var numC=done?'done':(is72?'rdv72h':'planifie');
 
       h+='<div class="session-item '+(done?'done':'planifie')+'" id="sess-'+k+'">';
@@ -5294,14 +5352,22 @@ function renderYearTabs(c,id){
       if(done){
         h+='<button class="btn btn-danger btn-xs" style="font-size:10px;padding:3px 7px" onclick="event.stopPropagation();unmarkYrDone(\''+id+'\','+yi+','+s.numero+')">↩</button>';
         h+='<span style="color:var(--green);font-size:11px;font-weight:700">✅ Fait</span>';
+      } else if(conso){
+        /* Séance consommée (absence / report < 48 h) : seuls Adrien et
+           Emily peuvent la rendre (décision du 14/10/2026). */
+        if(bpCanGrant(id))h+='<button class="btn btn-danger btn-xs" style="font-size:10px;padding:3px 7px" title="Rendre la séance (réservé Adrien / Emily)" onclick="event.stopPropagation();unmarkYrConsumed(\''+id+'\','+yi+','+s.numero+')">↩</button>';
+        h+='<span style="color:#b45309;font-size:11px;font-weight:700">⛔ Consommée'+(s.consoMotif==='report_tardif'?' (report &lt; 48 h)':' (absence)')+'</span>';
       } else {
+        if(bpv2&&!is72)h+='<button class="btn btn-outline btn-xs" style="border-color:#f59e0b;color:#b45309" title="Absence sans prévenir ou report à moins de 48 h : la séance est consommée" onclick="event.stopPropagation();markYrConsumed(\''+id+'\','+yi+','+s.numero+')">⛔ Absence</button>';
         h+='<button class="btn btn-outline btn-xs" onclick="event.stopPropagation();markYrDone(\''+id+'\','+yi+','+s.numero+')">✓ Fait</button>';
       }
       h+='<span class="si-chevron">▼</span></div></div>';
 
       // Body
       h+='<div class="si-body">';
-      if(done){
+      if(conso){
+        h+='<div style="padding:8px 0;font-size:12px;color:#92400e">⛔ Séance consommée le '+(s.date?formatDate(s.date):'—')+' — '+(s.consoMotif==='report_tardif'?'report à moins de 48 h':'absence sans prévenir')+(s.consoPar?' · noté par '+escHtml(s.consoPar):'')+'. Elle compte dans les '+(window.BPCredits?BPCredits.TOTAL:10)+' séances.</div>';
+      } else if(done){
         if(s.visioUrl||s.driveUrl||s.resumeUrl){
           h+='<div class="si-links">';
           if(s.visioUrl)h+='<a class="si-link-pill visio" href="'+s.visioUrl+'" target="_blank">🎥 Visio ↗</a>';
@@ -5326,7 +5392,7 @@ function renderYearTabs(c,id){
         h+='<div class="si-edit-field"><label>🎥 Visio</label><input type="url" id="sev-'+k+'" value="'+(s.visioUrl||'')+'"/></div>';
         h+='<div class="si-edit-field"><label>📄 Google Doc</label><input type="url" id="seg-'+k+'" value="'+(s.driveUrl||s.resumeUrl||'')+'"/></div>';
         h+='</div>';
-        h+='<div class="si-edit-field" style="margin-bottom:8px"><label>Résumé <button type="button" class="ai-cr-btn" data-ai-cr="ser-'+k+'|sedv-'+k+'" data-client="'+id+'" data-yi="'+yi+'" data-sn="'+s.numero+'" title="Colle tes notes brutes (ou les notes Gemini) dans Résumé, l\'IA les met au propre et propose les devoirs">✨ CR IA</button></label><textarea id="ser-'+k+'">'+escHtml(s.resume||'')+'</textarea></div>';
+        h+='<div class="si-edit-field" style="margin-bottom:8px"><label>Résumé <button type="button" class="ai-cr-btn" data-ai-cr="ser-'+k+'|sedv-'+k+'" data-client="'+id+'" data-yi="'+yi+'" data-sn="'+s.numero+'" title="Colle tes notes brutes (ou les notes Gemini) dans Résumé, l\'IA les met au propre et propose les devoirs">✨ CR IA</button>'+(bpv2&&!is72?' <button type="button" class="ai-cr-btn" data-bp-trame="ser-'+k+'" data-client="'+id+'" data-sn="'+s.numero+'" title="Trame de compte rendu Business Phénix (3 actions datées maximum)">📋 Trame</button>':'')+'</label><textarea id="ser-'+k+'">'+escHtml(s.resume||'')+'</textarea></div>';
         h+='<div class="si-edit-field" style="margin-bottom:8px"><label>Devoirs</label><textarea id="sedv-'+k+'" rows="2">'+escHtml(s.devoirs||'')+'</textarea></div>';
         h+='<div class="si-edit-field" style="margin-bottom:4px"><label>Notes</label><textarea id="sen-'+k+'" rows="2">'+escHtml(s.notes||'')+'</textarea></div>';
         h+='<div class="si-edit-save-row">';
@@ -5344,7 +5410,7 @@ function renderYearTabs(c,id){
         h+='<div class="si-edit-field"><label>🎥 Visio</label><input type="url" id="qsv-'+k+'" placeholder="https://meet..."/></div>';
         h+='<div class="si-edit-field"><label>📄 Google Doc</label><input type="url" id="qsg-'+k+'" placeholder="https://docs..."/></div>';
         h+='</div>';
-        h+='<div class="si-edit-field" style="margin-bottom:8px"><label>Résumé <button type="button" class="ai-cr-btn" data-ai-cr="qsr-'+k+'|qsdv-'+k+'" data-client="'+id+'" data-yi="'+yi+'" data-sn="'+s.numero+'" title="Colle tes notes brutes (ou les notes Gemini) dans Résumé, l\'IA les met au propre et propose les devoirs">✨ CR IA</button></label><textarea id="qsr-'+k+'" rows="2" placeholder="Notes brutes ou notes Gemini → ✨ CR IA"></textarea></div>';
+        h+='<div class="si-edit-field" style="margin-bottom:8px"><label>Résumé <button type="button" class="ai-cr-btn" data-ai-cr="qsr-'+k+'|qsdv-'+k+'" data-client="'+id+'" data-yi="'+yi+'" data-sn="'+s.numero+'" title="Colle tes notes brutes (ou les notes Gemini) dans Résumé, l\'IA les met au propre et propose les devoirs">✨ CR IA</button>'+(bpv2&&!is72?' <button type="button" class="ai-cr-btn" data-bp-trame="qsr-'+k+'" data-client="'+id+'" data-sn="'+s.numero+'" title="Trame de compte rendu Business Phénix (3 actions datées maximum)">📋 Trame</button>':'')+'</label><textarea id="qsr-'+k+'" rows="2" placeholder="Notes brutes ou notes Gemini → ✨ CR IA"></textarea></div>';
         h+='<div class="si-edit-field" style="margin-bottom:8px"><label>Devoirs</label><textarea id="qsdv-'+k+'" rows="2"></textarea></div>';
         h+='<div class="si-edit-field" style="margin-bottom:8px"><label>Notes</label><textarea id="qsn-'+k+'" rows="2"></textarea></div>';
         if(is72)h+=render72hFiles(s.files||[],id,yi,s.numero);
@@ -5370,6 +5436,259 @@ window.toggleClientStatus=toggleClientStatus;
 window.togglePlanEdit=togglePlanEdit;window.savePlanAction=savePlanAction;
 window.quickMarkDone=quickMarkDone;window.markSessionDone=markSessionDone;
 window.toggleSessionEdit=toggleSessionEdit;window.saveSessionEdit=saveSessionEdit;
+
+/* ═══════════════════════════════════════════════════════════
+   BUSINESS PHÉNIX NOUVEAU FORMAT (14/10/2026) — compteur de séances
+   Règle : bp-credits.js (partagée avec le serveur). État servi par
+   api/bp-seances (fiche + réservations + ajouts) ; ajouts et dispenses
+   réservés à _config/business_phenix.sessionGranters (Adrien, Emily).
+═══════════════════════════════════════════════════════════ */
+const _bpState = {};
+function bpCanGrant(clientId){ return !!(_bpState[clientId] && _bpState[clientId].peutAjouter); }
+async function bpApi(payload){
+  const token = (window._auth && window._auth.currentUser) ? await window._auth.currentUser.getIdToken() : '';
+  const r = await fetch('/api/bp-seances', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token }, body: JSON.stringify(payload) });
+  const j = await r.json().catch(()=>({}));
+  if(!r.ok || j.ok === false){ const e = new Error(j.error || ('Erreur '+r.status)); e.data = j; throw e; }
+  return j;
+}
+function bpFmt(d){ return d ? String(d).split('-').reverse().join('/') : '—'; }
+async function bpLoadCredits(c, id){
+  const el = document.getElementById('bpCredits-'+id);
+  if(!el) return;
+  try{
+    const j = await bpApi({ action:'etat', clientId:id });
+    _bpState[id] = { credits:j.credits, ajouts:j.ajouts||[], peutAjouter:!!j.peutAjouter };
+    bpRenderCredits(c, id);
+    /* Les boutons réservés (↩ sur une séance consommée) dépendent du droit. */
+    if(j.peutAjouter){ const tabs = document.getElementById('yearTabs-'+id); if(tabs && typeof renderYearTabs==='function') tabs.innerHTML = renderYearTabs(c, id); }
+  }catch(e){
+    el.innerHTML = '🔥 Business Phénix — compteur indisponible : '+escHtml(e.message);
+  }
+}
+function bpRenderCredits(c, id){
+  const el = document.getElementById('bpCredits-'+id);
+  const st = _bpState[id];
+  if(!el || !st) return;
+  const k = st.credits, pct = Math.min(100, Math.round(k.consumed / Math.max(1,k.total) * 100));
+  const col = k.bloque ? '#dc2626' : (pct >= 70 ? '#f59e0b' : '#f97316');
+  let h = '<div class="bp-head"><b>🔥 Business Phénix — '+k.total+' séances sur 6 mois</b>'
+    + (st.peutAjouter ? '<button class="btn btn-sm btn-outline" style="margin-left:auto;font-size:11px;padding:4px 10px" onclick="bpAjouter(\''+id+'\')">➕ Ajouter des séances</button>' : '') + '</div>';
+  h += '<div class="bp-nums"><div><span>'+k.consumed+'</span>/'+k.total+'<small>séances consommées</small></div>'
+    + '<div><span>'+k.restantes+'</span><small>restante'+(k.restantes>1?'s':'')+'</small></div>'
+    + '<div><span>'+k.creneauxRestants+'</span><small>créneau'+(k.creneauxRestants>1?'x':'')+' (toutes les 2 semaines)</small></div></div>';
+  h += '<div class="bp-bar"><i style="width:'+pct+'%;background:'+col+'"></i></div>';
+  h += '<div class="bp-sub">Démarrage (J0) : <b>'+bpFmt(k.j0)+'</b> · fin : <b>'+bpFmt(k.fin)+'</b>'+(k.expired?' · <b style="color:#dc2626">terminé</b>':' · J-'+k.joursRestants)
+    + ' · '+k.tenues+' tenue'+(k.tenues>1?'s':'')+(k.consommees?' · '+k.consommees+' consommée'+(k.consommees>1?'s':'')+' (absence / report &lt; 48 h)':'')
+    + (k.bonus?' · dont +'+k.bonus+' ajoutée'+(k.bonus>1?'s':''):'')+'</div>';
+  if(k.bloque) h += '<div class="bp-al rouge">'+(k.expired?'⏹ Accompagnement terminé : plus aucune séance ne peut être validée.':'⏹ Les '+k.total+' séances sont consommées : la suivante est bloquée.')+(st.peutAjouter?'':' Seuls Adrien et Emily peuvent ajouter une séance.')+'</div>';
+  (k.alertes||[]).forEach(a => { if(a.code!=='expire' || !k.bloque) h += '<div class="bp-al '+a.niveau+'">⚠️ '+escHtml(a.texte)+'</div>'; });
+  if(k.tenues === 0 && !k.expired){
+    h += '<div class="bp-docs"><b>📎 À déposer par le client avant la séance 1</b><ul>'+BPCredits.DOCUMENTS_SEANCE1.map(d=>'<li>'+escHtml(d)+'</li>').join('')+'</ul></div>';
+  }
+  if(k.consommeesAuto && k.consommeesAuto.length){
+    h += '<div class="bp-list"><b>Détectées depuis l\'agenda</b>';
+    k.consommeesAuto.forEach(a => {
+      h += '<div class="bp-li">⛔ '+bpFmt(a.date)+(a.time?' à '+escHtml(a.time):'')+' — '+(a.motif==='report_tardif'?'report à moins de 48 h'+(a.heures!=null?' ('+a.heures+' h avant)':''):'absence')
+        + (a.personName?' · '+escHtml(a.personName):'')
+        + (st.peutAjouter?' <button class="btn btn-xs btn-outline" style="font-size:10px;padding:2px 8px" onclick="bpDispenser(\''+id+'\',\''+escHtml(a.id)+'\')">Ne pas compter</button>':'')+'</div>';
+    });
+    h += '</div>';
+  }
+  const ajouts = (st.ajouts||[]);
+  if(ajouts.length){
+    h += '<div class="bp-list"><b>Historique des ajustements</b>';
+    ajouts.slice().reverse().forEach(a => {
+      const lib = a.kind === 'dispense' ? 'Dispense du '+bpFmt(a.bookingDate) : '+'+a.delta+' séance'+(a.delta>1?'s':'');
+      h += '<div class="bp-li'+(a.annule?' bp-annule':'')+'">'+lib+' — '+escHtml(a.motif||'')+' · '+escHtml(a.byName||'')+' · '+bpFmt(String(a.at||'').slice(0,10))
+        + (a.annule?' · annulé':'') + (st.peutAjouter && !a.annule ? ' <button class="btn btn-xs btn-outline" style="font-size:10px;padding:2px 8px" onclick="bpAnnuler(\''+id+'\',\''+escHtml(a.id)+'\')">Annuler</button>':'')+'</div>';
+    });
+    h += '</div>';
+  }
+  el.innerHTML = h;
+}
+function bpAskMotif(question){
+  const m = prompt(question + '\n\nMotif (10 caractères minimum) :');
+  if(m == null) return null;
+  if(m.trim().length < 10){ showToast('Motif trop court (10 caractères minimum)','error'); return null; }
+  return m.trim();
+}
+async function bpAjouter(id){
+  const n = prompt('Combien de séances ajouter à ce client ? (1 à 5)\n\nRien n\'apparaît côté client hormis le compteur.', '1');
+  if(n == null) return;
+  const delta = parseInt(n, 10);
+  if(!(delta >= 1 && delta <= 5)){ showToast('Entre 1 et 5 séances','error'); return; }
+  const motif = bpAskMotif('Ajout de '+delta+' séance'+(delta>1?'s':''));
+  if(!motif) return;
+  try{ const j = await bpApi({ action:'ajouter', clientId:id, delta, motif }); showToast('✅ '+delta+' séance'+(delta>1?'s':'')+' ajoutée'+(delta>1?'s':'')+(j.academy?'':' — Academy à resynchroniser'),'success'); }
+  catch(e){ showToast('Erreur : '+e.message,'error'); }
+  const c = _clients.find(x=>x._id===id); if(c) bpLoadCredits(c, id);
+}
+async function bpDispenser(id, bookingId){
+  const motif = bpAskMotif('Ne pas compter cette absence / ce report ?');
+  if(!motif) return;
+  try{ await bpApi({ action:'dispenser', clientId:id, bookingId, motif }); showToast('✅ Séance non comptée','success'); }
+  catch(e){ showToast('Erreur : '+e.message,'error'); }
+  const c = _clients.find(x=>x._id===id); if(c) bpLoadCredits(c, id);
+}
+async function bpAnnuler(id, ajoutId){
+  const motif = bpAskMotif('Annuler cet ajustement ?');
+  if(!motif) return;
+  try{ await bpApi({ action:'annuler', clientId:id, ajoutId, motif }); showToast('✅ Ajustement annulé','success'); }
+  catch(e){ showToast('Erreur : '+e.message,'error'); }
+  const c = _clients.find(x=>x._id===id); if(c) bpLoadCredits(c, id);
+}
+/* Garde-fou avant de valider ou consommer une séance (Business nouveau
+   format) : 10 séances maximum (+ ajouts), rien après J0 + 180. La séance
+   déjà comptée (faite / consommée) ou le RDV audit ne sont jamais bloqués. */
+function bpGuard(c, s){
+  if(!window.BPCredits || !BPCredits.isBusinessV2(c.programme)) return true;
+  if(s && (s.numero === 0 || s.type === 'rdv72h' || s.statut === 'fait' || s.statut === 'consommee')) return true;
+  const st = _bpState[c._id] || {};
+  const k = BPCredits.compute(c, { ajouts: st.ajouts || [] });
+  const auto = (st.credits && st.credits.consommeesAuto) ? st.credits.consommeesAuto.length : 0;
+  if(k.consumed + auto >= k.total){
+    showToast('⏹ Les '+k.total+' séances sont consommées. Seuls Adrien et Emily peuvent ajouter une séance.','error');
+    return false;
+  }
+  if(k.expired){
+    if(st.peutAjouter && confirm('Accompagnement terminé le '+bpFmt(k.fin)+' : les séances restantes sont perdues.\n\nValider quand même cette séance ? (exception Adrien / Emily)')) return true;
+    if(!st.peutAjouter) showToast('⏹ Accompagnement terminé le '+bpFmt(k.fin)+' : séances restantes perdues.','error');
+    return false;
+  }
+  return true;
+}
+async function markYrConsumed(clientId, yi, sn){
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c || !c.years || !c.years[yi]) return;
+  const s = (c.years[yi].sessions||[]).find(x=>x.numero===sn);
+  if(!s || !bpGuard(c, s)) return;
+  const k = 'y'+yi+'s'+sn;
+  const choix = prompt('Séance consommée — que s\'est-il passé ?\n\n1 = absence sans prévenir\n2 = report à moins de 48 h\n\n(Un report à 48 h ou plus, ou une annulation par le coach, ne consomme rien : ne rien saisir ici.)', '1');
+  if(choix == null) return;
+  if(choix.trim() !== '1' && choix.trim() !== '2'){ showToast('Réponds 1 ou 2','error'); return; }
+  const date = (document.getElementById('qsd-'+k)||{}).value || new Date().toISOString().slice(0,10);
+  const coach = normalizeCoach((document.getElementById('qsc-'+k)||{}).value||'') || s.coach || c.coach || '';
+  s.statut = 'consommee';
+  s.consoMotif = choix.trim() === '2' ? 'report_tardif' : 'absence';
+  s.date = date; s.coach = coach;
+  s.consoPar = localStorage.getItem('ambitio_name') || '';
+  s.consoAt = new Date().toISOString();
+  syncYearStats(c);
+  try{
+    c._updatedAt = Date.now();
+    await saveClientDoc(clientId, c);
+    syncSeanceAcademy(clientId, sn, (c.years[yi]||{}).label || '');
+    showToast('⛔ Séance '+sn+' consommée','success'); applyFilters(); renderRecentActivity(); openDetail(clientId);
+  }catch(e){ showToast('Erreur: '+e.message,'error'); }
+}
+async function unmarkYrConsumed(clientId, yi, sn){
+  if(!bpCanGrant(clientId)){ showToast('Réservé à Adrien et Emily','error'); return; }
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c || !c.years || !c.years[yi]) return;
+  const s = (c.years[yi].sessions||[]).find(x=>x.numero===sn);
+  if(!s) return;
+  const motif = bpAskMotif('Rendre la séance '+sn+' au client (elle ne sera plus comptée) ?');
+  if(!motif) return;
+  s.statut = 'planifie';
+  s.consoAnnulee = { motif, par: localStorage.getItem('ambitio_name') || '', at: new Date().toISOString(), motifInitial: s.consoMotif || '' };
+  delete s.consoMotif;
+  syncYearStats(c);
+  try{
+    c._updatedAt = Date.now();
+    await saveClientDoc(clientId, c);
+    showToast('↩ Séance '+sn+' rendue','success'); applyFilters(); renderRecentActivity(); openDetail(clientId);
+  }catch(e){ showToast('Erreur: '+e.message,'error'); }
+}
+/* Trame de compte rendu Business (cahier §6.5) dans le champ Résumé. */
+document.addEventListener('click', function(e){
+  const b = e.target.closest ? e.target.closest('[data-bp-trame]') : null;
+  if(!b || !window.BPCredits) return;
+  e.preventDefault(); e.stopPropagation();
+  const ta = document.getElementById(b.getAttribute('data-bp-trame'));
+  if(!ta) return;
+  if(ta.value.trim() && !confirm('Le résumé contient déjà du texte. Le remplacer par la trame ?')) return;
+  const id = b.getAttribute('data-client'), n = parseInt(b.getAttribute('data-sn'), 10);
+  const c = _clients.find(x=>x._id===id) || {};
+  const st = _bpState[id] || {}, k = st.credits || {};
+  ta.value = BPCredits.trameCompteRendu(n, { client: (c.activite ? c.activite + ', ' : '') + (c.nom || ''), coach: c.coach || '', date: new Date().toISOString().slice(0,10), restantes: k.restantes, fin: k.fin || BPCredits.finOf(c) });
+  ta.rows = 18;
+});
+/* ── PLAN D'ACTION BUSINESS PHÉNIX ──
+   clients/{id}.planBP = { pointA, pointB, coach, coachRdvUrl,
+   jalons: { J1: { statut: 'todo'|'wip'|'ok', commentaire, at, par } },
+   updatedAt, version }. Point A / point B et la liste des jalons partent
+   vers l'Academy (api/academy-plan, codes J1–J10) ; un jalon atteint ou en
+   cours est constaté dans l'Academy (api/academy-jalon) — un jalon peut
+   être validé lors d'une séance ultérieure. */
+const BP_JALON_ST = { todo: { l:'À faire', c:'#94a3b8' }, wip: { l:'En cours', c:'#f59e0b' }, ok: { l:'Atteint', c:'#10b981' } };
+function bpPlanSectionHtml(c, id){
+  const p = c.planBP || {}, J = p.jalons || {};
+  let h = '<div class="dp-plan-section" style="margin:0 0 16px" data-bp-plan="'+id+'">';
+  h += '<div class="dp-plan-header"><div class="dp-plan-title">🎯 Plan d\'action — Business Phénix '
+    + (p.pointA && p.pointB ? '<span class="dp-plan-badge">✅ Point A / B posés</span>' : '<span class="dp-plan-badge" style="background:#fef3c7;color:#92400e">Point A / B à poser (séance 1)</span>') + '</div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="dp-plan-edit-btn" onclick="bpPushPlan(\''+id+'\', true)">📤 Envoyer à l\'Academy</button></div></div>';
+  h += '<div class="dp-plan-body" style="padding:12px 0">';
+  h += '<div class="bp-ab"><label>Point A — où en est l\'entreprise (chiffres réels)</label><textarea id="bpA-'+id+'" rows="3" placeholder="CA, charges, trésorerie, rémunération du dirigeant aujourd\'hui…">'+escHtml(p.pointA||'')+'</textarea>'
+    + '<label>Point B — salaire cible et échéance</label><textarea id="bpB-'+id+'" rows="3" placeholder="Le dirigeant se verse … € par mois à partir du …, connaît ses chiffres chaque mois…">'+escHtml(p.pointB||'')+'</textarea>'
+    + '<div style="text-align:right;margin-top:6px"><button class="btn btn-primary btn-sm" onclick="bpSaveAB(\''+id+'\')">💾 Enregistrer le point A / B</button></div></div>';
+  h += '<div class="bp-jalons">';
+  BPCredits.SEANCES.forEach(se => {
+    const j = J[se.jalon] || {}, st = j.statut || 'todo';
+    h += '<div class="bp-jal"><div class="bp-jal-t"><b>'+se.jalon+'</b> · '+escHtml(se.jalonTitre)+'<small>'+escHtml(se.moteur)+' — séance '+se.n+(j.at?' · '+BP_JALON_ST[st].l.toLowerCase()+' le '+bpFmt(String(j.at).slice(0,10))+(j.par?' par '+escHtml(j.par):''):'')+'</small></div><div class="bp-jal-b">';
+    Object.keys(BP_JALON_ST).forEach(k => {
+      h += '<button class="bp-chip'+(st===k?' on':'')+'" style="'+(st===k?'background:'+BP_JALON_ST[k].c+';border-color:'+BP_JALON_ST[k].c+';color:#fff':'')+'" onclick="bpSetJalon(\''+id+'\',\''+se.jalon+'\',\''+k+'\')">'+BP_JALON_ST[k].l+'</button>';
+    });
+    h += '</div></div>';
+  });
+  h += '</div></div></div>';
+  return h;
+}
+async function bpSavePlan(clientId, plan){
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c) return;
+  plan.updatedAt = new Date().toISOString();
+  plan.version = (Number(plan.version) || 0) + 1;
+  c.planBP = plan;
+  await window._updateDoc(window._doc(window._db,'clients',clientId), { planBP: plan });
+}
+async function bpPushPlan(clientId, verbose){
+  try{
+    const token = (window._auth && window._auth.currentUser) ? await window._auth.currentUser.getIdToken() : '';
+    const r = await fetch('/api/academy-plan', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token }, body: JSON.stringify({ clientId }) });
+    const j = await r.json().catch(()=>({}));
+    if(verbose) showToast(j.ok ? '📤 Plan envoyé à l\'Academy' : 'Academy : '+(j.message || j.error || 'envoi impossible'), j.ok ? 'success' : 'error');
+  }catch(e){ if(verbose) showToast('Academy : '+e.message,'error'); }
+}
+async function bpSaveAB(clientId){
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c) return;
+  const p = Object.assign({ jalons:{} }, c.planBP || {});
+  p.pointA = (document.getElementById('bpA-'+clientId)||{}).value || '';
+  p.pointB = (document.getElementById('bpB-'+clientId)||{}).value || '';
+  p.coach = p.coach || c.coach || '';
+  try{ await bpSavePlan(clientId, p); showToast('✅ Point A / B enregistrés','success'); bpPushPlan(clientId, false); openDetail(clientId); }
+  catch(e){ showToast('Erreur: '+e.message,'error'); }
+}
+async function bpSetJalon(clientId, code, statut){
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c) return;
+  const p = Object.assign({ jalons:{} }, c.planBP || {});
+  p.jalons = Object.assign({}, p.jalons);
+  p.jalons[code] = Object.assign({}, p.jalons[code] || {}, { statut, at: new Date().toISOString(), par: localStorage.getItem('ambitio_name') || '' });
+  try{
+    await bpSavePlan(clientId, p);
+    if(statut !== 'todo' && c.email){
+      const token = (window._auth && window._auth.currentUser) ? await window._auth.currentUser.getIdToken() : '';
+      fetch('/api/academy-jalon', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
+        body: JSON.stringify({ email: c.email, code, statut: statut === 'ok' ? 'atteint' : 'partiel', cause: '' }) })
+        .then(r=>r.json()).then(j=>{ if(!j || !j.ok) console.warn('[bp] constat de jalon non transmis :', j && (j.message || j.error)); }).catch(()=>{});
+    }
+    showToast(code+' : '+BP_JALON_ST[statut].l.toLowerCase(),'success'); openDetail(clientId);
+  }catch(e){ showToast('Erreur: '+e.message,'error'); }
+}
+window.bpSaveAB=bpSaveAB;window.bpSetJalon=bpSetJalon;window.bpPushPlan=bpPushPlan;
+window.bpAjouter=bpAjouter;window.bpDispenser=bpDispenser;window.bpAnnuler=bpAnnuler;window.markYrConsumed=markYrConsumed;window.unmarkYrConsumed=unmarkYrConsumed;
 
 // ── EDIT CLIENT ──
 function editClient(id){
@@ -5430,6 +5749,13 @@ async function saveEditClient(){
   // Update nbCoachingsTotal if programme changed
   const nbMatch = c.programme.match(/(\d+)C/);
   if(nbMatch) c.nbCoachingsTotal = parseInt(nbMatch[1]);
+  /* Passage en Business nouveau format : J0 / fin posés s'ils manquent
+     (jamais réécrits : J0 est la date de signature du contrat). */
+  if(window.BPCredits && BPCredits.isBusinessV2(c.programme)){
+    if(!c.j0) c.j0 = c.dateEntree || new Date().toISOString().slice(0,10);
+    if(!c.finAccompagnement) c.finAccompagnement = BPCredits.addDays(c.j0, BPCredits.DUREE_JOURS);
+    if(!c.formatOffre) c.formatOffre = 'bp_v2_6mois';
+  }
 
   try{
     c._updatedAt = Date.now();

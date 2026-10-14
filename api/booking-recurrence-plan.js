@@ -112,10 +112,14 @@ module.exports = async (req, res) => {
     if (c.ancienClient === true || c.statut === 'inactif') return notEligible(res, 'client_inactive');
 
     const programme = c.programme || '';
-    if (!R.isEliteNewWeekly(programme)) return notEligible(res, 'programme_not_eligible');
+    /* Elite NEW (hebdomadaire) ou Business nouveau format (toutes les deux
+       semaines, borné à J0 + 180) — R.seriesRule (14/10/2026). */
+    const rule = await R.seriesRule(client, emailRaw);
+    if (!rule) return notEligible(res, 'programme_not_eligible');
+    if (rule.expired) return notEligible(res, 'accompagnement_termine', { fin: rule.fin });
 
-    const total = R.totalSessionsOf(programme);
-    const done = R.countDoneSessions(c) + (await R.countUpcomingCoachingBookings(emailRaw)).count;
+    const total = rule.total;
+    const done = rule.done;
     const remaining = total - done;
 
     // remaining <= 1 : il ne reste que le RDV en cours, il n'y a rien à
@@ -127,7 +131,8 @@ module.exports = async (req, res) => {
     // ── 3. Disponibilité du coach sur tout l'horizon ───────────────────────
     const params = R.slotParamsOf(ctxConf.type, ctxConf.person);
     const horizonWeeks = Math.min(recurrenceCount + R.RESERVE_WEEKS, R.MAX_HORIZON_WEEKS);
-    const lastDs = Dispo.addDays(date, 7 * horizonWeeks + 3); // +3 : les jours de repli
+    let lastDs = Dispo.addDays(date, rule.interval * horizonWeeks + 3); // +3 : les jours de repli
+    if (rule.fin && lastDs > Dispo.addDays(rule.fin, 3)) lastDs = Dispo.addDays(rule.fin, 3);
 
     // RDV Alteore de la période. Requête sur le seul champ `date` (plage
     // simple, aucun index composite requis) puis filtrage sur l'expert en
@@ -151,7 +156,7 @@ module.exports = async (req, res) => {
       minDate: Dispo.addDays(Dispo.todayParis(), minNoticeDays),
     };
 
-    const occurrences = R.buildOccurrences(ctx, date, time, recurrenceCount);
+    const occurrences = R.buildOccurrences(ctx, date, time, recurrenceCount, rule.interval, rule.fin);
 
     return json(res, 200, {
       ok: true,
@@ -161,6 +166,8 @@ module.exports = async (req, res) => {
       done,
       remaining,
       recurrenceCount,
+      intervalDays: rule.interval,
+      finAccompagnement: rule.fin || null,
       weekdayLabel: JOURS_FR[Dispo.ymdToDate(date).getDay()],
       calendarConnected: ctxConf.person.calendarConnected === true,
       occurrences,

@@ -424,7 +424,22 @@ function switchTab(tab){
    requêtes : complète pour les admins, filtrée pour l'équipe (tri local). */
 function _isAdm(){return window._currentRole==='admin';}
 function _tsSec(v){return v&&v.seconds?v.seconds:0;}
+/* BUSINESS PHÉNIX — NOUVEAU FORMAT (14/10/2026) : _config/business_phenix.
+   Interrupteur allumé → les modèles Business 12 mois (BP12…) sont MASQUÉS
+   aux closers (jamais supprimés) ; éteint → c'est le modèle 6 mois qui
+   leur est masqué. Les admins voient tout, avec un badge. */
+var BP_CFG={};
+function _bpFold(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
+function _bpIsNew(t){if((BP_CFG.templateIds||[]).indexOf(t.id)>=0)return true;var n=_bpFold(t.name);return n.indexOf('business')>=0&&/6\s*mois/.test(n);}
+function _bpIsOld(t){if(_bpIsNew(t))return false;var n=_bpFold(t.name);return /^bp\s?12\b/.test(n)||(n.indexOf('business')>=0&&/12\s*(mois|c\b)/.test(n));}
+/* 'hidden-new' | 'hidden-old' | '' : visibilité d'un modèle pour l'équipe. */
+function _bpTplState(t){if(BP_CFG.active===true)return _bpIsOld(t)?'hidden-old':'';return _bpIsNew(t)?'hidden-new':'';}
+function loadBusinessCfg(){
+  db.collection('_config').doc('business_phenix').get().then(function(s){BP_CFG=s.exists?(s.data()||{}):{};renderTemplates();})
+    .catch(function(e){console.warn('[SIG] _config/business_phenix illisible :',e&&e.message);});
+}
 function loadTemplates(){
+  loadBusinessCfg();
   var q=_isAdm()?db.collection('signature_templates').orderBy('createdAt','desc'):db.collection('signature_templates').where('audience','==','equipe');
   q.get().then(function(sn){
     TPL=[];
@@ -447,12 +462,16 @@ function renderTemplates(){
   TPL.forEach(function(t){
     if(t.isAdhoc)return; // Envois rapides : modèles éphémères, cachés de la grille
     if(t.audience==='admin')return; // Modèles confidentiels : onglet 🔒 Espace admin
+    var bpSt=_bpTplState(t);
+    if(bpSt&&!_isAdm())return; // Business : seule la formule en vigueur est proposée aux closers
     /* Un clic ouvre l'atelier (texte du contrat) pour les admins ; l'ancien
        éditeur de PDF reste accessible par son bouton 📐. */
     var gen=t.web&&t.web.generated;
     var studio=window._currentRole==='admin'&&(gen||(t.web&&t.web.sections));
     h+='<div class="tpl-card" data-tpl="'+esc(t.id)+'" data-studio="'+(studio?'1':'')+'">';
     h+='<div class="tpl-card-name">'+esc(t.name||'Sans nom')+'</div>';
+    if(bpSt==='hidden-old')h+='<div class="tpl-card-meta" style="color:#f59e0b">🗄 Ancienne formule 12 mois — masqué pour les closers</div>';
+    if(bpSt==='hidden-new')h+='<div class="tpl-card-meta" style="color:#f97316">⏸ Business 6 mois — visible des closers au démarrage (Offres &amp; formules)</div>';
     h+='<div class="tpl-card-meta">'+(gen?('✨ Atelier · texte v'+(t.web.version||1)+' · PDF généré'):(((t.fields||[]).length)+' champs · '+(t.pages||0)+' pages'+(t.web&&t.web.sections?' · texte web':'')))+'</div>';
     if(t.academyCourseId==='__none__'){h+='<div class="tpl-card-meta" style="color:#f59e0b">🚫 Sans accès Academy</div>';}
     else if(t.academyCourseId){h+='<div class="tpl-card-meta" style="color:#34d399">🎓 '+esc(t.academyCourseName||'Formation liée')+'</div>';}
@@ -1268,6 +1287,18 @@ function _collectPrefill(){
     if(actif)manque.push(inp.getAttribute('data-label'));
   });
   if(manque.length){alert('À renseigner avant l\'envoi :\n• '+manque.join('\n• '));return null;}
+  /* Business Phénix 6 mois (14/10/2026) : 6 mensualités maximum (BP MENS).
+     L'atelier ne sait pas borner un champ nombre : contrôle ici. */
+  var tplB=_sendTpl();
+  if(tplB&&tplB.id&&_bpIsNew(tplB)){
+    var trop=null;
+    [].slice.call(document.querySelectorAll('#sendPrefill [data-prefill]')).forEach(function(inp){
+      if(!/mensualit/i.test(inp.getAttribute('data-label')||''))return;
+      var n=parseInt(inp.value,10);
+      if(inp.value.trim()&&(!(n>=1)||n>6))trop=inp.value.trim();
+    });
+    if(trop!==null){alert('Business Phénix : 6 mensualités maximum (BP MENS). Valeur saisie : '+trop+'.');return null;}
+  }
   return prefill;
 }
 function toggleSecondSigner(checked){

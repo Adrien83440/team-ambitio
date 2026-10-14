@@ -119,6 +119,26 @@
 const { db } = require('./_firebaseAdmin');
 const parseBody = require('./_parseBody');
 const { effectiveMonthlyQuota, monthlyQuotaFromProgramme } = require('./_coaching-quota');
+const BP = require('../bp-credits.js');
+
+/* Toutes les réservations coaching d'un client (deux graphies de l'e-mail,
+   dédoublonnées) — pour le compteur Business nouveau format. */
+async function allCoachingBookings(rawEmail) {
+  const raw = String(rawEmail || '').trim(), low = raw.toLowerCase();
+  const seen = {}, out = [];
+  const graphies = raw && raw !== low ? [low, raw] : [low];
+  for (let i = 0; i < graphies.length; i++) {
+    if (!graphies[i]) continue;
+    const sn = await db.collection('bookings').where('prospect.email', '==', graphies[i]).get();
+    sn.forEach(function (d) {
+      if (seen[d.id]) return;
+      seen[d.id] = 1;
+      const b = d.data() || {};
+      if (b.isCoaching === true) out.push(Object.assign({ id: d.id }, b));
+    });
+  }
+  return out;
+}
 
 function normEmail(e) {
   return (e || '').toString().trim().toLowerCase();
@@ -235,7 +255,7 @@ function countUsed(sessionsByDay, bookingsByDay) {
  *    n'était jamais bloqué. Le balayage ne lit que le champ `email`
  *    (projection `select`) puis recharge le seul document retenu.
  *
- * @returns {Promise<{data:Object|null, matchedBy:string}>}
+ * @returns {Promise<{data:Object|null, id:string|null, matchedBy:string}>}
  */
 async function findClientByEmail(rawEmail) {
   const raw = String(rawEmail || '').trim();
@@ -247,7 +267,7 @@ async function findClientByEmail(rawEmail) {
     const snap = await db.collection('clients').where('email', '==', v).limit(2).get();
     if (!snap.empty) {
       if (snap.size > 1) console.warn('[check-coaching-quota] multiple clients for email', lower);
-      return { data: snap.docs[0].data(), matchedBy: 'exact' };
+      return { data: snap.docs[0].data(), id: snap.docs[0].id, matchedBy: 'exact' };
     }
   }
 
@@ -263,12 +283,12 @@ async function findClientByEmail(rawEmail) {
     const e = ((doc.get('email') || '') + '').trim().toLowerCase();
     if (e && e === lower) hitId = doc.id;
   });
-  if (!hitId) return { data: null, matchedBy: 'none' };
+  if (!hitId) return { data: null, id: null, matchedBy: 'none' };
 
   console.warn('[check-coaching-quota] client trouvé par balayage insensible à la casse — '
     + 'email à normaliser sur clients/' + hitId);
   const full = await db.collection('clients').doc(hitId).get();
-  return { data: full.exists ? full.data() : null, matchedBy: 'scan' };
+  return { data: full.exists ? full.data() : null, id: full.exists ? hitId : null, matchedBy: 'scan' };
 }
 
 module.exports = async (req, res) => {
@@ -299,9 +319,11 @@ module.exports = async (req, res) => {
     // ── 1. Cherche la fiche client coaching par email ──────────────────────
     let clientData = null;
     let matchedBy = 'none';
+    let matchedId = null;
     try {
       const found = await findClientByEmail(body.email || email);
       clientData = found.data;
+      matchedId = found.id || null;
       matchedBy = found.matchedBy;
     } catch (e) {
       console.error('[check-coaching-quota] clients query error:', e);
@@ -341,6 +363,37 @@ module.exports = async (req, res) => {
         quota: 0,
         programme: clientData.programme || null
       });
+      return;
+    }
+
+    // ── 1 bis. Business Phénix nouveau format (14/10/2026) ─────────────────
+    // Créneau fixe toutes les deux semaines, posé par le coach : pas de
+    // réservation libre d'un coaching individuel (reason 'bp_creneau_fixe'
+    // — en mode agent, la CSM ou le coach replace un report : booking.html
+    // laisse passer). 10 séances consommées ou J0 + 180 dépassé : blocage
+    // total (reason 'bp_complet'). Le RDV audit business (séance 0) n'est
+    // jamais concerné. Type inconnu (ancienne page en cache) : on applique
+    // la règle du compteur seulement.
+    if (BP.isBusinessV2(clientData.programme)) {
+      const typeRef = { type: String(body.typeId || ''), typeLabel: String(body.typeLabel || '') };
+      if ((typeRef.type || typeRef.typeLabel) && BP.isAuditBooking(typeRef)) {
+        res.status(200).json({ ok: true, allowed: true, clientFound: true, programme: clientData.programme, bp: { audit: true } });
+        return;
+      }
+      let credits = null;
+      try {
+        const ajouts = [];
+        if (matchedId) {
+          const ajSnap = await db.collection('clients').doc(matchedId).collection('seances_ajouts').get();
+          ajSnap.forEach(function (d) { ajouts.push(d.data() || {}); });
+        }
+        credits = BP.compute(clientData, { bookings: await allCoachingBookings(body.email || email), ajouts: ajouts });
+      } catch (e) { console.error('[check-coaching-quota] compteur Business :', e); }
+      if (credits && credits.bloque) {
+        res.status(200).json({ ok: true, allowed: false, clientFound: true, reason: 'bp_complet', expired: credits.expired, fin: credits.fin, used: credits.consumed, quota: credits.total, programme: clientData.programme });
+        return;
+      }
+      res.status(200).json({ ok: true, allowed: false, clientFound: true, reason: 'bp_creneau_fixe', used: credits ? credits.consumed : 0, quota: credits ? credits.total : BP.TOTAL, restantes: credits ? credits.restantes : null, programme: clientData.programme });
       return;
     }
 

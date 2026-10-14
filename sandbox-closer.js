@@ -367,12 +367,19 @@
     renderWizard();
   }
   function cwPay() { var c = ui.cw, oc = X.PRICING[c.a.contrat]; if (!oc) return null; return c.a.paiement === 'pif' ? oc.pif : oc.mensualise; }
+  /* Même libellé que close-wizard.js : prix HT, BP/EP PIF/MENS, max ×. */
+  function cwOfferLine(key) {
+    var oc = X.PRICING[key], AF = window.AlteoreFlow;
+    if (!oc) return '';
+    function code(st) { return AF && AF.offreCode ? AF.offreCode(oc.commOffre, st) : (st === 'pif' ? 'PIF' : 'MENS'); }
+    return (oc.format === 'v2_6mois' ? '6 mois<br>' : '') + code('pif') + ' ' + euro(oc.pif.contracte) + ' HT<br>' + code('mensualise') + ' ' + euro(oc.mensualise.contracte) + ' HT (≤ ' + oc.mensualise.maxX + '×)';
+  }
   function cwOpt(field, v, ic, lb, pr) { return '<button class="cw-opt' + (ui.cw.a[field] === v ? ' sel' : '') + '" data-a="cwPick" data-f="' + field + '" data-v="' + v + '"><span class="ic">' + ic + '</span><span class="lb2">' + lb + '</span><div class="pr">' + pr + '</div></button>'; }
   function renderWizard() {
     var c = ui.cw, l = X.leadById(S(), c.id), key = CW_STEPS[c.step], h = '', title = '';
     if (key === 'contrat') {
       title = 'Close — contrat signé';
-      h += '<div class="cw-q">Quel type de contrat a été signé ?</div><div class="cw-opts">' + cwOpt('contrat', 'Elite', '👑', 'ELITE', 'PIF 12 000 € HT<br>MENS 13 000 € HT (≤ 4×)') + cwOpt('contrat', 'Business', '🚀', 'BUSINESS', 'PIF 5 000 € HT<br>MENS 6 000 € HT (≤ 10×)') + '</div>';
+      h += '<div class="cw-q">Quel type de contrat a été signé ?</div><div class="cw-opts">' + cwOpt('contrat', 'Elite', '👑', 'ELITE', cwOfferLine('Elite')) + cwOpt('contrat', 'Business', '🚀', 'BUSINESS', cwOfferLine('Business')) + '</div>';
     } else if (key === 'paiement') {
       title = 'Close — paiement';
       var oc = X.PRICING[c.a.contrat];
@@ -964,13 +971,19 @@
     var cfgP = real.collection('booking_config').get().then(function (sn) {
       sn.forEach(function (d) { st.setOverlay('booking_config/' + d.id, window.SBXDB.encode(d.data())); });
     }).catch(function (e) { if (window.console) console.warn('[sandbox] agendas illisibles', e && e.message); });
+    /* Interrupteur du nouveau format Business (14/10/2026), lecture seule :
+       Signatures et Paiements, dans le cadre, proposent la même formule
+       que le vrai module. */
+    var bpP = real.collection('_config').doc('business_phenix').get().then(function (d) {
+      if (d.exists) st.setOverlay('_config/business_phenix', window.SBXDB.encode(d.data()));
+    }).catch(function (e) { if (window.console) console.warn('[sandbox] _config/business_phenix illisible', e && e.message); });
     /* Seulement les modèles de l'ÉQUIPE : les règles refusent à un sales une
        lecture non filtrée (espace admin confidentiel, audience 'admin'), et
        un contrat confidentiel n'a rien à faire dans l'entraînement. */
     return real.collection('signature_templates').where('audience', '==', 'equipe').get().then(function (sn) {
       var n = 0;
       sn.forEach(function (d) { st.setOverlay('signature_templates/' + d.id, window.SBXDB.encode(d.data())); n++; });
-      return cfgP.then(function () { return n; });
+      return Promise.all([cfgP, bpP]).then(function () { return n; });
     });
   }
   function start(user) {
@@ -981,7 +994,15 @@
     st.host = { deliver: X.deliver, registry: X.registry };
     $('sideMe').textContent = '👤 ' + window._sbxUser;
     $('vLock').innerHTML = 'Chargement des contrats du moment…';
-    if (window.AlteoreFlow && window.AlteoreFlow.WIZARD_PRICING) X.setPricing(window.AlteoreFlow.WIZARD_PRICING);
+    /* Tarifs du moment : suivent l'interrupteur du nouveau format Business
+       (_config/business_phenix, lu en lecture seule par alteore-flow.js). */
+    function syncPricing() {
+      var AF = window.AlteoreFlow;
+      if (AF && AF.wizardPricing) X.setPricing(AF.wizardPricing());
+      else if (AF && AF.WIZARD_PRICING) X.setPricing(AF.WIZARD_PRICING);
+    }
+    syncPricing();
+    window.addEventListener('business-config-changed', function () { syncPricing(); if (ui.cw) renderWizard(); });
     /* L'équipe réelle (lecture seule) : coachs, setters, annuaire. */
     var teamP = firebase.firestore().collection('_meta').doc('team_members').get().then(function (snap) {
       var raw = (snap.exists && snap.data().members) || {};

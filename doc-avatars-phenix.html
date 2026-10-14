@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Avatars — Business Phénix · Elite Phénix</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Charte des documents Phénix : orange = Business Phénix, violet = Elite Phénix. */
+  :root{
+    --ink:#151A2D; --soft:#3A4258; --mut:#667089; --line:#E4E6EE; --bg:#F6F5F2; --card:#FFFFFF;
+    --bp:#E8620C; --bp-dk:#B04A06; --bp-soft:#FFF2E8; --bp-line:#F6C9A3;
+    --ep:#6A3FD4; --ep-dk:#4C2AA6; --ep-soft:#F3EEFF; --ep-line:#D3C4FA;
+    --grey:#8A93A8; --grey-soft:#EEF0F5; --red:#B42318; --red-soft:#FEF0EE;
+    --display:'Sora',system-ui,sans-serif;
+    --body:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+  body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.6}
+  .wrap{max-width:980px;margin:0 auto;padding:0 20px}
+
+  .hero{background:linear-gradient(115deg,#2A1406 0%,#3A1A08 38%,#24164A 62%,#170F33 100%);color:#fff;padding:50px 0 42px}
+  .eyebrow{display:inline-block;font-family:var(--display);font-size:11.5px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:#FFD9BF;border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:6px 14px;margin-bottom:18px}
+  .hero h1{font-family:var(--display);font-weight:800;font-size:clamp(28px,4.6vw,44px);line-height:1.08;letter-spacing:-.02em;margin-bottom:14px}
+  .hero h1 .b{color:#FF9A57} .hero h1 .e{color:#B9A2FF}
+  .hero p{max-width:680px;color:#E4DEEF;font-size:16.5px}
+
+  .toc{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0 4px}
+  .toc a{font-family:var(--display);font-size:12px;font-weight:600;color:var(--soft);text-decoration:none;background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 13px}
+
+  section{padding:42px 0 6px}
+  .kick{font-family:var(--display);font-size:12px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;margin-bottom:8px;color:var(--mut)}
+  h2{font-family:var(--display);font-weight:800;font-size:clamp(22px,3.2vw,30px);line-height:1.15;margin-bottom:12px}
+  h3{font-family:var(--display);font-weight:700;font-size:18px;line-height:1.3;margin-bottom:8px}
+  .lead{color:var(--soft);font-size:16px;max-width:760px;margin-bottom:16px}
+  p{margin-bottom:10px}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px 22px}
+  .card.b{border-top:4px solid var(--bp)} .card.e{border-top:4px solid var(--ep)}
+  .card.b h3{color:var(--bp-dk)} .card.e h3{color:var(--ep-dk)}
+  .card ul{list-style:none;margin-top:6px}
+  .card li{position:relative;padding-left:18px;margin-bottom:7px;color:var(--soft);font-size:15px}
+  .card li::before{content:'';position:absolute;left:2px;top:10px;width:6px;height:6px;border-radius:50%;background:var(--grey)}
+  .card.b li::before{background:var(--bp)} .card.e li::before{background:var(--ep)}
+  .card li strong{color:var(--ink)}
+
+  .q{font-family:var(--display);font-weight:800;font-size:clamp(21px,3vw,27px);text-align:center;margin:6px 0 18px}
+  .ans{font-family:var(--display);font-weight:800;font-size:13px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:6px}
+  .card.b .ans{color:var(--bp)} .card.e .ans{color:var(--ep)}
+
+  .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:14px;border:1px solid var(--line);background:#fff}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  th{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;text-align:left;padding:11px 14px;color:#fff;background:var(--ink)}
+  th.cb{background:var(--bp)} th.ce{background:var(--ep)}
+  td{padding:11px 14px;border-top:1px solid var(--line);vertical-align:top;color:var(--soft)}
+  td:first-child{font-weight:600;color:var(--ink);white-space:nowrap}
+  td.cb{background:#FFFBF7} td.ce{background:#FBF9FF}
+
+  /* Jauge CA */
+  .gauge{display:grid;grid-template-columns:1fr 2fr 2fr 2.4fr;border-radius:14px;overflow:hidden;border:1px solid var(--line);margin-top:6px}
+  .gauge div{padding:14px 12px;font-size:13.5px;line-height:1.4}
+  .gauge strong{display:block;font-family:var(--display);font-size:14px}
+  .g0{background:var(--grey-soft);color:var(--soft)}
+  .g1{background:var(--bp-soft);color:var(--bp-dk)}
+  .g2{background:repeating-linear-gradient(135deg,#FFF2E8 0 14px,#F3EEFF 14px 28px);color:var(--ink)}
+  .g3{background:var(--ep-soft);color:var(--ep-dk)}
+  .scale{display:grid;grid-template-columns:1fr 2fr 2fr 2.4fr;font-size:12px;color:var(--mut);font-weight:600;margin-top:4px}
+  .scale span{padding-left:2px}
+
+  .callout{border-radius:0 14px 14px 0;padding:14px 18px;margin-top:14px;font-size:15px;color:var(--soft);background:#fff;border-left:4px solid var(--ink)}
+  .callout strong{color:var(--ink)}
+  .callout.b{border-left-color:var(--bp)} .callout.e{border-left-color:var(--ep)}
+  .callout.red{border-left-color:var(--red);background:var(--red-soft)}
+  .callout.grey{border-left-color:var(--grey)}
+
+  .ex{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .ex span{font-size:13px;font-weight:600;background:var(--bp-soft);color:var(--bp-dk);border:1px solid var(--bp-line);border-radius:999px;padding:4px 11px}
+
+  footer{margin-top:54px;padding:22px 0 50px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--mut)}
+
+  @media (max-width:820px){
+    .grid2{grid-template-columns:1fr}
+    .gauge,.scale{grid-template-columns:1fr}
+    .scale{display:none}
+    .gauge div strong::after{content:attr(data-r);font-family:var(--body);font-weight:600;font-size:12px;margin-left:6px;opacity:.8}
+  }
+  @media print{
+    @page{size:A4;margin:13mm}
+    html,body{background:#fff}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .toc{display:none}
+    .hero{padding:24px 0 20px}
+    section{padding-top:24px}
+    .card,tr,.callout,.gauge{break-inside:avoid;page-break-inside:avoid}
+    h2,h3{break-after:avoid;page-break-after:avoid}
+    .tbl-wrap{overflow:visible}
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow">Document interne · Équipe closing</span>
+    <h1>Avatars <span class="b">Business Phénix</span><br>et <span class="e">Elite Phénix</span>.</h1>
+    <p>Qui va dans quelle offre, et pourquoi. Deux offres pour deux problèmes : la rentabilité pour Business, la délégation pour Elite. Le chiffre d'affaires aide à situer le prospect ; c'est la découverte qui tranche.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <nav class="toc" aria-label="Sommaire">
+    <a href="#bascule">Règle de bascule</a>
+    <a href="#criteres">Critères</a>
+    <a href="#zone-grise">Zone grise &amp; plancher</a>
+    <a href="#profils">Profils types</a>
+    <a href="#hors-cible">Hors cible Business</a>
+    <a href="#argent">L'argent</a>
+  </nav>
+
+  <section id="bascule">
+    <div class="kick">Règle de bascule</div>
+    <h2>Une question avant tout le reste.</h2>
+    <p class="q">Le dirigeant se paie-t-il correctement&nbsp;?</p>
+    <div class="grid2">
+      <div class="card b">
+        <div class="ans">Non</div>
+        <h3>Business Phénix — problème de rentabilité</h3>
+        <p>Il ne se paie pas, ou mal, <strong>faute de rentabilité</strong>. Pas par choix fiscal : un dirigeant qui se rémunère en dividendes ou qui laisse sa trésorerie dans la société par stratégie n'est pas dans ce cas.</p>
+      </div>
+      <div class="card e">
+        <div class="ans">Oui, mais…</div>
+        <h3>Elite Phénix — problème de délégation</h3>
+        <p>Il se paie, mais il est <strong>noyé dans l'opérationnel</strong> : tout remonte à lui, rien n'avance sans lui.</p>
+      </div>
+    </div>
+    <div class="callout">
+      <strong>Le closer choisit l'offre ; il ne propose jamais les deux.</strong> Un profil Elite reste Elite, même s'il hésite sur le prix : Business n'est pas une solution de repli. Business n'est pas non plus une « petite » version d'Elite : c'est une offre à part entière, pour un autre problème.
+    </div>
+  </section>
+
+  <section id="criteres">
+    <div class="kick">Critères</div>
+    <h2>Les repères de la découverte.</h2>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Critère</th><th class="cb">Business Phénix</th><th class="ce">Elite Phénix</th></tr></thead>
+        <tbody>
+          <tr><td>CA annuel</td><td class="cb">Moins de 300 K€</td><td class="ce">500 K€ et plus</td></tr>
+          <tr><td>Salariés</td><td class="cb">1 à 3</td><td class="ce">5 à 10 et plus</td></tr>
+          <tr><td>Rémunération du dirigeant</td><td class="cb">Faible ou nulle, subie (pas un choix fiscal)</td><td class="ce">Se paie</td></tr>
+          <tr><td>Problème central</td><td class="cb">Marge, prix, charges, offre, pilotage</td><td class="ce">Délégation, management, recrutement, temps</td></tr>
+          <tr><td>Il travaille…</td><td class="cb">Pour survivre</td><td class="ce">Dans l'entreprise au lieu de travailler sur l'entreprise</td></tr>
+          <tr><td>Objection principale</td><td class="cb">« Je n'ai pas l'argent »</td><td class="ce">« Je n'ai pas le temps »</td></tr>
+          <tr><td>Équivalent</td><td class="cb">TPE</td><td class="ce">PME</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="zone-grise">
+    <div class="kick">Zone grise &amp; plancher</div>
+    <h2>Le chiffre situe. La découverte tranche.</h2>
+    <div class="gauge" role="img" aria-label="Repères de chiffre d'affaires annuel : moins de 100 K€ hors cible, 100 à 300 K€ Business, 300 à 500 K€ zone grise, 500 K€ et plus Elite">
+      <div class="g0"><strong data-r="< 100 K€">Hors cible</strong>Sous le plancher</div>
+      <div class="g1"><strong data-r="100–300 K€">Business</strong>1 à 3 salariés</div>
+      <div class="g2"><strong data-r="300–500 K€">Zone grise</strong>ou 3 à 5 salariés</div>
+      <div class="g3"><strong data-r="≥ 500 K€">Elite</strong>5 à 10 salariés et plus</div>
+    </div>
+    <div class="scale"><span>0</span><span>≈ 100 K€</span><span>300 K€</span><span>500 K€ et plus</span></div>
+
+    <div class="grid2" style="margin-top:18px">
+      <div class="card">
+        <h3>Zone grise : 300 à 500 K€, ou 3 à 5 salariés</h3>
+        <p>Le chiffre ne décide pas seul. Ce qui tranche :</p>
+        <ul>
+          <li><strong>La rémunération du dirigeant</strong> : se paie-t-il, et si non, pourquoi&nbsp;?</li>
+          <li><strong>La nature du problème</strong> : marge, prix, charges (Business) ou délégation, équipe, temps (Elite)&nbsp;?</li>
+          <li><strong>La motivation</strong> : ce qu'il veut vraiment changer, et pour quand.</li>
+        </ul>
+        <p style="margin-top:8px"><strong>Dans le doute, la zone penche vers Elite.</strong></p>
+      </div>
+      <div class="card b">
+        <h3>Plancher Business : environ 100 K€ de CA annuel</h3>
+        <p>En dessous, on n'y va pas : l'entreprise n'a pas encore la matière pour que le travail sur la marge, les prix et le salaire du dirigeant produise un effet.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="profils">
+    <div class="kick">Profils types</div>
+    <h2>À quoi ils ressemblent.</h2>
+    <div class="grid2">
+      <div class="card b">
+        <h3>Business Phénix</h3>
+        <p>Commerçant ou TPE physique : restauration, retail, bien-être, artisanat, services. Un local, des charges fixes.</p>
+        <ul>
+          <li>Ne connaît ni sa marge par produit ni ses indicateurs</li>
+          <li>Ne sait pas lire son bilan</li>
+          <li>Doute de ses prix</li>
+          <li>Se paie peu ou pas, et le subit</li>
+        </ul>
+        <div class="ex"><span>≈ 10 K€ / mois avec 3 apprentis</span><span>Boulanger à 16–17 K€ / mois</span></div>
+      </div>
+      <div class="card e">
+        <h3>Elite Phénix</h3>
+        <p>Dirigeant de TPE/PME établie — équipe, charges fixes, complexité — devenu le centre de tout : tout remonte à lui, rien n'avance sans lui.</p>
+        <ul>
+          <li>Se paie, l'entreprise est rentable</li>
+          <li>Travaille dans l'entreprise au lieu de travailler sur l'entreprise</li>
+          <li>Bute sur la délégation, le management, le recrutement</li>
+          <li>Son premier manque : le temps</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="hors-cible">
+    <div class="kick">Hors cible Business</div>
+    <h2>Ceux qu'on n'embarque pas dans Business.</h2>
+    <div class="card">
+      <ul>
+        <li><strong>Commerces de proximité au modèle en déclin</strong> : petites merceries, boulangeries en difficulté, modèles dépassés. On ne joue plus les sauveurs.</li>
+        <li><strong>Pas de local ni de salarié</strong>, ou activité trop jeune.</li>
+        <li><strong>Procédure collective</strong> en cours ou dépôt de bilan imminent.</li>
+        <li><strong>Dirigeant qui ne se paie pas par choix fiscal</strong> : ce n'est pas un problème de rentabilité.</li>
+        <li><strong>Sous le plancher</strong> d'environ 100 K€ de CA annuel.</li>
+        <li><strong>Profil trop avancé</strong> (exemple : 100 K€ par mois et 15 salariés) : c'est Elite, jamais Business.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="argent">
+    <div class="kick">L'argent</div>
+    <h2>« Je n'ai pas l'argent » ne disqualifie pas.</h2>
+    <div class="callout red">
+      <strong>L'argent n'est pas un motif de disqualification en soi.</strong> Un prospect très motivé peut aller chercher le financement. C'est la <strong>motivation</strong> qu'on qualifie, pas le compte en banque du jour. Et un profil Elite qui hésite sur le prix ne bascule pas sur Business pour autant.
+    </div>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  <span>Avatars Business Phénix · Elite Phénix — Ambitio Corp</span>
+  <span>Document interne · version du 14 octobre 2026</span>
+</footer>
+
+</body>
+</html>

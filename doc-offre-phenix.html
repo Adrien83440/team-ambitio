@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Business Phénix · Elite Phénix — Document d'offre</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Charte des documents Phénix : orange = Business Phénix, violet = Elite Phénix.
+     Page autonome, sans nav.js : imprimable telle quelle (CSS print en bas). */
+  :root{
+    --ink:#151A2D; --soft:#3A4258; --mut:#667089; --line:#E4E6EE; --bg:#F6F5F2; --card:#FFFFFF;
+    --bp:#E8620C; --bp-dk:#B04A06; --bp-soft:#FFF2E8; --bp-line:#F6C9A3;
+    --ep:#6A3FD4; --ep-dk:#4C2AA6; --ep-soft:#F3EEFF; --ep-line:#D3C4FA;
+    --display:'Sora',system-ui,sans-serif;
+    --body:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+  body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.6}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 20px}
+
+  /* ---------- En-tête ---------- */
+  .hero{background:linear-gradient(115deg,#2A1406 0%,#3A1A08 38%,#24164A 62%,#170F33 100%);color:#fff;padding:54px 0 46px}
+  .eyebrow{display:inline-block;font-family:var(--display);font-size:11.5px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:#FFD9BF;border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:6px 14px;margin-bottom:20px}
+  .hero h1{font-family:var(--display);font-weight:800;font-size:clamp(30px,5vw,48px);line-height:1.06;letter-spacing:-.02em;margin-bottom:16px}
+  .hero h1 .b{color:#FF9A57} .hero h1 .e{color:#B9A2FF}
+  .hero p{max-width:680px;color:#E4DEEF;font-size:17px}
+  .duo{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:30px}
+  .duo a{display:block;text-decoration:none;color:#fff;border-radius:14px;padding:18px 20px;border:1px solid rgba(255,255,255,.18)}
+  .duo .b{background:rgba(232,98,12,.22)} .duo .e{background:rgba(106,63,212,.30)}
+  .duo strong{display:block;font-family:var(--display);font-size:19px;margin-bottom:4px}
+  .duo span{font-size:14px;color:#EDE6F7}
+
+  .usage{background:#fff;border:1px solid var(--line);border-left:4px solid var(--ink);border-radius:0 12px 12px 0;padding:12px 16px;margin:26px 0 0;font-size:14px;color:var(--soft)}
+
+  /* ---------- Sommaire ---------- */
+  .toc{display:flex;flex-wrap:wrap;gap:8px;margin:22px 0 4px}
+  .toc a{font-family:var(--display);font-size:12px;font-weight:600;color:var(--soft);text-decoration:none;background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 13px}
+  .toc a:hover{border-color:var(--ink)}
+
+  /* ---------- Sections ---------- */
+  section{padding:46px 0 6px}
+  .kick{font-family:var(--display);font-size:12px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;margin-bottom:8px;color:var(--mut)}
+  .kick.b{color:var(--bp)} .kick.e{color:var(--ep)}
+  h2{font-family:var(--display);font-weight:800;font-size:clamp(24px,3.4vw,32px);line-height:1.15;letter-spacing:-.01em;margin-bottom:12px}
+  h3{font-family:var(--display);font-weight:700;font-size:18px;line-height:1.3;margin-bottom:8px}
+  .lead{color:var(--soft);font-size:16.5px;max-width:760px;margin-bottom:18px}
+  p{margin-bottom:10px}
+
+  .band{border-radius:20px;padding:30px 28px;margin-top:8px}
+  .band.b{background:var(--bp-soft);border:1px solid var(--bp-line)}
+  .band.e{background:var(--ep-soft);border:1px solid var(--ep-line)}
+  .band .tag{display:inline-block;font-family:var(--display);font-weight:700;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#fff;border-radius:999px;padding:5px 13px;margin-bottom:14px}
+  .band.b .tag{background:var(--bp)} .band.e .tag{background:var(--ep)}
+  .band h2{margin-bottom:6px}
+  .band .tagline{font-size:17px;color:var(--soft);margin-bottom:22px;max-width:760px}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px 22px}
+  .card.b{border-top:4px solid var(--bp)} .card.e{border-top:4px solid var(--ep)}
+  .card .lab{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);margin-bottom:6px}
+  .card ul{list-style:none;margin-top:6px}
+  .card li{position:relative;padding-left:18px;margin-bottom:7px;color:var(--soft);font-size:15px}
+  .card li::before{content:'';position:absolute;left:2px;top:10px;width:6px;height:6px;border-radius:50%;background:var(--mut)}
+  .b li::before,.card.b li::before{background:var(--bp)}
+  .e li::before,.card.e li::before{background:var(--ep)}
+  .card li strong{color:var(--ink)}
+  ul.no li::before{content:'✕';background:none;width:auto;height:auto;top:0;left:0;font-size:12px;font-weight:800;color:var(--mut)}
+  .quote{font-family:var(--display);font-weight:600;font-size:15px;color:var(--ink);margin:4px 0 8px}
+  .moteur .num{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;color:#fff;font-family:var(--display);font-weight:800;font-size:14px;margin-bottom:10px}
+  .card.b .num{background:var(--bp)} .card.e .num{background:var(--ep)}
+  .seances{font-size:12.5px;font-weight:600;color:var(--mut);margin-top:6px}
+
+  /* ---------- Règle de bascule ---------- */
+  .q{font-family:var(--display);font-weight:800;font-size:clamp(22px,3vw,28px);text-align:center;margin:8px 0 18px}
+  .fork .card h3{font-size:20px}
+  .fork .ans{font-family:var(--display);font-weight:800;font-size:13px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:6px}
+  .fork .b .ans{color:var(--bp)} .fork .e .ans{color:var(--ep)}
+
+  /* ---------- Séances ---------- */
+  .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:14px;border:1px solid var(--line);background:#fff}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  th{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;text-align:left;padding:11px 14px;color:#fff;background:var(--ink)}
+  td{padding:11px 14px;border-top:1px solid var(--line);vertical-align:top;color:var(--soft)}
+  td strong{color:var(--ink)}
+  .tb th{background:var(--bp)} .te th{background:var(--ep)}
+  .mot{display:inline-block;font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 9px;white-space:nowrap}
+  .m0{background:#EEF0F5;color:var(--soft)} .m1{background:#FFE3CF;color:var(--bp-dk)} .m2{background:#FFD3B3;color:var(--bp-dk)} .m3{background:#FFC294;color:#7A3204}
+  tr.zero td{background:#FAFAFC}
+  .cmp td:first-child{font-weight:600;color:var(--ink);white-space:nowrap}
+  .cmp th.cb{background:var(--bp)} .cmp th.ce{background:var(--ep)}
+  .cmp td.cb{background:#FFFBF7} .cmp td.ce{background:#FBF9FF}
+
+  /* ---------- Prix ---------- */
+  .prices{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .price{background:#fff;border-radius:16px;padding:20px 22px}
+  .b .price{border:2px solid var(--bp-line)} .e .price{border:2px solid var(--ep-line)}
+  .price .code{font-family:var(--display);font-size:11.5px;font-weight:700;letter-spacing:.12em;color:var(--mut)}
+  .price .val{font-family:var(--display);font-weight:800;font-size:30px;line-height:1.15;margin:4px 0}
+  .b .price .val{color:var(--bp-dk)} .e .price .val{color:var(--ep-dk)}
+  .price .val small{font-size:15px;font-weight:700}
+  .price p{font-size:14px;color:var(--soft);margin:0}
+
+  /* ---------- Jalons Elite ---------- */
+  .miles{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+  .mile{background:#fff;border:1px solid var(--ep-line);border-radius:12px;padding:12px 10px;text-align:center}
+  .mile b{display:block;font-family:var(--display);font-weight:800;color:var(--ep);font-size:16px}
+  .mile em{display:block;font-style:normal;font-size:11.5px;font-weight:700;color:var(--mut)}
+  .mile span{display:block;font-size:13px;color:var(--soft);line-height:1.35;margin-top:4px}
+
+  /* ---------- Parcours ---------- */
+  .path{list-style:none;position:relative;margin-top:6px}
+  .path::before{content:'';position:absolute;left:94px;top:6px;bottom:6px;width:2px;background:var(--bp-line)}
+  .path.e::before{background:var(--ep-line)}
+  .path li{position:relative;display:grid;grid-template-columns:80px 1fr;gap:34px;margin-bottom:14px}
+  .path li::before{content:'';position:absolute;left:88px;top:7px;width:14px;height:14px;border-radius:50%;background:var(--bp);box-shadow:0 0 0 4px var(--bp-soft)}
+  .path.e li::before{background:var(--ep);box-shadow:0 0 0 4px var(--ep-soft)}
+  .path .when{font-family:var(--display);font-weight:700;font-size:13.5px;text-align:right;color:var(--bp-dk)}
+  .path.e .when{color:var(--ep-dk)}
+  .path .what strong{display:block;color:var(--ink)}
+  .path .what span{color:var(--soft);font-size:14.5px}
+  .side{font-size:14px;color:var(--soft);background:#fff;border:1px dashed var(--bp-line);border-radius:12px;padding:12px 16px;margin-top:6px}
+
+  .note{font-size:14px;color:var(--soft);border-left:4px solid var(--bp);background:#fff;border-radius:0 12px 12px 0;padding:12px 16px;margin-top:14px}
+  .note.e{border-left-color:var(--ep)}
+
+  footer{margin-top:54px;padding:22px 0 50px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--mut)}
+
+  @media (max-width:820px){
+    .grid2,.grid3,.duo,.prices{grid-template-columns:1fr}
+    .miles{grid-template-columns:repeat(3,1fr)}
+    .band{padding:24px 18px}
+    .path::before{left:8px}
+    .path li{grid-template-columns:1fr;gap:2px;padding-left:30px}
+    .path li::before{left:2px}
+    .path .when{text-align:left}
+  }
+  @media print{
+    @page{size:A4;margin:13mm}
+    html,body{background:#fff}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .toc{display:none}
+    .hero{padding:26px 0 22px}
+    section{padding-top:26px}
+    .card,.price,.mile,tr,.path li,.fork{break-inside:avoid;page-break-inside:avoid}
+    h2,h3{break-after:avoid;page-break-after:avoid}
+    #elite{break-before:page;page-break-before:always}
+    .tbl-wrap{overflow:visible}
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow">Document d'offre · Business Phénix &amp; Elite Phénix</span>
+    <h1>Deux offres.<br><span class="b">Deux problèmes</span> <span class="e">différents.</span></h1>
+    <p>Business Phénix et Elite Phénix ne sont pas deux niveaux d'un même accompagnement. Chacune répond à un problème précis, avec sa propre méthode, son propre rythme et son propre encadrement. La bonne offre est celle qui correspond à votre problème d'aujourd'hui.</p>
+    <div class="duo">
+      <a class="b" href="#business"><strong>Business Phénix</strong><span>Votre entreprise ne vous paie pas, ou mal : on remet de la rentabilité et du pilotage.</span></a>
+      <a class="e" href="#elite"><strong>Elite Phénix</strong><span>Vous vous payez, mais tout repose sur vous : on vous sort de l'opérationnel.</span></a>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <p class="usage"><strong>Usage :</strong> support du closer pendant le rendez-vous de closing. Les prix sont annoncés uniquement par le closer, en rendez-vous. Tous les prix sont hors taxes.</p>
+
+  <nav class="toc" aria-label="Sommaire">
+    <a href="#bascule">La question qui tranche</a>
+    <a href="#business">Business Phénix</a>
+    <a href="#elite">Elite Phénix</a>
+    <a href="#comparatif">Comparatif</a>
+    <a href="#parcours">Parcours client</a>
+  </nav>
+
+  <!-- ============ RÈGLE DE BASCULE ============ -->
+  <section id="bascule">
+    <div class="kick">La question qui tranche</div>
+    <h2>Une seule question oriente vers la bonne offre.</h2>
+    <p class="q">Le dirigeant se paie-t-il correctement&nbsp;?</p>
+    <div class="grid2 fork">
+      <div class="card b">
+        <div class="ans">Non — faute de rentabilité</div>
+        <h3>Business Phénix</h3>
+        <p>Le problème est un problème de <strong>rentabilité</strong> : l'entreprise tourne, mais elle ne dégage pas de quoi payer son dirigeant. On travaille les chiffres, les prix, les charges, puis les ventes.</p>
+        <p style="font-size:13.5px;color:var(--mut);margin:0">Un dirigeant qui ne se paie pas par choix fiscal ne relève pas de cette réponse.</p>
+      </div>
+      <div class="card e">
+        <div class="ans">Oui — mais il est noyé dans l'opérationnel</div>
+        <h3>Elite Phénix</h3>
+        <p>Le problème est un problème de <strong>délégation</strong> : l'entreprise est rentable, mais tout remonte au dirigeant. On structure, on délègue, on pilote, puis on développe.</p>
+      </div>
+    </div>
+    <p class="note">Une seule offre est proposée : celle qui répond au problème. Les deux accompagnements ne sont jamais présentés comme deux options à comparer sur le prix.</p>
+  </section>
+
+  <!-- ============ BUSINESS ============ -->
+  <section id="business">
+    <div class="band b">
+      <span class="tag">Business Phénix</span>
+      <h2>Votre entreprise doit vous payer.</h2>
+      <p class="tagline">Un accompagnement individuel de 6 mois pour reprendre la main sur vos chiffres, dégager une marge qui vous rémunère et faire rentrer le chiffre d'affaires qui manque.</p>
+
+      <div class="grid3">
+        <div class="card b">
+          <div class="lab">Pour qui</div>
+          <p>Dirigeants de TPE — commerce, restauration, retail, bien-être, artisanat, services — avec un local, des charges fixes et une petite équipe (1 à 3 salariés), pour un chiffre d'affaires annuel de moins de 300&nbsp;K€.</p>
+        </div>
+        <div class="card b">
+          <div class="lab">Le problème</div>
+          <p>Vous travaillez pour faire tourner l'entreprise, mais elle ne vous paie pas, ou mal. Vous ne connaissez ni votre marge par produit ni vos indicateurs, vous doutez de vos prix, et vous travaillez pour tenir plutôt que pour avancer.</p>
+        </div>
+        <div class="card b">
+          <div class="lab">L'objectif — votre point B</div>
+          <p>Vous vous versez un <strong>salaire régulier</strong>, vous <strong>connaissez vos chiffres chaque mois</strong> et vous <strong>savez quelles décisions prendre</strong>.</p>
+        </div>
+      </div>
+
+      <h3 style="margin-top:30px">La méthode : 3 moteurs, dans cet ordre</h3>
+      <p style="color:var(--soft)">Les trois moteurs sont encadrés par une séance de cadrage (séance 1) et une séance de bilan (séance 10). <strong>Vendre arrive en dernier</strong> : on ne pousse pas le chiffre d'affaires d'une entreprise qui perd de l'argent à chaque vente.</p>
+      <div class="grid3 moteur">
+        <div class="card b">
+          <span class="num">1</span>
+          <h3>Piloter</h3>
+          <p class="quote">« Je sais où j'en suis chaque mois. »</p>
+          <p style="font-size:14.5px;color:var(--soft)">Lecture du bilan et du compte de résultat, 5 indicateurs de base, tableau de bord mensuel, temps de pilotage bloqué dans l'agenda, posture de dirigeant.</p>
+          <div class="seances">Séances 2 et 3</div>
+        </div>
+        <div class="card b">
+          <span class="num">2</span>
+          <h3>Se rémunérer</h3>
+          <p class="quote">« Mon entreprise me paie. »</p>
+          <p style="font-size:14.5px;color:var(--soft)">Marge par produit, construction des prix, charges, seuil de rentabilité, trésorerie, salaire du dirigeant.</p>
+          <div class="seances">Séances 4 à 6</div>
+        </div>
+        <div class="card b">
+          <span class="num">3</span>
+          <h3>Vendre</h3>
+          <p class="quote">« Je fais rentrer le CA qui manque. »</p>
+          <p style="font-size:14.5px;color:var(--soft)">Offre et panier moyen, acquisition simple (réseaux sociaux, clientèle locale, fidélisation), premières délégations pour libérer du temps de vente.</p>
+          <div class="seances">Séances 7 à 9</div>
+        </div>
+      </div>
+
+      <h3 style="margin-top:30px">Le déroulé : un RDV audit business, puis 10 séances</h3>
+      <div class="tbl-wrap">
+        <table class="tb">
+          <thead><tr><th>Séance</th><th>Thème</th><th>Moteur</th><th>Ce que vous avez en main à la sortie</th></tr></thead>
+          <tbody>
+            <tr class="zero"><td><strong>RDV audit business</strong><br><span style="font-size:12.5px">sous 72 h</span></td><td>Premier état des lieux avec un coach, à partir de votre questionnaire de démarrage</td><td><span class="mot m0">Démarrage</span></td><td>Votre situation posée, vos documents de départ identifiés, la séance 1 en vue</td></tr>
+            <tr><td><strong>1</strong></td><td>Diagnostic et cadrage</td><td><span class="mot m0">Cadrage</span></td><td>Point A et point B posés, créneau récurrent fixé dans les deux agendas</td></tr>
+            <tr><td><strong>2</strong></td><td>Lire ses chiffres</td><td><span class="mot m1">Piloter</span></td><td>Tableau de bord mensuel en place, rempli avec le mois précédent</td></tr>
+            <tr><td><strong>3</strong></td><td>Le temps du dirigeant</td><td><span class="mot m1">Piloter</span></td><td>Première revue mensuelle de vos chiffres tenue seul</td></tr>
+            <tr><td><strong>4</strong></td><td>Marge par produit et construction des prix</td><td><span class="mot m2">Se rémunérer</span></td><td>Grille de prix revue, avec sa date d'application</td></tr>
+            <tr><td><strong>5</strong></td><td>Charges, seuil de rentabilité, trésorerie</td><td><span class="mot m2">Se rémunérer</span></td><td>Plan d'économies chiffré et seuil de rentabilité calculé</td></tr>
+            <tr><td><strong>6</strong></td><td>La rémunération du dirigeant</td><td><span class="mot m2">Se rémunérer</span></td><td>Montant et date de votre premier salaire fixés</td></tr>
+            <tr><td><strong>7</strong></td><td>Offre et concept</td><td><span class="mot m3">Vendre</span></td><td>Offre retravaillée pour vendre ce qui fait de la marge</td></tr>
+            <tr><td><strong>8</strong></td><td>Acquisition de base</td><td><span class="mot m3">Vendre</span></td><td>Plan d'action commercial sur 90 jours</td></tr>
+            <tr><td><strong>9</strong></td><td>Premières délégations</td><td><span class="mot m3">Vendre</span></td><td>2 tâches déléguées, avec une procédure simple</td></tr>
+            <tr><td><strong>10</strong></td><td>Bilan</td><td><span class="mot m0">Bilan</span></td><td>Point A et aujourd'hui comparés, plan autonome pour les 6 mois suivants</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid2" style="margin-top:22px">
+        <div class="card b">
+          <div class="lab">Le cadre</div>
+          <ul>
+            <li><strong>6 mois</strong>, soit 180 jours à compter du démarrage de l'accompagnement</li>
+            <li><strong>10 coachings individuels</strong> de 60 minutes avec <strong>un coach référent</strong>, le même du début à la fin (un remplaçant nommé uniquement pendant ses congés)</li>
+            <li>Un <strong>créneau fixe toutes les deux semaines</strong>, posé en séance 1 : même jour, même heure</li>
+            <li>13 créneaux sur la période pour 10 séances : <strong>3 créneaux de marge</strong> pour les vacances et les imprévus</li>
+            <li>Report possible jusqu'à <strong>48 h avant</strong> ; en dessous, ou en cas d'absence, la séance est comptée comme utilisée</li>
+            <li>Les séances non utilisées à la fin des 180 jours ne sont pas reportées</li>
+            <li>Après chaque séance : un <strong>compte rendu écrit</strong> et <strong>3 actions datées au maximum</strong>, sur votre plateforme de suivi</li>
+          </ul>
+        </div>
+        <div>
+          <div class="card b" style="margin-bottom:14px">
+            <div class="lab">Ce qui est inclus</div>
+            <ul>
+              <li>Le <strong>RDV audit business</strong> de 30 minutes avec un coach, dans les 72 heures</li>
+              <li>Les <strong>10 coachings individuels</strong> avec votre coach référent</li>
+              <li>Les <strong>coachings de groupe</strong> du lundi et du jeudi, ouverts à tous nos clients</li>
+              <li>La <strong>communauté Business</strong>, animée par Marine, où Adrien et Emily interviennent aussi</li>
+              <li>La <strong>plateforme de suivi</strong> : point A, point B, jalons, comptes rendus, actions</li>
+              <li>Les <strong>outils de pilotage</strong> du Vault</li>
+            </ul>
+          </div>
+          <div class="card">
+            <div class="lab">Ce qui ne l'est pas</div>
+            <ul class="no">
+              <li>Des échanges avec le coach en dehors des séances : le travail se fait en séance</li>
+              <li>Un groupe WhatsApp privé avec Adrien et Emily</li>
+              <li>Des calls experts</li>
+              <li>Des vidéos à regarder : tout se fait sur votre situation réelle</li>
+              <li>Branding, vision, culture d'entreprise, management d'équipe, recrutement</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <h3 style="margin-top:30px">Prix et paiement</h3>
+      <div class="prices">
+        <div class="price">
+          <div class="code">BP PIF · paiement comptant</div>
+          <div class="val">5 000 € <small>HT</small></div>
+          <p>Réglé en une fois.</p>
+        </div>
+        <div class="price">
+          <div class="code">BP MENS · paiement échelonné</div>
+          <div class="val">6 000 € <small>HT</small></div>
+          <p>En <strong>6 mensualités au maximum</strong>, soit 1 000 € HT par mois en 6 fois.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ELITE ============ -->
+  <section id="elite">
+    <div class="band e">
+      <span class="tag">Elite Phénix</span>
+      <h2>Diriger sans être indispensable.</h2>
+      <p class="tagline">Faire de votre entreprise un système qui tourne sans que vous ayez à tout porter.</p>
+
+      <div class="grid3">
+        <div class="card e">
+          <div class="lab">Pour qui</div>
+          <p>Pour les dirigeants de TPE/PME établies — équipe, charges fixes, complexité — devenus le centre de tout : tout remonte à vous, rien n'avance sans vous.</p>
+        </div>
+        <div class="card e">
+          <div class="lab">Le problème</div>
+          <p>La croissance qui plafonne n'est qu'un symptôme. La cause, c'est un dirigeant devenu indispensable.</p>
+        </div>
+        <div class="card e">
+          <div class="lab">L'objectif — votre point B</div>
+          <p>De « tout repose sur moi » à <strong>50 % de vos tâches opérationnelles déléguées</strong>, avec une croissance absorbée par l'équipe.</p>
+        </div>
+      </div>
+
+      <h3 style="margin-top:30px">Le Modèle Phénix, en 3 moteurs</h3>
+      <p style="color:var(--soft)">Les trois moteurs du Modèle Phénix s'attaquent à cette cause — dans cet ordre.</p>
+      <div class="grid3 moteur">
+        <div class="card e">
+          <span class="num">1</span>
+          <h3>Structuration</h3>
+          <p style="font-size:14.5px;color:var(--soft)">Sortez de l'opérationnel : les rôles sont clarifiés, la délégation devient réelle, et votre entreprise cesse de dépendre de votre présence permanente.</p>
+        </div>
+        <div class="card e">
+          <span class="num">2</span>
+          <h3>Rentabilité</h3>
+          <p style="font-size:14.5px;color:var(--soft)">Pilotez par les chiffres : vous reprenez le contrôle de vos marges et de votre trésorerie, et chaque décision s'appuie sur des données, pas sur des impressions.</p>
+        </div>
+        <div class="card e">
+          <span class="num">3</span>
+          <h3>Développement</h3>
+          <p style="font-size:14.5px;color:var(--soft)">Faites croître une entreprise qui ne dépend plus d'une seule personne — une croissance structurée, que vous choisissez au lieu de la subir.</p>
+        </div>
+      </div>
+
+      <h3 style="margin-top:30px">Les étapes clés, du point A au point B</h3>
+      <div class="miles">
+        <div class="mile"><b>A1</b><em>J10</em><span>−30 % de charge</span></div>
+        <div class="mile"><b>A2</b><em>J20</em><span>Sortie du cycle de vente</span></div>
+        <div class="mile"><b>A3</b><em>J45</em><span>Sortie de la production</span></div>
+        <div class="mile"><b>A4</b><em>J90</em><span>Pilotage par les chiffres</span></div>
+        <div class="mile"><b>A5</b><em>J135</em><span>Marge &amp; trésorerie</span></div>
+        <div class="mile"><b>B</b><em>J180</em><span>50 % délégué</span></div>
+      </div>
+
+      <div class="grid2" style="margin-top:22px">
+        <div class="card e">
+          <div class="lab">L'encadrement</div>
+          <ul>
+            <li><strong>6 mois</strong> d'accompagnement individuel</li>
+            <li><strong>24 séances sur 6 mois</strong>, sur un créneau fixe</li>
+            <li>Un <strong>coach référent dédié</strong>, le même du début à la fin de l'accompagnement</li>
+            <li>Un <strong>diagnostic de départ réalisé par Adrien ou Emily</strong>, qui transmettent ensuite votre dossier à votre coach référent</li>
+            <li>Un <strong>suivi WhatsApp entre les séances</strong> : au moins deux points par semaine, pour que rien ne retombe entre deux rendez-vous</li>
+            <li>Un <strong>expert</strong> qui intervient à la place d'une séance quand un sujet le demande</li>
+            <li>5 étapes clés, chacune validée par une victoire concrète et vérifiable</li>
+          </ul>
+        </div>
+        <div class="card e">
+          <div class="lab">Ce qui est inclus</div>
+          <ul>
+            <li>Le groupe WhatsApp privé avec votre coach, Adrien, Emily et Marine</li>
+            <li>Des outils propriétaires appliqués pendant les séances : délégation, rôles, pilotage de la semaine…</li>
+            <li>Les coachings de groupe du lundi et du jeudi</li>
+            <li>La communauté Elite</li>
+            <li>La plateforme de suivi : point A, point B, jalons, comptes rendus, actions</li>
+            <li>The Vault, en accès complet</li>
+            <li>Zéro vidéo à regarder : uniquement de l'exécution accompagnée, sur votre situation réelle</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3 style="margin-top:30px">Prix et paiement</h3>
+      <div class="prices">
+        <div class="price">
+          <div class="code">EP PIF · paiement comptant</div>
+          <div class="val">12 000 € <small>HT</small></div>
+          <p>Réglé en une fois.</p>
+        </div>
+        <div class="price">
+          <div class="code">EP MENS · paiement échelonné</div>
+          <div class="val">13 000 € <small>HT</small></div>
+          <p>4 × 3 250 € HT — <strong>4 mensualités au maximum</strong>, premier prélèvement le jour même.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ COMPARATIF ============ -->
+  <section id="comparatif">
+    <div class="kick">Côte à côte</div>
+    <h2>Deux offres, deux problèmes, deux encadrements.</h2>
+    <p class="lead">La différence ne tient pas qu'au nombre de séances : elle tient au problème traité, à l'encadrement et au moment où se trouve l'entreprise.</p>
+    <div class="tbl-wrap">
+      <table class="cmp">
+        <thead><tr><th></th><th class="cb">Business Phénix</th><th class="ce">Elite Phénix</th></tr></thead>
+        <tbody>
+          <tr><td>Problème traité</td><td class="cb">Rentabilité, pilotage de base, salaire du dirigeant</td><td class="ce">Délégation, management, recrutement, temps</td></tr>
+          <tr><td>Point de départ</td><td class="cb">Le dirigeant ne voit pas ses chiffres</td><td class="ce">Le dirigeant est le centre de tout</td></tr>
+          <tr><td>Durée</td><td class="cb">6 mois (180 jours à compter du démarrage)</td><td class="ce">6 mois (26 semaines)</td></tr>
+          <tr><td>Démarrage</td><td class="cb">RDV audit business avec un coach, sous 72 h</td><td class="ce">Diagnostic de départ avec Adrien ou Emily</td></tr>
+          <tr><td>Coachings individuels</td><td class="cb">10 séances de 60 min, créneau fixe toutes les deux semaines</td><td class="ce">24 séances sur 6 mois, créneau fixe</td></tr>
+          <tr><td>Coach</td><td class="cb">Coach référent unique</td><td class="ce">Coach référent unique</td></tr>
+          <tr><td>Suivi entre les séances</td><td class="cb">Aucun : le travail se fait en séance</td><td class="ce">WhatsApp coach : 2 points de contact par semaine minimum, réponse sous 12 h ouvrées</td></tr>
+          <tr><td>WhatsApp privé Adrien &amp; Emily</td><td class="cb">Non</td><td class="ce">Oui</td></tr>
+          <tr><td>Communauté</td><td class="cb">Communauté Business (Marine, Adrien &amp; Emily)</td><td class="ce">Communauté Elite</td></tr>
+          <tr><td>Coachings de groupe</td><td class="cb">Oui (lundi et jeudi)</td><td class="ce">Oui (lundi et jeudi)</td></tr>
+          <tr><td>Calls experts</td><td class="cb">Non</td><td class="ce">Oui, à la place d'une séance</td></tr>
+          <tr><td>Vidéos</td><td class="cb">Non</td><td class="ce">Non</td></tr>
+          <tr><td>Parcours</td><td class="cb">Point A, point B, 10 jalons Business</td><td class="ce">Point A, point B, jalons Elite</td></tr>
+          <tr><td>Plateforme de suivi</td><td class="cb">Oui</td><td class="ce">Oui</td></tr>
+          <tr><td>The Vault</td><td class="cb">Outils de pilotage</td><td class="ce">Accès complet</td></tr>
+          <tr><td>Prix HT</td><td class="cb">5 000 € comptant · 6 000 € en 6 mensualités maximum</td><td class="ce">12 000 € comptant · 13 000 € en 4 mensualités maximum</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Business traite la rentabilité et le pilotage de base : chiffres, marge, prix, charges, trésorerie, rémunération du dirigeant, offre, acquisition simple, premiers pas de délégation. Branding, vision, culture d'entreprise, management d'équipe, recrutement et sortie complète de l'opérationnel relèvent d'Elite. Quand le problème de rentabilité est réglé et que le sujet devient la délégation, la suite se traite dans Elite.</p>
+  </section>
+
+  <!-- ============ PARCOURS ============ -->
+  <section id="parcours">
+    <div class="kick b">Parcours client · Business Phénix</div>
+    <h2>Du closing au jour 180.</h2>
+    <p class="lead">J0 est le démarrage de l'accompagnement : le jour de la signature avec l'accès immédiat, sinon à l'issue du délai de rétractation de 14 jours. Tout le calendrier part de là.</p>
+    <ol class="path">
+      <li><div class="when">J0</div><div class="what"><strong>Closing et signature</strong><span>Une offre choisie, le prix HT présenté, le contrat signé avec accès immédiat, le paiement mis en place (BP PIF, ou BP MENS en 6 fois maximum).</span></div></li>
+      <li><div class="when">J0</div><div class="what"><strong>Passation à Marine</strong><span>Le closer présente Marine dans un groupe WhatsApp de bienvenue temporaire, fermé une fois l'intégration faite.</span></div></li>
+      <li><div class="when">J0 → J+3</div><div class="what"><strong>Onboarding avec Marine</strong><span>Compte sur la plateforme de suivi, coach référent attribué, accès à la communauté Business, liens des coachings de groupe, explication du cadre, liste des documents à déposer avant la séance 1.</span></div></li>
+      <li><div class="when">Sous 72 h</div><div class="what"><strong>RDV audit business</strong><span>Premier état des lieux avec un coach, à partir du questionnaire de démarrage.</span></div></li>
+      <li><div class="when">Sous 7 jours</div><div class="what"><strong>Séance 1 — Diagnostic et cadrage</strong><span>Point A, point B, créneau récurrent posé toutes les deux semaines.</span></div></li>
+      <li><div class="when">Séances 2–3</div><div class="what"><strong>Piloter</strong><span>Tableau de bord mensuel, revue mensuelle des chiffres.</span></div></li>
+      <li><div class="when">Séances 4–6</div><div class="what"><strong>Se rémunérer</strong><span>Prix, charges, seuil de rentabilité, premier salaire.</span></div></li>
+      <li><div class="when">Séances 7–9</div><div class="what"><strong>Vendre</strong><span>Offre, acquisition, premières délégations.</span></div></li>
+      <li><div class="when">Avant J+180</div><div class="what"><strong>Séance 10 — Bilan</strong><span>Point B mesuré, plan autonome pour la suite.</span></div></li>
+      <li><div class="when">J+180</div><div class="what"><strong>Fin de l'accompagnement</strong><span>Les séances non utilisées ne sont pas reportées.</span></div></li>
+    </ol>
+    <p class="side">En parallèle pendant les 6 mois : les coachings de groupe du lundi et du jeudi, et la communauté Business.</p>
+
+    <div class="kick e" style="margin-top:34px">Parcours client · Elite Phénix</div>
+    <ol class="path e">
+      <li><div class="when">J0</div><div class="what"><strong>Closing et signature</strong><span>Signature accompagnée en visio et mandat de prélèvement ; le diagnostic de départ (RDV Plan d'Action avec Adrien ou Emily) est calé en direct ; le groupe WhatsApp privé est créé.</span></div></li>
+      <li><div class="when">J0 → J7</div><div class="what"><strong>Onboarding</strong><span>Accès à la plateforme, présentation du coach et créneau fixe posé sous 48 h, RDV Plan d'Action puis passation complète au coach.</span></div></li>
+      <li><div class="when">J7 → J30</div><div class="what"><strong>Diagnostic &amp; premier résultat</strong><span>Un résultat nommable avant J30 (A1, A2).</span></div></li>
+      <li><div class="when">J30 → J90</div><div class="what"><strong>Délégation &amp; structure</strong><span>Le dirigeant sort de la production (A3).</span></div></li>
+      <li><div class="when">J90 → J150</div><div class="what"><strong>Rentabilité &amp; pilotage</strong><span>Diriger sur des chiffres, plus à l'intuition (A4, A5).</span></div></li>
+      <li><div class="when">J150 → J180</div><div class="what"><strong>Consolidation &amp; duplication</strong><span>Rendre reproductible ce qui fonctionne ; point B constaté par écrit à J180.</span></div></li>
+    </ol>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  <span>Business Phénix · Elite Phénix — Ambitio Corp</span>
+  <span>Document d'offre unique · version du 14 octobre 2026 · prix hors taxes</span>
+</footer>
+
+</body>
+</html>

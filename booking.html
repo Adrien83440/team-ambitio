@@ -1853,9 +1853,12 @@ function renderRecurrence() {
   h += '<div class="bk-rec-head" data-action="recToggle">';
   h += '<div class="bk-rec-ico">🔁</div>';
   h += '<div class="bk-rec-txt">';
-  h += '<div class="bk-rec-title">Programmer toutes mes séances, une par semaine</div>';
+  /* Business Phénix nouveau format (14/10/2026) : toutes les deux semaines
+     (p.intervalDays = 14), bornée à la fin d'accompagnement. */
+  var biweekly = p.intervalDays === 14;
+  h += '<div class="bk-rec-title">Programmer toutes mes séances, ' + (biweekly ? 'une toutes les deux semaines' : 'une par semaine') + '</div>';
   var suite = (p.recurrenceCount > 1)
-    ? 'On peut poser les <b>' + p.recurrenceCount + '</b> suivantes tous les ' + esc(p.weekdayLabel) + 's à ' + esc(S.selTime) + '.'
+    ? 'On peut poser les <b>' + p.recurrenceCount + '</b> suivantes ' + (biweekly ? 'un ' + esc(p.weekdayLabel) + ' sur deux' : 'tous les ' + esc(p.weekdayLabel) + 's') + ' à ' + esc(S.selTime) + (biweekly && p.finAccompagnement ? ', jusqu\'au ' + esc(recFmtDate(p.finAccompagnement)) + ' au plus tard' : '') + '.'
     : 'On peut poser <b>la dernière</b> le ' + esc(p.weekdayLabel) + ' suivant à ' + esc(S.selTime) + '.';
   h += '<div class="bk-rec-sub">Il vous reste <b>' + p.remaining + ' séances sur ' + p.total + '</b>, celle-ci comprise. ' + suite + '</div>';
   h += '</div>';
@@ -2423,11 +2426,20 @@ async function submitBooking() {
       var resp = await fetch('/api/booking-check-coaching-quota', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email, monthYear: monthYear })
+        body: JSON.stringify({ email: email, monthYear: monthYear, typeId: booking.type || '', typeLabel: booking.typeLabel || (S.selType ? S.selType.label : '') })
       });
       var quotaData = await resp.json();
       if (quotaData && quotaData.allowed === false) {
-        if (quotaData.reason === 'client_inactive') {
+        /* Business Phénix nouveau format (14/10/2026) : 10 séances
+           consommées ou accompagnement terminé → blocage total ; créneau
+           fixe → le client ne réserve pas lui-même, mais la CSM ou le coach
+           (mode agent) replace un report. */
+        if (quotaData.reason === 'bp_complet') { showQuotaModal(quotaData); return; }
+        if (quotaData.reason === 'bp_creneau_fixe') {
+          if (_agentMode) { booking.bpReplacement = true; }
+          else { showQuotaModal(quotaData); return; }
+        }
+        else if (quotaData.reason === 'client_inactive') {
           // Fin d'accompagnement : blocage TOTAL, y compris en mode agent
           // (décision 07/2026 — il faut réactiver la fiche avant de
           // réserver, pour éviter les RDV posés par erreur sur un ancien
@@ -2435,7 +2447,10 @@ async function submitBooking() {
           showQuotaModal(quotaData);
           return;
         }
-        if (_agentMode) {
+        if (booking.bpReplacement) {
+          // Business : séance replacée par la CSM / le coach — pas un
+          // dépassement de quota, rien à signaler.
+        } else if (_agentMode) {
           // Mode agent (CSM) : on n'interrompt PAS la réservation. Choix
           // métier — le RDV est créé malgré le quota mensuel atteint. On pose
           // un flag d'audit (visible côté coach) et on prévient sans modal.
@@ -2671,6 +2686,23 @@ function showQuotaModal(quotaData) {
   // compteur — le client est un ancien client, le quota n'a plus de sens.
   var titleEl = document.getElementById('quotaTitle');
   var statEl = document.getElementById('quotaStatBlock');
+  if (quotaData && (quotaData.reason === 'bp_complet' || quotaData.reason === 'bp_creneau_fixe')) {
+    if (statEl) statEl.style.display = 'none';
+    var bpText;
+    if (quotaData.reason === 'bp_complet') {
+      if (titleEl) titleEl.textContent = quotaData.expired ? 'Accompagnement terminé' : 'Séances individuelles utilisées';
+      bpText = quotaData.expired
+        ? 'Votre accompagnement Business Phénix est arrivé à son terme : il n\'est plus possible de réserver de coaching individuel. Si vous pensez qu\'il s\'agit d\'une erreur, contactez l\'équipe.'
+        : 'Vos ' + (quotaData.quota || 10) + ' séances individuelles ont été utilisées. Pour toute question, contactez l\'équipe.';
+      if (_agentMode) bpText = quotaData.expired ? 'Accompagnement Business terminé (J0 + 180 jours) : séances restantes perdues. Seuls Adrien et Emily peuvent faire une exception.' : 'Les ' + (quotaData.quota || 10) + ' séances de ce client Business sont consommées. Seuls Adrien et Emily peuvent ajouter une séance (fiche coaching).';
+    } else {
+      if (titleEl) titleEl.textContent = 'Votre créneau est déjà fixé';
+      bpText = 'Votre accompagnement Business Phénix se déroule sur un créneau fixe toutes les deux semaines, posé avec votre coach : il n\'y a rien à réserver. Pour déplacer une séance, prévenez votre coach au moins 48 h à l\'avance.';
+    }
+    document.getElementById('quotaText').innerHTML = bpText;
+    document.getElementById('quotaOverlay').classList.add('show');
+    return;
+  }
   if (quotaData && quotaData.reason === 'client_inactive') {
     if (titleEl) titleEl.textContent = 'Accompagnement terminé';
     if (statEl) statEl.style.display = 'none';
