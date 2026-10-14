@@ -237,10 +237,27 @@ function maskPhone(p) {
   return d.length >= 2 ? '•• •• •• ' + d.slice(-2) : '';
 }
 
+/* « ad•••@gmail.com » — même rôle que maskPhone pour une adresse e-mail. */
+function maskEmail(e) {
+  const s = String(e || '').trim();
+  const at = s.indexOf('@');
+  if (at < 1) return '';
+  return s.slice(0, Math.min(2, at)) + '•••' + s.slice(at);
+}
+
+/* Canal du code à usage unique d'une demande : 'sms' (défaut) ou 'email'.
+   'email' se choisit à l'envoi (sales-signatures, « signataire hors de
+   France ») : Twilio n'achemine pas un SMS vers le Canada ou les États-Unis
+   depuis notre numéro français. Le choix vit sur la demande, jamais dans ce
+   que la page envoie : un signataire ne peut pas changer de canal. */
+function otpChannel(R) {
+  return R && R.otpChannel === 'email' ? 'email' : 'sms';
+}
+
 module.exports = {
   sha256Hex, findByToken, clientInfo,
   appendAudit, readAudit, entryHash,
   loadTemplate, webIsValid, webDigest,
   otpOk, OTP_SESSION_MS, device, setProgress, STEP_NAMES,
-  parisToday, parisDateTime, foldText, maskPhone,
+  parisToday, parisDateTime, foldText, maskPhone, maskEmail, otpChannel,
 };

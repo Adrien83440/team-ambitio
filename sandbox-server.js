@@ -353,6 +353,14 @@ __defs["./api/sign-session.js"] = { map: {"./_parseBody":"./api/_parseBody.js","
 //
 // Le token ne sert jamais à choisir un destinataire ni un numéro : tout ce qui
 // part (SMS, e-mail) vient du document Firestore.
+//
+// 14/10/2026 — signataires hors de France :
+//   · company.country === 'CA' : société canadienne saisie par le signataire
+//     (_companyLookup.canadaCompany), sans annuaire officiel ;
+//   · R.otpChannel === 'email' : le code arrive par e-mail (signature-otp) ;
+//     la page et le dossier de preuve le disent ;
+//   · web.roleSignataire === 'prestataire' : contrat où Ambitio est « la
+//     Société » et le signataire « le Prestataire » (closer, setter…).
 // ============================================================================
 
 const crypto = require('crypto');
@@ -375,6 +383,8 @@ const CLIENT_EVENTS = {
 };
 
 const QUALITES = ['Gérant', 'Co-gérant', 'Président', 'Directeur général', 'Directeur général délégué', 'Associé', 'Mandataire habilité', 'Entrepreneur individuel'];
+/* Qualités usuelles d'une entreprise canadienne (Québec compris). */
+const QUALITES_CA = ['Président', 'Administrateur', 'Dirigeant', 'Associé', 'Propriétaire unique', 'Travailleur autonome', 'Mandataire habilité'];
 
 const DECLARATIONS = {
   pouvoir: 'Je certifie être habilité(e) à engager la société désignée ci-dessus et signer le présent contrat en son nom.',
@@ -500,8 +510,16 @@ function clientMap(d) {
   return {
     entreprise: c.name || '', nom_prenom: (d.rep && d.rep.full) || '', qualite: (d.rep && d.rep.qualite) || '',
     prenom: (d.rep && d.rep.first) || '', nom: (d.rep && d.rep.last) || '',
-    siege_social: c.addressLine || company.addressLine(a), siret: c.siret || '', siren: c.siren || String(c.siret || '').slice(0, 9),
-    tva: c.vatNumber || '', forme_juridique: c.legalFormLabel || '', activite: c.nafLabel || '',
+    siege_social: c.addressLine || company.addressLine(a),
+    /* Société canadienne : pas de SIRET ; un ancien modèle qui imprime
+       {{siret}} affiche alors son immatriculation (« NEQ … »). */
+    siret: c.country === 'CA' ? (c.registryNumber ? c.registryLabel + ' ' + c.registryNumber : '') : (c.siret || ''),
+    siren: c.siren || String(c.siret || '').slice(0, 9),
+    tva: company.taxLine(c), forme_juridique: c.legalFormLabel || '', activite: c.nafLabel || '',
+    immatriculation: company.registrationLine(c),
+    /* Entreprise canadienne non inscrite aux taxes : « néant », pas une ligne vide. */
+    numeros_taxes: c.country === 'CA' ? (c.taxNumbers || 'néant') : company.taxLine(c),
+    pays: c.country === 'CA' ? 'Canada' : (c.name ? 'France' : ''), province: c.provinceLabel || '',
     adresse: [a.line1, a.line2].filter(Boolean).join(', '), code_postal: a.postalCode || '', ville: a.city || '',
     date_creation: c.creationDate ? String(c.creationDate).split('-').reverse().join('/') : '',
     email: d.email || '', telephone: d.phone || '', date_signature: d.date || '',
@@ -516,7 +534,8 @@ function initials(first, last) {
 /* Le représentant figure-t-il parmi les dirigeants publiés ? On le dit tel
    quel dans le dossier de preuve — sans bloquer : un mandataire habilité peut
    signer, il l'a certifié. */
-function dirigeantCheck(reg, first, last) {
+function dirigeantCheck(reg, first, last, co) {
+  if (co && co.country === 'CA') return 'Registre canadien non consulté — habilitation certifiée par le signataire';
   if (!reg) return 'Registre non consulté (saisie manuelle)';
   const list = reg.dirigeants || [];
   if (!list.length) return 'Aucun dirigeant publié au registre';
@@ -574,7 +593,12 @@ async function validate(body, found, ctx, strict) {
   const out = { spec: spec };
 
   /* Société — saisie par le 1er signataire, reprise telle quelle par le 2e. */
-  if (i === 0) {
+  if (i === 0 && f.company && f.company.country === 'CA') {
+    const ca = company.canadaCompany(f.company, core.parisToday());
+    ca.errors.forEach(function (e) { errs.push(e); });
+    ca.company.addressLine = company.addressLine(ca.company.address);
+    out.company = ca.company;
+  } else if (i === 0) {
     const c = f.company || {};
     const ident = String(c.siret || c.siren || '').replace(/\D/g, '');
     let reg = null;
@@ -772,6 +796,8 @@ module.exports = async (req, res) => {
         otpOk: core.otpOk(R, i),
         twoSigners: signers.length > 1,
         firstSignerName: i >= 1 && signers[0] ? signers[0].name : '',
+        otpChannel: core.otpChannel(R),
+        emailHint: core.maskEmail(found.signer.email || R.clientEmail),
       });
       return;
     }
@@ -792,7 +818,7 @@ module.exports = async (req, res) => {
 
     if (mineSigned) { send(res, 409, { error: 'Vous avez déjà signé ce contrat.', stage: 'signed' }); return; }
     if (waiting) { send(res, 409, { error: 'Le premier signataire doit signer avant vous.', stage: 'waiting' }); return; }
-    if (!core.otpOk(R, i)) { send(res, 401, { error: 'Vérification par code SMS requise.', stage: 'otp' }); return; }
+    if (!core.otpOk(R, i)) { send(res, 401, { error: 'Vérification par code requise.', stage: 'otp' }); return; }
 
     /* ── events ────────────────────────────────────────────────────────── */
     if (action === 'events') {
@@ -848,6 +874,9 @@ module.exports = async (req, res) => {
           paraphe: spec.paraphe, dateField: spec.dateField,
           startNoWaiver: startNoWaiver(),
           qualites: QUALITES,
+          qualitesCa: QUALITES_CA,
+          provinces: company.CA_PROVINCES,
+          roleSignataire: ctx.web && ctx.web.roleSignataire === 'prestataire' ? 'prestataire' : 'client',
           declarations: DECLARATIONS,
         },
         signer: { name: found.signer.name || '', email: found.signer.email || '', phone: found.signer.phone || '', index: i },
@@ -1005,7 +1034,7 @@ async function finalize(found, ctx, v, info, body) {
     caption: caption,
     signedAt: nowIso,
     ip: info.ip, ua: info.ua, geo: [info.city, info.region, info.country].filter(Boolean).join(', '),
-    dirigeantCheck: i === 0 ? dirigeantCheck(v.registry || null, v.rep.first, v.rep.last) : 'Second signataire',
+    dirigeantCheck: i === 0 ? dirigeantCheck(v.registry || null, v.rep.first, v.rep.last, v.company) : 'Second signataire',
     declarations: [
       { id: 'pouvoir', etat: 'Accepté', libelle: DECLARATIONS.pouvoir, at: lastAt('consentement', function (e) { return e.data && e.data.id === 'pouvoir'; }) },
       { id: 'esign', etat: 'Accepté', libelle: DECLARATIONS.esign, at: lastAt('consentement', function (e) { return e.data && e.data.id === 'esign'; }) },
@@ -1025,8 +1054,13 @@ async function finalize(found, ctx, v, info, body) {
       + (rd.duree ? ' — temps passé sur le contrat ' + rd.duree : '') + ' — confirmé le ' + core.parisDateTime(new Date(readDone.at || nowIso)),
     pdfConsulte: firstAt('pdf_original_ouvert') ? 'Oui, le ' + core.parisDateTime(new Date(firstAt('pdf_original_ouvert'))) : 'Non',
     apercu: firstAt('apercu_ouvert') ? 'Oui, le ' + core.parisDateTime(new Date(firstAt('apercu_ouvert'))) : 'Non consulté',
-    otpLine: otp.atMs ? ('Code à usage unique envoyé par SMS au ' + (otp.phone || '') + ', validé le ' + core.parisDateTime(new Date(otp.atMs))) : 'Non vérifié',
+    otpLine: otp.atMs
+      ? (otp.canal === 'email'
+        ? 'Code à usage unique envoyé par e-mail à ' + (otp.email || '') + ', validé le ' + core.parisDateTime(new Date(otp.atMs))
+        : 'Code à usage unique envoyé par SMS au ' + (otp.phone || '') + ', validé le ' + core.parisDateTime(new Date(otp.atMs)))
+      : 'Non vérifié',
     otpAtMs: otp.atMs || null,
+    otpCanal: otp.canal === 'email' ? 'email' : 'sms',
   };
   data.mentions = [
     { nom: 'Date de signature', valeur: v.date, at: lastAt('mention_saisie', function (e) { return e.data && e.data.nom === 'date'; }) },
@@ -1101,10 +1135,11 @@ async function finalize(found, ctx, v, info, body) {
     createdAt: R.createdAt && R.createdAt.toDate ? R.createdAt.toDate().toISOString() : '',
     createdBy: ((R.events || []).find(function (e) { return e && e.type === 'created'; }) || {}).by || '',
     company: Object.assign({}, all[0].company),
+    roleSignataire: ctx.web && ctx.web.roleSignataire === 'prestataire' ? 'prestataire' : 'client',
     signers: all.map(function (d) {
       return {
         repName: d.rep.full, repQualite: d.rep.qualite, dirigeantCheck: d.dirigeantCheck,
-        email: d.email, phone: d.phone, otpLine: d.otpLine, otpAt: d.otpAtMs,
+        email: d.email, phone: d.phone, otpLine: d.otpLine, otpAt: d.otpAtMs, otpCanal: d.otpCanal || 'sms',
         ip: d.ip, geo: d.geo, ua: d.ua, signedAt: d.signedAt,
         declarations: d.declarations, lecture: d.lecture, pdfConsulte: d.pdfConsulte, apercu: d.apercu,
         mentions: d.mentions,
@@ -1160,6 +1195,7 @@ async function finalize(found, ctx, v, info, body) {
     nom_prenom: d0.rep.full, email: d0.email, telephone: d0.phone,
     entreprise: d0.company.name, type_entreprise: d0.company.legalFormLabel,
     siege_social: d0.company.addressLine, adresse: d0.company.addressLine, siret: d0.company.siret,
+    immatriculation: company.registrationLine(d0.company), pays: d0.company.country === 'CA' ? 'Canada' : 'France',
     date_signature: d0.date, lu_approuve: d0.luApprouve, qualite: d0.rep.qualite,
   };
   Object.keys(d0.checks || {}).forEach(function (k) { fv[k] = d0.checks[k]; });
@@ -1519,12 +1555,29 @@ function maskPhone(p) {
   return d.length >= 2 ? '•• •• •• ' + d.slice(-2) : '';
 }
 
+/* « ad•••@gmail.com » — même rôle que maskPhone pour une adresse e-mail. */
+function maskEmail(e) {
+  const s = String(e || '').trim();
+  const at = s.indexOf('@');
+  if (at < 1) return '';
+  return s.slice(0, Math.min(2, at)) + '•••' + s.slice(at);
+}
+
+/* Canal du code à usage unique d'une demande : 'sms' (défaut) ou 'email'.
+   'email' se choisit à l'envoi (sales-signatures, « signataire hors de
+   France ») : Twilio n'achemine pas un SMS vers le Canada ou les États-Unis
+   depuis notre numéro français. Le choix vit sur la demande, jamais dans ce
+   que la page envoie : un signataire ne peut pas changer de canal. */
+function otpChannel(R) {
+  return R && R.otpChannel === 'email' ? 'email' : 'sms';
+}
+
 module.exports = {
   sha256Hex, findByToken, clientInfo,
   appendAudit, readAudit, entryHash,
   loadTemplate, webIsValid, webDigest,
   otpOk, OTP_SESSION_MS, device, setProgress, STEP_NAMES,
-  parisToday, parisDateTime, foldText, maskPhone,
+  parisToday, parisDateTime, foldText, maskPhone, maskEmail, otpChannel,
 };
 
 }};
@@ -1541,6 +1594,14 @@ __defs["./api/_companyLookup.js"] = { map: {}, shims: {}, fn: function (module, 
 //
 // Source : https://recherche-entreprises.api.gouv.fr — publique, gratuite,
 // sans clé (≈ 7 req/s).
+//
+// ENTREPRISES CANADIENNES (14/10/2026) — canadaCompany() valide une société
+// établie au Canada, saisie par le signataire : il n'existe pas d'annuaire
+// canadien interrogeable librement (le Registraire des entreprises du Québec
+// n'a pas d'API publique). Format de l'identifiant contrôlé (NEQ à 10
+// chiffres au Québec, numéro d'entreprise fédéral à 9 chiffres ailleurs),
+// code postal canadien, numéros de TPS/TVH et de TVQ facultatifs ; le dossier
+// de preuve dit que rien n'a été vérifié au registre.
 // ============================================================================
 
 const API_BASE = 'https://recherche-entreprises.api.gouv.fr/search';
@@ -1703,12 +1764,113 @@ function normalize(entry) {
   };
 }
 
-/* Adresse sur une ligne, telle qu'elle s'imprime dans le contrat. */
+/* Adresse sur une ligne, telle qu'elle s'imprime dans le contrat. Hors de
+   France : « ville (QC) H3A 1B2, Canada ». */
 function addressLine(a) {
   a = a || {};
   const l1 = [a.line1, a.line2].filter(Boolean).join(', ');
+  if (a.country && a.country !== 'France') {
+    const l2b = [a.city, a.region ? '(' + a.region + ')' : '', a.postalCode].filter(Boolean).join(' ');
+    return [l1, l2b, a.country].filter(Boolean).join(', ');
+  }
   const l2 = [a.postalCode, a.city].filter(Boolean).join(' ');
   return [l1, l2].filter(Boolean).join(', ');
+}
+
+/* ── Canada ──────────────────────────────────────────────────────────────── */
+const CA_PROVINCES = {
+  QC: 'Québec', ON: 'Ontario', BC: 'Colombie-Britannique', AB: 'Alberta', MB: 'Manitoba',
+  SK: 'Saskatchewan', NS: 'Nouvelle-Écosse', NB: 'Nouveau-Brunswick', NL: 'Terre-Neuve-et-Labrador',
+  PE: 'Île-du-Prince-Édouard', YT: 'Yukon', NT: 'Territoires du Nord-Ouest', NU: 'Nunavut',
+};
+
+/* Le registre d'où vient l'identifiant : NEQ au Québec, numéro d'entreprise
+   (NE, attribué par l'Agence du revenu du Canada) partout ailleurs. */
+function caRegistry(province) {
+  if (province === 'QC') return { label: 'NEQ', name: 'Registraire des entreprises du Québec', digits: 10 };
+  return { label: 'NE', name: 'numéro d\'entreprise fédéral (Agence du revenu du Canada)', digits: 9 };
+}
+
+/* Code postal canadien « A1A 1A1 » (lettres D, F, I, O, Q, U exclues ; W et Z
+   jamais en tête). Rend la forme normalisée, ou '' si invalide. */
+function caPostal(s) {
+  const c = String(s || '').toUpperCase().replace(/\s+/g, '');
+  if (!/^[ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z]\d[ABCEGHJ-NPRSTV-Z]\d$/.test(c)) return '';
+  return c.slice(0, 3) + ' ' + c.slice(3);
+}
+
+/* TPS/TVH : 9 chiffres + RT + 4 chiffres. TVQ : 10 chiffres + TQ + 4 chiffres.
+   Rend la forme normalisée, '' si vide, null si invalide. */
+function caTaxNumber(s, kind) {
+  const c = String(s || '').toUpperCase().replace(/[\s-]+/g, '');
+  if (!c) return '';
+  const m = kind === 'tvq' ? /^(\d{10})TQ(\d{4})$/.exec(c) : /^(\d{9})RT(\d{4})$/.exec(c);
+  if (!m) return null;
+  return m[1] + (kind === 'tvq' ? ' TQ' : ' RT') + m[2];
+}
+
+/* Société canadienne saisie par le signataire → { company, errors }.
+   `today` (JJ/MM/AAAA) date la mention du dossier de preuve. */
+function canadaCompany(c, today) {
+  c = c || {};
+  const errors = [];
+  const province = CA_PROVINCES[c.province] ? c.province : '';
+  if (!province) errors.push('Province ou territoire de l\'entreprise manquant.');
+  const reg = caRegistry(province);
+  const number = String(c.registryNumber || '').replace(/\D/g, '');
+  if (number.length !== reg.digits) errors.push(reg.label === 'NEQ'
+    ? 'Numéro d\'entreprise du Québec (NEQ) invalide : 10 chiffres attendus.'
+    : 'Numéro d\'entreprise (NE) invalide : 9 chiffres attendus.');
+  const gst = caTaxNumber(c.gstNumber, 'tps');
+  const qst = caTaxNumber(c.qstNumber, 'tvq');
+  if (gst === null) errors.push('Numéro de TPS/TVH invalide (format 123456789 RT0001).');
+  if (qst === null) errors.push('Numéro de TVQ invalide (format 1234567890 TQ0001).');
+  const a = c.address || {};
+  const postal = caPostal(a.postalCode);
+  const address = {
+    line1: String(a.line1 || '').trim().slice(0, 140),
+    line2: String(a.line2 || '').trim().slice(0, 140),
+    postalCode: postal || String(a.postalCode || '').trim().slice(0, 10),
+    city: String(a.city || '').trim().slice(0, 80),
+    region: province,
+    country: 'Canada',
+  };
+  if (!address.line1 || !postal || !address.city) errors.push('Adresse de l\'entreprise incomplète (voie, ville, code postal au format A1A 1A1).');
+  const name = String(c.name || '').trim().slice(0, 160);
+  const legalFormLabel = String(c.legalFormLabel || '').trim().slice(0, 80);
+  if (!name) errors.push('Nom de l\'entreprise manquant.');
+  if (!legalFormLabel) errors.push('Forme juridique manquante.');
+  const taxes = [gst ? 'TPS/TVH ' + gst : '', qst ? 'TVQ ' + qst : ''].filter(Boolean).join(' · ');
+  return {
+    errors: errors,
+    company: {
+      country: 'CA', countryLabel: 'Canada', province: province, provinceLabel: CA_PROVINCES[province] || '',
+      name: name, legalForm: '', legalFormLabel: legalFormLabel,
+      registryLabel: reg.label, registryName: reg.name, registryNumber: number,
+      siret: '', siren: '', vatNumber: '',
+      gstNumber: gst || '', qstNumber: qst || '', taxNumbers: taxes,
+      nafLabel: '', creationDate: '',
+      address: address, addressSource: 'saisie',
+      verification: 'Entreprise établie au Canada (' + (CA_PROVINCES[province] || 'province non précisée') + ') — ' + reg.label + ' ' + number
+        + ' déclaré par le signataire le ' + (today || '') + ' ; aucun annuaire canadien n\'étant interrogeable automatiquement, l\'immatriculation n\'a pas été vérifiée en ligne et doit l\'être sur pièce (extrait du registre : ' + reg.name + ')',
+    },
+  };
+}
+
+/* « SIRET 943 098 707 00012 » ou « NEQ 1234567890 (Registraire des
+   entreprises du Québec) » : l'immatriculation telle qu'elle s'imprime. */
+function registrationLine(C) {
+  C = C || {};
+  if (C.country === 'CA') return C.registryNumber ? C.registryLabel + ' ' + C.registryNumber + ' (' + C.registryName + ')' : '';
+  const s = String(C.siret || '');
+  return s ? 'SIRET ' + (s.length === 14 ? s.slice(0, 3) + ' ' + s.slice(3, 6) + ' ' + s.slice(6, 9) + ' ' + s.slice(9) : s) : '';
+}
+
+/* Numéros de taxes : TVA intracommunautaire en France, TPS/TVH et TVQ au
+   Canada. */
+function taxLine(C) {
+  C = C || {};
+  return C.country === 'CA' ? (C.taxNumbers || '') : (C.vatNumber || '');
 }
 
 /* Recherche brute. Lève une Error portant .status (400/429/502/504). */
@@ -1770,6 +1932,7 @@ module.exports = {
   vatFromSiren, clean, luhnOk, sirenValid, siretValid,
   legalFormLabel, normalize, addressLine,
   searchCompanies, lookupByIdentifier,
+  CA_PROVINCES, caRegistry, caPostal, caTaxNumber, canadaCompany, registrationLine, taxLine,
 };
 
 }};
@@ -2220,6 +2383,19 @@ const EVENT_LABELS = {
   copie_envoyee: 'Exemplaire signé envoyé par e-mail',
 };
 
+/* Code reçu par e-mail (demande « signataire hors de France ») : mêmes
+   événements, libellés exacts. */
+const EMAIL_EVENT_LABELS = {
+  otp_envoye: 'Code envoyé par e-mail',
+  otp_echec: 'Code incorrect',
+  otp_verifie: 'Adresse e-mail vérifiée par code',
+};
+function eventLabel(e) {
+  const d = e.data || {};
+  if (d.canal === 'email' && EMAIL_EVENT_LABELS[e.type]) return EMAIL_EVENT_LABELS[e.type];
+  return EVENT_LABELS[e.type] || e.type;
+}
+
 function eventDetail(e) {
   const d = e.data || {};
   if (e.type === 'section_vue') return d.titre || d.id || '';
@@ -2230,7 +2406,7 @@ function eventDetail(e) {
   if (e.type === 'consentement') return d.libelle || d.id || '';
   if (e.type === 'mention_saisie') return d.nom ? (d.nom + ' : « ' + (d.valeur || '') + ' »') : '';
   if (e.type === 'lecture_terminee') return d.duree ? ('durée de lecture ' + d.duree) : '';
-  if (e.type === 'otp_envoye' || e.type === 'otp_verifie') return d.tel || '';
+  if (e.type === 'otp_envoye' || e.type === 'otp_verifie') return d.tel || d.dest || '';
   if (e.type === 'lien_envoye') return d.canaux || '';
   if (e.type === 'page_pdf_vue') return d.page ? ('page ' + d.page) : '';
   return '';
@@ -2255,7 +2431,7 @@ async function proofPages(doc, fonts, P) {
   F.y = F.H - 180;
 
   F.box([
-    { text: 'Ce dossier a été établi automatiquement par le serveur de SARL Ambitio Corp au moment de la signature. Il rassemble les éléments qui identifient le signataire, attestent de son consentement et garantissent l\'intégrité du document : vérification du téléphone par code à usage unique, mentions saisies de sa main, journal horodaté de chacune de ses actions, empreintes cryptographiques et jetons d\'horodatage émis par une autorité tierce.', font: fonts.regular },
+    { text: 'Ce dossier a été établi automatiquement par le serveur de SARL Ambitio Corp au moment de la signature. Il rassemble les éléments qui identifient le signataire, attestent de son consentement et garantissent l\'intégrité du document : vérification ' + (P.signers.some(function (x) { return x.otpCanal === 'email'; }) ? 'de l\'adresse e-mail' : 'du téléphone') + ' par code à usage unique, mentions saisies de sa main, journal horodaté de chacune de ses actions, empreintes cryptographiques et jetons d\'horodatage émis par une autorité tierce.', font: fonts.regular },
   ]);
 
   F.section('1', 'Document');
@@ -2271,17 +2447,22 @@ async function proofPages(doc, fonts, P) {
     ['Envoyée par', P.createdBy || ''],
   ]);
 
+  /* Contrat de prestataire (closer, setter…) : Ambitio y est « la Société »
+     et le signataire « le Prestataire ». */
+  const prest = P.roleSignataire === 'prestataire';
   F.section('2', 'Parties');
   F.kv([
-    ['Prestataire', 'SARL Ambitio Corp — SIRET 943 098 707 00012 — 231B chemin de Mourre de Masque, 83440 Fayence — représentée par Emily UGHETTO et Adrien FRANCOIS'],
+    [prest ? 'Société' : 'Prestataire', 'SARL Ambitio Corp — SIRET 943 098 707 00012 — 231B chemin de Mourre de Masque, 83440 Fayence — représentée par Emily UGHETTO et Adrien FRANCOIS'],
   ]);
   const C = P.company || {};
+  const ca = C.country === 'CA';
   F.kv([
-    ['Client', C.name],
+    [prest ? 'Prestataire' : 'Client', C.name],
     ['Forme juridique', C.legalFormLabel],
-    ['SIREN / SIRET', [C.siren, C.siret].filter(Boolean).join(' / ')],
-    ['N° TVA intracommunautaire', C.vatNumber],
-    ['Siège social', C.addressLine],
+    ['Pays', ca ? 'Canada' + (C.provinceLabel ? ' (' + C.provinceLabel + ')' : '') : ''],
+    ca ? ['Immatriculation', C.registryNumber ? C.registryLabel + ' ' + C.registryNumber + ' — ' + C.registryName : ''] : ['SIREN / SIRET', [C.siren, C.siret].filter(Boolean).join(' / ')],
+    ca ? ['Numéros de taxes', C.taxNumbers || 'Aucun déclaré'] : ['N° TVA intracommunautaire', C.vatNumber],
+    [ca ? 'Adresse' : 'Siège social', C.addressLine],
     ['Vérification au registre', C.verification],
   ]);
 
@@ -2292,7 +2473,7 @@ async function proofPages(doc, fonts, P) {
       ['Qualité', S.repQualite],
       ['Dirigeants publiés', S.dirigeantCheck],
       ['Adresse e-mail', S.email],
-      ['Téléphone vérifié', S.phone],
+      [S.otpCanal === 'email' ? 'Téléphone (non vérifié)' : 'Téléphone vérifié', S.phone],
       ['Vérification d\'identité', S.otpLine, { color: S.otpAt ? GREEN : RED }],
       ['Adresse IP à la signature', S.ip],
       ['Localisation (réseau)', S.geo],
@@ -2331,7 +2512,7 @@ async function proofPages(doc, fonts, P) {
   row('Heure (Paris)', 'Événement', 'Signataire · IP · n° · empreinte', fonts.bold, NAVY);
   F.page.drawLine({ start: { x: F.M, y: F.y + 1 }, end: { x: F.W - F.M, y: F.y + 1 }, thickness: 0.5, color: LINE });
   P.audit.forEach(function (e) {
-    const lbl = (EVENT_LABELS[e.type] || e.type) + (eventDetail(e) ? ' — ' + eventDetail(e) : '');
+    const lbl = eventLabel(e) + (eventDetail(e) ? ' — ' + eventDetail(e) : '');
     const who = (e.signer === null || e.signer === undefined ? 'système' : 'S' + (e.signer + 1)) + ' · ' + (e.ip || '—') + ' · #' + e.seq + ' · ' + String(e.hash || '').slice(0, 10);
     row(parisStamp(e.at), lbl, who, e.type === 'signature_validee' ? fonts.bold : fonts.regular, e.type === 'signature_validee' ? GREEN : null);
   });
@@ -2522,7 +2703,13 @@ __defs["./api/_contract-render.js"] = { map: {"./_sign-brand":"./api/_sign-brand
 // TEXTE EN LIGNE
 //   **gras** · {{var:clé}} · {{entreprise}} {{nom_prenom}} {{qualite}}
 //   {{siege_social}} {{siret}} {{forme_juridique}} {{email}} {{telephone}}
-//   {{date_signature}}
+//   {{date_signature}} {{immatriculation}} {{numeros_taxes}} {{pays}}
+//   {{province}}
+//
+// web.roleSignataire === 'prestataire' (14/10/2026) : contrat d'un
+// prestataire d'Ambitio (closer, setter…). Le bloc de signatures dit alors
+// « La SOCIÉTÉ — SARL Ambitio Corp » et « Le PRESTATAIRE — <signataire> » au
+// lieu de « Le PRESTATAIRE — SARL Ambitio Corp » et « Le CLIENT ».
 //
 // Mise en page : celle des contrats actuels — titre centré, « ARTICLE »
 // en gras souligné, texte justifié — avec en pied de CHAQUE page les deux
@@ -2549,7 +2736,15 @@ const CLIENT_KEYS = {
   siege_social: 'siège social', adresse: 'adresse', code_postal: 'code postal', ville: 'ville',
   siret: 'SIRET', siren: 'SIREN', tva: 'n° TVA', forme_juridique: 'forme juridique', activite: 'activité',
   date_creation: 'date de création', email: 'e-mail', telephone: 'téléphone', date_signature: 'date',
+  immatriculation: 'immatriculation', numeros_taxes: 'numéros de taxes', pays: 'pays', province: 'province',
 };
+
+/* Libellés des deux parties du bloc de signatures. */
+function partyTitles(web) {
+  return web && web.roleSignataire === 'prestataire'
+    ? { ambitio: 'La SOCIÉTÉ', signataire: 'Le PRESTATAIRE' }
+    : { ambitio: 'Le PRESTATAIRE', signataire: 'Le CLIENT' };
+}
 
 /* ── Polices du document (Source Serif 4) ─────────────────────────────────── */
 const SERIF = {
@@ -2660,7 +2855,9 @@ function resolveForSigner(web, prefill) {
           return v ? '**' + v + '**' : '……';
         });
       });
-      if (sec.signatures) blocks.push('p:Signatures du PRESTATAIRE et du CLIENT apposées en fin de document, précédées de la date et de la mention « Lu et approuvé ».');
+      if (sec.signatures) blocks.push(web.roleSignataire === 'prestataire'
+        ? 'p:Signatures de la SOCIÉTÉ et du PRESTATAIRE apposées en fin de document, précédées de la date et de la mention « Lu et approuvé ».'
+        : 'p:Signatures du PRESTATAIRE et du CLIENT apposées en fin de document, précédées de la date et de la mention « Lu et approuvé ».');
       return { id: sec.id, title: sec.title, blocks: blocks };
     }).filter(function (s) { return s.blocks.length || s.title; }),
   };
@@ -2797,9 +2994,10 @@ async function signatureBlock(C, opts, cachet) {
   const top = C.y;
   const page = C.page;
   function txt(t, x, y, font, size, color) { page.drawText(cl(F, t), { x: x, y: y, size: size || SIZE, font: font || F.r, color: color || BLACK }); }
-  /* PRESTATAIRE */
+  const T = partyTitles(C.ctx.web);
+  /* AMBITIO */
   let y = top - SIZE;
-  txt('Le PRESTATAIRE', ML, y, F.b); y -= LH;
+  txt(T.ambitio, ML, y, F.b); y -= LH;
   txt('SARL Ambitio Corp', ML, y); y -= LH;
   txt('Représentée par Emily UGHETTO', ML, y); y -= LH;
   txt('et Adrien FRANCOIS', ML, y); y -= 6;
@@ -2810,10 +3008,10 @@ async function signatureBlock(C, opts, cachet) {
     y -= h;
   }
   const yLeft = y;
-  /* CLIENT */
+  /* SIGNATAIRE */
   const xR = ML + colW + 30;
   let yr = top - SIZE;
-  txt('Le CLIENT', xR, yr, F.b); yr -= LH;
+  txt(T.signataire, xR, yr, F.b); yr -= LH;
   const co = (C.ctx.client.entreprise || '').trim();
   function wrapTo(t, font, size) { return signPdf.wrap({ unicode: F.unicode }, font, t, size, colW); }
   wrapTo(co || '……………………………', co ? F.b : F.r, SIZE).forEach(function (l) { txt(l, xR, yr, co ? F.b : F.r, SIZE, co ? INK : MUTED); yr -= LH; });
@@ -3027,7 +3225,7 @@ module.exports = { pdfBase64: 'JVBERi0xLjcKJYGBgYEKCjQgMCBvYmoKPDwKL0ZpbHRlciAvR
 }};
 
 /* ── ./api/signature-otp.js ── */
-__defs["./api/signature-otp.js"] = { map: {"./_twilioClient":"./api/_twilioClient.js","./_parseBody":"./api/_parseBody.js","./_sign-core":"./api/_sign-core.js"}, shims: {"crypto": function () { return __crypto; }, "./_firebaseAdmin": function () { return __shim['./_firebaseAdmin']; }}, fn: function (module, exports, require) {
+__defs["./api/signature-otp.js"] = { map: {"./_twilioClient":"./api/_twilioClient.js","./_parseBody":"./api/_parseBody.js","./_sign-core":"./api/_sign-core.js"}, shims: {"crypto": function () { return __crypto; }, "./_firebaseAdmin": function () { return __shim['./_firebaseAdmin']; }, "./_billing-gmail": function () { return __shim['./_billing-gmail']; }}, fn: function (module, exports, require) {
 // ============================================================================
 // api/signature-otp.js — CODE SMS DE SIGNATURE (envoi + vérification)
 // ----------------------------------------------------------------------------
@@ -3047,6 +3245,13 @@ __defs["./api/signature-otp.js"] = { map: {"./_twilioClient":"./api/_twilioClien
 // « status » repond ce que Twilio a fini par faire du SMS : en_cours, livre
 // ou echec. Sans lui, un message filtre par l'operateur laissait le
 // signataire attendre indefiniment devant un « ✅ Code envoye ».
+//
+// CANAL E-MAIL (14/10/2026) — une demande créée avec otpChannel:'email'
+// (sales-signatures, « signataire hors de France ») reçoit son code par
+// e-mail, à l'adresse du signataire enregistrée sur la demande. Raison :
+// Twilio n'achemine pas de SMS vers le Canada ni les États-Unis depuis notre
+// numéro français. Mêmes plafonds, même durée de validité, même journal ; le
+// dossier de preuve dit « envoyé par e-mail » au lieu de « par SMS ».
 //
 // POURQUOI CET ENDPOINT
 // ---------------------
@@ -3075,12 +3280,16 @@ __defs["./api/signature-otp.js"] = { map: {"./_twilioClient":"./api/_twilioClien
 const crypto = require('crypto');
 const { db, admin } = require('./_firebaseAdmin');
 const { getTwilioClient, getTwilioCreds } = require('./_twilioClient');
+const { sendGmailWithAttachment } = require('./_billing-gmail');
 const parseBody = require('./_parseBody');
 const core = require('./_sign-core');
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const MAX_SENDS = 5;
 const MAX_ATTEMPTS = 8;
+
+/* Comptes d'envoi autorisés — mêmes que api/signature-send-link.js. */
+const ACCOUNTS = { contact: 1, strategie: 1, coaching: 1 };
 
 /* Meme normalisation que api/twilio-sms-send.js (E.164, France par defaut). */
 function normalizePhone(raw) {
@@ -3090,6 +3299,8 @@ function normalizePhone(raw) {
   if (cleaned.startsWith('00')) return '+' + cleaned.slice(2);
   if (cleaned.startsWith('0') && cleaned.length === 10) return '+33' + cleaned.slice(1);
   if (cleaned.startsWith('33') && cleaned.length >= 11) return '+' + cleaned;
+  /* Amérique du Nord saisie sans « + » : 1 + 10 chiffres. */
+  if (/^1\d{10}$/.test(cleaned)) return '+' + cleaned;
   return null;
 }
 
@@ -3136,6 +3347,69 @@ module.exports = async (req, res) => {
     }
 
     const otpRef = db.collection('signature_otp').doc(reqId);
+
+    // ─── ENVOI PAR E-MAIL ──────────────────────────────────────────────────
+    if (action === 'send' && core.otpChannel(R) === 'email') {
+      const dest = String(found.signer.email || R.clientEmail || '').trim();
+      if (dest.indexOf('@') < 1) {
+        res.status(400).json({ error: "Aucune adresse e-mail valide sur cette demande. Contactez votre conseiller." });
+        return;
+      }
+      const prevSnap = await otpRef.get();
+      const prev = prevSnap.exists ? (prevSnap.data() || {}) : {};
+      const sends = (prev.sends || 0) + 1;
+      if (sends > MAX_SENDS) {
+        res.status(429).json({ error: "Trop de demandes de code. Contactez votre conseiller." });
+        return;
+      }
+      const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+      /* Code écrit AVANT l'envoi, comme pour le SMS. */
+      await otpRef.set({
+        code,
+        signerIndex,
+        canal: 'email',
+        email: dest,
+        phone: null,
+        sends,
+        attempts: 0,
+        expiresAt: Date.now() + OTP_TTL_MS,
+        livraison: admin.firestore.FieldValue.delete(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      try {
+        await sendGmailWithAttachment({
+          tokenAccount: ACCOUNTS[R.sendAccount] ? R.sendAccount : 'contact',
+          fromName: 'Ambitio',
+          to: [dest],
+          subject: 'Votre code de signature : ' + code,
+          bodyText: [
+            'Bonjour,',
+            '',
+            'Voici votre code de vérification pour signer le document « ' + (R.templateName || 'Contrat') + ' » :',
+            '',
+            '    ' + code,
+            '',
+            'Il est valable 10 minutes. Ne le communiquez à personne : il prouve que c\'est bien vous qui signez.',
+            '',
+            'Si vous n\'êtes pas à l\'origine de cette demande, ignorez ce message.',
+            '',
+            'L\'équipe Ambitio',
+          ].join('\n'),
+        });
+      } catch (mailErr) {
+        console.error('[signature-otp] e-mail:', mailErr && mailErr.message);
+        res.status(502).json({ error: "L'envoi de l'e-mail a échoué. Réessayez dans un instant." });
+        return;
+      }
+      /* Gmail a accepté le message : pas de rappel de remise comme chez
+         Twilio, la page n'a donc rien à surveiller. */
+      await otpRef.set({ livraison: { statut: 'delivered', canal: 'email', at: Date.now() } }, { merge: true }).catch(function () {});
+      await core.appendAudit(reqRef, [{ type: 'otp_envoye', signer: signerIndex, data: { canal: 'email', dest: core.maskEmail(dest), envoi: sends } }], info)
+        .catch(function (e) { console.error('[signature-otp] journal:', e && e.message); });
+      await core.setProgress(reqRef, signerIndex, { derniere: 'Code e-mail demandé', enLigne: true }, info);
+      res.status(200).json({ ok: true, canal: 'email', phoneHint: core.maskEmail(dest), destHint: core.maskEmail(dest) });
+      return;
+    }
 
     // ─── ENVOI ─────────────────────────────────────────────────────────────
     if (action === 'send') {
@@ -3258,15 +3532,16 @@ module.exports = async (req, res) => {
       return;
     }
     if (!compareCode(O.code, code)) {
-      await core.appendAudit(reqRef, [{ type: 'otp_echec', signer: signerIndex, data: { tentative: attempts } }], info).catch(function () {});
+      await core.appendAudit(reqRef, [{ type: 'otp_echec', signer: signerIndex, data: O.canal === 'email' ? { canal: 'email', tentative: attempts } : { tentative: attempts } }], info).catch(function () {});
       res.status(400).json({ error: "Code incorrect." });
       return;
     }
 
     /* otpVerified alimente le certificat de signature (sign-certificate.html) :
        on le pose sur la demande, comme le faisait l'ancien traitement. */
+    const parEmail = O.canal === 'email';
     const by = {};
-    by[String(signerIndex)] = { atMs: Date.now(), at: new Date().toISOString(), phone: O.phone || null, ip: info.ip };
+    by[String(signerIndex)] = { atMs: Date.now(), at: new Date().toISOString(), canal: parEmail ? 'email' : 'sms', phone: O.phone || null, email: parEmail ? (O.email || null) : null, ip: info.ip };
     await reqRef.set({
       otpVerified: true,
       otpVerifiedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -3278,8 +3553,8 @@ module.exports = async (req, res) => {
         by: 'signer' + (signerIndex + 1),
       }),
     }, { merge: true });
-    await core.appendAudit(reqRef, [{ type: 'otp_verifie', signer: signerIndex, data: { tel: phoneHint(O.phone) } }], info);
-    await core.setProgress(reqRef, signerIndex, { etape: 2, derniere: 'Téléphone vérifié par code SMS', enLigne: true }, info);
+    await core.appendAudit(reqRef, [{ type: 'otp_verifie', signer: signerIndex, data: parEmail ? { canal: 'email', dest: core.maskEmail(O.email) } : { tel: phoneHint(O.phone) } }], info);
+    await core.setProgress(reqRef, signerIndex, { etape: 2, derniere: parEmail ? 'Adresse e-mail vérifiée par code' : 'Téléphone vérifié par code SMS', enLigne: true }, info);
 
     /* Code consomme : il ne doit plus pouvoir servir. */
     await otpRef.delete().catch((e) => console.error('[signature-otp] purge:', e && e.message));
@@ -3406,6 +3681,8 @@ function normalizePhone(raw) {
   if (cleaned.startsWith('00')) return '+' + cleaned.slice(2);
   if (cleaned.startsWith('0') && cleaned.length === 10) return '+33' + cleaned.slice(1);
   if (cleaned.startsWith('33') && cleaned.length >= 11) return '+' + cleaned;
+  /* Amérique du Nord saisie sans « + » : 1 + 10 chiffres. */
+  if (/^1\d{10}$/.test(cleaned)) return '+' + cleaned;
   return null;
 }
 
@@ -3511,8 +3788,12 @@ module.exports = async (req, res) => {
     }
 
     /* ── SMS ───────────────────────────────────────────────────────────── */
-    const to = normalizePhone(S.phone);
-    const sms = { envoye: false, dest: to || null, sid: null, erreur: null };
+    /* Demande « signataire hors de France » (otpChannel 'email', 14/10/2026) :
+       pas de SMS. Twilio n'achemine pas vers le Canada ni les États-Unis
+       depuis notre numéro français ; le lien part par e-mail, le code aussi. */
+    const smsOff = R.otpChannel === 'email';
+    const to = smsOff ? null : normalizePhone(S.phone);
+    const sms = { envoye: false, dest: to || null, sid: null, erreur: null, ignore: smsOff };
     if (to) {
       try {
         const creds = await getTwilioCreds();
@@ -3534,7 +3815,7 @@ module.exports = async (req, res) => {
         sms.erreur = (e && e.message) || 'echec';
         console.error('[signature-send-link] sms', requestId, e && e.message, e && e.code);
       }
-    } else {
+    } else if (!smsOff) {
       sms.erreur = 'aucun numéro valide sur la demande';
     }
 

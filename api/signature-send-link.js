@@ -51,6 +51,8 @@ function normalizePhone(raw) {
   if (cleaned.startsWith('00')) return '+' + cleaned.slice(2);
   if (cleaned.startsWith('0') && cleaned.length === 10) return '+33' + cleaned.slice(1);
   if (cleaned.startsWith('33') && cleaned.length >= 11) return '+' + cleaned;
+  /* Amérique du Nord saisie sans « + » : 1 + 10 chiffres. */
+  if (/^1\d{10}$/.test(cleaned)) return '+' + cleaned;
   return null;
 }
 
@@ -156,8 +158,12 @@ module.exports = async (req, res) => {
     }
 
     /* ── SMS ───────────────────────────────────────────────────────────── */
-    const to = normalizePhone(S.phone);
-    const sms = { envoye: false, dest: to || null, sid: null, erreur: null };
+    /* Demande « signataire hors de France » (otpChannel 'email', 14/10/2026) :
+       pas de SMS. Twilio n'achemine pas vers le Canada ni les États-Unis
+       depuis notre numéro français ; le lien part par e-mail, le code aussi. */
+    const smsOff = R.otpChannel === 'email';
+    const to = smsOff ? null : normalizePhone(S.phone);
+    const sms = { envoye: false, dest: to || null, sid: null, erreur: null, ignore: smsOff };
     if (to) {
       try {
         const creds = await getTwilioCreds();
@@ -179,7 +185,7 @@ module.exports = async (req, res) => {
         sms.erreur = (e && e.message) || 'echec';
         console.error('[signature-send-link] sms', requestId, e && e.message, e && e.code);
       }
-    } else {
+    } else if (!smsOff) {
       sms.erreur = 'aucun numéro valide sur la demande';
     }
 

@@ -23,7 +23,13 @@
 // TEXTE EN LIGNE
 //   **gras** · {{var:clé}} · {{entreprise}} {{nom_prenom}} {{qualite}}
 //   {{siege_social}} {{siret}} {{forme_juridique}} {{email}} {{telephone}}
-//   {{date_signature}}
+//   {{date_signature}} {{immatriculation}} {{numeros_taxes}} {{pays}}
+//   {{province}}
+//
+// web.roleSignataire === 'prestataire' (14/10/2026) : contrat d'un
+// prestataire d'Ambitio (closer, setter…). Le bloc de signatures dit alors
+// « La SOCIÉTÉ — SARL Ambitio Corp » et « Le PRESTATAIRE — <signataire> » au
+// lieu de « Le PRESTATAIRE — SARL Ambitio Corp » et « Le CLIENT ».
 //
 // Mise en page : celle des contrats actuels — titre centré, « ARTICLE »
 // en gras souligné, texte justifié — avec en pied de CHAQUE page les deux
@@ -50,7 +56,15 @@ const CLIENT_KEYS = {
   siege_social: 'siège social', adresse: 'adresse', code_postal: 'code postal', ville: 'ville',
   siret: 'SIRET', siren: 'SIREN', tva: 'n° TVA', forme_juridique: 'forme juridique', activite: 'activité',
   date_creation: 'date de création', email: 'e-mail', telephone: 'téléphone', date_signature: 'date',
+  immatriculation: 'immatriculation', numeros_taxes: 'numéros de taxes', pays: 'pays', province: 'province',
 };
+
+/* Libellés des deux parties du bloc de signatures. */
+function partyTitles(web) {
+  return web && web.roleSignataire === 'prestataire'
+    ? { ambitio: 'La SOCIÉTÉ', signataire: 'Le PRESTATAIRE' }
+    : { ambitio: 'Le PRESTATAIRE', signataire: 'Le CLIENT' };
+}
 
 /* ── Polices du document (Source Serif 4) ─────────────────────────────────── */
 const SERIF = {
@@ -161,7 +175,9 @@ function resolveForSigner(web, prefill) {
           return v ? '**' + v + '**' : '……';
         });
       });
-      if (sec.signatures) blocks.push('p:Signatures du PRESTATAIRE et du CLIENT apposées en fin de document, précédées de la date et de la mention « Lu et approuvé ».');
+      if (sec.signatures) blocks.push(web.roleSignataire === 'prestataire'
+        ? 'p:Signatures de la SOCIÉTÉ et du PRESTATAIRE apposées en fin de document, précédées de la date et de la mention « Lu et approuvé ».'
+        : 'p:Signatures du PRESTATAIRE et du CLIENT apposées en fin de document, précédées de la date et de la mention « Lu et approuvé ».');
       return { id: sec.id, title: sec.title, blocks: blocks };
     }).filter(function (s) { return s.blocks.length || s.title; }),
   };
@@ -298,9 +314,10 @@ async function signatureBlock(C, opts, cachet) {
   const top = C.y;
   const page = C.page;
   function txt(t, x, y, font, size, color) { page.drawText(cl(F, t), { x: x, y: y, size: size || SIZE, font: font || F.r, color: color || BLACK }); }
-  /* PRESTATAIRE */
+  const T = partyTitles(C.ctx.web);
+  /* AMBITIO */
   let y = top - SIZE;
-  txt('Le PRESTATAIRE', ML, y, F.b); y -= LH;
+  txt(T.ambitio, ML, y, F.b); y -= LH;
   txt('SARL Ambitio Corp', ML, y); y -= LH;
   txt('Représentée par Emily UGHETTO', ML, y); y -= LH;
   txt('et Adrien FRANCOIS', ML, y); y -= 6;
@@ -311,10 +328,10 @@ async function signatureBlock(C, opts, cachet) {
     y -= h;
   }
   const yLeft = y;
-  /* CLIENT */
+  /* SIGNATAIRE */
   const xR = ML + colW + 30;
   let yr = top - SIZE;
-  txt('Le CLIENT', xR, yr, F.b); yr -= LH;
+  txt(T.signataire, xR, yr, F.b); yr -= LH;
   const co = (C.ctx.client.entreprise || '').trim();
   function wrapTo(t, font, size) { return signPdf.wrap({ unicode: F.unicode }, font, t, size, colW); }
   wrapTo(co || '……………………………', co ? F.b : F.r, SIZE).forEach(function (l) { txt(l, xR, yr, co ? F.b : F.r, SIZE, co ? INK : MUTED); yr -= LH; });

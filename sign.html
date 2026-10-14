@@ -130,6 +130,9 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:inherit;}
 .co-k{color:var(--muted);min-width:118px;flex:none;}
 .co-v{font-weight:700;word-break:break-word;}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.seg{display:flex;gap:6px;margin:4px 0 14px;}
+.seg-b{flex:1;border:1.5px solid var(--line2);background:#fff;border-radius:12px;padding:10px 8px;font-size:14px;font-weight:700;cursor:pointer;color:var(--ink2);}
+.seg-b.on{border-color:var(--accent);background:var(--accentSoft);color:var(--accent);}
 .chip{border:1.5px solid var(--line2);background:#fff;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer;}
 .chip:hover{border-color:var(--accent);color:var(--accent);}
 /* Cases à cocher : grandes, visibles, rien de pré-coché */
@@ -234,15 +237,16 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:inherit;}
   <div class="view" id="v1">
     <div class="card">
       <div class="h1">Bonjour <span id="hello"></span>,</div>
-      <p class="sub">Vous êtes invité(e) à signer le contrat <strong id="tplName1"></strong>. Pour commencer, confirmons votre identité : un code à 6 chiffres va être envoyé par SMS à votre téléphone.</p>
-      <div class="note note-b">📱 Numéro enregistré : <strong id="phoneHint"></strong></div>
+      <p class="sub">Vous êtes invité(e) à signer le contrat <strong id="tplName1"></strong>. Pour commencer, confirmons votre identité : un code à 6 chiffres va être envoyé <span id="otpVia">par SMS à votre téléphone</span>.</p>
+      <div class="note note-b"><span id="otpDestLbl">📱 Numéro enregistré</span> : <strong id="phoneHint"></strong></div>
       <div id="otpAsk"><button class="btn btn-p btn-w" data-action="otp-send" id="otpSendBtn">Recevoir mon code par SMS</button></div>
       <div id="otpForm" style="display:none">
-        <label class="lbl" for="otpCode">Code reçu par SMS</label>
+        <label class="lbl" for="otpCode" id="otpCodeLbl">Code reçu par SMS</label>
         <input class="inp otp-in" id="otpCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••"/>
         <div class="err" id="otpErr" style="display:none"></div>
         <button class="btn btn-p btn-w" style="margin-top:12px" data-action="otp-verify" id="otpVerifyBtn">Valider le code</button>
         <div class="center" style="margin-top:8px"><button class="btn btn-l" data-action="otp-send">Je n'ai rien reçu — renvoyer un code</button></div>
+        <p class="help" id="otpSpam" style="display:none;text-align:center">Pas d'e-mail après une minute ? Regardez dans vos courriers indésirables (spam).</p>
         <div class="note note-r" id="otpFail" style="display:none"></div>
       </div>
       <p class="help" style="margin-top:14px">Ce code prouve que c'est bien vous qui signez. Il est valable 10 minutes et ne doit être communiqué à personne.</p>
@@ -270,7 +274,31 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:inherit;}
   <div class="view" id="v3">
     <div class="card" id="coCard">
       <div class="h2">Votre société</div>
-      <p class="sub">Le contrat est conclu au nom de votre entreprise. Saisissez son numéro SIRET (14 chiffres) ou SIREN (9 chiffres) : nous retrouvons ses informations dans l'annuaire officiel des entreprises.</p>
+      <div class="seg" id="coCountry">
+        <button type="button" class="seg-b on" data-action="co-country" data-c="FR">🇫🇷 Entreprise française</button>
+        <button type="button" class="seg-b" data-action="co-country" data-c="CA">🇨🇦 Entreprise canadienne</button>
+      </div>
+      <p class="sub" id="coSubFr">Le contrat est conclu au nom de votre entreprise. Saisissez son numéro SIRET (14 chiffres) ou SIREN (9 chiffres) : nous retrouvons ses informations dans l'annuaire officiel des entreprises.</p>
+      <div id="coCa" style="display:none">
+        <p class="sub">Le contrat est conclu au nom de votre entreprise, telle qu'elle est immatriculée au Canada. Ces informations figureront telles quelles sur le contrat : recopiez-les depuis votre état de renseignements (registre des entreprises).</p>
+        <label class="lbl" for="caName">Nom de l'entreprise (tel qu'immatriculé)</label><input class="inp" id="caName" autocomplete="organization"/>
+        <div class="row2">
+          <div><label class="lbl" for="caForm">Forme juridique</label><input class="inp" id="caForm" list="caForms" placeholder="Société par actions, entreprise individuelle…"/>
+            <datalist id="caForms"><option value="Société par actions (compagnie)"></option><option value="Entreprise individuelle"></option><option value="Travailleur autonome"></option><option value="Société en nom collectif (SENC)"></option><option value="Société en commandite (SEC)"></option><option value="Société par actions de régime fédéral (inc.)"></option></datalist></div>
+          <div><label class="lbl" for="caProv">Province ou territoire</label><select class="inp" id="caProv"></select></div>
+        </div>
+        <label class="lbl" for="caNum" id="caNumLbl">NEQ — numéro d'entreprise du Québec (10 chiffres)</label><input class="inp" id="caNum" inputmode="numeric" autocomplete="off"/>
+        <div class="row2">
+          <div><label class="lbl" for="caGst">N° de TPS/TVH <small>(facultatif)</small></label><input class="inp" id="caGst" autocomplete="off" placeholder="123456789 RT0001"/></div>
+          <div id="caQstBox"><label class="lbl" for="caQst">N° de TVQ <small>(facultatif)</small></label><input class="inp" id="caQst" autocomplete="off" placeholder="1234567890 TQ0001"/></div>
+        </div>
+        <label class="lbl" for="caL1">Adresse de l'entreprise</label><input class="inp" id="caL1" autocomplete="address-line1" placeholder="N° et rue"/>
+        <input class="inp" id="caL2" style="margin-top:8px" autocomplete="address-line2" placeholder="Bureau, app. (facultatif)"/>
+        <div class="row3" style="margin-top:8px">
+          <input class="inp" id="caCp" autocomplete="postal-code" placeholder="A1A 1A1" maxlength="7" style="text-transform:uppercase"/>
+          <input class="inp" id="caCity" autocomplete="address-level2" placeholder="Ville"/>
+        </div>
+      </div>
       <div id="coSearchBox">
         <label class="lbl" for="coQ">SIRET, SIREN ou raison sociale</label>
         <div style="display:flex;gap:8px">
@@ -413,7 +441,7 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:inherit;}
 var TOKEN=(new URLSearchParams(location.search).get('t')||'').replace(/[^A-Za-z0-9]/g,'');
 var S={step:0,reqId:'',signerIndex:0,load:null,content:null,
   read:{seen:{},count:0,total:0,end:false,startedAt:0,done:false},
-  co:null,coManual:false,coResults:[],
+  co:null,coManual:false,coResults:[],coCountry:'FR',
   checks:{},decl:{pouvoir:false,esign:false},
   pad:{strokes:0,points:0,t0:0,t1:0,minX:1e9,minY:1e9,maxX:-1e9,maxY:-1e9},sigMode:'dessin',
   sent:{},queue:[],busy:false};
@@ -474,7 +502,8 @@ function draftKey(){return 'sign_draft_'+TOKEN;}
 function val(id){var e=$(id);return e?e.value:'';}
 function saveDraft(){
   try{localStorage.setItem(draftKey(),JSON.stringify({co:S.content&&S.content.form.needsCompany?S.co:null,coManual:S.coManual,f:val('rFirst'),l:val('rLast'),q:val('rQual'),qa:val('rQualAutre'),
-    m:{n:val('mName'),fo:val('mForm'),s:val('mSiret')},a:{l1:val('aL1'),l2:val('aL2'),cp:val('aCp'),c:val('aCity')}}));}catch(e){}
+    m:{n:val('mName'),fo:val('mForm'),s:val('mSiret')},a:{l1:val('aL1'),l2:val('aL2'),cp:val('aCp'),c:val('aCity')},
+    cc:S.coCountry,ca:{n:val('caName'),fo:val('caForm'),p:val('caProv'),num:val('caNum'),g:val('caGst'),q:val('caQst'),l1:val('caL1'),l2:val('caL2'),cp:val('caCp'),c:val('caCity')}}));}catch(e){}
 }
 function loadDraft(){try{return JSON.parse(localStorage.getItem(draftKey())||'null');}catch(e){return null;}}
 function clearDraft(){try{localStorage.removeItem(draftKey());}catch(e){}}
@@ -488,10 +517,19 @@ function clearDraft(){try{localStorage.removeItem(draftKey());}catch(e){}}
     $('hdName').textContent=L.templateName;
     document.title=L.templateName+' — Signature';
     if(L.stage==='signed'){view('vSigned');return;}
-    if(L.stage==='waiting'){view('vWaiting');if(L.firstSignerName)$('waitMsg').textContent=L.firstSignerName+' doit signer avant vous. Vous recevrez un SMS dès que ce sera votre tour.';return;}
+    if(L.stage==='waiting'){view('vWaiting');if(L.firstSignerName)$('waitMsg').textContent=L.firstSignerName+' doit signer avant vous. Vous recevrez '+(L.otpChannel==='email'?'un e-mail':'un SMS')+' dès que ce sera votre tour.';return;}
     $('hello').textContent=L.firstName||'';
     $('tplName1').textContent='« '+L.templateName+' »';
     $('phoneHint').textContent=L.phoneHint||'—';
+    if(L.otpChannel==='email'){
+      /* Signataire hors de France : le code arrive par e-mail. */
+      $('otpVia').textContent='par e-mail, à votre adresse';
+      $('otpDestLbl').textContent='✉️ Adresse enregistrée';
+      $('phoneHint').textContent=L.emailHint||'—';
+      $('otpCodeLbl').textContent='Code reçu par e-mail';
+      show('otpSpam');
+    }
+    $('otpSendBtn').textContent=otpBtnLabel();
     show('steps');
     if(L.otpOk){loadContent();}else{go(1);}
   }).catch(function(){fail('Connexion impossible. Vérifiez votre réseau puis rechargez la page.');});
@@ -510,18 +548,20 @@ function go(n){
   window.scrollTo(0,0);
 }
 
-/* ═══ ÉTAPE 1 — CODE SMS ═══ */
+/* ═══ ÉTAPE 1 — CODE SMS (ou e-mail) ═══ */
 var otpTimer=null;
+function otpByEmail(){return !!(S.load&&S.load.otpChannel==='email');}
+function otpBtnLabel(){return otpByEmail()?'Recevoir mon code par e-mail':'Recevoir mon code par SMS';}
 function otpSend(){
   var b=$('otpSendBtn');b.disabled=true;b.innerHTML='<span class="spin w"></span> Envoi…';
   hide('otpErr');hide('otpFail');
   otpApi('send').then(function(o){
-    b.disabled=false;b.textContent='Recevoir mon code par SMS';
+    b.disabled=false;b.textContent=otpBtnLabel();
     if(!o.ok){showOtpErr(o.j.error||'Envoi impossible. Réessayez dans un instant.');show('otpForm');return;}
     hide('otpAsk');show('otpForm');
     try{$('otpCode').focus();}catch(e){}
-    watchSms();
-  }).catch(function(){b.disabled=false;b.textContent='Recevoir mon code par SMS';showOtpErr('Connexion indisponible. Réessayez.');});
+    if(!otpByEmail())watchSms();
+  }).catch(function(){b.disabled=false;b.textContent=otpBtnLabel();showOtpErr('Connexion indisponible. Réessayez.');});
 }
 /* Twilio ACCEPTE un SMS sans garantir qu'il arrive. On suit le statut réel de
    remise et on prévient tout de suite si l'opérateur l'a rejeté. */
@@ -569,14 +609,18 @@ function loadContent(){
 function phValue(key){
   var c=currentCompany();
   if(key==='entreprise')return c&&c.name;
-  if(key==='siret')return c&&c.siret;
+  if(key==='siret')return c&&(c.country==='CA'?(c.registryNumber?caReg(c.province).label+' '+c.registryNumber:''):c.siret);
+  if(key==='immatriculation')return c&&(c.country==='CA'?(c.registryNumber?caReg(c.province).label+' '+c.registryNumber+' ('+caReg(c.province).name+')':''):(c.siret?'SIRET '+fmtSiret(c.siret):''));
+  if(key==='numeros_taxes')return c&&(c.country==='CA'?(taxLine(c)||'néant'):taxLine(c));
+  if(key==='pays')return c&&(c.country==='CA'?'Canada':(c.name?'France':''));
+  if(key==='province')return c&&c.country==='CA'&&S.content.form.provinces?S.content.form.provinces[c.province]||'':'';
   if(key==='siege_social')return c&&addrLine(c.address);
   if(key==='nom_prenom'){var f=$('rFirst').value.trim(),l=$('rLast').value.trim();return (f||l)?(f+' '+l).trim():'';}
   if(key==='qualite')return qualite();
   if(key==='prenom')return $('rFirst').value.trim();
   if(key==='nom')return $('rLast').value.trim();
   if(key==='siren')return c&&(c.siren||String(c.siret||'').slice(0,9));
-  if(key==='tva')return c&&c.vatNumber;
+  if(key==='tva')return c&&taxLine(c);
   if(key==='activite')return c&&c.nafLabel;
   if(key==='adresse')return c&&c.address&&[c.address.line1,c.address.line2].filter(Boolean).join(', ');
   if(key==='code_postal')return c&&c.address&&c.address.postalCode;
@@ -588,7 +632,7 @@ function phValue(key){
   if(key==='date_signature')return $('mDate')&&$('mDate').value.length===10?$('mDate').value:'';
   return '';
 }
-var PH_LABEL={prenom:'votre prénom',nom:'votre nom',siren:'SIREN',tva:'n° TVA',activite:'activité',adresse:'adresse',code_postal:'code postal',ville:'ville',date_creation:'date de création',entreprise:'votre société',nom_prenom:'votre nom',siege_social:'adresse du siège',siret:'n° SIRET',qualite:'votre qualité',forme_juridique:'forme juridique',email:'votre e-mail',telephone:'votre téléphone',date_signature:'date de signature'};
+var PH_LABEL={prenom:'votre prénom',nom:'votre nom',siren:'SIREN',tva:'n° TVA',activite:'activité',adresse:'adresse',code_postal:'code postal',ville:'ville',date_creation:'date de création',entreprise:'votre société',nom_prenom:'votre nom',siege_social:'adresse du siège',siret:'n° SIRET',immatriculation:'immatriculation',numeros_taxes:'numéros de taxes',pays:'pays',province:'province',qualite:'votre qualité',forme_juridique:'forme juridique',email:'votre e-mail',telephone:'votre téléphone',date_signature:'date de signature'};
 function inline(s){
   var h=esc(s);
   h=h.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
@@ -744,13 +788,14 @@ function buildForm(){
   var F=S.content.form;
   $('txtPouvoir').textContent=F.declarations.pouvoir;
   $('txtEsign').textContent=F.declarations.esign;
-  var q='<option value="">Choisissez…</option>';
-  F.qualites.forEach(function(x){q+='<option>'+esc(x)+'</option>';});
-  q+='<option value="Autre">Autre…</option>';
-  $('rQual').innerHTML=q;
+  fillQualites();
+  var pv='';
+  var P=F.provinces||{};for(var pk in P){if(Object.prototype.hasOwnProperty.call(P,pk))pv+='<option value="'+esc(pk)+'">'+esc(P[pk])+'</option>';}
+  $('caProv').innerHTML=pv;$('caProv').value='QC';caProvUi();
   $('todayEx').textContent=S.content.today;
   if(!F.needsCompany){
     S.co=F.company;
+    if(F.company&&F.company.country==='CA'){S.coCountry='CA';fillQualites();}
     $('coCard').innerHTML='<div class="h2">La société</div><p class="sub">Renseignée par le premier signataire.</p>'+companyCard(F.company);
   }
   /* Cases à cocher */
@@ -785,6 +830,8 @@ function buildForm(){
   /* Brouillon */
   var D=loadDraft();
   if(D&&F.needsCompany){
+    if(D.cc==='CA'&&D.ca){S.coCountry='CA';$('caName').value=D.ca.n||'';$('caForm').value=D.ca.fo||'';if(D.ca.p)$('caProv').value=D.ca.p;$('caNum').value=D.ca.num||'';$('caGst').value=D.ca.g||'';$('caQst').value=D.ca.q||'';
+      $('caL1').value=D.ca.l1||'';$('caL2').value=D.ca.l2||'';$('caCp').value=D.ca.cp||'';$('caCity').value=D.ca.c||'';caProvUi();fillQualites();countryButtons();}
     if(D.co){S.co=D.co;S.coManual=!!D.coManual;}
     if(D.coManual){S.coManual=true;}
     $('mName').value=(D.m&&D.m.n)||'';$('mForm').value=(D.m&&D.m.fo)||'';$('mSiret').value=(D.m&&D.m.s)||'';
@@ -800,7 +847,31 @@ function buildForm(){
 }
 
 /* ═══ ÉTAPE 3 — SOCIÉTÉ ═══ */
-function addrLine(a){if(!a)return '';var l1=[a.line1,a.line2].filter(Boolean).join(', ');var l2=[a.postalCode,a.city].filter(Boolean).join(' ');return [l1,l2].filter(Boolean).join(', ');}
+function addrLine(a){if(!a)return '';var l1=[a.line1,a.line2].filter(Boolean).join(', ');
+  if(a.country&&a.country!=='France')return [l1,[a.city,a.region?'('+a.region+')':'',a.postalCode].filter(Boolean).join(' '),a.country].filter(Boolean).join(', ');
+  var l2=[a.postalCode,a.city].filter(Boolean).join(' ');return [l1,l2].filter(Boolean).join(', ');}
+/* Entreprise canadienne : pas d'annuaire interrogeable, saisie contrôlée.
+   Mêmes règles que le serveur (api/_companyLookup.js, canadaCompany). */
+function caReg(p){return p==='QC'?{label:'NEQ',name:'Registraire des entreprises du Québec',digits:10}:{label:'NE',name:'numéro d\'entreprise fédéral (Agence du revenu du Canada)',digits:9};}
+function caPostal(v){var c=String(v||'').toUpperCase().replace(/\s+/g,'');return /^[ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z]\d[ABCEGHJ-NPRSTV-Z]\d$/.test(c)?c.slice(0,3)+' '+c.slice(3):'';}
+function caTax(v,kind){var c=String(v||'').toUpperCase().replace(/[\s-]+/g,'');if(!c)return '';var m=kind==='tvq'?/^(\d{10})TQ(\d{4})$/.exec(c):/^(\d{9})RT(\d{4})$/.exec(c);return m?m[1]+(kind==='tvq'?' TQ':' RT')+m[2]:null;}
+function taxLine(c){if(!c)return '';if(c.country!=='CA')return c.vatNumber||'';if(c.taxNumbers)return c.taxNumbers;var g=caTax(c.gstNumber,'tps'),q=caTax(c.qstNumber,'tvq');return [g?'TPS/TVH '+g:'',q?'TVQ '+q:''].filter(Boolean).join(' · ');}
+function caProvUi(){var r=caReg($('caProv').value);$('caNumLbl').textContent=r.label==='NEQ'?'NEQ — numéro d\'entreprise du Québec (10 chiffres)':'Numéro d\'entreprise — NE (9 chiffres)';show('caQstBox',$('caProv').value==='QC');}
+function fillQualites(){
+  var F=S.content.form,cur=$('rQual').value,list=(S.coCountry==='CA'&&F.qualitesCa)?F.qualitesCa:F.qualites;
+  var q='<option value="">Choisissez…</option>';
+  list.forEach(function(x){q+='<option>'+esc(x)+'</option>';});
+  q+='<option value="Autre">Autre…</option>';
+  $('rQual').innerHTML=q;
+  if(cur){if(list.indexOf(cur)>=0||cur==='Autre')$('rQual').value=cur;else{$('rQual').value='Autre';$('rQualAutre').value=cur;show('rQualAutre');}}
+}
+function countryButtons(){var bs=document.querySelectorAll('#coCountry .seg-b');for(var i=0;i<bs.length;i++)bs[i].classList.toggle('on',bs[i].getAttribute('data-c')===S.coCountry);}
+function setCountry(c){
+  c=c==='CA'?'CA':'FR';
+  if(c===S.coCountry)return;
+  S.coCountry=c;
+  countryButtons();fillQualites();renderCompany();saveDraft();
+}
 function fmtSiret(s){s=String(s||'');return s.length===14?s.slice(0,3)+' '+s.slice(3,6)+' '+s.slice(6,9)+' '+s.slice(9):s;}
 function coSearch(){
   var q=$('coQ').value.trim();
@@ -829,6 +900,13 @@ function coPick(i){
 }
 function companyCard(c){
   if(!c)return '';
+  if(c.country==='CA')return '<div class="co">'
+    +'<div class="co-row"><span class="co-k">Entreprise</span><span class="co-v">'+esc(c.name)+'</span></div>'
+    +'<div class="co-row"><span class="co-k">Forme juridique</span><span class="co-v">'+esc(c.legalFormLabel||'—')+'</span></div>'
+    +'<div class="co-row"><span class="co-k">'+esc(c.registryLabel||'Immatriculation')+'</span><span class="co-v">'+esc(c.registryNumber||'—')+'</span></div>'
+    +(c.taxNumbers?'<div class="co-row"><span class="co-k">Taxes</span><span class="co-v">'+esc(c.taxNumbers)+'</span></div>':'')
+    +'<div class="co-row"><span class="co-k">Adresse</span><span class="co-v">'+esc(c.addressLine||addrLine(c.address))+'</span></div>'
+    +'</div>';
   return '<div class="co">'
     +'<div class="co-row"><span class="co-k">Raison sociale</span><span class="co-v">'+esc(c.name)+(c.closed?' <span class="badge b-r">RADIÉE</span>':' <span class="badge b-g">Active</span>')+'</span></div>'
     +'<div class="co-row"><span class="co-k">Forme juridique</span><span class="co-v">'+esc(c.legalFormLabel||'—')+'</span></div>'
@@ -838,6 +916,9 @@ function companyCard(c){
     +'</div>';
 }
 function renderCompany(){
+  var ca=S.coCountry==='CA';
+  show('coCa',ca);show('coSubFr',!ca);
+  if(ca){hide('coSearchBox');hide('coSelected');hide('coManual');hide('coAddr');$('dirChips').innerHTML='';refreshBar();return;}
   if(S.coManual){hide('coSearchBox');hide('coSelected');show('coManual');show('coAddr');hide('coAddrNote');
     $('coSelected').innerHTML='';refreshBar();return;}
   hide('coManual');
@@ -858,6 +939,9 @@ function renderCompany(){
 function currentCompany(){
   if(!S.content)return null;
   if(!S.content.form.needsCompany)return S.content.form.company;
+  if(S.coCountry==='CA')return {country:'CA',name:val('caName').trim(),legalFormLabel:val('caForm').trim(),province:val('caProv'),registryNumber:val('caNum').replace(/\D/g,''),
+    gstNumber:val('caGst').trim(),qstNumber:val('caProv')==='QC'?val('caQst').trim():'',
+    address:{line1:val('caL1').trim(),line2:val('caL2').trim(),postalCode:caPostal(val('caCp'))||val('caCp').trim(),city:val('caCity').trim(),region:val('caProv'),country:'Canada'}};
   if(S.coManual)return {name:val('mName').trim(),legalFormLabel:$('mForm').value.trim(),siret:$('mSiret').value.replace(/\D/g,''),address:{line1:$('aL1').value.trim(),line2:$('aL2').value.trim(),postalCode:$('aCp').value.trim(),city:$('aCity').value.trim()}};
   if(!S.co)return null;
   var c=JSON.parse(JSON.stringify(S.co));
@@ -878,7 +962,14 @@ function missing(step){
   }
   if(step===3){
     var c=currentCompany();
-    if(S.content.form.needsCompany){
+    if(S.content.form.needsCompany&&S.coCountry==='CA'){
+      var rg=caReg(c.province);
+      if(!c.name)m.push('Nom de l\'entreprise');if(!c.legalFormLabel)m.push('Forme juridique');
+      if(c.registryNumber.length!==rg.digits)m.push(rg.label+' ('+rg.digits+' chiffres)');
+      if(caTax(c.gstNumber,'tps')===null)m.push('N° de TPS/TVH');if(caTax(c.qstNumber,'tvq')===null)m.push('N° de TVQ');
+      if(!c.address.line1||!caPostal(c.address.postalCode)||!c.address.city)m.push('Adresse de l\'entreprise');
+    }
+    else if(S.content.form.needsCompany){
       if(!c)m.push('Recherchez votre société');
       else{
         if(c.closed)m.push('Entreprise radiée');
@@ -929,7 +1020,18 @@ function flagMissing(step){
   }
   if(step===3){
     var c=currentCompany();
-    if(S.content.form.needsCompany){
+    if(S.content.form.needsCompany&&S.coCountry==='CA'){
+      var rg2=caReg(val('caProv')),nb=val('caNum').replace(/\D/g,'');
+      if(!val('caName').trim())f('caName','Nom de l\'entreprise obligatoire.');
+      if(!val('caForm').trim())f('caForm','Forme juridique obligatoire.');
+      if(nb.length!==rg2.digits)f('caNum','Le '+rg2.label+' compte '+rg2.digits+' chiffres ('+nb.length+' saisis).');
+      if(caTax(val('caGst'),'tps')===null)f('caGst','Format attendu : 123456789 RT0001.');
+      if(val('caProv')==='QC'&&caTax(val('caQst'),'tvq')===null)f('caQst','Format attendu : 1234567890 TQ0001.');
+      if(!val('caL1').trim())f('caL1','Adresse obligatoire.');
+      if(!caPostal(val('caCp')))f('caCp','Code postal au format A1A 1A1.');
+      if(!val('caCity').trim())f('caCity','Ville obligatoire.');
+    }
+    else if(S.content.form.needsCompany){
       if(!c&&!S.coManual){f('coQ','Saisissez le SIRET ou le SIREN de votre société, puis « Rechercher ».');}
       if(S.coManual){
         if(!val('mName').trim())f('mName','Raison sociale obligatoire.');
@@ -981,7 +1083,8 @@ function next(){
   }
   if(S.step===3){
     track('representant_saisi',{nom:repFull(),qualite:qualite()},'rep:'+repFull()+qualite());
-    if(S.coManual){var c=currentCompany();track('entreprise_manuelle',{nom:c.name,siret:c.siret},'man:'+c.siret);}
+    if(S.content.form.needsCompany&&S.coCountry==='CA'){var cc=currentCompany(),rr=caReg(cc.province);track('entreprise_manuelle',{nom:cc.name,siret:rr.label+' '+cc.registryNumber,pays:'Canada'},'ca:'+cc.registryNumber+cc.name);}
+    else if(S.coManual){var c=currentCompany();track('entreprise_manuelle',{nom:c.name,siret:c.siret},'man:'+c.siret);}
     saveDraft();refreshPlaceholders();go(4);return;
   }
   if(S.step===4){
@@ -1121,7 +1224,9 @@ function formPayload(withSig){
   var c=currentCompany()||{};
   var texts={};S.content.form.texts.forEach(function(x){var e=$('tx_'+x.id);if(e)texts[x.id]=e.value.trim();});
   var p={
-    company:S.content.form.needsCompany?{siren:c.siren||'',siret:c.siret||'',name:c.name||'',legalFormLabel:c.legalFormLabel||'',address:c.address||{}}:null,
+    company:!S.content.form.needsCompany?null:(c.country==='CA'
+      ?{country:'CA',name:c.name||'',legalFormLabel:c.legalFormLabel||'',province:c.province||'',registryNumber:c.registryNumber||'',gstNumber:c.gstNumber||'',qstNumber:c.qstNumber||'',address:c.address||{}}
+      :{siren:c.siren||'',siret:c.siret||'',name:c.name||'',legalFormLabel:c.legalFormLabel||'',address:c.address||{}}),
     representative:{firstName:$('rFirst').value.trim(),lastName:$('rLast').value.trim(),qualite:$('rQual').value,qualiteAutre:$('rQualAutre').value.trim()},
     declarations:{pouvoir:S.decl.pouvoir,esign:S.decl.esign},
     checks:S.checks,texts:texts,
@@ -1137,7 +1242,8 @@ function buildRecap(){
   var c=currentCompany()||{},h='';
   function row(k,v){h+='<div class="co-row"><span class="co-k">'+esc(k)+'</span><span class="co-v">'+esc(v||'—')+'</span></div>';}
   row('Contrat',S.content.templateName);
-  row('Société',c.name);row('SIRET',fmtSiret(c.siret));row('Siège social',c.addressLine||addrLine(c.address));
+  if(c.country==='CA'){var rc=caReg(c.province);row('Entreprise',c.name);row(rc.label,c.registryNumber);if(taxLine(c))row('Taxes',taxLine(c));row('Adresse',c.addressLine||addrLine(c.address));}
+  else{row('Société',c.name);row('SIRET',fmtSiret(c.siret));row('Siège social',c.addressLine||addrLine(c.address));}
   row('Représentant',repFull()+(qualite()?', '+qualite():''));
   (S.content.form.conditions||[]).forEach(function(x){if(x.value)row('Condition',x.label);});
   S.content.form.checks.forEach(function(x){row(S.checks[x.id]?'☑ Coché':'☐ Non coché',x.label);
@@ -1233,6 +1339,7 @@ document.addEventListener('click',function(e){
   else if(a==='next')next();
   else if(a==='back')back();
   else if(a==='co-search')coSearch();
+  else if(a==='co-country')setCountry(t.getAttribute('data-c'));
   else if(a==='co-pick')coPick(+t.getAttribute('data-i'));
   else if(a==='co-change'){S.co=null;S.coManual=false;$('coResults').innerHTML='';renderCompany();try{$('coQ').focus();}catch(x){}}
   else if(a==='co-manual'){S.coManual=true;S.co=null;renderCompany();saveDraft();}
@@ -1249,15 +1356,17 @@ document.addEventListener('input',function(e){
   var id=e.target&&e.target.id;
   if(e.target&&e.target.classList&&e.target.classList.contains('bad'))clearFerr(e.target);
   if(id==='mSiret'){var d=e.target.value.replace(/\D/g,'');if(d.length===14&&!siretOk(d))ferr(e.target,'Ce SIRET n\'est pas valide : vérifiez les 14 chiffres (la clé de contrôle ne correspond pas).');}
-  if(id==='rFirst'||id==='rLast'||id==='rQualAutre'||id==='sigName'||id==='mName'||id==='mForm'||id==='mSiret'||id==='aL1'||id==='aL2'||id==='aCp'||id==='aCity'||(e.target.getAttribute&&e.target.getAttribute('data-tx'))){
+  if(id==='rFirst'||id==='rLast'||id==='rQualAutre'||id==='sigName'||id==='mName'||id==='mForm'||id==='mSiret'||id==='aL1'||id==='aL2'||id==='aCp'||id==='aCity'||/^ca(Name|Form|Num|Gst|Qst|L1|L2|Cp|City)$/.test(id||'')||(e.target.getAttribute&&e.target.getAttribute('data-tx'))){
     if(id==='aCp')e.target.value=e.target.value.replace(/\D/g,'').slice(0,5);
+    if(id==='caNum')e.target.value=e.target.value.replace(/\D/g,'').slice(0,10);
     if(id==='sigName'){updTyped();var ok=fold(e.target.value)===fold(repFull());e.target.className='inp'+(e.target.value.length>3?(ok?' ok':' bad'):'');
       var er=$('sigNameErr');if(e.target.value.length>3&&!ok){er.textContent='Saisissez : '+repFull();show('sigNameErr');}else hide('sigNameErr');}
     refreshBar();
     if(S.step===3)saveDraft();
   }
 });
-document.addEventListener('change',function(e){if(e.target&&e.target.id==='rQual'){clearFerr(e.target);show('rQualAutre',e.target.value==='Autre');refreshBar();saveDraft();}});
+document.addEventListener('change',function(e){if(e.target&&e.target.id==='rQual'){clearFerr(e.target);show('rQualAutre',e.target.value==='Autre');refreshBar();saveDraft();}
+  if(e.target&&e.target.id==='caProv'){caProvUi();refreshBar();saveDraft();}});
 $('coQ').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();coSearch();}});
 </script>
 </body>

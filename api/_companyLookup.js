@@ -8,6 +8,14 @@
 //
 // Source : https://recherche-entreprises.api.gouv.fr — publique, gratuite,
 // sans clé (≈ 7 req/s).
+//
+// ENTREPRISES CANADIENNES (14/10/2026) — canadaCompany() valide une société
+// établie au Canada, saisie par le signataire : il n'existe pas d'annuaire
+// canadien interrogeable librement (le Registraire des entreprises du Québec
+// n'a pas d'API publique). Format de l'identifiant contrôlé (NEQ à 10
+// chiffres au Québec, numéro d'entreprise fédéral à 9 chiffres ailleurs),
+// code postal canadien, numéros de TPS/TVH et de TVQ facultatifs ; le dossier
+// de preuve dit que rien n'a été vérifié au registre.
 // ============================================================================
 
 const API_BASE = 'https://recherche-entreprises.api.gouv.fr/search';
@@ -170,12 +178,113 @@ function normalize(entry) {
   };
 }
 
-/* Adresse sur une ligne, telle qu'elle s'imprime dans le contrat. */
+/* Adresse sur une ligne, telle qu'elle s'imprime dans le contrat. Hors de
+   France : « ville (QC) H3A 1B2, Canada ». */
 function addressLine(a) {
   a = a || {};
   const l1 = [a.line1, a.line2].filter(Boolean).join(', ');
+  if (a.country && a.country !== 'France') {
+    const l2b = [a.city, a.region ? '(' + a.region + ')' : '', a.postalCode].filter(Boolean).join(' ');
+    return [l1, l2b, a.country].filter(Boolean).join(', ');
+  }
   const l2 = [a.postalCode, a.city].filter(Boolean).join(' ');
   return [l1, l2].filter(Boolean).join(', ');
+}
+
+/* ── Canada ──────────────────────────────────────────────────────────────── */
+const CA_PROVINCES = {
+  QC: 'Québec', ON: 'Ontario', BC: 'Colombie-Britannique', AB: 'Alberta', MB: 'Manitoba',
+  SK: 'Saskatchewan', NS: 'Nouvelle-Écosse', NB: 'Nouveau-Brunswick', NL: 'Terre-Neuve-et-Labrador',
+  PE: 'Île-du-Prince-Édouard', YT: 'Yukon', NT: 'Territoires du Nord-Ouest', NU: 'Nunavut',
+};
+
+/* Le registre d'où vient l'identifiant : NEQ au Québec, numéro d'entreprise
+   (NE, attribué par l'Agence du revenu du Canada) partout ailleurs. */
+function caRegistry(province) {
+  if (province === 'QC') return { label: 'NEQ', name: 'Registraire des entreprises du Québec', digits: 10 };
+  return { label: 'NE', name: 'numéro d\'entreprise fédéral (Agence du revenu du Canada)', digits: 9 };
+}
+
+/* Code postal canadien « A1A 1A1 » (lettres D, F, I, O, Q, U exclues ; W et Z
+   jamais en tête). Rend la forme normalisée, ou '' si invalide. */
+function caPostal(s) {
+  const c = String(s || '').toUpperCase().replace(/\s+/g, '');
+  if (!/^[ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z]\d[ABCEGHJ-NPRSTV-Z]\d$/.test(c)) return '';
+  return c.slice(0, 3) + ' ' + c.slice(3);
+}
+
+/* TPS/TVH : 9 chiffres + RT + 4 chiffres. TVQ : 10 chiffres + TQ + 4 chiffres.
+   Rend la forme normalisée, '' si vide, null si invalide. */
+function caTaxNumber(s, kind) {
+  const c = String(s || '').toUpperCase().replace(/[\s-]+/g, '');
+  if (!c) return '';
+  const m = kind === 'tvq' ? /^(\d{10})TQ(\d{4})$/.exec(c) : /^(\d{9})RT(\d{4})$/.exec(c);
+  if (!m) return null;
+  return m[1] + (kind === 'tvq' ? ' TQ' : ' RT') + m[2];
+}
+
+/* Société canadienne saisie par le signataire → { company, errors }.
+   `today` (JJ/MM/AAAA) date la mention du dossier de preuve. */
+function canadaCompany(c, today) {
+  c = c || {};
+  const errors = [];
+  const province = CA_PROVINCES[c.province] ? c.province : '';
+  if (!province) errors.push('Province ou territoire de l\'entreprise manquant.');
+  const reg = caRegistry(province);
+  const number = String(c.registryNumber || '').replace(/\D/g, '');
+  if (number.length !== reg.digits) errors.push(reg.label === 'NEQ'
+    ? 'Numéro d\'entreprise du Québec (NEQ) invalide : 10 chiffres attendus.'
+    : 'Numéro d\'entreprise (NE) invalide : 9 chiffres attendus.');
+  const gst = caTaxNumber(c.gstNumber, 'tps');
+  const qst = caTaxNumber(c.qstNumber, 'tvq');
+  if (gst === null) errors.push('Numéro de TPS/TVH invalide (format 123456789 RT0001).');
+  if (qst === null) errors.push('Numéro de TVQ invalide (format 1234567890 TQ0001).');
+  const a = c.address || {};
+  const postal = caPostal(a.postalCode);
+  const address = {
+    line1: String(a.line1 || '').trim().slice(0, 140),
+    line2: String(a.line2 || '').trim().slice(0, 140),
+    postalCode: postal || String(a.postalCode || '').trim().slice(0, 10),
+    city: String(a.city || '').trim().slice(0, 80),
+    region: province,
+    country: 'Canada',
+  };
+  if (!address.line1 || !postal || !address.city) errors.push('Adresse de l\'entreprise incomplète (voie, ville, code postal au format A1A 1A1).');
+  const name = String(c.name || '').trim().slice(0, 160);
+  const legalFormLabel = String(c.legalFormLabel || '').trim().slice(0, 80);
+  if (!name) errors.push('Nom de l\'entreprise manquant.');
+  if (!legalFormLabel) errors.push('Forme juridique manquante.');
+  const taxes = [gst ? 'TPS/TVH ' + gst : '', qst ? 'TVQ ' + qst : ''].filter(Boolean).join(' · ');
+  return {
+    errors: errors,
+    company: {
+      country: 'CA', countryLabel: 'Canada', province: province, provinceLabel: CA_PROVINCES[province] || '',
+      name: name, legalForm: '', legalFormLabel: legalFormLabel,
+      registryLabel: reg.label, registryName: reg.name, registryNumber: number,
+      siret: '', siren: '', vatNumber: '',
+      gstNumber: gst || '', qstNumber: qst || '', taxNumbers: taxes,
+      nafLabel: '', creationDate: '',
+      address: address, addressSource: 'saisie',
+      verification: 'Entreprise établie au Canada (' + (CA_PROVINCES[province] || 'province non précisée') + ') — ' + reg.label + ' ' + number
+        + ' déclaré par le signataire le ' + (today || '') + ' ; aucun annuaire canadien n\'étant interrogeable automatiquement, l\'immatriculation n\'a pas été vérifiée en ligne et doit l\'être sur pièce (extrait du registre : ' + reg.name + ')',
+    },
+  };
+}
+
+/* « SIRET 943 098 707 00012 » ou « NEQ 1234567890 (Registraire des
+   entreprises du Québec) » : l'immatriculation telle qu'elle s'imprime. */
+function registrationLine(C) {
+  C = C || {};
+  if (C.country === 'CA') return C.registryNumber ? C.registryLabel + ' ' + C.registryNumber + ' (' + C.registryName + ')' : '';
+  const s = String(C.siret || '');
+  return s ? 'SIRET ' + (s.length === 14 ? s.slice(0, 3) + ' ' + s.slice(3, 6) + ' ' + s.slice(6, 9) + ' ' + s.slice(9) : s) : '';
+}
+
+/* Numéros de taxes : TVA intracommunautaire en France, TPS/TVH et TVQ au
+   Canada. */
+function taxLine(C) {
+  C = C || {};
+  return C.country === 'CA' ? (C.taxNumbers || '') : (C.vatNumber || '');
 }
 
 /* Recherche brute. Lève une Error portant .status (400/429/502/504). */
@@ -237,4 +346,5 @@ module.exports = {
   vatFromSiren, clean, luhnOk, sirenValid, siretValid,
   legalFormLabel, normalize, addressLine,
   searchCompanies, lookupByIdentifier,
+  CA_PROVINCES, caRegistry, caPostal, caTaxNumber, canadaCompany, registrationLine, taxLine,
 };

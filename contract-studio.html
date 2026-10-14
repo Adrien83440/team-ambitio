@@ -212,6 +212,7 @@ textarea.inp{resize:vertical;line-height:1.5;}
           <div><div class="lbl">Sous-titre</div><input class="inp" id="dSub" data-head="subtitle"/></div>
           <div><div class="lbl">Accroche</div><input class="inp" id="dTag" data-head="tagline"/></div>
           <div><div class="lbl">Fait à</div><input class="inp" id="dPlace" data-head="place"/></div>
+          <div><div class="lbl">Le signataire est</div><select class="inp" id="dRole" data-head="roleSignataire"><option value="">le CLIENT (Ambitio = le prestataire)</option><option value="prestataire">le PRESTATAIRE (Ambitio = la société)</option></select></div>
         </div>
         <div id="doc"></div>
         <div style="text-align:center;margin-top:6px"><button class="btn" data-action="add-section">＋ Ajouter un article</button></div>
@@ -334,7 +335,7 @@ function init(web,name){
   ST.web=web;
   ST.web.sections.forEach(function(s){s.bl=s.blocks.map(parseBlock);delete s.blocks;if(!s.id)s.id=gid();});
   $('tplName').value=name||'';
-  $('dTitle').value=web.title||'';$('dSub').value=web.subtitle||'';$('dTag').value=web.tagline||'';$('dPlace').value=web.place||'FAYENCE';
+  $('dTitle').value=web.title||'';$('dSub').value=web.subtitle||'';$('dTag').value=web.tagline||'';$('dPlace').value=web.place||'FAYENCE';$('dRole').value=web.roleSignataire==='prestataire'?'prestataire':'';
   $('gate').style.display='none';$('app').style.display='';
   $('histBtn').disabled=!ST.id;$('dupBtn').disabled=!ST.id;
   fillSettings();
@@ -343,6 +344,7 @@ function init(web,name){
 function exportWeb(){
   var w=JSON.parse(JSON.stringify(ST.web));
   w.title=$('dTitle').value.trim();w.subtitle=$('dSub').value.trim();w.tagline=$('dTag').value.trim();w.place=$('dPlace').value.trim();
+  if($('dRole').value==='prestataire')w.roleSignataire='prestataire';else delete w.roleSignataire;
   w.sections=w.sections.map(function(s){var o={id:s.id,title:s.title,blocks:(s.bl||[]).map(buildBlock)};if(s.signatures)o.signatures=true;return o;});
   return w;
 }

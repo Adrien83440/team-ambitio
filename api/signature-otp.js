@@ -18,6 +18,13 @@
 // ou echec. Sans lui, un message filtre par l'operateur laissait le
 // signataire attendre indefiniment devant un « ✅ Code envoye ».
 //
+// CANAL E-MAIL (14/10/2026) — une demande créée avec otpChannel:'email'
+// (sales-signatures, « signataire hors de France ») reçoit son code par
+// e-mail, à l'adresse du signataire enregistrée sur la demande. Raison :
+// Twilio n'achemine pas de SMS vers le Canada ni les États-Unis depuis notre
+// numéro français. Mêmes plafonds, même durée de validité, même journal ; le
+// dossier de preuve dit « envoyé par e-mail » au lieu de « par SMS ».
+//
 // POURQUOI CET ENDPOINT
 // ---------------------
 // Le parcours passait par un document webhook_inbox { action:'signature_otp_send' }
@@ -45,12 +52,16 @@
 const crypto = require('crypto');
 const { db, admin } = require('./_firebaseAdmin');
 const { getTwilioClient, getTwilioCreds } = require('./_twilioClient');
+const { sendGmailWithAttachment } = require('./_billing-gmail');
 const parseBody = require('./_parseBody');
 const core = require('./_sign-core');
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const MAX_SENDS = 5;
 const MAX_ATTEMPTS = 8;
+
+/* Comptes d'envoi autorisés — mêmes que api/signature-send-link.js. */
+const ACCOUNTS = { contact: 1, strategie: 1, coaching: 1 };
 
 /* Meme normalisation que api/twilio-sms-send.js (E.164, France par defaut). */
 function normalizePhone(raw) {
@@ -60,6 +71,8 @@ function normalizePhone(raw) {
   if (cleaned.startsWith('00')) return '+' + cleaned.slice(2);
   if (cleaned.startsWith('0') && cleaned.length === 10) return '+33' + cleaned.slice(1);
   if (cleaned.startsWith('33') && cleaned.length >= 11) return '+' + cleaned;
+  /* Amérique du Nord saisie sans « + » : 1 + 10 chiffres. */
+  if (/^1\d{10}$/.test(cleaned)) return '+' + cleaned;
   return null;
 }
 
@@ -106,6 +119,69 @@ module.exports = async (req, res) => {
     }
 
     const otpRef = db.collection('signature_otp').doc(reqId);
+
+    // ─── ENVOI PAR E-MAIL ──────────────────────────────────────────────────
+    if (action === 'send' && core.otpChannel(R) === 'email') {
+      const dest = String(found.signer.email || R.clientEmail || '').trim();
+      if (dest.indexOf('@') < 1) {
+        res.status(400).json({ error: "Aucune adresse e-mail valide sur cette demande. Contactez votre conseiller." });
+        return;
+      }
+      const prevSnap = await otpRef.get();
+      const prev = prevSnap.exists ? (prevSnap.data() || {}) : {};
+      const sends = (prev.sends || 0) + 1;
+      if (sends > MAX_SENDS) {
+        res.status(429).json({ error: "Trop de demandes de code. Contactez votre conseiller." });
+        return;
+      }
+      const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+      /* Code écrit AVANT l'envoi, comme pour le SMS. */
+      await otpRef.set({
+        code,
+        signerIndex,
+        canal: 'email',
+        email: dest,
+        phone: null,
+        sends,
+        attempts: 0,
+        expiresAt: Date.now() + OTP_TTL_MS,
+        livraison: admin.firestore.FieldValue.delete(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      try {
+        await sendGmailWithAttachment({
+          tokenAccount: ACCOUNTS[R.sendAccount] ? R.sendAccount : 'contact',
+          fromName: 'Ambitio',
+          to: [dest],
+          subject: 'Votre code de signature : ' + code,
+          bodyText: [
+            'Bonjour,',
+            '',
+            'Voici votre code de vérification pour signer le document « ' + (R.templateName || 'Contrat') + ' » :',
+            '',
+            '    ' + code,
+            '',
+            'Il est valable 10 minutes. Ne le communiquez à personne : il prouve que c\'est bien vous qui signez.',
+            '',
+            'Si vous n\'êtes pas à l\'origine de cette demande, ignorez ce message.',
+            '',
+            'L\'équipe Ambitio',
+          ].join('\n'),
+        });
+      } catch (mailErr) {
+        console.error('[signature-otp] e-mail:', mailErr && mailErr.message);
+        res.status(502).json({ error: "L'envoi de l'e-mail a échoué. Réessayez dans un instant." });
+        return;
+      }
+      /* Gmail a accepté le message : pas de rappel de remise comme chez
+         Twilio, la page n'a donc rien à surveiller. */
+      await otpRef.set({ livraison: { statut: 'delivered', canal: 'email', at: Date.now() } }, { merge: true }).catch(function () {});
+      await core.appendAudit(reqRef, [{ type: 'otp_envoye', signer: signerIndex, data: { canal: 'email', dest: core.maskEmail(dest), envoi: sends } }], info)
+        .catch(function (e) { console.error('[signature-otp] journal:', e && e.message); });
+      await core.setProgress(reqRef, signerIndex, { derniere: 'Code e-mail demandé', enLigne: true }, info);
+      res.status(200).json({ ok: true, canal: 'email', phoneHint: core.maskEmail(dest), destHint: core.maskEmail(dest) });
+      return;
+    }
 
     // ─── ENVOI ─────────────────────────────────────────────────────────────
     if (action === 'send') {
@@ -228,15 +304,16 @@ module.exports = async (req, res) => {
       return;
     }
     if (!compareCode(O.code, code)) {
-      await core.appendAudit(reqRef, [{ type: 'otp_echec', signer: signerIndex, data: { tentative: attempts } }], info).catch(function () {});
+      await core.appendAudit(reqRef, [{ type: 'otp_echec', signer: signerIndex, data: O.canal === 'email' ? { canal: 'email', tentative: attempts } : { tentative: attempts } }], info).catch(function () {});
       res.status(400).json({ error: "Code incorrect." });
       return;
     }
 
     /* otpVerified alimente le certificat de signature (sign-certificate.html) :
        on le pose sur la demande, comme le faisait l'ancien traitement. */
+    const parEmail = O.canal === 'email';
     const by = {};
-    by[String(signerIndex)] = { atMs: Date.now(), at: new Date().toISOString(), phone: O.phone || null, ip: info.ip };
+    by[String(signerIndex)] = { atMs: Date.now(), at: new Date().toISOString(), canal: parEmail ? 'email' : 'sms', phone: O.phone || null, email: parEmail ? (O.email || null) : null, ip: info.ip };
     await reqRef.set({
       otpVerified: true,
       otpVerifiedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -248,8 +325,8 @@ module.exports = async (req, res) => {
         by: 'signer' + (signerIndex + 1),
       }),
     }, { merge: true });
-    await core.appendAudit(reqRef, [{ type: 'otp_verifie', signer: signerIndex, data: { tel: phoneHint(O.phone) } }], info);
-    await core.setProgress(reqRef, signerIndex, { etape: 2, derniere: 'Téléphone vérifié par code SMS', enLigne: true }, info);
+    await core.appendAudit(reqRef, [{ type: 'otp_verifie', signer: signerIndex, data: parEmail ? { canal: 'email', dest: core.maskEmail(O.email) } : { tel: phoneHint(O.phone) } }], info);
+    await core.setProgress(reqRef, signerIndex, { etape: 2, derniere: parEmail ? 'Adresse e-mail vérifiée par code' : 'Téléphone vérifié par code SMS', enLigne: true }, info);
 
     /* Code consomme : il ne doit plus pouvoir servir. */
     await otpRef.delete().catch((e) => console.error('[signature-otp] purge:', e && e.message));

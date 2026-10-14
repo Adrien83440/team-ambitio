@@ -442,6 +442,19 @@ const EVENT_LABELS = {
   copie_envoyee: 'Exemplaire signé envoyé par e-mail',
 };
 
+/* Code reçu par e-mail (demande « signataire hors de France ») : mêmes
+   événements, libellés exacts. */
+const EMAIL_EVENT_LABELS = {
+  otp_envoye: 'Code envoyé par e-mail',
+  otp_echec: 'Code incorrect',
+  otp_verifie: 'Adresse e-mail vérifiée par code',
+};
+function eventLabel(e) {
+  const d = e.data || {};
+  if (d.canal === 'email' && EMAIL_EVENT_LABELS[e.type]) return EMAIL_EVENT_LABELS[e.type];
+  return EVENT_LABELS[e.type] || e.type;
+}
+
 function eventDetail(e) {
   const d = e.data || {};
   if (e.type === 'section_vue') return d.titre || d.id || '';
@@ -452,7 +465,7 @@ function eventDetail(e) {
   if (e.type === 'consentement') return d.libelle || d.id || '';
   if (e.type === 'mention_saisie') return d.nom ? (d.nom + ' : « ' + (d.valeur || '') + ' »') : '';
   if (e.type === 'lecture_terminee') return d.duree ? ('durée de lecture ' + d.duree) : '';
-  if (e.type === 'otp_envoye' || e.type === 'otp_verifie') return d.tel || '';
+  if (e.type === 'otp_envoye' || e.type === 'otp_verifie') return d.tel || d.dest || '';
   if (e.type === 'lien_envoye') return d.canaux || '';
   if (e.type === 'page_pdf_vue') return d.page ? ('page ' + d.page) : '';
   return '';
@@ -477,7 +490,7 @@ async function proofPages(doc, fonts, P) {
   F.y = F.H - 180;
 
   F.box([
-    { text: 'Ce dossier a été établi automatiquement par le serveur de SARL Ambitio Corp au moment de la signature. Il rassemble les éléments qui identifient le signataire, attestent de son consentement et garantissent l\'intégrité du document : vérification du téléphone par code à usage unique, mentions saisies de sa main, journal horodaté de chacune de ses actions, empreintes cryptographiques et jetons d\'horodatage émis par une autorité tierce.', font: fonts.regular },
+    { text: 'Ce dossier a été établi automatiquement par le serveur de SARL Ambitio Corp au moment de la signature. Il rassemble les éléments qui identifient le signataire, attestent de son consentement et garantissent l\'intégrité du document : vérification ' + (P.signers.some(function (x) { return x.otpCanal === 'email'; }) ? 'de l\'adresse e-mail' : 'du téléphone') + ' par code à usage unique, mentions saisies de sa main, journal horodaté de chacune de ses actions, empreintes cryptographiques et jetons d\'horodatage émis par une autorité tierce.', font: fonts.regular },
   ]);
 
   F.section('1', 'Document');
@@ -493,17 +506,22 @@ async function proofPages(doc, fonts, P) {
     ['Envoyée par', P.createdBy || ''],
   ]);
 
+  /* Contrat de prestataire (closer, setter…) : Ambitio y est « la Société »
+     et le signataire « le Prestataire ». */
+  const prest = P.roleSignataire === 'prestataire';
   F.section('2', 'Parties');
   F.kv([
-    ['Prestataire', 'SARL Ambitio Corp — SIRET 943 098 707 00012 — 231B chemin de Mourre de Masque, 83440 Fayence — représentée par Emily UGHETTO et Adrien FRANCOIS'],
+    [prest ? 'Société' : 'Prestataire', 'SARL Ambitio Corp — SIRET 943 098 707 00012 — 231B chemin de Mourre de Masque, 83440 Fayence — représentée par Emily UGHETTO et Adrien FRANCOIS'],
   ]);
   const C = P.company || {};
+  const ca = C.country === 'CA';
   F.kv([
-    ['Client', C.name],
+    [prest ? 'Prestataire' : 'Client', C.name],
     ['Forme juridique', C.legalFormLabel],
-    ['SIREN / SIRET', [C.siren, C.siret].filter(Boolean).join(' / ')],
-    ['N° TVA intracommunautaire', C.vatNumber],
-    ['Siège social', C.addressLine],
+    ['Pays', ca ? 'Canada' + (C.provinceLabel ? ' (' + C.provinceLabel + ')' : '') : ''],
+    ca ? ['Immatriculation', C.registryNumber ? C.registryLabel + ' ' + C.registryNumber + ' — ' + C.registryName : ''] : ['SIREN / SIRET', [C.siren, C.siret].filter(Boolean).join(' / ')],
+    ca ? ['Numéros de taxes', C.taxNumbers || 'Aucun déclaré'] : ['N° TVA intracommunautaire', C.vatNumber],
+    [ca ? 'Adresse' : 'Siège social', C.addressLine],
     ['Vérification au registre', C.verification],
   ]);
 
@@ -514,7 +532,7 @@ async function proofPages(doc, fonts, P) {
       ['Qualité', S.repQualite],
       ['Dirigeants publiés', S.dirigeantCheck],
       ['Adresse e-mail', S.email],
-      ['Téléphone vérifié', S.phone],
+      [S.otpCanal === 'email' ? 'Téléphone (non vérifié)' : 'Téléphone vérifié', S.phone],
       ['Vérification d\'identité', S.otpLine, { color: S.otpAt ? GREEN : RED }],
       ['Adresse IP à la signature', S.ip],
       ['Localisation (réseau)', S.geo],
@@ -553,7 +571,7 @@ async function proofPages(doc, fonts, P) {
   row('Heure (Paris)', 'Événement', 'Signataire · IP · n° · empreinte', fonts.bold, NAVY);
   F.page.drawLine({ start: { x: F.M, y: F.y + 1 }, end: { x: F.W - F.M, y: F.y + 1 }, thickness: 0.5, color: LINE });
   P.audit.forEach(function (e) {
-    const lbl = (EVENT_LABELS[e.type] || e.type) + (eventDetail(e) ? ' — ' + eventDetail(e) : '');
+    const lbl = eventLabel(e) + (eventDetail(e) ? ' — ' + eventDetail(e) : '');
     const who = (e.signer === null || e.signer === undefined ? 'système' : 'S' + (e.signer + 1)) + ' · ' + (e.ip || '—') + ' · #' + e.seq + ' · ' + String(e.hash || '').slice(0, 10);
     row(parisStamp(e.at), lbl, who, e.type === 'signature_validee' ? fonts.bold : fonts.regular, e.type === 'signature_validee' ? GREEN : null);
   });

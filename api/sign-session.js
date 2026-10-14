@@ -22,6 +22,14 @@
 //
 // Le token ne sert jamais à choisir un destinataire ni un numéro : tout ce qui
 // part (SMS, e-mail) vient du document Firestore.
+//
+// 14/10/2026 — signataires hors de France :
+//   · company.country === 'CA' : société canadienne saisie par le signataire
+//     (_companyLookup.canadaCompany), sans annuaire officiel ;
+//   · R.otpChannel === 'email' : le code arrive par e-mail (signature-otp) ;
+//     la page et le dossier de preuve le disent ;
+//   · web.roleSignataire === 'prestataire' : contrat où Ambitio est « la
+//     Société » et le signataire « le Prestataire » (closer, setter…).
 // ============================================================================
 
 const crypto = require('crypto');
@@ -44,6 +52,8 @@ const CLIENT_EVENTS = {
 };
 
 const QUALITES = ['Gérant', 'Co-gérant', 'Président', 'Directeur général', 'Directeur général délégué', 'Associé', 'Mandataire habilité', 'Entrepreneur individuel'];
+/* Qualités usuelles d'une entreprise canadienne (Québec compris). */
+const QUALITES_CA = ['Président', 'Administrateur', 'Dirigeant', 'Associé', 'Propriétaire unique', 'Travailleur autonome', 'Mandataire habilité'];
 
 const DECLARATIONS = {
   pouvoir: 'Je certifie être habilité(e) à engager la société désignée ci-dessus et signer le présent contrat en son nom.',
@@ -169,8 +179,16 @@ function clientMap(d) {
   return {
     entreprise: c.name || '', nom_prenom: (d.rep && d.rep.full) || '', qualite: (d.rep && d.rep.qualite) || '',
     prenom: (d.rep && d.rep.first) || '', nom: (d.rep && d.rep.last) || '',
-    siege_social: c.addressLine || company.addressLine(a), siret: c.siret || '', siren: c.siren || String(c.siret || '').slice(0, 9),
-    tva: c.vatNumber || '', forme_juridique: c.legalFormLabel || '', activite: c.nafLabel || '',
+    siege_social: c.addressLine || company.addressLine(a),
+    /* Société canadienne : pas de SIRET ; un ancien modèle qui imprime
+       {{siret}} affiche alors son immatriculation (« NEQ … »). */
+    siret: c.country === 'CA' ? (c.registryNumber ? c.registryLabel + ' ' + c.registryNumber : '') : (c.siret || ''),
+    siren: c.siren || String(c.siret || '').slice(0, 9),
+    tva: company.taxLine(c), forme_juridique: c.legalFormLabel || '', activite: c.nafLabel || '',
+    immatriculation: company.registrationLine(c),
+    /* Entreprise canadienne non inscrite aux taxes : « néant », pas une ligne vide. */
+    numeros_taxes: c.country === 'CA' ? (c.taxNumbers || 'néant') : company.taxLine(c),
+    pays: c.country === 'CA' ? 'Canada' : (c.name ? 'France' : ''), province: c.provinceLabel || '',
     adresse: [a.line1, a.line2].filter(Boolean).join(', '), code_postal: a.postalCode || '', ville: a.city || '',
     date_creation: c.creationDate ? String(c.creationDate).split('-').reverse().join('/') : '',
     email: d.email || '', telephone: d.phone || '', date_signature: d.date || '',
@@ -185,7 +203,8 @@ function initials(first, last) {
 /* Le représentant figure-t-il parmi les dirigeants publiés ? On le dit tel
    quel dans le dossier de preuve — sans bloquer : un mandataire habilité peut
    signer, il l'a certifié. */
-function dirigeantCheck(reg, first, last) {
+function dirigeantCheck(reg, first, last, co) {
+  if (co && co.country === 'CA') return 'Registre canadien non consulté — habilitation certifiée par le signataire';
   if (!reg) return 'Registre non consulté (saisie manuelle)';
   const list = reg.dirigeants || [];
   if (!list.length) return 'Aucun dirigeant publié au registre';
@@ -243,7 +262,12 @@ async function validate(body, found, ctx, strict) {
   const out = { spec: spec };
 
   /* Société — saisie par le 1er signataire, reprise telle quelle par le 2e. */
-  if (i === 0) {
+  if (i === 0 && f.company && f.company.country === 'CA') {
+    const ca = company.canadaCompany(f.company, core.parisToday());
+    ca.errors.forEach(function (e) { errs.push(e); });
+    ca.company.addressLine = company.addressLine(ca.company.address);
+    out.company = ca.company;
+  } else if (i === 0) {
     const c = f.company || {};
     const ident = String(c.siret || c.siren || '').replace(/\D/g, '');
     let reg = null;
@@ -441,6 +465,8 @@ module.exports = async (req, res) => {
         otpOk: core.otpOk(R, i),
         twoSigners: signers.length > 1,
         firstSignerName: i >= 1 && signers[0] ? signers[0].name : '',
+        otpChannel: core.otpChannel(R),
+        emailHint: core.maskEmail(found.signer.email || R.clientEmail),
       });
       return;
     }
@@ -461,7 +487,7 @@ module.exports = async (req, res) => {
 
     if (mineSigned) { send(res, 409, { error: 'Vous avez déjà signé ce contrat.', stage: 'signed' }); return; }
     if (waiting) { send(res, 409, { error: 'Le premier signataire doit signer avant vous.', stage: 'waiting' }); return; }
-    if (!core.otpOk(R, i)) { send(res, 401, { error: 'Vérification par code SMS requise.', stage: 'otp' }); return; }
+    if (!core.otpOk(R, i)) { send(res, 401, { error: 'Vérification par code requise.', stage: 'otp' }); return; }
 
     /* ── events ────────────────────────────────────────────────────────── */
     if (action === 'events') {
@@ -517,6 +543,9 @@ module.exports = async (req, res) => {
           paraphe: spec.paraphe, dateField: spec.dateField,
           startNoWaiver: startNoWaiver(),
           qualites: QUALITES,
+          qualitesCa: QUALITES_CA,
+          provinces: company.CA_PROVINCES,
+          roleSignataire: ctx.web && ctx.web.roleSignataire === 'prestataire' ? 'prestataire' : 'client',
           declarations: DECLARATIONS,
         },
         signer: { name: found.signer.name || '', email: found.signer.email || '', phone: found.signer.phone || '', index: i },
@@ -674,7 +703,7 @@ async function finalize(found, ctx, v, info, body) {
     caption: caption,
     signedAt: nowIso,
     ip: info.ip, ua: info.ua, geo: [info.city, info.region, info.country].filter(Boolean).join(', '),
-    dirigeantCheck: i === 0 ? dirigeantCheck(v.registry || null, v.rep.first, v.rep.last) : 'Second signataire',
+    dirigeantCheck: i === 0 ? dirigeantCheck(v.registry || null, v.rep.first, v.rep.last, v.company) : 'Second signataire',
     declarations: [
       { id: 'pouvoir', etat: 'Accepté', libelle: DECLARATIONS.pouvoir, at: lastAt('consentement', function (e) { return e.data && e.data.id === 'pouvoir'; }) },
       { id: 'esign', etat: 'Accepté', libelle: DECLARATIONS.esign, at: lastAt('consentement', function (e) { return e.data && e.data.id === 'esign'; }) },
@@ -694,8 +723,13 @@ async function finalize(found, ctx, v, info, body) {
       + (rd.duree ? ' — temps passé sur le contrat ' + rd.duree : '') + ' — confirmé le ' + core.parisDateTime(new Date(readDone.at || nowIso)),
     pdfConsulte: firstAt('pdf_original_ouvert') ? 'Oui, le ' + core.parisDateTime(new Date(firstAt('pdf_original_ouvert'))) : 'Non',
     apercu: firstAt('apercu_ouvert') ? 'Oui, le ' + core.parisDateTime(new Date(firstAt('apercu_ouvert'))) : 'Non consulté',
-    otpLine: otp.atMs ? ('Code à usage unique envoyé par SMS au ' + (otp.phone || '') + ', validé le ' + core.parisDateTime(new Date(otp.atMs))) : 'Non vérifié',
+    otpLine: otp.atMs
+      ? (otp.canal === 'email'
+        ? 'Code à usage unique envoyé par e-mail à ' + (otp.email || '') + ', validé le ' + core.parisDateTime(new Date(otp.atMs))
+        : 'Code à usage unique envoyé par SMS au ' + (otp.phone || '') + ', validé le ' + core.parisDateTime(new Date(otp.atMs)))
+      : 'Non vérifié',
     otpAtMs: otp.atMs || null,
+    otpCanal: otp.canal === 'email' ? 'email' : 'sms',
   };
   data.mentions = [
     { nom: 'Date de signature', valeur: v.date, at: lastAt('mention_saisie', function (e) { return e.data && e.data.nom === 'date'; }) },
@@ -770,10 +804,11 @@ async function finalize(found, ctx, v, info, body) {
     createdAt: R.createdAt && R.createdAt.toDate ? R.createdAt.toDate().toISOString() : '',
     createdBy: ((R.events || []).find(function (e) { return e && e.type === 'created'; }) || {}).by || '',
     company: Object.assign({}, all[0].company),
+    roleSignataire: ctx.web && ctx.web.roleSignataire === 'prestataire' ? 'prestataire' : 'client',
     signers: all.map(function (d) {
       return {
         repName: d.rep.full, repQualite: d.rep.qualite, dirigeantCheck: d.dirigeantCheck,
-        email: d.email, phone: d.phone, otpLine: d.otpLine, otpAt: d.otpAtMs,
+        email: d.email, phone: d.phone, otpLine: d.otpLine, otpAt: d.otpAtMs, otpCanal: d.otpCanal || 'sms',
         ip: d.ip, geo: d.geo, ua: d.ua, signedAt: d.signedAt,
         declarations: d.declarations, lecture: d.lecture, pdfConsulte: d.pdfConsulte, apercu: d.apercu,
         mentions: d.mentions,
@@ -829,6 +864,7 @@ async function finalize(found, ctx, v, info, body) {
     nom_prenom: d0.rep.full, email: d0.email, telephone: d0.phone,
     entreprise: d0.company.name, type_entreprise: d0.company.legalFormLabel,
     siege_social: d0.company.addressLine, adresse: d0.company.addressLine, siret: d0.company.siret,
+    immatriculation: company.registrationLine(d0.company), pays: d0.company.country === 'CA' ? 'Canada' : 'France',
     date_signature: d0.date, lu_approuve: d0.luApprouve, qualite: d0.rep.qualite,
   };
   Object.keys(d0.checks || {}).forEach(function (k) { fv[k] = d0.checks[k]; });

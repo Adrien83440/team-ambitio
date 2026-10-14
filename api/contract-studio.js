@@ -49,6 +49,9 @@ function cleanWeb(w) {
     place: String(w.place || 'FAYENCE').slice(0, 60),
     sections: [], variables: [], clientChecks: [],
   };
+  /* Contrat d'un prestataire d'Ambitio (closer, setter…) : change les
+     libellés des parties dans le bloc de signatures (_contract-render.js). */
+  if (w.roleSignataire === 'prestataire') out.roleSignataire = 'prestataire';
   const ids = {};
   (Array.isArray(w.sections) ? w.sections : []).forEach(function (s, i) {
     let id = String((s && s.id) || ('s' + (i + 1))).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40) || ('s' + (i + 1));
@@ -119,7 +122,7 @@ const FORMAT_GUIDE = [
   '- sections : liste d\'articles { id, title, blocks[] }. title en MAJUSCULES, ex. « ARTICLE 3 — DURÉE ». La section des signatures porte signatures:true et blocks:[] (le bloc de signatures est automatique).',
   '- blocks : une chaîne par bloc, préfixée : « p: » paragraphe, « h: » sous-titre (ex. « h:3.1. Prix »), « li: » puce, « ol: » élément numéroté (« ol:1. … »), « i: » mention en italique, « check:<id> » case que le client coche (définie dans clientChecks).',
   '- Bloc conditionnel : « if:<clé>=<valeur>:<bloc> » (présent seulement si la variable vaut cette valeur) ou « if:<clé>:<bloc> » (si renseignée). Ex. « if:formule=integral:p:Le prix est de **12 000 € HT**. »',
-  '- Dans le texte : **gras** ; variables {{var:<clé>}} ; données du client remplies automatiquement : {{entreprise}} {{nom_prenom}} {{prenom}} {{nom}} {{qualite}} {{siege_social}} {{adresse}} {{code_postal}} {{ville}} {{siret}} {{siren}} {{tva}} {{forme_juridique}} {{activite}} {{date_creation}} {{email}} {{telephone}} {{date_signature}}.',
+  '- Dans le texte : **gras** ; variables {{var:<clé>}} ; données du client remplies automatiquement : {{entreprise}} {{nom_prenom}} {{prenom}} {{nom}} {{qualite}} {{siege_social}} {{adresse}} {{code_postal}} {{ville}} {{siret}} {{siren}} {{tva}} {{forme_juridique}} {{activite}} {{date_creation}} {{email}} {{telephone}} {{date_signature}} {{immatriculation}} (« SIRET … » en France, « NEQ … » au Québec) {{numeros_taxes}} (TVA intracommunautaire, ou TPS/TVQ au Canada) {{pays}} {{province}}.',
   '- variables : { key (lettres/chiffres/_), label, type: text|number|money|date|choice, options:[{value,label}] pour choice, filledBy: equipe (le conseiller avant l\'envoi : prix, formule, mensualités, dates…) | client, required, requiredIf (« clé=valeur »), help }.',
   '- clientChecks : { id, label (phrase exacte que le client coche), required, kind: "renonciation" pour une renonciation au délai de rétractation, sinon "" }.',
   'Le prestataire est toujours SARL Ambitio Corp (SIRET 94309870700012, 231B chemin de Mourre de Masque, 83440 Fayence), représentée par Emily Ughetto et Adrien François. Les clients sont exclusivement des sociétés (B2B).',
@@ -302,6 +305,7 @@ module.exports = async (req, res) => {
         entreprise: 'SOCIÉTÉ EXEMPLE SAS', nom_prenom: 'Camille Martin', qualite: 'Présidente',
         siege_social: '12 rue de la République, 83000 Toulon', siret: '12345678900012', forme_juridique: 'SAS',
         email: 'camille@exemple.fr', telephone: '+33 6 00 00 00 00', date_signature: new Date().toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' }),
+        immatriculation: 'SIRET 123 456 789 00012', numeros_taxes: 'FR32123456789', pays: 'France', tva: 'FR32123456789',
       } : {};
       const built = await render.composeContract({ web: c.web, prefill: prefill, client: client, checks: {}, signers: [], preview: true, blank: !sample });
       const bytes = Buffer.from(await built.doc.save());
