@@ -11,6 +11,8 @@
         opts    : { preselect: 'close'|..., typeMap, onDone(result) }
      RdvOutcome.chip(booking)        → HTML badge du résultat (ou à statuer)
      RdvOutcome.openReschedule(booking, opts) → replanification directe
+     « Replanifié » propose : nouveau créneau (agenda) OU RDV déjà reposé à
+     rattacher (AlteoreFlow.linkReschedule, 14/10/2026).
 
    Dépend de : alteore-flow.js (AlteoreFlow), firebase compat, nav.js
    (TEAM_MEMBERS_LIST pour les sélecteurs closer/setter).
@@ -54,6 +56,15 @@
     '.rvo-radio button{flex:1;background:var(--bg,#07080f);border:1px solid var(--border,rgba(148,163,214,.16));color:var(--muted,#8f97b2);border-radius:9px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}',
     '.rvo-radio button.sel{border-color:rgba(91,124,250,.6);color:var(--text,#fff);background:rgba(91,124,250,.12)}',
     '.rvo-actions{display:flex;justify-content:flex-end;gap:8px}',
+    /* Replanifié : nouveau créneau OU RDV déjà reposé à rattacher (14/10/2026) */
+    '.rvo-cand-list{display:flex;flex-direction:column;gap:6px;margin-top:10px;max-height:260px;overflow-y:auto}',
+    '.rvo-cand{display:flex;align-items:center;gap:10px;text-align:left;background:var(--bg,#07080f);border:1px solid var(--border,rgba(148,163,214,.16));border-radius:10px;padding:9px 11px;cursor:pointer;font-family:inherit;color:var(--text,#eef0f8);width:100%}',
+    '.rvo-cand:hover{border-color:rgba(167,139,250,.45)}',
+    '.rvo-cand.sel{border-color:#a78bfa;background:rgba(167,139,250,.12);box-shadow:0 0 0 1px #a78bfa inset}',
+    '.rvo-cand-main{flex:1;min-width:0}',
+    '.rvo-cand-t{font-size:13px;font-weight:700}',
+    '.rvo-cand-s{font-size:11px;color:var(--muted,#8f97b2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.rvo-cand-empty{font-size:12px;color:var(--muted,#8f97b2);padding:10px 2px}',
     '.rvo-btn{background:var(--bg3,#151928);border:1px solid var(--border,rgba(148,163,214,.16));color:var(--text,#eef0f8);border-radius:10px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .13s}',
     '.rvo-btn:hover{border-color:rgba(148,163,214,.35)}',
     '.rvo-btn.primary{background:linear-gradient(135deg,rgba(91,124,250,.28),rgba(91,124,250,.14));border-color:rgba(91,124,250,.5);color:#c3cdff}',
@@ -74,7 +85,7 @@
     'body.light-theme .rvo-f input,body.light-theme .rvo-f select,body.light-theme .rvo-f textarea{background:#f8fafc;color:#111827}'
   ].join('\n');
 
-  var state = { booking: null, lead: null, outcome: null, opts: {}, personsMap: null, saving: false };
+  var state = { booking: null, lead: null, outcome: null, opts: {}, personsMap: null, saving: false, resched: null };
 
   function esc(s) { if (s == null) return ''; return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function $(id) { return document.getElementById(id); }
@@ -237,6 +248,7 @@
     state.outcome = null;
     state.lead = null;
     state.saving = false;
+    state.resched = null;
 
     var sb = AF.isSB(booking, state.opts.typeMap);
     var dateFr = booking.date ? booking.date.split('-').reverse().join('/') : '';
@@ -247,9 +259,10 @@
       '<span class="rvo-sbchip ' + (sb ? 'sb' : 'nb') + '">' + (sb ? 'Self Booking' : 'Setting NB') + '</span>';
 
     /* Réinitialiser n'a de sens que si un résultat existe déjà — et jamais
-       sur un RDV replanifié (son remplaçant dépend de la chaîne). */
+       sur un RDV replanifié par l'agenda (son remplaçant dépend de la
+       chaîne). Un rattachement « déjà reposé » se défait, lui. */
     var resetBtn = $('rvoReset');
-    resetBtn.style.display = (booking.outcome && !booking.rescheduledToId) ? '' : 'none';
+    resetBtn.style.display = (booking.outcome && (!booking.rescheduledToId || booking.rescheduleLinked === true)) ? '' : 'none';
     resetBtn.disabled = false;
     resetBtn.textContent = '↩︎ Réinitialiser';
 
@@ -302,6 +315,7 @@
     if (bg) bg.classList.remove('show');
     state.booking = null;
     state.outcome = null;
+    state.resched = null;
   }
 
   function renderGrid() {
@@ -328,10 +342,14 @@
     $('rvoDesc').textContent = AF.OUTCOMES[k].desc;
 
     if (k === 'replanifie') {
-      /* Pas de formulaire : on ouvre directement l'agenda de replanification.
-         booking.html crée le nouveau RDV (même source SB/NB, même lead) et
-         passe l'ancien en `replanifie` — voir mode ?reschedule=. */
-      openResched();
+      /* Deux chemins (14/10/2026) :
+         · nouveau créneau → agenda booking.html?reschedule= (crée le nouveau
+           RDV, même source SB/NB, même lead, ancien en `replanifie`) ;
+         · déjà reposé → on rattache un RDV existant du prospect
+           (AlteoreFlow.linkReschedule). */
+      state.resched = { mode: null, list: null, selId: null };
+      renderPanel();
+      $('rvoOk').disabled = true;
       return;
     }
     if (k === 'close' && window.CloseWizard) {
@@ -434,7 +452,8 @@
     var AF = window.AlteoreFlow;
     var k = state.outcome;
     var panel = $('rvoPanel');
-    if (!k || k === 'replanifie') { panel.className = 'rvo-panel'; return; }
+    if (!k) { panel.className = 'rvo-panel'; return; }
+    if (k === 'replanifie') { renderReschedPanel(panel); return; }
     var b = state.booking || {};
     var cd = b.closeData || {};
     var h = '';
@@ -504,6 +523,108 @@
     }
   }
 
+  /* ── Replanifié : choix du chemin + liste des RDV déjà reposés ── */
+  function renderReschedPanel(panel) {
+    var rs = state.resched || (state.resched = { mode: null, list: null, selId: null });
+    var h =
+      '<div class="rvo-radio" id="rvoReschedMode">' +
+        '<button type="button" data-v="new">📅 Choisir un nouveau créneau</button>' +
+        '<button type="button" data-v="link"' + (rs.mode === 'link' ? ' class="sel"' : '') + '>✅ Déjà reposé — rattacher</button>' +
+      '</div>';
+    if (rs.mode === 'link') {
+      h += '<div class="rvo-cand-list" id="rvoCandList">' + candListHtml(rs) + '</div>';
+      if (rs.list && rs.list.length) {
+        h += '<div class="rvo-f" style="margin-top:10px"><label>Note</label><input type="text" id="rvoNote" placeholder="optionnel (ex : décalé à la demande du prospect)"/></div>';
+      }
+      h += '<div style="font-size:11.5px;color:var(--muted,#8f97b2);margin-top:8px">ℹ️ Le RDV choisi devient le remplaçant de celui-ci : il n’est pas compté comme un nouveau SET. Sa source SB/NB ne change pas.</div>';
+    }
+    panel.innerHTML = h;
+    panel.className = 'rvo-panel show';
+
+    $('rvoReschedMode').addEventListener('click', function (e) {
+      var btn = e.target.closest ? e.target.closest('button[data-v]') : null;
+      if (!btn) return;
+      if (btn.getAttribute('data-v') === 'new') { openResched(); return; }
+      if (rs.mode === 'link') return;
+      rs.mode = 'link';
+      rs.selId = null;
+      renderReschedPanel(panel);
+      loadCandidates();
+    });
+    var list = $('rvoCandList');
+    if (list) list.addEventListener('click', function (e) {
+      var row = e.target.closest ? e.target.closest('.rvo-cand[data-id]') : null;
+      if (!row) return;
+      rs.selId = row.getAttribute('data-id');
+      list.querySelectorAll('.rvo-cand').forEach(function (x) { x.classList.toggle('sel', x === row); });
+      $('rvoOk').disabled = false;
+    });
+    $('rvoOk').disabled = !(rs.mode === 'link' && rs.selId);
+  }
+
+  function candListHtml(rs) {
+    if (rs.list === null) return '<div class="rvo-cand-empty">Recherche des RDV du prospect…</div>';
+    if (rs.error) return '<div class="rvo-cand-empty">❌ ' + esc(rs.error) + '</div>';
+    if (!rs.list.length) return '<div class="rvo-cand-empty">Aucun autre RDV actif trouvé pour ce prospect. Utilise « Choisir un nouveau créneau ».</div>';
+    var h = '';
+    rs.list.forEach(function (c) {
+      var dateFr = c.date ? c.date.split('-').reverse().join('/') : '?';
+      var sub = [c.typeLabel || c.typeName || c.type || 'RDV'];
+      if (c.personName) sub.push('avec ' + c.personName);
+      if (c.bookedByName) sub.push('posé par ' + c.bookedByName);
+      if (c.createdAt && c.createdAt.toDate) {
+        var cd = c.createdAt.toDate();
+        sub.push('le ' + ('0' + cd.getDate()).slice(-2) + '/' + ('0' + (cd.getMonth() + 1)).slice(-2));
+      }
+      h += '<button type="button" class="rvo-cand' + (rs.selId === c.id ? ' sel' : '') + '" data-id="' + esc(c.id) + '">' +
+        '<div class="rvo-cand-main"><div class="rvo-cand-t">' + esc(dateFr) + ' à ' + esc(c.time || '?') + '</div>' +
+        '<div class="rvo-cand-s">' + esc(sub.join(' · ')) + '</div></div>' + chip(c) + '</button>';
+    });
+    return h;
+  }
+
+  function loadCandidates() {
+    var AF = window.AlteoreFlow;
+    var bk = state.booking;
+    var rs = state.resched;
+    if (!bk || !rs) return;
+    AF.rescheduleCandidates(bk, state.opts.typeMap || {}).then(function (list) {
+      if (state.booking !== bk || state.resched !== rs) return;
+      rs.list = list || [];
+      if (rs.list.length === 1) rs.selId = rs.list[0].id;
+      renderReschedPanel($('rvoPanel'));
+    }).catch(function (e) {
+      if (state.booking !== bk || state.resched !== rs) return;
+      rs.list = [];
+      rs.error = (e && e.message) || 'Erreur de lecture';
+      renderReschedPanel($('rvoPanel'));
+    });
+  }
+
+  function confirmLink() {
+    var AF = window.AlteoreFlow;
+    var rs = state.resched;
+    if (!rs || !rs.selId) { toastMsg('⚠️ Choisis le RDV déjà reposé.'); return; }
+    var noteEl = $('rvoNote');
+    state.saving = true;
+    var okBtn = $('rvoOk');
+    okBtn.disabled = true;
+    okBtn.textContent = 'Enregistrement…';
+    AF.linkReschedule(state.booking, rs.selId, { note: noteEl ? (noteEl.value.trim() || null) : null }).then(function (res) {
+      toastMsg('📅 RDV replanifié — rattaché au RDV du ' + (res.whenFr || ''));
+      var cb = state.opts.onDone;
+      close();
+      okBtn.textContent = 'Enregistrer';
+      state.saving = false;
+      if (typeof cb === 'function') cb({ ok: true, outcome: 'replanifie', rescheduledToId: res.rescheduledToId, linked: true });
+    }).catch(function (e) {
+      state.saving = false;
+      okBtn.disabled = false;
+      okBtn.textContent = 'Enregistrer';
+      toastMsg('❌ ' + (e && e.message || 'Erreur'));
+    });
+  }
+
   function updateCommPrev() {
     var AF = window.AlteoreFlow;
     var prev = $('rvoCommPrev');
@@ -563,6 +684,7 @@
     var AF = window.AlteoreFlow;
     if (!state.booking || !state.outcome || state.saving) return;
     var k = state.outcome;
+    if (k === 'replanifie') { confirmLink(); return; }
     var opts = { typeMap: state.opts.typeMap, lead: state.lead };
     var noteEl = $('rvoNote');
     if (noteEl) opts.note = noteEl.value.trim() || null;

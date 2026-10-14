@@ -754,7 +754,11 @@
       var b = snap.data() || {};
       b.id = booking.id;
       if (!b.outcome) throw new Error('Ce RDV n\'a aucun résultat à effacer.');
-      if (b.rescheduledToId) throw new Error('Ce RDV a été replanifié vers un autre RDV — supprime d\'abord le RDV de remplacement.');
+      /* Un RDV RATTACHÉ (« déjà reposé », rescheduleLinked) se défait : le
+         RDV de remplacement existait avant, on ne fait que retirer le lien.
+         Un report créé par l'agenda reste bloqué (chaîne orpheline). */
+      var linkedTo = (b.rescheduledToId && b.rescheduleLinked === true) ? b.rescheduledToId : null;
+      if (b.rescheduledToId && !linkedTo) throw new Error('Ce RDV a été replanifié vers un autre RDV — supprime d\'abord le RDV de remplacement.');
 
       var DEL = firebase.firestore.FieldValue.delete();
       var undo = b.outcomeUndo || null;
@@ -763,7 +767,7 @@
         outcomeNote: DEL, outcomeDay: DEL, closeData: DEL,
         cancelledAt: DEL, cancelledBy: DEL, cancelledByName: DEL, cancelledOrigin: DEL, cancellation: DEL,
         noShowAt: DEL, noShowBy: DEL, noShowByName: DEL, completedAt: DEL,
-        rescheduled: DEL, outcomeUndo: DEL,
+        rescheduled: DEL, rescheduledToId: DEL, rescheduleLinked: DEL, outcomeUndo: DEL,
         /* Statut legacy : celui d'avant le clic si on l'a, sinon « confirmé »
            — un RDV sans résultat est un RDV qui reste à statuer. */
         status: (undo && undo.bookingStatus) || 'confirmed',
@@ -774,7 +778,24 @@
         })
       };
 
-      return _db.collection('bookings').doc(booking.id).update(patch).then(function () {
+      /* Rattachement : le lien retour du RDV de remplacement part dans le
+         même lot — seulement s'il pointe bien vers ce RDV. */
+      var pWrite;
+      if (linkedTo) {
+        var toRef = _db.collection('bookings').doc(linkedTo);
+        pWrite = toRef.get().then(function (ts2) {
+          var batch = _db.batch();
+          batch.update(_db.collection('bookings').doc(booking.id), patch);
+          if (ts2.exists && (ts2.data() || {}).rescheduledFromId === booking.id) {
+            batch.update(toRef, { rescheduledFromId: DEL, rescheduleLink: DEL });
+          }
+          return batch.commit();
+        });
+      } else {
+        pWrite = _db.collection('bookings').doc(booking.id).update(patch);
+      }
+
+      return pWrite.then(function () {
         /* Fiche : restauration à l'identique quand la photo existe. */
         var pLead = Promise.resolve();
         if (b.leadId && undo && undo.lead) {
@@ -797,6 +818,118 @@
             return { ok: true, restored: !!(undo && undo.lead), deals: deals || [] };
           });
       });
+    });
+  }
+
+  /* ═══ REPLANIFICATION « DÉJÀ REPOSÉ » (14/10/2026) ═════════════════════
+     Le prospect a décalé et un setter a déjà reposé le RDV de son côté : on
+     RATTACHE ce RDV existant au lieu d'en créer un nouveau par l'agenda.
+     Même chaînage que booking.html?reschedule= : l'ancien passe en
+     `replanifie` + rescheduledToId, le remplaçant reçoit rescheduledFromId
+     (→ sorti des « RDV pris / SET » : c'est un report, pas un nouveau set).
+     Différences voulues avec l'agenda :
+       · la source SB/NB du remplaçant n'est PAS touchée (trace réelle de qui
+         l'a posé — la carte SB/NB du Close tranche au moment du close) ;
+       · la fiche n'est PAS repassée en rdv_pose / rdv_self_booking : le
+         remplaçant a déjà fait vivre la fiche (et peut être déjà statué) ;
+       · rescheduleLinked:true → le rattachement se défait par Réinitialiser. */
+  function isDeadBooking(b) {
+    return !b || b.status === 'cancelled' || b.outcome === 'annule' || b.outcome === 'replanifie' || b.rescheduled === true;
+  }
+
+  /* RDV pouvant remplacer `booking` : même lead (leadId), à défaut même
+     email prospect. Exclus : lui-même, annulés / replanifiés, déjà
+     remplaçants d'un autre RDV, hors périmètre Setting & Sales.
+     Tri : ceux qui suivent l'ancien d'abord (chronologique), puis les autres. */
+  function rescheduleCandidates(booking, typeMap) {
+    if (!booking || !booking.id) return Promise.resolve([]);
+    var _db = db();
+    var email = String((booking.prospect && booking.prospect.email) || '').trim().toLowerCase();
+    var qs = [];
+    if (booking.leadId) qs.push(_db.collection('bookings').where('leadId', '==', booking.leadId).get());
+    if (email) qs.push(_db.collection('bookings').where('prospect.email', '==', email).get());
+    if (!qs.length) return Promise.resolve([]);
+    return Promise.all(qs.map(function (p) { return p.catch(function () { return null; }); })).then(function (snaps) {
+      var seen = {}, out = [];
+      snaps.forEach(function (snap) {
+        if (!snap) return;
+        snap.forEach(function (d) {
+          if (seen[d.id] || d.id === booking.id) return;
+          seen[d.id] = 1;
+          var b = d.data() || {};
+          b.id = d.id;
+          if (isDeadBooking(b) || b.rescheduledFromId) return;
+          if (classifyBooking(b, typeMap || {}) === 'excluded') return;
+          out.push(b);
+        });
+      });
+      var ref = (booking.date || '') + ' ' + (booking.time || '');
+      out.sort(function (a, b) {
+        var ka = (a.date || '') + ' ' + (a.time || ''), kb = (b.date || '') + ' ' + (b.time || '');
+        var aa = ka >= ref ? 0 : 1, ab = kb >= ref ? 0 : 1;
+        if (aa !== ab) return aa - ab;
+        return aa === 0 ? (ka < kb ? -1 : ka > kb ? 1 : 0) : (ka > kb ? -1 : ka < kb ? 1 : 0);
+      });
+      return out;
+    });
+  }
+
+  function linkReschedule(booking, toId, opts) {
+    opts = opts || {};
+    if (!booking || !booking.id || !toId) return Promise.reject(new Error('RDV de remplacement manquant'));
+    if (toId === booking.id) return Promise.reject(new Error('Un RDV ne peut pas se remplacer lui-même'));
+    var _db = db();
+    var m = me() || { uid: null, name: null };
+    var oldRef = _db.collection('bookings').doc(booking.id);
+    var newRef = _db.collection('bookings').doc(toId);
+    var now = new Date();
+    var info = {};
+
+    return _db.runTransaction(function (tx) {
+      return Promise.all([tx.get(oldRef), tx.get(newRef)]).then(function (snaps) {
+        if (!snaps[0].exists) throw new Error('RDV introuvable');
+        if (!snaps[1].exists) throw new Error('RDV de remplacement introuvable');
+        var o = snaps[0].data() || {}, n = snaps[1].data() || {};
+        if (o.rescheduledToId) throw new Error('Ce RDV est déjà replanifié vers un autre RDV.');
+        if (n.rescheduledFromId) throw new Error('Le RDV choisi remplace déjà un autre RDV.');
+        if (isDeadBooking(n)) throw new Error('Le RDV choisi est annulé ou replanifié.');
+
+        var whenFr = (n.date ? n.date.split('-').reverse().join('/') : '?') + ' à ' + (n.time || '?');
+        var note = 'Replanifié au ' + whenFr + ' (RDV déjà reposé)' + (opts.note ? ' — ' + opts.note : '');
+        info = { leadId: o.leadId || n.leadId || null, whenFr: whenFr,
+                 oldFr: (o.date ? o.date.split('-').reverse().join('/') : '?') + ' ' + (o.time || '') };
+
+        var patch = {
+          outcome: 'replanifie',
+          outcomeAt: ts(),
+          outcomeBy: m.uid, outcomeByName: m.name,
+          outcomeNote: note,
+          outcomeDay: dayKey(now),
+          outcomeHistory: arrayUnion({ outcome: 'replanifie', note: note, linked: true, toId: toId, at: now.toISOString(), by: m.uid, byName: m.name }),
+          status: 'cancelled',
+          statusUpdatedAt: ts(), statusUpdatedBy: m.uid, statusUpdatedByName: m.name,
+          cancelledAt: ts(), cancelledBy: m.uid, cancelledByName: m.name,
+          cancellation: cancellationBlock({ origin: 'systeme', via: 'reschedule', reason: note, member: m }),
+          rescheduled: true,
+          rescheduledToId: toId,
+          rescheduleLinked: true
+        };
+        /* Photo pour Réinitialiser : statut d'avant, fiche non modifiée.
+           Un RDV déjà statué garde sa photo d'origine. */
+        if (!o.outcome) patch.outcomeUndo = { lead: {}, bookingStatus: o.status || null, at: ts() };
+        tx.update(oldRef, patch);
+        tx.update(newRef, {
+          rescheduledFromId: booking.id,
+          rescheduleLink: { fromId: booking.id, by: m.uid, byName: m.name, at: now.toISOString() }
+        });
+      });
+    }).then(function () {
+      if (info.leadId) {
+        addLeadTimeline(info.leadId,
+          '📅 RDV du ' + info.oldFr + ' replanifié → ' + info.whenFr + ' (RDV déjà reposé, rattaché' + (m.name ? ' par ' + m.name : '') + ')',
+          '#a78bfa');
+      }
+      return { ok: true, rescheduledToId: toId, whenFr: info.whenFr };
     });
   }
 
@@ -1373,6 +1506,8 @@
     addLeadTimeline: addLeadTimeline,
     setOutcome: setOutcome,
     clearOutcome: clearOutcome,
+    rescheduleCandidates: rescheduleCandidates,
+    linkReschedule: linkReschedule,
     cancellationBlock: cancellationBlock,
     cancellationInfo: cancellationInfo,
     cancellationLabel: cancellationLabel,
