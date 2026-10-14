@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>La méthode Business Phénix — Guide du closer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  /* Charte des documents Phénix : orange = Business Phénix, violet = Elite Phénix.
+     Page autonome (sans nav.js), même mise en page que « La méthode Elite Phénix ». */
+  :root{
+    --bg:#0D0906; --card:rgba(30,20,13,.92); --line:rgba(244,148,82,.17);
+    --txt:#FFF4EC; --mut:#B9A493; --soft:#E9D8CA; --or:#E8732A; --or-soft:#F49452;
+    --grad:linear-gradient(135deg,#E8732A 0%,#F49452 100%);
+    --gold:#D9B45A; --amber:#F2C14E; --teal:#4FD6B8; --red:#F08A8A; --vi:#9C83F2; --vi-dk:#6D4BD8;
+    --on-or:#1E0E03;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{scroll-behavior:smooth; -webkit-text-size-adjust:100%;}
+  body{
+    background:var(--bg);
+    background-image:radial-gradient(1000px 560px at 90% -5%, rgba(232,115,42,.24), transparent 60%),
+                     radial-gradient(800px 520px at -12% 35%, rgba(232,115,42,.10), transparent 55%);
+    background-repeat:no-repeat;
+    font-family:'Inter',system-ui,sans-serif; color:var(--txt); padding:56px 20px 70px;
+    -webkit-font-smoothing:antialiased; overflow-wrap:break-word;
+  }
+  .wrap{max-width:1060px; margin:0 auto;}
+  .eyebrow{font-family:'Sora',sans-serif; font-weight:600; font-size:12px; letter-spacing:.24em; text-transform:uppercase; color:var(--or-soft); margin-bottom:14px;}
+  h1{font-family:'Sora',sans-serif; font-weight:800; font-size:clamp(28px,4.4vw,42px); line-height:1.12; margin-bottom:14px; text-wrap:balance;}
+  .sub{color:var(--mut); font-size:15.5px; line-height:1.6; max-width:720px;}
+  .sub strong{color:var(--soft);}
+  .accent{font-family:Georgia,'Times New Roman',serif; font-style:italic; font-weight:400; color:var(--or-soft);}
+  a{color:var(--or-soft);}
+
+  /* ---- Chiffres clés ---- */
+  .facts{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin:30px 0 14px;}
+  .fact{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px 18px 16px;}
+  .fact b{display:block; font-family:'Sora',sans-serif; font-weight:800; font-size:30px; line-height:1; color:var(--or-soft); margin-bottom:8px;}
+  .fact span{font-size:13px; color:var(--soft); line-height:1.45; display:block;}
+  .prices{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  .price{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px 22px;}
+  .price.main{border-color:rgba(244,148,82,.5);}
+  .price .ph{font-family:'Sora',sans-serif; font-size:10.5px; font-weight:600; letter-spacing:.18em; text-transform:uppercase; color:var(--or-soft); margin-bottom:8px;}
+  .price .amt{font-family:'Sora',sans-serif; font-weight:800; font-size:26px; line-height:1.15;}
+  .price .amt small{font-weight:600; font-size:14px; color:var(--mut);}
+  .price p{font-size:13.5px; color:var(--soft); line-height:1.5; margin-top:6px;}
+  .note-link{font-size:13.5px; color:var(--mut); margin-top:12px;}
+
+  /* ---- Sommaire ---- */
+  .toc{display:flex; flex-wrap:wrap; gap:8px; margin:30px 0 0; padding-top:24px; border-top:1px solid var(--line);}
+  .toc a{display:inline-flex; align-items:center; gap:8px; text-decoration:none; font-family:'Sora',sans-serif; font-size:12px; font-weight:600; color:var(--soft); border:1px solid var(--line); border-radius:999px; padding:7px 13px; background:rgba(30,20,13,.6);}
+  .toc a:hover{border-color:rgba(244,148,82,.55); color:var(--txt);}
+  .toc a i{font-style:normal; color:var(--or-soft); font-weight:700;}
+
+  /* ---- Sections ---- */
+  section{margin-top:64px; scroll-margin-top:20px;}
+  .num{font-family:'Sora',sans-serif; font-weight:700; font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:var(--or-soft); margin-bottom:10px;}
+  h2{font-family:'Sora',sans-serif; font-weight:800; font-size:clamp(22px,3vw,28px); line-height:1.2; margin-bottom:10px; text-wrap:balance;}
+  h2 + .sub{margin-bottom:24px;}
+  h3{font-family:'Sora',sans-serif; font-weight:700; font-size:17px; line-height:1.3; margin-bottom:6px;}
+  .h3-out{margin:34px 0 14px; font-size:18px;}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:22px 24px; min-width:0;}
+  .card .ph{font-family:'Sora',sans-serif; font-size:10.5px; font-weight:600; letter-spacing:.18em; text-transform:uppercase; color:var(--or-soft); margin-bottom:10px;}
+  .card p{font-size:14px; line-height:1.6; color:var(--soft);}
+  .card p + p{margin-top:8px;}
+  .card p strong, .card li strong{color:var(--txt); font-weight:600;}
+  .card ul, .card ol{list-style:none; margin:10px 0 2px;}
+  .card li{position:relative; padding-left:16px; font-size:14px; line-height:1.55; color:var(--soft); margin-bottom:7px;}
+  .card li::before{content:''; position:absolute; left:0; top:9px; width:6px; height:6px; border-radius:50%; background:var(--or-soft);}
+  .card ol{counter-reset:o;}
+  .card ol li{padding-left:24px; counter-increment:o;}
+  .card ol li::before{content:counter(o); width:auto; height:auto; background:none; top:0; font-family:'Sora',sans-serif; font-weight:700; font-size:13px; color:var(--or-soft);}
+  .card.no{border-color:rgba(217,180,90,.42);}
+  .card.no .ph{color:var(--gold);}
+  .card.no li::before{background:var(--gold);}
+  .g2{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  .g3{display:grid; grid-template-columns:repeat(3,1fr); gap:16px;}
+  .mt{margin-top:16px;}
+  .rule{border-left:3px solid var(--gold); background:rgba(217,180,90,.08); border-radius:0 10px 10px 0; padding:12px 16px; font-size:13.5px; color:#EADBB4; margin-top:16px; line-height:1.55;}
+  .rule strong{color:#F6EBC9;}
+  .rule a{color:#F6EBC9;}
+  .say{border-left:3px solid var(--or-soft); background:rgba(244,148,82,.08); border-radius:0 10px 10px 0; padding:12px 16px; font-size:14px; color:var(--txt); margin-top:12px; line-height:1.6; font-style:italic;}
+  .say .lab{display:block; font-style:normal; font-family:'Sora',sans-serif; font-size:10px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--or-soft); margin-bottom:5px;}
+  .quotes{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;}
+  .quotes span{font-style:italic; font-size:13.5px; color:var(--txt); background:rgba(244,148,82,.10); border:1px solid rgba(244,148,82,.25); border-radius:10px; padding:7px 12px;}
+
+  /* ---- Manifeste ---- */
+  .manifest{background:var(--card); border:1px solid rgba(244,148,82,.5); border-radius:16px; padding:30px 28px; text-align:center;}
+  .manifest p{font-family:'Sora',sans-serif; font-weight:700; font-size:clamp(19px,2.6vw,25px); line-height:1.35; text-wrap:balance;}
+  .manifest p span{color:var(--or-soft);}
+  .manifest small{display:block; margin-top:12px; font-size:13.5px; color:var(--mut); line-height:1.55; max-width:760px; margin-left:auto; margin-right:auto;}
+  .test{display:grid; grid-template-columns:1fr 1fr; gap:0; margin-top:16px; border:1px solid var(--line); border-radius:12px; overflow:hidden;}
+  .test div{padding:14px 16px; font-size:14px; line-height:1.5; color:var(--soft);}
+  .test div + div{border-left:1px solid var(--line);}
+  .test b{display:block; font-family:'Sora',sans-serif; font-size:11px; letter-spacing:.16em; text-transform:uppercase; margin-bottom:5px;}
+  .test .y b{color:var(--or-soft);} .test .n b{color:var(--vi);}
+  .sig, .card p.sig{font-family:Georgia,'Times New Roman',serif; font-style:italic; font-size:17px; line-height:1.45; color:var(--txt);}
+  .calc{display:grid; grid-template-columns:1fr 1fr; gap:0; margin-top:14px; border:1px solid var(--line); border-radius:12px; overflow:hidden;}
+  .calc div{padding:14px 16px; font-size:14px; line-height:1.55; color:var(--soft);}
+  .calc div + div{border-left:1px solid var(--line);}
+  .calc b{display:block; font-family:'Sora',sans-serif; font-size:11px; letter-spacing:.14em; text-transform:uppercase; margin-bottom:5px;}
+  .calc .bad b{color:var(--red);} .calc .good b{color:var(--teal);}
+
+  /* ---- Tableaux ---- */
+  .tw{overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid var(--line); border-radius:16px; background:var(--card);}
+  table{width:100%; border-collapse:collapse; font-size:14px;}
+  th,td{padding:12px 16px; text-align:left; vertical-align:top; border-bottom:1px solid var(--line); line-height:1.5;}
+  tr:last-child td{border-bottom:0;}
+  thead th{font-family:'Sora',sans-serif; font-size:10.5px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--mut); background:rgba(232,115,42,.08);}
+  thead th.b{color:var(--or-soft);} thead th.e{color:var(--vi);}
+  td{color:var(--soft);}
+  td:first-child{font-weight:600; color:var(--txt);}
+  .t-min{min-width:560px;}
+
+  /* ---- Échelle zone grise ---- */
+  .scale{display:grid; grid-template-columns:1fr 2fr 1.3fr 1.3fr; gap:4px; margin-top:6px;}
+  .scale div{border-radius:8px; padding:10px 10px; font-size:12.5px; line-height:1.35; color:var(--txt); font-family:'Sora',sans-serif; font-weight:600;}
+  .scale div small{display:block; font-family:'Inter',sans-serif; font-weight:400; font-size:11.5px; color:var(--soft); margin-top:3px;}
+  .s-out{background:rgba(240,138,138,.12); border:1px solid rgba(240,138,138,.35);}
+  .s-bp{background:rgba(232,115,42,.20); border:1px solid rgba(244,148,82,.5);}
+  .s-grey{background:repeating-linear-gradient(135deg,rgba(232,115,42,.16) 0 10px,rgba(109,75,216,.20) 10px 20px); border:1px solid rgba(217,180,90,.45);}
+  .s-ep{background:rgba(109,75,216,.24); border:1px solid rgba(156,131,242,.5);}
+  .ticks{display:grid; grid-template-columns:1fr 2fr 1.3fr 1.3fr; gap:4px; font-family:'Sora',sans-serif; font-size:11px; color:var(--mut); margin-top:6px;}
+
+  /* ---- Moteurs ---- */
+  .eng{position:relative; padding-top:26px; overflow:hidden;}
+  .eng::before{content:''; position:absolute; left:0; right:0; top:0; height:4px; background:var(--c);}
+  .eng .ord{font-family:'Sora',sans-serif; font-weight:700; font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--c); margin-bottom:8px;}
+  .eng h3{font-size:21px; margin-bottom:4px;}
+  .eng .fn{font-size:14.5px; color:var(--txt); font-weight:500; margin-bottom:14px; line-height:1.45; font-style:italic;}
+  .eng .lbl{font-family:'Sora',sans-serif; font-size:10px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--mut); margin:14px 0 4px;}
+  .eng li::before{background:var(--c);}
+  .eng .ses{display:inline-block; margin-top:12px; font-family:'Sora',sans-serif; font-size:11px; font-weight:700; color:var(--on-or); background:var(--c); border-radius:999px; padding:4px 11px;}
+  .vs{display:grid; grid-template-columns:repeat(3,1fr); gap:0; margin-top:16px; border:1px solid var(--line); border-radius:14px; overflow:hidden; background:var(--card);}
+  .vs div{padding:16px 18px; font-size:14px; line-height:1.5; color:var(--soft);}
+  .vs div + div{border-left:1px solid var(--line);}
+  .vs b{color:var(--or-soft); font-weight:700;} .vs i{color:var(--vi); font-style:normal; font-weight:600;}
+
+  /* ---- Contenu de l'offre ---- */
+  .inc{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  .inc .card h3{font-size:16px;}
+  .inc .vol{display:inline-block; font-family:'Sora',sans-serif; font-size:11px; font-weight:700; color:var(--on-or); background:var(--or-soft); border-radius:999px; padding:3px 10px; margin-bottom:10px;}
+  .arm{display:grid; grid-template-columns:230px 1fr; gap:0; background:var(--card); border:1px solid var(--line); border-radius:16px; overflow:hidden; margin-bottom:14px;}
+  .arm .id{padding:22px 22px; border-right:1px solid var(--line); background:rgba(232,115,42,.07);}
+  .arm .id .n{font-family:'Sora',sans-serif; font-weight:700; font-size:12px; color:var(--gold); letter-spacing:.14em; margin-bottom:8px;}
+  .arm .id .nm{font-family:'Sora',sans-serif; font-weight:800; font-size:18px; line-height:1.25;}
+  .arm .bd{padding:20px 24px; display:grid; gap:12px; min-width:0;}
+  .arm .row{display:grid; grid-template-columns:118px 1fr; gap:14px; align-items:start;}
+  .arm .row .k{font-family:'Sora',sans-serif; font-size:10px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--mut); padding-top:3px; line-height:1.4;}
+  .arm .row .v{font-size:14px; line-height:1.55; color:var(--soft);}
+  .arm .row.a .k{color:var(--or-soft);}
+  .arm .row.a .v{color:var(--txt); font-style:italic;}
+
+  /* ---- Séance type ---- */
+  .steps5{display:grid; grid-template-columns:repeat(5,1fr); gap:12px;}
+  .steps5 .card{position:relative; padding:18px 16px;}
+  .steps5 .tm{display:inline-block; font-family:'Sora',sans-serif; font-size:11px; font-weight:700; color:var(--on-or); background:var(--or-soft); border-radius:999px; padding:3px 9px; margin-bottom:10px;}
+  .steps5 h3{font-size:14.5px;}
+  .steps5 p{font-size:13px;}
+
+  /* ---- Les 10 séances ---- */
+  .ses-list{display:grid; gap:10px;}
+  .sl{display:grid; grid-template-columns:52px 1fr 250px; gap:16px; align-items:start; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px;}
+  .sl .no{width:40px; height:40px; border-radius:50%; background:var(--c,var(--or-soft)); color:var(--on-or); font-family:'Sora',sans-serif; font-weight:800; font-size:15px; display:flex; align-items:center; justify-content:center;}
+  .sl .no.zero{background:transparent; color:var(--or-soft); border:2px dashed var(--or-soft);}
+  .sl h3{font-size:15.5px; margin-bottom:3px;}
+  .sl .mot{font-family:'Sora',sans-serif; font-size:10px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--c,var(--or-soft)); margin-bottom:5px;}
+  .sl p{font-size:14px; line-height:1.55; color:var(--soft);}
+  .sl .jx{font-size:13px; line-height:1.45; color:var(--txt); background:rgba(244,148,82,.08); border:1px solid rgba(244,148,82,.25); border-radius:10px; padding:9px 12px;}
+  .sl .jx b{display:block; font-family:'Sora',sans-serif; font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--or-soft); margin-bottom:3px;}
+  .m-cad{--c:#E9D8CA;} .m-pil{--c:var(--or-soft);} .m-rem{--c:var(--amber);} .m-ven{--c:var(--teal);} .m-bil{--c:#E9D8CA;}
+
+  /* ---- Équipe ---- */
+  .team{display:grid; grid-template-columns:repeat(4,1fr); gap:14px;}
+  .team .card h3{font-size:15px;}
+  .team .card .ph{margin-bottom:6px;}
+
+  /* ---- Croyances ---- */
+  .bel{border:1px solid var(--line); border-radius:16px; overflow:hidden; background:var(--card);}
+  .bel .hd, .bel .r{display:grid; grid-template-columns:38% 62%;}
+  .bel .hd div{font-family:'Sora',sans-serif; font-size:10.5px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; padding:14px 20px; color:var(--mut); background:rgba(232,115,42,.08);}
+  .bel .hd div + div{color:var(--or-soft);}
+  .bel .r{border-top:1px solid var(--line);}
+  .bel .r div{padding:14px 20px; font-size:14px; line-height:1.55;}
+  .bel .r .x{color:var(--mut); font-style:italic;}
+  .bel .r .y{color:var(--txt); border-left:1px solid var(--line);}
+
+  /* ---- Mots ---- */
+  .words{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;}
+  .w{font-family:'Sora',sans-serif; font-size:12.5px; font-weight:600; border-radius:8px; padding:5px 11px; border:1px solid var(--line); color:var(--txt);}
+  .w.ko{color:#E9B9B9; border-color:rgba(240,138,138,.35); text-decoration:line-through; text-decoration-color:rgba(240,138,138,.6);}
+  .w.ok{border-color:rgba(244,148,82,.45); color:var(--or-soft);}
+  .proof b{font-family:'Sora',sans-serif; font-weight:800; font-size:24px; color:var(--or-soft); display:block; line-height:1.1; margin-bottom:6px;}
+
+  /* ---- Objections ---- */
+  .obj{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:24px 26px; margin-bottom:14px; display:grid; grid-template-columns:54px 1fr; gap:18px;}
+  .obj > div{min-width:0;}
+  .obj .rk{width:44px; height:44px; border-radius:50%; background:var(--or-soft); color:var(--on-or); font-family:'Sora',sans-serif; font-size:17px; font-weight:800; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 5px rgba(244,148,82,.14);}
+  .obj h3{font-size:18px; margin-bottom:2px;}
+  .obj .heard{font-style:italic; color:var(--mut); font-size:14px; margin-bottom:12px; line-height:1.5;}
+  .obj .lbl{font-family:'Sora',sans-serif; font-size:10px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--mut); margin:12px 0 4px;}
+  .obj p{font-size:14px; line-height:1.6; color:var(--soft);}
+  .obj p strong{color:var(--txt); font-weight:600;}
+  .obj ul{list-style:none; margin:6px 0 0;}
+  .obj li{position:relative; padding-left:16px; font-size:14px; line-height:1.55; color:var(--soft); margin-bottom:5px;}
+  .obj li::before{content:''; position:absolute; left:0; top:9px; width:6px; height:6px; border-radius:50%; background:var(--or-soft);}
+
+  footer{margin-top:64px; padding-top:22px; border-top:1px solid var(--line); display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap; align-items:center;}
+  .logo{font-family:'Sora',sans-serif; font-weight:700; font-size:15px; letter-spacing:.16em; text-transform:uppercase; color:var(--or-soft);}
+  footer .sub{font-size:12.5px;}
+
+  @media (max-width:980px){
+    .steps5{grid-template-columns:repeat(3,1fr);}
+    .sl{grid-template-columns:52px 1fr;}
+    .sl .jx{grid-column:2;}
+  }
+  @media (max-width:900px){
+    .team{grid-template-columns:1fr 1fr;}
+    .arm{grid-template-columns:1fr;}
+    .arm .id{border-right:0; border-bottom:1px solid var(--line); padding:18px 20px;}
+  }
+  @media (max-width:820px){
+    body{padding:40px 16px 56px;}
+    section{margin-top:52px;}
+    .facts{grid-template-columns:1fr 1fr;}
+    .prices,.g2,.g3,.inc,.vs,.test,.calc{grid-template-columns:1fr;}
+    .vs div + div, .test div + div, .calc div + div{border-left:0; border-top:1px solid var(--line);}
+    .bel .hd{display:none;}
+    .bel .r{grid-template-columns:1fr;}
+    .bel .r .y{border-left:0; padding-top:0;}
+    .bel .r .x{padding-bottom:6px;}
+    .obj{grid-template-columns:1fr; gap:12px; padding:20px;}
+    .arm .bd{padding:18px 20px;}
+    .arm .row{grid-template-columns:1fr; gap:3px;}
+    .card{padding:20px;}
+    .manifest{padding:24px 18px;}
+  }
+  @media (max-width:600px){
+    .steps5{grid-template-columns:1fr 1fr;}
+    .scale, .ticks{grid-template-columns:1fr 1fr;}
+    .ticks{display:none;}
+    .sl{grid-template-columns:1fr; gap:10px; padding:16px;}
+    .sl .jx{grid-column:auto;}
+  }
+  @media (max-width:520px){
+    .team,.steps5{grid-template-columns:1fr;}
+    .fact b{font-size:26px;}
+  }
+  @media print{
+    :root{--bg:#FFFFFF; --card:#FFFFFF; --line:#E2D6CC; --txt:#1B140F; --mut:#6B5D52; --soft:#3A2E25; --or-soft:#C4561A; --gold:#9A7A1E; --amber:#B07F05; --teal:#16866F; --vi:#5B3DC4; --on-or:#FFFFFF;}
+    body{background:#FFFFFF !important; background-image:none !important; padding:0; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+    .rule{color:#4A3B12; background:#FBF4E2;} .rule strong,.rule a{color:#2E240A;}
+    .say{background:#FFF1E7;}
+    .quotes span{background:#FFF1E7;}
+    .w.ko{color:#A33;}
+    .card,.arm,.obj,.sl,.fact,.price,.bel .r,.manifest{page-break-inside:avoid; break-inside:avoid;}
+    section{page-break-before:auto;}
+    .toc{display:none;}
+    a{color:inherit; text-decoration:none;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ============ EN-TÊTE ============ -->
+  <div class="eyebrow">Interne · Closing LAB · Business Phénix</div>
+  <h1>La méthode Business Phénix,<br><span class="accent">pour la vendre juste.</span></h1>
+  <p class="sub">Tout ce que tu dois avoir en tête avant un rendez-vous Business : le vrai problème du dirigeant, les trois moteurs, ce que le client reçoit pendant six mois, ce qu'il ne reçoit pas, et la manière d'en parler. Business Phénix est une offre à part entière, pour un problème précis : <strong>l'entreprise ne paie pas son dirigeant.</strong></p>
+
+  <div class="facts">
+    <div class="fact"><b>6 mois</b><span>180 jours à compter du démarrage de l'accompagnement (J0)</span></div>
+    <div class="fact"><b>10</b><span>séances individuelles de 60 minutes, une toutes les deux semaines</span></div>
+    <div class="fact"><b>1</b><span>coach référent unique, du premier au dernier jour</span></div>
+    <div class="fact"><b>0</b><span>vidéo. Rien à regarder : tout se fait sur ses chiffres réels</span></div>
+  </div>
+  <div class="prices">
+    <div class="price main">
+      <div class="ph">BP PIF · paiement comptant · à proposer en premier</div>
+      <div class="amt">5&nbsp;000&nbsp;€ <small>HT</small></div>
+      <p>Un seul prélèvement, lancé le jour de la signature (6&nbsp;000&nbsp;€ TTC). C'est le meilleur tarif : tu le proposes toujours en premier.</p>
+    </div>
+    <div class="price">
+      <div class="ph">BP MENS · paiement échelonné · 6 fois maximum</div>
+      <div class="amt">6&nbsp;000&nbsp;€ <small>HT, de 2 à 6 mensualités</small></div>
+      <p>De 2 × 3&nbsp;000&nbsp;€ HT à 6 × 1&nbsp;000&nbsp;€ HT. La première mensualité est prélevée le jour de la signature. Jamais plus de 6.</p>
+    </div>
+  </div>
+  <p class="note-link">Tous les montants HT et TTC, mensualité par mensualité : <a href="https://team.alteore.com/doc-tarifs-phenix.html">Tarifs et paiements</a>.</p>
+
+  <nav class="toc" aria-label="Sommaire">
+    <a href="#probleme"><i>1</i> Le problème</a>
+    <a href="#cible"><i>2</i> Pour qui</a>
+    <a href="#moteurs"><i>3</i> Les 3 moteurs</a>
+    <a href="#contenu"><i>4</i> Ce que contient l'accompagnement</a>
+    <a href="#exclus"><i>5</i> Ce qu'il ne contient pas</a>
+    <a href="#seance"><i>6</i> La séance type</a>
+    <a href="#seances"><i>7</i> Les 10 séances</a>
+    <a href="#equipe"><i>8</i> L'équipe</a>
+    <a href="#cadre"><i>9</i> Le cadre</a>
+    <a href="#elite"><i>10</i> Face à Elite</a>
+    <a href="#parler"><i>11</i> Comment en parler</a>
+    <a href="#objections"><i>12</i> Les objections</a>
+    <a href="#interdits"><i>13</i> À ne jamais dire</a>
+  </nav>
+
+  <!-- ============ 1. LE PROBLÈME ============ -->
+  <section id="probleme">
+    <div class="num">01 · Le problème</div>
+    <h2>Il ne manque pas de clients. Il manque de marge.</h2>
+    <p class="sub">Le dirigeant Business travaille beaucoup. Il fait tourner son local, paie ses salariés, ses fournisseurs, ses charges… et se paie en dernier, quand il reste quelque chose. Il en conclut qu'il lui faut plus de clients. C'est la mauvaise conclusion, et toute la méthode part de là.</p>
+
+    <div class="manifest">
+      <p>D'abord voir clair.<br>Ensuite se payer.<br><span>Enfin vendre plus. Dans cet ordre.</span></p>
+      <small>Il lui faudra peut-être plus de chiffre d'affaires. Mais tant qu'il ne connaît pas sa marge, chaque vente en plus peut lui coûter de l'argent. On ne pousse pas le chiffre d'affaires d'une entreprise qui perd de l'argent à chaque vente.</small>
+    </div>
+
+    <div class="g3 mt">
+      <div class="card">
+        <div class="ph">Constat 1</div>
+        <h3>Il pilote à l'aveugle</h3>
+        <p>Il voit ses chiffres une fois par an, quand son comptable lui rend le bilan. Il ne sait pas lire son compte de résultat, ne sait pas ce que rapporte chacun de ses produits, et décide à l'intuition.</p>
+      </div>
+      <div class="card">
+        <div class="ph">Constat 2</div>
+        <h3>Plus de ventes, pas plus de salaire</h3>
+        <p>Si ses prix sont mal construits, vendre deux fois plus, c'est travailler deux fois plus pour la même absence de salaire, parfois pour moins. Le volume amplifie le problème de marge, il ne le règle pas.</p>
+      </div>
+      <div class="card">
+        <div class="ph">Constat 3</div>
+        <h3>Il se paie en dernier</h3>
+        <p>Son salaire est la variable d'ajustement : tout le monde est payé avant lui. Tant que sa marge n'est pas construite pour l'inclure, il ne restera rien à la fin du mois, quel que soit le chiffre d'affaires.</p>
+      </div>
+    </div>
+
+    <div class="card mt">
+      <div class="ph">Pourquoi « plus de clients » n'est pas la solution · un calcul à refaire avec ses chiffres</div>
+      <p>Prends son produit le plus vendu. Imaginons qu'une fois tout payé (matière, temps, part des charges), il lui reste <strong>1&nbsp;€ par vente</strong> et qu'il en vende 1&nbsp;000 par mois.</p>
+      <div class="calc">
+        <div class="bad"><b>Ce qu'il croit devoir faire</b>Vendre 1&nbsp;000 unités de plus par mois : +1&nbsp;000&nbsp;€, et des dizaines d'heures de travail en plus, des achats en plus, de la trésorerie en plus.</div>
+        <div class="good"><b>Ce que la méthode fait d'abord</b>Corriger le prix ou le coût de 1&nbsp;€ sur les 1&nbsp;000 ventes qu'il fait déjà : +1&nbsp;000&nbsp;€, sans une heure de plus.</div>
+      </div>
+      <p style="margin-top:12px">C'est une illustration pour te faire comprendre la logique, pas un cas client : en rendez-vous, tu refais le raisonnement avec <strong>ses</strong> produits et <strong>ses</strong> chiffres.</p>
+    </div>
+
+    <div class="card mt">
+      <div class="ph">La question qui oriente · la règle de bascule</div>
+      <p class="sig">« Le dirigeant se paie-t-il correctement ? »</p>
+      <div class="test">
+        <div class="y"><b>Non, faute de rentabilité</b>Business Phénix. Le problème est la rentabilité.</div>
+        <div class="n"><b>Oui, mais il est noyé dans l'opérationnel</b>Elite Phénix. Le problème est la délégation.</div>
+      </div>
+      <p style="margin-top:12px">Attention au « non » par choix fiscal : un dirigeant qui se rémunère en dividendes, ou qui laisse sa trésorerie dans la société par stratégie, n'a pas un problème de rentabilité. Ce n'est pas un profil Business.</p>
+    </div>
+
+    <div class="rule"><strong>La cause et le symptôme.</strong> La marge non maîtrisée est la cause, l'absence de salaire est le symptôme. Tu parles toujours de la cause. Tu ne vends pas « plus de chiffre d'affaires » : tu vends un dirigeant que son entreprise paie, qui connaît ses chiffres chaque mois et qui sait quelles décisions prendre.</div>
+  </section>
+
+  <!-- ============ 2. POUR QUI ============ -->
+  <section id="cible">
+    <div class="num">02 · Pour qui</div>
+    <h2>Le gérant qui ne se paie pas.</h2>
+    <p class="sub">Des dirigeants de TPE déjà en activité, avec un local, des charges fixes et une petite équipe. Ils travaillent beaucoup et ne se paient pas, ou mal, parce que l'entreprise n'est pas rentable. Ni des débutants, ni des entreprises à sauver.</p>
+
+    <div class="card">
+      <div class="ph">Le point A · celui que tu reconnais au call</div>
+      <p>Commerçant ou TPE physique : <strong>restauration, retail, bien-être, artisanat, services</strong>. Un local, des charges fixes, <strong>1 à 3 salariés</strong>, <strong>moins de 300 K€</strong> de chiffre d'affaires annuel. Il fait tout lui-même, y compris ce qu'il ne maîtrise pas. Il ne connaît ni sa marge par produit ni ses indicateurs, ne sait pas lire son bilan et doute de ses prix. Il travaille pour survivre.</p>
+      <p>Ordres de grandeur rencontrés : environ 10 K€ de chiffre d'affaires par mois avec 3 apprentis ; un boulanger à 16 ou 17 K€ par mois.</p>
+      <div class="quotes"><span>« Je n'arrive pas à me sortir un salaire. »</span><span>« Je bosse comme un fou et il ne reste rien à la fin du mois. »</span><span>« Je paie tout le monde sauf moi. »</span></div>
+    </div>
+
+    <div class="tw mt">
+      <table class="t-min">
+        <thead><tr><th>Repère de découverte</th><th class="b">Business Phénix</th></tr></thead>
+        <tbody>
+          <tr><td>Chiffre d'affaires annuel</td><td>Moins de 300 K€, et au moins 100 K€ environ (plancher)</td></tr>
+          <tr><td>Salariés</td><td>1 à 3</td></tr>
+          <tr><td>Rémunération du dirigeant</td><td>Faible ou nulle, et subie (pas un choix fiscal)</td></tr>
+          <tr><td>Problème central</td><td>Marge, prix, charges, offre, pilotage</td></tr>
+          <tr><td>Il travaille…</td><td>Pour survivre</td></tr>
+          <tr><td>Ce qu'il croit</td><td>« Il me faut juste plus de clients. »</td></tr>
+          <tr><td>Ce qu'il veut</td><td>Se verser un salaire régulier, comprendre ses chiffres et savoir quoi faire</td></tr>
+          <tr><td>Objection principale</td><td>« Je n'ai pas l'argent. »</td></tr>
+          <tr><td>Équivalent</td><td>TPE</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="g2 mt">
+      <div class="card">
+        <div class="ph">C'est pour lui si</div>
+        <ul>
+          <li>Son entreprise tourne, avec un local, des charges et une petite équipe</li>
+          <li>Il ne se paie pas, ou mal, et il le subit</li>
+          <li>Il ne voit pas ses chiffres, ou ne sait pas quoi en faire</li>
+          <li>Il accepte de poser ses vrais chiffres sur la table : bilan, chiffre d'affaires, charges, salaire</li>
+          <li>Il peut tenir une séance toutes les deux semaines et trois actions entre deux séances</li>
+        </ul>
+      </div>
+      <div class="card no">
+        <div class="ph">Hors cible · on ne l'embarque pas</div>
+        <ul>
+          <li><strong>Sous le plancher</strong> d'environ 100 K€ de chiffre d'affaires annuel</li>
+          <li><strong>Pas de local ni de salarié</strong>, ou activité trop jeune</li>
+          <li><strong>Procédure collective</strong> en cours ou dépôt de bilan imminent</li>
+          <li><strong>Commerce de proximité au modèle en déclin</strong> (petite mercerie, boulangerie en difficulté, modèle dépassé) : on ne joue plus les sauveurs</li>
+          <li><strong>Il ne se paie pas par choix fiscal</strong> : ce n'est pas un problème de rentabilité</li>
+          <li><strong>Profil trop avancé</strong> (par exemple 100 K€ par mois et 15 salariés) : c'est Elite, jamais Business</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3 class="h3-out">Zone grise : c'est la rémunération qui décide</h3>
+    <div class="card">
+      <div class="scale" aria-hidden="true">
+        <div class="s-out">Hors cible<small>sous ≈ 100 K€</small></div>
+        <div class="s-bp">Business Phénix<small>≈ 100 à 300 K€ · 1 à 3 salariés</small></div>
+        <div class="s-grey">Zone grise<small>300 à 500 K€ · 3 à 5 salariés</small></div>
+        <div class="s-ep">Elite Phénix<small>500 K€ et plus · 5 à 10 salariés et plus</small></div>
+      </div>
+      <div class="ticks" aria-hidden="true"><span>0</span><span>≈ 100 K€</span><span>300 K€</span><span>500 K€</span></div>
+      <p style="margin-top:16px">Entre 300 et 500 K€ de chiffre d'affaires, ou entre 3 et 5 salariés, <strong>le chiffre ne décide pas seul</strong>. Ce qui tranche, dans cet ordre :</p>
+      <ol>
+        <li><strong>La rémunération du dirigeant</strong> : se paie-t-il ? Et si non, pourquoi ?</li>
+        <li><strong>La nature du problème</strong> : marge, prix, charges (Business) ou délégation, équipe, temps (Elite) ?</li>
+        <li><strong>La motivation</strong> : ce qu'il veut vraiment changer, et pour quand.</li>
+      </ol>
+      <p style="margin-top:8px"><strong>Dans le doute, la zone penche vers Elite.</strong></p>
+    </div>
+
+    <div class="rule"><strong>L'argent ne disqualifie pas.</strong> « Je n'ai pas l'argent » est l'objection n° 1 de cette cible, et elle est souvent vraie : c'est justement son problème. Ce n'est pas un motif de disqualification. Un prospect très motivé peut aller chercher le financement : c'est la motivation que tu qualifies, pas le compte en banque du jour. Et un profil Elite qui hésite sur le prix ne bascule jamais sur Business. Détail des profils : <a href="https://team.alteore.com/doc-avatars-phenix.html">Avatars Business Phénix et Elite Phénix</a>.</div>
+  </section>
+
+  <!-- ============ 3. MOTEURS ============ -->
+  <section id="moteurs">
+    <div class="num">03 · La méthode</div>
+    <h2>Trois moteurs, dans cet ordre.</h2>
+    <p class="sub">Le parcours Business se lit en trois moteurs, encadrés par une séance de cadrage (séance 1) et une séance de bilan (séance 10). Chaque moteur a une promesse simple, formulée dans les mots du client. C'est la grille de lecture de tout l'accompagnement, et c'est la tienne en rendez-vous.</p>
+
+    <div class="g3">
+      <div class="card eng" style="--c:var(--or-soft)">
+        <div class="ord">Moteur 1 · on commence ici</div>
+        <h3>Piloter</h3>
+        <p class="fn">« Je sais où j'en suis chaque mois. »</p>
+        <div class="lbl">Ce qu'on y travaille</div>
+        <p>Lecture du bilan et du compte de résultat, 5 indicateurs de base, tableau de bord mensuel, un temps de pilotage bloqué dans l'agenda, la posture de dirigeant.</p>
+        <div class="lbl">Signes que c'est grippé</div>
+        <ul>
+          <li>Il découvre ses chiffres une fois par an</li>
+          <li>Il ne sait pas dire ce qu'il a gagné le mois dernier</li>
+          <li>Il décide à l'intuition</li>
+        </ul>
+        <span class="ses">Séances 2 et 3</span>
+      </div>
+      <div class="card eng" style="--c:var(--amber)">
+        <div class="ord">Moteur 2</div>
+        <h3>Se rémunérer</h3>
+        <p class="fn">« Mon entreprise me paie. »</p>
+        <div class="lbl">Ce qu'on y travaille</div>
+        <p>Marge par produit, construction des prix, charges, seuil de rentabilité, trésorerie, salaire du dirigeant.</p>
+        <div class="lbl">Signes que c'est grippé</div>
+        <ul>
+          <li>Il ne connaît pas sa marge par produit</li>
+          <li>Ses prix sont « ceux du voisin », ou n'ont pas bougé depuis longtemps</li>
+          <li>Il ne se verse rien, ou pas tous les mois</li>
+        </ul>
+        <span class="ses">Séances 4 à 6</span>
+      </div>
+      <div class="card eng" style="--c:var(--teal)">
+        <div class="ord">Moteur 3 · en dernier</div>
+        <h3>Vendre</h3>
+        <p class="fn">« Je fais rentrer le CA qui manque. »</p>
+        <div class="lbl">Ce qu'on y travaille</div>
+        <p>Offre et panier moyen, acquisition simple (réseaux sociaux, clientèle locale, fidélisation), premières délégations pour libérer du temps de vente.</p>
+        <div class="lbl">Signes que c'est grippé</div>
+        <ul>
+          <li>Panier moyen faible, clients qui ne reviennent pas</li>
+          <li>Il attend que le client entre, sans action pour le faire venir</li>
+          <li>Il n'a pas de temps pour vendre : il est au comptoir ou à l'atelier toute la journée</li>
+        </ul>
+        <span class="ses">Séances 7 à 9</span>
+      </div>
+    </div>
+
+    <div class="rule"><strong>Pourquoi Vendre arrive en dernier.</strong> On ne pousse pas le chiffre d'affaires d'une entreprise qui perd de l'argent à chaque vente. D'abord il voit clair (Piloter), ensuite sa marge le paie (Se rémunérer), et seulement alors chaque vente en plus devient du salaire (Vendre). Quand le prospect te dit « moi, ce qu'il me faut, c'est des clients », il a raison sur la destination, pas sur l'ordre.</div>
+
+    <div class="card mt">
+      <div class="say"><span class="lab">À dire au prospect</span>« Dans votre situation, on travaille trois moteurs, dans un ordre précis. D'abord piloter : savoir où vous en êtes chaque mois. Ensuite vous rémunérer : faire en sorte que votre marge vous paie. Et seulement après, vendre plus, parce que vendre plus avec une marge qui ne vous paie pas, c'est travailler plus pour le même résultat. D'après ce que vous me décrivez, chez vous, ça coince d'abord sur… »</div>
+    </div>
+  </section>
+
+  <!-- ============ 4. CONTENU ============ -->
+  <section id="contenu">
+    <div class="num">04 · L'offre</div>
+    <h2>Ce que contient l'accompagnement.</h2>
+    <p class="sub">Business Phénix est un accompagnement, pas un contenu à consommer. Le dirigeant n'a pas besoin de cours : il a besoin de quelqu'un qui pose ses vrais chiffres avec lui, toutes les deux semaines, et qui vérifie que les décisions sont prises. Voici tout ce qu'il reçoit, carte par carte.</p>
+
+    <div class="inc">
+      <div class="card">
+        <span class="vol">Sous 72 h · 30 minutes</span>
+        <h3>Le RDV audit business</h3>
+        <p>Avec un coach de l'équipe, en visio, dans les 72 heures qui suivent le closing. Un petit audit : où en est l'entreprise, ce qui coince, ce qui l'a fait signer. Le client remplit avant un <strong>questionnaire de démarrage obligatoire</strong>. C'est la séance 0 : <strong>elle ne compte pas dans les 10 séances</strong>, elle prépare la séance 1.</p>
+      </div>
+      <div class="card">
+        <span class="vol">Pièce maîtresse</span>
+        <h3>Un coach référent unique</h3>
+        <p>Un seul interlocuteur du début à la fin, qui connaît ses chiffres et son dossier. Il est attribué par l'équipe : le client ne choisit pas son coach. Un remplaçant nommé prend le relais <strong>uniquement pendant les congés</strong> du référent, à partir des comptes rendus : le client ne réexplique pas son histoire.</p>
+      </div>
+      <div class="card">
+        <span class="vol">10 séances · 60 minutes</span>
+        <h3>Une séance toutes les deux semaines</h3>
+        <p>En visio, sur un <strong>créneau fixe</strong> (même jour, même heure) posé en séance 1 et mis en récurrence dans les deux agendas. Aucune réservation à faire. 13 créneaux sur 26 semaines pour 10 séances : <strong>3 créneaux libres</strong> pour les vacances et les imprévus. Après chaque séance : un compte rendu écrit et <strong>3 actions datées au maximum</strong>.</p>
+      </div>
+      <div class="card">
+        <span class="vol">Lundi 14 h · jeudi 12 h 30</span>
+        <h3>Les coachings de groupe</h3>
+        <p>Les mêmes que pour Elite, ouverts à tous nos clients : des cas réels étudiés devant les autres, des thèmes de fond, des échanges entre dirigeants. C'est aussi là qu'il peut poser une question entre deux séances.</p>
+      </div>
+      <div class="card">
+        <span class="vol">Accès continu</span>
+        <h3>La communauté Business</h3>
+        <p>Le groupe WhatsApp des clients Business Phénix, <strong>animé par Marine</strong>. Adrien et Emily y répondent aussi. Un espace entre dirigeants qui vivent les mêmes sujets : chiffres, prix, marge, trésorerie, ventes. Elle est séparée de la communauté Elite, et les coachs n'y interviennent pas.</p>
+      </div>
+      <div class="card">
+        <span class="vol">Point A → point B</span>
+        <h3>La plateforme de suivi</h3>
+        <p>Son espace de suivi en ligne : son <strong>point A et son point B</strong> écrits noir sur blanc, <strong>10 jalons</strong> (un par séance), les comptes rendus, les actions à faire, et la zone où il dépose ses documents. Le même modèle que pour Elite, avec les jalons Business.</p>
+      </div>
+      <div class="card">
+        <span class="vol">Pendant les séances</span>
+        <h3>Les outils de pilotage</h3>
+        <p>Les outils de pilotage du Vault, remplis avec son coach sur ses propres chiffres : le <strong>tableau de bord dirigeant</strong> (séances 2 et 3) et l'<strong>audit rentabilité et trésorerie</strong> (séances 4 à 6). Des outils pour décider, pas des cours.</p>
+      </div>
+      <div class="card">
+        <span class="vol">À J0 + 180</span>
+        <h3>Le point B visé</h3>
+        <p>Se verser un <strong>salaire régulier</strong>, connaître ses chiffres chaque mois et savoir quelles décisions prendre. Le point B exact (salaire cible, échéance) est écrit avec lui en séance 1. C'est un objectif de travail, pas une promesse.</p>
+      </div>
+    </div>
+
+    <div class="g2 mt">
+      <div class="card">
+        <div class="ph">Son espace de suivi · ce qu'il y trouve</div>
+        <ul>
+          <li>Son point A et son point B, écrits noir sur blanc</li>
+          <li>Ses 10 jalons et leur avancement réel</li>
+          <li>Le compte rendu de chaque séance et ses 3 actions datées</li>
+          <li>Ses documents déposés et ses outils de pilotage remplis</li>
+        </ul>
+      </div>
+      <div class="card no">
+        <div class="ph">Ce qu'il n'y trouve pas</div>
+        <ul>
+          <li>Des heures de vidéos à rattraper le soir</li>
+          <li>Un catalogue de modules à terminer</li>
+          <li>Un pourcentage de complétion qui ne veut rien dire</li>
+          <li>Une messagerie avec son coach entre deux séances</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 5. CE QU'IL NE CONTIENT PAS ============ -->
+  <section id="exclus">
+    <div class="num">05 · Ce qui n'est pas inclus</div>
+    <h2>Ce qu'il ne contient pas, et comment le dire.</h2>
+    <p class="sub">Quatre éléments ne font pas partie de Business Phénix. Le prospect peut en avoir entendu parler ailleurs, ou par un client Elite. Tu les annonces toi-même, avant qu'il ne les découvre, et tu les présentes pour ce qu'ils sont : des choix de méthode adaptés à son problème, pas des manques.</p>
+
+    <div class="arm">
+      <div class="id"><div class="n">Non inclus</div><div class="nm">Les vidéos</div></div>
+      <div class="bd">
+        <div class="row"><div class="k">Pourquoi</div><div class="v">Le dirigeant n'a jamais manqué d'informations. Le travail se fait sur son bilan, ses prix et ses charges, en séance, avec son coach. Rien à regarder, rien à rattraper.</div></div>
+        <div class="row a"><div class="k">À dire</div><div class="v">« Il n'y a rien à regarder le soir. Tout se fait en séance, sur vos chiffres à vous : votre bilan, vos prix, vos charges. »</div></div>
+      </div>
+    </div>
+
+    <div class="arm">
+      <div class="id"><div class="n">Non inclus</div><div class="nm">Les échanges avec le coach entre les séances</div></div>
+      <div class="bd">
+        <div class="row"><div class="k">Pourquoi</div><div class="v">Le travail se fait en séance. Entre deux séances, le client exécute ses 3 actions ; le coach prépare la suivante à partir du compte rendu. Une question pratique va à Marine ; une question de fond se pose au coaching de groupe ou dans la communauté, ou se garde pour la séance.</div></div>
+        <div class="row a"><div class="k">À dire</div><div class="v">« Entre deux séances, vous avez trois actions datées à faire, pas plus. Pour une question pratique, Marine est là. Une question de fond, vous la posez au coaching de groupe du lundi ou du jeudi, ou vous la gardez pour votre séance : c'est là qu'on la traite vraiment. »</div></div>
+      </div>
+    </div>
+
+    <div class="arm">
+      <div class="id"><div class="n">Non inclus</div><div class="nm">Le WhatsApp privé avec Adrien et Emily</div></div>
+      <div class="bd">
+        <div class="row"><div class="k">Pourquoi</div><div class="v">Business a sa propre communauté, dans laquelle Adrien et Emily interviennent. Le groupe privé avec les fondateurs fait partie d'un autre accompagnement, pour un autre problème.</div></div>
+        <div class="row a"><div class="k">À dire</div><div class="v">« Adrien et Emily sont présents dans la communauté Business et y répondent. »</div></div>
+      </div>
+    </div>
+
+    <div class="arm">
+      <div class="id"><div class="n">Non inclus</div><div class="nm">Les calls experts</div></div>
+      <div class="bd">
+        <div class="row"><div class="k">Pourquoi</div><div class="v">Ses sujets (chiffres, prix, marge, charges, salaire) sont le cœur du travail de son coach référent, à chaque séance. Pour le choix fiscal de sa rémunération (salaire ou dividendes), le bon interlocuteur reste son expert-comptable.</div></div>
+        <div class="row a"><div class="k">À dire</div><div class="v">« Vos prix, votre marge, vos charges, votre salaire : c'est exactement ce que votre coach traite avec vous à chaque séance. Pour la forme fiscale de votre rémunération, c'est votre expert-comptable : on travaille avec lui, pas à sa place. »</div></div>
+      </div>
+    </div>
+
+    <div class="card no">
+      <div class="ph">Hors du périmètre Business · relève d'Elite</div>
+      <p>Branding, vision, culture d'entreprise, management d'équipe, recrutement, sortie complète de l'opérationnel. Si le prospect vient pour ça, ce n'est pas un profil Business : reviens à la règle de bascule.</p>
+    </div>
+
+    <div class="rule"><strong>Jamais « parce que c'est moins cher ».</strong> Tu ne présentes jamais ces éléments comme ce qui manque à Business par rapport à Elite. Ils ne sont pas retirés d'un ensemble plus grand : ils ne servent pas à résoudre un problème de rentabilité. Un élément hors offre ne se négocie pas au cas par cas : si le prospect en fait une condition, la réponse est non.</div>
+  </section>
+
+  <!-- ============ 6. SÉANCE TYPE ============ -->
+  <section id="seance">
+    <div class="num">06 · La séance type</div>
+    <h2>60 minutes, toujours la même structure.</h2>
+    <p class="sub">C'est ce qui rend l'accompagnement concret pour le prospect. Raconte-la telle quelle : il doit pouvoir se voir dans la séance.</p>
+
+    <div class="steps5">
+      <div class="card"><span class="tm">0–5 min</span><h3>La météo et le point B</h3><p>Comment il va, et le rappel de là où il veut aller.</p></div>
+      <div class="card"><span class="tm">5–15 min</span><h3>Les 3 actions</h3><p>Faites, pas faites, bloquées, et pourquoi. C'est le premier point, pas le dernier.</p></div>
+      <div class="card"><span class="tm">15–20 min</span><h3>Le tableau de bord</h3><p>Ses chiffres du mois mis à jour, à partir de la séance 3.</p></div>
+      <div class="card"><span class="tm">20–50 min</span><h3>Le thème du jour</h3><p>Prix, charges, salaire, offre… travaillé sur ses documents à lui.</p></div>
+      <div class="card"><span class="tm">50–60 min</span><h3>Jalon et 3 actions</h3><p>Jalon validé (ou plan pour l'atteindre), 3 actions datées, prochain créneau confirmé.</p></div>
+    </div>
+    <div class="rule"><strong>Avant la séance</strong>, le client dépose sur la plateforme les éléments demandés. <strong>Après la séance</strong>, le coach y dépose le compte rendu et les actions, sous 24 h.</div>
+    <div class="say"><span class="lab">À dire au prospect</span>« Toutes les deux semaines, même jour, même heure, vous avez une heure avec votre coach. On commence par ce que vous avez fait depuis la dernière fois, on met vos chiffres à jour, on travaille un sujet, et vous repartez avec trois actions datées, pas trente. Le compte rendu est sur votre espace de suivi le lendemain. »</div>
+  </section>
+
+  <!-- ============ 7. LES 10 SÉANCES ============ -->
+  <section id="seances">
+    <div class="num">07 · Le parcours</div>
+    <h2>Dix séances, dix jalons.</h2>
+    <p class="sub">Chaque séance a un thème et un jalon de sortie : quelque chose de concret que le dirigeant a en main en partant. Une phrase par séance, que tu dois pouvoir raconter.</p>
+
+    <div class="ses-list">
+      <div class="sl m-cad">
+        <div class="no zero">0</div>
+        <div><div class="mot">Démarrage · hors des 10 séances</div><h3>RDV audit business</h3><p>30 minutes avec un coach, sous 72 h : où en est l'entreprise, ce qui coince, et la liste des documents à préparer.</p></div>
+        <div class="jx"><b>En sortie</b>Séance 1 calée sous 7 jours.</div>
+      </div>
+      <div class="sl m-cad">
+        <div class="no">1</div>
+        <div><div class="mot">Cadrage</div><h3>Diagnostic et cadrage</h3><p>On part de ses vrais chiffres (bilan, chiffre d'affaires, charges, salaire) pour écrire son point A et son point B, et on pose le créneau fixe.</p></div>
+        <div class="jx"><b>Jalon J1</b>Point A et point B déposés, créneau récurrent posé.</div>
+      </div>
+      <div class="sl m-pil">
+        <div class="no">2</div>
+        <div><div class="mot">Piloter</div><h3>Lire ses chiffres</h3><p>Il apprend à lire son bilan et son compte de résultat, et choisit ses 5 indicateurs : chiffre d'affaires du mois, marge brute, charges fixes, trésorerie, panier moyen.</p></div>
+        <div class="jx"><b>Jalon J2</b>Tableau de bord mensuel en place, rempli avec le mois précédent.</div>
+      </div>
+      <div class="sl m-pil">
+        <div class="no">3</div>
+        <div><div class="mot">Piloter</div><h3>Le temps du dirigeant</h3><p>Il bloque un temps de pilotage chaque semaine et une revue de ses chiffres à date fixe chaque mois : le pilotage devient un rendez-vous.</p></div>
+        <div class="jx"><b>Jalon J3</b>Première revue mensuelle des chiffres tenue seul.</div>
+      </div>
+      <div class="sl m-rem">
+        <div class="no">4</div>
+        <div><div class="mot">Se rémunérer</div><h3>Marge par produit et construction des prix</h3><p>Il calcule ce que lui rapporte réellement chacun de ses produits ou services, et revoit ses prix en conséquence.</p></div>
+        <div class="jx"><b>Jalon J4</b>Grille de prix revue, avec sa date d'application.</div>
+      </div>
+      <div class="sl m-rem">
+        <div class="no">5</div>
+        <div><div class="mot">Se rémunérer</div><h3>Charges, seuil de rentabilité, trésorerie</h3><p>Il passe ses charges ligne à ligne, sait combien il doit vendre pour couvrir l'entreprise et son salaire, et prévoit sa trésorerie à 3 mois.</p></div>
+        <div class="jx"><b>Jalon J5</b>Plan d'économies chiffré et seuil de rentabilité calculé.</div>
+      </div>
+      <div class="sl m-rem">
+        <div class="no">6</div>
+        <div><div class="mot">Se rémunérer · point d'étape</div><h3>La rémunération du dirigeant</h3><p>Il fixe son premier salaire, réaliste et tenable, et la date du premier versement ; la forme fiscale reste à son expert-comptable. On relit le point B à mi-parcours.</p></div>
+        <div class="jx"><b>Jalon J6</b>Montant et date du premier salaire fixés.</div>
+      </div>
+      <div class="sl m-ven">
+        <div class="no">7</div>
+        <div><div class="mot">Vendre</div><h3>Offre et concept</h3><p>Il retravaille son offre pour vendre ce qui fait de la marge : panier moyen, montée en gamme, offres groupées, produits à retirer.</p></div>
+        <div class="jx"><b>Jalon J7</b>Offre retravaillée.</div>
+      </div>
+      <div class="sl m-ven">
+        <div class="no">8</div>
+        <div><div class="mot">Vendre</div><h3>Acquisition de base</h3><p>Il construit un plan simple pour faire rentrer le chiffre d'affaires qui manque : réseaux sociaux, clientèle locale, fidélisation, avec des objectifs reliés à son seuil de rentabilité.</p></div>
+        <div class="jx"><b>Jalon J8</b>Plan d'action commercial sur 90 jours.</div>
+      </div>
+      <div class="sl m-ven">
+        <div class="no">9</div>
+        <div><div class="mot">Vendre</div><h3>Premières délégations</h3><p>Il sort deux tâches de son quotidien, chacune avec une procédure simple, pour libérer du temps pour vendre et piloter.</p></div>
+        <div class="jx"><b>Jalon J9</b>2 tâches déléguées, avec leur procédure.</div>
+      </div>
+      <div class="sl m-bil">
+        <div class="no">10</div>
+        <div><div class="mot">Bilan · avant J0 + 180</div><h3>Bilan</h3><p>On compare son point A et aujourd'hui, sur ses 5 indicateurs et son salaire, et il repart avec son plan pour continuer seul.</p></div>
+        <div class="jx"><b>Jalon J10</b>Plan autonome des 6 mois suivants.</div>
+      </div>
+    </div>
+
+    <div class="rule"><strong>Les jalons sont des repères de travail, pas des promesses.</strong> Tu peux raconter le chemin et ce que le client a en main à chaque étape. Tu n'annonces jamais un montant de salaire, un chiffre d'affaires ou un délai comme un résultat acquis : le point B est un objectif, et le résultat dépend de la situation de départ et de l'exécution. Un jalon non atteint à temps se valide à une séance suivante. Le détail jour par jour : <a href="https://team.alteore.com/doc-parcours-business-phenix.html">Parcours client Business Phénix, du closing au jour 180</a>.</div>
+  </section>
+
+  <!-- ============ 8. ÉQUIPE ============ -->
+  <section id="equipe">
+    <div class="num">08 · L'équipe</div>
+    <h2>L'équipe autour du client.</h2>
+    <p class="sub">Le client sait toujours à qui s'adresser. Présente-lui ces visages dès le closing.</p>
+    <div class="team">
+      <div class="card"><div class="ph">Fondateurs</div><h3>Adrien &amp; Emily</h3><p>Fondateurs d'Ambitio Corp. Présents dans la communauté Business, où ils répondent. Pas de WhatsApp privé avec les clients Business.</p></div>
+      <div class="card"><div class="ph">Coachs</div><h3>Édouard, Flore, Thomas, Farah</h3><p>Un coach tient le RDV audit business, puis un coach référent unique mène les 10 séances. Le client ne choisit pas son coach et n'en change pas en cours de route.</p></div>
+      <div class="card"><div class="ph">Suivi client</div><h3>Marine</h3><p>Onboarding de J0 à J+3, communauté Business, suivi de l'assiduité et relances si des créneaux sautent. Le contact pour toute question pratique.</p></div>
+      <div class="card"><div class="ph">Le closer</div><h3>Toi</h3><p>Tu choisis l'offre, tu annonces le prix HT, tu fais signer, tu mets en place le paiement, tu cales le RDV audit business et tu passes la main à Marine.</p></div>
+    </div>
+  </section>
+
+  <!-- ============ 9. LE CADRE ============ -->
+  <section id="cadre">
+    <div class="num">09 · Le cadre</div>
+    <h2>Le cadre, à connaître pour répondre juste.</h2>
+    <p class="sub">Les questions pratiques arrivent souvent juste avant la signature. Une réponse hésitante sur le cadre coûte plus cher qu'une objection.</p>
+    <div class="g2">
+      <div class="card">
+        <div class="ph">Les règles du jeu</div>
+        <ul>
+          <li><strong>J0, c'est le démarrage.</strong> Le jour de la signature si le client coche l'accès immédiat (il renonce alors à son délai de rétractation) ; sinon J+15, à la fin du délai de 14 jours. Tout le calendrier part de J0, et l'accompagnement se termine à <strong>J0 + 180 jours</strong>.</li>
+          <li><strong>Un créneau fixe toutes les deux semaines</strong>, posé en séance 1 : même jour, même heure, en récurrence. Pas de réservation séance par séance.</li>
+          <li><strong>13 créneaux pour 10 séances.</strong> Les 3 créneaux libres servent aux vacances et aux imprévus, sans se cumuler.</li>
+          <li><strong>Report au moins 48 h avant</strong> : la séance est replacée à la suite, elle n'est pas perdue.</li>
+          <li><strong>Moins de 48 h, ou absence sans prévenir</strong> : la séance est consommée. Une séance annulée par le coach n'est pas consommée, elle est replacée.</li>
+          <li><strong>Les séances non prises à J0 + 180 sont perdues.</strong> Pas de prolongation.</li>
+          <li><strong>Engagement ferme.</strong> Le prix est dû pour toute la période ; l'échelonnement est une facilité de paiement, pas un abonnement mensuel résiliable. Pas de reconduction tacite.</li>
+          <li><strong>Pas de prise en charge OPCO ni CPF</strong> : c'est un accompagnement.</li>
+        </ul>
+      </div>
+      <div class="card no">
+        <div class="ph">Ce qui ne fait pas partie de l'offre</div>
+        <ul>
+          <li>Les vidéos et toute bibliothèque de cours</li>
+          <li>Les échanges avec le coach en dehors des séances</li>
+          <li>Le WhatsApp privé avec Adrien et Emily</li>
+          <li>Les calls experts</li>
+          <li>Une 11<sup>e</sup> séance : il y en a 10, pas une de plus</li>
+          <li>Branding, vision, culture d'entreprise, management d'équipe, recrutement</li>
+        </ul>
+        <p style="margin-top:10px">Un élément hors offre <strong>ne se négocie pas au cas par cas</strong>. Pas d'exception silencieuse qui créerait un écart entre ce qui est vendu et ce qui est délivré.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 10. FACE À ELITE ============ -->
+  <section id="elite">
+    <div class="num">10 · Business face à Elite</div>
+    <h2>Autre problème, autre méthode.</h2>
+    <p class="sub">La différence ne tient pas au nombre de séances : elle tient au problème traité. Business répond à « mon entreprise ne me paie pas » ; Elite répond à « mon entreprise ne tourne pas sans moi ». Deux offres à part entière, pour deux moments différents d'une entreprise. Business n'est pas une version réduite d'Elite.</p>
+
+    <div class="tw">
+      <table class="t-min">
+        <thead><tr><th></th><th class="b">Business Phénix</th><th class="e">Elite Phénix</th></tr></thead>
+        <tbody>
+          <tr><td>Le problème</td><td>L'entreprise ne paie pas son dirigeant</td><td>L'entreprise ne tourne pas sans son dirigeant</td></tr>
+          <tr><td>Point de départ</td><td>Il ne voit pas ses chiffres</td><td>Il est le centre de tout</td></tr>
+          <tr><td>Point B</td><td>Un salaire régulier, ses chiffres chaque mois, les bonnes décisions</td><td>50 % de ses tâches opérationnelles déléguées, croissance absorbée par l'équipe</td></tr>
+          <tr><td>Les moteurs</td><td>Piloter, Se rémunérer, Vendre</td><td>Structuration, Rentabilité, Développement</td></tr>
+          <tr><td>Le rythme</td><td>10 séances de 60 min, toutes les deux semaines</td><td>24 séances sur 6 mois</td></tr>
+          <tr><td>Le démarrage</td><td>RDV audit business, 30 min avec un coach, sous 72 h</td><td>RDV Plan d'Action avec Adrien ou Emily, avant J7</td></tr>
+          <tr><td>Entre les séances</td><td>Le client exécute ses 3 actions ; communauté et coachings de groupe</td><td>Groupe WhatsApp privé avec le coach, Adrien, Emily et Marine</td></tr>
+          <tr><td>Prix HT</td><td>5&nbsp;000&nbsp;€ (BP PIF) · 6&nbsp;000&nbsp;€ en 6 fois max (BP MENS)</td><td>12&nbsp;000&nbsp;€ (EP PIF) · 13&nbsp;000&nbsp;€ en 4 fois max (EP MENS)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="h3-out">Moteur contre moteur : même logique, autre problème, autre ordre</h3>
+    <div class="vs">
+      <div><b>Piloter</b> : voir clair sur ses chiffres.<br><i>Structuration</i> : sortir de l'opérationnel.</div>
+      <div><b>Se rémunérer</b> : dégager une marge qui le paie.<br><i>Rentabilité</i> : optimiser une entreprise déjà rentable.</div>
+      <div><b>Vendre</b> : faire le chiffre d'affaires qui manque pour vivre.<br><i>Développement</i> : passer un plafond.</div>
+    </div>
+
+    <div class="rule"><strong>Tu choisis l'offre, tu ne proposes jamais les deux.</strong> Un profil Elite reste Elite, même s'il hésite sur le prix : Business n'est pas une solution de repli. Quand un client Business a réglé sa rentabilité et bute sur la délégation, la suite se traite dans Elite : son coach repère le signal, Marine le transmet à Adrien, Emily et au closer. Les modalités de ce passage ne sont pas définies : tu n'annonces rien, ni prix ni déduction. Le détail : <a href="https://team.alteore.com/doc-comparatif-phenix.html">Business ou Elite : le comparatif</a>.</div>
+  </section>
+
+  <!-- ============ 11. COMMENT EN PARLER ============ -->
+  <section id="parler">
+    <div class="num">11 · Le discours</div>
+    <h2>Comment en parler.</h2>
+    <p class="sub">Ta cible n'achète pas un programme. Elle achète le fait que quelqu'un prenne enfin son problème par le bon bout, avec ses chiffres à elle. Voici les croyances que tu vas entendre, et ce qu'on affirme en face.</p>
+
+    <div class="bel">
+      <div class="hd"><div>Ce que le dirigeant croit</div><div>Ce qu'on affirme</div></div>
+      <div class="r"><div class="x">« Il me faut plus de clients. »</div><div class="y">Il vous faut d'abord une marge qui vous paie. Plus de clients sur une marge qui ne vous paie pas, c'est plus de travail pour le même résultat.</div></div>
+      <div class="r"><div class="x">« Mon comptable s'occupe de mes chiffres. »</div><div class="y">Votre comptable fait vos comptes une fois par an, sur l'année passée. Piloter, c'est regarder vos chiffres chaque mois pour décider le mois suivant.</div></div>
+      <div class="r"><div class="x">« Je ne peux pas augmenter mes prix, mes clients partiraient. »</div><div class="y">Vous ne savez pas encore ce que vous rapporte chaque produit. On commence par le calculer ; la décision de prix vient après, chiffres en main.</div></div>
+      <div class="r"><div class="x">« Je me paierai quand ça ira mieux. »</div><div class="y">Ça n'ira pas mieux tout seul. Tant que votre salaire n'est pas prévu dans votre marge, il reste la variable d'ajustement.</div></div>
+      <div class="r"><div class="x">« Si je travaille encore plus, ça finira par payer. »</div><div class="y">Vos heures ne sont pas le problème. Si un produit vous coûte plus qu'il ne vous rapporte, chaque heure en plus vous coûte de l'argent.</div></div>
+      <div class="r"><div class="x">« Les chiffres, ce n'est pas pour moi. »</div><div class="y">Cinq chiffres, une fois par mois, sur un tableau construit avec vous. Pas besoin d'être comptable pour savoir où vous en êtes.</div></div>
+    </div>
+
+    <h3 class="h3-out">Les mots</h3>
+    <div class="g2">
+      <div class="card no">
+        <div class="ph">Ceux qu'on n'emploie jamais</div>
+        <div class="words">
+          <span class="w ko">formation</span><span class="w ko">module</span><span class="w ko">cours</span><span class="w ko">leçon</span><span class="w ko">e-learning</span><span class="w ko">vidéos à regarder</span><span class="w ko">petit Elite</span>
+        </div>
+        <p style="margin-top:12px">Ces mots réactivent un souvenir d'école et nourrissent l'objection « je n'aurai pas le temps de suivre ça ». Et Business n'est jamais une petite version de quoi que ce soit.</p>
+      </div>
+      <div class="card">
+        <div class="ph">Ceux qu'on emploie</div>
+        <div class="words">
+          <span class="w ok">accompagnement</span><span class="w ok">séance</span><span class="w ok">coach référent</span><span class="w ok">créneau fixe</span><span class="w ok">point A / point B</span><span class="w ok">jalon</span><span class="w ok">moteur</span><span class="w ok">marge</span><span class="w ok">votre salaire</span><span class="w ok">piloter</span><span class="w ok">tableau de bord</span><span class="w ok">espace de suivi</span>
+        </div>
+        <p style="margin-top:12px">« Plateforme de suivi » est le nom de l'outil. Devant le prospect, préfère <strong>« votre espace de suivi »</strong> : tu vends un suivi, pas un logiciel.</p>
+      </div>
+    </div>
+
+    <h3 class="h3-out">Les phrases signature</h3>
+    <div class="g3">
+      <div class="card"><p class="sig">« Votre entreprise doit vous payer. »</p></div>
+      <div class="card"><p class="sig">« D'abord voir clair, ensuite vous payer, enfin vendre plus. »</p></div>
+      <div class="card"><p class="sig">« Vous payez tout le monde. Il est temps que votre entreprise vous paie. »</p></div>
+    </div>
+
+    <h3 class="h3-out">Les preuves · uniquement celles-ci</h3>
+    <div class="g3">
+      <div class="card proof"><b>200+</b><p>dirigeants accompagnés</p></div>
+      <div class="card proof"><b>4,8 / 5</b><p>sur Trustpilot</p></div>
+      <div class="card proof"><b>50 → 350 K€</b><p>de chiffre d'affaires <strong>par mois</strong> en 7 mois : l'histoire d'Adrien et Emily. Toujours préciser « par mois ».</p></div>
+    </div>
+    <div class="rule"><strong>On ne cite que des chiffres vérifiés.</strong> Les cas clients de la méthode Elite sont des cas Elite : ne les présente pas comme des résultats Business. Il n'existe pas encore de cas client Business au nouveau format : tu n'en inventes pas, tu n'arrondis rien vers le haut. Si tu n'as pas le chiffre exact, tu ne le donnes pas.</div>
+  </section>
+
+  <!-- ============ 12. OBJECTIONS ============ -->
+  <section id="objections">
+    <div class="num">12 · Les objections</div>
+    <h2>Les cinq objections les plus probables.</h2>
+    <p class="sub">Sur cette cible, l'argent arrive en premier, et il est souvent réel. Les réponses ci-dessous sont des trames : tu les dis avec tes mots, sans changer le fond.</p>
+
+    <div class="obj">
+      <div class="rk">1</div>
+      <div>
+        <h3>L'argent</h3>
+        <p class="heard">« Je n'ai pas l'argent. » « C'est trop pour moi en ce moment. »</p>
+        <div class="lbl">Ce qu'il y a derrière</div>
+        <p>Souvent la vérité : c'est précisément son problème, l'entreprise ne le paie pas. Ce n'est pas un motif de disqualification.</p>
+        <div class="lbl">Ce que tu poses</div>
+        <ul>
+          <li><strong>D'abord la motivation</strong> : veut-il vraiment que ça change, et pour quand ?</li>
+          <li><strong>Ensuite le retour sur investissement, avec ses chiffres</strong> : combien il se verse aujourd'hui, combien il voudrait se verser, et ce que lui coûte chaque mois de plus sans salaire. Un exemple de calcul : sur 200 K€ de chiffre d'affaires, un point de marge en plus représente 2&nbsp;000&nbsp;€ par an. C'est de l'arithmétique sur ses chiffres, jamais une promesse.</li>
+          <li><strong>Enfin les modalités</strong> : 5&nbsp;000&nbsp;€ HT en une fois (BP PIF, le meilleur tarif), sinon 6&nbsp;000&nbsp;€ HT en 2 à 6 mensualités, soit 1&nbsp;000&nbsp;€ HT par mois en 6 fois (BP MENS). La première mensualité est prélevée à la signature.</li>
+        </ul>
+        <p style="margin-top:6px">Pas d'urgence artificielle, pas de remise, pas de séance ou d'élément ajouté pour « faire passer » le prix.</p>
+        <div class="say"><span class="lab">Trame</span>« Mettons le prix de côté une seconde. Aujourd'hui, vous vous versez combien ? Et vous voudriez vous verser combien ? Cet écart, c'est ce que vous coûte chaque mois la situation actuelle. L'accompagnement, c'est 1&nbsp;000&nbsp;€ HT par mois sur six mois, et tout son travail porte sur une chose : construire la marge qui vous paie. »</div>
+      </div>
+    </div>
+
+    <div class="obj">
+      <div class="rk">2</div>
+      <div>
+        <h3>Le temps</h3>
+        <p class="heard">« Je n'ai pas le temps, je suis au magasin toute la journée. »</p>
+        <div class="lbl">Ce qu'il y a derrière</div>
+        <p>Il imagine des cours à suivre le soir, ou des rendez-vous à rallonge.</p>
+        <div class="lbl">Ce que tu poses</div>
+        <p><strong>Une heure toutes les deux semaines</strong>, sur un créneau fixe choisi avec lui, <strong>3 actions au maximum</strong>, rien à regarder. Et son temps fait partie du travail : la séance 3 est consacrée à son temps de dirigeant, la séance 9 à sortir deux tâches de son quotidien.</p>
+        <div class="say"><span class="lab">Trame</span>« Une heure toutes les deux semaines, au créneau qui vous arrange, toujours le même, et rien à regarder entre deux. Si vous n'avez pas une heure tous les quinze jours pour regarder vos chiffres, c'est justement ce qu'on va changer. »</div>
+      </div>
+    </div>
+
+    <div class="obj">
+      <div class="rk">3</div>
+      <div>
+        <h3>Le comptable</h3>
+        <p class="heard">« J'ai déjà un comptable. » « Mon comptable me dit que ça va. »</p>
+        <div class="lbl">Ce qu'il y a derrière</div>
+        <p>Il confond tenir les comptes et piloter.</p>
+        <div class="lbl">Ce que tu poses</div>
+        <p>Le comptable produit le bilan, une fois par an, sur le passé, et reste la référence pour la fiscalité. Le coach travaille avec le dirigeant sur ses décisions du mois : prix, charges, salaire, offre. <strong>On ne remplace pas le comptable, on se sert de ce qu'il produit.</strong></p>
+        <div class="say"><span class="lab">Trame</span>« Votre comptable vous dit ce qui s'est passé l'année dernière. Nous, on vous apprend à regarder vos chiffres chaque mois pour décider ce que vous faites le mois suivant. D'ailleurs, la première chose qu'on lira ensemble, c'est le bilan qu'il vous a préparé. »</div>
+      </div>
+    </div>
+
+    <div class="obj">
+      <div class="rk">4</div>
+      <div>
+        <h3>« Il me faut juste plus de clients »</h3>
+        <p class="heard">« Moi, mon problème, c'est le chiffre d'affaires. » « Aidez-moi à trouver des clients. »</p>
+        <div class="lbl">Ce qu'il y a derrière</div>
+        <p>Il sent juste (l'argent manque) et conclut faux (il faut du volume).</p>
+        <div class="lbl">Ce que tu poses</div>
+        <p>Il a raison sur la destination, pas sur l'ordre. Vendre arrive en dernier (séances 7 à 9), mais il arrive. Refais avec lui le calcul de la partie 1 sur son produit le plus vendu.</p>
+        <div class="say"><span class="lab">Trame</span>« Vous avez raison, et on y vient : c'est tout le troisième moteur. Mais si vous gagnez un euro par vente, mille ventes de plus vous rapportent mille euros et vous coûtent des dizaines d'heures. On commence par faire en sorte que chaque vente vous paie. »</div>
+      </div>
+    </div>
+
+    <div class="obj">
+      <div class="rk">5</div>
+      <div>
+        <h3>La confiance</h3>
+        <p class="heard">« J'ai déjà essayé, ça n'a rien donné. » « Je me connais, je ne vais pas tenir. »</p>
+        <div class="lbl">Ce qu'il y a derrière</div>
+        <p>Il doute de sa capacité à appliquer, ou il a été déçu par des contenus à consommer seul.</p>
+        <div class="lbl">Ce que tu poses</div>
+        <p><strong>Un cadre, pas de la motivation</strong> : un créneau fixe, 3 actions datées vérifiées à la séance suivante, un jalon concret par séance sur son espace de suivi, un coach référent qui connaît son dossier. Et du vérifiable : 200+ dirigeants accompagnés, 4,8/5 sur Trustpilot.</p>
+        <div class="say"><span class="lab">Trame</span>« Vous n'avez pas à tout changer d'un coup. Une séance, un sujet, trois actions, et quelqu'un qui vérifie à la séance suivante que c'est fait. La régularité, c'est le cadre qui la porte, pas votre motivation. »</div>
+      </div>
+    </div>
+
+    <h3 class="h3-out">Trois questions qui reviennent</h3>
+    <div class="g3">
+      <div class="card">
+        <div class="ph">« Je pourrai écrire à mon coach ? »</div>
+        <p>Non, et tu le dis clairement. Le travail se fait en séance ; les questions pratiques vont à Marine, les questions de fond au coaching de groupe, dans la communauté ou à la séance suivante.</p>
+      </div>
+      <div class="card">
+        <div class="ph">« Et si je rate une séance ? »</div>
+        <p>Prévenue au moins 48 h avant, elle est replacée. Moins de 48 h, ou absence, elle est consommée. Il a 3 créneaux libres sur la période pour les vacances et les imprévus.</p>
+      </div>
+      <div class="card">
+        <div class="ph">« Et après les six mois ? »</div>
+        <p>Il repart de la séance 10 avec son plan autonome pour les six mois suivants : ses rituels de pilotage, sa revue mensuelle, ses prochaines décisions. Rien ne se reconduit tout seul.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 13. INTERDITS ============ -->
+  <section id="interdits">
+    <div class="num">13 · Les garde-fous</div>
+    <h2>Ce que tu ne dis jamais.</h2>
+    <p class="sub">Ce qui est vendu doit être exactement ce qui est délivré. Chaque écart se paie en déception dès la première séance.</p>
+
+    <div class="g2">
+      <div class="card no">
+        <div class="ph">Sur la promesse</div>
+        <ul>
+          <li><strong>Une garantie</strong>, un remboursement, un « satisfait ou remboursé ». Il n'y en a pas.</li>
+          <li><strong>Un engagement de résultat</strong> : un montant de salaire, de chiffre d'affaires ou un délai promis. L'accompagnement est une obligation de moyens.</li>
+          <li><strong>« Formation », « modules », vidéos</strong> : c'est un accompagnement.</li>
+          <li><strong>Un cas client non vérifié</strong>, ou un cas Elite présenté comme un résultat Business.</li>
+          <li><strong>Un conseil fiscal</strong> : salaire ou dividendes, c'est son expert-comptable.</li>
+        </ul>
+      </div>
+      <div class="card no">
+        <div class="ph">Sur l'offre</div>
+        <ul>
+          <li><strong>Des séances offertes</strong>, une séance en plus, une 11<sup>e</sup> séance.</li>
+          <li><strong>Un échange avec le coach entre les séances</strong>, un WhatsApp avec le coach ou avec Adrien et Emily, des calls experts.</li>
+          <li><strong>Plus de 6 mensualités</strong>, une remise, un tarif hors barème, ou l'ancienne remise de 1&nbsp;000&nbsp;€ pour passer au comptant après la signature : elle n'existe plus.</li>
+          <li><strong>Titan</strong> : on n'en parle jamais.</li>
+          <li><strong>Les « 9 piliers » ou l'ancienne formule de 12 mois</strong> : on parle des 3 moteurs et de 6 mois.</li>
+          <li><strong>Un coach nommément</strong>, ou le choix du coach.</li>
+        </ul>
+      </div>
+      <div class="card no">
+        <div class="ph">Sur le choix de l'offre</div>
+        <ul>
+          <li><strong>Proposer les deux offres</strong> et laisser le prospect choisir.</li>
+          <li><strong>Replier un profil Elite sur Business</strong> parce qu'il hésite sur le prix.</li>
+          <li><strong>Présenter Business comme un « mini-Elite »</strong>, un Elite en moins cher ou une première marche.</li>
+          <li><strong>Promettre un passage vers Elite</strong> avec un prix ou une déduction : rien n'est défini.</li>
+        </ul>
+      </div>
+      <div class="card no">
+        <div class="ph">Côté setting</div>
+        <ul>
+          <li><strong>Aucun prix ni aucune fourchette</strong> avant le RDV de closing. Le setter qualifie et place le rendez-vous ; c'est le closer qui annonce le prix, en HT, en rendez-vous.</li>
+          <li><strong>Aucune offre annoncée</strong> au setting : c'est la découverte du closer qui la choisit.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card mt">
+      <div class="ph">Le vendre en une minute</div>
+      <p class="sig" style="font-size:16px">« Business Phénix, c'est six mois pour que votre entreprise vous paie. Pas de vidéos : un coach référent qui connaît vos chiffres, une séance d'une heure toutes les deux semaines sur un créneau fixe, et trois actions à faire entre deux. On commence par piloter : savoir où vous en êtes chaque mois. Ensuite, on fait en sorte que votre marge vous rémunère : vos prix, vos charges, votre salaire. Et seulement après, on fait rentrer le chiffre d'affaires qui manque. Dix séances, dix étapes concrètes, et à la fin, un plan pour continuer seul. »</p>
+    </div>
+
+    <div class="rule"><strong>Une fois le oui obtenu</strong>, tout se joue avant de raccrocher, dans le pilote de closing : deal, contrat « Business Phénix 6 mois — BP PIF / BP MENS » avec la case d'accès immédiat, paiement (6 mensualités maximum), close, RDV audit business calé, checklist, annonce. La marche à suivre est dans le <a href="https://team.alteore.com/process-onboarding-business-closer.html">Process onboarding Business Phénix</a>.</div>
+  </section>
+
+  <footer>
+    <div class="logo">Business Phénix</div>
+    <div class="sub">Votre entreprise doit vous payer. · Document interne, équipe closing. Ne pas diffuser aux prospects ni aux clients.</div>
+  </footer>
+</div>
+</body>
+</html>

@@ -100,13 +100,14 @@ function child(cmd, args, env) {
   if (mask.length) { patch.updatedAt = new Date(); patch.updatedByName = 'Mise en service (Claude Code, validée par Adrien)'; mask.push('updatedAt', 'updatedByName'); }
   info(mask.length ? 'à écrire : ' + JSON.stringify(patch) : 'déjà à jour');
   info('interrupteur : ' + (cur.active === true ? 'ALLUMÉ' : 'éteint (bouton « Démarrer » de Offres & formules)'));
-  if (APPLY && mask.length) await R.patchDoc('_config/business_phenix', patch, mask);
+  /* Document absent : création (patchDoc exige un document existant). */
+  if (APPLY && mask.length) { if (cfg) await R.patchDoc('_config/business_phenix', patch, mask); else await R.createDoc('_config/business_phenix', patch); }
 
   /* 3. Pilote de closing */
   titre('3. _config/sales_close_pilot.typeBusinessAudit');
   const pil = await R.getDoc('_config/sales_close_pilot');
   if (pil && pil.data.typeBusinessAudit === AUDIT_TYPE) info('déjà à jour');
-  else { info('à écrire : typeBusinessAudit = ' + AUDIT_TYPE + ' (typeBusiness inchangé : ' + ((pil && pil.data.typeBusiness) || '—') + ')'); if (APPLY) await R.patchDoc('_config/sales_close_pilot', { typeBusinessAudit: AUDIT_TYPE }, ['typeBusinessAudit']); }
+  else { info('à écrire : typeBusinessAudit = ' + AUDIT_TYPE + ' (typeBusiness inchangé : ' + ((pil && pil.data.typeBusiness) || '—') + ')'); if (APPLY) { if (pil) await R.patchDoc('_config/sales_close_pilot', { typeBusinessAudit: AUDIT_TYPE }, ['typeBusinessAudit']); else await R.createDoc('_config/sales_close_pilot', { typeBusinessAudit: AUDIT_TYPE }); } }
 
   /* 4. Type de RDV « RDV AUDIT BUSINESS » */
   titre('4. Type de RDV « RDV AUDIT BUSINESS » (30 min, coachs)');
@@ -124,6 +125,11 @@ function child(cmd, args, env) {
     f.duration = { integerValue: '30' };
     f.color = { stringValue: '#f97316' };
     f.isCoaching = { booleanValue: true };
+    /* Image : celle de l'ancien RDV urgent Business (32 Ko) et non celle du
+       plan d'action Elite (228 Ko) — booking_config/_types approche la
+       limite de 1 Mo d'un document Firestore (images en base64). */
+    const urgent = list.find(function (v) { return F(v, 'id') && F(v, 'id').stringValue === 'rdv_urgent_post'; });
+    f.image = (urgent && F(urgent, 'image')) || { stringValue: '' };
     f.description = { stringValue: 'Dès la validation de votre inscription à Business Phénix, un rendez-vous de 30 minutes avec un coach du programme.\n\nUn premier point pour faire l\'état des lieux de votre entreprise et de vos problématiques, et préparer le démarrage de votre accompagnement.\n\nC\'est le point de départ de vos 10 séances individuelles.' };
     if (F(copy, 'rules')) F(copy, 'rules').mapValue.fields.maxNoticeDays = { integerValue: '4' };
     list.push(copy);

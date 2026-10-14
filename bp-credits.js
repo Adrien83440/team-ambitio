@@ -259,7 +259,10 @@
     L.push('4. Décisions prises');
     L.push('   [liste courte]');
     L.push('');
-    L.push('5. Jalon ' + info.jalon + (info.jalonTitre ? ' (' + info.jalonTitre + ')' : '') + ' : atteint / en cours — [ce qui manque]');
+    /* Libellé CLIENT : le compte rendu part dans l'Academy (J10 sans la
+       mention Elite, qui reste interne). */
+    var titreJalon = info.jalonTitreClient || info.jalonTitre;
+    L.push('5. Jalon ' + info.jalon + (titreJalon ? ' (' + titreJalon + ')' : '') + ' : atteint / en cours — [ce qui manque]');
     L.push('');
     L.push('6. Actions d\'ici la prochaine séance (3 maximum, datées)');
     L.push('   1. [action] — pour le [date]');

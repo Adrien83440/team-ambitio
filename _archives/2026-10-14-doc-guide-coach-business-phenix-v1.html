@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Guide du coach — Business Phénix</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  /* Charte des documents Phénix : orange = Business Phénix, violet = Elite Phénix. */
+  :root{
+    --ink:#151A2D; --soft:#3A4258; --mut:#667089; --line:#E4E6EE; --bg:#F6F5F2; --card:#FFFFFF;
+    --bp:#E8620C; --bp-dk:#B04A06; --bp-soft:#FFF2E8; --bp-line:#F6C9A3;
+    --ep:#6A3FD4; --ep-dk:#4C2AA6; --ep-soft:#F3EEFF; --ep-line:#D3C4FA;
+    --red:#B42318; --red-soft:#FEF0EE; --ok:#1B7F5A;
+    --display:'Sora',system-ui,sans-serif;
+    --body:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+  body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.6}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 20px}
+
+  nav.toc{position:sticky;top:0;z-index:50;background:rgba(246,245,242,.94);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  nav.toc .in{max-width:1000px;margin:0 auto;padding:10px 20px;display:flex;gap:7px;overflow-x:auto;scrollbar-width:none}
+  nav.toc .in::-webkit-scrollbar{display:none}
+  nav.toc a{flex:0 0 auto;font-family:var(--display);font-size:11.5px;font-weight:600;color:var(--soft);text-decoration:none;background:#fff;border:1px solid var(--line);border-radius:999px;padding:5px 12px}
+  nav.toc a:hover{border-color:var(--bp);color:var(--bp-dk)}
+
+  .hero{background:radial-gradient(900px 420px at 88% -10%,rgba(232,98,12,.5),transparent 60%),linear-gradient(160deg,#2C150A 0%,#1A0C05 100%);color:#fff;padding:52px 0 44px}
+  .eyebrow{display:inline-block;font-family:var(--display);font-size:11.5px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:#FFD9BF;border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:6px 14px;margin-bottom:18px}
+  .hero h1{font-family:var(--display);font-weight:800;font-size:clamp(30px,5vw,46px);line-height:1.06;margin-bottom:14px}
+  .hero h1 span{color:#FF8A3D}
+  .hero p{max-width:700px;color:#F4E6DB;font-size:16.5px}
+
+  section{padding:44px 0 4px;scroll-margin-top:56px}
+  .kick{font-family:var(--display);font-size:12px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--bp);margin-bottom:8px}
+  h2{font-family:var(--display);font-weight:800;font-size:clamp(22px,3.2vw,30px);line-height:1.15;margin-bottom:12px}
+  h3{font-family:var(--display);font-weight:700;font-size:17.5px;line-height:1.3;margin-bottom:6px}
+  .lead{color:var(--soft);font-size:16px;max-width:780px;margin-bottom:16px}
+  p{margin-bottom:10px}
+
+  .nums{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:6px}
+  .nums div{background:#fff;border:1px solid var(--line);border-top:4px solid var(--bp);border-radius:14px;padding:14px 12px}
+  .nums b{display:block;font-family:var(--display);font-weight:800;font-size:22px;color:var(--bp-dk);line-height:1.15}
+  .nums span{display:block;font-size:13px;color:var(--soft);line-height:1.4;margin-top:4px}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px 22px}
+  .card.b{border-top:4px solid var(--bp)} .card.e{border-top:4px solid var(--ep)} .card.red{border-top:4px solid var(--red)}
+  .card ul{list-style:none;margin-top:4px}
+  .card li{position:relative;padding-left:18px;margin-bottom:7px;color:var(--soft);font-size:15px}
+  .card li::before{content:'';position:absolute;left:2px;top:10px;width:6px;height:6px;border-radius:50%;background:var(--bp)}
+  .card.e li::before{background:var(--ep)}
+  .card li strong{color:var(--ink)}
+  ul.no li::before{content:'✕';background:none;width:auto;height:auto;top:0;left:0;font-size:12px;font-weight:800;color:var(--red)}
+
+  .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:14px;border:1px solid var(--line);background:#fff}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  th{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;text-align:left;padding:11px 14px;color:#fff;background:var(--bp)}
+  th.ce{background:var(--ep)} th.dk{background:var(--ink)}
+  td{padding:10px 14px;border-top:1px solid var(--line);vertical-align:top;color:var(--soft)}
+  td strong{color:var(--ink)}
+  td.k{font-weight:600;color:var(--ink);white-space:nowrap}
+  td.ce{background:#FBF9FF}
+
+  .callout{border-radius:0 14px 14px 0;padding:14px 18px;margin-top:14px;font-size:15px;color:var(--soft);background:#fff;border-left:4px solid var(--bp)}
+  .callout strong{color:var(--ink)}
+  .callout.e{border-left-color:var(--ep);background:var(--ep-soft)}
+  .callout.red{border-left-color:var(--red);background:var(--red-soft)}
+  .callout.int{border-left-color:var(--ink);background:#EEF0F5}
+
+  /* Séances */
+  .seance{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-bottom:14px;display:grid;grid-template-columns:64px 1fr;gap:18px}
+  .seance .n{width:56px;height:56px;border-radius:14px;background:var(--bp);color:#fff;font-family:var(--display);font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center}
+  .seance.zero .n{background:var(--ink);font-size:15px}
+  .seance .m{display:inline-block;font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 10px;margin-bottom:6px;background:var(--bp-soft);color:var(--bp-dk);border:1px solid var(--bp-line)}
+  .seance dl{display:grid;grid-template-columns:150px 1fr;gap:6px 14px;font-size:14.5px;margin-top:8px}
+  .seance dt{font-weight:700;color:var(--ink)}
+  .seance dd{color:var(--soft)}
+  .seance .vig{margin-top:10px;font-size:14px;background:var(--red-soft);border-radius:10px;padding:9px 12px;color:#7A1B12}
+  .seance .vig.e{background:var(--ep-soft);color:var(--ep-dk)}
+
+  /* Trame */
+  .script{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-top:6px}
+  .script .head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 18px;background:var(--bp-soft);border-bottom:1px solid var(--bp-line)}
+  .script .head span{font-family:var(--display);font-weight:700;font-size:14px}
+  .script pre{padding:18px;font-family:var(--mono);font-size:13px;line-height:1.65;color:var(--ink);white-space:pre-wrap;word-break:break-word}
+  .copy{font-family:var(--display);font-size:12.5px;font-weight:700;color:#fff;background:var(--bp);border:0;border-radius:999px;padding:8px 18px;cursor:pointer}
+  .copy:hover{background:var(--bp-dk)}
+  .copy.done{background:var(--ok)}
+  .copy:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+
+  footer{margin-top:54px;padding:22px 0 50px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--mut)}
+
+  @media (max-width:820px){
+    .nums{grid-template-columns:repeat(2,1fr)}
+    .grid2{grid-template-columns:1fr}
+    .seance{grid-template-columns:1fr;gap:10px}
+    .seance dl{grid-template-columns:1fr}
+    .seance dt{margin-top:6px}
+  }
+  @media print{
+    @page{size:A4;margin:13mm}
+    html,body{background:#fff}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    nav.toc,.copy{display:none}
+    .hero{padding:24px 0 20px}
+    section{padding-top:22px}
+    .card,.seance,tr,.callout,.nums div{break-inside:avoid;page-break-inside:avoid}
+    h2,h3{break-after:avoid;page-break-after:avoid}
+    .tbl-wrap{overflow:visible}
+  }
+</style>
+</head>
+<body>
+
+<nav class="toc" aria-label="Sommaire">
+  <div class="in">
+    <a href="#essentiel">Essentiel</a>
+    <a href="#offre">L'offre</a>
+    <a href="#face-elite">Face à Elite</a>
+    <a href="#perimetre">Périmètre</a>
+    <a href="#cadre">Cadre</a>
+    <a href="#regles">Règles</a>
+    <a href="#audit">RDV audit</a>
+    <a href="#structure">Séance type</a>
+    <a href="#seances">10 séances</a>
+    <a href="#jalons">Jalons</a>
+    <a href="#trame">Compte rendu</a>
+    <a href="#passerelle">Passerelle Elite</a>
+    <a href="#piliers">9 piliers</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow">Document interne · Équipe coaching</span>
+    <h1>Guide du coach<br><span>Business Phénix.</span></h1>
+    <p>Le nouveau format Business Phénix : 6 mois, 10 séances, 3 moteurs, un coach référent. Ce guide contient tout ce qu'il faut pour tenir le cadre, mener chaque séance et rendre des comptes rendus homogènes. Les clients de l'ancienne formule continuent comme avant.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ============ ESSENTIEL ============ -->
+  <section id="essentiel">
+    <div class="kick">L'essentiel en une page</div>
+    <h2>Votre mission.</h2>
+    <p class="lead">Amener votre client du point A au point B en 6 mois : d'un dirigeant qui ne voit pas ses chiffres et ne se paie pas (ou mal) à un dirigeant qui <strong>se verse un salaire régulier, connaît ses chiffres chaque mois et sait quelles décisions prendre</strong>.</p>
+    <div class="nums">
+      <div><b>10</b><span>séances de 60 min, pas une de plus</span></div>
+      <div><b>2 sem.</b><span>créneau fixe, même jour, même heure</span></div>
+      <div><b>3</b><span>actions datées maximum par séance</span></div>
+      <div><b>24 h</b><span>pour déposer le compte rendu (comme Elite)</span></div>
+      <div><b>48 h</b><span>de préavis pour un report</span></div>
+      <div><b>J0+180</b><span>fin : séances non prises perdues</span></div>
+    </div>
+    <div class="callout"><strong>Trois réflexes.</strong> 1. Aucun échange avec le client en dehors des séances. 2. Vous ne vendez jamais rien : un profil qui relève d'Elite, vous le signalez à Marine. 3. Vendre arrive en dernier : on ne pousse pas le chiffre d'affaires d'une entreprise qui perd de l'argent à chaque vente.</div>
+  </section>
+
+  <!-- ============ OFFRE ============ -->
+  <section id="offre">
+    <div class="kick">01 · L'offre</div>
+    <h2>Business Phénix, nouveau format.</h2>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th class="dk">Élément</th><th>Business Phénix</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Problème traité</td><td>Rentabilité et pilotage de base : le dirigeant ne se paie pas (ou mal) faute de rentabilité</td></tr>
+          <tr><td class="k">Promesse (point B type)</td><td>Le dirigeant se verse un salaire régulier, connaît ses chiffres chaque mois et sait quelles décisions prendre</td></tr>
+          <tr><td class="k">Durée</td><td>6 mois, soit <strong>180 jours à compter du démarrage (J0)</strong> : la signature si le client renonce à son délai de rétractation, sinon J+15</td></tr>
+          <tr><td class="k">Coachings individuels</td><td><strong>10 séances de 60 minutes</strong></td></tr>
+          <tr><td class="k">Coach</td><td>Un coach référent unique pour toute la durée (un remplaçant nommé uniquement pendant les congés du référent)</td></tr>
+          <tr><td class="k">Rythme</td><td>Créneau fixe toutes les deux semaines, sans réservation, posé en séance 1 et mis en récurrence. 13 créneaux sur 26 semaines pour 10 séances, soit 3 créneaux libres</td></tr>
+          <tr><td class="k">Report</td><td>Avec 48 h de préavis minimum. Absence sans prévenir ou report hors délai = séance consommée</td></tr>
+          <tr><td class="k">Séances non prises</td><td>Perdues à J+180, sans prolongation</td></tr>
+          <tr><td class="k">Après chaque séance</td><td>Compte rendu écrit + 3 actions datées au maximum, déposés sur la plateforme (même règle qu'Elite)</td></tr>
+          <tr><td class="k">Parcours</td><td>Point A, point B, 10 jalons Business, sur le même modèle de plateforme qu'Elite</td></tr>
+          <tr><td class="k">Méthode</td><td>3 moteurs : Piloter, Se rémunérer, Vendre, encadrés par une séance de cadrage (1) et une séance de bilan (10)</td></tr>
+          <tr><td class="k">Coachings de groupe</td><td>Oui, les mêmes que pour Elite : lundi et jeudi, ouverts à tous les clients</td></tr>
+          <tr><td class="k">Communauté</td><td>Communauté Business, séparée de la communauté Elite. Animée par Marine ; Adrien et Emily peuvent y répondre ; <strong>les coachs n'y interviennent pas</strong></td></tr>
+          <tr><td class="k">Suivi entre les séances</td><td><strong>Aucun « off »</strong> : pas d'échange avec le client en dehors des séances</td></tr>
+          <tr><td class="k">WhatsApp privé Adrien &amp; Emily</td><td>Non</td></tr>
+          <tr><td class="k">Calls experts</td><td>Non (réservés à Elite)</td></tr>
+          <tr><td class="k">Contenus vidéo</td><td>Non pour les nouveaux clients</td></tr>
+          <tr><td class="k">Plateforme de suivi</td><td>Oui : point A / point B, jalons, comptes rendus, actions</td></tr>
+          <tr><td class="k">The Vault</td><td>Outils de pilotage uniquement</td></tr>
+          <tr><td class="k">Engagement de résultat</td><td>Aucun (obligation de moyens). Rien n'est indiqué au client</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ FACE À ELITE ============ -->
+  <section id="face-elite">
+    <div class="kick">02 · Business face à Elite</div>
+    <h2>Autre problème, autre ordre.</h2>
+    <p class="lead">La différence ne tient pas qu'au nombre de séances : elle tient au problème traité, à l'encadrement et à la valeur perçue. Business n'est pas une version réduite d'Elite.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th class="dk">Élément</th><th>Business Phénix</th><th class="ce">Elite Phénix</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Problème traité</td><td>Rentabilité, pilotage de base, salaire du dirigeant</td><td class="ce">Délégation, management, recrutement, temps</td></tr>
+          <tr><td class="k">Point de départ</td><td>Le dirigeant ne voit pas ses chiffres</td><td class="ce">Le dirigeant est le centre de tout</td></tr>
+          <tr><td class="k">Durée</td><td>6 mois</td><td class="ce">6 mois (26 semaines)</td></tr>
+          <tr><td class="k">Coachings individuels</td><td>10 séances, toutes les deux semaines</td><td class="ce">24 séances sur 6 mois</td></tr>
+          <tr><td class="k">Démarrage</td><td>RDV audit business, fait par un coach</td><td class="ce">RDV Plan d'Action avec Adrien ou Emily</td></tr>
+          <tr><td class="k">Coach</td><td>Coach référent unique</td><td class="ce">Coach référent unique</td></tr>
+          <tr><td class="k">Suivi entre séances</td><td>Aucun</td><td class="ce">WhatsApp coach : 2 points de contact par semaine minimum, réponse sous 12 h ouvrées</td></tr>
+          <tr><td class="k">WhatsApp privé Adrien &amp; Emily</td><td>Non</td><td class="ce">Oui</td></tr>
+          <tr><td class="k">Communauté</td><td>Communauté Business (Marine, Adrien &amp; Emily)</td><td class="ce">Communauté Elite (2 sous-groupes maximum : général, urgences / management)</td></tr>
+          <tr><td class="k">Coachings de groupe</td><td>Oui (lundi et jeudi)</td><td class="ce">Oui (lundi et jeudi)</td></tr>
+          <tr><td class="k">Calls experts</td><td>Non</td><td class="ce">Oui, en remplacement d'une séance</td></tr>
+          <tr><td class="k">Contenus vidéo</td><td>Non</td><td class="ce">Non</td></tr>
+          <tr><td class="k">Parcours</td><td>Point A, point B, jalons Business</td><td class="ce">Point A, point B, jalons Elite</td></tr>
+          <tr><td class="k">Plateforme de suivi</td><td>Oui</td><td class="ce">Oui</td></tr>
+          <tr><td class="k">The Vault</td><td>Outils de pilotage</td><td class="ce">Accès complet</td></tr>
+          <tr><td class="k">Nomenclature interne</td><td>BP PIF / BP MENS</td><td class="ce">EP PIF / EP MENS</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:14px;color:var(--soft)">Face aux moteurs Elite (Structuration, Rentabilité, Développement) : même logique de méthode, autre problème, autre ordre. <strong>Piloter</strong> (voir clair) contre Structuration (sortir de l'opérationnel) ; <strong>Se rémunérer</strong> (dégager une marge qui le paie) contre Rentabilité (optimiser une entreprise déjà rentable) ; <strong>Vendre</strong> (faire le CA qui manque pour vivre) contre Développement (passer un plafond).</p>
+  </section>
+
+  <!-- ============ PÉRIMÈTRE ============ -->
+  <section id="perimetre">
+    <div class="kick">03 · Le périmètre</div>
+    <h2>Ce que Business traite, ce qu'il ne traite pas.</h2>
+    <div class="grid2">
+      <div class="card b">
+        <h3>Business traite</h3>
+        <ul>
+          <li>Pilotage de base, lecture du bilan et du compte de résultat, KPI</li>
+          <li>Marge et prix, charges, trésorerie</li>
+          <li>Rémunération du dirigeant</li>
+          <li>Offre et concept</li>
+          <li>Marketing de base : réseaux sociaux, local, fidélisation</li>
+          <li>Petite gestion du temps, premiers pas de délégation</li>
+        </ul>
+      </div>
+      <div class="card e">
+        <h3>Réservé à Elite</h3>
+        <ul>
+          <li>Branding, vision</li>
+          <li>Culture d'entreprise</li>
+          <li>Management d'équipe, recrutement</li>
+          <li>Sortie complète de l'opérationnel</li>
+        </ul>
+        <p style="font-size:14px;color:var(--mut);margin-top:8px">Si la séance glisse vers l'un de ces sujets, c'est un signal de passerelle (voir plus bas), pas un sujet à traiter.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CADRE ============ -->
+  <section id="cadre">
+    <div class="kick">04 · Le cadre</div>
+    <h2>Calendrier et règles de séances.</h2>
+    <div class="grid2">
+      <div class="card b">
+        <h3>Le calendrier</h3>
+        <ul>
+          <li><strong>J0</strong> = démarrage de l'accompagnement : le jour de la signature si le client a coché l'accès immédiat, sinon J+15 (fin du délai de rétractation). <strong>Fin d'accompagnement</strong> = J0 + 180 jours.</li>
+          <li><strong>RDV audit business</strong> (séance 0) sous 72 h, hors des 10 séances.</li>
+          <li><strong>Séance 1</strong> planifiée très vite après la signature : objectif <strong>sous 7 jours</strong>.</li>
+          <li><strong>Créneau fixe toutes les deux semaines</strong> à partir de la séance 1, même jour, même heure, en récurrence dans les deux agendas.</li>
+          <li><strong>13 créneaux pour 10 séances</strong> : 3 créneaux libres que le client utilise quand il veut (vacances, imprévus), sans les cumuler.</li>
+          <li>La <strong>séance 10</strong> a lieu avant J+180.</li>
+        </ul>
+      </div>
+      <div class="card b">
+        <h3>Le décompte</h3>
+        <ul>
+          <li><strong>Report ≥ 48 h avant</strong> : séance reportée, non consommée, replacée à la suite.</li>
+          <li><strong>Report &lt; 48 h ou absence sans prévenir</strong> : séance <strong>consommée</strong>.</li>
+          <li><strong>Séance annulée par le coach</strong> : non consommée, à replacer.</li>
+          <li><strong>Séances non prises à J+180</strong> : perdues.</li>
+          <li>La plateforme calcule le statut à partir de la réservation ; <strong>vous pouvez le corriger</strong> si la réalité est différente.</li>
+          <li><strong>10 séances maximum</strong>, jamais au-delà, jamais après J0+180. Seuls Adrien et Emily peuvent ajouter une séance : ce n'est ni un droit, ni un argument. Vous n'en promettez jamais.</li>
+          <li><strong>Congés du coach référent</strong> : le remplaçant nommé assure la séance, à partir des comptes rendus de la plateforme.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ RÈGLES ============ -->
+  <section id="regles">
+    <div class="kick">05 · Règles de comportement</div>
+    <h2>Ce que vous faites, ce que vous ne faites pas.</h2>
+    <div class="grid2">
+      <div class="card b">
+        <h3>Vous faites</h3>
+        <ul>
+          <li>Les 10 séances, à l'heure, sur le créneau fixe</li>
+          <li>Le compte rendu et les 3 actions datées maximum sur la plateforme, <strong>sous 24 h</strong></li>
+          <li>La validation des jalons sur la plateforme, sans exception</li>
+          <li>Le signalement à Marine d'un profil qui relève d'Elite</li>
+          <li>Le renvoi vers l'expert-comptable du client pour tout choix fiscal ou social</li>
+        </ul>
+      </div>
+      <div class="card red">
+        <h3>Vous ne faites jamais</h3>
+        <ul class="no">
+          <li><strong>De « off »</strong> : aucun échange avec le client en dehors des séances (ni WhatsApp, ni appel, ni mail de suivi)</li>
+          <li><strong>De vente</strong> : ni Elite, ni séance supplémentaire, ni autre prestation</li>
+          <li><strong>D'intervention dans la communauté Business</strong> : elle est animée par Marine, Adrien et Emily</li>
+          <li><strong>De conseil fiscal</strong> : rémunération ou dividendes, c'est l'expert-comptable du client</li>
+          <li><strong>De promesse de résultat</strong> : l'accompagnement est une obligation de moyens</li>
+          <li><strong>De sujets réservés à Elite</strong> : branding, vision, culture, management, recrutement</li>
+        </ul>
+      </div>
+    </div>
+    <p class="callout">Si le client vous écrit entre deux séances, une réponse courte et cordiale suffit : la question est notée pour la prochaine séance, et toute question pratique passe par Marine.</p>
+  </section>
+
+  <!-- ============ RDV AUDIT ============ -->
+  <section id="audit">
+    <div class="kick">06 · Le RDV audit business</div>
+    <h2>Séance 0 : c'est vous qui la faites.</h2>
+    <p class="lead">Le RDV audit business remplace, pour les nouveaux clients Business, l'ancien RDV 72 h tenu par Adrien ou Emily. Il est fait <strong>par les coachs</strong>, dure <strong>30 minutes</strong> (un petit audit : où en est le client, ses problématiques) et se tient dans les <strong>72 heures</strong> qui suivent la signature. C'est l'équivalent, pour Business, du diagnostic de départ Elite.</p>
+    <div class="seance zero">
+      <div class="n">0</div>
+      <div>
+        <span class="m">Démarrage · hors des 10 séances</span>
+        <h3>RDV audit business</h3>
+        <dl>
+          <dt>Quand</dt><dd>Sous 72 h après la signature. Réservé par le client (ou par le closer pendant le closing).</dd>
+          <dt>Préalable</dt><dd>Le questionnaire de démarrage « Audit Business », obligatoire, rempli avant le rendez-vous. Lisez-le avant d'entrer.</dd>
+          <dt>Objectif</dt><dd>Premier état des lieux : l'entreprise, le dirigeant, ses chiffres tels qu'il les connaît, ce qui l'a fait signer. Vérifier que le problème est bien un problème de rentabilité.</dd>
+          <dt>À faire passer</dt><dd>Le cadre en clair (créneau fixe toutes les deux semaines, report à 48 h, 10 séances, fin à J0+180) et la liste des documents à déposer avant la séance 1.</dd>
+          <dt>Sortie</dt><dd>Séance 1 calée sous 7 jours. Note de l'audit déposée sur la fiche du client pour le coach référent.</dd>
+        </dl>
+        <div class="vig">Le RDV audit business ne compte pas dans les 10 séances. Il ne pose pas encore le point A et le point B : c'est le travail de la séance 1.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ STRUCTURE ============ -->
+  <section id="structure">
+    <div class="kick">07 · La séance type</div>
+    <h2>60 minutes, toujours la même structure.</h2>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th class="dk">Temps</th><th>Contenu</th></tr></thead>
+        <tbody>
+          <tr><td class="k">0–5 min</td><td>Météo du dirigeant, rappel du point B</td></tr>
+          <tr><td class="k">5–15 min</td><td>Revue des 3 actions de la séance précédente : faite / pas faite / bloquée, et pourquoi</td></tr>
+          <tr><td class="k">15–20 min</td><td>Mise à jour rapide du tableau de bord (à partir de la séance 3)</td></tr>
+          <tr><td class="k">20–50 min</td><td>Travail du thème de la séance</td></tr>
+          <tr><td class="k">50–60 min</td><td>Validation du jalon (ou plan pour l'atteindre), 3 actions datées maximum, date du prochain créneau confirmée</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="callout"><strong>Avant la séance</strong> : le client dépose sur la plateforme les éléments demandés. <strong>Après la séance</strong> : vous déposez le compte rendu et les actions sur la plateforme, sous 24 h, comme pour Elite.</p>
+  </section>
+
+  <!-- ============ 10 SÉANCES ============ -->
+  <section id="seances">
+    <div class="kick">08 · Les 10 séances</div>
+    <h2>Le contenu, séance par séance.</h2>
+
+    <div class="seance">
+      <div class="n">1</div>
+      <div>
+        <span class="m">Cadrage</span>
+        <h3>Diagnostic et cadrage</h3>
+        <dl>
+          <dt>Objectif</dt><dd>Partir des chiffres réels, poser le point A et le point B, installer le cadre.</dd>
+          <dt>À déposer avant</dt><dd>Dernier bilan et compte de résultat (ou à défaut l'export comptable de l'année), CA mensuel des 6 derniers mois, liste des produits ou services avec leurs prix, liste des charges fixes mensuelles, rémunération actuelle du dirigeant, semaine type.</dd>
+          <dt>Déroulé</dt><dd>Histoire de l'entreprise et motivation (10 min) ; chiffres réels : CA, charges, trésorerie, rémunération (20 min) ; rédaction du point A chiffré et du point B — salaire cible et échéance (15 min) ; règles du cadre : créneau fixe, 13 créneaux pour 10 séances, report à 48 h, séances perdues à J+180, actions et comptes rendus (10 min) ; 3 actions (5 min).</dd>
+          <dt>Jalon de sortie</dt><dd><strong>J1</strong> — Point A et point B déposés sur la plateforme ; créneau récurrent posé dans les deux agendas.</dd>
+        </dl>
+        <div class="vig">Diagnostiquer, ne pas résoudre. Si le profil relève manifestement d'Elite (se paie déjà, problème de délégation), le signaler à Marine.</div>
+      </div>
+    </div>
+
+    <div class="seance">
+      <div class="n">2</div>
+      <div>
+        <span class="m">Piloter</span>
+        <h3>Lire ses chiffres</h3>
+        <dl>
+          <dt>Objectif</dt><dd>Savoir lire son bilan et son compte de résultat, et choisir ses 5 KPI de base.</dd>
+          <dt>5 KPI proposés</dt><dd>CA du mois, taux de marge brute, charges fixes, trésorerie en fin de mois, panier moyen — adaptables au métier.</dd>
+          <dt>Déroulé</dt><dd>Lecture guidée du compte de résultat puis du bilan sur les documents du client ; ce que chaque ligne dit de son entreprise ; choix des 5 KPI ; mise en place du tableau de bord mensuel (outil de pilotage du Vault / tableau de bord dirigeant de la plateforme).</dd>
+          <dt>Jalon de sortie</dt><dd><strong>J2</strong> — Tableau de bord mensuel en place, rempli avec le mois précédent.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="seance">
+      <div class="n">3</div>
+      <div>
+        <span class="m">Piloter</span>
+        <h3>Le temps du dirigeant</h3>
+        <dl>
+          <dt>Objectif</dt><dd>Faire du pilotage un rendez-vous, pas une corvée.</dd>
+          <dt>Déroulé</dt><dd>Créneau de pilotage hebdomadaire bloqué dans l'agenda ; revue mensuelle des chiffres (date fixe chaque mois) ; agenda type ; trois priorités du dirigeant ; posture : travailler sur l'entreprise, pas seulement dedans.</dd>
+          <dt>Jalon de sortie</dt><dd><strong>J3</strong> — Première revue mensuelle des chiffres tenue par le dirigeant seul, tableau de bord mis à jour sans le coach.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="seance">
+      <div class="n">4</div>
+      <div>
+        <span class="m">Se rémunérer</span>
+        <h3>Marge par produit et construction des prix</h3>
+        <dl>
+          <dt>Objectif</dt><dd>Savoir ce que rapporte réellement chaque produit ou service.</dd>
+          <dt>Déroulé</dt><dd>Calcul du coût de revient et de la marge unitaire sur les produits principaux ; classement (ce qui fait la marge, ce qui fait le volume, ce qui coûte) ; construction du prix (coût, marge cible, marché) ; décisions de prix.</dd>
+          <dt>Jalon de sortie</dt><dd><strong>J4</strong> — Grille de prix revue, avec date d'application.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="seance">
+      <div class="n">5</div>
+      <div>
+        <span class="m">Se rémunérer</span>
+        <h3>Charges, seuil de rentabilité, trésorerie</h3>
+        <dl>
+          <dt>Objectif</dt><dd>Savoir combien il faut vendre pour couvrir l'entreprise et le salaire du dirigeant.</dd>
+          <dt>Déroulé</dt><dd>Revue des charges ligne à ligne ; plan d'économies chiffré ; calcul du seuil de rentabilité ; prévisionnel de trésorerie à 3 mois.</dd>
+          <dt>Jalon de sortie</dt><dd><strong>J5</strong> — Plan d'économies chiffré et seuil de rentabilité calculé.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="seance">
+      <div class="n">6</div>
+      <div>
+        <span class="m">Se rémunérer</span>
+        <h3>La rémunération du dirigeant</h3>
+        <dl>
+          <dt>Objectif</dt><dd>Fixer le premier salaire, réaliste et tenable.</dd>
+          <dt>Déroulé</dt><dd>Montant cible compatible avec la trésorerie prévisionnelle ; date du premier versement ; règle de régularité. Les choix de forme (rémunération, dividendes) et leurs effets fiscaux et sociaux sont renvoyés à l'expert-comptable du client.</dd>
+          <dt>Jalon de sortie</dt><dd><strong>J6</strong> — Montant et date du premier salaire fixés.</dd>
+          <dt>Point d'étape</dt><dd>On relit le point B à mi-parcours.</dd>
+        </dl>
+        <div class="vig">Le coach ne donne pas de conseil fiscal.</div>
+      </div>
+    </div>
+
+    <div class="seance">
+      <div class="n">7</div>
+      <div>
+        <span class="m">Vendre</span>
+        <h3>Offre et concept</h3>
+        <dl>
+          <dt>Objectif</dt><dd>Vendre ce qui fait de la marge.</dd>
+          <dt>Déroulé</dt><dd>Panier moyen ; offre à marge (montée en gamme, offres groupées, produits à retirer) ; clarté du concept pour le client final.</dd>
+          <dt>Jalon de sortie</dt><dd><strong>J7</strong> — Offre retravaillée.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="seance">
+      <div class="n">8</div>
+      <div>
+        <span class="m">Vendre</span>
+        <h3>Acquisition de base</h3>
+        <dl>
+          <dt>Objectif</dt><dd>Faire rentrer le CA qui manque, avec des moyens simples.</dd>
+          <dt>Déroulé</dt><dd>Réseaux sociaux (régularité, contenu simple) ; acquisition locale ; fidélisation des clients existants ; objectifs chiffrés reliés au seuil de rentabilité.</dd>
+          <dt>Jalon de sortie</dt><dd><strong>J8</strong> — Plan d'action commercial sur 90 jours.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="seance">
+      <div class="n">9</div>
+      <div>
+        <span class="m">Vendre</span>
+        <h3>Premières délégations</h3>
+        <dl>
+          <dt>Objectif</dt><dd>Libérer du temps pour vendre et piloter.</dd>
+          <dt>Déroulé</dt><dd>Identifier 2 tâches à déléguer ; écrire une procédure simple pour chacune ; à qui, à partir de quand, comment on contrôle.</dd>
+          <dt>Jalon de sortie</dt><dd><strong>J9</strong> — 2 tâches déléguées avec procédure.</dd>
+        </dl>
+        <div class="vig e">Rester sur de la délégation simple. Si le sujet devient du management d'équipe ou du recrutement, c'est un signal de passerelle vers Elite.</div>
+      </div>
+    </div>
+
+    <div class="seance">
+      <div class="n">10</div>
+      <div>
+        <span class="m">Bilan</span>
+        <h3>Bilan</h3>
+        <dl>
+          <dt>Objectif</dt><dd>Mesurer le chemin parcouru et rendre le dirigeant autonome.</dd>
+          <dt>Déroulé</dt><dd>Point B atteint ou non ; comparaison point A / aujourd'hui sur les 5 KPI et le salaire ; plan autonome des 6 mois suivants (rituels de pilotage, revue mensuelle, prochaines décisions) ; si pertinent, orientation vers Elite.</dd>
+          <dt>Jalon de sortie</dt><dd><strong>J10</strong> — Plan autonome déposé sur la plateforme ; décision d'orientation éventuelle vers Elite transmise à Marine.</dd>
+          <dt>Calendrier</dt><dd>La séance 10 doit avoir lieu avant J+180.</dd>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ JALONS ============ -->
+  <section id="jalons">
+    <div class="kick">09 · Les jalons</div>
+    <h2>Dix jalons, un par séance.</h2>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th class="dk">#</th><th>Jalon</th><th>Moteur</th><th>Validé par</th></tr></thead>
+        <tbody>
+          <tr><td class="k">J1</td><td>Point A et point B déposés, créneau récurrent posé</td><td>Cadrage</td><td>Coach, séance 1</td></tr>
+          <tr><td class="k">J2</td><td>Tableau de bord mensuel en place</td><td>Piloter</td><td>Coach, séance 2</td></tr>
+          <tr><td class="k">J3</td><td>Revue mensuelle des chiffres tenue</td><td>Piloter</td><td>Coach, séance 3</td></tr>
+          <tr><td class="k">J4</td><td>Grille de prix revue</td><td>Se rémunérer</td><td>Coach, séance 4</td></tr>
+          <tr><td class="k">J5</td><td>Plan d'économies chiffré et seuil de rentabilité</td><td>Se rémunérer</td><td>Coach, séance 5</td></tr>
+          <tr><td class="k">J6</td><td>Montant et date du premier salaire fixés</td><td>Se rémunérer</td><td>Coach, séance 6</td></tr>
+          <tr><td class="k">J7</td><td>Offre retravaillée</td><td>Vendre</td><td>Coach, séance 7</td></tr>
+          <tr><td class="k">J8</td><td>Plan d'action commercial sur 90 jours</td><td>Vendre</td><td>Coach, séance 8</td></tr>
+          <tr><td class="k">J9</td><td>2 tâches déléguées avec procédure</td><td>Vendre</td><td>Coach, séance 9</td></tr>
+          <tr><td class="k">J10</td><td>Plan autonome, orientation éventuelle vers Elite</td><td>Bilan</td><td>Coach, séance 10</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="callout">Un jalon non atteint à temps peut être validé lors d'une séance ultérieure (même comportement qu'Elite). Positionnement indicatif : J1 vers J0+7, puis environ 14 jours par séance (J10 vers J0+133), fin à J0+180. <strong>Outils de la plateforme</strong> : le tableau de bord dirigeant sert aux jalons J2–J3, l'audit rentabilité / trésorerie aux jalons J4–J6 ; les autres jalons sont validés sur votre constat. La zone de dépôt des documents de la séance 1 est sur la fiche du client.</p>
+  </section>
+
+  <!-- ============ TRAME ============ -->
+  <section id="trame">
+    <div class="kick">10 · Le compte rendu</div>
+    <h2>La trame, à copier après chaque séance.</h2>
+    <p class="lead">Même trame pour tous les coachs : le remplaçant doit pouvoir reprendre un client en lisant les comptes rendus.</p>
+    <div class="script">
+      <div class="head"><span>Trame de compte rendu — Business Phénix</span><button class="copy" type="button" data-target="trame-cr">Copier</button></div>
+      <pre id="trame-cr">Compte rendu — Séance [n]/10 — [Thème] — [date]
+Client : [entreprise, dirigeant]        Coach référent : [nom]
+
+1. Actions de la séance précédente
+   - [action] : faite / partielle / non faite — [commentaire]
+
+2. Chiffres du moment (à partir de la séance 3)
+   CA du mois : …   Taux de marge brute : …   Charges fixes : …
+   Trésorerie fin de mois : …   Panier moyen : …   Salaire du dirigeant : …
+
+3. Ce qu'on a travaillé
+   [3 à 6 lignes]
+
+4. Décisions prises
+   [liste courte]
+
+5. Jalon [Jn] : atteint / en cours — [ce qui manque]
+
+6. Actions d'ici la prochaine séance (3 maximum, datées)
+   1. [action] — pour le [date]
+   2. [action] — pour le [date]
+   3. [action] — pour le [date]
+
+Prochaine séance : [date, heure] — Séances restantes : [x]/10 — Fin d'accompagnement : [J0 + 180]</pre>
+    </div>
+  </section>
+
+  <!-- ============ PASSERELLE ============ -->
+  <section id="passerelle">
+    <div class="kick" style="color:var(--ep)">11 · Passerelle vers Elite</div>
+    <h2>Vous repérez, vous ne vendez pas.</h2>
+    <div class="callout e">
+      <p>Quand un client Business a réglé son problème de rentabilité et bute sur la délégation, on ne le fait pas tourner en rond : la suite se traite dans Elite. C'est un <strong>upgrade</strong>, prévu dans la séance de bilan (séance 10), ou plus tôt si vous repérez le signal (se paie déjà, sujets de management ou de recrutement qui reviennent).</p>
+      <p style="margin:0"><strong>Le coach ne vend pas.</strong> Il signale le profil à Marine, qui transmet à Adrien, Emily et au closer. Les modalités commerciales de l'upgrade ne sont pas définies : ne rien annoncer au client, ni prix, ni déduction.</p>
+    </div>
+  </section>
+
+  <!-- ============ 9 PILIERS ============ -->
+  <section id="piliers">
+    <div class="kick" style="color:var(--ink)">12 · Correspondance avec les 9 piliers — usage interne</div>
+    <h2>Pour les coachs qui suivent encore d'anciens clients.</h2>
+    <p class="callout int" style="margin-top:0;margin-bottom:14px"><strong>Usage interne uniquement.</strong> Les 9 piliers ne sont jamais évoqués avec un client du nouveau format : on parle des 3 moteurs.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th class="dk">Ancien pilier</th><th class="dk">Où il se retrouve</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Mindset</td><td>Séance 1 (motivation, point B), séance 3 (posture)</td></tr>
+          <tr><td class="k">Positionnement</td><td>Séance 7 (offre et concept)</td></tr>
+          <tr><td class="k">Gestion du temps</td><td>Séance 3</td></tr>
+          <tr><td class="k">Vente</td><td>Séances 7 et 8</td></tr>
+          <tr><td class="k">Délégation</td><td>Séance 9 (premiers pas uniquement)</td></tr>
+          <tr><td class="k">Marketing</td><td>Séance 8</td></tr>
+          <tr><td class="k">Maîtrise des coûts</td><td>Séance 5</td></tr>
+          <tr><td class="k">Expérience client</td><td>Séance 8 (fidélisation)</td></tr>
+          <tr><td class="k">Pérennisation</td><td>Séance 10 (plan autonome)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  <span>Business Phénix — Guide du coach · Ambitio Corp</span>
+  <span>Document interne · version du 14 octobre 2026</span>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+  function copieSecours(texte) {
+    var zone = document.createElement('textarea');
+    zone.value = texte;
+    zone.setAttribute('readonly', '');
+    zone.style.position = 'fixed';
+    zone.style.top = '-1000px';
+    document.body.appendChild(zone);
+    zone.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(zone);
+    return ok;
+  }
+  function retour(btn, ok) {
+    var initial = btn.getAttribute('data-libelle') || btn.textContent;
+    btn.setAttribute('data-libelle', initial);
+    btn.textContent = ok ? 'Copié ✓' : 'Sélectionner le texte';
+    if (ok) btn.className = btn.className + ' done';
+    setTimeout(function () {
+      btn.textContent = initial;
+      btn.className = btn.className.replace(/\s*done/g, '');
+    }, 1800);
+  }
+  document.addEventListener('click', function (e) {
+    var btn = e.target;
+    while (btn && btn !== document && !(btn.getAttribute && btn.getAttribute('data-target'))) btn = btn.parentNode;
+    if (!btn || btn === document) return;
+    var el = document.getElementById(btn.getAttribute('data-target'));
+    if (!el) return;
+    var texte = el.textContent;
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(texte).then(
+        function () { retour(btn, true); },
+        function () { retour(btn, copieSecours(texte)); }
+      );
+    } else {
+      retour(btn, copieSecours(texte));
+    }
+  });
+})();
+</script>
+</body>
+</html>

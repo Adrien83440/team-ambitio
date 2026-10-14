@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Tarifs et paiements — Business Phénix &amp; Elite Phénix</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  /* Charte des documents Phénix : orange = Business Phénix, violet = Elite Phénix.
+     Page autonome (sans nav.js). Montants figés, aucun calcul à faire. TVA 20 %. */
+  :root{
+    --bg:#0A0A12; --card:rgba(20,19,32,.94); --line:rgba(170,160,210,.16);
+    --txt:#F4F2FB; --mut:#A7A2BD; --soft:#D8D4E8;
+    --bp:#E8732A; --bp-soft:#F49452; --bp-bg:rgba(232,115,42,.12); --bp-line:rgba(244,148,82,.45);
+    --ep:#6D4BD8; --ep-soft:#9C83F2; --ep-bg:rgba(109,75,216,.16); --ep-line:rgba(156,131,242,.5);
+    --gold:#D9B45A; --on-c:#140A02;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{scroll-behavior:smooth; -webkit-text-size-adjust:100%;}
+  body{
+    background:var(--bg);
+    background-image:radial-gradient(900px 520px at 95% -5%, rgba(109,75,216,.22), transparent 60%),
+                     radial-gradient(900px 520px at -10% -5%, rgba(232,115,42,.18), transparent 60%);
+    background-repeat:no-repeat;
+    font-family:'Inter',system-ui,sans-serif; color:var(--txt); padding:56px 20px 70px;
+    -webkit-font-smoothing:antialiased; overflow-wrap:break-word;
+  }
+  .wrap{max-width:1060px; margin:0 auto;}
+  .eyebrow{font-family:'Sora',sans-serif; font-weight:600; font-size:12px; letter-spacing:.24em; text-transform:uppercase; color:var(--soft); margin-bottom:14px;}
+  h1{font-family:'Sora',sans-serif; font-weight:800; font-size:clamp(28px,4.4vw,42px); line-height:1.12; margin-bottom:14px;}
+  h1 .b{color:var(--bp-soft);} h1 .e{color:var(--ep-soft);}
+  h2{font-family:'Sora',sans-serif; font-weight:800; font-size:clamp(21px,3vw,27px); line-height:1.2; margin-bottom:8px;}
+  h3{font-family:'Sora',sans-serif; font-weight:700; font-size:16px; line-height:1.3; margin-bottom:6px;}
+  .sub{color:var(--mut); font-size:15.5px; line-height:1.6; max-width:720px;}
+  .sub strong{color:var(--soft);}
+  a{color:var(--soft);}
+  section{margin-top:56px; scroll-margin-top:20px;}
+  .num{font-family:'Sora',sans-serif; font-weight:700; font-size:12px; letter-spacing:.2em; text-transform:uppercase; margin-bottom:10px;}
+  .is-bp .num{color:var(--bp-soft);} .is-ep .num{color:var(--ep-soft);}
+
+  /* ---- Récap express ---- */
+  .recap{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:28px;}
+  .rc{background:var(--card); border:1px solid var(--line); border-top:4px solid var(--c); border-radius:14px; padding:16px 16px 14px; min-width:0;}
+  .rc.bp{--c:var(--bp-soft);} .rc.ep{--c:var(--ep-soft);}
+  .rc .rcode{font-family:'Sora',sans-serif; font-weight:800; font-size:13px; letter-spacing:.08em; color:var(--c);}
+  .rc .lab{font-size:12px; color:var(--mut); margin:2px 0 10px;}
+  .rc .ht{font-family:'Sora',sans-serif; font-weight:800; font-size:24px; line-height:1.1;}
+  .rc .ht small{font-size:12px; font-weight:600; color:var(--mut);}
+  .rc .ttc{font-size:13px; color:var(--soft); margin-top:4px;}
+  .rc .how{font-size:12.5px; color:var(--mut); margin-top:8px; line-height:1.45; border-top:1px solid var(--line); padding-top:8px;}
+
+  /* ---- Encadrés ---- */
+  .box{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:22px 24px; margin-top:22px;}
+  .box .ph{font-family:'Sora',sans-serif; font-size:10.5px; font-weight:600; letter-spacing:.18em; text-transform:uppercase; color:var(--gold); margin-bottom:12px;}
+  .box ul{list-style:none;}
+  .box li{position:relative; padding-left:18px; font-size:14px; line-height:1.6; color:var(--soft); margin-bottom:8px;}
+  .box li::before{content:''; position:absolute; left:0; top:9px; width:7px; height:7px; border-radius:50%; background:var(--gold);}
+  .box li strong{color:var(--txt);}
+  .box.read{border-color:rgba(217,180,90,.5);}
+
+  /* ---- Bandeau d'offre ---- */
+  .offer-head{display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-end; gap:12px; margin-bottom:16px;}
+  .pill{display:inline-block; font-family:'Sora',sans-serif; font-size:11px; font-weight:700; letter-spacing:.06em; border-radius:999px; padding:5px 12px; color:var(--on-c); background:var(--c);}
+  .is-bp{--c:var(--bp-soft); --cbg:var(--bp-bg); --cl:var(--bp-line);}
+  .is-ep{--c:var(--ep-soft); --cbg:var(--ep-bg); --cl:var(--ep-line);}
+
+  /* ---- PIF ---- */
+  .pif{display:grid; grid-template-columns:1.1fr 1fr 1fr 1fr; gap:0; background:var(--card); border:1px solid var(--cl); border-radius:16px; overflow:hidden; margin-bottom:16px;}
+  .pif > div{padding:16px 18px; min-width:0;}
+  .pif > div + div{border-left:1px solid var(--line);}
+  .pif .t{font-family:'Sora',sans-serif; font-size:10.5px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--mut); margin-bottom:6px;}
+  .pif .v{font-family:'Sora',sans-serif; font-weight:800; font-size:21px; line-height:1.15;}
+  .pif .v small{font-size:12px; font-weight:600; color:var(--mut);}
+  .pif .first{background:var(--cbg);}
+  .pif .first .v{color:var(--c); font-size:17px;}
+  .pif .first p{font-size:12.5px; color:var(--soft); margin-top:4px; line-height:1.45;}
+
+  /* ---- Tableau MENS ---- */
+  .tw{overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid var(--cl); border-radius:16px; background:var(--card);}
+  table{width:100%; border-collapse:collapse; min-width:720px; font-variant-numeric:tabular-nums;}
+  th,td{padding:12px 14px; text-align:right; border-bottom:1px solid var(--line); white-space:nowrap; font-size:14.5px;}
+  th:first-child, td:first-child{text-align:left;}
+  thead th{font-family:'Sora',sans-serif; font-size:10.5px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--mut); background:var(--cbg);}
+  thead tr:first-child th{color:var(--c); border-bottom:1px solid var(--line);}
+  thead th.grp{text-align:center; border-left:1px solid var(--line);}
+  td.sep, th.sep{border-left:1px solid var(--line);}
+  tbody tr:last-child td{border-bottom:0;}
+  td:first-child{font-family:'Sora',sans-serif; font-weight:700; color:var(--txt);}
+  td.ht{color:var(--txt); font-weight:600;}
+  td.ttc{color:var(--soft);}
+  td.sig{background:var(--cbg);}
+  td.sig.ht{color:var(--c);}
+  tr.max td:first-child::after{content:'maximum'; margin-left:8px; font-family:'Sora',sans-serif; font-size:9.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--on-c); background:var(--c); border-radius:999px; padding:2px 7px; vertical-align:2px;}
+  .tnote{font-size:12.5px; color:var(--mut); margin-top:10px; line-height:1.5;}
+  .tnote strong{color:var(--soft);}
+
+  /* ---- Cartes MENS (téléphone) ---- */
+  .mcards{display:none; gap:10px;}
+  .mc{background:var(--card); border:1px solid var(--cl); border-radius:14px; padding:14px 16px;}
+  .mc h3{font-size:15px; color:var(--c); margin-bottom:8px;}
+  .mc h3 em{font-style:normal; font-family:'Sora',sans-serif; font-size:9.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--on-c); background:var(--c); border-radius:999px; padding:2px 7px; margin-left:6px; vertical-align:2px;}
+  .mc dl{display:grid; grid-template-columns:auto 1fr; gap:6px 12px; font-size:14px; font-variant-numeric:tabular-nums;}
+  .mc dt{color:var(--mut);}
+  .mc dd{text-align:right; color:var(--txt); font-weight:600;}
+  .mc dd span{display:block; font-weight:400; font-size:12.5px; color:var(--soft);}
+  .mc .sigrow{border-top:1px solid var(--line); padding-top:7px;}
+  .mc dd.sigrow{color:var(--c);}
+  .mc dd.sigrow span{color:var(--soft);}
+
+  /* ---- Écart PIF / MENS ---- */
+  .gap{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:22px;}
+  .gap .g{background:var(--card); border:1px solid var(--line); border-left:4px solid var(--c); border-radius:0 14px 14px 0; padding:14px 18px; font-size:14px; line-height:1.55; color:var(--soft);}
+  .gap .g strong{color:var(--txt);}
+
+  /* ---- Nomenclature ---- */
+  .codes{display:grid; grid-template-columns:repeat(4,1fr); gap:12px;}
+  .code{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 16px;}
+  .code b{display:block; font-family:'Sora',sans-serif; font-size:17px; font-weight:800; color:var(--c); margin-bottom:4px;}
+  .code span{font-size:13px; color:var(--soft); line-height:1.45;}
+
+  /* ---- FAQ ---- */
+  .faq{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  .q{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 20px; min-width:0;}
+  .q h3{font-size:15px; margin-bottom:8px;}
+  .q h3::before{content:'Q'; display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%; background:var(--gold); color:var(--on-c); font-size:11px; font-weight:800; margin-right:8px; vertical-align:1px;}
+  .q p{font-size:14px; line-height:1.6; color:var(--soft);}
+  .q p + p{margin-top:6px;}
+  .q p strong{color:var(--txt);}
+  .q .say{margin-top:8px; border-left:3px solid var(--gold); padding:6px 12px; font-style:italic; color:var(--txt); background:rgba(217,180,90,.07); border-radius:0 8px 8px 0;}
+
+  footer{margin-top:56px; padding-top:22px; border-top:1px solid var(--line); display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap; align-items:center;}
+  .logo{font-family:'Sora',sans-serif; font-weight:700; font-size:14px; letter-spacing:.14em; text-transform:uppercase;}
+  .logo .b{color:var(--bp-soft);} .logo .e{color:var(--ep-soft);}
+  footer .sub{font-size:12.5px;}
+
+  @media (max-width:900px){
+    .recap,.codes{grid-template-columns:1fr 1fr;}
+  }
+  @media (max-width:760px){
+    body{padding:40px 16px 56px;}
+    .pif{grid-template-columns:1fr 1fr;}
+    .pif > div:nth-child(3){border-left:0;}
+    .pif > div:nth-child(n+3){border-top:1px solid var(--line);}
+    .faq,.gap{grid-template-columns:1fr;}
+    .tw{display:none;}
+    .mcards{display:grid;}
+    .box{padding:18px;}
+  }
+  @media (max-width:420px){
+    .recap,.codes{grid-template-columns:1fr;}
+    .rc .ht{font-size:22px;}
+  }
+  @media print{
+    :root{--bg:#FFFFFF; --card:#FFFFFF; --line:#DDD8E6; --txt:#16141F; --mut:#5E5873; --soft:#2E2A3D;
+          --bp-soft:#C4561A; --bp-bg:#FFF1E7; --bp-line:#F0C3A2; --ep-soft:#5B3DC4; --ep-bg:#F1EDFF; --ep-line:#CFC3F5; --gold:#9A7A1E; --on-c:#FFFFFF;}
+    body{background:#FFFFFF !important; background-image:none !important; padding:0; font-size:12px; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+    .tw{display:block !important; overflow:visible; border-width:1px;}
+    table{min-width:0;}
+    th,td{padding:7px 8px; font-size:12px;}
+    .mcards{display:none !important;}
+    section{margin-top:28px;}
+    .is-bp, .is-ep, .box, .q, .pif, .recap{page-break-inside:avoid; break-inside:avoid;}
+    #ep{page-break-before:always; break-before:page;}
+    a{color:inherit; text-decoration:none;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">Interne · Closing LAB · Tarifs</div>
+  <h1>Tarifs et paiements<br><span class="b">Business Phénix</span> &amp; <span class="e">Elite Phénix</span></h1>
+  <p class="sub">Tous les montants, déjà calculés, pour chaque formule et chaque nombre de mensualités autorisé. <strong>Aucun calcul à faire</strong> : tu lis la ligne et tu annonces le montant HT. Prix de référence, TVA à 20 %.</p>
+
+  <!-- ============ RÉCAP EXPRESS ============ -->
+  <div class="recap">
+    <div class="rc bp">
+      <div class="rcode">BP PIF</div>
+      <div class="lab">Business Phénix · comptant</div>
+      <div class="ht">5&nbsp;000&nbsp;€ <small>HT</small></div>
+      <div class="ttc">6&nbsp;000&nbsp;€ TTC</div>
+      <div class="how">1 prélèvement, le jour de la signature</div>
+    </div>
+    <div class="rc bp">
+      <div class="rcode">BP MENS</div>
+      <div class="lab">Business Phénix · échelonné</div>
+      <div class="ht">6&nbsp;000&nbsp;€ <small>HT</small></div>
+      <div class="ttc">7&nbsp;200&nbsp;€ TTC</div>
+      <div class="how">De 2 à <strong>6 mensualités maximum</strong></div>
+    </div>
+    <div class="rc ep">
+      <div class="rcode">EP PIF</div>
+      <div class="lab">Elite Phénix · comptant</div>
+      <div class="ht">12&nbsp;000&nbsp;€ <small>HT</small></div>
+      <div class="ttc">14&nbsp;400&nbsp;€ TTC</div>
+      <div class="how">1 prélèvement, le jour de la signature</div>
+    </div>
+    <div class="rc ep">
+      <div class="rcode">EP MENS</div>
+      <div class="lab">Elite Phénix · échelonné</div>
+      <div class="ht">13&nbsp;000&nbsp;€ <small>HT</small></div>
+      <div class="ttc">15&nbsp;600&nbsp;€ TTC</div>
+      <div class="how">De 2 à <strong>4 mensualités maximum</strong></div>
+    </div>
+  </div>
+
+  <!-- ============ COMMENT LIRE ============ -->
+  <div class="box read">
+    <div class="ph">Comment lire ces tableaux</div>
+    <ul>
+      <li><strong>Tu annonces toujours le prix HT.</strong> Le récap de closing et les commissions sont en HT.</li>
+      <li><strong>GoCardless prélève en TTC</strong> (HT + TVA 20 %). Le montant que le client voit sur son relevé est donc le montant TTC.</li>
+      <li><strong>Le PIF est le meilleur tarif</strong> : 1&nbsp;000&nbsp;€ HT de moins que le MENS, sur les deux offres. Tu le proposes toujours en premier.</li>
+      <li><strong>Encaissé à la signature</strong> : en PIF, la totalité ; en MENS, la <strong>première mensualité</strong>. Le premier prélèvement est lancé le jour de la signature, les suivants à la même date les mois suivants.</li>
+      <li><strong>Prélèvement SEPA GoCardless</strong>, mis en place dans le pilote de closing (étape Paiement).</li>
+    </ul>
+  </div>
+
+  <!-- ============ BUSINESS ============ -->
+  <section id="bp" class="is-bp">
+    <div class="num">01 · Business Phénix</div>
+    <div class="offer-head">
+      <h2>Business Phénix</h2>
+      <span class="pill">6 mensualités maximum</span>
+    </div>
+
+    <div class="pif">
+      <div class="first"><div class="t">BP PIF · comptant</div><div class="v">1 prélèvement</div><p>Le meilleur tarif, à proposer en premier.</p></div>
+      <div><div class="t">Montant HT</div><div class="v">5&nbsp;000&nbsp;€ <small>HT</small></div></div>
+      <div><div class="t">Montant TTC prélevé</div><div class="v">6&nbsp;000&nbsp;€ <small>TTC</small></div></div>
+      <div><div class="t">Encaissé à la signature</div><div class="v">5&nbsp;000&nbsp;€ <small>HT</small></div><p style="font-size:12.5px;color:var(--soft);margin-top:2px">6&nbsp;000&nbsp;€ TTC</p></div>
+    </div>
+
+    <div class="tw">
+      <table>
+        <thead>
+          <tr><th>BP MENS · 6&nbsp;000&nbsp;€ HT</th><th class="grp" colspan="2">Chaque mensualité</th><th class="grp" colspan="2">Total payé</th><th class="grp" colspan="2">Encaissé à la signature</th></tr>
+          <tr><th>Nombre de mensualités</th><th class="sep">HT</th><th>TTC</th><th class="sep">HT</th><th>TTC</th><th class="sep">HT</th><th>TTC</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>2 mensualités</td><td class="ht sep">3&nbsp;000&nbsp;€</td><td class="ttc">3&nbsp;600&nbsp;€</td><td class="ht sep">6&nbsp;000&nbsp;€</td><td class="ttc">7&nbsp;200&nbsp;€</td><td class="ht sig sep">3&nbsp;000&nbsp;€</td><td class="ttc sig">3&nbsp;600&nbsp;€</td></tr>
+          <tr><td>3 mensualités</td><td class="ht sep">2&nbsp;000&nbsp;€</td><td class="ttc">2&nbsp;400&nbsp;€</td><td class="ht sep">6&nbsp;000&nbsp;€</td><td class="ttc">7&nbsp;200&nbsp;€</td><td class="ht sig sep">2&nbsp;000&nbsp;€</td><td class="ttc sig">2&nbsp;400&nbsp;€</td></tr>
+          <tr><td>4 mensualités</td><td class="ht sep">1&nbsp;500&nbsp;€</td><td class="ttc">1&nbsp;800&nbsp;€</td><td class="ht sep">6&nbsp;000&nbsp;€</td><td class="ttc">7&nbsp;200&nbsp;€</td><td class="ht sig sep">1&nbsp;500&nbsp;€</td><td class="ttc sig">1&nbsp;800&nbsp;€</td></tr>
+          <tr><td>5 mensualités</td><td class="ht sep">1&nbsp;200&nbsp;€</td><td class="ttc">1&nbsp;440&nbsp;€</td><td class="ht sep">6&nbsp;000&nbsp;€</td><td class="ttc">7&nbsp;200&nbsp;€</td><td class="ht sig sep">1&nbsp;200&nbsp;€</td><td class="ttc sig">1&nbsp;440&nbsp;€</td></tr>
+          <tr class="max"><td>6 mensualités</td><td class="ht sep">1&nbsp;000&nbsp;€</td><td class="ttc">1&nbsp;200&nbsp;€</td><td class="ht sep">6&nbsp;000&nbsp;€</td><td class="ttc">7&nbsp;200&nbsp;€</td><td class="ht sig sep">1&nbsp;000&nbsp;€</td><td class="ttc sig">1&nbsp;200&nbsp;€</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mcards">
+      <div class="mc"><h3>BP MENS · 2 mensualités</h3><dl>
+        <dt>Chaque mensualité</dt><dd>3&nbsp;000&nbsp;€ HT<span>3&nbsp;600&nbsp;€ TTC</span></dd>
+        <dt>Total payé</dt><dd>6&nbsp;000&nbsp;€ HT<span>7&nbsp;200&nbsp;€ TTC</span></dd>
+        <dt class="sigrow">À la signature</dt><dd class="sigrow">3&nbsp;000&nbsp;€ HT<span>3&nbsp;600&nbsp;€ TTC</span></dd></dl></div>
+      <div class="mc"><h3>BP MENS · 3 mensualités</h3><dl>
+        <dt>Chaque mensualité</dt><dd>2&nbsp;000&nbsp;€ HT<span>2&nbsp;400&nbsp;€ TTC</span></dd>
+        <dt>Total payé</dt><dd>6&nbsp;000&nbsp;€ HT<span>7&nbsp;200&nbsp;€ TTC</span></dd>
+        <dt class="sigrow">À la signature</dt><dd class="sigrow">2&nbsp;000&nbsp;€ HT<span>2&nbsp;400&nbsp;€ TTC</span></dd></dl></div>
+      <div class="mc"><h3>BP MENS · 4 mensualités</h3><dl>
+        <dt>Chaque mensualité</dt><dd>1&nbsp;500&nbsp;€ HT<span>1&nbsp;800&nbsp;€ TTC</span></dd>
+        <dt>Total payé</dt><dd>6&nbsp;000&nbsp;€ HT<span>7&nbsp;200&nbsp;€ TTC</span></dd>
+        <dt class="sigrow">À la signature</dt><dd class="sigrow">1&nbsp;500&nbsp;€ HT<span>1&nbsp;800&nbsp;€ TTC</span></dd></dl></div>
+      <div class="mc"><h3>BP MENS · 5 mensualités</h3><dl>
+        <dt>Chaque mensualité</dt><dd>1&nbsp;200&nbsp;€ HT<span>1&nbsp;440&nbsp;€ TTC</span></dd>
+        <dt>Total payé</dt><dd>6&nbsp;000&nbsp;€ HT<span>7&nbsp;200&nbsp;€ TTC</span></dd>
+        <dt class="sigrow">À la signature</dt><dd class="sigrow">1&nbsp;200&nbsp;€ HT<span>1&nbsp;440&nbsp;€ TTC</span></dd></dl></div>
+      <div class="mc"><h3>BP MENS · 6 mensualités<em>maximum</em></h3><dl>
+        <dt>Chaque mensualité</dt><dd>1&nbsp;000&nbsp;€ HT<span>1&nbsp;200&nbsp;€ TTC</span></dd>
+        <dt>Total payé</dt><dd>6&nbsp;000&nbsp;€ HT<span>7&nbsp;200&nbsp;€ TTC</span></dd>
+        <dt class="sigrow">À la signature</dt><dd class="sigrow">1&nbsp;000&nbsp;€ HT<span>1&nbsp;200&nbsp;€ TTC</span></dd></dl></div>
+    </div>
+    <p class="tnote"><strong>Jamais plus de 6 mensualités</strong> en Business. Le total MENS est le même quel que soit le nombre de mensualités : 6&nbsp;000&nbsp;€ HT, soit 7&nbsp;200&nbsp;€ TTC.</p>
+  </section>
+
+  <!-- ============ ELITE ============ -->
+  <section id="ep" class="is-ep">
+    <div class="num">02 · Elite Phénix</div>
+    <div class="offer-head">
+      <h2>Elite Phénix</h2>
+      <span class="pill">4 mensualités maximum</span>
+    </div>
+
+    <div class="pif">
+      <div class="first"><div class="t">EP PIF · comptant</div><div class="v">1 prélèvement</div><p>Le meilleur tarif, à proposer en premier.</p></div>
+      <div><div class="t">Montant HT</div><div class="v">12&nbsp;000&nbsp;€ <small>HT</small></div></div>
+      <div><div class="t">Montant TTC prélevé</div><div class="v">14&nbsp;400&nbsp;€ <small>TTC</small></div></div>
+      <div><div class="t">Encaissé à la signature</div><div class="v">12&nbsp;000&nbsp;€ <small>HT</small></div><p style="font-size:12.5px;color:var(--soft);margin-top:2px">14&nbsp;400&nbsp;€ TTC</p></div>
+    </div>
+
+    <div class="tw">
+      <table>
+        <thead>
+          <tr><th>EP MENS · 13&nbsp;000&nbsp;€ HT</th><th class="grp" colspan="2">Chaque mensualité</th><th class="grp" colspan="2">Total payé</th><th class="grp" colspan="2">Encaissé à la signature</th></tr>
+          <tr><th>Nombre de mensualités</th><th class="sep">HT</th><th>TTC</th><th class="sep">HT</th><th>TTC</th><th class="sep">HT</th><th>TTC</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>2 mensualités</td><td class="ht sep">6&nbsp;500&nbsp;€</td><td class="ttc">7&nbsp;800&nbsp;€</td><td class="ht sep">13&nbsp;000&nbsp;€</td><td class="ttc">15&nbsp;600&nbsp;€</td><td class="ht sig sep">6&nbsp;500&nbsp;€</td><td class="ttc sig">7&nbsp;800&nbsp;€</td></tr>
+          <tr><td>3 mensualités</td><td class="ht sep">4&nbsp;333,33&nbsp;€</td><td class="ttc">5&nbsp;200&nbsp;€</td><td class="ht sep">13&nbsp;000&nbsp;€</td><td class="ttc">15&nbsp;600&nbsp;€</td><td class="ht sig sep">4&nbsp;333,33&nbsp;€</td><td class="ttc sig">5&nbsp;200&nbsp;€</td></tr>
+          <tr class="max"><td>4 mensualités</td><td class="ht sep">3&nbsp;250&nbsp;€</td><td class="ttc">3&nbsp;900&nbsp;€</td><td class="ht sep">13&nbsp;000&nbsp;€</td><td class="ttc">15&nbsp;600&nbsp;€</td><td class="ht sig sep">3&nbsp;250&nbsp;€</td><td class="ttc sig">3&nbsp;900&nbsp;€</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mcards">
+      <div class="mc"><h3>EP MENS · 2 mensualités</h3><dl>
+        <dt>Chaque mensualité</dt><dd>6&nbsp;500&nbsp;€ HT<span>7&nbsp;800&nbsp;€ TTC</span></dd>
+        <dt>Total payé</dt><dd>13&nbsp;000&nbsp;€ HT<span>15&nbsp;600&nbsp;€ TTC</span></dd>
+        <dt class="sigrow">À la signature</dt><dd class="sigrow">6&nbsp;500&nbsp;€ HT<span>7&nbsp;800&nbsp;€ TTC</span></dd></dl></div>
+      <div class="mc"><h3>EP MENS · 3 mensualités</h3><dl>
+        <dt>Chaque mensualité</dt><dd>4&nbsp;333,33&nbsp;€ HT<span>5&nbsp;200&nbsp;€ TTC</span></dd>
+        <dt>Total payé</dt><dd>13&nbsp;000&nbsp;€ HT<span>15&nbsp;600&nbsp;€ TTC</span></dd>
+        <dt class="sigrow">À la signature</dt><dd class="sigrow">4&nbsp;333,33&nbsp;€ HT<span>5&nbsp;200&nbsp;€ TTC</span></dd></dl></div>
+      <div class="mc"><h3>EP MENS · 4 mensualités<em>maximum</em></h3><dl>
+        <dt>Chaque mensualité</dt><dd>3&nbsp;250&nbsp;€ HT<span>3&nbsp;900&nbsp;€ TTC</span></dd>
+        <dt>Total payé</dt><dd>13&nbsp;000&nbsp;€ HT<span>15&nbsp;600&nbsp;€ TTC</span></dd>
+        <dt class="sigrow">À la signature</dt><dd class="sigrow">3&nbsp;250&nbsp;€ HT<span>3&nbsp;900&nbsp;€ TTC</span></dd></dl></div>
+    </div>
+    <p class="tnote"><strong>Jamais plus de 4 mensualités</strong> en Elite. En 3 mensualités, le montant HT s'arrondit à 4&nbsp;333,33&nbsp;€ ; le prélèvement, lui, est rond : 3 × 5&nbsp;200&nbsp;€ TTC = 15&nbsp;600&nbsp;€ TTC, soit exactement 13&nbsp;000&nbsp;€ HT.</p>
+  </section>
+
+  <!-- ============ ÉCART ============ -->
+  <section id="ecart">
+    <div class="num" style="color:var(--gold)">03 · PIF ou MENS</div>
+    <h2>Ce que le comptant fait économiser.</h2>
+    <div class="gap">
+      <div class="g is-bp"><strong>Business :</strong> BP PIF 5&nbsp;000&nbsp;€ HT au lieu de 6&nbsp;000&nbsp;€ HT en BP MENS, soit <strong>1&nbsp;000&nbsp;€ HT d'écart</strong> (1&nbsp;200&nbsp;€ TTC).</div>
+      <div class="g is-ep"><strong>Elite :</strong> EP PIF 12&nbsp;000&nbsp;€ HT au lieu de 13&nbsp;000&nbsp;€ HT en EP MENS, soit <strong>1&nbsp;000&nbsp;€ HT d'écart</strong> (1&nbsp;200&nbsp;€ TTC).</div>
+    </div>
+  </section>
+
+  <!-- ============ NOMENCLATURE ============ -->
+  <section id="codes">
+    <div class="num" style="color:var(--gold)">04 · Nomenclature</div>
+    <h2>Les quatre libellés, partout les mêmes.</h2>
+    <p class="sub" style="margin-bottom:16px">Leads Live, récap de closing, contrats, tableaux de suivi : on n'utilise que ces quatre libellés.</p>
+    <div class="codes">
+      <div class="code is-bp"><b>BP PIF</b><span>Business Phénix, paiement comptant : 5&nbsp;000&nbsp;€ HT</span></div>
+      <div class="code is-bp"><b>BP MENS</b><span>Business Phénix, paiement échelonné : 6&nbsp;000&nbsp;€ HT, 2 à 6 fois</span></div>
+      <div class="code is-ep"><b>EP PIF</b><span>Elite Phénix, paiement comptant : 12&nbsp;000&nbsp;€ HT</span></div>
+      <div class="code is-ep"><b>EP MENS</b><span>Elite Phénix, paiement échelonné : 13&nbsp;000&nbsp;€ HT, 2 à 4 fois</span></div>
+    </div>
+  </section>
+
+  <!-- ============ FAQ ============ -->
+  <section id="faq">
+    <div class="num" style="color:var(--gold)">05 · Questions fréquentes</div>
+    <h2>Les questions qui reviennent.</h2>
+    <p class="sub" style="margin-bottom:18px">Une réponse claire et toujours la même, quel que soit le closer.</p>
+    <div class="faq">
+      <div class="q">
+        <h3>Le client veut payer en 8 ou 10 fois.</h3>
+        <p><strong>Non.</strong> Business : 6 mensualités maximum. Elite : 4 mensualités maximum. Tu ne proposes jamais plus et tu ne promets rien : toute demande hors barème remonte à Adrien ou Emily.</p>
+        <p class="say">« L'échelonnement va jusqu'à 6 fois, soit 1&nbsp;000&nbsp;€ HT par mois. On ne va pas au-delà. »</p>
+      </div>
+      <div class="q">
+        <h3>Il a signé en PIF et veut passer en MENS, ou l'inverse.</h3>
+        <p><strong>Tu ne modifies rien toi-même</strong> une fois le contrat signé : la demande passe par Adrien ou Emily. Il n'existe plus de délai pour passer au comptant avec une remise : ne le propose pas.</p>
+      </div>
+      <div class="q">
+        <h3>« Pourquoi le prélèvement est plus élevé que le prix annoncé ? »</h3>
+        <p>Le prix est annoncé <strong>HT</strong> ; GoCardless prélève le <strong>TTC</strong>, TVA de 20 % comprise. Une entreprise assujettie à la TVA la récupère, comme sur ses autres achats.</p>
+        <p class="say">« Le prix est de 5&nbsp;000&nbsp;€ hors taxes. Le prélèvement est de 6&nbsp;000&nbsp;€ TTC, dont 1&nbsp;000&nbsp;€ de TVA, que votre entreprise récupère si elle y est assujettie. »</p>
+      </div>
+      <div class="q">
+        <h3>Quand part le premier prélèvement ?</h3>
+        <p><strong>Le jour de la signature</strong>, que ce soit le PIF ou la première mensualité du MENS. Les mensualités suivantes partent à la même date les mois suivants. L'accompagnement démarre sans attendre que le premier prélèvement soit encaissé.</p>
+      </div>
+      <div class="q">
+        <h3>Il pourra arrêter de payer s'il arrête l'accompagnement ?</h3>
+        <p><strong>Non.</strong> L'engagement est ferme pour toute la période : l'échelonnement est une facilité de paiement, pas un abonnement mensuel résiliable. Dis-le avant la signature, pas après.</p>
+      </div>
+      <div class="q">
+        <h3>Il demande une remise.</h3>
+        <p><strong>Pas de remise.</strong> Le meilleur tarif, c'est le PIF : 1&nbsp;000&nbsp;€ HT de moins que le MENS. Pas de séance offerte, pas d'élément ajouté pour faire passer le prix.</p>
+      </div>
+      <div class="q">
+        <h3>Il veut payer par carte ou par virement.</h3>
+        <p>Le paiement passe par <strong>prélèvement SEPA GoCardless</strong>, mis en place à l'étape Paiement du pilote de closing. Pour toute autre demande, Adrien ou Emily.</p>
+      </div>
+      <div class="q">
+        <h3>Quel montant noter dans le récap de closing ?</h3>
+        <p>Le montant <strong>HT</strong>, avec le bon libellé : BP PIF, BP MENS, EP PIF ou EP MENS. Le TTC ne sert qu'à répondre au client sur ce qu'il verra sur son relevé.</p>
+      </div>
+      <div class="q">
+        <h3>Un setter peut-il donner une idée du prix ?</h3>
+        <p><strong>Jamais</strong>, ni prix ni fourchette. Le prix est annoncé par le closer, en HT, pendant le rendez-vous de closing.</p>
+      </div>
+      <div class="q">
+        <h3>Un profil Elite trouve le prix trop élevé.</h3>
+        <p><strong>Il reste Elite.</strong> On ne le replie jamais sur Business pour une question de prix : ce sont deux offres pour deux problèmes différents. On traite l'objection, ou on n'y va pas.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="logo"><span class="b">Business Phénix</span> · <span class="e">Elite Phénix</span></div>
+    <p class="sub">Document interne, équipe closing. Ne pas transmettre au client. Voir aussi : <a href="https://team.alteore.com/doc-comparatif-phenix.html">Business ou Elite : le comparatif</a>.</p>
+  </footer>
+</div>
+</body>
+</html>
