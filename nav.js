@@ -121,6 +121,7 @@
     // Réglages IA (programme IA 10/2026) : budget mensuel, interrupteur,
     // modèle par tâche, « cerveau Alteore ». Données via api/ai-admin.js.
     { id: 'admin-ia',          icon: '🤖', label: 'Réglages IA',  href: 'admin-ia.html',          section: 'Admin', perm: '_admin' },
+    { id: 'aide-admin',        icon: '🆘', label: 'Aide Team · fiches', href: 'aide-admin.html',  section: 'Admin', perm: '_admin' },
     { id: 'alteoforms',        icon: '📝', label: 'AlteoForms',   href: 'alteoforms.html',        section: 'Outils', perm: 'alteoforms' },
     { id: 'payments',          icon: '💳', label: 'Paiements',    href: 'payments.html',          section: 'Outils', perm: 'payments' },
     // Formations internes (Setting LAB / Closing LAB / Coach LAB) : accès
@@ -138,6 +139,10 @@
     // sur une base locale — rien de réel n'est déclenché. Sales + admin
     // seulement (perm '_sales'), ouvert dans une fenêtre à part (newWindow).
     { id: 'sandbox-closer',    icon: '🧪', label: 'Bac à sable closer', href: 'sandbox-closer.html', section: 'Outils', perm: '_sales', newWindow: true },
+    // Aide Team (14/10/2026) : assistant IA des questions techniques (où
+    // cliquer, agenda, WhatsApp…) + catalogue des fiches pratiques. Sales et
+    // admins ; la bulle « ? » (aide-widget.js) est injectée plus bas.
+    { id: 'aide',              icon: '🆘', label: 'Aide Team',    href: 'aide.html',              section: 'Outils', perm: '_sales' },
     { id: 'documents',         icon: '📚', label: 'Documents',    href: 'documents.html',         section: 'Outils', perm: '_all' },
     // Mur de témoignages : ouvert à toute l'équipe connectée, coachs et CSM
     // compris — ce sont eux qui reçoivent le plus de retours clients. Chacun
@@ -1575,6 +1580,26 @@
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // AIDE TEAM — bulle « ? » + guidage « Montre-moi » (14/10/2026).
+  // aide-widget.js ne s'active que pour sales / admin (rôle vérifié dans le
+  // widget) ; aide-guide.js reprend un guidage en cours après un changement
+  // de page (état en sessionStorage). Absents du bac à sable : sandbox-frame
+  // retire nav.js des pages miroir.
+  // ─────────────────────────────────────────────────────────────────────────
+  function injectAideWidget() {
+    if (window.__aideWidgetInjected) return;
+    window.__aideWidgetInjected = true;
+    ['aide-guide.js', 'aide-widget.js'].forEach(function (src) {
+      if (document.querySelector('script[src="' + src + '"]')) return;
+      var script = document.createElement('script');
+      script.src = src;
+      script.defer = true;
+      script.setAttribute('data-aide-widget', '1');
+      document.head.appendChild(script);
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // ACTIVITY TRACKER — connexions et temps d'activité par utilisateur
   // Alimente user_activity/* via POST /api/user-activity { action:'beat' }.
   // Lu par admin-users.html (section « Activité de connexion »).
@@ -1698,13 +1723,14 @@
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { injectInboxWidget(); injectInfosWidget(); injectCelebrationWidget(); injectPendingUsersWidget(); injectAiFollowupWidget(); initActivityTracker(); });
+    document.addEventListener('DOMContentLoaded', function () { injectInboxWidget(); injectInfosWidget(); injectCelebrationWidget(); injectPendingUsersWidget(); injectAiFollowupWidget(); injectAideWidget(); initActivityTracker(); });
   } else {
     injectInboxWidget();
     injectInfosWidget();
     injectCelebrationWidget();
     injectPendingUsersWidget();
     injectAiFollowupWidget();
+    injectAideWidget();
     initActivityTracker();
   }
 })();

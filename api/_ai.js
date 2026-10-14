@@ -30,6 +30,7 @@ const API_URL = 'https://api.anthropic.com/v1/messages';
 
 const OPUS  = 'claude-opus-5-5';
 const HAIKU = 'claude-haiku-4-5';
+const SONNET = 'claude-sonnet-5-5';
 
 // Tarifs en $ par million de tokens (entrée / sortie). Lecture de cache =
 // 10 % du tarif d'entrée, écriture de cache (TTL 5 min) = 125 %.
@@ -67,6 +68,9 @@ const DEFAULT_TASKS = {
   // Atelier de contrats (contract-studio.html) : réécriture et import PDF.
   contract_edit:    { model: OPUS,  effort: 'medium', maxTokens: 32000 },
   contract_import:  { model: OPUS,  effort: 'medium', maxTokens: 32000 },
+  // Aide Team (aide-widget.js) : questions techniques des setters / closers.
+  // Sonnet effort bas : réponse rapide à partir des fiches (validé 14/10/2026).
+  aide_team:        { model: SONNET, effort: 'low',   maxTokens: 3000 },
 };
 
 const DEFAULT_CONFIG = {
@@ -178,6 +182,8 @@ async function maybeSendBudgetAlert(cfg, key, month) {
  * @param {Object} [o.schema]      JSON schema → réponse parsée dans .json
  * @param {Array}  [o.tools]       outils (tool use) — boucle gérée par l'appelant
  * @param {boolean}[o.noContext]   ne pas injecter le cerveau Alteore
+ * @param {string} [o.systemCached] consignes longues et stables (base de
+ *                                 fiches…) mises en cache côté Anthropic
  * @param {string} [o.uid]         utilisateur à l'origine (traçabilité)
  * @param {string} [o.ref]         référence métier (leadId, clientId…)
  * @returns {Promise<{ok, text, json, content, stopReason, costUsd, error}>}
@@ -205,6 +211,7 @@ async function callClaude(o) {
     const ctx = await getAiContext();
     if (ctx) system.push({ type: 'text', text: 'CONTEXTE ALTEORE (référence permanente) :\n' + ctx, cache_control: { type: 'ephemeral' } });
   }
+  if (o.systemCached) system.push({ type: 'text', text: String(o.systemCached), cache_control: { type: 'ephemeral' } });
   if (o.system) system.push({ type: 'text', text: String(o.system) });
 
   const body = {
@@ -226,9 +233,9 @@ async function callClaude(o) {
     'x-api-key': process.env.ANTHROPIC_API_KEY,
     'anthropic-version': '2023-06-01',
   };
-  // Repli serveur : si les filtres de sécurité d'Opus déclinent la demande,
+  // Repli serveur : si les filtres de sécurité d'Opus / Sonnet 5.5 déclinent la demande,
   // Anthropic la rejoue sur le modèle de repli recommandé (même appel).
-  if (model === OPUS) {
+  if (model === OPUS || model === SONNET) {
     headers['anthropic-beta'] = 'server-side-fallback-2026-07-01';
     body.fallbacks = 'default';
   }
@@ -360,4 +367,5 @@ module.exports = {
   DEFAULT_CONFIG: DEFAULT_CONFIG,
   OPUS: OPUS,
   HAIKU: HAIKU,
+  SONNET: SONNET,
 };
