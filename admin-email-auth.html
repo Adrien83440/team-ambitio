@@ -30,6 +30,8 @@ h1{font-size:22px;font-weight:800;margin-bottom:8px}
 .account-status{font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;flex-shrink:0}
 .account-status.connected{background:rgba(52,211,153,0.12);color:var(--green)}
 .account-status.disconnected{background:rgba(239,68,68,0.12);color:var(--red)}
+.account.revoked{border-color:rgba(239,68,68,0.45);background:rgba(239,68,68,0.05)}
+.account-alert{font-size:11px;color:var(--red);margin-top:3px;line-height:1.4}
 .msg{margin-top:20px;padding:12px 16px;border-radius:10px;font-size:13px;font-weight:600;display:none}
 .msg.success{display:block;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);color:var(--green)}
 .msg.error{display:block;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);color:var(--red)}
@@ -96,6 +98,16 @@ async function init(){
     if(!confDoc.exists){showMsg('error','Config OAuth manquante dans _config/oauth');return;}
     oauthConf=confDoc.data();
 
+    // Comptes révoqués côté Google (invalid_grant) — registre tenu par
+    // api/_mailHealth.js (15/10/2026). Un document présent mais révoqué
+    // n'est PAS connecté : sans ça, la carte affichait « ✓ » pendant que
+    // plus rien ne partait (incident strategie@ du 10/10/2026).
+    var revoked={};
+    try{
+      var mh=await db.collection('_config').doc('mail_health').get();
+      revoked=(mh.exists&&mh.data().accounts)||{};
+    }catch(e){ console.warn('[email-auth] mail_health :',e&&e.message); }
+
     // Load connection status for each account
     var html='';
     for(var i=0;i<ACCOUNTS.length;i++){
@@ -103,10 +115,14 @@ async function init(){
       var tokenDoc=await db.collection('email_tokens').doc(acc.key).get();
       var connected=tokenDoc.exists&&tokenDoc.data().accessToken;
       var connEmail=connected?tokenDoc.data().email:'';
-      html+='<div class="account" data-account="'+acc.key+'">';
+      var isRevoked=!!revoked[acc.key];
+      html+='<div class="account'+(isRevoked?' revoked':'')+'" data-account="'+acc.key+'">';
       html+='<div class="account-icon '+acc.cls+'">'+acc.icon+'</div>';
-      html+='<div class="account-info"><div class="account-name">'+acc.label+'</div><div class="account-email">'+acc.email+'</div></div>';
-      html+='<span class="account-status '+(connected?'connected':'disconnected')+'">'+(connected?'✓ '+connEmail:'Non connecté')+'</span>';
+      html+='<div class="account-info"><div class="account-name">'+acc.label+'</div><div class="account-email">'+acc.email+'</div>';
+      if(isRevoked) html+='<div class="account-alert">Accès révoqué par Google — clique pour reconnecter</div>';
+      html+='</div>';
+      if(isRevoked) html+='<span class="account-status disconnected">⚠️ Révoqué</span>';
+      else html+='<span class="account-status '+(connected?'connected':'disconnected')+'">'+(connected?'✓ '+connEmail:'Non connecté')+'</span>';
       html+='</div>';
     }
     document.getElementById('accounts').innerHTML=html;
@@ -138,7 +154,9 @@ async function init(){
             if(d.status==='success'){
               showMsg('success','✓ Compte '+state+' connecté avec succès ('+d.email+')');
               unsub();
-              setTimeout(function(){window.location.href='admin-email-auth.html';},2000);
+              // Revérifie tous les comptes tout de suite : efface l'alerte
+              // « révoqué » du compte reconnecté sans attendre le contrôle horaire.
+              recheckHealth().then(function(){window.location.href='admin-email-auth.html';});
             } else if(d.status==='error'){
               showMsg('error','Erreur : '+d.error);
               unsub();
@@ -149,6 +167,16 @@ async function init(){
       window.history.replaceState({},'',window.location.pathname);
     }
   });
+}
+
+function recheckHealth(){
+  var u=firebase.auth().currentUser;
+  var done=new Promise(function(resolve){setTimeout(resolve,2000);});
+  if(!u) return done;
+  var call=u.getIdToken().then(function(t){
+    return fetch('/api/mail-health-cron',{method:'POST',headers:{'Authorization':'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({action:'run'})});
+  }).catch(function(e){ console.warn('[email-auth] recheck :',e&&e.message); });
+  return Promise.all([done,call]);
 }
 
 function connectAccount(accountKey){

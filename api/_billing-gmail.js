@@ -23,6 +23,7 @@
  */
 
 const { admin, db } = require('./_billing-helpers');
+const mailHealth = require('./_mailHealth');
 
 /* ─── OAuth credentials lookup ─── */
 async function getOAuthCreds() {
@@ -116,7 +117,24 @@ async function getValidAccessToken(tokenSlug) {
 
   /* Refresh */
   const creds = await getOAuthCreds();
-  const refreshed = await refreshAccessToken(data.refreshToken, creds);
+  let refreshed;
+  try {
+    refreshed = await refreshAccessToken(data.refreshToken, creds);
+  } catch (err) {
+    /* invalid_grant = accès révoqué / expiré côté Google : registre
+       _config/mail_health + alerte admin (api/_mailHealth.js). */
+    if (mailHealth.isRevokedResponse(err && err.message)) {
+      await mailHealth.markRevoked(tokenSlug, {
+        error: err.message,
+        email: data.email || '',
+        source: 'billing-gmail',
+        lastSuccessAt: data.lastRefreshedAt || data.accessTokenRefreshedAt || data.connectedAt || null,
+      });
+      err.message = 'Compte Gmail ' + (data.email || tokenSlug) + ' déconnecté de Google (accès révoqué ou expiré) : '
+        + 'à reconnecter depuis admin-email-auth.html';
+    }
+    throw err;
+  }
   const newExpiresAt = new Date(now + (refreshed.expiresIn * 1000));
 
   await ref.update({
@@ -124,6 +142,7 @@ async function getValidAccessToken(tokenSlug) {
     expiresAt: admin.firestore.Timestamp.fromDate(newExpiresAt),
     lastRefreshedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
+  await mailHealth.markHealthy(tokenSlug);
 
   return { accessToken: refreshed.accessToken, email: data.email };
 }

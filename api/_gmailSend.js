@@ -31,6 +31,7 @@
 // ==========================================================================
 
 const { db } = require('./_firebaseAdmin');
+const mailHealth = require('./_mailHealth');
 
 // Récupère client_id + client_secret depuis _config (essaie oauth puis oauth_calendar)
 async function loadOauthConfig() {
@@ -64,11 +65,14 @@ async function loadAccountTokens(accountKey) {
     accessToken: d.accessToken || null,
     refreshToken: d.refreshToken,
     email: d.email || null,
+    lastSuccessAt: d.accessTokenRefreshedAt || d.connectedAt || null,
   };
 }
 
 // Refresh access_token via Google OAuth
-async function refreshAccessToken(accountKey, refreshToken, oauth) {
+// `health` : { email, lastSuccessAt, noAlert } — transmis à _mailHealth sur un
+// invalid_grant (accès révoqué / expiré côté Google, incident du 10/10/2026).
+async function refreshAccessToken(accountKey, refreshToken, oauth, health) {
   const params = new URLSearchParams({
     client_id: oauth.clientId,
     client_secret: oauth.clientSecret,
@@ -82,6 +86,18 @@ async function refreshAccessToken(accountKey, refreshToken, oauth) {
   });
   const data = await resp.json();
   if (!resp.ok || !data.access_token) {
+    if (mailHealth.isRevokedResponse(data)) {
+      const h = health || {};
+      await mailHealth.markRevoked(accountKey, {
+        error: JSON.stringify(data),
+        email: h.email || '',
+        source: 'gmailSend',
+        lastSuccessAt: h.lastSuccessAt || null,
+        noAlert: !!h.noAlert,
+      });
+      throw new Error('Compte Gmail ' + (h.email || accountKey) + ' déconnecté de Google (accès révoqué ou expiré) : '
+        + 'à reconnecter depuis admin-email-auth.html');
+    }
     throw new Error('Refresh token Gmail failed pour ' + accountKey + ' : ' + JSON.stringify(data));
   }
   // Sauvegarde le nouveau access_token
@@ -90,6 +106,7 @@ async function refreshAccessToken(accountKey, refreshToken, oauth) {
     accessTokenExpiresAt: new Date(Date.now() + (data.expires_in || 3600) * 1000),
     accessTokenRefreshedAt: new Date(),
   }, { merge: true });
+  await mailHealth.markHealthy(accountKey);
   return data.access_token;
 }
 
@@ -219,9 +236,11 @@ async function gmailApiSend(accessToken, mimeMessage) {
  * @param {string} [params.cc] — copie(s), séparées par des virgules (optionnel)
  * @param {Array}  [params.attachments] — [{ filename, mimeType, content }] où
  *                 content est un Buffer ou une chaîne (optionnel)
+ * @param {boolean} [params._healthAlert] — usage interne de _mailHealth : l'email
+ *                 est lui-même une alerte, pas de nouvelle alerte s'il échoue
  * @returns {Promise<{ok: boolean, messageId?: string, error?: string}>}
  */
-async function sendEmailFromAccount({ accountKey, to, cc, subject, bodyHtml, bodyText, replyTo, attachments }) {
+async function sendEmailFromAccount({ accountKey, to, cc, subject, bodyHtml, bodyText, replyTo, attachments, _healthAlert }) {
   if (!accountKey || !to || !subject) {
     throw new Error('sendEmailFromAccount : accountKey, to et subject sont requis');
   }
@@ -252,7 +271,9 @@ async function sendEmailFromAccount({ accountKey, to, cc, subject, bodyHtml, bod
 
   // Refresh + retry
   if (needsRefresh) {
-    accessToken = await refreshAccessToken(accountKey, tokens.refreshToken, oauth);
+    accessToken = await refreshAccessToken(accountKey, tokens.refreshToken, oauth, {
+      email: tokens.email, lastSuccessAt: tokens.lastSuccessAt, noAlert: !!_healthAlert,
+    });
     const mime = buildMime({ from: fromAddr, to, cc, subject, bodyHtml, bodyText, replyTo, attachments });
     const result = await gmailApiSend(accessToken, mime);
     if (result.ok) {
@@ -264,4 +285,4 @@ async function sendEmailFromAccount({ accountKey, to, cc, subject, bodyHtml, bod
   return { ok: false, error: 'Unknown send failure' };
 }
 
-module.exports = { sendEmailFromAccount };
+module.exports = { sendEmailFromAccount, loadOauthConfig };

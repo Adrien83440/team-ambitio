@@ -1547,6 +1547,8 @@
   // users en status 'pending_activation' (mot de passe choisi via
   // set-password.html, compte encore verrouillé).
   // ─────────────────────────────────────────────────────────────────────────
+  // + COMPTES GOOGLE DÉCONNECTÉS (15/10/2026) : alteore-mail-health.js,
+  // encart admin tant qu'un compte figure dans _config/mail_health.
   function injectPendingUsersWidget() {
     if (window.__pendingUsersWidgetInjected) return;
     window.__pendingUsersWidgetInjected = true;
@@ -1556,6 +1558,13 @@
       script.defer = true;
       script.setAttribute('data-pending-users-widget', '1');
       document.head.appendChild(script);
+    }
+    if (!document.querySelector('script[data-mail-health-widget]')) {
+      var mh = document.createElement('script');
+      mh.src = 'alteore-mail-health.js';
+      mh.defer = true;
+      mh.setAttribute('data-mail-health-widget', '1');
+      document.head.appendChild(mh);
     }
   }
 
