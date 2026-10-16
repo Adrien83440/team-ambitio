@@ -8,7 +8,8 @@
 <meta name="description" content="Business Phénix : 6 mois d'accompagnement individuel pour que votre entreprise vous paie. 10 coachings avec un coach référent, 3 moteurs : Piloter, Se rémunérer, Vendre.">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  /* Plaquette Business Phénix — diffusable AVANT le closing : aucun prix.
+  /* Plaquette Business Phénix — à remettre au client ou au prospect : aucun prix
+     (les prix sont annoncés uniquement par le closer, en rendez-vous).
      Charte : orange Business Phénix. Page autonome, imprimable (A4). */
   :root{
     --ink:#1B1410; --soft:#4A3F38; --mut:#7A6D64; --line:#EFE3D8; --bg:#FBF7F3; --card:#FFFFFF;
@@ -41,24 +42,60 @@
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
   .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px}
+  .card p{font-size:15px;color:var(--soft)}
   .card ul{list-style:none}
   .card li{position:relative;padding-left:22px;margin-bottom:8px;color:var(--soft)}
   .card li::before{content:'✓';position:absolute;left:0;top:0;color:var(--bp);font-weight:800}
   .card li strong{color:var(--ink)}
 
+  .pointb{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center;margin-top:6px}
+  .pointb .card{text-align:center}
+  .pointb .card b{display:block;font-family:var(--display);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--mut);margin-bottom:6px}
+  .pointb .card span{font-family:var(--display);font-weight:700;font-size:19px;line-height:1.3;color:var(--ink)}
+  .pointb .card.b{background:var(--bp-soft);border-color:var(--bp-line)}
+  .pointb .card.b b{color:var(--bp)}
+  .pointb .arrow{font-family:var(--display);font-weight:800;font-size:28px;color:var(--bp)}
+
   .mot{border-top:5px solid var(--bp)}
   .mot .n{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:10px;background:var(--bp);color:#fff;font-family:var(--display);font-weight:800;margin-bottom:12px}
   .mot .q{font-family:var(--display);font-weight:600;color:var(--bp-dk);margin-bottom:8px}
-  .mot p{font-size:15px;color:var(--soft)}
+  .mot .s{font-family:var(--display);font-size:12.5px;font-weight:700;color:var(--mut);letter-spacing:.06em;text-transform:uppercase;margin-top:10px;margin-bottom:0}
 
-  .frame{display:flex;gap:10px;align-items:stretch;margin-top:6px;flex-wrap:wrap}
+  .team .role{font-family:var(--display);font-size:11.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--bp);margin-bottom:4px}
+  .team h3{margin-bottom:8px}
+
+  .seances{width:100%;border-collapse:separate;border-spacing:0;background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-top:8px;font-size:15px}
+  .seances th{font-family:var(--display);font-size:12px;letter-spacing:.12em;text-transform:uppercase;text-align:left;color:var(--mut);background:var(--bp-soft);padding:11px 14px;border-bottom:1px solid var(--bp-line)}
+  .seances td{padding:11px 14px;border-bottom:1px solid var(--line);color:var(--soft);vertical-align:top}
+  .seances tr:last-child td{border-bottom:none}
+  .seances td.n{width:56px}
+  .seances td.n span{display:inline-block;font-family:var(--display);font-weight:800;font-size:13px;color:#fff;background:var(--bp);border-radius:8px;padding:3px 8px;white-space:nowrap}
+  .seances td.n span.z{background:var(--bp-dk)}
+  .seances td b{color:var(--ink);font-weight:600}
+  .seances .m{display:inline-block;font-size:12px;font-weight:700;color:var(--bp-dk);background:var(--bp-soft);border:1px solid var(--bp-line);border-radius:999px;padding:1px 8px;margin-left:6px;white-space:nowrap}
+
+  .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;counter-reset:s}
+  .step{counter-increment:s;background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px 16px}
+  .step::before{content:counter(s);display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;background:var(--bp-soft);color:var(--bp-dk);font-family:var(--display);font-weight:800;margin-bottom:10px}
+  .step b{display:block;font-family:var(--display);font-size:16px;margin-bottom:4px}
+  .step span{font-size:14.5px;color:var(--soft);line-height:1.45;display:block}
+
+  .frame{display:flex;gap:10px;align-items:stretch;margin-top:14px;flex-wrap:wrap}
   .frame div{flex:1 1 140px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;text-align:center;font-size:14px;color:var(--soft)}
   .frame b{display:block;font-family:var(--display);color:var(--ink);font-size:15px}
   .frame .c{background:var(--bp-soft);border-color:var(--bp-line)}
 
-  .jalons{counter-reset:j;list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:8px 18px;margin-top:8px}
-  .jalons li{counter-increment:j;display:flex;gap:12px;align-items:flex-start;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:15px;color:var(--soft)}
-  .jalons li::before{content:'J' counter(j);flex:none;font-family:var(--display);font-weight:800;font-size:13px;color:#fff;background:var(--bp);border-radius:8px;padding:3px 7px;margin-top:2px}
+  .between{background:var(--night);color:#F4E6DB;border-radius:22px;padding:30px 28px;display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start}
+  .between h2{color:#fff}
+  .between .kick{color:#FF9A57}
+  .between p{color:#EAD9CC}
+  .between ul{list-style:none}
+  .between li{position:relative;padding-left:22px;margin-bottom:10px}
+  .between li::before{content:'●';position:absolute;left:2px;top:0;color:#FF9A57;font-size:12px}
+  .between li strong{color:#fff}
+
+  .tools{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .tools span{background:var(--bp-soft);border:1px solid var(--bp-line);color:var(--bp-dk);border-radius:999px;padding:5px 12px;font-size:14px;font-weight:600}
 
   .who{background:var(--night);color:#F4E6DB;border-radius:22px;padding:30px 28px}
   .who h2{color:#fff}
@@ -78,8 +115,12 @@
 
   @media (max-width:820px){
     .keys{grid-template-columns:1fr 1fr}
-    .grid2,.grid3,.jalons{grid-template-columns:1fr}
+    .grid2,.grid3,.between{grid-template-columns:1fr}
+    .steps{grid-template-columns:1fr 1fr}
+    .pointb{grid-template-columns:1fr}
+    .pointb .arrow{transform:rotate(90deg);justify-self:center}
     .who ul{columns:1}
+    .seances th.m2,.seances td.m2{display:none}
   }
   @media print{
     @page{size:A4;margin:12mm}
@@ -87,9 +128,9 @@
     *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .hero{padding:30px 0 28px}
     section{padding-top:24px}
-    .card,.jalons li,.who,.cta,.key{break-inside:avoid;page-break-inside:avoid}
+    .card,.step,.seances tr,.between,.who,.cta,.key{break-inside:avoid;page-break-inside:avoid}
     h2,h3{break-after:avoid;page-break-after:avoid}
-    #parcours{break-before:page;page-break-before:always}
+    #equipe,#parcours,#cadre{break-before:page;page-break-before:always}
     .btn{background:var(--bp) !important;color:#fff !important}
   }
 </style>
@@ -119,6 +160,17 @@
   </section>
 
   <section>
+    <div class="kick">L'objectif</div>
+    <h2>Votre point B, écrit dès la première séance.</h2>
+    <p class="lead">En séance 1, on pose ensemble votre point de départ et l'objectif que vous visez, y compris le salaire que vous voulez vous verser. Tout le parcours est construit pour vous y emmener.</p>
+    <div class="pointb">
+      <div class="card"><b>Point A · aujourd'hui</b><span>« Je paie tout le monde, sauf moi. »</span></div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="card b"><b>Point B · à 6 mois</b><span>Un salaire régulier, vos chiffres connus chaque mois, et les bonnes décisions.</span></div>
+    </div>
+  </section>
+
+  <section>
     <div class="kick">La méthode</div>
     <h2>3 moteurs, dans le bon ordre.</h2>
     <p class="lead">Une séance de cadrage pour partir de vos chiffres réels, trois moteurs pour remettre l'entreprise d'aplomb, une séance de bilan pour vous rendre autonome. Et la vente arrive en dernier : on ne pousse pas le chiffre d'affaires d'une entreprise qui perd de l'argent à chaque vente.</p>
@@ -128,67 +180,146 @@
         <h3>Piloter</h3>
         <p class="q">« Je sais où j'en suis chaque mois. »</p>
         <p>Lire votre bilan et votre compte de résultat, choisir vos 5 indicateurs, tenir un tableau de bord mensuel et bloquer un vrai temps de pilotage dans votre agenda.</p>
+        <p class="s">Séances 2 et 3</p>
       </div>
       <div class="card mot">
         <span class="n">2</span>
         <h3>Se rémunérer</h3>
         <p class="q">« Mon entreprise me paie. »</p>
         <p>Connaître votre marge par produit, construire vos prix, revoir vos charges, calculer votre seuil de rentabilité, anticiper votre trésorerie et fixer votre salaire.</p>
+        <p class="s">Séances 4 à 6</p>
       </div>
       <div class="card mot">
         <span class="n">3</span>
         <h3>Vendre</h3>
         <p class="q">« Je fais rentrer le CA qui manque. »</p>
         <p>Retravailler votre offre et votre panier moyen, attirer et fidéliser avec des moyens simples, et déléguer vos premières tâches pour libérer du temps de vente.</p>
+        <p class="s">Séances 7 à 9</p>
       </div>
     </div>
   </section>
 
-  <section>
-    <div class="kick">L'accompagnement</div>
-    <h2>Un coach référent, un cadre clair.</h2>
-    <div class="grid2">
+  <section id="equipe">
+    <div class="kick">Votre équipe</div>
+    <h2>Un coach référent, et une équipe autour de vous.</h2>
+    <div class="grid3 team">
       <div class="card">
-        <ul>
-          <li><strong>Un RDV audit business</strong> de 30 minutes avec un coach dans les 72 heures qui suivent votre inscription, pour faire un premier point sur votre situation.</li>
-          <li><strong>10 coachings individuels de 60 minutes</strong> avec un coach référent, le même du début à la fin.</li>
-          <li><strong>Un créneau fixe toutes les deux semaines</strong> : même jour, même heure, posé dès la première séance.</li>
-          <li><strong>Après chaque séance</strong>, un compte rendu écrit et 3 actions datées au maximum : vous savez exactement quoi faire d'ici la prochaine fois.</li>
-        </ul>
+        <div class="role">Votre coach référent</div>
+        <h3>Le même, du début à la fin</h3>
+        <p>Il réalise vos 10 séances, connaît vos chiffres et vous tient au cap. Pendant ses congés seulement, un remplaçant nommé prend le relais.</p>
       </div>
       <div class="card">
-        <ul>
-          <li><strong>Les coachings de groupe</strong> du lundi et du jeudi, pour avancer aussi avec d'autres dirigeants.</li>
-          <li><strong>La communauté Business</strong>, un espace d'échange entre dirigeants qui vivent les mêmes réalités que vous.</li>
-          <li><strong>La plateforme de suivi</strong> : votre point de départ, votre objectif, vos jalons, vos comptes rendus et vos actions, au même endroit.</li>
-          <li><strong>Des outils de pilotage</strong> prêts à l'emploi pour tenir vos chiffres.</li>
-        </ul>
+        <div class="role">Votre chargée de suivi</div>
+        <h3>Marine</h3>
+        <p>Elle organise votre démarrage, vos accès et votre planning, et répond à toutes vos questions pratiques pendant les six mois. Elle anime aussi la communauté Business.</p>
       </div>
-    </div>
-    <div class="frame" aria-label="Le rythme">
-      <div class="c"><b>Sous 72 h</b>RDV audit business</div>
-      <div><b>Sous 7 jours</b>Séance 1 : diagnostic et cadrage</div>
-      <div><b>Toutes les deux semaines</b>Vos séances, sur votre créneau</div>
-      <div class="c"><b>Avant la fin des 6 mois</b>Séance 10 : bilan</div>
+      <div class="card">
+        <div class="role">Les fondateurs</div>
+        <h3>Adrien &amp; Emily</h3>
+        <p>Ils ont construit la méthode Business Phénix. Vous les retrouvez dans la communauté Business, où ils interviennent et répondent aussi.</p>
+      </div>
     </div>
   </section>
 
   <section id="parcours">
-    <div class="kick">Le parcours à jalons</div>
-    <h2>Dix étapes concrètes, une par séance.</h2>
-    <p class="lead">Chaque séance vise un résultat que vous pouvez constater. Votre coach le valide avec vous sur la plateforme de suivi.</p>
-    <ol class="jalons">
-      <li>Votre point de départ et votre objectif posés, votre créneau fixé</li>
-      <li>Un tableau de bord mensuel en place</li>
-      <li>Votre première revue mensuelle des chiffres, tenue seul</li>
-      <li>Une grille de prix revue</li>
-      <li>Un plan d'économies chiffré et votre seuil de rentabilité</li>
-      <li>Le montant et la date de votre premier salaire fixés</li>
-      <li>Une offre retravaillée pour vendre ce qui fait de la marge</li>
-      <li>Un plan d'action commercial sur 90 jours</li>
-      <li>Deux tâches déléguées, avec une procédure simple</li>
-      <li>Votre plan autonome pour les 6 mois suivants</li>
-    </ol>
+    <div class="kick">Le déroulé</div>
+    <h2>Un RDV audit business, puis 10 séances.</h2>
+    <p class="lead">Chaque séance vise un résultat que vous pouvez constater : c'est votre jalon. Votre coach le valide avec vous sur la plateforme de suivi.</p>
+    <table class="seances">
+      <thead><tr><th>Séance</th><th>Ce qu'on travaille</th><th class="m2">Ce que vous avez en main à la sortie</th></tr></thead>
+      <tbody>
+        <tr><td class="n"><span class="z">Audit</span></td><td><b>RDV audit business</b>, 30 minutes avec un coach, sous 72 h, à partir de votre questionnaire de démarrage</td><td class="m2">Votre situation posée, vos documents de départ identifiés</td></tr>
+        <tr><td class="n"><span>1</span></td><td><b>Diagnostic et cadrage</b></td><td class="m2">Votre point A et votre point B posés, votre créneau fixé dans les deux agendas</td></tr>
+        <tr><td class="n"><span>2</span></td><td><b>Lire ses chiffres</b><span class="m">Piloter</span></td><td class="m2">Un tableau de bord mensuel en place, rempli avec le mois précédent</td></tr>
+        <tr><td class="n"><span>3</span></td><td><b>Le temps du dirigeant</b><span class="m">Piloter</span></td><td class="m2">Votre première revue mensuelle des chiffres, tenue seul</td></tr>
+        <tr><td class="n"><span>4</span></td><td><b>Marge par produit et construction des prix</b><span class="m">Se rémunérer</span></td><td class="m2">Une grille de prix revue, avec sa date d'application</td></tr>
+        <tr><td class="n"><span>5</span></td><td><b>Charges, seuil de rentabilité, trésorerie</b><span class="m">Se rémunérer</span></td><td class="m2">Un plan d'économies chiffré et votre seuil de rentabilité calculé</td></tr>
+        <tr><td class="n"><span>6</span></td><td><b>La rémunération du dirigeant</b><span class="m">Se rémunérer</span></td><td class="m2">Le montant et la date de votre premier salaire fixés</td></tr>
+        <tr><td class="n"><span>7</span></td><td><b>Offre et concept</b><span class="m">Vendre</span></td><td class="m2">Une offre retravaillée pour vendre ce qui fait de la marge</td></tr>
+        <tr><td class="n"><span>8</span></td><td><b>Acquisition de base</b><span class="m">Vendre</span></td><td class="m2">Un plan d'action commercial sur 90 jours</td></tr>
+        <tr><td class="n"><span>9</span></td><td><b>Premières délégations</b><span class="m">Vendre</span></td><td class="m2">Deux tâches déléguées, avec une procédure simple</td></tr>
+        <tr><td class="n"><span>10</span></td><td><b>Bilan</b></td><td class="m2">Votre point de départ et aujourd'hui comparés, votre plan autonome pour les 6 mois suivants</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <div class="kick">Une séance</div>
+    <h2>60 minutes, sur vos chiffres réels.</h2>
+    <p class="lead">Chaque séance se déroule en visio, avec votre coach référent. Pas de théorie, pas de vidéo à regarder : on travaille sur votre entreprise.</p>
+    <div class="steps">
+      <div class="step"><b>Où en êtes-vous ?</b><span>Vos chiffres du moment et les actions de la dernière séance.</span></div>
+      <div class="step"><b>Le thème du jour</b><span>Le sujet de la séance, appliqué à votre situation.</span></div>
+      <div class="step"><b>Trois actions</b><span>Datées, à mener d'ici la séance suivante. Trois au maximum.</span></div>
+      <div class="step"><b>Le compte rendu</b><span>Écrit, déposé sur votre plateforme de suivi avec vos actions.</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="between">
+      <div>
+        <div class="kick">Entre deux séances</div>
+        <h2>Deux semaines pour passer à l'action.</h2>
+        <p>Le rythme est pensé pour ça : une séance toutes les deux semaines, le temps d'appliquer vos trois actions sur votre entreprise avant le rendez-vous suivant. Et vous n'êtes pas seul pendant ce temps.</p>
+      </div>
+      <ul>
+        <li><strong>Les coachings de groupe</strong> du lundi à 14 h et du jeudi à 12 h 30, pour avancer avec d'autres dirigeants.</li>
+        <li><strong>La communauté Business</strong>, un espace d'échange entre dirigeants qui vivent les mêmes réalités que vous, animé par Marine, où Adrien et Emily répondent aussi.</li>
+        <li><strong>Marine</strong>, pour toutes vos questions pratiques : accès, planning, plateforme.</li>
+        <li><strong>Votre plateforme de suivi</strong>, pour retrouver vos comptes rendus, vos actions et vos jalons.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <div class="kick">Ce qui est inclus</div>
+    <h2>Tout ce que vous trouverez en Business.</h2>
+    <div class="grid2">
+      <div class="card">
+        <ul>
+          <li><strong>Le RDV audit business</strong> de 30 minutes avec un coach, dans les 72 heures qui suivent votre inscription.</li>
+          <li><strong>10 coachings individuels de 60 minutes</strong> avec votre coach référent.</li>
+          <li><strong>Un compte rendu écrit et 3 actions datées</strong> après chaque séance.</li>
+          <li><strong>Les coachings de groupe</strong> du lundi et du jeudi.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <ul>
+          <li><strong>La communauté Business</strong>, animée par Marine, avec Adrien et Emily.</li>
+          <li><strong>La plateforme de suivi</strong> : votre point de départ, votre objectif, vos jalons, vos comptes rendus et vos actions, au même endroit.</li>
+          <li><strong>Les outils de pilotage du Vault</strong>, prêts à l'emploi pour tenir vos chiffres.</li>
+        </ul>
+        <div class="tools"><span>Tableau de bord dirigeant</span><span>Audit rentabilité et trésorerie</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="cadre">
+    <div class="kick">Le cadre</div>
+    <h2>Des règles simples, connues dès le départ.</h2>
+    <div class="grid3">
+      <div class="card"><h3>Un créneau fixe</h3><p>Posé en séance 1 : même jour, même heure, toutes les deux semaines, inscrit dans votre agenda et dans celui de votre coach.</p></div>
+      <div class="card"><h3>De la marge pour les imprévus</h3><p>13 créneaux sur la période pour 10 séances : trois créneaux libres pour vos vacances et vos imprévus.</p></div>
+      <div class="card"><h3>Report jusqu'à 48 h avant</h3><p>En dessous, ou en cas d'absence, la séance est comptée comme utilisée. Les séances non utilisées à la fin des 6 mois ne sont pas reportées.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="kick">Les premiers jours</div>
+    <h2>Un démarrage rapide et cadré.</h2>
+    <div class="frame" aria-label="Le démarrage">
+      <div class="c"><b>Les 3 premiers jours</b>Marine vous accueille : vos accès, votre coach référent, la communauté, les coachings de groupe</div>
+      <div><b>Sous 72 h</b>Votre RDV audit business avec un coach</div>
+      <div class="c"><b>Sous 7 jours</b>Séance 1 : diagnostic, cadrage et créneau fixé</div>
+      <div><b>Toutes les deux semaines</b>Vos séances, sur votre créneau</div>
+    </div>
+    <p class="lead" style="margin-top:16px">Avant la séance 1, Marine vous indique les documents à déposer sur votre plateforme (bilan, compte de résultat…) : on travaille dès le premier rendez-vous sur vos vrais chiffres.</p>
+  </section>
+
+  <section>
+    <div class="kick">Et après six mois</div>
+    <h2>Vous repartez autonome.</h2>
+    <p class="lead">La séance 10 compare votre point de départ et votre situation du jour, et vous laisse un plan autonome pour les six mois suivants. Vous gardez vos outils, votre tableau de bord et le réflexe de votre revue mensuelle : vous savez piloter seul.</p>
   </section>
 
   <section>
