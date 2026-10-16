@@ -157,6 +157,28 @@ body:not(.light-theme) .pl-in[type=date]{color-scheme:dark}
 .pl-ev .tx .sub{display:block;font-size:12px;color:var(--muted);margin-top:3px}
 .pl-ev.journal{opacity:.72}
 
+.pl-ev.mini{padding:5px 12px;border-radius:9px;background:transparent;border-color:transparent;border-bottom:1px solid var(--border)}
+.pl-ev.mini .tx{font-size:12px;color:var(--muted)}
+.pl-ev .tx .pg{font-size:10.5px;color:var(--muted2);margin-left:6px}
+.pl-ev details{margin-top:5px}
+.pl-ev summary{cursor:pointer;font-size:11.5px;font-weight:700;color:var(--muted);list-style:none;display:inline-flex;align-items:center;gap:4px}
+.pl-ev summary::-webkit-details-marker{display:none}
+.pl-ev summary:before{content:'▸';display:inline-block;transition:transform .15s}
+.pl-ev details[open] summary:before{transform:rotate(90deg)}
+.pl-pre{white-space:pre-wrap;word-break:break-word;font-size:12.5px;line-height:1.6;margin-top:6px;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:9px;color:var(--text)}
+.pl-ev.st-en_retard{border-color:rgba(239,68,68,.45)}
+.pl-ev.st-coche_sans_contact{border-color:rgba(251,191,36,.45)}
+.pl-rap{display:grid;grid-template-columns:60px minmax(0,1.2fr) auto minmax(0,1.6fr);gap:12px;align-items:center;padding:10px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;margin-bottom:6px;font-size:12.5px}
+.pl-rap .tm{font-family:var(--font-m);font-weight:800;font-size:13px}
+.pl-rap .nt{color:var(--muted);font-size:12px;line-height:1.5}
+.pl-t td[data-j]{cursor:pointer}
+.pl-t td[data-j]:hover{text-decoration:underline;color:#4ade80}
+.pl-ph[data-j]{cursor:pointer}
+.pl-ph[data-j]:hover b{text-decoration:underline}
+.pl-rem{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.pl-rem span{font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;background:rgba(148,163,184,.08);color:var(--muted);border:1px solid var(--border)}
+.pl-rem span.ok{color:#34d399;border-color:rgba(52,211,153,.3);background:rgba(52,211,153,.07)}
+@media (max-width:640px){.pl-rap{grid-template-columns:52px minmax(0,1fr)}.pl-rap>*:nth-child(n+3){grid-column:2}}
 .pl-locked{text-align:center;padding:80px 20px;color:var(--muted)}
 .pl-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#2e1a1a;border:1px solid rgba(239,68,68,.35);color:#fca5a5;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none;max-width:90vw}
 .pl-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -190,6 +212,7 @@ body:not(.light-theme) .pl-in[type=date]{color-scheme:dark}
   <nav class="pl-tabs">
     <button class="pl-tab on" type="button" data-tab="live">🔴 En direct</button>
     <button class="pl-tab" type="button" data-tab="activity">📊 Activité</button>
+    <button class="pl-tab" type="button" data-tab="journal">📜 Journal</button>
     <button class="pl-tab" type="button" data-tab="lead">🔎 Prospect</button>
   </nav>
 
@@ -231,6 +254,24 @@ body:not(.light-theme) .pl-in[type=date]{color-scheme:dark}
   </section>
 
   <!-- ═══ PROSPECT ═══ -->
+  <section class="pl-pane" id="paneJournal">
+    <div class="pl-filters">
+      <select class="pl-in" id="jrWho" title="Personne"></select>
+      <button class="pl-act pl-act-s" type="button" data-action="jr-prev" title="Jour précédent">‹</button>
+      <input class="pl-in" id="jrDate" type="date" title="Jour">
+      <button class="pl-act pl-act-s" type="button" data-action="jr-next" title="Jour suivant">›</button>
+      <button class="pl-act pl-act-s" type="button" data-action="jr-today">Aujourd'hui</button>
+    </div>
+    <div id="jrBanner"></div>
+    <section class="pl-kpis" id="jrKpis"></section>
+    <div class="pl-h2">Rappels prévus ce jour-là <em>· fait = vrai contact avec le prospect (30 min avant l'heure → fin de journée)</em></div>
+    <section id="jrRappels"></section>
+    <div class="pl-h2">Tout ce qui s'est passé <em>· du plus récent au plus ancien</em></div>
+    <div class="pl-kinds" id="jrCats"></div>
+    <section class="pl-tl" id="jrTl"><div class="pl-empty">Choisis une personne.</div></section>
+    <p class="pl-note">Pages et clics : relevés par Team depuis le 16/10/2026 (libellé du bouton, page, prospect concerné — jamais le contenu de ce qui est tapé). Messages : texte complet de ce qui est parti. Les e-mails envoyés directement depuis la boîte partagée strategie@ n'ont pas d'auteur et n'apparaissent que sur la fiche du prospect.</p>
+  </section>
+
   <section class="pl-pane" id="paneLead">
     <form class="pl-search" id="leadForm" autocomplete="off">
       <input class="pl-in" id="leadQ" type="search" placeholder="Nom, téléphone ou e-mail du prospect">
@@ -383,18 +424,21 @@ function setTab(t, noHash) {
   $('paneLive').className = 'pl-pane' + (t === 'live' ? ' on' : '');
   $('paneActivity').className = 'pl-pane' + (t === 'activity' ? ' on' : '');
   $('paneLead').className = 'pl-pane' + (t === 'lead' ? ' on' : '');
+  $('paneJournal').className = 'pl-pane' + (t === 'journal' ? ' on' : '');
   if (!noHash) {
-    var h = t === 'lead' && LEAD ? '#lead=' + encodeURIComponent(LEAD.lead.id) : '#' + t;
+    var h = t === 'lead' && LEAD ? '#lead=' + encodeURIComponent(LEAD.lead.id) : (t === 'journal' && JR.slug ? '#journal=' + encodeURIComponent(JR.slug) + '/' + JR.date : '#' + t);
     try { history.replaceState(null, '', h); } catch (e) { /* ignore */ }
   }
   if (t === 'live') { loadLive(); startLiveTimers(); } else { stopLiveTimers(); }
   if (t === 'activity' && !ACT) loadActivity();
+  if (t === 'journal' && !JR.data && !JR.loading) loadJournal();
   updateSub();
 }
 function updateSub() {
   var s = '';
   if (TAB === 'live') s = LIVE ? 'Actualisé à ' + parisTime(LIVE.now) + ' · rafraîchi toutes les 20 s' : 'Chargement…';
   else if (TAB === 'activity') s = ACT ? (ACT.from === ACT.to ? fmtDayLabel(ACT.from) : 'Du ' + fmtShortDay(ACT.from) + ' au ' + fmtShortDay(ACT.to)) : 'Chargement…';
+  else if (TAB === 'journal') s = JR.data && JR.data.member ? JR.data.member.name + ' · ' + fmtDayLabel(JR.data.date) : 'Journal d\'une personne, minute par minute';
   else s = LEAD ? LEAD.lead.nom || 'Prospect' : 'Historique complet d\'un prospect';
   $('plSub').textContent = s;
 }
@@ -493,7 +537,7 @@ function renderLive() {
     $('livePeople').innerHTML = members.map(function (m) {
       var t = m.today;
       return '<div class="pl-person st-' + esc(m.status) + '">' +
-        '<div class="pl-ph"><div class="pl-av" style="background:' + esc(memberColor(m)) + '">' + esc(initials(m)) + '</div>' +
+        '<div class="pl-ph" data-j="' + esc(m.slug + '|' + todayIso() + '|') + '" title="Ouvrir le journal du jour"><div class="pl-av" style="background:' + esc(memberColor(m)) + '">' + esc(initials(m)) + '</div>' +
         '<div class="pl-pn"><b>' + esc(m.name) + '</b><small>' + esc(ROLE_LABEL[m.role] || m.role || '') + '' + '</small></div></div>' +
         statusHtml(m) +
         '<div class="pl-today"><span><b>' + t.calls + '</b> appel' + (t.calls > 1 ? 's' : '') + '</span>' +
@@ -501,7 +545,7 @@ function renderLive() {
         '<span><b>' + fmtTalk(t.talkSec) + '</b> de parole</span>' +
         (t.lastCallAt ? '<span>dernier ' + esc(ago(t.lastCallAt)) + '</span>' : '') +
         (t.dmOut || t.dmIn || m.role === 'setter_ecrit' ? '<span><b>' + t.dmOut + '</b> DM envoyé' + (t.dmOut > 1 ? 's' : '') + ' · ' + t.dmIn + ' reçu' + (t.dmIn > 1 ? 's' : '') + (t.lastDmAt ? ' · dernier ' + esc(ago(t.lastDmAt)) : '') + '</span>' : '') +
-        '<span>⏱ <b>' + fmtTalk(Math.round((t.activeMs || 0) / 1000)) + '</b> connecté' + (t.firstSeenAt ? ' · depuis ' + esc(parisTime(t.firstSeenAt)) : '') + (t.sessions > 1 ? ' · ' + t.sessions + ' sessions' : '') + '</span>' +
+        '<span>⏱ <b>' + fmtTalk(Math.round((t.activeMs || 0) / 1000)) + '</b> connecté' + (t.firstSeenAt ? ' · depuis ' + esc(parisTime(t.firstSeenAt)) : '') + (t.sessions > 1 ? ' · ' + t.sessions + ' sessions' : '') + (t.clicks ? ' · ' + t.clicks + ' clics' : '') + '</span>' +
         '</div>' +
         '</div>';
     }).join('');
@@ -555,6 +599,12 @@ function rdvRow(b) {
   } else if (pr && !pr.ok && b.phase === 'live') {
     sig.push('<span class="pill pill-mute" title="' + esc(pr.message || '') + '">📹 présence indisponible</span>');
   }
+  var rm = b.reminders || {};
+  var remChips = [['confirmation_sms', 'Confirm. SMS'], ['j1_email', 'J-1 e-mail'], ['j1_sms', 'J-1 SMS'], ['h1_email', 'H-1 e-mail'], ['h1_sms', 'H-1 SMS']]
+    .filter(function (x) { return x[0] !== 'confirmation_sms' || rm[x[0]]; })
+    .map(function (x) { return '<span class="' + (rm[x[0]] ? 'ok' : '') + '">' + (rm[x[0]] ? '✓ ' : '· ') + x[1] + '</span>'; });
+  (b.waReminders || []).forEach(function (w) { remChips.push('<span class="' + (w.ok ? 'ok' : '') + '">' + (w.ok ? '✓' : '✗') + ' WhatsApp ' + esc(parisTime(w.at)) + '</span>'); });
+  parts += '<div class="pl-rem" title="Rappels automatiques envoyés au prospect">' + remChips.join('') + '</div>';
   var out = b.outcome && OUTCOME[b.outcome] ? '<span class="pill ' + OUTCOME[b.outcome][1] + '">' + OUTCOME[b.outcome][0] + '</span>' : (b.phase === 'past' ? '<span class="pill pill-warn">à statuer</span>' : '');
   return '<div class="pl-rdv ' + esc(b.outcome && b.phase === 'live' ? 'past' : b.phase) + '">' +
     '<div class="pl-rt">' + esc(b.time) + '<small>' + phaseTxt + '</small></div>' +
@@ -598,12 +648,19 @@ var COLS = [
   ['rdvSet', 'Posés', 'RDV'], ['rdvHeld', 'Tenus', 'RDV'], ['close', 'Close', 'RDV'], ['no_show', 'No-show', 'RDV'], ['pending', 'À statuer', 'RDV'],
   ['sms', 'SMS', 'Messages'], ['email', 'E-mails', 'Messages'], ['whatsapp', 'WhatsApp', 'Messages'], ['dmOut', 'DM Insta', 'Messages'],
   ['actStatus', 'Statuts', 'Fiches'], ['actBooking', 'RDV posés', 'Fiches'], ['notes', 'Notes', 'Fiches'],
-  ['activeMs', 'Temps', 'Connexion'], ['sessions', 'Sessions', 'Connexion']
+  ['rapDue', 'Prévus', 'Rappels'], ['rapDone', 'Faits', 'Rappels'], ['rapLate', 'En retard', 'Rappels'], ['rapChecked', 'Cochés sans contact', 'Rappels'],
+  ['activeMs', 'Temps', 'Connexion'], ['sessions', 'Sessions', 'Connexion'], ['clicks', 'Clics', 'Connexion']
 ];
-function cell(k, v) {
+/* Catégorie du journal ouverte par un clic sur une cellule. */
+var COL_CAT = { callsOut: 'call', callsIn: 'call', answered: 'call', convos: 'call', talkSec: 'call',
+  rdvSet: 'rdv', rdvHeld: 'rdv', close: 'rdv', no_show: 'rdv', pending: 'rdv',
+  sms: 'msg', email: 'msg', whatsapp: 'msg', dmOut: 'msg', actStatus: 'fiche', actBooking: 'fiche', notes: 'fiche',
+  rapDue: 'rappel', rapDone: 'rappel', rapLate: 'rappel', rapChecked: 'rappel', activeMs: 'nav', sessions: 'nav', clicks: 'click' };
+function cell(k, v, slug, day) {
   v = Number(v) || 0;
   var txt = k === 'talkSec' ? fmtTalk(v) : (k === 'activeMs' ? fmtTalk(Math.round(v / 1000)) : String(v));
-  return '<td' + (v ? '' : ' class="z"') + '>' + esc(txt) + '</td>';
+  var j = slug && day && v ? ' data-j="' + esc(slug + '|' + day + '|' + (COL_CAT[k] || '')) + '" title="Ouvrir le journal"' : '';
+  return '<td' + (v ? '' : ' class="z"') + j + '>' + esc(txt) + '</td>';
 }
 function sumStats(list) {
   var o = {};
@@ -628,7 +685,8 @@ function renderActivity() {
     kpi('🗓️ RDV posés', tot.rdvSet) +
     kpi('📅 RDV tenus', tot.rdvHeld + ' · ' + tot.close + ' close') +
     kpi('✉️ Messages', tot.sms + tot.email + tot.whatsapp + tot.dmOut) +
-    kpi('⏱ Temps de connexion', fmtTalk(Math.round(tot.activeMs / 1000)));
+    kpi('⏱ Temps de connexion', fmtTalk(Math.round(tot.activeMs / 1000))) +
+    kpi('🔔 Rappels', tot.rapDue + ' prévus · ' + tot.rapDone + ' faits' + (tot.rapLate ? ' · ' + tot.rapLate + ' en retard' : ''));
 
   var groups = [];
   COLS.forEach(function (c) {
@@ -644,13 +702,13 @@ function renderActivity() {
   members.forEach(function (m) {
     var open = !!actOpen[m.slug];
     h += '<tr class="mem' + (open ? ' open' : '') + '" data-mem="' + esc(m.slug) + '"><td class="l"><span class="who"><span class="car">›</span><i style="background:' + esc(memberColor(m)) + '"></i>' + esc(m.name) + ' <small>' + esc(ROLE_LABEL[m.role] || m.role || '') + '</small></span></td>' +
-      COLS.map(function (c) { return cell(c[0], m.totals[c[0]]); }).join('') + '</tr>';
+      COLS.map(function (c) { return cell(c[0], m.totals[c[0]], m.slug, A.from === A.to ? A.from : null); }).join('') + '</tr>';
     if (open) {
       days.forEach(function (day) {
         var s = m.days[day];
         if (!s && days.length > 1) return;
         s = s || {};
-        h += '<tr class="day"><td class="l">' + esc(fmtShortDay(day)) + '</td>' + COLS.map(function (c) { return cell(c[0], s[c[0]]); }).join('') + '</tr>';
+        h += '<tr class="day"><td class="l">' + esc(fmtShortDay(day)) + '</td>' + COLS.map(function (c) { return cell(c[0], s[c[0]], m.slug, day); }).join('') + '</tr>';
       });
     }
   });
@@ -730,11 +788,126 @@ function hasRicher() {
   return LEAD.events.some(function (ev) { return ev.kind !== 'journal' && ev.kind !== 'creation'; });
 }
 
+/* ═══ JOURNAL ═══════════════════════════════════════════════════════════ */
+var JR = { slug: '', date: '', data: null, loading: false, cats: {}, limit: 1500, members: null };
+var JR_CATS = [['rappel', '🔔 Rappels'], ['call', '📞 Appels'], ['msg', '✉️ Messages'], ['fiche', '📝 Fiches'], ['rdv', '📅 RDV'], ['nav', '🧭 Pages'], ['click', '👆 Clics']];
+var JR_ICON = { page: '🧭', leave: '↩︎', click: '👆', change: '🔽', call: '📞', sms: '📱', email: '✉️', whatsapp: '💬', dm_out: '📸', dm_in: '📥',
+  note: '📝', action: '⚡', booking_set: '🗓️', booking: '📅', rappel: '🔔' };
+var PAGE_NAMES = { 'sales-leads': 'Leads Live', 'sales-crm': 'Pipeline', 'sales-contact': 'Fiche CRM', 'sales-dialer': 'Dialer', 'sales-setting': 'Set NB',
+  'sales-closing': 'Close SB', 'sales-eod': 'EOD', 'booking-admin': 'Booking', 'sales-rdv': 'Rendez-vous', 'whatsapp': 'WhatsApp', 'sales-appels': 'Réécoutes',
+  'sales-retargeting': 'Retargeting', 'sales-clients': 'Clients', 'sales-signatures': 'Signatures', 'payments': 'Paiements', 'sales-dashboard': 'Dashboard Sales',
+  'sales-funnel': 'Funnel', 'sales-commissions': 'Commissions', 'sales-projections': 'Projections', 'sales-equipe': 'Équipe Sales', 'admin-pilotage': 'Pilotage équipe',
+  'sandbox-closer': 'Bac à sable closer', 'formations': 'Formations', 'documents': 'Documents', 'index': 'Accueil', 'aide': 'Aide' };
+function pageName(p) { return PAGE_NAMES[p] || pageLabel(p); }
+
+function openJournal(slug, date, cat) {
+  JR.slug = slug || JR.slug;
+  JR.date = date || JR.date || todayIso();
+  JR.cats = {};
+  if (cat) JR.cats[cat] = true;
+  JR.limit = 1500;
+  try { if (JR.slug) localStorage.setItem('pilotage_jr_slug', JR.slug); } catch (e) { /* ignore */ }
+  JR.loading = true; // setTab ne relance pas un 2e chargement
+  if (TAB !== 'journal') setTab('journal', true);
+  try { history.replaceState(null, '', '#journal=' + encodeURIComponent(JR.slug) + '/' + JR.date); } catch (e) { /* ignore */ }
+  loadJournal();
+}
+function loadJournal() {
+  if (!JR.date) JR.date = todayIso();
+  if (!JR.slug) { try { JR.slug = localStorage.getItem('pilotage_jr_slug') || ''; } catch (e) { /* ignore */ } }
+  JR.loading = true;
+  $('jrDate').value = JR.date;
+  $('jrTl').innerHTML = '<div class="pl-empty">Chargement du journal…</div>';
+  $('jrRappels').innerHTML = '';
+  $('jrKpis').innerHTML = '';
+  api({ action: 'journal', slug: JR.slug, date: JR.date }).then(function (j) {
+    JR.data = j;
+    JR.members = j.members || JR.members;
+    if (!j.member && JR.members && JR.members.length) {
+      var first = JR.members.filter(function (m) { return ROLE_LABEL[m.role] && m.role !== 'admin'; })[0] || JR.members[0];
+      JR.slug = first.slug;
+      JR.loading = false;
+      loadJournal();
+      return;
+    }
+    renderJournal();
+  }).catch(function (e) {
+    $('jrTl').innerHTML = '<div class="pl-empty">Erreur : ' + esc(e.message) + '</div>';
+  }).then(function () { JR.loading = false; updateSub(); });
+}
+function renderJournal() {
+  var J = JR.data;
+  if (!J) return;
+  $('jrWho').innerHTML = (JR.members || []).map(function (m) {
+    return '<option value="' + esc(m.slug) + '"' + (m.slug === JR.slug ? ' selected' : '') + '>' + esc(m.name) + ' — ' + esc(ROLE_LABEL[m.role] || m.role || '') + '</option>';
+  }).join('');
+  $('jrDate').value = J.date;
+  var S = J.summary || {};
+  var rp = S.rappels || {};
+  $('jrKpis').innerHTML =
+    kpi('⏱ Connexion', fmtTalk(Math.round((S.activeMs || 0) / 1000)) + (S.firstSeenAt ? ' · ' + parisTime(S.firstSeenAt) + '→' + parisTime(S.lastSeenAt) : '')) +
+    kpi('👆 Clics · pages', (S.clicks || 0) + ' · ' + (S.pages || 0)) +
+    kpi('📞 Appels', (S.calls || 0) + ' · ' + (S.answered || 0) + ' décrochés · ' + fmtTalk(S.talkSec)) +
+    kpi('✉️ Envoyés', (S.sms || 0) + ' SMS · ' + (S.email || 0) + ' e-mails · ' + (S.whatsapp || 0) + ' WA' + (S.dm ? ' · ' + S.dm + ' DM' : '')) +
+    kpi('📝 Fiches', (S.actions || 0) + ' actions · ' + (S.notes || 0) + ' notes') +
+    kpi('📅 RDV', (S.rdvSet || 0) + ' posés · ' + (S.rdvHeld || 0) + ' tenus') +
+    kpi('🔔 Rappels', (rp.due || 0) + ' prévus · ' + (rp.done || 0) + ' faits' + (rp.late ? ' · ' + rp.late + ' en retard' : ''));
+
+  var RAP = { fait: ['✅ Fait', 'pill-ok'], a_venir: ['⏳ À venir', 'pill-live'], coche_sans_contact: ['⚠️ Coché sans contact', 'pill-warn'], en_retard: ['🔴 En retard', 'pill-bad'] };
+  $('jrRappels').innerHTML = (J.rappels || []).length ? J.rappels.map(function (x) {
+    var st = RAP[x.status] || [x.status, 'pill-mute'];
+    return '<div class="pl-rap"><div class="tm">' + esc(parisTime(x.dueAt)) + '</div><div><b>' + leadBtn(x.leadId, x.leadName) + '</b></div>' +
+      '<div><span class="pill ' + st[1] + '">' + st[0] + '</span></div>' +
+      '<div class="nt">' + (x.contact ? esc(x.contact.kind) + ' à ' + esc(parisTime(x.contact.at)) + (x.contact.who ? ' par ' + esc(x.contact.who) : '') : 'Aucun contact relevé') +
+      (x.note ? '<br>« ' + esc(x.note) + ' »' : '') + '</div></div>';
+  }).join('') : '<div class="pl-empty" style="padding:16px">Aucun rappel programmé ce jour-là.</div>';
+
+  var counts = {};
+  (J.events || []).forEach(function (e) { counts[e.cat] = (counts[e.cat] || 0) + 1; });
+  var anyOn = Object.keys(JR.cats).some(function (k) { return JR.cats[k]; });
+  $('jrCats').innerHTML = JR_CATS.filter(function (c) { return counts[c[0]]; }).map(function (c) {
+    return '<button type="button" class="pl-kind' + (JR.cats[c[0]] ? ' on' : '') + '" data-jcat="' + c[0] + '">' + c[1] + ' <b>' + counts[c[0]] + '</b></button>';
+  }).join('');
+  var evs = (J.events || []).filter(function (e) { return !anyOn || JR.cats[e.cat]; });
+  if (!evs.length) {
+    $('jrTl').innerHTML = '<div class="pl-empty">Rien ce jour-là' + (anyOn ? ' pour ce filtre' : '') + '.</div>';
+    return;
+  }
+  var h = '';
+  evs.slice(0, JR.limit).forEach(function (e) {
+    var mini = e.cat === 'nav' || e.cat === 'click';
+    var title = esc(e.title);
+    if (e.cat === 'nav') title = esc(e.kind === 'page' ? 'Ouvre ' + pageName(e.page) : 'Quitte ' + pageName(e.page) + (e.ms ? ' après ' + fmtTalk(Math.round(e.ms / 1000)) : ''));
+    var lead = e.leadId || e.leadName ? ' · ' + leadBtn(e.leadId, e.leadName || 'fiche') : (e.number ? ' · ' + esc(telFmt(e.number)) : '');
+    var pg = e.cat === 'click' && e.page ? '<span class="pg">' + esc(pageName(e.page)) + '</span>' : '';
+    var det = '';
+    if (e.detail) {
+      var lbl = e.cat === 'call' ? 'Résumé IA de l\'appel' : (e.cat === 'msg' ? 'Voir le message' : (e.cat === 'rdv' ? 'Détails' : 'Voir le texte'));
+      det = '<details><summary>' + lbl + '</summary><div class="pl-pre">' + esc(e.detail) + '</div></details>';
+    }
+    h += '<div class="pl-ev' + (mini ? ' mini' : '') + (e.status ? ' st-' + esc(e.status) : '') + '"><div class="tm">' + esc(parisTime(e.at)) + '</div><div class="ic">' + (JR_ICON[e.kind] || '·') + '</div>' +
+      '<div class="tx">' + title + lead + pg + det + '</div></div>';
+  });
+  if (evs.length > JR.limit) h += '<button class="pl-act" type="button" data-action="jr-more" style="margin-top:8px">Afficher ' + Math.min(1500, evs.length - JR.limit) + ' de plus</button>';
+  $('jrTl').innerHTML = h;
+}
+
 /* ── Délégation d'événements ─────────────────────────────────────────── */
 document.addEventListener('click', function (e) {
   var t = e.target;
-  var el = t.closest ? t.closest('[data-tab],[data-action],[data-period],[data-mem],[data-lead],[data-kind]') : null;
+  var el = t.closest ? t.closest('[data-j],[data-jcat],[data-tab],[data-action],[data-period],[data-mem],[data-lead],[data-kind]') : null;
   if (!el) return;
+  if (el.hasAttribute('data-j')) {
+    var pj = el.getAttribute('data-j').split('|');
+    openJournal(pj[0], pj[1], pj[2] || '');
+    return;
+  }
+  if (el.hasAttribute('data-jcat')) {
+    var jc = el.getAttribute('data-jcat');
+    JR.cats[jc] = !JR.cats[jc];
+    renderJournal();
+    return;
+  }
   if (el.hasAttribute('data-tab')) { setTab(el.getAttribute('data-tab')); return; }
   if (el.hasAttribute('data-lead')) { e.preventDefault(); openLead(el.getAttribute('data-lead')); return; }
   if (el.hasAttribute('data-kind')) {
@@ -766,11 +939,21 @@ document.addEventListener('click', function (e) {
   if (a === 'refresh') {
     if (TAB === 'live') loadLive();
     else if (TAB === 'activity') loadActivity();
+    else if (TAB === 'journal') loadJournal();
     else if (LEAD) openLead(LEAD.lead.id);
   } else if (a === 'act-apply') {
     loadActivity();
+  } else if (a === 'jr-prev' || a === 'jr-next') {
+    openJournal(JR.slug, addDays(JR.date, a === 'jr-prev' ? -1 : 1), '');
+  } else if (a === 'jr-today') {
+    openJournal(JR.slug, todayIso(), '');
+  } else if (a === 'jr-more') {
+    JR.limit += 1500;
+    renderJournal();
   }
 });
+$('jrWho').addEventListener('change', function () { openJournal(this.value, JR.date, ''); });
+$('jrDate').addEventListener('change', function () { if (this.value) openJournal(JR.slug, this.value, ''); });
 $('leadForm').addEventListener('submit', function (e) {
   e.preventDefault();
   searchLeads($('leadQ').value);
@@ -789,7 +972,10 @@ firebase.auth().onAuthStateChanged(function (user) {
   $('mainView').style.display = '';
   var h = String(window.location.hash || '');
   var m = /^#lead=([A-Za-z0-9_-]+)$/.exec(h);
+  var mj = /^#journal=([A-Za-z0-9_-]+)\/(\d{4}-\d{2}-\d{2})$/.exec(h);
   if (m) { setTab('lead', true); openLead(m[1]); }
+  else if (mj) openJournal(mj[1], mj[2], '');
+  else if (h === '#journal') setTab('journal');
   else if (h === '#activity') setTab('activity');
   else setTab('live');
 });

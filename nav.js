@@ -1705,6 +1705,146 @@
       }).then(function () { sending = false; });
     }
 
+    // ─── JOURNAL DES CLICS ET DES PAGES (16/10/2026, module Pilotage équipe) ──
+    // Chaque page ouverte, chaque clic sur un bouton / lien / onglet / case,
+    // chaque choix dans une liste déroulante : libellé visible de l'élément,
+    // page, et prospect concerné quand l'élément le porte (data-lead…, data-id
+    // dans Leads Live / Pipeline, ou ?leadId= dans l'URL). JAMAIS le contenu de
+    // ce qui est tapé dans un champ. Tampon en mémoire + localStorage (survit
+    // au changement de page), envoyé toutes les 30 s par lots à
+    // /api/user-activity { action:'events' } → user_events (Admin SDK).
+    // Lu par admin-pilotage.html (onglet Journal). Silencieux en cas d'erreur.
+    var EV_LS = 'ambitio_ev_buf';
+    var EV_FLUSH_MS = 30 * 1000;
+    var EV_MAX_BUF = 400;
+    var EV_SEL = 'button,a,[role="button"],[role="tab"],[role="menuitem"],[data-action],summary,' +
+      'input[type="checkbox"],input[type="radio"],input[type="submit"],input[type="button"],[onclick]';
+    var EV_LEAD_PAGES = { 'sales-leads': 1, 'sales-crm': 1, 'sales-contact': 1, 'sales-retargeting': 1, 'sales-clients': 1 };
+    var evBuf = [];
+    var evSending = false;
+    var pageShownAt = (document.visibilityState === 'visible') ? Date.now() : null;
+    var pageVisibleMs = 0;
+    try { evBuf = JSON.parse(localStorage.getItem(EV_LS) || '[]') || []; } catch (_) { evBuf = []; }
+    if (!(evBuf instanceof Array)) evBuf = [];
+
+    function evSave() {
+      try { localStorage.setItem(EV_LS, JSON.stringify(evBuf.slice(-EV_MAX_BUF))); } catch (_) {}
+    }
+    function evClean(v, n) {
+      return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n || 80);
+    }
+    function evLabel(el) {
+      var t = el.getAttribute('aria-label') || el.getAttribute('title') || '';
+      if (!t) {
+        var tag = el.tagName;
+        if (tag === 'INPUT') {
+          var ty = (el.getAttribute('type') || '').toLowerCase();
+          if (ty === 'submit' || ty === 'button') t = el.value;
+          else {
+            var lab = el.id ? document.querySelector('label[for="' + el.id.replace(/"/g, '') + '"]') : null;
+            t = (lab && (lab.innerText || lab.textContent)) || (el.closest('label') && (el.closest('label').innerText || '')) || el.name || el.id || ty;
+          }
+        } else {
+          t = el.innerText || el.textContent || '';
+        }
+      }
+      return evClean(t, 80);
+    }
+    function evLead(el) {
+      var x = el.closest('[data-lead],[data-lead-id],[data-leadid]');
+      if (x) return x.getAttribute('data-lead') || x.getAttribute('data-lead-id') || x.getAttribute('data-leadid');
+      if (EV_LEAD_PAGES[pageName]) {
+        var y = el.closest('[data-id]');
+        if (y) return y.getAttribute('data-id');
+      }
+      try {
+        var q = new URLSearchParams(window.location.search);
+        return q.get('leadId') || q.get('lead') || (pageName === 'sales-contact' ? q.get('id') : null);
+      } catch (_) { return null; }
+    }
+    function evPush(e) {
+      e.t = Date.now();
+      e.p = pageName;
+      evBuf.push(e);
+      if (evBuf.length > EV_MAX_BUF) evBuf = evBuf.slice(-EV_MAX_BUF);
+      evSave();
+    }
+    function evFlush(keep) {
+      if (evSending || !evBuf.length) return;
+      var user = getUser();
+      if (!user) return;
+      var batch = evBuf.slice(0, 150);
+      evSending = true;
+      Promise.resolve(user.getIdToken()).then(function (token) {
+        return fetch('/api/user-activity', {
+          method: 'POST',
+          keepalive: !!keep,
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ action: 'events', events: batch })
+        });
+      }).then(function (resp) {
+        if (!resp || !resp.ok) throw new Error('http ' + (resp && resp.status));
+        evBuf = evBuf.slice(batch.length);
+        evSave();
+      }).catch(function () { /* on réessaiera au prochain envoi */ })
+        .then(function () { evSending = false; });
+    }
+    document.addEventListener('click', function (e) {
+      try {
+        var t = e.target;
+        var el = t && t.closest ? t.closest(EV_SEL) : null;
+        if (!el) return;
+        var ev = { k: 'click', l: evLabel(el) };
+        var a = el.getAttribute('data-action') || el.getAttribute('data-tab') || '';
+        if (a) ev.a = evClean(a, 40);
+        if (el.tagName === 'A' && el.getAttribute('href')) {
+          var href = el.getAttribute('href');
+          if (href.charAt(0) !== '#' && !/^javascript:/i.test(href)) ev.h = evClean(href.split('?')[0], 120);
+        }
+        if (el.tagName === 'INPUT' && (el.type === 'checkbox' || el.type === 'radio')) ev.v = el.checked ? 'coché' : 'décoché';
+        var lead = evLead(el);
+        if (lead) ev.lead = evClean(lead, 80);
+        if (!ev.l && !ev.a && !ev.h) return;
+        evPush(ev);
+      } catch (_) {}
+    }, true);
+    document.addEventListener('change', function (e) {
+      try {
+        var el = e.target;
+        if (!el || el.tagName !== 'SELECT') return;
+        var opt = el.options && el.selectedIndex >= 0 ? el.options[el.selectedIndex] : null;
+        var ev = { k: 'change', l: evLabel(el) || evClean(el.name || el.id, 40), v: evClean(opt ? (opt.text || opt.value) : '', 80) };
+        var lead = evLead(el);
+        if (lead) ev.lead = evClean(lead, 80);
+        evPush(ev);
+      } catch (_) {}
+    }, true);
+    function evPageMs() {
+      var ms = pageVisibleMs;
+      if (pageShownAt) ms += Date.now() - pageShownAt;
+      return Math.round(ms);
+    }
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') pageShownAt = Date.now();
+      else if (pageShownAt) { pageVisibleMs += Date.now() - pageShownAt; pageShownAt = null; evFlush(true); }
+    });
+    window.addEventListener('pagehide', function () {
+      evPush({ k: 'leave', ms: evPageMs() });
+      evFlush(true);
+    });
+    setInterval(function () { evFlush(false); }, EV_FLUSH_MS);
+    var evPageLogged = false;
+    function evStart() {
+      if (evPageLogged) return;
+      evPageLogged = true;
+      var lead = null;
+      try { var q = new URLSearchParams(window.location.search); lead = q.get('leadId') || q.get('lead') || (pageName === 'sales-contact' ? q.get('id') : null); } catch (_) {}
+      var ev = { k: 'page', l: evClean(document.title, 80) };
+      if (lead) ev.lead = evClean(lead, 80);
+      evPush(ev);
+      setTimeout(function () { evFlush(false); }, 3000);
+    }
+
     document.addEventListener('visibilitychange', function () {
       if (document.visibilityState === 'visible') {
         visibleSince = Date.now();
@@ -1730,6 +1870,7 @@
       if (!getUser()) return false;
       started = true;
       beat('load');
+      evStart();
       return true;
     }
     if (tryStart()) return;

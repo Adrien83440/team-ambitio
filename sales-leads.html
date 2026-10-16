@@ -6003,6 +6003,16 @@ document.addEventListener('click', function(e) {
     var fdLead = allLeads.find(function(l) { return l.id === fdId; });
     if (fdLead && fdLead.followUps && fdLead.followUps[fdIdx] !== undefined) {
       fdLead.followUps[fdIdx].done = !fdLead.followUps[fdIdx].done;
+      /* Trace de qui coche et quand (16/10/2026, module Pilotage équipe :
+         rappel « fait » vs « coché sans contact »). */
+      if (fdLead.followUps[fdIdx].done) {
+        var fdMe = window.AlteoreFlow ? window.AlteoreFlow.me() : null;
+        fdLead.followUps[fdIdx].doneAt = new Date().toISOString();
+        fdLead.followUps[fdIdx].doneBy = fdMe ? (fdMe.resolved ? fdMe.slug : fdMe.name) : null;
+      } else {
+        delete fdLead.followUps[fdIdx].doneAt;
+        delete fdLead.followUps[fdIdx].doneBy;
+      }
       db.collection('leads').doc(fdId).update({
         followUps: fdLead.followUps,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()

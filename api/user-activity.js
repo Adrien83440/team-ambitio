@@ -42,6 +42,16 @@
 //   POST { action: 'purge', dryRun: true }    → admin : aperçu, rien n'est écrit
 //   POST { action: 'purge', dryRun: false }   → admin : purge immédiate
 //
+// JOURNAL DES CLICS (16/10/2026) :
+//   { action: 'events', events: [{ k, t, p, l, a, h, v, lead, ms }] }  → tout utilisateur connecté
+//     Lots envoyés par nav.js : k = 'page' (page ouverte), 'leave' (page
+//     quittée, ms = temps visible), 'click' (libellé l, data-action a, lien h,
+//     état v d'une case), 'change' (liste déroulante, option v). Jamais le
+//     contenu d'un champ de saisie. Un doc par lot et par jour :
+//       user_events/{auto}  { uid, date, at, count, events[] }
+//     + compteurs `clicks` / `pages` sur le doc journalier user_activity.
+//     Même conservation (12 mois) et même purge que les docs journaliers.
+//
 // Toute l'équipe est suivie, setters compris (décision Adrien 16/10/2026) :
 // ces données alimentent aussi admin-pilotage.html (présence et temps de
 // connexion par personne).
@@ -64,6 +74,9 @@ const NEW_SESSION_CAP_MS = 5 * 60 * 1000;
 const MAX_REPORT_DAYS = 365;
 const DEFAULT_REPORT_DAYS = 30;
 const RETENTION_DAYS = 365;
+const EVENTS_COLLECTION = 'user_events';
+const EVENT_KINDS = { page: 1, leave: 1, click: 1, change: 1 };
+const MAX_EVENTS_PER_CALL = 200;
 const PURGE_MAX_DOCS = 4000;
 
 // ─── BEAT ───────────────────────────────────────────────────────────────────
@@ -246,24 +259,82 @@ async function handleReport(req, res) {
   });
 }
 
-// ─── PURGE (conservation 12 mois des docs journaliers) ──────────────────────
-async function runPurge(dryRun) {
-  const cutoff = todayIsoParis(new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000));
-  const snap = await db.collection(COLLECTION).where('date', '<', cutoff).limit(PURGE_MAX_DOCS).get();
-  const ids = [];
-  snap.forEach((d) => {
-    const s = d.data() || {};
-    if (s.kind && s.kind !== 'daily') return; // jamais un résumé
-    ids.push(d.id);
+// ─── EVENTS (journal des clics et des pages) ────────────────────────────────
+function cleanStr(v, n) {
+  return String(v == null ? '' : v).replace(/[\r\n\t]+/g, ' ').trim().slice(0, n) || null;
+}
+
+async function handleEvents(req, res) {
+  const auth = await requireAuth(req, res);
+  if (!auth) return;
+  const body = parseBody(req);
+  const raw = Array.isArray(body.events) ? body.events.slice(0, MAX_EVENTS_PER_CALL) : [];
+  const now = Date.now();
+  const byDate = {};
+  raw.forEach((e) => {
+    if (!e || !EVENT_KINDS[e.k]) return;
+    let t = Number(e.t);
+    // Tampon localStorage : un lot peut dater de la veille, jamais du futur.
+    if (!isFinite(t) || t > now + 60000 || t < now - 3 * 24 * 3600 * 1000) t = now;
+    const ev = { k: e.k, t: Math.round(t) };
+    const p = cleanPage(e.p); if (p) ev.p = p;
+    const l = cleanStr(e.l, 80); if (l) ev.l = l;
+    const a = cleanStr(e.a, 40); if (a) ev.a = a;
+    const h = cleanStr(e.h, 120); if (h) ev.h = h;
+    const v = cleanStr(e.v, 80); if (v) ev.v = v;
+    const lead = String(e.lead || '').trim();
+    if (/^[A-Za-z0-9_-]{3,80}$/.test(lead)) ev.lead = lead;
+    const ms = Number(e.ms);
+    if (e.k === 'leave' && isFinite(ms) && ms >= 0) ev.ms = Math.min(Math.round(ms), 24 * 3600 * 1000);
+    const date = todayIsoParis(new Date(ev.t));
+    (byDate[date] = byDate[date] || []).push(ev);
   });
+  const dates = Object.keys(byDate);
+  if (!dates.length) { res.status(200).json({ ok: true, stored: 0 }); return; }
+
+  const inc = admin.firestore.FieldValue.increment;
+  const batch = db.batch();
+  dates.forEach((date) => {
+    const evs = byDate[date].sort((x, y) => x.t - y.t);
+    batch.set(db.collection(EVENTS_COLLECTION).doc(), {
+      uid: auth.uid, date, at: admin.firestore.Timestamp.fromMillis(evs[0].t),
+      count: evs.length, events: evs,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    const clicks = evs.filter((x) => x.k === 'click' || x.k === 'change').length;
+    const pages = evs.filter((x) => x.k === 'page').length;
+    batch.set(db.collection(COLLECTION).doc(auth.uid + '_' + date), {
+      kind: 'daily', uid: auth.uid, date,
+      clicks: inc(clicks), pages: inc(pages),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
+  // Écriture AVANT la réponse : Vercel tue la fonction dès res.end().
+  await batch.commit();
+  res.status(200).json({ ok: true, stored: raw.length });
+}
+
+// ─── PURGE (conservation 12 mois des docs journaliers et du journal) ────────
+async function purgeCollection(name, cutoff, dryRun, keep) {
+  const snap = await db.collection(name).where('date', '<', cutoff).limit(PURGE_MAX_DOCS).get();
+  const ids = [];
+  snap.forEach((d) => { if (!keep || keep(d.data() || {})) ids.push(d.id); });
   if (!dryRun) {
     for (let i = 0; i < ids.length; i += 400) {
       const batch = db.batch();
-      ids.slice(i, i + 400).forEach((id) => batch.delete(db.collection(COLLECTION).doc(id)));
+      ids.slice(i, i + 400).forEach((id) => batch.delete(db.collection(name).doc(id)));
       await batch.commit();
     }
   }
-  return { dryRun: !!dryRun, cutoff, count: ids.length, sample: ids.slice(0, 20), more: snap.size >= PURGE_MAX_DOCS };
+  return { count: ids.length, sample: ids.slice(0, 10), more: snap.size >= PURGE_MAX_DOCS };
+}
+
+async function runPurge(dryRun) {
+  const cutoff = todayIsoParis(new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000));
+  // Jamais un résumé (kind 'summary', sans champ date de toute façon).
+  const daily = await purgeCollection(COLLECTION, cutoff, dryRun, (s) => !s.kind || s.kind === 'daily');
+  const events = await purgeCollection(EVENTS_COLLECTION, cutoff, dryRun, null);
+  return { dryRun: !!dryRun, cutoff, count: daily.count + events.count, daily, events };
 }
 
 async function handlePurge(req, res, body) {
@@ -302,6 +373,7 @@ module.exports = async (req, res) => {
     if (action === 'beat') return await handleBeat(req, res);
     if (action === 'report') return await handleReport(req, res);
     if (action === 'purge') return await handlePurge(req, res, body);
+    if (action === 'events') return await handleEvents(req, res);
     return res.status(400).json({ error: 'Unknown action: ' + (action || '(vide)') });
   } catch (e) {
     console.error('[user-activity] ' + action + ' failed:', e);

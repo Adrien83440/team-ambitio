@@ -71,6 +71,46 @@ const CALL_STATUS_FR = {
   initiated: 'sans suite', ringing: 'sans suite', 'in-progress': 'en cours', completed: 'non décroché',
   busy: 'occupé', failed: 'échec', canceled: 'annulé',
 };
+// Doublons d'appels : le dialer crée un doc au lancement, Ringover un autre à
+// la fin — l'un des deux reste coincé en 'ringing' / 'initiated' sans endedAt
+// (constaté le 16/10/2026 : « sans suite » + « décroché » à la même minute,
+// même numéro). On fusionne deux appels de la même personne vers le même
+// numéro à moins de 90 s d'écart quand l'un des deux n'est jamais terminé ;
+// on garde le plus renseigné, en lui reportant leadId / nom si besoin.
+function callScore(c) {
+  return (c.endedAt ? 4 : 0) + (c.answeredAt ? 2 : 0) + (Number(c.durationSec) ? 1 : 0) +
+    (c.status === 'completed' ? 1 : 0) + (c.aiSummary ? 1 : 0);
+}
+function isStuckCall(c) {
+  return !c.endedAt && (c.status === 'ringing' || c.status === 'initiated');
+}
+function dedupeSnap(snap, R) {
+  const items = [];
+  if (snap) snap.forEach(function (d) { items.push({ id: d.id, c: Object.assign({}, d.data() || {}) }); });
+  items.sort(function (a, b) { return toMs(a.c.initiatedAt) - toMs(b.c.initiatedAt); });
+  const keep = [];
+  const last = {};
+  items.forEach(function (x) {
+    const c = x.c;
+    const m = callMember(c, R);
+    const other = last9(c.direction === 'inbound' ? c.fromNumber : c.toNumber);
+    const key = (m ? m.slug : (c.userId || c.userName || '?')) + '|' + (other || x.id);
+    const t = toMs(c.initiatedAt);
+    const prev = last[key];
+    if (prev && Math.abs(t - prev.t) < 90000 && (isStuckCall(c) || isStuckCall(prev.x.c))) {
+      const win = callScore(c) > callScore(prev.x.c) ? x : prev.x;
+      const lose = win === x ? prev.x : x;
+      ['leadId', 'leadNameSnapshot', 'leadName', 'userId', 'campaignId'].forEach(function (k) { if (!win.c[k] && lose.c[k]) win.c[k] = lose.c[k]; });
+      keep[prev.i] = win;
+      prev.x = win;
+      return;
+    }
+    last[key] = { t: t, i: keep.length, x: x };
+    keep.push(x);
+  });
+  return keep.map(function (x) { return { id: x.id, data: function () { return x.c; } }; });
+}
+
 function talkSecOf(c) {
   return Number(c.talkDurationSec || c.durationSec) || 0;
 }
@@ -218,13 +258,19 @@ function last9(num) {
 }
 async function leadNamesByPhone(phones) {
   const out = {};
-  const uniq = phones.filter(function (p, i) { return p && phones.indexOf(p) === i; }).slice(0, 30);
+  const uniq = phones.filter(function (p, i) { return p && phones.indexOf(p) === i; }).slice(0, 150);
   if (!uniq.length) return out;
-  const snap = await db.collection('leads').where('phoneNormalized', 'in', uniq).select('nom', 'phoneNormalized', '_merged').get();
-  snap.forEach(function (d) {
-    const l = d.data() || {};
-    if (l._merged === true) return;
-    if (!out[l.phoneNormalized]) out[l.phoneNormalized] = { id: d.id, nom: l.nom || '' };
+  const parts = [];
+  for (let i = 0; i < uniq.length; i += 30) parts.push(uniq.slice(i, i + 30));
+  const snaps = await Promise.all(parts.map(function (part) {
+    return db.collection('leads').where('phoneNormalized', 'in', part).select('nom', 'phoneNormalized', '_merged').get();
+  }));
+  snaps.forEach(function (snap) {
+    snap.forEach(function (d) {
+      const l = d.data() || {};
+      if (l._merged === true) return;
+      if (!out[l.phoneNormalized]) out[l.phoneNormalized] = { id: d.id, nom: l.nom || '' };
+    });
   });
   return out;
 }
@@ -413,7 +459,7 @@ async function handleLive(req, res) {
   // Appels
   const liveCalls = [];
   const phonesToResolve = [];
-  callSnap.forEach(function (d) {
+  dedupeSnap(callSnap, R).forEach(function (d) {
     const c = d.data() || {};
     const m = callMember(c, R);
     const ini = toMs(c.initiatedAt);
@@ -484,6 +530,7 @@ async function handleLive(req, res) {
       outcome: b.outcome || null, status: b.status || null, hasMeet: !!b.meetLink, tracked: !!(b.meetLink && b.meetTrackedLink),
       clicks: Number(bm.clicks) || 0, firstClickAt: isoOf(toMs(bm.firstClickAt)), lastClickAt: isoOf(toMs(bm.lastClickAt)),
       presence: bm.presence || null, presenceCheckedAt: isoOf(toMs(bm.presenceCheckedAt)),
+      reminders: b.remindersSent || {}, waReminders: [],
     };
     if (phase === 'live' && b.meetLink && !b.outcome) {
       const age = now - toMs(bm.presenceCheckedAt);
@@ -494,6 +541,21 @@ async function handleLive(req, res) {
     }
     return o;
   });
+
+  // Rappels WhatsApp automatiques des RDV (api/whatsapp-rappels-rdv.js).
+  try {
+    const ids = outB.map(function (o) { return o.id; });
+    const byId = {};
+    outB.forEach(function (o) { byId[o.id] = o; });
+    for (let i = 0; i < ids.length; i += 30) {
+      const ws = await db.collection('whatsapp_messages').where('contexte.bookingId', 'in', ids.slice(i, i + 30)).select('contexte', 'statut', 'at').get();
+      ws.forEach(function (d) {
+        const w = d.data() || {};
+        const o = byId[w.contexte && w.contexte.bookingId];
+        if (o) o.waReminders.push({ at: isoOf(toMs(w.at)), type: (w.contexte && w.contexte.type) || 'rappel', ok: w.statut !== 'refuse' && w.statut !== 'echec' });
+      });
+    }
+  } catch (e) { console.warn('[team-pilotage] rappels WhatsApp', e.message); }
 
   liveOnes.sort(function (x, y) { return x.prio - y.prio; });
   await Promise.all(liveOnes.slice(0, MAX_LIVE_MEETS).map(async function (x) {
@@ -552,6 +614,7 @@ async function handleLive(req, res) {
     if (!r) return;
     r.today.activeMs += Number(s.activeMs) || 0;
     r.today.sessions += Number(s.sessions) || 0;
+    r.today.clicks = (r.today.clicks || 0) + (Number(s.clicks) || 0);
     const f = toMs(s.firstSeenAt);
     if (f && (!r.today.firstSeenAt || f < Date.parse(r.today.firstSeenAt))) r.today.firstSeenAt = isoOf(f);
   });
@@ -583,7 +646,7 @@ const STAT_KEYS = [
   'callsOut', 'callsIn', 'answered', 'convos', 'talkSec',
   'rdvSet', 'rdvHeld', 'pending'].concat(OUTCOME_KEYS).concat([
   'sms', 'email', 'whatsapp', 'dmOut', 'dmIn', 'actStatus', 'actBooking', 'actAssign', 'notes',
-  'activeMs', 'sessions',
+  'activeMs', 'sessions', 'clicks', 'pages', 'rapDue', 'rapDone', 'rapLate', 'rapChecked',
 ]);
 
 function emptyStats() {
@@ -646,7 +709,7 @@ async function handleActivity(req, res, body) {
       snaps.forEach(function (sn) { if (sn) sn.forEach(function (d) { docs[d.id] = d; }); });
       return { size: snaps[0].size, forEach: function (fn) { Object.keys(docs).forEach(function (k) { fn(docs[k]); }); } };
     }),
-    waQ.select('contexte', 'statut', 'at').get(),
+    waQ.select('contexte', 'statut', 'at', 'to').get(),
     Promise.all(slugs.map(function (s) {
       return db.collection('lead_actions').doc(s).collection('items')
         .where('day', '>=', from).where('day', '<=', to).get()
@@ -654,9 +717,10 @@ async function handleActivity(req, res, body) {
     })),
     dmQ.select('direction', 'date').get(),
     uaQ.get(),
+    loadRappelLeads(),
   ]);
   const warnings = [];
-  const SOURCES = ['fiches experts', 'types de RDV', 'appels', 'RDV tenus', 'RDV posés', 'messages et notes', 'WhatsApp', 'actions sur les fiches', 'DM Instagram', 'temps de connexion'];
+  const SOURCES = ['fiches experts', 'types de RDV', 'appels', 'RDV tenus', 'RDV posés', 'messages et notes', 'WhatsApp', 'actions sur les fiches', 'DM Instagram', 'temps de connexion', 'rappels'];
   function val(i) {
     if (settled[i].status === 'fulfilled') return settled[i].value;
     console.error('[team-pilotage] activité —', SOURCES[i], settled[i].reason && settled[i].reason.message);
@@ -666,7 +730,7 @@ async function handleActivity(req, res, body) {
   const persons = val(0) || {};
   const typeMap = val(1) || {};
   const callSnap = val(2), heldSnap = val(3), setSnap = val(4), leadSnap = val(5), waSnap = val(6), actRes = val(7);
-  const dmSnap = val(8), uaSnap = val(9);
+  const dmSnap = val(8), uaSnap = val(9), rappelLeads = val(10);
 
   const totals = {};     // slug → stats
   const byDay = {};      // slug → day → stats
@@ -683,7 +747,8 @@ async function handleActivity(req, res, body) {
   }
   function inRange(ms) { return ms >= fromMs && ms < toMs_; }
 
-  if (callSnap) callSnap.forEach(function (d) {
+  const callDocs = dedupeSnap(callSnap, R);
+  callDocs.forEach(function (d) {
     const c = d.data() || {};
     const m = callMember(c, R);
     const day = parisDayOfMs(toMs(c.initiatedAt));
@@ -755,6 +820,8 @@ async function handleActivity(req, res, body) {
     if (!m || m.hidden || m.departed || (!m.sales && !totals[m.slug])) return;
     if (Number(s.activeMs)) add(m, s.date, 'activeMs', Number(s.activeMs));
     if (Number(s.sessions)) add(m, s.date, 'sessions', Number(s.sessions));
+    if (Number(s.clicks)) add(m, s.date, 'clicks', Number(s.clicks));
+    if (Number(s.pages)) add(m, s.date, 'pages', Number(s.pages));
   });
 
   if (actRes) actRes.forEach(function (x) {
@@ -765,6 +832,24 @@ async function handleActivity(req, res, body) {
       add(m, a.day, key);
     });
   });
+
+  // Rappels : contacts relevés dans les appels, WhatsApp et actions déjà lus,
+  // plus les communications de la fiche elle-même.
+  if (rappelLeads) {
+    const ci = contactIndex();
+    callDocs.forEach(function (d) { ci.call(d.data() || {}, R); });
+    if (waSnap) waSnap.forEach(function (d) { ci.wa(d.data() || {}, R); });
+    if (actRes) actRes.forEach(function (x) {
+      const am = R.bySlug[x.slug];
+      x.snap.forEach(function (d) { const a = d.data() || {}; if (a.leadId) ci.action(a.leadId, toMs(a.createdAt), am ? am.name : x.slug); });
+    });
+    computeRappels(rappelLeads, R, ci, fromMs, toMs_, now).forEach(function (x) {
+      add(x.owner, x.day, 'rapDue');
+      if (x.status === 'fait') add(x.owner, x.day, 'rapDone');
+      else if (x.status === 'en_retard') add(x.owner, x.day, 'rapLate');
+      else if (x.status === 'coche_sans_contact') add(x.owner, x.day, 'rapChecked');
+    });
+  }
 
   const members = R.list.filter(function (m) {
     return !m.departed && !m.hidden && (m.sales || totals[m.slug]);
@@ -781,6 +866,361 @@ async function handleActivity(req, res, body) {
     warnings: warnings,
     members: members, unassigned: unassigned,
   });
+}
+
+// ─── RAPPELS (follow-ups programmés sur les fiches) ─────────────────────────
+// leads/{id}.followUps[] = { id, dateTime 'AAAA-MM-JJTHH:MM:SS' (heure de
+// Paris), note, done, createdBy (slug, nom complet ou début d'e-mail selon
+// l'écran), createdAt, doneAt / doneBy depuis le 16/10/2026 }.
+// Un rappel est « fait » s'il y a eu un VRAI contact avec le prospect (appel,
+// SMS, e-mail, WhatsApp, action sur la fiche) entre 30 min avant l'heure
+// prévue et la fin de ce jour-là ; coché sans aucun contact = « coché sans
+// contact » ; échu sans contact ni case = « en retard » (décision 16/10/2026).
+const RAPPEL_BEFORE_MS = 30 * 60000;
+const RAPPEL_LEAD_FIELDS = ['nom', 'telephone', 'phoneNormalized', 'followUps', 'communications', 'assignedTo', 'setterSlug', '_merged'];
+
+function looseMember(name, R) {
+  const n = normName(name);
+  if (!n) return null;
+  const toks = n.split(' ');
+  if (R.bySlug[toks[0]]) return R.bySlug[toks[0]];
+  if (R.bySlug[toks.join('')]) return R.bySlug[toks.join('')];
+  return R.byFirst[toks[0]] || null;
+}
+
+async function loadRappelLeads() {
+  const q = db.collection('leads').where('followUps', '>', []).limit(3000);
+  const snap = await q.select.apply(q, RAPPEL_LEAD_FIELDS).get();
+  const out = [];
+  snap.forEach(function (d) {
+    const l = d.data() || {};
+    if (l._merged === true) return;
+    out.push(Object.assign({ id: d.id }, l));
+  });
+  return out;
+}
+
+function fuDueMs(f) {
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(String((f && f.dateTime) || ''));
+  return m ? MT.parisToUtcMs(m[1], m[2]) : 0;
+}
+
+// Index des contacts par prospect, construit à partir de ce qui est déjà lu.
+function contactIndex() {
+  const idx = {};
+  function addK(k, c) { if (k) (idx[k] = idx[k] || []).push(c); }
+  return {
+    call: function (c, R) {
+      const ms = toMs(c.initiatedAt);
+      const m = callMember(c, R);
+      const item = { ms: ms, kind: 'appel', who: m ? m.name : (c.userName || null), ok: isAnsweredCall(c) };
+      addK(c.leadId ? 'id:' + c.leadId : null, item);
+      addK(last9(c.direction === 'inbound' ? c.fromNumber : c.toNumber) ? 'tel:' + last9(c.direction === 'inbound' ? c.fromNumber : c.toNumber) : null, item);
+    },
+    wa: function (w, R) {
+      if (w.statut === 'refuse' || w.statut === 'echec') return;
+      const m = w.contexte && w.contexte.uid ? R.byUid[w.contexte.uid] : null;
+      addK(last9(w.to) ? 'tel:' + last9(w.to) : null, { ms: toMs(w.at), kind: 'WhatsApp', who: m ? m.name : null });
+    },
+    action: function (leadId, ms, who) { addK('id:' + leadId, { ms: ms, kind: 'action fiche', who: who }); },
+    find: function (lead, from, to, R) {
+      let best = null;
+      function take(c) { if (c.ms >= from && c.ms <= to && (!best || c.ms < best.ms)) best = c; }
+      (idx['id:' + lead.id] || []).forEach(take);
+      const k = last9(lead.phoneNormalized || lead.telephone);
+      if (k) (idx['tel:' + k] || []).forEach(take);
+      (Array.isArray(lead.communications) ? lead.communications : []).forEach(function (c) {
+        if (!c || c.direction !== 'outbound') return;
+        const m = commMember(c, R);
+        take({ ms: toMs(c.date || c.createdAt), kind: c.type === 'sms' ? 'SMS' : (c.type === 'email' ? 'e-mail' : (c.type === 'call' ? 'appel' : (c.type || 'message'))), who: m ? m.name : (c.ownerName || null) });
+      });
+      return best;
+    },
+  };
+}
+
+function computeRappels(leads, R, ci, fromMs, toMsX, now) {
+  const out = [];
+  leads.forEach(function (l) {
+    (Array.isArray(l.followUps) ? l.followUps : []).forEach(function (f) {
+      const due = fuDueMs(f);
+      if (!due || due < fromMs || due >= toMsX) return;
+      let owner = looseMember(f.createdBy, R);
+      if (!owner && l.assignedTo) owner = R.bySlug[l.assignedTo] || R.byUid[l.assignedTo] || null;
+      if (!owner && l.setterSlug) owner = R.bySlug[l.setterSlug] || null;
+      const dayEnd = MT.parisToUtcMs(addDays(parisDayOfMs(due), 1), '00:00');
+      const contact = ci.find(l, due - RAPPEL_BEFORE_MS, Math.min(dayEnd, now), R);
+      let status;
+      if (contact) status = 'fait';
+      else if (due > now) status = 'a_venir';
+      else if (f.done) status = 'coche_sans_contact';
+      else status = 'en_retard';
+      out.push({
+        leadId: l.id, leadName: l.nom || '', dueAt: isoOf(due), day: parisDayOfMs(due), note: f.note ? clip(f.note, 300) : '',
+        ownerSlug: owner ? owner.slug : null, ownerName: owner ? owner.name : (f.createdBy || null), owner: owner,
+        done: !!f.done, doneAt: f.doneAt || null, doneBy: f.doneBy || null, status: status,
+        contact: contact ? { at: isoOf(contact.ms), kind: contact.kind, who: contact.who || null } : null,
+      });
+    });
+  });
+  return out.sort(function (a, b) { return a.dueAt < b.dueAt ? -1 : 1; });
+}
+
+// ─── JOURNAL D'UNE PERSONNE SUR UNE JOURNÉE ─────────────────────────────────
+// POST { action: 'journal', slug, date } → tout ce que la personne a fait ce
+// jour-là, minute par minute : pages et clics (user_events, nav.js), appels
+// (durée, décroché, résumé IA), messages envoyés AVEC leur texte (SMS,
+// e-mails, WhatsApp, DM Instagram), notes, actions sur les fiches, RDV posés
+// et tenus, rappels prévus et leur sort.
+async function handleJournal(req, res, body) {
+  const date = validIso(body.date) ? body.date : todayIsoParis();
+  const R = await loadRoster();
+  const m = R.bySlug[String(body.slug || '')];
+  const membersList = R.list.filter(function (x) { return !x.departed && !x.hidden; }).map(publicMember);
+  if (!m) { res.status(200).json({ ok: true, date: date, member: null, members: membersList, events: [], rappels: [], summary: null }); return; }
+  const dayStart = MT.parisToUtcMs(date, '00:00');
+  const dayEnd = MT.parisToUtcMs(addDays(date, 1), '00:00');
+  const now = Date.now();
+  const startTs = admin.firestore.Timestamp.fromMillis(dayStart);
+  const endTs = admin.firestore.Timestamp.fromMillis(dayEnd);
+  const isDm = (dmOwner(R) || {}).slug === m.slug;
+
+  const callQ = db.collection('call_logs').where('initiatedAt', '>=', startTs).where('initiatedAt', '<', endTs).limit(4000);
+  const setQ = db.collection('bookings').where('createdAt', '>=', startTs).where('createdAt', '<', endTs).limit(500);
+  const heldQ = db.collection('bookings').where('date', '==', date).limit(500);
+  const leadQ = db.collection('leads').where('updatedAt', '>=', startTs).limit(3000);
+  const leadQ2 = db.collection('leads').where('lastContactAt', '>=', startTs).limit(3000);
+  const LF = ['nom', 'telephone', 'phoneNormalized', 'communications', 'notesHistory', '_merged'];
+  const empty = { forEach: function () {}, size: 0 };
+  function safe(p) { return p.catch(function (e) { console.warn('[team-pilotage] journal', e.message); return null; }); }
+
+  const r = await Promise.all([
+    m.uid ? safe(db.collection('user_events').where('uid', '==', m.uid).where('date', '==', date).limit(3000).get()) : null,
+    m.uid ? safe(db.collection('user_activity').doc(m.uid + '_' + date).get()) : null,
+    safe(callQ.select.apply(callQ, CALL_FIELDS.concat(['aiSummary'])).get()),
+    safe(setQ.select.apply(setQ, BOOKING_FIELDS.concat(['outcomeNote', 'remindersSent'])).get()),
+    safe(heldQ.select.apply(heldQ, BOOKING_FIELDS.concat(['outcomeNote', 'remindersSent'])).get()),
+    safe(Promise.all([leadQ.select.apply(leadQ, LF).get(), leadQ2.select.apply(leadQ2, LF).get()])),
+    safe(db.collection('whatsapp_messages').where('at', '>=', dayStart).where('at', '<', dayEnd).limit(3000).get()),
+    isDm ? safe(db.collection('ig_dm_events').where('date', '==', date).limit(3000).get()) : null,
+    safe(db.collection('lead_actions').doc(m.slug).collection('items').where('day', '==', date).get()),
+    safe(loadRappelLeads()),
+    loadPersons(),
+    MT.loadTypeMap(),
+  ]);
+  const evSnap = r[0], uaDoc = r[1], callSnap = r[2] || empty, setSnap = r[3] || empty, heldSnap = r[4] || empty;
+  const leadSnaps = r[5] || [], waSnap = r[6] || empty, dmSnap = r[7] || empty, actSnap = r[8] || empty;
+  const rappelLeads = r[9] || [], persons = r[10], typeMap = r[11];
+
+  const ev = [];
+  const leadIds = {};
+  function push(ms, cat, kind, title, extra) {
+    if (!ms) return;
+    const o = Object.assign({ at: isoOf(ms), cat: cat, kind: kind, title: title }, extra || {});
+    if (o.leadId) leadIds[o.leadId] = 1;
+    ev.push(o);
+  }
+  const sum = { activeMs: 0, sessions: 0, firstSeenAt: null, lastSeenAt: null, clicks: 0, pages: 0,
+    calls: 0, answered: 0, talkSec: 0, sms: 0, email: 0, whatsapp: 0, dm: 0, notes: 0, actions: 0, rdvSet: 0, rdvHeld: 0 };
+  if (uaDoc && uaDoc.exists) {
+    const u = uaDoc.data() || {};
+    sum.activeMs = Number(u.activeMs) || 0; sum.sessions = Number(u.sessions) || 0;
+    sum.firstSeenAt = isoOf(toMs(u.firstSeenAt)); sum.lastSeenAt = isoOf(toMs(u.lastSeenAt));
+  }
+
+  // Navigation et clics
+  if (evSnap) evSnap.forEach(function (d) {
+    (d.data().events || []).forEach(function (e) {
+      const page = e.p || '';
+      if (e.k === 'page') { sum.pages++; push(e.t, 'nav', 'page', 'Ouvre ' + page, { page: page, leadId: e.lead || null }); }
+      else if (e.k === 'leave') push(e.t, 'nav', 'leave', 'Quitte ' + page, { page: page, ms: e.ms || 0 });
+      else {
+        sum.clicks++;
+        push(e.t, 'click', e.k, (e.k === 'change' ? 'Choisit « ' + (e.v || '') + ' »' + (e.l ? ' dans ' + e.l : '') : 'Clic « ' + (e.l || e.a || e.h || '?') + ' »' + (e.v ? ' (' + e.v + ')' : '')),
+          { page: page, action: e.a || null, href: e.h || null, leadId: e.lead || null });
+      }
+    });
+  });
+
+  // Appels (+ index des contacts pour les rappels)
+  const ci = contactIndex();
+  const phonesToResolve = [];
+  const myCalls = [];
+  dedupeSnap(callSnap, R).forEach(function (d) {
+    const c = d.data() || {};
+    ci.call(c, R);
+    if (callMember(c, R) !== m) return;
+    myCalls.push(Object.assign({ id: d.id }, c));
+  });
+  myCalls.forEach(function (c) {
+    sum.calls++;
+    const ok = isAnsweredCall(c);
+    if (ok) sum.answered++;
+    const talk = talkSecOf(c);
+    sum.talkSec += talk;
+    const other = c.direction === 'inbound' ? c.fromNumber : c.toNumber;
+    if (!c.leadId && !(c.leadNameSnapshot || c.leadName) && last9(other)) phonesToResolve.push(last9(other));
+    push(toMs(c.initiatedAt), 'call', 'call',
+      (c.direction === 'inbound' ? 'Appel reçu' : 'Appel passé') + ' — ' +
+      (ok ? 'décroché · ' + Math.floor(talk / 60) + ' min ' + ('0' + (talk % 60)).slice(-2) + ' s' : (c.status === 'no-answer' ? 'pas de réponse' : (c.answeredAt ? 'répondeur / très court' : (CALL_STATUS_FR[c.status] || c.status || '')))),
+      { leadId: c.leadId || null, leadName: c.leadNameSnapshot || c.leadName || null, number: other || null, callId: c.id, detail: c.aiSummary ? String(c.aiSummary).slice(0, 1500) : null });
+  });
+
+  // Messages et notes (texte complet)
+  const seenLead = {};
+  leadSnaps.forEach(function (sn) {
+    sn.forEach(function (d) {
+      if (seenLead[d.id]) return;
+      seenLead[d.id] = 1;
+      const l = d.data() || {};
+      if (l._merged === true) return;
+      (Array.isArray(l.communications) ? l.communications : []).forEach(function (c) {
+        if (!c || c.direction !== 'outbound' || c.type === 'call') return;
+        const ms = toMs(c.date || c.createdAt);
+        if (ms < dayStart || ms >= dayEnd) return;
+        if (commMember(c, R) !== m) return;
+        const type = c.type === 'sms' ? 'sms' : (c.type === 'email' ? 'email' : (c.type || 'message'));
+        if (sum[type] != null) sum[type]++;
+        push(ms, 'msg', type, (type === 'sms' ? 'SMS envoyé' : (type === 'email' ? 'E-mail envoyé' : 'Message envoyé')) + (c.subject ? ' — ' + clip(c.subject, 120) : ''),
+          { leadId: d.id, leadName: l.nom || null, detail: String(c.content || '').slice(0, 6000) });
+      });
+      (Array.isArray(l.notesHistory) ? l.notesHistory : []).forEach(function (n) {
+        if (!n) return;
+        const ms = toMs(n.date || n.createdAt);
+        if (ms < dayStart || ms >= dayEnd || noteMember(n, R) !== m) return;
+        sum.notes++;
+        push(ms, 'fiche', 'note', 'Note ajoutée', { leadId: d.id, leadName: l.nom || null, detail: String(n.text || '').slice(0, 4000) });
+      });
+    });
+  });
+
+  // WhatsApp (texte relu dans la conversation)
+  const myWa = [];
+  waSnap.forEach(function (d) {
+    const w = d.data() || {};
+    ci.wa(w, R);
+    if (!w.contexte || w.contexte.uid !== m.uid) return;
+    myWa.push(Object.assign({ id: d.id }, w));
+  });
+  const waTexts = {};
+  const waRefs = myWa.filter(function (w) { return w.wamid && w.to && /^[0-9]{8,15}$/.test(String(w.to)); }).slice(0, 150)
+    .map(function (w) { return db.collection('whatsapp_conversations').doc(String(w.to)).collection('messages').doc(String(w.wamid)); });
+  if (waRefs.length) {
+    const snaps = await db.getAll.apply(db, waRefs).catch(function () { return []; });
+    snaps.forEach(function (s) { if (s.exists) waTexts[s.id] = (s.data() || {}).texte || ''; });
+  }
+  myWa.forEach(function (w) {
+    if (last9(w.to)) phonesToResolve.push(last9(w.to));
+    if (w.statut !== 'refuse') sum.whatsapp++;
+    const txt = waTexts[w.wamid] || (w.modele ? 'Modèle « ' + w.modele + ' »' : (w.media ? 'Fichier ' + (w.nomFichier || '') : ''));
+    push(toMs(w.at), 'msg', 'whatsapp', 'WhatsApp ' + (w.statut === 'refuse' || w.statut === 'echec' ? 'NON parti (' + (w.erreur || w.statut) + ')' : 'envoyé'),
+      { number: w.to ? '+' + w.to : null, detail: txt ? String(txt).slice(0, 4000) : null });
+  });
+
+  // DM Instagram (setter écrit)
+  const dms = [];
+  dmSnap.forEach(function (d) { dms.push(d.data() || {}); });
+  const threadIds = dms.map(function (x) { return x.igsid; }).filter(function (v, i, a) { return v && a.indexOf(v) === i; }).slice(0, 200);
+  const threads = {};
+  if (threadIds.length) {
+    const ts = await db.getAll.apply(db, threadIds.map(function (id) { return db.collection('ig_dm_threads').doc(String(id)); })).catch(function () { return []; });
+    ts.forEach(function (s) { if (s.exists) threads[s.id] = s.data() || {}; });
+  }
+  dms.forEach(function (x) {
+    const t = threads[x.igsid] || {};
+    const who = t.username ? '@' + t.username : (t.name || 'compte Instagram');
+    if (x.direction === 'out') sum.dm++;
+    push(Number(x.timestampMs) || 0, 'msg', x.direction === 'out' ? 'dm_out' : 'dm_in',
+      (x.direction === 'out' ? 'DM Instagram envoyé à ' : 'DM Instagram reçu de ') + who,
+      { leadId: t.leadId || null, leadName: t.leadNom || null, detail: (x.text || '') + (x.hasAttachment ? ' [pièce jointe]' : '') });
+  });
+
+  // Actions sur les fiches
+  actSnap.forEach(function (d) {
+    const a = d.data() || {};
+    sum.actions++;
+    ci.action(a.leadId, toMs(a.createdAt), m.name);
+    const title = a.action === 'set_booking' ? 'RDV posé (Leads Live)' : (a.action === 'assign' ? 'Attribution ' + (a.assignFrom || '—') + ' → ' + (a.assignTo || '—') : 'Statut ' + (a.prevStatus ? a.prevStatus + ' → ' : '→ ') + a.action);
+    push(toMs(a.createdAt) || MT.parisToUtcMs(date, '12:00'), 'fiche', 'action', title, { leadId: a.leadId || null, leadName: a.leadName || null });
+  });
+
+  // RDV posés et tenus
+  function remindersTxt(b) {
+    const rs = b.remindersSent || {};
+    const parts = [];
+    if (rs.j1_email) parts.push('J-1 e-mail'); if (rs.j1_sms) parts.push('J-1 SMS');
+    if (rs.h1_email) parts.push('H-1 e-mail'); if (rs.h1_sms) parts.push('H-1 SMS');
+    return parts.length ? 'Rappels auto envoyés : ' + parts.join(', ') : 'Aucun rappel auto envoyé';
+  }
+  setSnap.forEach(function (d) {
+    const b = d.data() || {};
+    if (b.bookedBySlug !== m.slug) return;
+    sum.rdvSet++;
+    push(toMs(b.createdAt), 'rdv', 'booking_set', 'RDV posé pour le ' + String(b.date || '').split('-').reverse().join('/') + ' à ' + (b.time || '?') + (b.typeLabel ? ' — ' + b.typeLabel : ''),
+      { leadId: b.leadId || null, leadName: prospectName(b), bookingId: d.id });
+  });
+  const heldIds = [];
+  const helds = [];
+  heldSnap.forEach(function (d) {
+    const b = d.data() || {};
+    if (!MT.isClosingBooking(b, typeMap) || bookingCloser(b, R, persons) !== m) return;
+    heldIds.push(d.id);
+    helds.push(Object.assign({ id: d.id }, b));
+  });
+  const meets = {};
+  if (heldIds.length) {
+    const ms = await db.getAll.apply(db, heldIds.map(function (id) { return db.collection('booking_meet').doc(id); })).catch(function () { return []; });
+    ms.forEach(function (s) { if (s.exists) meets[s.id] = s.data() || {}; });
+  }
+  helds.forEach(function (b) {
+    sum.rdvHeld++;
+    const bm = meets[b.id] || {};
+    const pr = bm.presence && bm.presence.ok ? bm.presence : null;
+    const s2 = pr && pr.summary ? pr.summary : null;
+    const lines = [remindersTxt(b)];
+    if (Number(bm.clicks)) lines.push('Lien Meet cliqué ' + bm.clicks + ' fois (1er clic ' + new Date(toMs(bm.firstClickAt)).toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' }) + ')');
+    if (pr) lines.push('Visio : ' + (pr.participants || []).filter(function (p) { return p.kind !== 'bot'; }).map(function (p) {
+      return p.name + ' ' + (p.joinedAt ? new Date(p.joinedAt).toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' }) : '') + (p.leftAt ? ' → ' + new Date(p.leftAt).toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' }) : (p.inRoom ? ' → présent' : ''));
+    }).join(' · '));
+    if (b.outcomeNote) lines.push('Note de résultat : ' + b.outcomeNote);
+    push(MT.bookingStartMs(b), 'rdv', 'booking', 'RDV ' + (b.typeLabel || '') + ' — ' + (b.outcome ? 'résultat : ' + b.outcome : (b.status === 'cancelled' ? 'annulé' : 'à statuer')) +
+      (s2 ? (s2.prospectJoined ? ' · prospect venu' : ' · prospect jamais entré') : ''),
+      { leadId: b.leadId || null, leadName: prospectName(b), bookingId: b.id, detail: lines.join('\n') });
+  });
+
+  // Rappels du jour de cette personne
+  const rappels = computeRappels(rappelLeads, R, ci, dayStart, dayEnd, now).filter(function (x) { return x.owner === m; });
+  const RAP_TXT = { fait: 'fait', a_venir: 'à venir', coche_sans_contact: 'coché sans contact', en_retard: 'EN RETARD' };
+  rappels.forEach(function (x) {
+    delete x.owner;
+    push(Date.parse(x.dueAt), 'rappel', 'rappel', 'Rappel prévu — ' + RAP_TXT[x.status] + (x.contact ? ' (' + x.contact.kind + ' à ' + new Date(x.contact.at).toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' }) + (x.contact.who ? ' par ' + x.contact.who : '') + ')' : ''),
+      { leadId: x.leadId, leadName: x.leadName, detail: x.note || null, status: x.status });
+  });
+
+  // Noms des prospects (fiches citées par les clics, appels, actions…)
+  try {
+    const names = {};
+    const ids = Object.keys(leadIds).filter(function (id) { return /^[A-Za-z0-9_-]{3,80}$/.test(id); }).slice(0, 300);
+    if (ids.length) {
+      const refs = ids.map(function (id) { return db.collection('leads').doc(id); });
+      const snaps = await db.getAll.apply(db, refs.concat([{ fieldMask: ['nom'] }]));
+      snaps.forEach(function (s) { if (s.exists) names[s.id] = (s.data() || {}).nom || ''; });
+    }
+    const byPhone = phonesToResolve.length ? await leadNamesByPhone(phonesToResolve) : {};
+    ev.forEach(function (e) {
+      if (!e.leadName && e.leadId && names[e.leadId]) e.leadName = names[e.leadId];
+      if (!e.leadName && !e.leadId && e.number && byPhone[last9(e.number)]) { e.leadName = byPhone[last9(e.number)].nom; e.leadId = byPhone[last9(e.number)].id; }
+    });
+  } catch (e) { console.warn('[team-pilotage] journal noms', e.message); }
+
+  ev.sort(function (a, b) { return a.at < b.at ? 1 : (a.at > b.at ? -1 : 0); });
+  const rs = { due: rappels.length, done: 0, late: 0, checked: 0, upcoming: 0 };
+  rappels.forEach(function (x) {
+    if (x.status === 'fait') rs.done++; else if (x.status === 'en_retard') rs.late++;
+    else if (x.status === 'coche_sans_contact') rs.checked++; else rs.upcoming++;
+  });
+  sum.rappels = rs;
+  res.status(200).json({ ok: true, date: date, member: publicMember(m), members: membersList, summary: sum, rappels: rappels, events: ev.slice(0, 5000), total: ev.length });
 }
 
 // ─── RECHERCHE ET HISTORIQUE D'UN PROSPECT ──────────────────────────────────
@@ -871,8 +1311,9 @@ async function handleLead(req, res, body) {
   callSnaps.forEach(function (s) {
     if (s) s.forEach(function (d) { calls[d.id] = d.data() || {}; });
   });
-  Object.keys(calls).forEach(function (id) {
-    const c = calls[id];
+  dedupeSnap({ forEach: function (fn) { Object.keys(calls).forEach(function (id) { fn({ id: id, data: function () { return calls[id]; } }); }); } }, R).forEach(function (cd) {
+    const id = cd.id;
+    const c = cd.data();
     const m = callMember(c, R);
     const talk = talkSecOf(c);
     const res2 = isAnsweredCall(c) ? 'décroché' + (talk ? ' · ' + Math.floor(talk / 60) + ' min ' + ('0' + (talk % 60)).slice(-2) + ' s' : '') : (c.status === 'no-answer' ? 'pas de réponse' : (c.answeredAt ? 'répondeur / très court' : (CALL_STATUS_FR[c.status] || c.status || '')));
@@ -970,6 +1411,7 @@ module.exports = async (req, res) => {
     if (action === 'activity') return await handleActivity(req, res, body);
     if (action === 'search') return await handleSearch(req, res, body);
     if (action === 'lead') return await handleLead(req, res, body);
+    if (action === 'journal') return await handleJournal(req, res, body);
     return res.status(400).json({ error: 'Action inconnue : ' + (action || '(vide)') });
   } catch (e) {
     console.error('[team-pilotage] ' + action, e);
