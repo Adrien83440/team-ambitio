@@ -36,7 +36,7 @@
 
   var FORCE_KEY = 'll3_force';
   var LIST_KEY = 'll3_list';
-  var THEME_KEY = 'll5_theme';
+  var THEME_KEY = 'll5_theme_v2'; // v2 (16/10) : sombre par défaut, l'ancien choix « clair » est oublié
   var on = false;
 
   /* ═══ Interrupteur ═══════════════════════════════════════════════════ */
@@ -1117,8 +1117,8 @@
     }
   }, true);
 
-  /* ═══ Thème : clair par défaut sur cette page (point 3 validé) ═══════ */
-  function themeVoulu() { try { return localStorage.getItem(THEME_KEY) || 'light'; } catch (e) { return 'light'; } }
+  /* ═══ Thème : sombre par défaut (demande Adrien 16/10), bascule mémorisée ═══ */
+  function themeVoulu() { try { return localStorage.getItem(THEME_KEY) || 'dark'; } catch (e) { return 'dark'; } }
   function appliquerTheme() { if (on) document.body.classList.toggle('light-theme', themeVoulu() === 'light'); }
   document.addEventListener('click', function (e) {
     if (!on || !e.target.closest || !e.target.closest('#navThemeToggle')) return;
