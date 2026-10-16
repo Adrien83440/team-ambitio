@@ -144,6 +144,11 @@
     // sur une base locale — rien de réel n'est déclenché. Sales + admin
     // seulement (perm '_sales'), ouvert dans une fenêtre à part (newWindow).
     { id: 'sandbox-closer',    icon: '🧪', label: 'Bac à sable closer', href: 'sandbox-closer.html', section: 'Outils', perm: '_sales', newWindow: true },
+    // Labo Leads Live (16/10/2026) : la nouvelle présentation de Leads Live,
+    // à tester sur de faux leads avant ouverture à l'équipe. Page générée
+    // (scripts/build-sandbox-leads-live.js), faux Firebase + pare-feu : rien
+    // de réel ne part. Admins seulement, fenêtre à part.
+    { id: 'sandbox-leads-live', icon: '🧪', label: 'Labo Leads Live', href: 'sandbox-leads-live.html', section: 'Outils', perm: '_admin', newWindow: true },
     // Aide Team (14/10/2026) : assistant IA des questions techniques (où
     // cliquer, agenda, WhatsApp…) + catalogue des fiches pratiques. Sales et
     // admins ; la bulle « ? » (aide-widget.js) est injectée plus bas.
