@@ -290,6 +290,10 @@ module.exports = async (req, res) => {
   const rawPath = url.searchParams.get('__p') || '';
   const previewRoute = url.searchParams.get('__t') === '1';          // /t/… sur team.alteore.com
   const preview = previewRoute || url.searchParams.get('preview') === '1';
+  /* Labo Tunnels : la page est lue par sandbox-tunnels.js (fetch avec cet
+     en-tête, qu'une navigation ne peut pas poser) puis jouée derrière son
+     pare-feu. Seul ce lecteur voit les pages des tunnels de test. */
+  const labo = previewRoute && String(req.headers['x-alteo-labo'] || '') === '1';
   const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim().toLowerCase();
   const p = Reg.cleanPath(rawPath);
 
@@ -316,7 +320,7 @@ module.exports = async (req, res) => {
   let hit = null;
   if (p.indexOf('/') < 0) {
     try {
-      hit = await Reg.findByPath(p, { allowDraft: preview });
+      hit = await Reg.findByPath(p, { allowDraft: preview, labo: labo });
     } catch (e) {
       console.error('[tunnel-render] registre indisponible :', e && e.message);
       page(res, 503, 'Un instant…', 'La page arrive. Rechargez dans quelques secondes.', { 'Retry-After': '5' });

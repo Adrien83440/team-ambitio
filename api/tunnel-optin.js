@@ -198,6 +198,7 @@ module.exports = async (req, res) => {
   if (!hit) { res.status(404).json({ ok: false, error: 'tunnel_not_found' }); return; }
   const tunnel = hit.tunnel, step = hit.step;
   if (tunnel.status !== 'live' || step.status !== 'live') { res.status(403).json({ ok: false, error: 'tunnel_not_live' }); return; }
+  if (Reg.isTestTunnel(tunnel)) { res.status(403).json({ ok: false, error: 'test_tunnel' }); return; }   // page de test : jamais de fiche
   if (!src.utm_source && Reg.trackingSourceOf(tunnel, step) === 'youtube') src.utm_source = 'youtube';
 
   const prenom = str(fields.prenom, 80);

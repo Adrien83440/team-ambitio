@@ -193,7 +193,8 @@
       var ev = cmd.indexOf('Single') > 0 ? args[2] : args[1];
       var data = cmd.indexOf('Single') > 0 ? args[3] : args[2];
       var lines = [['Depuis', where]].concat(summarize(data));
-      log('pixel', 'Pixel Meta « ' + ev + ' » — NON envoyé', lines);
+      /* Une ligne par événement et par page (le quiz en envoie un par question). */
+      log('pixel', 'Pixel Meta « ' + ev + ' » — NON envoyé', lines, { dedupe: 'px:' + ev + ':' + where + ':' + (info.p || '') });
     }
   }
 
@@ -259,7 +260,7 @@
   var info = { p: '', qs: '', tunnel: '', step: '', variant: '' };
   function fetchPage(p, qs) {
     var url = '/t/' + String(p || '').split('/').map(encodeURIComponent).join('/') + (qs ? '?' + qs : '');
-    return fetch(url, { cache: 'no-store', credentials: 'same-origin' }).then(function (r) {
+    return fetch(url, { cache: 'no-store', credentials: 'same-origin', headers: { 'X-Alteo-Labo': '1' } }).then(function (r) {
       return r.text().then(function (html) {
         if (r.status === 404) log('info', 'Page introuvable : /' + p, [['Note', 'Chemin inconnu, ou étape sans page publiée']], { dedupe: '404:' + p });
         return { status: r.status, html: html, served: r.headers.get('X-Alteo-Tunnel') || '' };
@@ -292,12 +293,23 @@
 
   /* Le cadre a atterri ailleurs (navigation par script sans API Navigation,
      Safari ancien) : on le ramène dans le test. */
+  /* Coupe-circuit : plus de 3 rattrapages en 10 s = boucle — on s'arrête
+     et on le dit, au lieu de recharger sans fin. */
+  var remaps = [];
+  function remapAllowed() {
+    var now = Date.now();
+    remaps = remaps.filter(function (t) { return now - t < 10000; });
+    remaps.push(now);
+    if (remaps.length <= 3) return true;
+    log('nav', 'Rechargements en boucle arrêtés', [['Note', 'Recharge la page (↻) ; si ça recommence, signale-le avec ce journal.']], { toast: true, dedupe: 'loop:' + Math.floor(now / 10000) });
+    return false;
+  }
   stage.addEventListener('load', function () {
     var loc = null;
     try { loc = stage.contentWindow.location; void loc.pathname; } catch (e) { loc = null; }
     if (!loc) {
       log('nav', 'La page a voulu quitter le test (site externe) — retour à la dernière étape', null, { toast: true });
-      if (lastFrame) setFrame(lastFrame);
+      if (lastFrame && remapAllowed()) setFrame(lastFrame);
       return;
     }
     if (loc.href === 'about:blank') return;
@@ -309,12 +321,17 @@
       return;
     }
     var p = path.replace(/^\/(t\/|__sbx_tn\/?)?/, '').replace(/\/+$/, '');
+    /* Le cadre porte l'adresse du Labo lui-même (ancien Safari, voir
+       sandbox-tunnel-frame.js) : la page est bien celle du test, on ne
+       recharge rien. */
+    if (path === LAB) return;
+    if (!remapAllowed()) return;
     if (/^[A-Za-z0-9_-]*$/.test(p)) {
       var q = String(loc.search || '').replace(/^\?/, '');
       setFrame(FRAME + '?p=' + encodeURIComponent(p) + (q ? '&' + q : ''));
       return;
     }
-    log('nav', 'Page hors test bloquée : ' + path, null, { toast: true });
+    log('nav', 'Page hors test bloquée : ' + path, null, { toast: true, dedupe: 'out:' + path });
     if (lastFrame) setFrame(lastFrame);
   });
 
@@ -348,21 +365,21 @@
   });
 
   /* ═══ Liste des liens (admins) ═══════════════════════════════════════ */
-  var KIND_LABEL = { funnel: 'Tunnels de vente', site: 'Site adrienemily.com', pages: 'Pages communes', raw: 'Pages simples' };
+  var KIND_LABEL = { test: '🧪 Pages de test (visibles seulement ici)', funnel: 'Tunnels de vente', site: 'Site adrienemily.com', pages: 'Pages communes', raw: 'Pages simples' };
   function renderIndex(tunnels, msg) {
     var h = '<h1>🧪 Labo Tunnels</h1><p class="lead">Les vraies pages des tunnels, à tester sans que rien ne parte : aucun lead dans Leads Live, aucun RDV dans l\'agenda, aucun scénario Make, aucun événement pixel Meta. Les agendas et formulaires affichés sont les vrais (lecture seule). Envoie un lien 🧪 à l\'équipe : il s\'ouvre sur un téléphone sans connexion.</p>';
     if (msg) { $('index').innerHTML = h + '<div class="note">' + msg + '</div>'; return; }
     var groups = {};
     tunnels.forEach(function (t) { var k = t.kind || 'funnel'; (groups[k] = groups[k] || []).push(t); });
-    ['funnel', 'site', 'pages', 'raw'].forEach(function (k) {
+    ['test', 'funnel', 'site', 'pages', 'raw'].forEach(function (k) {
       if (!groups[k]) return;
       h += '<div class="grp">' + esc(KIND_LABEL[k] || k) + '</div>';
       groups[k].sort(function (a, b) { return String(a.name || '').localeCompare(String(b.name || '')); }).forEach(function (t) {
-        h += '<div class="tn"><h2>' + esc(t.name || t.slug) + ' <span class="pill' + (t.status === 'live' ? ' live' : '') + '">' + (t.status === 'live' ? 'en ligne' : 'brouillon') + '</span></h2>';
+        h += '<div class="tn"><h2>' + esc(t.name || t.slug) + ' ' + (k === 'test' ? '<span class="pill">test uniquement</span>' : '<span class="pill' + (t.status === 'live' ? ' live' : '') + '">' + (t.status === 'live' ? 'en ligne' : 'brouillon') + '</span>') + '</h2>';
         (t.steps || []).filter(function (s) { return s && s.archived !== true; }).forEach(function (s) {
           var p = (t.homeStepId && t.homeStepId === s.id) ? '' : String(s.slug || '');
           var vars = (s.variants || []).filter(function (v) { return v && !v.archived && v.html && v.html.path; });
-          h += '<div class="st"><div class="nm">' + esc(s.name || s.slug) + ' <span class="pill' + (s.status === 'live' ? ' live' : '') + '">' + (s.status === 'live' ? 'en ligne' : 'brouillon') + '</span><code>/' + esc(p) + '</code></div><div class="vs">';
+          h += '<div class="st"><div class="nm">' + esc(s.name || s.slug) + (k === 'test' ? '' : ' <span class="pill' + (s.status === 'live' ? ' live' : '') + '">' + (s.status === 'live' ? 'en ligne' : 'brouillon') + '</span>') + '<code>/' + esc(p) + '</code></div><div class="vs">';
           if (!vars.length) h += '<span class="pill">aucune page publiée</span>';
           vars.forEach(function (v) {
             var url = testLink(p, vars.length > 1 ? v.id : '');

@@ -175,8 +175,14 @@ async function findRedirect(path) {
   return prefix;
 }
 
+/* Tunnel de test (kind:'test', 16/10/2026) : pages créées pour être
+   essayées dans le Labo Tunnels, et nulle part ailleurs — jamais servies en
+   public ni par l'aperçu /t/, jamais mesurées, jamais d'opt-in. */
+function isTestTunnel(tunnel) { return !!tunnel && tunnel.kind === 'test'; }
+
 function isServable(tunnel, step, allowDraft) {
   if (!tunnel || !step) return false;
+  if (isTestTunnel(tunnel)) return false;
   if (allowDraft) return true;
   return tunnel.status === 'live' && step.status === 'live';
 }
@@ -184,10 +190,23 @@ function isServable(tunnel, step, allowDraft) {
 /* Chemin d'URL → { tunnel, step } ou null. '' = page d'accueil. */
 async function findByPath(path, opts) {
   const allowDraft = !!(opts && opts.allowDraft);
+  const labo = !!(opts && opts.labo);
   const p = cleanPath(path);
   const list = await getTunnels();
+  /* Labo Tunnels : une page de test prime sur une page réelle au même
+     chemin (c'est elle qu'on veut essayer). */
+  if (labo) {
+    for (const t of list) {
+      if (!isTestTunnel(t)) continue;
+      for (const s of t.steps) {
+        const isHomeT = t.homeStepId && t.homeStepId === s.id;
+        if (p === '' ? isHomeT : (s.slug === p)) return { tunnel: t, step: s };
+      }
+    }
+  }
   let fallback = null;
   for (const t of list) {
+    if (isTestTunnel(t)) continue;
     for (const s of t.steps) {
       const isHome = t.homeStepId && t.homeStepId === s.id;
       const match = p === '' ? isHome : (s.slug === p);
@@ -205,6 +224,7 @@ async function findByPage(page) {
   if (!isTunnelPageKey(key)) return null;
   const list = await getTunnels();
   for (const t of list) {
+    if (isTestTunnel(t)) continue;
     for (const s of t.steps) {
       if (pageKey(t, s) === key) return { tunnel: t, step: s };
     }
@@ -254,6 +274,6 @@ function trackingSourceOf(tunnel, step) {
 
 module.exports = {
   cleanSlug, cleanPath, pageKey, isTunnelPageKey, pageLabel, stepPath, normalizeTunnel,
-  getTunnels, invalidate, findByPath, findByPage, findByIds, isKnownPage, nextUrlOf,
+  getTunnels, invalidate, findByPath, findByPage, findByIds, isKnownPage, nextUrlOf, isTestTunnel,
   getConfig, findRedirect, trackingSourceOf
 };

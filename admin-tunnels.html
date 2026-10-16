@@ -153,6 +153,7 @@ pre.guide{background:var(--bg3,#14141f);border:1px solid var(--border);border-ra
     <div><h1>Tunnels de vente</h1><small>Pages hébergées, A/B test, stats, reliées à Leads Live</small></div>
     <div class="sp"></div>
     <a class="bb bb-o" id="btnBack" style="display:none" data-action="back">← Tous les tunnels</a>
+    <button class="bb bb-o" id="btnNewTest" data-action="newTest" title="Pages HTML visibles seulement dans le Labo Tunnels : jamais en ligne, rien n'est envoyé">🧪 Nouveau tunnel de test</button>
     <button class="bb bb-p" id="btnNew" data-action="new">+ Nouveau tunnel</button>
   </div>
 
@@ -266,11 +267,13 @@ function fmtSize(n) { n = Number(n) || 0; return n > 1024 * 1024 ? (n / 1048576)
 function stepTypeObj(id) { for (var i = 0; i < STEP_TYPES.length; i++) if (STEP_TYPES[i].id === id) return STEP_TYPES[i]; return STEP_TYPES[4]; }
 function pageKey(t, s) { return slugify(t.slug) + '__' + slugify(s.slug); }
 function stepPath(t, s) { return (t.homeStepId && t.homeStepId === s.id) ? '/' : '/' + s.slug; }
-function liveUrl(t, s) { return 'https://' + (t.settings && t.settings.host || CFG.primaryHost) + (s ? stepPath(t, s) : '/'); }
-function previewUrl(t, s, v) { return '/t' + stepPath(t, s) + (v ? '?v=' + encodeURIComponent(v) : ''); }
+/* Tunnel de test (kind:'test') : aucune adresse publique, aucun aperçu /t/ —
+   ses pages ne s'ouvrent que dans le Labo Tunnels (lien 🧪). */
+function liveUrl(t, s) { if (kindOf(t) === 'test') return testUrl(t, s); return 'https://' + (t.settings && t.settings.host || CFG.primaryHost) + (s ? stepPath(t, s) : '/'); }
+function previewUrl(t, s, v) { if (kindOf(t) === 'test') return testUrl(t, s, v); return '/t' + stepPath(t, s) + (v ? '?v=' + encodeURIComponent(v) : ''); }
 /* Lien de test du Labo Tunnels (16/10/2026) : la vraie page, sans aucun envoi
    (ni lead, ni RDV, ni Make, ni pixel) — public, à envoyer à l'équipe. */
-function testUrl(t, s, v) { return location.origin + '/sandbox-tunnels.html?p=' + encodeURIComponent(stepPath(t, s).replace(/^\//, '')) + (v ? '&v=' + encodeURIComponent(v) : ''); }
+function testUrl(t, s, v) { return location.origin + '/sandbox-tunnels.html?p=' + encodeURIComponent(s ? stepPath(t, s).replace(/^\//, '') : '') + (v ? '&v=' + encodeURIComponent(v) : ''); }
 function copyText(txt) {
   if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(txt).then(function () { toast('Copié'); }, function () { toast('Copie impossible', true); }); return; }
   var ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select();
@@ -383,7 +386,7 @@ function renderList() {
   $('viewList').style.display = '';
   $('viewEditor').style.display = 'none';
   $('btnBack').style.display = 'none';
-  $('btnNew').style.display = '';
+  $('btnNew').style.display = ''; $('btnNewTest').style.display = '';
   $('domainBanner').innerHTML = '<div>🌐 <strong>Domaine des tunnels :</strong> <code>' + esc(CFG.primaryHost) + '</code> — chaque étape répond sur <code>https://' + esc(CFG.primaryHost) + '/&lt;chemin&gt;</code>. '
     + 'Aperçu interne : <code>team.alteore.com/t/&lt;chemin&gt;</code> (brouillons visibles, aucune mesure). Pour faire tester un parcours à l\'équipe (formulaires, RDV), le lien 🧪 du Labo Tunnels : la même page, et rien n\'est envoyé.</div>';
   var grid = $('tunnelGrid');
@@ -405,6 +408,15 @@ function renderList() {
         + '<div><b>' + fmtNum(st.ctas) + '</b>clics CTA</div></div>'
         + '</div>';
     });
+    /* Tunnels de test : pages visibles seulement dans le Labo Tunnels. */
+    TUNNELS.filter(function (t) { return kindOf(t) === 'test'; }).forEach(function (t) {
+      h += '<div class="tn-card" data-action="open" data-id="' + escAttr(t.id) + '">'
+        + '<span class="pill pill-type">🧪 Test uniquement</span>'
+        + '<h3>' + esc(t.name || t.slug) + '</h3>'
+        + '<div class="url">Visible seulement dans le Labo Tunnels — jamais en ligne, rien n\'est envoyé</div>'
+        + '<div class="meta"><div><b>' + t.steps.length + '</b>page' + (t.steps.length > 1 ? 's' : '') + '</div></div>'
+        + '</div>';
+    });
     /* Pages communes (hors tunnel) et site vitrine : hébergés par le même
        moteur, mais ni listés ni mesurés comme des tunnels de vente. */
     var pagesDoc = TUNNELS.filter(function (t) { return kindOf(t) === 'pages'; })[0];
@@ -419,15 +431,16 @@ function renderList() {
 }
 
 /* ═══ CRÉATION / SAUVEGARDE ═══ */
-function createTunnel() {
-  var name = window.prompt('Nom du tunnel (ex : Élite Phénix — VSL)');
+function createTunnel(kind) {
+  var isTest = kind === 'test';
+  var name = window.prompt(isTest ? 'Nom du tunnel de test (ex : Essai nouvelle VSL)' : 'Nom du tunnel (ex : Élite Phénix — VSL)');
   if (!name || !name.trim()) return;
   var slug = slugify(name);
   if (!slug) { toast('Nom invalide', true); return; }
   var n = 2, base = slug;
   while (TUNNELS.some(function (t) { return t.slug === slug; })) slug = base + '-' + (n++);
   var doc = {
-    name: name.trim(), slug: slug, kind: 'funnel', status: 'draft', archived: false, homeStepId: '',
+    name: name.trim(), slug: slug, kind: isTest ? 'test' : 'funnel', status: 'draft', archived: false, homeStepId: '',
     settings: { host: CFG.primaryHost, trackingSource: 'meta', pixelId: '', leadType: 'vsl_elite', defaultChannel: '', bookingType: '', requiredFields: '', noindex: false, faviconUrl: '', ogImage: '', headHtml: '', notes: '' },
     steps: [], assets: [],
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -435,7 +448,7 @@ function createTunnel() {
     createdBy: (firebase.auth().currentUser || {}).uid || ''
   };
   db.collection('tunnels').add(doc).then(function (ref) {
-    toast('Tunnel créé');
+    toast(isTest ? 'Tunnel de test créé — ajoute une page, puis 🧪 Test' : 'Tunnel créé');
     return loadTunnels().then(function () { openTunnel(ref.id); });
   }).catch(function (e) { toast('Création impossible : ' + e.message, true); });
 }
@@ -508,25 +521,28 @@ function renderEditor() {
   $('viewList').style.display = 'none';
   $('viewEditor').style.display = '';
   $('btnBack').style.display = '';
-  $('btnNew').style.display = 'none';
+  $('btnNew').style.display = 'none'; $('btnNewTest').style.display = 'none';
   var t = CUR;
   var home = t.steps.filter(function (s) { return s.id === t.homeStepId; })[0];
   var first = home || t.steps[0];
   var h = '<div class="ed-head">'
     + '<input class="name" id="edName" value="' + escAttr(t.name) + '" placeholder="Nom du tunnel"/>'
-    + '<span class="pill ' + (t.status === 'live' ? 'pill-live' : 'pill-draft') + '">' + (t.status === 'live' ? '● En ligne' : 'Brouillon') + '</span>'
-    + (first ? '<a class="ed-url" href="' + escAttr(liveUrl(t, first)) + '" target="_blank" rel="noopener">' + esc(liveUrl(t, first)) + ' ↗</a>' : '')
+    + (kindOf(t) === 'test'
+      ? '<span class="pill pill-type">🧪 Test uniquement</span>'
+      : '<span class="pill ' + (t.status === 'live' ? 'pill-live' : 'pill-draft') + '">' + (t.status === 'live' ? '● En ligne' : 'Brouillon') + '</span>')
+    + (first ? '<a class="ed-url" href="' + escAttr(liveUrl(t, first)) + '" target="_blank" rel="noopener">' + esc(kindOf(t) === 'test' ? '🧪 Ouvrir dans le Labo' : liveUrl(t, first)) + ' ↗</a>' : '')
     + '<div style="flex:1"></div>'
-    + '<a class="bb bb-o bb-s" href="sales-leads.html?tunnel=' + encodeURIComponent(t.name) + '">👥 Voir les leads</a>'
-    + (t.status === 'live'
-      ? '<button class="bb bb-o bb-s" data-action="setStatus" data-status="draft">Repasser en brouillon</button>'
-      : '<button class="bb bb-g bb-s" data-action="setStatus" data-status="live">● Mettre en ligne</button>')
+    + (kindOf(t) === 'test' ? '' : '<a class="bb bb-o bb-s" href="sales-leads.html?tunnel=' + encodeURIComponent(t.name) + '">👥 Voir les leads</a>'
+      + (t.status === 'live'
+        ? '<button class="bb bb-o bb-s" data-action="setStatus" data-status="draft">Repasser en brouillon</button>'
+        : '<button class="bb bb-g bb-s" data-action="setStatus" data-status="live">● Mettre en ligne</button>'))
     + '<button class="bb bb-r bb-s" data-action="archiveTunnel">Archiver</button>'
     + '</div>';
   if (kindOf(t) === 'site') h += '<div class="tn-banner">🌐 <strong>Site vitrine</strong> — hébergé ici, géré aussi depuis <a href="admin-site.html" style="color:#7dd3fc">Site &amp; pages</a>. Ce n\'est pas un tunnel de vente : aucune conversion attendue, les stats ne comptent que des vues.</div>';
+  if (kindOf(t) === 'test') h += '<div class="tn-banner">🧪 <strong>Tunnel de test</strong> — ses pages ne s\'ouvrent QUE dans le Labo Tunnels (boutons 🧪 Test, liens à envoyer à l\'équipe) : jamais sur le site, jamais dans l\'aperçu /t/. Formulaires, quiz, RDV, Make, pixel : rien n\'est envoyé, même si le code de la page le fait. Les statuts « en ligne / brouillon » n\'ont aucun effet ici.</div>';
   if (kindOf(t) === 'pages') h += '<div class="tn-banner">📄 <strong>Pages communes</strong> — pages servies sur le domaine sans appartenir à un tunnel (merci après RDV, pages utilitaires). Chaque page a son chemin, ses variantes, ses réglages SEO / pixel / head. Mesurées en vues.</div>';
   h += '<div class="tabs">'
-    + '<button class="tab' + (TAB === 'steps' ? ' on' : '') + '" data-action="tab" data-tab="steps">' + (kindOf(t) === 'funnel' ? '🧩 Étapes' : '📄 Pages') + '</button>'
+    + '<button class="tab' + (TAB === 'steps' ? ' on' : '') + '" data-action="tab" data-tab="steps">' + (kindOf(t) === 'funnel' || kindOf(t) === 'test' ? '🧩 Étapes' : '📄 Pages') + '</button>'
     + '<button class="tab' + (TAB === 'settings' ? ' on' : '') + '" data-action="tab" data-tab="settings">⚙️ Réglages</button>'
     + '<button class="tab' + (TAB === 'stats' ? ' on' : '') + '" data-action="tab" data-tab="stats">📊 Stats</button>'
     + '<button class="tab' + (TAB === 'guide' ? ' on' : '') + '" data-action="tab" data-tab="guide">📖 Guide des pages</button>'
@@ -580,7 +596,7 @@ function renderSteps() {
 function findStep(id) { return CUR.steps.filter(function (s) { return s.id === id; })[0]; }
 function addStep() {
   var s = { id: uid('st_'), name: 'Nouvelle étape', slug: '', type: 'page', status: 'draft', next: { mode: 'auto' }, seo: { title: '', description: '', ogImage: '' }, pixelEvent: '', noindex: false, headHtml: '', variants: [{ id: 'a', label: 'Variante A', weight: 100, status: 'live', html: null }] };
-  if (kindOf(CUR) !== 'funnel') {
+  if (kindOf(CUR) !== 'funnel' && kindOf(CUR) !== 'test') {
     s.name = 'Nouvelle page'; s.type = kindOf(CUR) === 'pages' ? 'merci' : 'page'; s.next = { mode: 'none' };
     CUR.steps.push(s); openStep(s.id); return;
   }
@@ -1285,6 +1301,7 @@ document.addEventListener('click', function (ev) {
   var act = el.getAttribute('data-action');
   if (el.tagName === 'INPUT' && el.type === 'file') return;   // géré par change
   if (act === 'new') { createTunnel(); return; }
+  if (act === 'newTest') { createTunnel('test'); return; }
   if (act === 'newPages') { createPagesDoc(); return; }
   if (act === 'open') { openTunnel(el.getAttribute('data-id')); return; }
   if (act === 'back') { CUR = null; try { history.replaceState(null, '', 'admin-tunnels.html'); } catch (e) {} loadTunnels().then(renderList); return; }

@@ -56,6 +56,8 @@
   var TEAM_HOST = /^team\.alteore\.com$/i;
   var BLANK_GIF = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
 
+  var SELF_URL = location.pathname + location.search + location.hash;
+  var nativeTimeout = window.setTimeout;
   var params = new URLSearchParams(location.search);
   var P = String(params.get('p') || '');
   params.delete('p');
@@ -446,10 +448,23 @@
     return html;
   }
 
-  TN.fetchPage(P, QS).then(function (r) {
-    var html = rewrite(r.html);
+  /* L'écriture part d'une minuterie de CE cadre, pas de la promesse du
+     Labo : Safari donne au document l'adresse de la fenêtre qui « entre »
+     dans document.open() — avec la promesse du Labo, la page prenait
+     l'adresse sandbox-tunnels.html et le Labo la rechargeait en boucle
+     (16/10/2026). L'adresse du cadre est en plus reposée juste après. */
+  function writePage(html) {
     document.open();
+    try { if (location.pathname !== FRAME) history.replaceState(null, '', SELF_URL); } catch (e) {}
     document.write(html);
     document.close();
-  }).catch(function (e) { fail('Impossible de charger la page « /' + P + ' » : ' + (e && e.message)); });
+    try { if (location.pathname !== FRAME) history.replaceState(null, '', SELF_URL); } catch (e2) {}
+  }
+  TN.fetchPage(P, QS).then(function (r) {
+    var html = rewrite(r.html);
+    nativeTimeout.call(window, function () { writePage(html); }, 0);
+  }).catch(function (e) {
+    var msg = (e && e.message) || '';
+    nativeTimeout.call(window, function () { fail('Impossible de charger la page « /' + P + ' » : ' + msg); }, 0);
+  });
 })();

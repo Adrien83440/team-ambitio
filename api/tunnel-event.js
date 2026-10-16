@@ -80,6 +80,7 @@ module.exports = async (req, res) => {
   let hit = null;
   try { hit = await Reg.findByIds(tunnelId, stepId); } catch (e) { console.error('[tunnel-event] registre :', e && e.message); }
   if (!hit) { res.status(200).json({ ok: true, ignored: 'unknown' }); return; }
+  if (Reg.isTestTunnel(hit.tunnel)) { res.status(200).json({ ok: true, ignored: 'test' }); return; }   // page de test : jamais mesurée
   const tunnel = hit.tunnel, step = hit.step;
 
   const FV = admin.firestore.FieldValue;
