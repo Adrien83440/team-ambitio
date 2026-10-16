@@ -468,3 +468,111 @@ html body.ll5 .l2fs .ld-filter .ld-period-count, html body.ll5 .l2fs .ld-member-
 html body.ll5 .l2fs .l2fs-apply { min-height: 54px; border-radius: 18px; border: 0; background: var(--l5-acc); color: var(--l5-on-acc); font-size: 16px; font-weight: 800; }
 html body.ll5 .l2fs .l2fs-reset { color: var(--l5-acc); }
 html body.ll5 .l2fs .l2fs-head .t { color: var(--l5-text); font-size: 18px; }
+
+/* ═══ Pilote de closing (close-pilot.js) et cartes du close (close-wizard.js) ═══
+   Restylés pour la nouvelle vue seulement (retour Adrien 16/10 : « très moche,
+   plus arrondi, plus ergonomique ») : le fichier partagé n'est pas modifié,
+   l'ancienne vue et le bac à sable closer gardent leur apparence. */
+html body.ll5 #cpBg, html body.ll5 .cw-bg { background: rgba(5,6,12,0.55); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); padding: 20px; }
+html body.ll5 #cpBg .cp-mo, html body.ll5 .cw-bg .cw-modal {
+  width: min(660px, 96vw); max-height: min(92vh, 860px); border-radius: 28px;
+  background: var(--l5-modal); border: 1px solid var(--l5-border);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8); backdrop-filter: blur(30px) saturate(1.8);
+  box-shadow: 0 30px 80px -20px rgba(5,8,20,0.55); color: var(--l5-text); font-family: var(--fb);
+}
+html body.ll5 .cw-bg .cw-modal { width: min(520px, 96vw); position: relative; }
+/* En-tête */
+html body.ll5 #cpBg .cp-hd, html body.ll5 .cw-bg .cw-head { padding: 22px 22px 14px; border-bottom: 1px solid var(--l5-line); }
+html body.ll5 #cpBg .cp-hd .ti, html body.ll5 .cw-bg .cw-title { gap: 10px; font-size: 20px; font-weight: 800; letter-spacing: -0.01em; color: var(--l5-text); }
+html body.ll5 .cw-bg .cw-sub { font-size: 14px; color: var(--l5-muted); margin-top: 4px; }
+html body.ll5 #cpBg .cp-x, html body.ll5 .cw-bg .cw-x {
+  width: 42px; height: 42px; flex: none; padding: 0; display: grid; place-items: center; font-size: 16px;
+  border: 0 !important; border-radius: 50% !important; background: var(--l5-card2) !important; color: var(--l5-text) !important; box-shadow: none !important;
+}
+html body.ll5 .cw-bg .cw-x { top: 18px; right: 18px; }
+/* Étapes : des pastilles arrondies, la courante en couleur */
+html body.ll5 #cpBg .cp-steps { gap: 8px; margin-top: 16px; padding: 2px 2px 4px; overflow-x: auto; scrollbar-width: none; }
+html body.ll5 #cpBg .cp-steps::-webkit-scrollbar { display: none; }
+html body.ll5 #cpBg .cp-st {
+  flex: none; min-width: 0; display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px 0 12px;
+  border: 0 !important; border-radius: 999px !important; background: var(--l5-card2) !important; box-shadow: none !important;
+  color: var(--l5-muted); cursor: pointer;
+}
+html body.ll5 #cpBg .cp-st i { display: inline-block; width: 9px; height: 9px; margin: 0; border-radius: 50%; background: var(--l5-faint); }
+html body.ll5 #cpBg .cp-st b { font-size: 13.5px; font-weight: 700; }
+html body.ll5 #cpBg .cp-st.d { color: var(--l5-text); }
+html body.ll5 #cpBg .cp-st.d i { background: var(--l5-go); }
+html body.ll5 #cpBg .cp-st.on { background: var(--l5-acc) !important; color: var(--l5-on-acc); }
+html body.ll5 #cpBg .cp-st.on i { background: var(--l5-on-acc); }
+html body.ll5 .cw-bg .cw-dots { gap: 6px; margin-top: 14px; }
+html body.ll5 .cw-bg .cw-dot { height: 6px; background: var(--l5-card2); }
+/* Corps */
+html body.ll5 #cpBg .cp-bd, html body.ll5 .cw-bg .cw-body { padding: 22px; }
+html body.ll5 #cpBg .cp-h { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; margin-bottom: 6px; color: var(--l5-text); }
+html body.ll5 #cpBg .cp-sub, html body.ll5 .cw-bg .cw-hint { font-size: 15px; line-height: 1.5; color: var(--l5-muted); margin-bottom: 18px; }
+html body.ll5 #cpBg .cp-lb { font-size: 13px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--l5-muted); margin: 20px 2px 10px; }
+html body.ll5 .cw-bg .cw-q { font-size: 17px; font-weight: 800; margin-bottom: 16px; color: var(--l5-text); }
+html body.ll5 #cpBg .cp-opts, html body.ll5 .cw-bg .cw-opts { gap: 12px; }
+html body.ll5 #cpBg .cp-opt, html body.ll5 .cw-bg .cw-opt {
+  position: relative; padding: 18px 18px 16px; border-radius: 22px !important; text-align: left;
+  border: 2px solid transparent !important; background: var(--l5-card2) !important; box-shadow: none !important; color: var(--l5-text);
+  transition: transform 0.12s, border-color 0.12s, background 0.12s;
+}
+html body.ll5 #cpBg .cp-opt:hover, html body.ll5 .cw-bg .cw-opt:hover { transform: translateY(-1px); border-color: var(--l5-line) !important; }
+html body.ll5 #cpBg .cp-opt b, html body.ll5 .cw-bg .cw-opt b { font-size: 17px; font-weight: 800; padding-right: 26px; }
+html body.ll5 #cpBg .cp-opt small, html body.ll5 .cw-bg .cw-opt small { font-size: 14px; line-height: 1.45; color: var(--l5-muted); margin-top: 6px; }
+html body.ll5 #cpBg .cp-opt.sel, html body.ll5 .cw-bg .cw-opt.sel { border-color: var(--l5-acc) !important; background: var(--l5-acc-soft) !important; }
+html body.ll5 #cpBg .cp-opt.sel::after, html body.ll5 .cw-bg .cw-opt.sel::after {
+  content: "✓"; position: absolute; top: 14px; right: 14px; width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--l5-acc); color: var(--l5-on-acc); font-size: 14px; font-weight: 800;
+}
+html body.ll5 #cpBg .cp-chips, html body.ll5 .cw-bg .cw-chips { gap: 8px; padding: 0; border: 0 !important; background: none !important; box-shadow: none !important; }
+/* La bulle messagerie (z 99998) passe sinon devant le bouton « Continuer » */
+html body.ll5:has(#cpBg.show) #ambitio-inbox-fab, html body.ll5:has(.cw-bg.show) #ambitio-inbox-fab { display: none !important; }
+html body.ll5 #cpBg .cp-chip, html body.ll5 .cw-bg .cw-chip {
+  min-height: 44px; padding: 0 18px; border-radius: 999px !important; border: 0 !important; background: var(--l5-card2) !important;
+  box-shadow: none !important; color: var(--l5-text); font-size: 15px; font-weight: 700;
+}
+html body.ll5 #cpBg .cp-chip.sel, html body.ll5 .cw-bg .cw-chip.sel { background: var(--l5-acc) !important; color: var(--l5-on-acc); }
+html body.ll5 #cpBg .cp-in, html body.ll5 .cw-bg .cw-input {
+  min-height: 52px; padding: 0 16px; border-radius: 16px; border: 0; background: var(--l5-card2); color: var(--l5-text); font-size: 17px; font-weight: 700;
+}
+html body.ll5 #cpBg .cp-box, html body.ll5 .cw-bg .cw-comm, html body.ll5 .cw-bg .cw-warn, html body.ll5 .cw-bg .cw-r {
+  margin-top: 14px; padding: 14px 16px; border-radius: 18px; border: 0; background: var(--l5-card2); color: var(--l5-text); font-size: 15px; line-height: 1.55;
+}
+html body.ll5 #cpBg .cp-box b { color: var(--l5-text); }
+html body.ll5 #cpBg .cp-box.g, html body.ll5 .cw-bg .cw-comm { background: var(--l5-go-soft); color: var(--l5-text); }
+html body.ll5 #cpBg .cp-box.y, html body.ll5 .cw-bg .cw-warn { background: var(--l5-warn-soft); color: var(--l5-text); }
+html body.ll5 #cpBg .cp-box.r { background: var(--l5-late-soft); color: var(--l5-text); }
+html body.ll5 #cpBg .cp-chk { gap: 12px; margin-top: 8px; padding: 14px 16px; border: 0; border-radius: 18px; background: var(--l5-card2); font-size: 15px; }
+html body.ll5 #cpBg .cp-chk input { width: 22px; height: 22px; }
+html body.ll5 #cpBg .cp-chk.on { background: var(--l5-go-soft); }
+html body.ll5 #cpBg .cp-msg { border: 0; border-radius: 16px; padding: 14px 16px; background: var(--l5-card2); color: var(--l5-text); font-size: 14px; }
+html body.ll5 #cpBg .cp-tbl { font-size: 14.5px; }
+html body.ll5 #cpBg .cp-tbl td { padding: 9px 6px; border-bottom: 1px solid var(--l5-line); }
+html body.ll5 #cpBg .cp-li { padding: 12px 0; border-bottom: 1px solid var(--l5-line); font-size: 15px; }
+html body.ll5 #cpBg .cp-li .m { width: 26px; height: 26px; font-size: 13px; }
+html body.ll5 #cpBg .cp-li small { font-size: 13px; color: var(--l5-muted); }
+/* Pied : deux gros boutons, toujours visibles */
+html body.ll5 #cpBg .cp-ft, html body.ll5 .cw-bg .cw-foot { gap: 10px; padding: 16px 22px 22px; border-top: 1px solid var(--l5-line); }
+html body.ll5 .cw-bg .cw-foot { border-top: 0; }
+html body.ll5 #cpBg .cp-btn, html body.ll5 .cw-bg .cw-back, html body.ll5 .cw-bg .cw-ok, html body.ll5 .cw-bg .cw-pay, html body.ll5 .cw-bg .cw-ghost, html body.ll5 #cpNotice .cp-btn {
+  min-height: 52px; padding: 0 22px; border-radius: 18px !important; border: 0 !important; box-shadow: none !important;
+  font-family: var(--fb); font-size: 16px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  background: var(--l5-card2) !important; color: var(--l5-text) !important;
+}
+html body.ll5 #cpBg .cp-ft .cp-btn { flex: 1; }
+html body.ll5 #cpBg .cp-ft > span:empty { display: none; }
+html body.ll5 #cpBg .cp-btn.pri, html body.ll5 .cw-bg .cw-pay { background: var(--l5-acc) !important; color: var(--l5-on-acc) !important; }
+html body.ll5 #cpBg .cp-btn.ok, html body.ll5 .cw-bg .cw-ok, html body.ll5 #cpNotice .cp-btn.ok { background: var(--l5-go-bg) !important; color: var(--l5-on-go) !important; }
+html body.ll5 #cpBg .cp-btn[disabled], html body.ll5 .cw-bg .cw-ok:disabled { opacity: 1; cursor: default; background: var(--l5-card2) !important; color: var(--l5-faint) !important; }
+html body.ll5 #cpBg .cp-win h2 { font-size: 28px; }
+html body.ll5 #cpNotice { border-radius: 26px; background: var(--l5-modal); border: 1px solid var(--l5-border); color: var(--l5-text); -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px); }
+html body.ll5 #cpNotice .d { color: var(--l5-muted); font-size: 14px; }
+/* Téléphone : feuille plein écran, pied collé en bas */
+@media (max-width: 560px) {
+  html body.ll5 #cpBg, html body.ll5 .cw-bg { padding: 0; align-items: flex-end; }
+  html body.ll5 #cpBg .cp-mo, html body.ll5 .cw-bg .cw-modal { width: 100%; max-height: 96dvh; border-radius: 28px 28px 0 0; }
+  html body.ll5 #cpBg .cp-opts, html body.ll5 .cw-bg .cw-opts { grid-template-columns: 1fr; }
+  html body.ll5 #cpBg .cp-ft { padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
+}

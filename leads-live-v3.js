@@ -780,7 +780,13 @@
     CHOIX_RAPPEL.forEach(function (q) {
       h += '<button type="button" class="ll5line big" data-ll5="fuask" data-v="' + q[0] + '" data-id="' + id + '"><span class="ll5ric">' + ic('clock') + '</span><span class="ll5tx"><b>' + q[1] + '</b></span></button>';
     });
-    h += '</div><div class="ll5group ll5mt"><label class="ll5switch"><span>Ajouter à mon agenda</span><input type="checkbox" id="ll5AskCal" checked/><span class="ll5sw" aria-hidden="true"></span></label></div>';
+    var dem = new Date(); dem.setDate(dem.getDate() + 1);
+    h += '</div><details class="ll5more ll5mt" id="ll5AskMore"><summary class="ll5line big"><span class="ll5ric">' + ic('cal') + '</span><span class="ll5tx"><b>Personnalisé</b><span>Choisis le jour et l’heure</span></span><span class="ll5chev">' + ic('chev') + '</span></summary>';
+    h += '<div class="ll5form"><div class="ll5row2"><label>Date<input type="date" id="ll5AskDate" min="' + ymd(new Date()) + '" value="' + ymd(dem) + '"/></label><label>Heure<input type="time" id="ll5AskTime" step="300" value="10:00"/></label></div>';
+    h += '<label>Durée<select id="ll5AskDur"><option value="15">15 min</option><option value="30" selected>30 min</option><option value="45">45 min</option><option value="60">1 h</option></select></label>';
+    h += '<label>Pourquoi ? (facultatif)<textarea id="ll5AskNote" rows="2" placeholder="ex. il en parle à son associé"></textarea></label>';
+    h += '<button type="button" class="ll5big pri" data-ll5="fuperso" data-id="' + id + '">Programmer le rappel</button></div></details>';
+    h += '<div class="ll5group ll5mt"><label class="ll5switch"><span>Ajouter à mon agenda</span><input type="checkbox" id="ll5AskCal" checked/><span class="ll5sw" aria-hidden="true"></span></label></div>';
     h += '<div class="ll5foot"><button type="button" class="ll5big soft" data-ll5="home">Pas de rappel</button></div>';
     return h;
   }
@@ -903,12 +909,13 @@
     g.innerHTML = '<button type="button" class="ld-status-btn" data-action="setStatus" data-id="' + escAttr(id) + '" data-status="' + st + '">' + escHtml(s.label) + '</button>';
     g.firstChild.click();
   }
-  function programmerRappel(id, ms, agenda) {
-    var d = new Date(ms), g = fantome(), avant = openCardId, ecr = pile.slice();
+  function programmerRappel(id, ms, agenda, note, duree) {
+    var d = new Date(ms), g = fantome(), avant = openCardId, ecr = pile.slice(), dur = String(duree || 30);
     g.innerHTML = '<input data-fu-field="date" value="' + ymd(d) + '"/><input data-fu-field="time" value="' + hm(d) + '"/>' +
-      '<textarea data-fu-field="note"></textarea><select data-fu-field="duration"><option value="30" selected>30</option></select>' +
+      '<textarea data-fu-field="note"></textarea><select data-fu-field="duration"><option value="' + escAttr(dur) + '" selected>' + escHtml(dur) + '</option></select>' +
       '<input type="checkbox" data-fu-field="pushCal"' + (agenda ? ' checked' : '') + '/>' +
       '<button type="button" data-action="addFu" data-id="' + escAttr(id) + '">Programmer le rappel</button>';
+    if (note) g.querySelector('[data-fu-field="note"]').value = note;
     g.querySelector('[data-action="addFu"]').click();
     if (avant !== id) {
       if (!avant) { l2CloseSheet(); renderFeed(); }
@@ -1040,6 +1047,15 @@
       case 'fuask':
         var cal = l2El('ll5AskCal');
         programmerRappel(id, heureRapide(v), cal ? cal.checked : true);
+        accueilLead();
+        return;
+      case 'fuperso':
+        var pd = l2El('ll5AskDate'), pt = l2El('ll5AskTime'), pc = l2El('ll5AskCal'), pn = l2El('ll5AskNote'), pu = l2El('ll5AskDur');
+        if (!pd || !pd.value || !pt || !pt.value) { toast('Choisis une date et une heure'); return; }
+        var pms = new Date(pd.value + 'T' + pt.value).getTime();
+        if (isNaN(pms)) { toast('Date ou heure invalide'); return; }
+        if (pms <= Date.now()) { toast('Choisis un moment à venir'); return; }
+        programmerRappel(id, pms, pc ? pc.checked : true, pn ? pn.value.trim() : '', pu ? pu.value : 30);
         accueilLead();
         return;
       case 'fuq':
