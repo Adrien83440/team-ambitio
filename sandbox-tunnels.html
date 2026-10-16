@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="robots" content="noindex,nofollow"/>
+<title>🧪 Labo Tunnels — test sans envoi</title>
+<!-- Labo Tunnels (16/10/2026) : les VRAIES pages des tunnels, à tester par
+     l'équipe sans que rien ne parte (ni lead, ni RDV, ni Make, ni pixel).
+     Voir sandbox-tunnels.js. Firebase ici = LECTURE SEULE des agendas, types
+     de RDV et formulaires réels (get() uniquement) ; les pages testées
+     parlent à la fausse base (sandbox-db.js). -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}</script>
+<script>window.__SBX_EPHEMERAL = true;</script>
+<script src="sandbox-db.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#0b0b14;color:#f0f0f5;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+button{font:inherit;cursor:pointer}
+#bar{position:fixed;top:0;left:0;right:0;height:44px;z-index:20;display:flex;align-items:center;gap:8px;padding:0 10px 0 0;padding-top:env(safe-area-inset-top);background:#17130a;border-bottom:2px solid #f59e0b;box-shadow:0 2px 10px rgba(0,0,0,.35)}
+#bar .tag{flex:0 0 auto;height:100%;display:flex;align-items:center;padding:0 12px;background:repeating-linear-gradient(135deg,#f59e0b 0 10px,#d97706 10px 20px);color:#1a1205;font-weight:800;font-size:13px;letter-spacing:.04em}
+#bar .txt{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;line-height:1.15}
+#bar .txt b{font-size:13px;color:#fde68a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#bar .txt span{font-size:11px;color:rgba(253,230,138,.65);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#bar .btn{flex:0 0 auto;height:30px;min-width:34px;padding:0 10px;border-radius:8px;border:1px solid rgba(253,230,138,.3);background:rgba(253,230,138,.08);color:#fde68a;font-size:13px;font-weight:600;display:flex;align-items:center;gap:5px}
+#bar .btn:hover{background:rgba(253,230,138,.16)}
+#bar .cnt{min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#f59e0b;color:#1a1205;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center}
+#stage{position:fixed;left:0;right:0;bottom:0;top:calc(44px + env(safe-area-inset-top));width:100%;height:calc(100% - 44px - env(safe-area-inset-top));border:0;background:#fff;display:none}
+body.run #stage{display:block}
+#journal{position:fixed;z-index:30;top:calc(44px + env(safe-area-inset-top));right:0;bottom:0;width:400px;max-width:100%;background:#12121c;border-left:1px solid rgba(255,255,255,.1);box-shadow:-8px 0 30px rgba(0,0,0,.45);display:none;flex-direction:column}
+#journal.open{display:flex}
+#journal header{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
+#journal header b{flex:1;font-size:14px}
+#journal header button{border:1px solid rgba(255,255,255,.15);background:transparent;color:#f0f0f5;border-radius:7px;padding:4px 10px;font-size:12px}
+#journal .intro{padding:10px 14px;font-size:12px;line-height:1.5;color:rgba(240,240,245,.6);border-bottom:1px solid rgba(255,255,255,.06)}
+#jList{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 0 30px}
+.je{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.05)}
+.je .h{display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.35}
+.je .h i{font-style:normal;flex:0 0 auto}
+.je .h b{flex:1;font-weight:600}
+.je .h small{flex:0 0 auto;color:rgba(240,240,245,.4);font-size:11px;margin-top:2px}
+.je dl{margin:6px 0 0 24px;display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:12px}
+.je dt{color:rgba(240,240,245,.45)}
+.je dd{margin:0;color:rgba(240,240,245,.85);word-break:break-word}
+.je.k-optin,.je.k-make,.je.k-booking,.je.k-form{background:rgba(245,158,11,.06)}
+.je.k-stats,.je.k-pixel{opacity:.8}
+.empty{padding:30px 20px;text-align:center;color:rgba(240,240,245,.45);font-size:13px}
+#toast{position:fixed;z-index:40;left:50%;bottom:22px;transform:translateX(-50%);max-width:calc(100% - 32px);background:#1f1a0c;border:1px solid #f59e0b;color:#fde68a;padding:10px 14px;border-radius:10px;font-size:13px;line-height:1.4;box-shadow:0 8px 30px rgba(0,0,0,.45);display:none}
+#toast.on{display:block}
+#index{display:none;max-width:860px;margin:0 auto;padding:70px 16px 60px}
+body.idx #index{display:block}
+#index h1{font-size:22px;margin:0 0 6px}
+#index .lead{color:rgba(240,240,245,.65);font-size:14px;line-height:1.55;margin:0 0 22px}
+.grp{margin:26px 0 8px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#fde68a}
+.tn{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px;margin:10px 0;overflow:hidden}
+.tn h2{font-size:15px;margin:0;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pill{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,.08);color:rgba(240,240,245,.7)}
+.pill.live{background:rgba(52,211,153,.15);color:#6ee7b7}
+.st{display:flex;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid rgba(255,255,255,.04);flex-wrap:wrap}
+.st:first-of-type{border-top:0}
+.st .nm{flex:1 1 200px;min-width:0;font-size:13px}
+.st .nm code{display:block;font-size:11px;color:rgba(240,240,245,.45);margin-top:2px}
+.st .vs{display:flex;gap:6px;flex-wrap:wrap}
+.vb{display:inline-flex;align-items:center;border:1px solid rgba(253,230,138,.3);border-radius:8px;overflow:hidden}
+.vb a,.vb button{border:0;background:rgba(253,230,138,.08);color:#fde68a;font-size:12px;font-weight:600;padding:6px 10px;text-decoration:none}
+.vb button{border-left:1px solid rgba(253,230,138,.25)}
+.vb a:hover,.vb button:hover{background:rgba(253,230,138,.18)}
+.note{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.55;color:rgba(253,230,138,.9)}
+@media (max-width:640px){
+  #bar .txt span{display:none}
+  #bar .btn .lbl{display:none}
+  #journal{top:auto;height:72%;width:100%;border-left:0;border-top:1px solid rgba(255,255,255,.12);border-radius:14px 14px 0 0}
+}
+</style>
+</head>
+<body>
+<div id="bar">
+  <div class="tag">🧪 TEST</div>
+  <div class="txt"><b id="bInfo">Labo Tunnels</b><span>Rien n'est envoyé : ni lead, ni RDV, ni Make, ni pixel Meta</span></div>
+  <button class="btn" data-act="journal" title="Ce qui serait parti en vrai">📋 <span class="lbl">Journal</span> <span class="cnt" id="bCount">0</span></button>
+  <button class="btn" data-act="copy" title="Copier le lien de test de cette page">🔗 <span class="lbl">Lien</span></button>
+  <button class="btn" data-act="reset" title="Recommencer le parcours à zéro">↺ <span class="lbl">Recommencer</span></button>
+</div>
+<iframe id="stage" title="Page du tunnel (test)" allow="autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write"></iframe>
+<aside id="journal" aria-label="Journal du test">
+  <header><b>📋 Ce qui serait parti en vrai</b><button data-act="clear">Vider</button><button data-act="journal">Fermer</button></header>
+  <div class="intro">Chaque envoi de la page est intercepté ici : rien n'arrive dans Leads Live, l'agenda, Make ou chez Meta.</div>
+  <div id="jList"></div>
+</aside>
+<main id="index"></main>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="sandbox-tunnels.js"></script>
+</body>
+</html>

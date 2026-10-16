@@ -238,6 +238,10 @@
       });
     }
     function scheduleSave() {
+      /* Labo Tunnels : magasin éphémère (window.__SBX_EPHEMERAL posé avant
+         ce fichier) — rien n'est gardé dans IndexedDB, et la base du bac à
+         sable closer n'est jamais écrasée. */
+      if (window.__SBX_EPHEMERAL) return;
       clearTimeout(saveTimer);
       saveTimer = setTimeout(function () {
         var snap = { docs: docs, tomb: tomb };

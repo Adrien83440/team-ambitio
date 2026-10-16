@@ -18,7 +18,7 @@
 
   /* Pages que le bac à sable sait faire tourner. Toute autre page est
      bloquée : elle chargerait le VRAI Firebase. */
-  var MIRRORED = { 'sign.html': 1, 'sales-signatures.html': 1, 'payments.html': 1, 'booking.html': 1 };
+  var MIRRORED = { 'sign.html': 1, 'sales-signatures.html': 1, 'payments.html': 1, 'booking.html': 1, 'alteoforms-render.html': 1 };
   var STATIC_HOSTS = { 'cdnjs.cloudflare.com': 1, 'fonts.googleapis.com': 1, 'fonts.gstatic.com': 1, 'cdn.jsdelivr.net': 1, 'unpkg.com': 1 };
 
   var params = new URLSearchParams(location.search);
@@ -144,6 +144,18 @@
       else warn('Navigation bloquée : ' + dest);
     });
   }
+
+  /* Pixel Meta : booking.html et AlteoForms le chargent d'office pour un
+     visiteur public (identifiant écrit en dur). Un faux fbq le remplace : le
+     code de base de Meta voit `window.fbq` déjà posé et ne charge jamais
+     fbevents.js — aucun événement ne part chez Meta. Le Labo Tunnels
+     affiche dans son journal ce qui serait parti (16/10/2026). */
+  function fakeFbq() {
+    var args = Array.prototype.slice.call(arguments);
+    try { if (top_.SBX_TN && top_.SBX_TN.pixel) top_.SBX_TN.pixel(args, page); } catch (e) {}
+  }
+  fakeFbq.queue = []; fakeFbq.loaded = true; fakeFbq.version = '2.0'; fakeFbq.push = fakeFbq; fakeFbq.callMethod = null;
+  window.fbq = window._fbq = fakeFbq;
 
   /* ═══ 2. FIREBASE → fausse base ══════════════════════════════════════ */
   window.firebase = window.SBXDB.compat(window);

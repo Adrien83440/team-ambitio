@@ -268,6 +268,9 @@ function pageKey(t, s) { return slugify(t.slug) + '__' + slugify(s.slug); }
 function stepPath(t, s) { return (t.homeStepId && t.homeStepId === s.id) ? '/' : '/' + s.slug; }
 function liveUrl(t, s) { return 'https://' + (t.settings && t.settings.host || CFG.primaryHost) + (s ? stepPath(t, s) : '/'); }
 function previewUrl(t, s, v) { return '/t' + stepPath(t, s) + (v ? '?v=' + encodeURIComponent(v) : ''); }
+/* Lien de test du Labo Tunnels (16/10/2026) : la vraie page, sans aucun envoi
+   (ni lead, ni RDV, ni Make, ni pixel) — public, à envoyer à l'équipe. */
+function testUrl(t, s, v) { return location.origin + '/sandbox-tunnels.html?p=' + encodeURIComponent(stepPath(t, s).replace(/^\//, '')) + (v ? '&v=' + encodeURIComponent(v) : ''); }
 function copyText(txt) {
   if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(txt).then(function () { toast('Copié'); }, function () { toast('Copie impossible', true); }); return; }
   var ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select();
@@ -382,7 +385,7 @@ function renderList() {
   $('btnBack').style.display = 'none';
   $('btnNew').style.display = '';
   $('domainBanner').innerHTML = '<div>🌐 <strong>Domaine des tunnels :</strong> <code>' + esc(CFG.primaryHost) + '</code> — chaque étape répond sur <code>https://' + esc(CFG.primaryHost) + '/&lt;chemin&gt;</code>. '
-    + 'Aperçu interne : <code>team.alteore.com/t/&lt;chemin&gt;</code> (brouillons visibles, aucune mesure).</div>';
+    + 'Aperçu interne : <code>team.alteore.com/t/&lt;chemin&gt;</code> (brouillons visibles, aucune mesure). Pour faire tester un parcours à l\'équipe (formulaires, RDV), le lien 🧪 du Labo Tunnels : la même page, et rien n\'est envoyé.</div>';
   var grid = $('tunnelGrid');
   var funnels = TUNNELS.filter(function (t) { return kindOf(t) === 'funnel'; });
   grid.innerHTML = '<div class="tn-empty" style="grid-column:1/-1">Chargement…</div>';
@@ -562,7 +565,9 @@ function renderSteps() {
       + '<div class="acts">'
       + '<button class="bb bb-o" data-action="editStep" data-id="' + escAttr(s.id) + '">✏️ Modifier</button>'
       + '<a class="bb bb-o" href="' + escAttr(previewUrl(t, s)) + '" target="_blank" rel="noopener">👁 Aperçu</a>'
-      + '<button class="bb bb-o" data-action="copyUrl" data-url="' + escAttr(liveUrl(t, s)) + '">🔗</button>'
+      + '<a class="bb bb-o" href="' + escAttr(testUrl(t, s)) + '" target="_blank" rel="noopener" title="Labo Tunnels : la vraie page, rien n\'est envoyé">🧪 Test</a>'
+      + '<button class="bb bb-o" data-action="copyUrl" data-url="' + escAttr(testUrl(t, s)) + '" title="Copier le lien de test (à envoyer à l\'équipe)">🧪🔗</button>'
+      + '<button class="bb bb-o" data-action="copyUrl" data-url="' + escAttr(liveUrl(t, s)) + '" title="Copier l\'adresse publique">🔗</button>'
       + '<button class="bb bb-o" data-action="dupStep" data-id="' + escAttr(s.id) + '" title="Dupliquer">⧉</button>'
       + '<button class="bb bb-o" data-action="moveStep" data-id="' + escAttr(s.id) + '" data-dir="-1"' + (i === 0 ? ' disabled' : '') + '>▲</button>'
       + '<button class="bb bb-o" data-action="moveStep" data-id="' + escAttr(s.id) + '" data-dir="1"' + (i === t.steps.length - 1 ? ' disabled' : '') + '>▼</button>'
@@ -700,6 +705,7 @@ function renderVariants(s) {
       + (ok ? '<button class="bb bb-o bb-s" data-action="openCode" data-id="' + escAttr(v.id) + '">✏️ Modifier le code</button>' : '')
       + (ok ? '<a class="bb bb-o bb-s" href="' + escAttr(previewUrl(t, s, v.id)) + '" target="_blank" rel="noopener">👁 Aperçu</a>' : '')
       + (ok ? (v.previews || []).map(function (pv) { return '<a class="bb bb-o bb-s" href="' + escAttr(previewUrl(t, s, v.id) + '&' + pv.query) + '" target="_blank" rel="noopener">👁 ' + esc(pv.label) + '</a>'; }).join('') : '')
+      + (ok ? '<a class="bb bb-o bb-s" href="' + escAttr(testUrl(t, s, v.id)) + '" target="_blank" rel="noopener" title="Labo Tunnels : la vraie page, rien n\'est envoyé">🧪 Test</a><button class="bb bb-o bb-s" data-action="copyUrl" data-url="' + escAttr(testUrl(t, s, v.id)) + '">🧪🔗 Lien de test</button>' : '')
       + (ok ? '<button class="bb bb-o bb-s" data-action="dlHtml" data-id="' + escAttr(v.id) + '">⬇ Télécharger le HTML</button>' : '')
       + '</div>'
       /* Écrans d'aperçu : la page lit un paramètre d'URL et affiche directement

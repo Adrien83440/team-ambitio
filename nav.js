@@ -149,6 +149,10 @@
     // (scripts/build-sandbox-leads-live.js), faux Firebase + pare-feu : rien
     // de réel ne part. Admins seulement, fenêtre à part.
     { id: 'sandbox-leads-live', icon: '🧪', label: 'Labo Leads Live', href: 'sandbox-leads-live.html', section: 'Outils', perm: '_admin', newWindow: true },
+    // Labo Tunnels (16/10/2026) : les vraies pages des tunnels, pare-feu +
+    // fausse base — ni lead, ni RDV, ni Make, ni pixel. La liste des liens
+    // est réservée aux admins ; un lien de test (?p=…) s'ouvre sans connexion.
+    { id: 'sandbox-tunnels',   icon: '🧪', label: 'Labo Tunnels', href: 'sandbox-tunnels.html', section: 'Outils', perm: '_admin', newWindow: true },
     // Aide Team (14/10/2026) : assistant IA des questions techniques (où
     // cliquer, agenda, WhatsApp…) + catalogue des fiches pratiques. Sales et
     // admins ; la bulle « ? » (aide-widget.js) est injectée plus bas.
