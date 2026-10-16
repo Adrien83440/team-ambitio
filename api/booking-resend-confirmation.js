@@ -206,7 +206,9 @@ module.exports = async (req, res) => {
     // Lien de visio : celui posé par onBookingCreated (Meet auto), sinon le
     // lien fixe de la consultation (Zoom, Teams, lien perso). Jamais le lien
     // Google Calendar de l'événement, qui n'a de sens que côté équipe.
-    const meetLink = booking.meetLink || (type && type.locationUrl) || null;
+    // Lien suivi (module Pilotage équipe) quand onBookingCreated l'a posé —
+    // jamais sans le vrai lien Meet, que la page relais doit pouvoir ouvrir.
+    const meetLink = (booking.meetLink && booking.meetTrackedLink) || booking.meetLink || (type && type.locationUrl) || null;
 
     const mail = buildConfirmationEmail(booking, meetLink);
 

@@ -193,6 +193,36 @@ async function getEventCalendarId(personId) {
 //           Le prospect ajoute le RDV via le .ics de la page de confirmation.
 const SEND_GOOGLE_INVITE_TO_PROSPECT = true;
 
+// ─── Lien Meet SUIVI (module Pilotage équipe, 16/10/2026) ───────────────────
+// Quand _config/team_pilotage.meetTracking === true, onBookingCreated pose
+// sur le booking `meetTrackedLink` = https://team.alteore.com/m/{bookingId}.
+// Ce lien passe par api/meet-link.js (Vercel) : il compte le clic du prospect
+// (booking_meet/{bookingId}) puis ouvre la vraie visio — redirection fermée,
+// la destination est relue dans booking.meetLink. Il remplace le lien brut
+// dans les canaux PROSPECT qu'on maîtrise : e-mail de confirmation, rappels
+// J-1 / H-1 (e-mail et SMS via {{meetLink}} / {{meetBlock}}), page de
+// confirmation de booking.html et renvoi de confirmation. L'invitation Google
+// Agenda et la notification interne de l'expert gardent le lien brut.
+// Interrupteur OFF par défaut : à activer APRÈS le déploiement Vercel de
+// api/meet-link.js. Le couper n'invalide pas les liens déjà envoyés.
+const MEET_TRACK_BASE = 'https://team.alteore.com/m/';
+async function _abMeetTrackingOn() {
+  try {
+    const d = await db.collection('_config').doc('team_pilotage').get();
+    return d.exists && (d.data() || {}).meetTracking === true;
+  } catch (e) {
+    console.warn('[meetTracking] config illisible:', e.message);
+    return false;
+  }
+}
+// Lien à donner au PROSPECT : le lien suivi s'il existe ET que le vrai lien
+// Meet est en place (sans lui, la page relais n'aurait rien à ouvrir).
+function _abProspectMeetLink(booking) {
+  const raw = (booking && booking.meetLink) || '';
+  if (raw && booking.meetTrackedLink) return booking.meetTrackedLink;
+  return raw;
+}
+
 /**
  * Attend que le code Google Meet d'un événement soit DÉFINITIF avant qu'on
  * notifie qui que ce soit.
@@ -2248,7 +2278,8 @@ exports.scheduledBookingReminders = functions.pubsub
         // Depuis l'option A (2026-06), les rappels EMAIL J-1/H-1 injectent de
         // toute façon l'encart Meet automatiquement via _abReminderEmail —
         // indépendamment de la présence de {{meetLink}} dans le template.
-        const reminderMeetLink = booking.meetLink || "";
+        // Lien suivi (module Pilotage équipe) quand onBookingCreated l'a posé.
+        const reminderMeetLink = _abProspectMeetLink(booking);
         const reminderMeetBlock = reminderMeetLink
           ? "📹 Lien de la visioconférence : " + reminderMeetLink
           : "";
@@ -2658,6 +2689,7 @@ exports.onBookingCreated = functions.firestore
     const typeLabel = booking.typeLabel || booking.type || 'RDV';
 
     let meetLink = null;
+    let meetTrackedLink = null;
     let calendarEventId = null;
     let calendarEventLink = null;
 
@@ -2751,7 +2783,12 @@ exports.onBookingCreated = functions.firestore
             }
           }
 
-          await snap.ref.update({ calendarEventId, calendarEventLink, meetLink, calendarIdUsed: targetCalendarId });
+          const evPatch = { calendarEventId, calendarEventLink, meetLink, calendarIdUsed: targetCalendarId };
+          if (meetLink && /^[A-Za-z0-9_-]{5,64}$/.test(bookingId) && await _abMeetTrackingOn()) {
+            meetTrackedLink = MEET_TRACK_BASE + bookingId;
+            evPatch.meetTrackedLink = meetTrackedLink;
+          }
+          await snap.ref.update(evPatch);
           await fetchAndStoreBusy(personId);
           console.log('[onBookingCreated] Event ' + calendarEventId + ' meet=' + (meetLink ? 'yes' : 'no'));
         }
@@ -2767,10 +2804,12 @@ exports.onBookingCreated = functions.firestore
 
         const subject = 'Confirmation de votre RDV — ' + typeLabel;
         const dateFr = _abFmtDate(booking.date);
-        const meetBlock = meetLink
+        // Lien suivi si l'interrupteur meetTracking était actif (voir plus haut).
+        const prospectMeetLink = meetLink ? (meetTrackedLink || meetLink) : null;
+        const meetBlock = prospectMeetLink
           ? '<div style="margin:20px 0;padding:16px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px">'
             + '<div style="font-size:14px;font-weight:700;color:#166534;margin-bottom:6px">📹 Lien de visioconférence</div>'
-            + '<a href="' + meetLink + '" style="color:#16a34a;font-size:15px;font-weight:600;text-decoration:none;word-break:break-all">' + meetLink + '</a>'
+            + '<a href="' + prospectMeetLink + '" style="color:#16a34a;font-size:15px;font-weight:600;text-decoration:none;word-break:break-all">' + prospectMeetLink + '</a>'
             + '<div style="font-size:12px;color:#6b7280;margin-top:6px">Cliquez à l\'heure du RDV pour rejoindre la réunion.</div>'
             + '</div>'
           : '';

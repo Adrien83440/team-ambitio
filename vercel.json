@@ -79,10 +79,17 @@
     {
       "path": "/api/mail-health-cron",
       "schedule": "15 * * * *"
+    },
+    {
+      "path": "/api/user-activity",
+      "schedule": "20 2 1 * *"
     }
   ],
   "functions": {
     "api/sign-session.js": {
+      "maxDuration": 60
+    },
+    "api/team-pilotage.js": {
       "maxDuration": 60
     },
     "api/contract-studio.js": {
@@ -249,6 +256,10 @@
     {
       "src": "^/g/([^/]+)$",
       "dest": "/api/group-redirect?id=$1"
+    },
+    {
+      "src": "^/m/([A-Za-z0-9_-]{5,64})/?$",
+      "dest": "/api/meet-link?id=$1"
     },
     {
       "src": "^/f/([A-Za-z0-9_-]+)/?$",

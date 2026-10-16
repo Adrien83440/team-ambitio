@@ -34,7 +34,19 @@
 // Les docs journaliers portent un champ `date`, les résumés non : la requête
 // `where('date', '>=', from)` n'a donc besoin d'aucun index composite.
 //
-// Rien n'est jamais supprimé : compteurs et cumuls uniquement.
+// CONSERVATION (décision Adrien 16/10/2026, module Pilotage équipe) :
+// données de connexion = données personnelles → les docs journaliers de plus
+// de 12 mois sont supprimés (exception assumée à « rien n'est supprimé »).
+// Le résumé par personne est conservé.
+//   GET  Bearer <CRON_SECRET>                 → purge (cron mensuel, vercel.json)
+//   POST { action: 'purge', dryRun: true }    → admin : aperçu, rien n'est écrit
+//   POST { action: 'purge', dryRun: false }   → admin : purge immédiate
+//
+// PRESTATAIRES (même décision) : un membre prestataire de _meta/team_members
+// (`prestataire: true`, ou par défaut les rôles setter / setter_ecrit, sous
+// contrat de prestation) n'est PAS suivi : le signal est accepté puis ignoré,
+// sans aucune écriture. Suivre le temps de connexion d'un indépendant
+// renforcerait le risque de requalification en salariat.
 // ============================================================================
 
 const { admin, db } = require('./_firebaseAdmin');
@@ -53,6 +65,32 @@ const NEW_SESSION_CAP_MS = 5 * 60 * 1000;
 
 const MAX_REPORT_DAYS = 365;
 const DEFAULT_REPORT_DAYS = 30;
+const RETENTION_DAYS = 365;
+const PURGE_MAX_DOCS = 4000;
+
+// ─── Prestataires (cache 5 min du roster) ──────────────────────────────────
+const PRESTATAIRE_ROLES = { setter: 1, setter_ecrit: 1 };
+let rosterCache = null;
+let rosterCacheAt = 0;
+async function prestataireUids() {
+  if (rosterCache && Date.now() - rosterCacheAt < 5 * 60 * 1000) return rosterCache;
+  const out = {};
+  try {
+    const snap = await db.collection('_meta').doc('team_members').get();
+    const raw = snap.exists ? (snap.data() || {}).members : null;
+    const list = Array.isArray(raw) ? raw : Object.values(raw || {});
+    list.forEach((m) => {
+      if (!m || !m.firebaseUid) return;
+      if (m.prestataire === true || (m.prestataire !== false && PRESTATAIRE_ROLES[m.role])) out[m.firebaseUid] = true;
+    });
+    rosterCache = out;
+    rosterCacheAt = Date.now();
+  } catch (e) {
+    console.warn('[user-activity] roster illisible:', e.message);
+    if (rosterCache) return rosterCache;
+  }
+  return out;
+}
 
 function todayIsoParis(d) {
   // 'en-CA' → format YYYY-MM-DD
@@ -84,6 +122,11 @@ function cleanUserAgent(raw) {
 async function handleBeat(req, res) {
   const auth = await requireAuth(req, res);
   if (!auth) return;
+
+  if ((await prestataireUids())[auth.uid]) {
+    res.status(200).json({ ok: true, skipped: 'prestataire' });
+    return;
+  }
 
   const body = parseBody(req);
   const now = Date.now();
@@ -260,10 +303,52 @@ async function handleReport(req, res) {
   });
 }
 
+// ─── PURGE (conservation 12 mois des docs journaliers) ──────────────────────
+async function runPurge(dryRun) {
+  const cutoff = todayIsoParis(new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000));
+  const snap = await db.collection(COLLECTION).where('date', '<', cutoff).limit(PURGE_MAX_DOCS).get();
+  const ids = [];
+  snap.forEach((d) => {
+    const s = d.data() || {};
+    if (s.kind && s.kind !== 'daily') return; // jamais un résumé
+    ids.push(d.id);
+  });
+  if (!dryRun) {
+    for (let i = 0; i < ids.length; i += 400) {
+      const batch = db.batch();
+      ids.slice(i, i + 400).forEach((id) => batch.delete(db.collection(COLLECTION).doc(id)));
+      await batch.commit();
+    }
+  }
+  return { dryRun: !!dryRun, cutoff, count: ids.length, sample: ids.slice(0, 20), more: snap.size >= PURGE_MAX_DOCS };
+}
+
+async function handlePurge(req, res, body) {
+  const auth = await requireAdmin(req, res);
+  if (!auth) return;
+  const dryRun = body.dryRun !== false;
+  res.status(200).json(Object.assign({ ok: true }, await runPurge(dryRun)));
+}
+
 // ─── ROUTER ─────────────────────────────────────────────────────────────────
 module.exports = async (req, res) => {
+  if (req.method === 'GET') {
+    const secret = process.env.CRON_SECRET;
+    const authHeader = req.headers['authorization'] || '';
+    if (!secret || (authHeader !== 'Bearer ' + secret && req.headers['x-api-key'] !== secret)) {
+      return res.status(401).json({ error: 'unauthorized' });
+    }
+    try {
+      const r = await runPurge(false);
+      console.log('[user-activity] purge', r.cutoff, r.count);
+      return res.status(200).json(Object.assign({ ok: true }, r));
+    } catch (e) {
+      console.error('[user-activity] purge failed:', e);
+      return res.status(200).json({ ok: false, error: e.message });
+    }
+  }
   if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
+    res.setHeader('Allow', 'GET, POST');
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -273,6 +358,7 @@ module.exports = async (req, res) => {
   try {
     if (action === 'beat') return await handleBeat(req, res);
     if (action === 'report') return await handleReport(req, res);
+    if (action === 'purge') return await handlePurge(req, res, body);
     return res.status(400).json({ error: 'Unknown action: ' + (action || '(vide)') });
   } catch (e) {
     console.error('[user-activity] ' + action + ' failed:', e);

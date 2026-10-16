@@ -2645,10 +2645,15 @@ async function submitBooking() {
         var d = snap.data();
         if (d && d.meetLink) {
           unsub();
-          S.confirmedMeetLink = d.meetLink;  // dispo pour le .ics
+          // Lien suivi (module Pilotage équipe, 16/10/2026) : posé par
+          // onBookingCreated dans la même écriture que meetLink quand
+          // _config/team_pilotage.meetTracking est actif — il compte le clic
+          // du prospect puis ouvre la vraie visio (api/meet-link.js).
+          var shownLink = d.meetTrackedLink || d.meetLink;
+          S.confirmedMeetLink = shownLink;  // dispo pour le .ics
           document.getElementById('meetLinkWrap').style.display = '';
-          document.getElementById('meetLinkBtn').href = d.meetLink;
-          document.getElementById('meetLinkUrl').textContent = d.meetLink;
+          document.getElementById('meetLinkBtn').href = shownLink;
+          document.getElementById('meetLinkUrl').textContent = shownLink;
         }
       });
       setTimeout(function() { unsub(); }, 30000); // timeout 30s

@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pilotage équipe · Alteore</title>
+<link rel="stylesheet" href="sales.css">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}</script>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   admin-pilotage.html — Pilotage équipe sales (16/10/2026, admin)
+   Trois onglets :
+     • En direct  : qui est en appel / en visio / connecté, RDV de closing
+                    du jour avec clic sur le lien Meet et présence du
+                    prospect dans la salle (rafraîchi toutes les 20 s) ;
+     • Activité   : par personne et par jour (appels, RDV, messages,
+                    actions sur les fiches) ;
+     • Prospect   : toute l'histoire d'un prospect, toutes personnes
+                    confondues.
+   Données : api/team-pilotage.js (admin uniquement). Les prestataires
+   (setters sous contrat de prestation) n'ont ni présence ni temps de
+   connexion : seulement leurs résultats.
+   ═══════════════════════════════════════════════════════════════════════ */
+.pl{padding:20px 26px 80px;max-width:1500px;margin:0 auto}
+.pl .sp{flex:1}
+.pl-top{display:flex;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.pl-ic{width:44px;height:44px;border-radius:13px;background:linear-gradient(135deg,#0ea5e9,#22c55e);display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 14px rgba(34,197,94,.3);flex-shrink:0}
+.pl-top h1{font-family:var(--font-d);font-size:21px;font-weight:800;letter-spacing:-.4px;line-height:1.2}
+.pl-top small{display:block;font-size:12px;color:var(--muted);margin-top:3px}
+.pl-act{padding:8px 14px;border:none;border-radius:9px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s;text-decoration:none;line-height:1.3;white-space:nowrap;background:var(--bg3);border:1px solid var(--border);color:var(--muted)}
+.pl-act:hover{color:var(--text);border-color:var(--border2)}
+.pl-act-s{padding:5px 10px;font-size:11.5px}
+
+/* ── Onglets ── */
+.pl-tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.pl-tab{padding:8px 16px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s}
+.pl-tab:hover{color:var(--text)}
+.pl-tab.on{color:var(--text);border-color:rgba(34,197,94,.55);background:rgba(34,197,94,.1)}
+.pl-pane{display:none}
+.pl-pane.on{display:block}
+
+.pl-banner{padding:10px 14px;border-radius:10px;font-size:12.5px;line-height:1.55;margin-bottom:12px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25);color:#fcd34d}
+.pl-banner b{color:inherit}
+.pl-in{padding:8px 11px;background:var(--bg3);border:1.5px solid var(--border);border-radius:9px;color:var(--text);font-family:inherit;font-size:13px;outline:0;box-sizing:border-box;min-width:0}
+.pl-in:focus{border-color:#4ade80}
+.pl-in option{background:#14141f}
+body:not(.light-theme) .pl-in[type=date]{color-scheme:dark}
+.pl-h2{font-size:11.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:22px 0 10px;display:flex;align-items:center;gap:8px}
+.pl-h2 em{font-style:normal;font-weight:600;text-transform:none;letter-spacing:0;color:var(--muted2)}
+.pl-empty{text-align:center;padding:34px 20px;color:var(--muted);font-size:13px;line-height:1.7;background:var(--bg2);border:1px dashed var(--border2);border-radius:12px}
+
+/* ── KPI ── */
+.pl-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.pl-kpi{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:11px 14px}
+.pl-kpi span{display:block;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+.pl-kpi b{display:block;font-family:var(--font-d);font-size:22px;font-weight:800;letter-spacing:-.5px;margin-top:2px;line-height:1.15}
+
+/* ── Cartes personnes ── */
+.pl-people{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.pl-person{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:13px 14px;display:flex;flex-direction:column;gap:9px;min-width:0}
+.pl-person.st-call{border-color:rgba(34,197,94,.5);box-shadow:0 0 0 1px rgba(34,197,94,.2) inset}
+.pl-person.st-meet{border-color:rgba(96,165,250,.5);box-shadow:0 0 0 1px rgba(96,165,250,.2) inset}
+.pl-ph{display:flex;align-items:center;gap:10px;min-width:0}
+.pl-av{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#0b0b12;flex-shrink:0}
+.pl-pn{min-width:0;flex:1}
+.pl-pn b{display:block;font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl-pn small{display:block;font-size:11px;color:var(--muted);margin-top:1px}
+.pl-st{font-size:12.5px;line-height:1.5;padding:8px 10px;border-radius:10px;background:var(--bg3);border:1px solid var(--border);min-height:20px}
+.pl-st .t{font-family:var(--font-m);font-weight:700}
+.pl-st.call{background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#86efac}
+.pl-st.ring{background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.3);color:#fcd34d}
+.pl-st.meet{background:rgba(96,165,250,.08);border-color:rgba(96,165,250,.3);color:#93c5fd}
+.pl-st.on{color:var(--text)}
+.pl-st.off,.pl-st.unk{color:var(--muted)}
+.pl-st a,.pl-link{color:inherit;font-weight:700;text-decoration:underline;text-decoration-color:rgba(148,163,184,.4);cursor:pointer;background:none;border:none;font-family:inherit;font-size:inherit;padding:0}
+.pl-today{font-size:11.5px;color:var(--muted);display:flex;gap:4px 10px;flex-wrap:wrap}
+.pl-today b{color:var(--text);font-weight:800}
+.pl-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0}
+.pl-dot.call{background:#22c55e;box-shadow:0 0 0 4px rgba(34,197,94,.18);animation:plPulse 1.6s infinite}
+.pl-dot.meet{background:#60a5fa;box-shadow:0 0 0 4px rgba(96,165,250,.18);animation:plPulse 1.6s infinite}
+.pl-dot.on{background:#4ade80}
+.pl-dot.off{background:rgba(148,163,184,.35)}
+.pl-dot.unk{background:transparent;border:1.5px dashed rgba(148,163,184,.5)}
+@keyframes plPulse{0%,100%{opacity:1}50%{opacity:.45}}
+
+/* ── RDV du jour ── */
+.pl-rdvs{display:flex;flex-direction:column;gap:6px}
+.pl-rdv{display:grid;grid-template-columns:64px minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.6fr) auto;gap:12px;align-items:center;padding:11px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:12px}
+.pl-rdv.live{border-color:rgba(96,165,250,.45)}
+.pl-rdv.past{opacity:.78}
+.pl-rt{font-family:var(--font-m);font-size:14px;font-weight:800}
+.pl-rt small{display:block;font-family:inherit;font-size:10.5px;color:var(--muted);font-weight:600;margin-top:2px}
+.pl-rt small .pill{padding:1px 6px;font-size:9.5px}
+.pl-rp b{display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl-rp small{display:block;font-size:11px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl-rw{font-size:12px;color:var(--muted);line-height:1.5;min-width:0}
+.pl-rw b{color:var(--text);font-weight:700}
+.pl-sig{display:flex;gap:5px;flex-wrap:wrap;min-width:0}
+.pill{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid transparent;white-space:nowrap;display:inline-flex;align-items:center;gap:4px}
+.pill-ok{background:rgba(52,211,153,.1);color:#34d399;border-color:rgba(52,211,153,.25)}
+.pill-live{background:rgba(96,165,250,.1);color:#93c5fd;border-color:rgba(96,165,250,.3)}
+.pill-warn{background:rgba(251,191,36,.1);color:#fcd34d;border-color:rgba(251,191,36,.25)}
+.pill-bad{background:rgba(239,68,68,.1);color:#fca5a5;border-color:rgba(239,68,68,.25)}
+.pill-mute{background:rgba(148,163,184,.08);color:var(--muted);border-color:var(--border)}
+.pl-parts{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5}
+
+/* ── Activité ── */
+.pl-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.pl-seg{display:inline-flex;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:3px;gap:2px;flex-wrap:wrap}
+.pl-seg button{padding:6px 12px;border:none;border-radius:7px;background:transparent;color:var(--muted);font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+.pl-seg button.on{background:rgba(34,197,94,.15);color:var(--text)}
+.pl-custom{display:none;gap:6px;align-items:center}
+.pl-custom.on{display:inline-flex}
+.pl-tw{overflow-x:auto;-webkit-overflow-scrolling:touch;background:var(--bg2);border:1px solid var(--border);border-radius:14px}
+.pl-t{width:100%;border-collapse:collapse;font-size:12.5px;min-width:980px}
+.pl-t th{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);text-align:right;padding:10px 10px;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;background:var(--bg2)}
+.pl-t th.l,.pl-t td.l{text-align:left}
+.pl-t th.grp{text-align:center;border-bottom:none;padding-bottom:0;color:var(--muted2)}
+.pl-t td{padding:9px 10px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--font-m);white-space:nowrap}
+.pl-t td.l{font-family:inherit}
+.pl-t td.z{color:var(--muted2)}
+.pl-t tr.mem{cursor:pointer}
+.pl-t tr.mem:hover td{background:rgba(148,163,184,.05)}
+.pl-t tr.day td{font-size:11.5px;color:var(--muted);background:rgba(148,163,184,.03)}
+.pl-t tr.day td.l{padding-left:46px}
+.pl-t tr.tot td{font-weight:800;border-bottom:none}
+.pl-t .who{display:inline-flex;align-items:center;gap:8px;font-weight:700}
+.pl-t .who i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.pl-t .who small{font-weight:600;color:var(--muted);font-size:10.5px}
+.pl-t .car{display:inline-block;width:12px;color:var(--muted);transition:transform .15s}
+.pl-t tr.open .car{transform:rotate(90deg)}
+.pl-note{font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:10px}
+
+/* ── Prospect ── */
+.pl-search{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.pl-search .pl-in{flex:1;min-width:220px}
+.pl-res{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.pl-ri{display:flex;gap:10px;align-items:center;padding:10px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:11px;cursor:pointer;text-align:left;font-family:inherit;color:var(--text);font-size:13px;width:100%}
+.pl-ri:hover{border-color:var(--border2);background:var(--bg3)}
+.pl-ri small{color:var(--muted);font-family:var(--font-m);font-size:11.5px}
+.pl-lh{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-bottom:12px;display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+.pl-lh h2{font-family:var(--font-d);font-size:19px;font-weight:800;letter-spacing:-.3px}
+.pl-lh .meta{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.7}
+.pl-kinds{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.pl-kind{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;background:var(--bg3);border:1px solid var(--border);font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;font-family:inherit}
+.pl-kind.on{color:var(--text);border-color:rgba(34,197,94,.5);background:rgba(34,197,94,.1)}
+.pl-kind b{color:var(--text)}
+.pl-tl{display:flex;flex-direction:column;gap:4px}
+.pl-tday{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);padding:12px 4px 4px}
+.pl-ev{display:grid;grid-template-columns:48px 30px minmax(0,1fr);gap:10px;padding:9px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:11px;align-items:start}
+.pl-ev .tm{font-family:var(--font-m);font-size:11.5px;color:var(--muted);padding-top:2px}
+.pl-ev .ic{font-size:16px;line-height:1.2;text-align:center}
+.pl-ev .tx{font-size:13px;line-height:1.55;word-break:break-word;min-width:0}
+.pl-ev .tx .by{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;background:rgba(148,163,184,.1);color:var(--text);margin-right:6px}
+.pl-ev .tx .sub{display:block;font-size:12px;color:var(--muted);margin-top:3px}
+.pl-ev.journal{opacity:.72}
+
+.pl-locked{text-align:center;padding:80px 20px;color:var(--muted)}
+.pl-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#2e1a1a;border:1px solid rgba(239,68,68,.35);color:#fca5a5;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none;max-width:90vw}
+.pl-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media (max-width:980px){
+  .pl-rdv{grid-template-columns:56px minmax(0,1fr)}
+  .pl-rdv .pl-rw,.pl-rdv .pl-sig-w,.pl-rdv .pl-ro{grid-column:2}
+}
+@media (max-width:640px){
+  .pl{padding:14px 16px 80px}
+  .pl-people{grid-template-columns:minmax(0,1fr)}
+  .pl-kpi b{font-size:18px}
+  .pl-ev{grid-template-columns:42px 24px minmax(0,1fr);gap:8px;padding:8px 10px}
+}
+</style>
+</head>
+<body>
+<div id="nav-container"></div>
+
+<main class="pl" id="mainView" style="display:none">
+  <header class="pl-top">
+    <div class="pl-ic">🛰️</div>
+    <div>
+      <h1>Pilotage équipe</h1>
+      <small id="plSub">Chargement…</small>
+    </div>
+    <div class="sp"></div>
+    <button class="pl-act" type="button" data-action="refresh">↻ Actualiser</button>
+  </header>
+
+  <nav class="pl-tabs">
+    <button class="pl-tab on" type="button" data-tab="live">🔴 En direct</button>
+    <button class="pl-tab" type="button" data-tab="activity">📊 Activité</button>
+    <button class="pl-tab" type="button" data-tab="lead">🔎 Prospect</button>
+  </nav>
+
+  <!-- ═══ EN DIRECT ═══ -->
+  <section class="pl-pane on" id="paneLive">
+    <div id="liveBanner"></div>
+    <section class="pl-kpis" id="liveKpis"></section>
+    <div class="pl-h2">Équipe <em id="liveClock"></em></div>
+    <section class="pl-people" id="livePeople"><div class="pl-empty">Chargement…</div></section>
+    <div class="pl-h2" id="liveOtherH" style="display:none">Autres appels en cours</div>
+    <section class="pl-rdvs" id="liveOther"></section>
+    <div class="pl-h2">RDV de closing du jour <em>· clic sur le lien Meet et présence du prospect</em></div>
+    <section class="pl-rdvs" id="liveRdvs"></section>
+    <p class="pl-note">« Lien cliqué » ne compte que les clics sur le lien suivi des e-mails et de la page de confirmation. Le prospect qui rejoint depuis son invitation Google Agenda n'en laisse pas : c'est la présence Meet qui fait foi. Les setters prestataires n'ont ni présence ni temps de connexion (décision du 16/10/2026).</p>
+  </section>
+
+  <!-- ═══ ACTIVITÉ ═══ -->
+  <section class="pl-pane" id="paneActivity">
+    <div class="pl-filters">
+      <div class="pl-seg" id="actSeg">
+        <button type="button" data-period="today" class="on">Aujourd'hui</button>
+        <button type="button" data-period="yesterday">Hier</button>
+        <button type="button" data-period="7">7 jours</button>
+        <button type="button" data-period="month">Ce mois-ci</button>
+        <button type="button" data-period="custom">Dates…</button>
+      </div>
+      <span class="pl-custom" id="actCustom">
+        <input class="pl-in" id="actFrom" type="date" title="Du">
+        <span style="color:var(--muted);font-size:12px">→</span>
+        <input class="pl-in" id="actTo" type="date" title="Au">
+        <button class="pl-act pl-act-s" type="button" data-action="act-apply">OK</button>
+      </span>
+    </div>
+    <div id="actBanner"></div>
+    <section class="pl-kpis" id="actKpis"></section>
+    <div class="pl-h2">Par personne <em>· clic sur une ligne pour le détail par jour</em></div>
+    <div class="pl-tw" id="actTable"><div class="pl-empty">Chargement…</div></div>
+    <p class="pl-note">Appels : journal téléphonique (Ringover / dialer). Décroché = l'appel a été pris ; conversation = 1 min et plus. RDV posés : RDV de closing créés sur la période avec un setter identifié. RDV tenus : RDV de closing de la période par closeur, hors annulés et replanifiés. Messages : SMS et e-mails tracés sur les fiches, WhatsApp envoyés depuis la boîte partagée (les rappels automatiques sont « non attribués »). Actions : changements de statut, RDV posés et attributions dans Leads Live. Plage maximale : 31 jours.</p>
+  </section>
+
+  <!-- ═══ PROSPECT ═══ -->
+  <section class="pl-pane" id="paneLead">
+    <form class="pl-search" id="leadForm" autocomplete="off">
+      <input class="pl-in" id="leadQ" type="search" placeholder="Nom, téléphone ou e-mail du prospect">
+      <button class="pl-act" type="submit">Rechercher</button>
+    </form>
+    <section class="pl-res" id="leadRes"></section>
+    <section id="leadView"><div class="pl-empty">Recherche un prospect, ou clique sur un nom dans l'onglet En direct.</div></section>
+  </section>
+</main>
+
+<div class="pl-locked" id="lockedView" style="display:none"><div style="font-size:48px;margin-bottom:12px">🔒</div><div>Module réservé aux administrateurs.</div></div>
+<div class="pl-toast" id="plToast"></div>
+
+<script src="nav.js"></script>
+<script>
+(function () {
+'use strict';
+
+var API = '/api/team-pilotage';
+var LIVE_EVERY_MS = 20000;
+var PALETTE = ['#60a5fa', '#f472b6', '#34d399', '#fbbf24', '#a78bfa', '#fb923c', '#22d3ee', '#f87171'];
+var ROLE_LABEL = { setter: 'Setter', setter_ecrit: 'Setter écrit', closer: 'Closer', closer_setter: 'Closer · setter', sales: 'Sales', admin: 'Admin' };
+var OUTCOME = {
+  close: ['🏆 Close', 'pill-ok'], non_close: ['❌ Non close', 'pill-bad'], offre: ['💬 Offre', 'pill-live'],
+  disqualifie: ['🚫 Disqua', 'pill-mute'], no_show: ['👻 No-show', 'pill-warn'], annule: ['🔴 Annulé', 'pill-bad'],
+  replanifie: ['📅 Replanifié', 'pill-mute']
+};
+var KIND = {
+  call: ['📞', 'Appels'], booking: ['📅', 'RDV'], booking_set: ['🗓️', 'RDV'], meet_click: ['🖱️', 'Visio'], meet_join: ['📹', 'Visio'],
+  action: ['⚡', 'Actions'], message: ['✉️', 'Messages'], whatsapp: ['💬', 'Messages'], note: ['📝', 'Notes'],
+  journal: ['·', 'Journal'], creation: ['✨', 'Journal']
+};
+var KIND_ORDER = ['Appels', 'RDV', 'Visio', 'Messages', 'Notes', 'Actions', 'Journal'];
+
+var TAB = 'live';
+var LIVE = null;
+var liveTimer = null;
+var tickTimer = null;
+var liveLoading = false;
+var ACT = null;
+var actPeriod = 'today';
+var actOpen = {};
+var actLoading = false;
+var LEAD = null;
+var leadKinds = {};
+
+function $(id) { return document.getElementById(id); }
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function pad2(n) { n = Math.floor(n); return (n < 10 ? '0' : '') + n; }
+function toast(msg) {
+  var t = $('plToast');
+  t.textContent = msg;
+  t.className = 'pl-toast show';
+  clearTimeout(t._tm);
+  t._tm = setTimeout(function () { t.className = 'pl-toast'; }, 4200);
+}
+function hashColor(key) {
+  var h = 0;
+  key = String(key || '');
+  for (var i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
+  return PALETTE[Math.abs(h) % PALETTE.length];
+}
+function memberColor(m) { return (m && m.color) || hashColor(m && m.slug); }
+function initials(m) {
+  if (m.initials) return m.initials;
+  var p = String(m.fullName || m.name || '?').split(/\s+/);
+  return ((p[0] || '').charAt(0) + (p[1] || '').charAt(0)).toUpperCase() || '?';
+}
+function parisTime(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' });
+}
+function parisDay(iso) {
+  return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
+}
+function todayIso() { return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' }); }
+function addDays(iso, n) {
+  var d = new Date(iso + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+function fmtDayLabel(iso) {
+  var t = todayIso();
+  if (iso === t) return 'Aujourd\'hui';
+  if (iso === addDays(t, -1)) return 'Hier';
+  var s = new Date(iso + 'T12:00:00Z').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+function fmtShortDay(iso) {
+  return new Date(iso + 'T12:00:00Z').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+function elapsed(iso) {
+  if (!iso) return '';
+  var s = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 1000));
+  var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h ? h + ':' + pad2(m) + ':' + pad2(s % 60) : m + ':' + pad2(s % 60);
+}
+function ago(iso) {
+  if (!iso) return '';
+  var min = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  if (min < 1) return 'à l\'instant';
+  if (min < 60) return 'il y a ' + min + ' min';
+  var h = Math.floor(min / 60);
+  if (h < 24) return 'il y a ' + h + ' h' + (min % 60 ? ' ' + pad2(min % 60) : '');
+  return 'le ' + new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+}
+function fmtTalk(sec) {
+  sec = Math.max(0, Math.round(Number(sec) || 0));
+  var h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60);
+  if (!sec) return '0';
+  if (h) return h + ' h ' + pad2(m);
+  return m + ' min';
+}
+function telFmt(n) {
+  n = String(n || '');
+  var m = /^\+33(\d)(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(n);
+  return m ? '0' + m[1] + ' ' + m[2] + ' ' + m[3] + ' ' + m[4] + ' ' + m[5] : n;
+}
+function pageLabel(p) {
+  if (!p) return '';
+  return String(p).replace(/^sales-/, '').replace(/^admin-/, '').replace(/-/g, ' ');
+}
+
+/* ── API ─────────────────────────────────────────────────────────────── */
+function api(body) {
+  var u = firebase.auth().currentUser;
+  if (!u) return Promise.reject(new Error('Non connecté'));
+  return u.getIdToken(false).then(function (tok) {
+    return fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+      body: JSON.stringify(body || {})
+    });
+  }).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      if (!r.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
+      return j;
+    });
+  });
+}
+
+/* ── Onglets ─────────────────────────────────────────────────────────── */
+function setTab(t, noHash) {
+  TAB = t;
+  var tabs = document.querySelectorAll('.pl-tab');
+  for (var i = 0; i < tabs.length; i++) tabs[i].className = 'pl-tab' + (tabs[i].getAttribute('data-tab') === t ? ' on' : '');
+  $('paneLive').className = 'pl-pane' + (t === 'live' ? ' on' : '');
+  $('paneActivity').className = 'pl-pane' + (t === 'activity' ? ' on' : '');
+  $('paneLead').className = 'pl-pane' + (t === 'lead' ? ' on' : '');
+  if (!noHash) {
+    var h = t === 'lead' && LEAD ? '#lead=' + encodeURIComponent(LEAD.lead.id) : '#' + t;
+    try { history.replaceState(null, '', h); } catch (e) { /* ignore */ }
+  }
+  if (t === 'live') { loadLive(); startLiveTimers(); } else { stopLiveTimers(); }
+  if (t === 'activity' && !ACT) loadActivity();
+  updateSub();
+}
+function updateSub() {
+  var s = '';
+  if (TAB === 'live') s = LIVE ? 'Actualisé à ' + parisTime(LIVE.now) + ' · rafraîchi toutes les 20 s' : 'Chargement…';
+  else if (TAB === 'activity') s = ACT ? (ACT.from === ACT.to ? fmtDayLabel(ACT.from) : 'Du ' + fmtShortDay(ACT.from) + ' au ' + fmtShortDay(ACT.to)) : 'Chargement…';
+  else s = LEAD ? LEAD.lead.nom || 'Prospect' : 'Historique complet d\'un prospect';
+  $('plSub').textContent = s;
+}
+
+/* ═══ EN DIRECT ═════════════════════════════════════════════════════════ */
+function startLiveTimers() {
+  stopLiveTimers();
+  liveTimer = setInterval(function () { if (document.visibilityState === 'visible') loadLive(); }, LIVE_EVERY_MS);
+  tickTimer = setInterval(tick, 1000);
+}
+function stopLiveTimers() {
+  if (liveTimer) clearInterval(liveTimer);
+  if (tickTimer) clearInterval(tickTimer);
+  liveTimer = tickTimer = null;
+}
+function tick() {
+  var els = document.querySelectorAll('[data-since]');
+  for (var i = 0; i < els.length; i++) els[i].textContent = elapsed(els[i].getAttribute('data-since'));
+}
+function loadLive() {
+  if (liveLoading) return;
+  liveLoading = true;
+  api({ action: 'live' }).then(function (j) {
+    LIVE = j;
+    renderLive();
+  }).catch(function (e) {
+    if (!LIVE) $('livePeople').innerHTML = '<div class="pl-empty">Erreur de chargement : ' + esc(e.message) + '</div>';
+    toast('En direct : ' + e.message);
+  }).then(function () { liveLoading = false; updateSub(); });
+}
+
+function leadBtn(leadId, label) {
+  if (!leadId) return esc(label || 'Prospect');
+  return '<button type="button" class="pl-link" data-lead="' + esc(leadId) + '">' + esc(label || 'Prospect') + '</button>';
+}
+
+function statusHtml(m) {
+  if (m.status === 'call' && m.call) {
+    var c = m.call;
+    var who = c.leadName ? leadBtn(c.leadId, c.leadName) : esc(telFmt(c.number) || 'numéro inconnu');
+    if (c.state === 'ringing') {
+      return '<div class="pl-st ring"><span class="pl-dot call" style="background:#fbbf24"></span> ' + (c.direction === 'inbound' ? 'Appel entrant de ' : 'Sonne chez ') + who + ' · <span class="t" data-since="' + esc(c.since) + '">' + elapsed(c.since) + '</span></div>';
+    }
+    return '<div class="pl-st call"><span class="pl-dot call"></span> En appel avec ' + who + ' · <span class="t" data-since="' + esc(c.since) + '">' + elapsed(c.since) + '</span></div>';
+  }
+  if (m.status === 'meet' && m.meet) {
+    return '<div class="pl-st meet"><span class="pl-dot meet"></span> En visio avec ' + leadBtn(LIVE_LEAD_OF[m.meet.bookingId], m.meet.prospect) + ' · <span class="t" data-since="' + esc(m.meet.since) + '">' + elapsed(m.meet.since) + '</span></div>';
+  }
+  if (m.prestataire) {
+    return '<div class="pl-st unk"><span class="pl-dot unk"></span> Présence non suivie (prestataire)</div>';
+  }
+  if (m.status === 'online' && m.online) {
+    return '<div class="pl-st on"><span class="pl-dot on"></span> Connecté' + (m.online.lastPage ? ' · ' + esc(pageLabel(m.online.lastPage)) : '') + ' · ' + esc(ago(m.online.lastSeenAt)) + '</div>';
+  }
+  return '<div class="pl-st off"><span class="pl-dot off"></span> Hors ligne' + (m.online && m.online.lastSeenAt ? ' · vu ' + esc(ago(m.online.lastSeenAt)) : '') + '</div>';
+}
+
+var LIVE_LEAD_OF = {};
+
+function renderLive() {
+  var L = LIVE;
+  LIVE_LEAD_OF = {};
+  (L.bookings || []).forEach(function (b) { LIVE_LEAD_OF[b.id] = b.leadId; });
+
+  // Bandeau Meet
+  var ban = '';
+  if (!L.meet || !L.meet.connected) {
+    ban = '<div class="pl-banner">📹 <b>Présence Meet indisponible :</b> le compte Google « Meet Closing » n\'est pas connecté. Connecte-le avec strategie@adrienemily.com depuis <a href="admin-email-auth.html" style="color:inherit">Comptes e-mail</a>.</div>';
+  } else if (L.meet.error) {
+    ban = '<div class="pl-banner">📹 <b>Présence Meet :</b> ' + esc(L.meet.error.message || L.meet.error.error) + '</div>';
+  }
+  $('liveBanner').innerHTML = ban;
+
+  var members = (L.members || []).slice();
+  var rank = { call: 0, meet: 1, online: 2, unknown: 3, offline: 4 };
+  members.sort(function (a, b) {
+    var d = (rank[a.status] || 9) - (rank[b.status] || 9);
+    return d || String(a.name).localeCompare(String(b.name));
+  });
+  var nCall = 0, nMeet = 0, nOn = 0;
+  members.forEach(function (m) {
+    if (m.status === 'call') nCall++;
+    else if (m.status === 'meet') nMeet++;
+    else if (m.status === 'online') nOn++;
+  });
+  var rdvs = L.bookings || [];
+  var nLive = rdvs.filter(function (b) { return b.phase === 'live'; }).length;
+  var tCalls = 0, tAns = 0;
+  members.forEach(function (m) { tCalls += m.today.calls; tAns += m.today.answered; });
+  $('liveKpis').innerHTML =
+    kpi('📞 En appel', nCall) + kpi('📹 En visio', nMeet) + kpi('🟢 Connectés', nOn) +
+    kpi('📅 RDV aujourd\'hui', rdvs.length + (nLive ? ' · ' + nLive + ' en cours' : '')) +
+    kpi('☎️ Appels du jour', tCalls + ' · ' + tAns + ' décrochés');
+  $('liveClock').textContent = '· ' + parisTime(L.now);
+
+  if (!members.length) {
+    $('livePeople').innerHTML = '<div class="pl-empty">Aucun membre sales actif dans le roster.</div>';
+  } else {
+    $('livePeople').innerHTML = members.map(function (m) {
+      var t = m.today;
+      return '<div class="pl-person st-' + esc(m.status) + '">' +
+        '<div class="pl-ph"><div class="pl-av" style="background:' + esc(memberColor(m)) + '">' + esc(initials(m)) + '</div>' +
+        '<div class="pl-pn"><b>' + esc(m.name) + '</b><small>' + esc(ROLE_LABEL[m.role] || m.role || '') + (m.prestataire ? ' · prestataire' : '') + '</small></div></div>' +
+        statusHtml(m) +
+        '<div class="pl-today"><span><b>' + t.calls + '</b> appel' + (t.calls > 1 ? 's' : '') + '</span>' +
+        '<span><b>' + t.answered + '</b> décroché' + (t.answered > 1 ? 's' : '') + '</span>' +
+        '<span><b>' + fmtTalk(t.talkSec) + '</b> de parole</span>' +
+        (t.lastCallAt ? '<span>dernier ' + esc(ago(t.lastCallAt)) + '</span>' : '') + '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  // Appels en cours non rattachés à un membre suivi
+  var shown = {};
+  members.forEach(function (m) { if (m.call) shown[m.call.id] = 1; });
+  var others = (L.calls || []).filter(function (c) { return !shown[c.id]; });
+  $('liveOtherH').style.display = others.length ? '' : 'none';
+  $('liveOther').innerHTML = others.map(function (c) {
+    return '<div class="pl-rdv live"><div class="pl-rt">📞</div><div class="pl-rp"><b>' + (c.leadName ? leadBtn(c.leadId, c.leadName) : esc(telFmt(c.number))) + '</b><small>' + esc(c.memberName || 'Membre non identifié') + '</small></div>' +
+      '<div class="pl-rw">' + (c.state === 'ringing' ? 'Sonne' : 'En conversation') + ' · <span data-since="' + esc(c.since) + '">' + elapsed(c.since) + '</span></div><div class="pl-sig"></div><div></div></div>';
+  }).join('');
+
+  // RDV du jour
+  if (!rdvs.length) {
+    $('liveRdvs').innerHTML = '<div class="pl-empty">Aucun RDV de closing aujourd\'hui.</div>';
+  } else {
+    $('liveRdvs').innerHTML = rdvs.map(rdvRow).join('');
+  }
+  tick();
+}
+
+function kpi(label, val) { return '<div class="pl-kpi"><span>' + esc(label) + '</span><b>' + esc(val) + '</b></div>'; }
+
+function rdvRow(b) {
+  var phaseTxt = b.phase === 'live' ? '<span class="pill pill-live">● en cours</span>' : (b.phase === 'upcoming' ? 'à venir' : 'passé');
+  var sig = [];
+  if (!b.hasMeet) sig.push('<span class="pill pill-mute">pas de lien Meet</span>');
+  if (b.clicks) sig.push('<span class="pill pill-ok" title="Dernier clic à ' + esc(parisTime(b.lastClickAt)) + '">🖱️ Lien cliqué à ' + esc(parisTime(b.firstClickAt)) + (b.clicks > 1 ? ' (×' + b.clicks + ')' : '') + '</span>');
+  else if (b.tracked && b.phase !== 'upcoming') sig.push('<span class="pill pill-mute">🖱️ pas de clic</span>');
+  var pr = b.presence, parts = '';
+  if (pr && pr.ok) {
+    var s = pr.summary || {};
+    var past = b.phase === 'past';
+    if (s.prospectInRoom) sig.push('<span class="pill pill-ok">📹 Prospect dans la salle</span>');
+    else if (s.prospectJoined) sig.push('<span class="pill ' + (past ? 'pill-ok' : 'pill-live') + '">📹 Prospect ' + (past ? 'venu' : 'venu, reparti') + '</span>');
+    else if (past) sig.push('<span class="pill pill-bad">📹 Prospect jamais entré</span>');
+    else if (pr.started) sig.push('<span class="pill pill-warn">📹 Prospect pas encore entré</span>');
+    else if (b.phase === 'live') sig.push('<span class="pill pill-warn">📹 Salle encore vide</span>');
+    if (pr.participants && pr.participants.length) {
+      parts = '<div class="pl-parts">' + pr.participants.map(function (p) {
+        var k = p.kind === 'equipe' ? '🟦' : (p.kind === 'prospect' || p.kind === 'prospect_probable' ? '🟩' : (p.kind === 'bot' ? '🤖' : '⬜'));
+        return k + ' ' + esc(p.name) + ' ' + esc(parisTime(p.joinedAt)) + (p.inRoom ? ' → présent' : (p.leftAt ? ' → ' + esc(parisTime(p.leftAt)) : ''));
+      }).join(' · ') + '</div>';
+    }
+  } else if (pr && !pr.ok && b.phase === 'live') {
+    sig.push('<span class="pill pill-mute" title="' + esc(pr.message || '') + '">📹 présence indisponible</span>');
+  }
+  var out = b.outcome && OUTCOME[b.outcome] ? '<span class="pill ' + OUTCOME[b.outcome][1] + '">' + OUTCOME[b.outcome][0] + '</span>' : (b.phase === 'past' ? '<span class="pill pill-warn">à statuer</span>' : '');
+  return '<div class="pl-rdv ' + esc(b.phase) + '">' +
+    '<div class="pl-rt">' + esc(b.time) + '<small>' + phaseTxt + '</small></div>' +
+    '<div class="pl-rp"><b>' + leadBtn(b.leadId, b.prospect) + '</b><small>' + esc(b.typeLabel) + ' · ' + b.duration + ' min</small></div>' +
+    '<div class="pl-rw">Closeur <b>' + esc(b.closerName || '—') + '</b>' + (b.setterName ? '<br>Posé par <b>' + esc(b.setterName) + '</b>' : '') + '</div>' +
+    '<div class="pl-sig-w"><div class="pl-sig">' + sig.join('') + '</div>' + parts + '</div>' +
+    '<div class="pl-ro">' + out + '</div>' +
+    '</div>';
+}
+
+/* ═══ ACTIVITÉ ══════════════════════════════════════════════════════════ */
+function actRange() {
+  var t = todayIso();
+  if (actPeriod === 'yesterday') return { from: addDays(t, -1), to: addDays(t, -1) };
+  if (actPeriod === '7') return { from: addDays(t, -6), to: t };
+  if (actPeriod === 'month') return { from: t.slice(0, 8) + '01', to: t };
+  if (actPeriod === 'custom') {
+    var f = $('actFrom').value || t, to = $('actTo').value || f;
+    return { from: f, to: to };
+  }
+  return { from: t, to: t };
+}
+function loadActivity() {
+  if (actLoading) return;
+  actLoading = true;
+  var r = actRange();
+  $('actTable').innerHTML = '<div class="pl-empty">Chargement de l\'activité…</div>';
+  $('actKpis').innerHTML = '';
+  $('actBanner').innerHTML = '';
+  api({ action: 'activity', from: r.from, to: r.to }).then(function (j) {
+    ACT = j;
+    renderActivity();
+  }).catch(function (e) {
+    $('actTable').innerHTML = '<div class="pl-empty">Erreur : ' + esc(e.message) + '</div>';
+  }).then(function () { actLoading = false; updateSub(); });
+}
+
+var COLS = [
+  ['callsOut', 'Sortants', 'Appels'], ['callsIn', 'Entrants', 'Appels'], ['answered', 'Décrochés', 'Appels'],
+  ['convos', '≥ 1 min', 'Appels'], ['talkSec', 'Parole', 'Appels'],
+  ['rdvSet', 'Posés', 'RDV'], ['rdvHeld', 'Tenus', 'RDV'], ['close', 'Close', 'RDV'], ['no_show', 'No-show', 'RDV'], ['pending', 'À statuer', 'RDV'],
+  ['sms', 'SMS', 'Messages'], ['email', 'E-mails', 'Messages'], ['whatsapp', 'WhatsApp', 'Messages'],
+  ['actStatus', 'Statuts', 'Fiches'], ['actBooking', 'RDV posés', 'Fiches'], ['notes', 'Notes', 'Fiches']
+];
+function cell(k, v) {
+  v = Number(v) || 0;
+  var txt = k === 'talkSec' ? fmtTalk(v) : String(v);
+  return '<td' + (v ? '' : ' class="z"') + '>' + esc(txt) + '</td>';
+}
+function sumStats(list) {
+  var o = {};
+  COLS.forEach(function (c) { o[c[0]] = 0; });
+  list.forEach(function (s) { COLS.forEach(function (c) { o[c[0]] += Number(s[c[0]]) || 0; }); });
+  return o;
+}
+function renderActivity() {
+  var A = ACT;
+  var ban = '';
+  if (A.warnings && A.warnings.length) ban += '<div class="pl-banner">⚠️ Données partielles — ' + A.warnings.map(esc).join(' · ') + '</div>';
+  if (A.truncated && (A.truncated.calls || A.truncated.leads)) ban += '<div class="pl-banner">⚠️ Période très chargée : une partie des ' + (A.truncated.calls ? 'appels' : 'fiches') + ' n\'a pas été lue. Réduis la plage.</div>';
+  $('actBanner').innerHTML = ban;
+
+  var members = (A.members || []).slice().sort(function (a, b) {
+    return (b.totals.callsOut + b.totals.rdvSet + b.totals.rdvHeld) - (a.totals.callsOut + a.totals.rdvSet + a.totals.rdvHeld) || String(a.name).localeCompare(String(b.name));
+  });
+  var tot = sumStats(members.map(function (m) { return m.totals; }).concat([A.unassigned || {}]));
+  $('actKpis').innerHTML =
+    kpi('☎️ Appels', (tot.callsOut + tot.callsIn) + ' · ' + tot.answered + ' décrochés') +
+    kpi('🗣️ Temps de parole', fmtTalk(tot.talkSec)) +
+    kpi('🗓️ RDV posés', tot.rdvSet) +
+    kpi('📅 RDV tenus', tot.rdvHeld + ' · ' + tot.close + ' close') +
+    kpi('✉️ Messages', tot.sms + tot.email + tot.whatsapp);
+
+  var groups = [];
+  COLS.forEach(function (c) {
+    var g = groups[groups.length - 1];
+    if (!g || g.name !== c[2]) groups.push({ name: c[2], n: 1 });
+    else g.n++;
+  });
+  var h = '<table class="pl-t"><thead><tr><th class="l"></th>' + groups.map(function (g) { return '<th class="grp" colspan="' + g.n + '">' + esc(g.name) + '</th>'; }).join('') + '</tr>' +
+    '<tr><th class="l">Personne</th>' + COLS.map(function (c) { return '<th>' + esc(c[1]) + '</th>'; }).join('') + '</tr></thead><tbody>';
+  var days = [];
+  for (var d = A.from; d <= A.to; d = addDays(d, 1)) days.push(d);
+  days.reverse();
+  members.forEach(function (m) {
+    var open = !!actOpen[m.slug];
+    h += '<tr class="mem' + (open ? ' open' : '') + '" data-mem="' + esc(m.slug) + '"><td class="l"><span class="who"><span class="car">›</span><i style="background:' + esc(memberColor(m)) + '"></i>' + esc(m.name) + ' <small>' + esc(ROLE_LABEL[m.role] || m.role || '') + '</small></span></td>' +
+      COLS.map(function (c) { return cell(c[0], m.totals[c[0]]); }).join('') + '</tr>';
+    if (open) {
+      days.forEach(function (day) {
+        var s = m.days[day];
+        if (!s && days.length > 1) return;
+        s = s || {};
+        h += '<tr class="day"><td class="l">' + esc(fmtShortDay(day)) + '</td>' + COLS.map(function (c) { return cell(c[0], s[c[0]]); }).join('') + '</tr>';
+      });
+    }
+  });
+  var un = A.unassigned || {};
+  var unAny = COLS.some(function (c) { return Number(un[c[0]]) > 0; });
+  if (unAny) {
+    h += '<tr><td class="l"><span class="who" style="color:var(--muted)"><span class="car"></span><i style="background:rgba(148,163,184,.4)"></i>Non attribué <small>boîte partagée, envois auto, anciens membres</small></span></td>' + COLS.map(function (c) { return cell(c[0], un[c[0]]); }).join('') + '</tr>';
+  }
+  h += '<tr class="tot"><td class="l">Total</td>' + COLS.map(function (c) { return cell(c[0], tot[c[0]]); }).join('') + '</tr>';
+  h += '</tbody></table>';
+  $('actTable').innerHTML = members.length ? h : '<div class="pl-empty">Aucune activité sur la période.</div>';
+}
+
+/* ═══ PROSPECT ══════════════════════════════════════════════════════════ */
+function searchLeads(q) {
+  q = String(q || '').trim();
+  if (q.length < 2) { $('leadRes').innerHTML = ''; return; }
+  $('leadRes').innerHTML = '<div class="pl-empty">Recherche…</div>';
+  api({ action: 'search', q: q }).then(function (j) {
+    var r = j.results || [];
+    if (!r.length) { $('leadRes').innerHTML = '<div class="pl-empty">Aucune fiche trouvée. Essaie le numéro complet, l\'e-mail exact ou le début du nom.</div>'; return; }
+    if (r.length === 1) { $('leadRes').innerHTML = ''; openLead(r[0].id); return; }
+    $('leadRes').innerHTML = r.map(function (l) {
+      return '<button type="button" class="pl-ri" data-lead="' + esc(l.id) + '"><b>' + esc(l.nom || '(sans nom)') + '</b><small>' + esc(telFmt(l.telephone)) + '</small><small>' + esc(l.email) + '</small><span class="sp"></span><small>' + esc(l.status) + '</small></button>';
+    }).join('');
+  }).catch(function (e) { $('leadRes').innerHTML = '<div class="pl-empty">Erreur : ' + esc(e.message) + '</div>'; });
+}
+function openLead(id) {
+  if (TAB !== 'lead') setTab('lead', true);
+  $('leadView').innerHTML = '<div class="pl-empty">Chargement de l\'historique…</div>';
+  api({ action: 'lead', leadId: id }).then(function (j) {
+    LEAD = j;
+    leadKinds = {};
+    try { history.replaceState(null, '', '#lead=' + encodeURIComponent(j.lead.id)); } catch (e) { /* ignore */ }
+    renderLead();
+    updateSub();
+  }).catch(function (e) { $('leadView').innerHTML = '<div class="pl-empty">Erreur : ' + esc(e.message) + '</div>'; });
+}
+function renderLead() {
+  var L = LEAD.lead;
+  var counts = {};
+  LEAD.events.forEach(function (ev) { var g = (KIND[ev.kind] || ['', 'Journal'])[1]; counts[g] = (counts[g] || 0) + 1; });
+  var anyOn = Object.keys(leadKinds).some(function (k) { return leadKinds[k]; });
+  var h = '<div class="pl-lh"><div style="flex:1;min-width:220px"><h2>' + esc(L.nom || '(sans nom)') + '</h2>' +
+    '<div class="meta">' + [L.telephone ? '📞 ' + esc(telFmt(L.telephone)) : '', L.email ? '✉️ ' + esc(L.email) : '', L.status ? 'Statut : <b>' + esc(L.status) + '</b>' : '', L.setterName ? 'Setter : <b>' + esc(L.setterName) + '</b>' : '', L.ownerName ? 'Attribué à : <b>' + esc(L.ownerName) + '</b>' : '', L.createdAt ? 'Créé le ' + esc(new Date(L.createdAt).toLocaleDateString('fr-FR')) : ''].filter(Boolean).join(' · ') + '</div></div>' +
+    '<a class="pl-act" href="sales-leads.html?leadId=' + encodeURIComponent(L.id) + '">Ouvrir dans Leads Live →</a></div>';
+  h += '<div class="pl-kinds">' + KIND_ORDER.filter(function (k) { return counts[k]; }).map(function (k) {
+    return '<button type="button" class="pl-kind' + (leadKinds[k] ? ' on' : '') + '" data-kind="' + esc(k) + '">' + esc(k) + ' <b>' + counts[k] + '</b></button>';
+  }).join('') + '</div>';
+  var evs = LEAD.events.filter(function (ev) {
+    var g = (KIND[ev.kind] || ['', 'Journal'])[1];
+    if (anyOn) return !!leadKinds[g];
+    return g !== 'Journal' || !hasRicher();
+  });
+  if (!evs.length) {
+    h += '<div class="pl-empty">Aucun événement' + (anyOn ? ' pour ce filtre' : '') + '.</div>';
+  } else {
+    h += '<div class="pl-tl">';
+    var curDay = '';
+    evs.forEach(function (ev) {
+      var day = parisDay(ev.at);
+      if (day !== curDay) { curDay = day; h += '<div class="pl-tday">' + esc(fmtDayLabel(day)) + '</div>'; }
+      var k = KIND[ev.kind] || ['·', 'Journal'];
+      var extra = '';
+      if (ev.summary) extra += '<span class="sub">🤖 ' + esc(ev.summary) + '</span>';
+      if (ev.note) extra += '<span class="sub">📝 ' + esc(ev.note) + '</span>';
+      h += '<div class="pl-ev' + (ev.kind === 'journal' ? ' journal' : '') + '"><div class="tm">' + esc(parisTime(ev.at)) + '</div><div class="ic">' + k[0] + '</div>' +
+        '<div class="tx">' + (ev.who ? '<span class="by">' + esc(ev.who) + '</span>' : '') + esc(ev.text) + extra + '</div></div>';
+    });
+    h += '</div>';
+    if (LEAD.total > LEAD.events.length) h += '<p class="pl-note">' + (LEAD.total - LEAD.events.length) + ' événements plus anciens non affichés.</p>';
+  }
+  if (!anyOn && hasRicher()) h += '<p class="pl-note">Le journal brut de la fiche est masqué par défaut (il double souvent les autres événements) : filtre « Journal » pour l\'afficher.</p>';
+  $('leadView').innerHTML = h;
+}
+function hasRicher() {
+  return LEAD.events.some(function (ev) { return ev.kind !== 'journal' && ev.kind !== 'creation'; });
+}
+
+/* ── Délégation d'événements ─────────────────────────────────────────── */
+document.addEventListener('click', function (e) {
+  var t = e.target;
+  var el = t.closest ? t.closest('[data-tab],[data-action],[data-period],[data-mem],[data-lead],[data-kind]') : null;
+  if (!el) return;
+  if (el.hasAttribute('data-tab')) { setTab(el.getAttribute('data-tab')); return; }
+  if (el.hasAttribute('data-lead')) { e.preventDefault(); openLead(el.getAttribute('data-lead')); return; }
+  if (el.hasAttribute('data-kind')) {
+    var k = el.getAttribute('data-kind');
+    leadKinds[k] = !leadKinds[k];
+    renderLead();
+    return;
+  }
+  if (el.hasAttribute('data-period')) {
+    actPeriod = el.getAttribute('data-period');
+    var bs = document.querySelectorAll('#actSeg button');
+    for (var i = 0; i < bs.length; i++) bs[i].className = bs[i].getAttribute('data-period') === actPeriod ? 'on' : '';
+    $('actCustom').className = 'pl-custom' + (actPeriod === 'custom' ? ' on' : '');
+    if (actPeriod === 'custom') {
+      if (!$('actFrom').value) $('actFrom').value = addDays(todayIso(), -6);
+      if (!$('actTo').value) $('actTo').value = todayIso();
+      return;
+    }
+    loadActivity();
+    return;
+  }
+  if (el.hasAttribute('data-mem')) {
+    var s = el.getAttribute('data-mem');
+    actOpen[s] = !actOpen[s];
+    renderActivity();
+    return;
+  }
+  var a = el.getAttribute('data-action');
+  if (a === 'refresh') {
+    if (TAB === 'live') loadLive();
+    else if (TAB === 'activity') loadActivity();
+    else if (LEAD) openLead(LEAD.lead.id);
+  } else if (a === 'act-apply') {
+    loadActivity();
+  }
+});
+$('leadForm').addEventListener('submit', function (e) {
+  e.preventDefault();
+  searchLeads($('leadQ').value);
+});
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible' && TAB === 'live') loadLive();
+});
+
+/* ── Démarrage ───────────────────────────────────────────────────────── */
+firebase.auth().onAuthStateChanged(function (user) {
+  if (!user) { window.location.href = 'login.html'; return; }
+  if ((localStorage.getItem('ambitio_role') || '') !== 'admin') {
+    $('lockedView').style.display = '';
+    return;
+  }
+  $('mainView').style.display = '';
+  var h = String(window.location.hash || '');
+  var m = /^#lead=([A-Za-z0-9_-]+)$/.exec(h);
+  if (m) { setTab('lead', true); openLead(m[1]); }
+  else if (h === '#activity') setTab('activity');
+  else setTab('live');
+});
+})();
+</script>
+</body>
+</html>

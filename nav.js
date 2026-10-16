@@ -118,6 +118,11 @@
     // l'entrée reste alors dans la section Sales (sectionNonAdmin). Données
     // servies par api/calls-list + api/call-detail.
     { id: 'sales-appels',      icon: '🎧', label: 'Réécoutes',   href: 'sales-appels.html',      section: 'Admin', sectionNonAdmin: 'Sales', perm: 'sales_dialer' },
+    // Pilotage équipe (16/10/2026) : en direct (appels en cours, visios Meet
+    // avec clic et présence du prospect, connectés), activité par personne et
+    // par jour, historique complet d'un prospect. Données servies par
+    // api/team-pilotage.js, admin uniquement.
+    { id: 'admin-pilotage',    icon: '🛰️', label: 'Pilotage équipe', href: 'admin-pilotage.html', section: 'Admin', perm: '_admin' },
     // Réglages IA (programme IA 10/2026) : budget mensuel, interrupteur,
     // modèle par tâche, « cerveau Alteore ». Données via api/ai-admin.js.
     { id: 'admin-ia',          icon: '🤖', label: 'Réglages IA',  href: 'admin-ia.html',          section: 'Admin', perm: '_admin' },
@@ -227,6 +232,7 @@
     'alteoforms.html', 'booking-admin.html', 'clients-dedup.html',
     'csm-diagnostic.html', 'csm-import.html', 'formations.html',
     'formations-admin.html', 'payments.html',
+    'admin-pilotage.html',
     'sales-appels.html', 'sales-clients.html', 'sales-closing.html', 'sales-commissions.html',
     'sales-contact.html', 'sales-crm.html', 'sales-dashboard.html',
     'sales-dialer.html', 'sales-eod.html', 'sales-equipe.html',
@@ -1636,6 +1642,11 @@
 
     var visibleSince = (document.visibilityState === 'visible') ? Date.now() : null;
     var pendingMs = 0;
+    // Calculé ici : AL_PAGE_NAME est une const du PREMIER bloc de nav.js,
+    // invisible depuis celui-ci. Sa référence levait une ReferenceError au
+    // premier signal, après `sending = true` : le traceur restait bloqué et
+    // user_activity n'a rien reçu du 10/09 au 16/10/2026.
+    var pageName = (window.location.pathname.split('/').pop() || 'index.html').replace(/\.html$/, '');
     var sending = false;
     var started = false;
     var fromLogin = /login\.html/.test(document.referrer || '');
@@ -1677,7 +1688,7 @@
       pendingMs = 0;
       fromLogin = false;
       markBeat();
-      var payload = JSON.stringify({ action: 'beat', page: AL_PAGE_NAME, activeMs: Math.round(ms), reason: reason, login: login });
+      var payload = JSON.stringify({ action: 'beat', page: pageName, activeMs: Math.round(ms), reason: reason, login: login });
       Promise.resolve(user.getIdToken()).then(function (token) {
         return fetch('/api/user-activity', {
           method: 'POST',
