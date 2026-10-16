@@ -30,11 +30,10 @@
 // booking_meet/{bookingId}.presence (cache de la présence Meet), collection
 // lue et écrite uniquement par l'Admin SDK (aucune règle Firestore).
 //
-// PRESTATAIRES (décision Adrien 16/10/2026) : pour un membre prestataire
-// (`prestataire: true` dans _meta/team_members, ou par défaut les rôles
-// setter / setter_ecrit, sous contrat de prestation), ni présence « connecté »
-// ni temps de connexion — seulement les résultats de son activité. Le traceur
-// (api/user-activity.js) ne les enregistre d'ailleurs plus.
+// TOUTE l'équipe sales est suivie, setters compris (décision Adrien
+// 16/10/2026) : présence, temps de connexion (user_activity, docs journaliers),
+// appels, RDV, messages, DM Instagram (ig_dm_events, attribués au setter écrit
+// comme dans Set NB), actions et notes.
 //
 // Présence Meet — compte utilisé : les RDV de closing sont dans l'agenda
 // strategie@adrienemily.com, organisateur de la réunion ; c'est le compte
@@ -50,7 +49,6 @@ const parseBody = require('./_parseBody');
 const MT = require('./_meetTranscript');
 
 const SALES_ROLES = { setter: 1, setter_ecrit: 1, closer: 1, closer_setter: 1, sales: 1 };
-const PRESTATAIRE_ROLES = { setter: 1, setter_ecrit: 1 };
 const HIDDEN_ROLES = { coach: 1, csm: 1 };
 
 const RINGING_MAX_MS = 150 * 1000;
@@ -161,7 +159,6 @@ async function loadRoster() {
       departed: m.departed === true || m.active === false,
       hidden: !!HIDDEN_ROLES[role],
       sales: !!SALES_ROLES[role],
-      prestataire: m.prestataire === true || (m.prestataire !== false && !!PRESTATAIRE_ROLES[role]),
     };
     R.list.push(member);
     R.bySlug[member.slug] = member;
@@ -173,7 +170,14 @@ async function loadRoster() {
 }
 
 function publicMember(m) {
-  return { slug: m.slug, name: m.name, fullName: m.fullName, role: m.role, color: m.color, initials: m.initials, prestataire: m.prestataire };
+  return { slug: m.slug, name: m.name, fullName: m.fullName, role: m.role, color: m.color, initials: m.initials };
+}
+
+// DM Instagram : le journal du webhook Meta n'a pas d'auteur. Comme Set NB,
+// on les attribue au setter écrit — seulement s'il n'y en a qu'un actif.
+function dmOwner(R) {
+  const w = R.list.filter(function (m) { return m.role === 'setter_ecrit' && !m.departed; });
+  return w.length === 1 ? w[0] : null;
 }
 
 async function loadPersons() {
@@ -387,6 +391,10 @@ async function handleLive(req, res) {
     db.collection('bookings').where('date', '==', today).get(),
     db.collection('user_activity').where('kind', '==', 'summary').get(),
   ]);
+  const [dayActSnap, dmSnap] = await Promise.all([
+    db.collection('user_activity').where('date', '==', today).get().catch(function () { return null; }),
+    db.collection('ig_dm_events').where('date', '==', today).select('direction', 'timestampMs').get().catch(function () { return null; }),
+  ]);
 
   // Ligne par membre sales (+ tout membre non coach / CSM qui apparaît).
   const rows = {};
@@ -395,7 +403,7 @@ async function handleLive(req, res) {
     if (!rows[m.slug]) {
       rows[m.slug] = Object.assign(publicMember(m), {
         status: 'offline', call: null, meet: null, online: null,
-        today: { calls: 0, answered: 0, talkSec: 0, lastCallAt: null },
+        today: { calls: 0, answered: 0, talkSec: 0, lastCallAt: null, activeMs: 0, sessions: 0, firstSeenAt: null, dmOut: 0, dmIn: 0, lastDmAt: null },
       });
     }
     return rows[m.slug];
@@ -511,11 +519,11 @@ async function handleLive(req, res) {
   });
   outB.sort(function (a, b) { return String(a.time).localeCompare(String(b.time)); });
 
-  // Connexions (jamais pour un prestataire)
+  // Connexions
   actSnap.forEach(function (d) {
     const s = d.data() || {};
     const m = R.byUid[s.uid || d.id];
-    if (!m || m.prestataire) return;
+    if (!m) return;
     // Un admin connecté n'a sa ligne que s'il est aussi sur le terrain (appel…).
     const r = rows[m.slug] || (m.sales ? row(m) : null);
     if (!r) return;
@@ -523,8 +531,27 @@ async function handleLive(req, res) {
     r.online = { lastSeenAt: isoOf(seen), lastPage: s.lastPage || null, lastLoginAt: isoOf(toMs(s.lastLoginAt)) };
     if (r.status === 'offline' && seen && now - seen < ONLINE_MS) r.status = 'online';
   });
-  Object.keys(rows).forEach(function (k) {
-    if (rows[k].prestataire) { rows[k].online = null; if (rows[k].status === 'offline') rows[k].status = 'unknown'; }
+  if (dayActSnap) dayActSnap.forEach(function (d) {
+    const s = d.data() || {};
+    const m = R.byUid[s.uid];
+    const r = m ? rows[m.slug] : null;
+    if (!r) return;
+    r.today.activeMs += Number(s.activeMs) || 0;
+    r.today.sessions += Number(s.sessions) || 0;
+    const f = toMs(s.firstSeenAt);
+    if (f && (!r.today.firstSeenAt || f < Date.parse(r.today.firstSeenAt))) r.today.firstSeenAt = isoOf(f);
+  });
+  const dmM = dmOwner(R);
+  const dmRow = dmM ? row(dmM) : null;
+  if (dmRow && dmSnap) dmSnap.forEach(function (d) {
+    const e = d.data() || {};
+    if (e.direction === 'out') {
+      dmRow.today.dmOut += 1;
+      const t = Number(e.timestampMs) || 0;
+      if (t && (!dmRow.today.lastDmAt || t > Date.parse(dmRow.today.lastDmAt))) dmRow.today.lastDmAt = isoOf(t);
+    } else {
+      dmRow.today.dmIn += 1;
+    }
   });
 
   const meetConn = await MT.connectionStatus().catch(function () { return null; });
@@ -541,7 +568,8 @@ async function handleLive(req, res) {
 const STAT_KEYS = [
   'callsOut', 'callsIn', 'answered', 'convos', 'talkSec',
   'rdvSet', 'rdvHeld', 'pending'].concat(OUTCOME_KEYS).concat([
-  'sms', 'email', 'whatsapp', 'actStatus', 'actBooking', 'actAssign', 'notes',
+  'sms', 'email', 'whatsapp', 'dmOut', 'dmIn', 'actStatus', 'actBooking', 'actAssign', 'notes',
+  'activeMs', 'sessions',
 ]);
 
 function emptyStats() {
@@ -587,6 +615,8 @@ async function handleActivity(req, res, body) {
   const leadQ = db.collection('leads').where('updatedAt', '>=', fromTs).limit(5000);
   const leadQ2 = db.collection('leads').where('lastContactAt', '>=', fromTs).limit(5000);
   const waQ = db.collection('whatsapp_messages').where('at', '>=', fromMs).where('at', '<', toMs_).limit(5000);
+  const dmQ = db.collection('ig_dm_events').where('date', '>=', from).where('date', '<=', to).limit(8000);
+  const uaQ = db.collection('user_activity').where('date', '>=', from).where('date', '<=', to).limit(5000);
 
   const settled = await Promise.allSettled([
     loadPersons(),
@@ -608,9 +638,11 @@ async function handleActivity(req, res, body) {
         .where('day', '>=', from).where('day', '<=', to).get()
         .then(function (snap) { return { slug: s, snap: snap }; });
     })),
+    dmQ.select('direction', 'date').get(),
+    uaQ.get(),
   ]);
   const warnings = [];
-  const SOURCES = ['fiches experts', 'types de RDV', 'appels', 'RDV tenus', 'RDV posés', 'messages et notes', 'WhatsApp', 'actions sur les fiches'];
+  const SOURCES = ['fiches experts', 'types de RDV', 'appels', 'RDV tenus', 'RDV posés', 'messages et notes', 'WhatsApp', 'actions sur les fiches', 'DM Instagram', 'temps de connexion'];
   function val(i) {
     if (settled[i].status === 'fulfilled') return settled[i].value;
     console.error('[team-pilotage] activité —', SOURCES[i], settled[i].reason && settled[i].reason.message);
@@ -620,6 +652,7 @@ async function handleActivity(req, res, body) {
   const persons = val(0) || {};
   const typeMap = val(1) || {};
   const callSnap = val(2), heldSnap = val(3), setSnap = val(4), leadSnap = val(5), waSnap = val(6), actRes = val(7);
+  const dmSnap = val(8), uaSnap = val(9);
 
   const totals = {};     // slug → stats
   const byDay = {};      // slug → day → stats
@@ -692,6 +725,22 @@ async function handleActivity(req, res, body) {
     const m = ctx.uid ? (R.byUid[ctx.uid] || null) : null;
     if (!m) { unassigned.whatsapp += 1; return; }
     add(m, parisDayOfMs(toMs(w.at)), 'whatsapp');
+  });
+
+  const dmM = dmOwner(R);
+  if (dmSnap) dmSnap.forEach(function (d) {
+    const e = d.data() || {};
+    add(dmM, e.date, e.direction === 'out' ? 'dmOut' : 'dmIn');
+  });
+
+  if (uaSnap) uaSnap.forEach(function (d) {
+    const s = d.data() || {};
+    if (!s.uid || (s.kind && s.kind !== 'daily')) return;
+    const m = R.byUid[s.uid];
+    // Connexion d'un admin / coach sans activité terrain : pas de ligne pour ça.
+    if (!m || m.hidden || m.departed || (!m.sales && !totals[m.slug])) return;
+    if (Number(s.activeMs)) add(m, s.date, 'activeMs', Number(s.activeMs));
+    if (Number(s.sessions)) add(m, s.date, 'sessions', Number(s.sessions));
   });
 
   if (actRes) actRes.forEach(function (x) {

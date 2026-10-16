@@ -20,9 +20,9 @@
                     actions sur les fiches) ;
      • Prospect   : toute l'histoire d'un prospect, toutes personnes
                     confondues.
-   Données : api/team-pilotage.js (admin uniquement). Les prestataires
-   (setters sous contrat de prestation) n'ont ni présence ni temps de
-   connexion : seulement leurs résultats.
+   Données : api/team-pilotage.js (admin uniquement). Toute l'équipe sales
+   est suivie, setters compris : présence, temps de connexion, appels, RDV,
+   messages, DM Instagram, actions et notes.
    ═══════════════════════════════════════════════════════════════════════ */
 .pl{padding:20px 26px 80px;max-width:1500px;margin:0 auto}
 .pl .sp{flex:1}
@@ -74,7 +74,7 @@ body:not(.light-theme) .pl-in[type=date]{color-scheme:dark}
 .pl-st.ring{background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.3);color:#fcd34d}
 .pl-st.meet{background:rgba(96,165,250,.08);border-color:rgba(96,165,250,.3);color:#93c5fd}
 .pl-st.on{color:var(--text)}
-.pl-st.off,.pl-st.unk{color:var(--muted)}
+.pl-st.off{color:var(--muted)}
 .pl-st a,.pl-link{color:inherit;font-weight:700;text-decoration:underline;text-decoration-color:rgba(148,163,184,.4);cursor:pointer;background:none;border:none;font-family:inherit;font-size:inherit;padding:0}
 .pl-today{font-size:11.5px;color:var(--muted);display:flex;gap:4px 10px;flex-wrap:wrap}
 .pl-today b{color:var(--text);font-weight:800}
@@ -83,7 +83,6 @@ body:not(.light-theme) .pl-in[type=date]{color-scheme:dark}
 .pl-dot.meet{background:#60a5fa;box-shadow:0 0 0 4px rgba(96,165,250,.18);animation:plPulse 1.6s infinite}
 .pl-dot.on{background:#4ade80}
 .pl-dot.off{background:rgba(148,163,184,.35)}
-.pl-dot.unk{background:transparent;border:1.5px dashed rgba(148,163,184,.5)}
 @keyframes plPulse{0%,100%{opacity:1}50%{opacity:.45}}
 
 /* ── RDV du jour ── */
@@ -204,7 +203,7 @@ body:not(.light-theme) .pl-in[type=date]{color-scheme:dark}
     <section class="pl-rdvs" id="liveOther"></section>
     <div class="pl-h2">RDV de closing du jour <em>· clic sur le lien Meet et présence du prospect</em></div>
     <section class="pl-rdvs" id="liveRdvs"></section>
-    <p class="pl-note">« Lien cliqué » ne compte que les clics sur le lien suivi des e-mails et de la page de confirmation. Le prospect qui rejoint depuis son invitation Google Agenda n'en laisse pas : c'est la présence Meet qui fait foi. Les setters prestataires n'ont ni présence ni temps de connexion (décision du 16/10/2026).</p>
+    <p class="pl-note">« Lien cliqué » ne compte que les clics sur le lien suivi des e-mails et de la page de confirmation. Le prospect qui rejoint depuis son invitation Google Agenda n'en laisse pas : c'est la présence Meet qui fait foi. « Connecté » = onglet Team ouvert et visible dans les 7 dernières minutes ; le temps de connexion ne compte que l'onglet visible.</p>
   </section>
 
   <!-- ═══ ACTIVITÉ ═══ -->
@@ -228,7 +227,7 @@ body:not(.light-theme) .pl-in[type=date]{color-scheme:dark}
     <section class="pl-kpis" id="actKpis"></section>
     <div class="pl-h2">Par personne <em>· clic sur une ligne pour le détail par jour</em></div>
     <div class="pl-tw" id="actTable"><div class="pl-empty">Chargement…</div></div>
-    <p class="pl-note">Appels : journal téléphonique (Ringover / dialer). Décroché = l'appel a été pris ; conversation = 1 min et plus. RDV posés : RDV de closing créés sur la période avec un setter identifié. RDV tenus : RDV de closing de la période par closeur, hors annulés et replanifiés. Messages : SMS et e-mails tracés sur les fiches, WhatsApp envoyés depuis la boîte partagée (les rappels automatiques sont « non attribués »). Actions : changements de statut, RDV posés et attributions dans Leads Live. Plage maximale : 31 jours.</p>
+    <p class="pl-note">Appels : journal téléphonique (Ringover / dialer). Décroché = l'appel a été pris ; conversation = 1 min et plus. RDV posés : RDV de closing créés sur la période avec un setter identifié. RDV tenus : RDV de closing de la période par closeur, hors annulés et replanifiés. Messages : SMS et e-mails tracés sur les fiches, WhatsApp envoyés depuis la boîte partagée (les rappels automatiques sont « non attribués »), DM Instagram envoyés (attribués au setter écrit, comme dans Set NB). Connexion : temps d'onglet Team visible et nombre de sessions (nouvelle session après 30 min d'absence), relevés depuis le 16/10/2026. Actions : changements de statut, RDV posés et attributions dans Leads Live. Plage maximale : 31 jours.</p>
   </section>
 
   <!-- ═══ PROSPECT ═══ -->
@@ -444,9 +443,6 @@ function statusHtml(m) {
   if (m.status === 'meet' && m.meet) {
     return '<div class="pl-st meet"><span class="pl-dot meet"></span> En visio avec ' + leadBtn(LIVE_LEAD_OF[m.meet.bookingId], m.meet.prospect) + ' · <span class="t" data-since="' + esc(m.meet.since) + '">' + elapsed(m.meet.since) + '</span></div>';
   }
-  if (m.prestataire) {
-    return '<div class="pl-st unk"><span class="pl-dot unk"></span> Présence non suivie (prestataire)</div>';
-  }
   if (m.status === 'online' && m.online) {
     return '<div class="pl-st on"><span class="pl-dot on"></span> Connecté' + (m.online.lastPage ? ' · ' + esc(pageLabel(m.online.lastPage)) : '') + ' · ' + esc(ago(m.online.lastSeenAt)) + '</div>';
   }
@@ -470,7 +466,7 @@ function renderLive() {
   $('liveBanner').innerHTML = ban;
 
   var members = (L.members || []).slice();
-  var rank = { call: 0, meet: 1, online: 2, unknown: 3, offline: 4 };
+  var rank = { call: 0, meet: 1, online: 2, offline: 3 };
   members.sort(function (a, b) {
     var d = (rank[a.status] || 9) - (rank[b.status] || 9);
     return d || String(a.name).localeCompare(String(b.name));
@@ -498,12 +494,15 @@ function renderLive() {
       var t = m.today;
       return '<div class="pl-person st-' + esc(m.status) + '">' +
         '<div class="pl-ph"><div class="pl-av" style="background:' + esc(memberColor(m)) + '">' + esc(initials(m)) + '</div>' +
-        '<div class="pl-pn"><b>' + esc(m.name) + '</b><small>' + esc(ROLE_LABEL[m.role] || m.role || '') + (m.prestataire ? ' · prestataire' : '') + '</small></div></div>' +
+        '<div class="pl-pn"><b>' + esc(m.name) + '</b><small>' + esc(ROLE_LABEL[m.role] || m.role || '') + '' + '</small></div></div>' +
         statusHtml(m) +
         '<div class="pl-today"><span><b>' + t.calls + '</b> appel' + (t.calls > 1 ? 's' : '') + '</span>' +
         '<span><b>' + t.answered + '</b> décroché' + (t.answered > 1 ? 's' : '') + '</span>' +
         '<span><b>' + fmtTalk(t.talkSec) + '</b> de parole</span>' +
-        (t.lastCallAt ? '<span>dernier ' + esc(ago(t.lastCallAt)) + '</span>' : '') + '</div>' +
+        (t.lastCallAt ? '<span>dernier ' + esc(ago(t.lastCallAt)) + '</span>' : '') +
+        (t.dmOut || t.dmIn || m.role === 'setter_ecrit' ? '<span><b>' + t.dmOut + '</b> DM envoyé' + (t.dmOut > 1 ? 's' : '') + ' · ' + t.dmIn + ' reçu' + (t.dmIn > 1 ? 's' : '') + (t.lastDmAt ? ' · dernier ' + esc(ago(t.lastDmAt)) : '') + '</span>' : '') +
+        '<span>⏱ <b>' + fmtTalk(Math.round((t.activeMs || 0) / 1000)) + '</b> connecté' + (t.firstSeenAt ? ' · depuis ' + esc(parisTime(t.firstSeenAt)) : '') + (t.sessions > 1 ? ' · ' + t.sessions + ' sessions' : '') + '</span>' +
+        '</div>' +
         '</div>';
     }).join('');
   }
@@ -594,12 +593,13 @@ var COLS = [
   ['callsOut', 'Sortants', 'Appels'], ['callsIn', 'Entrants', 'Appels'], ['answered', 'Décrochés', 'Appels'],
   ['convos', '≥ 1 min', 'Appels'], ['talkSec', 'Parole', 'Appels'],
   ['rdvSet', 'Posés', 'RDV'], ['rdvHeld', 'Tenus', 'RDV'], ['close', 'Close', 'RDV'], ['no_show', 'No-show', 'RDV'], ['pending', 'À statuer', 'RDV'],
-  ['sms', 'SMS', 'Messages'], ['email', 'E-mails', 'Messages'], ['whatsapp', 'WhatsApp', 'Messages'],
-  ['actStatus', 'Statuts', 'Fiches'], ['actBooking', 'RDV posés', 'Fiches'], ['notes', 'Notes', 'Fiches']
+  ['sms', 'SMS', 'Messages'], ['email', 'E-mails', 'Messages'], ['whatsapp', 'WhatsApp', 'Messages'], ['dmOut', 'DM Insta', 'Messages'],
+  ['actStatus', 'Statuts', 'Fiches'], ['actBooking', 'RDV posés', 'Fiches'], ['notes', 'Notes', 'Fiches'],
+  ['activeMs', 'Temps', 'Connexion'], ['sessions', 'Sessions', 'Connexion']
 ];
 function cell(k, v) {
   v = Number(v) || 0;
-  var txt = k === 'talkSec' ? fmtTalk(v) : String(v);
+  var txt = k === 'talkSec' ? fmtTalk(v) : (k === 'activeMs' ? fmtTalk(Math.round(v / 1000)) : String(v));
   return '<td' + (v ? '' : ' class="z"') + '>' + esc(txt) + '</td>';
 }
 function sumStats(list) {
@@ -624,7 +624,8 @@ function renderActivity() {
     kpi('🗣️ Temps de parole', fmtTalk(tot.talkSec)) +
     kpi('🗓️ RDV posés', tot.rdvSet) +
     kpi('📅 RDV tenus', tot.rdvHeld + ' · ' + tot.close + ' close') +
-    kpi('✉️ Messages', tot.sms + tot.email + tot.whatsapp);
+    kpi('✉️ Messages', tot.sms + tot.email + tot.whatsapp + tot.dmOut) +
+    kpi('⏱ Temps de connexion', fmtTalk(Math.round(tot.activeMs / 1000)));
 
   var groups = [];
   COLS.forEach(function (c) {

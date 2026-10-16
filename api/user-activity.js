@@ -42,11 +42,9 @@
 //   POST { action: 'purge', dryRun: true }    → admin : aperçu, rien n'est écrit
 //   POST { action: 'purge', dryRun: false }   → admin : purge immédiate
 //
-// PRESTATAIRES (même décision) : un membre prestataire de _meta/team_members
-// (`prestataire: true`, ou par défaut les rôles setter / setter_ecrit, sous
-// contrat de prestation) n'est PAS suivi : le signal est accepté puis ignoré,
-// sans aucune écriture. Suivre le temps de connexion d'un indépendant
-// renforcerait le risque de requalification en salariat.
+// Toute l'équipe est suivie, setters compris (décision Adrien 16/10/2026) :
+// ces données alimentent aussi admin-pilotage.html (présence et temps de
+// connexion par personne).
 // ============================================================================
 
 const { admin, db } = require('./_firebaseAdmin');
@@ -68,65 +66,10 @@ const DEFAULT_REPORT_DAYS = 30;
 const RETENTION_DAYS = 365;
 const PURGE_MAX_DOCS = 4000;
 
-// ─── Prestataires (cache 5 min du roster) ──────────────────────────────────
-const PRESTATAIRE_ROLES = { setter: 1, setter_ecrit: 1 };
-let rosterCache = null;
-let rosterCacheAt = 0;
-async function prestataireUids() {
-  if (rosterCache && Date.now() - rosterCacheAt < 5 * 60 * 1000) return rosterCache;
-  const out = {};
-  try {
-    const snap = await db.collection('_meta').doc('team_members').get();
-    const raw = snap.exists ? (snap.data() || {}).members : null;
-    const list = Array.isArray(raw) ? raw : Object.values(raw || {});
-    list.forEach((m) => {
-      if (!m || !m.firebaseUid) return;
-      if (m.prestataire === true || (m.prestataire !== false && PRESTATAIRE_ROLES[m.role])) out[m.firebaseUid] = true;
-    });
-    rosterCache = out;
-    rosterCacheAt = Date.now();
-  } catch (e) {
-    console.warn('[user-activity] roster illisible:', e.message);
-    if (rosterCache) return rosterCache;
-  }
-  return out;
-}
-
-function todayIsoParis(d) {
-  // 'en-CA' → format YYYY-MM-DD
-  return (d || new Date()).toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
-}
-
-function tsToMillis(ts) {
-  if (!ts) return 0;
-  if (typeof ts.toMillis === 'function') return ts.toMillis();
-  if (ts instanceof Date) return ts.getTime();
-  if (typeof ts === 'number') return ts;
-  return 0;
-}
-
-function tsToIso(ts) {
-  const ms = tsToMillis(ts);
-  return ms ? new Date(ms).toISOString() : null;
-}
-
-function cleanPage(raw) {
-  return String(raw || '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 60) || null;
-}
-
-function cleanUserAgent(raw) {
-  return String(raw || '').replace(/[\r\n\t]/g, ' ').slice(0, 200) || null;
-}
-
 // ─── BEAT ───────────────────────────────────────────────────────────────────
 async function handleBeat(req, res) {
   const auth = await requireAuth(req, res);
   if (!auth) return;
-
-  if ((await prestataireUids())[auth.uid]) {
-    res.status(200).json({ ok: true, skipped: 'prestataire' });
-    return;
-  }
 
   const body = parseBody(req);
   const now = Date.now();
