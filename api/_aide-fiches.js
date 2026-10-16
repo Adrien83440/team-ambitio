@@ -457,7 +457,7 @@ const FICHES = [
     body: L([
       "La confirmation ne passe plus par le bouton WhatsApp de la page merci : c'est toi qui confirmes le RDV avec le prospect, puis tu le valides dans Leads Live.",
       "1. Appelle le prospect (ou fais-le répondre par SMS / WhatsApp) et fais-lui confirmer qu'il sera présent.",
-      "2. Ouvre sa fiche, onglet **⚡ Action**, bloc Rendez-vous : clique **✅ Confirmer la présence** sur le RDV à venir.",
+      "2. Ouvre sa fiche : le bandeau orange **⚠️ Présence à confirmer** est tout en haut, sous le nom. Clique **✅ Confirmer la présence** (aussi possible depuis la pastille « ⚠️ À confirmer » de la carte, de Mes RDV, ou du bloc Rendez-vous).",
       "3. Choisis le contact qui le prouve : un **appel décroché d'au moins 15 s**, ou un **SMS / WhatsApp envoyé par le prospect** depuis la prise du RDV. **🎙 Écouter** pour réécouter l'appel.",
       "4. Clique **✅ Valider la présence**.",
       "- C'est **définitif** : personne, même un admin, ne peut retirer une confirmation. Le RDV affiche ensuite **✅ Présence confirmée** (clique pour voir la preuve).",
@@ -465,7 +465,7 @@ const FICHES = [
       "- Liste vide ? L'appel n'a pas été décroché, a duré moins de 15 s, ou Ringover ne l'a pas encore remonté (environ 1 min) : clique **↻ Actualiser**. Un SMS que TU envoies ne compte pas : il faut la réponse du prospect.",
       "- RDV replanifié = nouveau RDV : il faut confirmer à nouveau.",
     ]),
-    guide: [G_OPEN_LEAD, G_SEG_ACTION, { page: 'sales-leads', sel: '#ldSheetInner [data-pres="confirm"]', text: "Clique sur « ✅ Confirmer la présence » sur le RDV à venir." }],
+    guide: [G_OPEN_LEAD, { page: 'sales-leads', sel: '#ldSheetInner .ldpres-big', text: "Clique sur « ✅ Confirmer la présence » dans le bandeau en haut de la fiche." }],
   },
   {
     id: 'leads-live-app-mobile', cat: 'Leads Live',

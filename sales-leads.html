@@ -602,6 +602,31 @@ body.ld-pilot-on .l2fam[data-fam="closing"] { display: none; }
 }
 .ldpres-chip.ok { color: var(--green); border-color: rgba(52,211,153,0.5); background: rgba(52,211,153,0.1); }
 .ldpres-chip.todo { color: var(--gold); border-color: rgba(251,191,36,0.45); background: rgba(251,191,36,0.08); }
+.ld-card-name .ldpres-chip { margin-left: 6px; vertical-align: 1px; font-size: 10.5px; padding: 1px 8px; }
+/* Bandeau de la fiche : entre l'en-tête et les onglets, visible partout. */
+.ldpres-bnwrap { flex: none; }
+.ldpres-bnwrap:not(:empty) { padding: 10px 14px 2px; display: flex; flex-direction: column; gap: 8px; }
+.ldpres-bn { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; }
+.ldpres-bn.todo { border: 1.5px solid rgba(251,191,36,0.6); background: rgba(251,191,36,0.1); }
+.ldpres-bn .tx { flex: 1; min-width: 0; }
+.ldpres-bn .k { font-size: 14px; font-weight: 800; color: var(--gold); }
+.ldpres-bn .d { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.ldpres-big {
+  flex: none; height: 44px; padding: 0 18px; border-radius: 12px; border: none; cursor: pointer; white-space: nowrap;
+  background: #10b981; color: #fff; font-family: var(--fb); font-size: 14px; font-weight: 800;
+  box-shadow: 0 6px 18px rgba(16,185,129,0.35); transition: background .13s;
+}
+.ldpres-big:hover { background: #059669; }
+.ldpres-bn.ok {
+  width: 100%; text-align: left; flex-wrap: wrap; gap: 2px 10px; padding: 9px 14px; cursor: pointer;
+  border: 1px solid rgba(52,211,153,0.45); background: rgba(52,211,153,0.08); color: var(--text); font-family: var(--fb);
+}
+.ldpres-bn.ok .k { color: var(--green); font-size: 13px; }
+.ldpres-bn.ok .d { margin-top: 0; }
+@media (max-width: 979px) {
+  .ldpres-bn.todo { flex-direction: column; align-items: stretch; gap: 10px; }
+  .ldpres-big { width: 100%; height: 50px; font-size: 15.5px; }
+}
 .ldpres-bd { display: none; position: fixed; inset: 0; z-index: 320; background: rgba(3,4,10,0.6); }
 .ldpres-bd.on { display: block; }
 .ldpres {
@@ -3554,6 +3579,9 @@ function paintCloseRail(leadId) {
 }
 
 function paintLeadRdvBox(leadId, items) {
+  /* Bandeau de présence : repeint à chaque mise à jour des RDV, quel que
+     soit l'onglet ouvert (la boîte RDV, elle, n'existe que sur Action). */
+  try { ldPresPaintBanner(leadId); } catch (ePres) { console.error('[présence] bandeau', leadId, ePres); }
   var block = document.querySelector('[data-rdv-block="' + leadId + '"]');
   var list  = document.querySelector('[data-rdv-list="'  + leadId + '"]');
   if (!block || !list) return;
@@ -3720,6 +3748,66 @@ function ldPresAgChip(b, past) {
   if (b.presenceConfirmed) return '<span class="ldpres-chip ok" data-pres="view" data-booking-id="' + escAttr(b.id) + '" title="Présence confirmée — voir la preuve">✅ Confirmé</span>';
   if (past || !ldPresOpenable(b)) return '';
   return '<span class="ldpres-chip todo" data-pres="confirm" data-booking-id="' + escAttr(b.id) + '" title="Présence pas encore confirmée — confirmer">⚠️ À confirmer</span>';
+}
+
+/* RDV commerciaux encore à venir d'une fiche (fusion fiche ouverte + flux des
+   45 derniers jours, comme ldRdvItemsFor, mais sans reparcourir allLeads :
+   appelé pour chaque carte du feed). */
+function ldPresUpcoming(l) {
+  if (!l || !l.id) return [];
+  var AF = window.AlteoreFlow, now = Date.now();
+  var em = (l.email || '').trim().toLowerCase(), t9 = ldPhone9(l.telephone);
+  var seen = {}, out = [];
+  [_ldRdvCache[l.id], _sbnbByLead[l.id], em ? _sbnbByEmail[em] : null, t9 ? _sbnbByTel[t9] : null].forEach(function (arr) {
+    (arr || []).forEach(function (b) {
+      if (!b || !b.id || seen[b.id]) return;
+      seen[b.id] = true;
+      if (!ldPresOpenable(b) && !b.presenceConfirmed) return;
+      if (b.status === 'cancelled' || b.outcome) return;
+      if (b.isCoaching === true || (AF && AF.classifyBooking(b, _ldTypeMap || {}) === 'excluded')) return;
+      if (!(now < ldAgEndMs(b))) return;
+      out.push(b);
+    });
+  });
+  out.sort(function (a, b) { return ldAgStartMs(a) - ldAgStartMs(b); });
+  return out;
+}
+function ldPresRdvLabel(b) {
+  var d = new Date((b.date || '') + 'T12:00:00');
+  return (isNaN(d.getTime()) ? '' : d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) + ' à ') + (b.time || '');
+}
+/* Bandeau de la fiche (16/10/2026, retour Adrien : « il faut vraiment que ce
+   soit visible ») : entre l'en-tête et les onglets, donc visible sur Action,
+   Infos et Échanges, au-dessus du brief IA, sur téléphone comme sur ordinateur. */
+function ldPresBannerHTML(l) {
+  var h = '';
+  ldPresUpcoming(l).slice(0, 2).forEach(function (b) {
+    var when = 'RDV ' + ldPresRdvLabel(b) + (b.personName ? ' · avec ' + b.personName : '');
+    if (b.presenceConfirmed) {
+      var pc = b.presenceConfirmed;
+      h += '<button type="button" class="ldpres-bn ok" data-pres="view" data-booking-id="' + escAttr(b.id) + '">'
+        + '<span class="k">✅ Présence confirmée</span><span class="d">' + escHtml(when + (pc.byName ? ' · par ' + pc.byName : '')) + ' · voir la preuve ›</span></button>';
+    } else {
+      h += '<div class="ldpres-bn todo"><div class="tx"><div class="k">⚠️ Présence à confirmer</div><div class="d">' + escHtml(when) + '</div></div>'
+        + '<button type="button" class="ldpres-big" data-pres="confirm" data-booking-id="' + escAttr(b.id) + '">✅ Confirmer la présence</button></div>';
+    }
+  });
+  return h;
+}
+function ldPresPaintBanner(leadId) {
+  var host = document.querySelector('[data-pres-banner="' + leadId + '"]');
+  if (!host) return;
+  var l = null;
+  for (var i = 0; i < allLeads.length; i++) { if (allLeads[i].id === leadId) { l = allLeads[i]; break; } }
+  host.innerHTML = l ? ldPresBannerHTML(l) : '';
+}
+/* Carte du feed : prochain RDV à venir, quel que soit le jour. Cliquable :
+   ouvre directement la confirmation (ou la preuve). */
+function ldPresCardChip(l) {
+  var b = ldPresUpcoming(l)[0];
+  if (!b) return '';
+  if (b.presenceConfirmed) return '<span class="ldpres-chip ok" data-pres="view" data-booking-id="' + escAttr(b.id) + '" title="Présence confirmée — RDV ' + escAttr(ldPresRdvLabel(b)) + '">✅ Confirmé</span>';
+  return '<span class="ldpres-chip todo" data-pres="confirm" data-booking-id="' + escAttr(b.id) + '" title="RDV ' + escAttr(ldPresRdvLabel(b)) + ' : présence à confirmer">⚠️ À confirmer</span>';
 }
 
 function ldPresWhen(ms) {
@@ -4749,7 +4837,7 @@ function renderCard(l) {
     h += '<div class="ld-card-avatar" style="background:var(--bg4);color:var(--muted)">?</div>';
   }
   h += '<div class="ld-card-info">';
-  h += '<div class="ld-card-name">' + escHtml(l.nom || '—') + l2AiBadgeHTML(l) + ldAgCardChip(l) + '<span class="l2ago">' + ago + '</span></div>';
+  h += '<div class="ld-card-name">' + escHtml(l.nom || '—') + l2AiBadgeHTML(l) + ldAgCardChip(l) + ldPresCardChip(l) + '<span class="l2ago">' + ago + '</span></div>';
   h += '<div class="ld-card-meta">' + renderLeadTags(l, true) + '</div>';
   var lastAct = l2LastActivity(l);
   if (lastAct) h += '<div class="l2last">' + escHtml(lastAct) + '</div>';
@@ -5536,6 +5624,9 @@ function l2RenderSheet(id, preserve) {
     console.error('[fiche] entête en erreur', id, eHead);
     h = '<div style="padding:14px 16px 4px;font-weight:800;font-size:15px">' + escHtml(l.nom || l.email || id) + '</div>';
   }
+  var presBn = '';
+  try { presBn = ldPresBannerHTML(l); } catch (ePres) { console.error('[fiche] bandeau présence', id, ePres); }
+  h += '<div class="ldpres-bnwrap" data-pres-banner="' + id + '">' + presBn + '</div>';
   h += '<div class="l2segs">';
   h += '<button type="button" class="l2seg' + (l2Seg === 'action' ? ' active' : '') + '" data-l2="seg" data-seg="action">⚡ Action' + (fuOver ? ' <span class="b">' + fuOver + '</span>' : '') + '</button>';
   h += '<button type="button" class="l2seg' + (l2Seg === 'infos' ? ' active' : '') + '" data-l2="seg" data-seg="infos">👤 Infos</button>';
@@ -7093,6 +7184,10 @@ function startSbNbBookingsListening() {
           paintCloseRail(lid);
         } catch (eRepaint) { console.error('[sbnb] repaint fiche en erreur', lid, eRepaint); }
       });
+      /* Bandeau de présence : visible sur tous les onglets de la fiche. */
+      document.querySelectorAll('[data-pres-banner]').forEach(function (el) {
+        try { ldPresPaintBanner(el.getAttribute('data-pres-banner')); } catch (ePres) { console.error('[sbnb] bandeau présence', ePres); }
+      });
     }, function (err) {
       console.warn('[sbnb-bookings] listener error:', err && err.message);
     });
@@ -7301,11 +7396,7 @@ function ldAgCardChip(l) {
   arr.forEach(function (it) { if (it.state !== 'past' && (!pick || it.st < pick.st)) pick = it; });
   if (!pick) pick = arr[arr.length - 1];
   var lbl = pick.state === 'now' ? 'RDV en cours' : (pick.state === 'past' ? 'RDV passé aujourd’hui' : 'RDV aujourd’hui');
-  /* Présence (16/10/2026) : ✅ confirmée, ⚠️ RDV à venir encore à confirmer. */
-  var pres = '';
-  if (pick.b.presenceConfirmed) { pres = ' ✅'; lbl += ' · présence confirmée'; }
-  else if (!pick.state) { pres = ' ⚠️'; lbl += ' · présence à confirmer'; }
-  return '<span class="l2agchip' + (pick.state ? ' ' + pick.state : '') + '" title="' + lbl + ' à ' + ldAgTime(pick.b) + '">📅 ' + ldAgTime(pick.b) + pres + '</span>';
+  return '<span class="l2agchip' + (pick.state ? ' ' + pick.state : '') + '" title="' + lbl + ' à ' + ldAgTime(pick.b) + '">📅 ' + ldAgTime(pick.b) + '</span>';
 }
 
 /* ── Pastille du bouton : mes RDV restants aujourd'hui ── */
