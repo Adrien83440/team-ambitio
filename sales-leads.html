@@ -602,7 +602,7 @@ body.ld-pilot-on .l2fam[data-fam="closing"] { display: none; }
 }
 .ldpres-chip.ok { color: var(--green); border-color: rgba(52,211,153,0.5); background: rgba(52,211,153,0.1); }
 .ldpres-chip.todo { color: var(--gold); border-color: rgba(251,191,36,0.45); background: rgba(251,191,36,0.08); }
-.ld-card-name .ldpres-chip { margin-left: 6px; vertical-align: 1px; font-size: 10.5px; padding: 1px 8px; }
+.ld-card-meta .ldpres-chip { flex: none; font-size: 10.5px; padding: 2px 9px; }
 /* Bandeau de la fiche : entre l'en-tête et les onglets, visible partout. */
 .ldpres-bnwrap { flex: none; }
 .ldpres-bnwrap:not(:empty) { padding: 10px 14px 2px; display: flex; flex-direction: column; gap: 8px; }
@@ -3806,8 +3806,8 @@ function ldPresPaintBanner(leadId) {
 function ldPresCardChip(l) {
   var b = ldPresUpcoming(l)[0];
   if (!b) return '';
-  if (b.presenceConfirmed) return '<span class="ldpres-chip ok" data-pres="view" data-booking-id="' + escAttr(b.id) + '" title="Présence confirmée — RDV ' + escAttr(ldPresRdvLabel(b)) + '">✅ Confirmé</span>';
-  return '<span class="ldpres-chip todo" data-pres="confirm" data-booking-id="' + escAttr(b.id) + '" title="RDV ' + escAttr(ldPresRdvLabel(b)) + ' : présence à confirmer">⚠️ À confirmer</span>';
+  if (b.presenceConfirmed) return '<span class="ldpres-chip ok" data-pres="view" data-booking-id="' + escAttr(b.id) + '" title="Présence confirmée — RDV ' + escAttr(ldPresRdvLabel(b)) + '">✅ Présence confirmée</span>';
+  return '<span class="ldpres-chip todo" data-pres="confirm" data-booking-id="' + escAttr(b.id) + '" title="RDV ' + escAttr(ldPresRdvLabel(b)) + ' : présence à confirmer">⚠️ Présence à confirmer</span>';
 }
 
 function ldPresWhen(ms) {
@@ -4837,8 +4837,10 @@ function renderCard(l) {
     h += '<div class="ld-card-avatar" style="background:var(--bg4);color:var(--muted)">?</div>';
   }
   h += '<div class="ld-card-info">';
-  h += '<div class="ld-card-name">' + escHtml(l.nom || '—') + l2AiBadgeHTML(l) + ldAgCardChip(l) + ldPresCardChip(l) + '<span class="l2ago">' + ago + '</span></div>';
-  h += '<div class="ld-card-meta">' + renderLeadTags(l, true) + '</div>';
+  h += '<div class="ld-card-name">' + escHtml(l.nom || '—') + l2AiBadgeHTML(l) + ldAgCardChip(l) + '<span class="l2ago">' + ago + '</span></div>';
+  /* Présence au RDV : en tête des étiquettes (ligne qui passe à la ligne),
+     jamais sur la ligne du nom, qui tronque ce qui dépasse. */
+  h += '<div class="ld-card-meta">' + ldPresCardChip(l) + renderLeadTags(l, true) + '</div>';
   var lastAct = l2LastActivity(l);
   if (lastAct) h += '<div class="l2last">' + escHtml(lastAct) + '</div>';
   h += '</div>';
