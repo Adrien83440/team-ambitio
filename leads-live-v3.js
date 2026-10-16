@@ -110,7 +110,9 @@
     sign: '<path d="M4 19c3 0 3-4 6-4s2 4 5 4 3-3 5-3M14 5l5 5-7 7H7v-5z"/>',
     card: '<rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M3.5 10h17M7 14.5h3"/>',
     team: '<circle cx="9" cy="9" r="3"/><circle cx="16.5" cy="10" r="2.5"/><path d="M3.5 19c.6-3 2.8-4.5 5.5-4.5s4.9 1.5 5.5 4.5M14.5 15c2.6-.4 4.6.9 5.2 3.5"/>',
-    sort: '<path d="M7 4v16M4 17l3 3 3-3M17 20V4M14 7l3-3 3 3"/>'
+    sort: '<path d="M7 4v16M4 17l3 3 3-3M17 20V4M14 7l3-3 3 3"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/>',
+    moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>'
   };
   function ic(n) { return '<svg class="ll5i" viewBox="0 0 24 24" aria-hidden="true">' + (IC[n] || '') + '</svg>'; }
 
@@ -329,6 +331,8 @@
     var h = '<div class="ll5nav">';
     h += '<button type="button" class="ll5me" data-ll5="menu" aria-label="Menu : notifications, liens, réglages">' + escHtml((nomMoi || '?').charAt(0).toUpperCase()) + '</button>';
     h += '<span class="ll5grow"></span>';
+    var clair = document.body.classList.contains('light-theme');
+    h += '<button type="button" class="ll5ib" data-ll5="theme" aria-label="' + (clair ? 'Passer en thème sombre' : 'Passer en thème clair') + '" title="' + (clair ? 'Thème sombre' : 'Thème clair') + '">' + ic(clair ? 'moon' : 'sun') + '</button>';
     h += '<button type="button" class="ll5ib" data-ll5="agenda" aria-label="Mes RDV du jour">' + ic('cal') + '<span class="ll5badge" id="ll5AgN"></span></button>';
     h += '<button type="button" class="ll5ib" data-ll5="search" aria-label="Rechercher">' + ic('search') + '</button>';
     h += '<button type="button" class="ll5ib" data-ll5="new" aria-label="Créer une fiche">' + ic('plus') + '</button>';
@@ -405,7 +409,7 @@
   function retour() { if (pile.length > 1) pile.pop(); anime = true; if (openCardId) l2RenderSheet(openCardId, false); }
   function accueilLead(msg) { pile = ['lead']; anime = true; if (openCardId) l2RenderSheet(openCardId, false); if (msg) toast(msg); }
 
-  var TITRES = { write: 'Écrire', 'c-sms': 'SMS', 'c-wa': 'WhatsApp', 'c-mail': 'E-mail', 'c-note': 'Note pour l’équipe', voice: 'Vocaux', fu: 'Rappel', rdv: 'Rendez-vous', hist: 'Historique', info: 'Infos et dossier', ai: 'Conseil de l’IA', stars: 'Qualité du lead', notes: 'Notes', more: 'Plus', state: 'Changer l’état', closing: 'Closing', result: 'Résultat de l’appel', result2: 'Résultat de l’appel', fuask: 'Rappel' };
+  var TITRES = { write: 'Écrire', 'c-sms': 'SMS', 'c-wa': 'WhatsApp', 'c-mail': 'E-mail', 'c-note': 'Note pour l’équipe', voice: 'Vocaux', fu: 'Rappel', rdv: 'Rendez-vous', hist: 'Historique', info: 'Infos et dossier', ai: 'Conseil de l’IA', stars: 'Qualité du lead', notes: 'Notes', more: 'Plus', state: 'Changer l’état', closing: 'Closing', result: 'Résultat de l’appel', result2: 'Résultat de l’appel', fuask: 'Rappel', incall: 'Appel' };
 
   function barre(l, e) {
     var premier = e === 'lead';
@@ -457,8 +461,12 @@
 
     var a = l.aiLead, nRdv = compterRdv(id), b = rdvAVenir(l)[0], fut = fuProchain(l, true) || fuProchain(l, false);
     var nHist = (l.communications || []).length + (l.notesHistory || []).length;
-    if (!terminal(l) && (dansRdv(l) || estClient(l))) {
-      h += '<div class="ll5group ll5mt">' + ligne('trophy', 'go', 'Je close', sous('L’aide-mémoire pendant la visio de signature'), 'data-action="closerGuide"') + '</div>';
+    if (!terminal(l) && (dansRdv(l) || estClient(l) || l.closePilot)) {
+      /* Pilote de closing (_config/sales_close_pilot) : « OK pour le closing,
+         c'est parti » ou la reprise des cartes, peint par paintCloseRail.
+         Masqué tant que le pilote n'est pas actif (le rail historique reste
+         dans l'écran Closing). */
+      h += '<div class="ld-rail-block ll5rail ll5railhome" data-close-rail="' + id + '"></div>';
     }
     h += '<div class="ll5gt">Sur ' + escHtml(prenom(l)) + '</div><div class="ll5group">';
     h += ligne('spark', '', 'Conseil de l’IA', a && typeof a.proba === 'number' ? a.proba + ' % de chances de RDV' : 'À lancer', 'data-ll5="go" data-v="ai"');
@@ -591,7 +599,6 @@
     var h = '<h1 class="ll5h1">Rendez-vous</h1>';
     h += '<div class="ld-rdv-block ll5rdv" data-rdv-block="' + id + '"><div class="ld-rdv-list" data-rdv-list="' + id + '"></div></div>';
     h += '<p class="ll5sub ll5rdvempty">Aucun rendez-vous avec ' + escHtml(prenom(l)) + ' pour l’instant.</p>';
-    h += '<div class="ll5group ll5mt">' + ligne('trophy', 'go', 'Je close', sous('L’aide-mémoire pendant la visio de signature'), 'data-action="closerGuide"') + '</div>';
     h += '<div class="ll5foot"><button type="button" class="ll5big pri" data-action="openBooking" data-id="' + id + '">' + ic('plus') + 'Prendre un RDV</button></div>';
     return h;
   }
@@ -603,7 +610,6 @@
     h += '<div class="ll5group ll5mt">';
     h += ligne('sign', 'grey', 'Signatures', '', 'data-action="openModule" data-mod="sig" data-lead-id="' + escAttr(id) + '"');
     h += ligne('card', 'grey', 'Paiements', '', 'data-action="openModule" data-mod="pay" data-lead-id="' + escAttr(id) + '"');
-    h += ligne('trophy', 'go', 'Je close', sous('L’aide-mémoire pendant la visio de signature'), 'data-action="closerGuide"');
     return h + '</div>';
   }
 
@@ -719,7 +725,6 @@
     h += ligne('flag', '', 'Noter le résultat d’un appel', sous('Il a répondu, pas de réponse…'), 'data-ll5="go" data-v="result"');
     h += ligne('flag', 'grey', 'Changer l’état à la main', sous('Les 17 états'), 'data-ll5="go" data-v="state"');
     h += ligne('trophy', '', 'Closing', sous('Contrat, paiement, coach'), 'data-ll5="go" data-v="closing"');
-    h += ligne('trophy', 'go', 'Je close', sous('L’aide-mémoire pendant la visio de signature'), 'data-action="closerGuide"');
     h += '</div><div class="ll5group ll5mt">';
     if (mine && l.assignedTo !== mine) h += ligne('user', 'grey', 'M’attribuer ce lead', '', 'data-action="reassign" data-id="' + id + '"');
     h += '<a class="ll5line" href="sales-contact.html?id=' + encodeURIComponent(id) + '"><span class="ll5ric grey">' + ic('folder') + '</span><span class="ll5tx"><b>Fiche CRM complète</b></span><span class="ll5chev">' + ic('chev') + '</span></a>';
@@ -746,6 +751,29 @@
       choixR('x', 'grey', 'Pas pour nous', 'Hors cible', 'data-ll5="r2" data-v="dq" data-id="' + id + '"') +
       choixR('trophy', '', 'Il a signé', 'Les étapes du close s’ouvrent', 'data-ll5="r2" data-v="win" data-id="' + id + '"') + '</div>';
   }
+  var appelTermine = false;
+  function ecranEnAppel(l, id) {
+    var a = l.aiLead || {};
+    var bits = [l.secteur, l.ca, l.defi].filter(function (x) { return x && String(x).trim(); });
+    var h = '<h1 class="ll5h1">' + (appelTermine ? 'Appel terminé' : 'En appel avec ' + escHtml(prenom(l))) + '</h1>';
+    h += '<p class="ll5sub">' + escHtml(l.nom || '') + (l.telephone ? ' · ' + escHtml(normalizeTel(l.telephone)) : '') + '</p>';
+    if (a.ouverture && !appelTermine) h += '<div class="ll5group ll5mt ll5incall"><div class="ll5para"><small>Pour commencer, dis</small>« ' + escHtml(a.ouverture) + ' »</div>' + (bits.length ? '<div class="ll5para"><small>À savoir</small>' + escHtml(bits.join(' · ')) + '</div>' : '') + '</div>';
+    else if (bits.length && !appelTermine) h += '<div class="ll5group ll5mt ll5incall"><div class="ll5para"><small>À savoir</small>' + escHtml(bits.join(' · ')) + '</div></div>';
+    h += '<div class="ll5gt">' + (appelTermine ? 'Il a répondu ?' : 'Il a décroché') + '</div><div class="ll5group">';
+    h += choixR('cal', 'go', 'Il veut un rendez-vous', 'L’agenda s’ouvre, l’appel continue', 'data-ll5="r2" data-v="rdv" data-id="' + id + '"');
+    h += choixR('clock', '', 'Il veut être rappelé', 'Tu choisis quand', 'data-ll5="r2" data-v="fu" data-id="' + id + '"');
+    h += choixR('msg', 'grey', 'Rien de décidé', 'On a juste parlé', 'data-ll5="r2" data-v="talk" data-id="' + id + '"');
+    h += choixR('x', 'grey', 'Pas intéressé', '', 'data-ll5="r2" data-v="no" data-id="' + id + '"');
+    h += choixR('x', 'grey', 'Pas pour nous', 'Hors cible', 'data-ll5="r2" data-v="dq" data-id="' + id + '"');
+    h += choixR('trophy', '', 'Il a signé', 'Les étapes du close s’ouvrent', 'data-ll5="r2" data-v="win" data-id="' + id + '"');
+    h += '</div><div class="ll5gt">Il n’a pas décroché</div><div class="ll5group">';
+    var suiv = NRP_SUIVANT[l.status || 'nouveau'] || 'nrp1';
+    h += choixR('phone', 'grey', 'Pas de réponse', 'Ce sera « ' + getStatusObj(suiv).label + ' »', 'data-ll5="r1" data-v="no" data-id="' + id + '"');
+    h += choixR('msg', 'grey', 'Messagerie', '', 'data-ll5="r1" data-v="vm" data-id="' + id + '"');
+    h += choixR('x', 'grey', 'Mauvais numéro', '', 'data-ll5="r1" data-v="bad" data-id="' + id + '"');
+    h += '</div>';
+    return h;
+  }
   var infoRappel = '';
   function ecranRappelApres(l, id) {
     var h = '<h1 class="ll5h1">Quand le rappeler ?</h1>' + (infoRappel ? '<p class="ll5ok">' + ic('check') + escHtml(infoRappel) + '</p>' : '') + '<div class="ll5group ll5mt">';
@@ -763,7 +791,7 @@
   var ECRANS = {
     lead: ecranLead, write: ecranEcrire, 'c-sms': ecranSms, 'c-wa': ecranWa, 'c-mail': ecranMail, 'c-note': ecranNoteCompose, voice: ecranVocaux,
     fu: ecranRappel, rdv: ecranRdv, closing: ecranClosing, hist: ecranHistorique, notes: ecranNotes, ai: ecranIa, stars: ecranQualite,
-    info: ecranInfos, state: ecranEtat, more: ecranPlus, result: ecranResultat, result2: ecranResultat2, fuask: ecranRappelApres
+    info: ecranInfos, state: ecranEtat, more: ecranPlus, result: ecranResultat, result2: ecranResultat2, fuask: ecranRappelApres, incall: ecranEnAppel
   };
 
   /* Assemblage (remplace l2RenderSheet) */
@@ -914,7 +942,15 @@
     if (!d) return;
     var lid = d.getAttribute('data-lead-id');
     if (!lid) { var c = d.closest('.ld-card'); lid = c && c.getAttribute('data-lead-id'); }
-    if (lid) appelEnCours = { id: lid, t: Date.now() };
+    if (!lid) return;
+    appelEnCours = { id: lid, t: Date.now() };
+    appelTermine = false;
+    setTimeout(function () {
+      if (openCardId !== lid) l2OpenLead(lid);
+      pile = ['lead', 'incall'];
+      anime = true;
+      l2RenderSheet(lid, false);
+    }, 80);
   }
   window.addEventListener('message', function (evt) {
     if (!on || evt.origin !== window.location.origin) return;
@@ -924,12 +960,10 @@
     if (data.leadId && data.leadId !== appelEnCours.id) return;
     var id = appelEnCours.id;
     appelEnCours = null;
+    appelTermine = true;
     setTimeout(function () {
-      if (openCardId !== id) l2OpenLead(id);
-      pile = ['lead', 'result'];
-      anime = true;
-      l2RenderSheet(id, false);
-    }, 400);
+      if (openCardId === id && ecran() === 'incall') l2RenderSheet(id, true);
+    }, 300);
   });
 
   /* ═══ Écouteurs ══════════════════════════════════════════════════════ */
@@ -976,6 +1010,11 @@
       case 'searchoff': recherche = false; filterSearch = ''; var si = l2El('ldSearchInput'); if (si) si.value = ''; renderFeed(); return;
       case 'new': if (typeof openCreateLead === 'function') openCreateLead(); return;
       case 'agenda': if (typeof ldAgOpen === 'function') ldAgOpen(); return;
+      case 'theme':
+        try { localStorage.setItem(THEME_KEY, document.body.classList.contains('light-theme') ? 'dark' : 'light'); } catch (e7) {}
+        appliquerTheme();
+        renderFeed();
+        return;
       case 'menu': e.stopPropagation(); var m = l2El('l2Menu'); if (m) m.classList.toggle('on'); return;
       case 'serie':
         serie = !serie;
@@ -1087,6 +1126,7 @@
         var clair = !document.body.classList.contains('light-theme');
         try { localStorage.setItem(THEME_KEY, clair ? 'light' : 'dark'); } catch (er) {}
         appliquerTheme();
+        renderFeed();
       });
       menu.insertBefore(tb, panel || null);
       var ob = document.createElement('button');

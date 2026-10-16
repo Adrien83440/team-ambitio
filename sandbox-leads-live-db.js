@@ -33,7 +33,7 @@
   })();
   /* Désormais cloisonnées : sans effet sur le vrai logiciel. */
   try { localStorage.setItem('ll3_force', '1'); localStorage.setItem('ambitio_role', 'admin'); localStorage.setItem('ambitio_name', MOI); } catch (e) {}
-  var KEY = 'llsbx_db_v5';
+  var KEY = 'llsbx_db_v6';
   var NOW = Date.now(), MIN = 60000, H = 3600000, D = 86400000;
 
   /* ── Horodatages et valeurs spéciales ── */
@@ -247,7 +247,7 @@
     } });
     Object.keys(db._meta.team_members.members).forEach(function (k) { var m = db._meta.team_members.members[k]; m.name = m.shortName; m.fullName = m.displayName; });
     put('users', 'u-moi', { role: 'admin', email: 'testeur@alteore.test', firstname: MOI });
-    put('_config', 'sales_close_pilot', { enabled: false });
+    put('_config', 'sales_close_pilot', { enabled: true });  /* comme en production */
     put('_config', 'leads_live_v3', { enabled: true });
 
     var T0 = new Date(); T0.setHours(9, 0, 0, 0); var t9 = T0.getTime();

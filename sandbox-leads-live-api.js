@@ -168,16 +168,18 @@
     /* Appel simulé : un écran d'appel, puis la fin d'appel comme le vrai Dialer. */
     if (window.DialerBridge) {
       window.DialerBridge.callLead = function (leadId, phone, name) {
-        var ov = document.createElement('div');
-        ov.className = 'sbx-call';
-        ov.innerHTML = '<div class="sbx-call-box"><div class="sbx-call-k">Appel simulé · labo</div><div class="sbx-call-n">' + (name || phone || '') + '</div><div class="sbx-call-t" id="sbxT">00:00</div>' +
-          '<button type="button" class="sbx-call-b">Raccrocher</button></div>';
-        document.body.appendChild(ov);
+        /* Comme le vrai Dialer : une barre flottante, la page reste utilisable
+           pendant l'appel (prendre un RDV, noter le résultat…). */
+        var old = document.querySelector('.sbx-callbar'); if (old) old.parentNode.removeChild(old);
+        var bar = document.createElement('div');
+        bar.className = 'sbx-callbar';
+        bar.innerHTML = '<span class="sbx-dot"></span><span class="sbx-cb-t"><b>Appel simulé · ' + (name || phone || '') + '</b><small id="sbxT">00:00</small></span><button type="button">Raccrocher</button>';
+        document.body.appendChild(bar);
         var t0 = Date.now(), it = setInterval(function () { var s = Math.floor((Date.now() - t0) / 1000); var el = document.getElementById('sbxT'); if (el) el.textContent = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }, 500);
-        ov.querySelector('button').addEventListener('click', function () {
+        bar.querySelector('button').addEventListener('click', function () {
           clearInterval(it);
           var d = Math.floor((Date.now() - t0) / 1000);
-          ov.parentNode.removeChild(ov);
+          bar.parentNode.removeChild(bar);
           if (leadId) addComm(leadId, { type: 'call', direction: 'outbound', ownerName: MOI.nom, ownerUid: MOI.uid, date: new Date().toISOString(), duration: d >= 8 ? d : 0, source: 'ringover' });
           window.postMessage({ type: 'dialer:call-ended', leadId: leadId || null }, location.origin);
         });
@@ -238,6 +240,10 @@
     '.sbx-call-box{width:min(360px,100%);display:flex;flex-direction:column;align-items:center;gap:12px;padding:28px 22px;border-radius:26px;background:#fff;color:#111216;font-family:"Plus Jakarta Sans",system-ui,sans-serif;text-align:center}' +
     '.sbx-call-k{font-size:12.5px;font-weight:700;color:#6c7080}.sbx-call-n{font-size:22px;font-weight:800}.sbx-call-t{font-size:34px;font-weight:700;font-variant-numeric:tabular-nums}' +
     '.sbx-call-b{width:100%;min-height:54px;border:0;border-radius:18px;background:#dc2626;color:#fff;font:800 16px "Plus Jakarta Sans",system-ui,sans-serif;cursor:pointer}' +
+    '.sbx-callbar{position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:100002;display:flex;align-items:center;gap:12px;width:min(420px,calc(100% - 20px));padding:10px 10px 10px 16px;border-radius:999px;background:#0f8a46;color:#fff;font-family:"Plus Jakarta Sans",system-ui,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.3)}' +
+    '.sbx-dot{width:10px;height:10px;border-radius:50%;background:#fff;animation:sbxp 1.2s infinite}@keyframes sbxp{50%{opacity:.3}}' +
+    '.sbx-cb-t{flex:1;min-width:0}.sbx-cb-t b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sbx-cb-t small{font-size:12.5px;opacity:.85;font-variant-numeric:tabular-nums}' +
+    '.sbx-callbar button{flex:none;min-height:40px;padding:0 16px;border:0;border-radius:999px;background:#c4161c;color:#fff;font:800 14px "Plus Jakarta Sans",system-ui,sans-serif;cursor:pointer}' +
     '.sbx-book .sbx-call-b{background:#f0f1f4;color:#111216}.sbx-slots{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%}' +
     '.sbx-slots button{min-height:48px;border:0;border-radius:14px;background:#3d5af1;color:#fff;font:700 14px "Plus Jakarta Sans",system-ui,sans-serif;cursor:pointer}';
   (document.head || document.documentElement).appendChild(st);

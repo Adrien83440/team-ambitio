@@ -8,23 +8,39 @@
    d'accent, vert pour agir, rouge pour en retard, orange pour à confirmer.
    ═══════════════════════════════════════════════════════════════════════ */
 
+/* Sombre = l'apparence actuelle d'Alteore (fond ardoise et ses halos, cartes
+   bordées, rouge Leads Live pour la sélection). Clair = « liquid glass » :
+   l'atmosphère colorée du thème clair d'Alteore, des cartes en verre dépoli,
+   un liseré lumineux, et un texte toujours très contrasté (≥ 7:1). */
 html body.ll5 {
-  --l5-bg: #0c0d10; --l5-card: #17181d; --l5-card2: #202228; --l5-line: rgba(255,255,255,0.08);
-  --l5-text: #f2f3f5; --l5-muted: #9ca0ac; --l5-faint: #62666f;
-  --l5-acc: #6b84ff; --l5-acc-soft: rgba(107,132,255,0.14); --l5-on-acc: #0c0d10;
-  --l5-go: #22c55e; --l5-on-go: #06210f; --l5-warn: #f59e0b; --l5-late: #f87171; --l5-new: #6b84ff;
-  --l5-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 10px 30px rgba(0,0,0,0.35);
+  --l5-bg: var(--bg, #07080f); --l5-card: var(--bg2, #0e111c); --l5-card2: var(--bg3, #151928);
+  --l5-line: var(--border, rgba(148,163,214,0.11)); --l5-text: var(--text, #eef0f8);
+  --l5-muted: var(--muted, #8f97b2); --l5-faint: var(--muted2, #596180);
+  --l5-acc: #5b7cfa; --l5-acc-soft: rgba(91,124,250,0.14); --l5-on-acc: #ffffff;
+  --l5-go: #34d399; --l5-go-bg: linear-gradient(135deg, #059669, #10b981); --l5-on-go: #ffffff; --l5-go-soft: rgba(52,211,153,0.12);
+  --l5-warn: #fbbf24; --l5-warn-soft: rgba(251,191,36,0.10); --l5-late: #f87171; --l5-late-soft: rgba(239,68,68,0.10); --l5-new: #5b7cfa;
+  --l5-sel: rgba(239,68,68,0.55); --l5-sel-soft: rgba(239,68,68,0.07);
+  --l5-surface: var(--bg2, #0e111c); --l5-border: var(--border, rgba(148,163,214,0.11));
+  --l5-shadow: none; --l5-blur: none;
+  --l5-bar: rgba(7,8,15,0.88);
+  --l5-atmo: radial-gradient(820px 460px at 6% -8%, rgba(239,68,68,0.07), transparent 60%), radial-gradient(700px 420px at 100% 4%, rgba(91,124,250,0.06), transparent 58%), var(--bg, #07080f);
+  --l5-modal: var(--bg2, #0e111c); --l5-ring: var(--bg2, #0e111c);
   font-size: 16px;
-  background: var(--l5-bg) !important;
-  background-image: none !important;
   color: var(--l5-text);
 }
 html body.ll5.light-theme {
-  --l5-bg: #f5f5f7; --l5-card: #ffffff; --l5-card2: #f0f1f4; --l5-line: rgba(16,17,20,0.08);
-  --l5-text: #111216; --l5-muted: #6c7080; --l5-faint: #a0a4b0;
-  --l5-acc: #3d5af1; --l5-acc-soft: rgba(61,90,241,0.10); --l5-on-acc: #ffffff;
-  --l5-go: #15a34a; --l5-on-go: #ffffff; --l5-warn: #d97706; --l5-late: #dc2626; --l5-new: #3d5af1;
-  --l5-shadow: 0 1px 2px rgba(16,17,20,0.05), 0 8px 24px rgba(16,17,20,0.06);
+  --l5-bg: #eceff8; --l5-card: rgba(255,255,255,0.70); --l5-card2: rgba(118,124,150,0.11);
+  --l5-line: rgba(17,19,36,0.09); --l5-text: #0f1222; --l5-muted: #474e6b; --l5-faint: #868ca5;
+  --l5-acc: #3451e0; --l5-acc-soft: rgba(52,81,224,0.10); --l5-on-acc: #ffffff;
+  --l5-go: #0d7f40; --l5-go-bg: linear-gradient(135deg, #0f8a46, #13a056); --l5-on-go: #ffffff; --l5-go-soft: rgba(19,160,86,0.12);
+  --l5-warn: #a85304; --l5-warn-soft: rgba(217,119,6,0.12); --l5-late: #c4161c; --l5-late-soft: rgba(220,38,38,0.10); --l5-new: #3451e0;
+  --l5-sel: rgba(52,81,224,0.42); --l5-sel-soft: rgba(52,81,224,0.09);
+  --l5-surface: rgba(255,255,255,0.66); --l5-border: rgba(255,255,255,0.82);
+  --l5-shadow: inset 0 1px 0 rgba(255,255,255,0.95), 0 1px 2px rgba(24,28,52,0.06), 0 14px 34px -16px rgba(24,28,52,0.28);
+  --l5-blur: blur(22px) saturate(1.7);
+  --l5-bar: rgba(236,239,248,0.72);
+  --l5-atmo: radial-gradient(1100px 700px at -5% -10%, rgba(91,124,250,0.42), transparent 58%), radial-gradient(900px 620px at 105% -5%, rgba(157,123,250,0.40), transparent 56%), radial-gradient(800px 560px at 108% 70%, rgba(244,114,182,0.26), transparent 55%), radial-gradient(1000px 640px at 35% 115%, rgba(45,212,191,0.36), transparent 58%), linear-gradient(180deg, #eef0fa 0%, #e6e9f5 100%);
+  --l5-modal: rgba(255,255,255,0.90); --l5-ring: #ffffff;
 }
 /* Le thème clair donne un liseré « bulle » à tout bouton et un dégradé aux cartes .ld-card :
    la nouvelle vue repart de zéro, chaque élément remet ensuite son ombre s'il en a une. */
@@ -46,7 +62,7 @@ html body.ll5 .l2sheet .l2ph { color: var(--l5-muted); }
   /* Le bouton ☰ de la barre latérale occupe le coin haut gauche. */
   html body.ll5.has-sidebar .ll5nav { padding-left: 52px; }
   html body.ll5 .l2sheet {
-    height: 100vh; height: 100dvh; border-radius: 0; border: 0; background: var(--l5-bg);
+    height: 100vh; height: 100dvh; border-radius: 0; border: 0; background: var(--l5-atmo); background-attachment: fixed;
     padding-top: env(safe-area-inset-top, 0px); box-shadow: none;
   }
   html body.ll5 .l2grab { display: none; }
@@ -75,7 +91,7 @@ html body.ll5 .l2sheet .l2ph { color: var(--l5-muted); }
 
 /* ═══ Accueil ═══ */
 html body.ll5 .ll5list { max-width: 640px; margin: 0 auto; padding: 8px 18px 120px; }
-html body.ll5 .ll5nav { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 4px; min-height: 60px; margin: 0 -6px; padding: 8px 0; background: var(--l5-bg); }
+html body.ll5 .ll5nav { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 4px; min-height: 60px; margin: 0 -18px; padding: 8px 12px; background: var(--l5-bar); -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6); }
 html body.ll5 .ll5grow { flex: 1; }
 html body.ll5 .ll5me { width: 42px; height: 42px; border-radius: 50%; border: 0; background: var(--l5-acc); color: var(--l5-on-acc); font-family: var(--fb); font-weight: 800; font-size: 16px; cursor: pointer; }
 html body.ll5 .ll5ib { position: relative; width: 44px; height: 44px; flex: none; border-radius: 50%; border: 0; background: transparent; color: var(--l5-text); display: grid; place-items: center; cursor: pointer; }
@@ -103,7 +119,7 @@ html body.ll5 .ll5hero.calm b { font-size: 19px; }
 html body.ll5 .ll5tabs { display: flex; gap: 4px; margin: 22px 0 10px; padding: 4px; border-radius: 16px; background: var(--l5-card2); }
 html body.ll5 .ll5tabs button { flex: 1; min-width: 0; border: 0; background: transparent; padding: 10px 4px; border-radius: 12px; font-family: var(--fb); font-weight: 700; font-size: 14px; color: var(--l5-muted); white-space: nowrap; cursor: pointer; }
 html body.ll5 .ll5tabs button .n { font-weight: 600; opacity: 0.7; margin-left: 4px; }
-html body.ll5 .ll5tabs button[aria-pressed="true"] { background: var(--l5-card); color: var(--l5-text); box-shadow: var(--l5-shadow); }
+html body.ll5 .ll5tabs button[aria-pressed="true"] { background: var(--l5-surface); color: var(--l5-text); box-shadow: inset 0 0 0 1.5px var(--l5-sel), var(--l5-shadow); }
 html body.ll5 .ll5pills { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px; scrollbar-width: none; }
 html body.ll5 .ll5pills::-webkit-scrollbar { display: none; }
 html body.ll5 .ll5pill {
@@ -125,13 +141,13 @@ html body.ll5 .ll5empty { padding: 40px 16px; text-align: center; color: var(--l
 html body.ll5 .ld-feed .ll5card { position: relative; margin: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; overflow: visible; }
 html body.ll5 .ld-feed .ll5card::before { display: none; }
 html body.ll5 .ld-feed .ll5card + .ll5card { border-top: 1px solid var(--l5-line); }
-html body.ll5 .ld-feed .ll5card.is-open { background: var(--l5-acc-soft); box-shadow: none; }
+html body.ll5 .ld-feed .ll5card.is-open { background: var(--l5-sel-soft); box-shadow: inset 3px 0 0 var(--l5-sel); }
 html body.ll5 .ld-feed .ll5card.l2done { opacity: 0.55; }
 html body.ll5 .ld-feed .ll5card.new { animation: none; }
 html body.ll5 .ll5row { display: flex; align-items: center; gap: 14px; min-height: 70px; padding: 12px 14px 12px 16px; cursor: pointer; }
 html body.ll5 .ll5row:hover { background: var(--l5-card2); }
 html body.ll5 .ll5av { position: relative; width: 46px; height: 46px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--l5-card2); color: var(--l5-text); font-family: var(--fb); font-weight: 800; font-size: 15px; }
-html body.ll5 .ll5dot { position: absolute; right: -1px; bottom: -1px; width: 14px; height: 14px; border-radius: 50%; border: 2.5px solid var(--l5-card); background: var(--l5-faint); }
+html body.ll5 .ll5dot { position: absolute; right: -1px; bottom: -1px; width: 14px; height: 14px; border-radius: 50%; border: 2.5px solid var(--l5-ring); background: var(--l5-faint); }
 html body.ll5 .ll5dot.late { background: var(--l5-late); }
 html body.ll5 .ll5dot.warn { background: var(--l5-warn); }
 html body.ll5 .ll5dot.ok { background: var(--l5-go); }
@@ -148,10 +164,10 @@ html body.ll5:not(.ll5-serie) .ld-feed .dbr-checkbox { display: none !important;
 html body.ll5:not(.ll5-serie) .ld-feed .ll5card .ld-card-head { padding-left: 16px; }
 
 /* ═══ Fiche : pile d'écrans ═══ */
-html body.ll5 .ll5screen { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--l5-bg); }
+html body.ll5 .ll5screen { flex: 1; min-height: 0; display: flex; flex-direction: column; background: transparent; }
 html body.ll5 .ll5screen.enter { animation: ll5push 0.24s cubic-bezier(0.3, 0.7, 0.2, 1); }
 @keyframes ll5push { from { transform: translateX(32px); opacity: 0.3; } to { transform: none; opacity: 1; } }
-html body.ll5 .ll5bar { flex: none; display: flex; align-items: center; gap: 6px; min-height: 60px; padding: 8px 10px; background: var(--l5-bg); }
+html body.ll5 .ll5bar { flex: none; display: flex; align-items: center; gap: 6px; min-height: 60px; padding: 8px 10px; background: var(--l5-bar); -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6); border-bottom: 1px solid var(--l5-line); }
 html body.ll5 .ll5bar .t { flex: 1; text-align: center; font-weight: 800; font-size: 16px; color: var(--l5-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 html body.ll5 .ll5scroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 html body.ll5 .l2body.ll5wrap { flex: none; overflow: visible; max-width: 640px; margin: 0 auto; padding: 4px 20px calc(40px + var(--sab)); background: transparent !important; border: 0; border-radius: 0; box-shadow: none !important; color: var(--l5-text); }
@@ -161,7 +177,7 @@ html body.ll5 .ll5status .ll5dot { position: static; flex: none; width: 12px; he
 html body.ll5 .ll5status b { display: block; font-size: 16px; color: var(--l5-text); }
 html body.ll5 .ll5status span span { display: block; font-size: 14.5px; color: var(--l5-muted); }
 html body.ll5 .ll5status.late span span { color: var(--l5-late); font-weight: 600; }
-html body.ll5 .ll5msg { display: block; width: 100%; text-align: left; margin: 0 0 14px; padding: 14px 16px; border-radius: 18px; cursor: pointer; font-family: var(--fb); background: rgba(34,197,94,0.10); border: 1px solid rgba(34,197,94,0.30); color: var(--l5-text); }
+html body.ll5 .ll5msg { display: block; width: 100%; text-align: left; margin: 0 0 14px; padding: 14px 16px; border-radius: 18px; cursor: pointer; font-family: var(--fb); background: var(--l5-go-soft); border: 1px solid var(--l5-go-soft); color: var(--l5-text); }
 html body.ll5 .ll5msg .k { display: block; font-size: 13px; font-weight: 700; color: var(--l5-go); }
 html body.ll5 .ll5msg .x { display: block; margin-top: 4px; font-size: 15.5px; }
 html body.ll5 .ll5big {
@@ -169,7 +185,7 @@ html body.ll5 .ll5big {
   border-radius: 18px; border: 0; font-family: var(--fb); font-weight: 800; font-size: 17px; text-decoration: none; cursor: pointer;
   box-shadow: none; text-transform: none; letter-spacing: 0;
 }
-html body.ll5 .ll5big.go { background: var(--l5-go); color: var(--l5-on-go); }
+html body.ll5 .ll5big.go { background: var(--l5-go-bg); color: var(--l5-on-go); box-shadow: 0 6px 18px -6px rgba(16,185,129,0.55); }
 html body.ll5 .ll5big.pri { background: var(--l5-acc); color: var(--l5-on-acc); }
 html body.ll5 .ll5big.soft { background: var(--l5-card2); color: var(--l5-text); }
 html body.ll5 .ll5big:disabled { opacity: 0.55; cursor: default; }
@@ -177,7 +193,7 @@ html body.ll5 .ll5under { text-align: center; color: var(--l5-muted); font-size:
 html body.ll5 .ll5acts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin: 22px 0 6px; }
 html body.ll5 .ll5act { display: flex; flex-direction: column; align-items: center; gap: 7px; border: 0; background: transparent; padding: 4px 0; font-family: var(--fb); font-size: 13px; font-weight: 700; color: var(--l5-text); text-decoration: none; cursor: pointer; }
 html body.ll5 .ll5act .c { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: var(--l5-card); box-shadow: var(--l5-shadow); color: var(--l5-acc); }
-html body.ll5 .ll5act.call .c { background: var(--l5-go); color: var(--l5-on-go); }
+html body.ll5 .ll5act.call .c { background: var(--l5-go-bg); color: var(--l5-on-go); border-color: transparent; }
 html body.ll5 .ll5act.off { opacity: 0.4; cursor: default; }
 
 /* Lignes d'action et de choix */
@@ -201,11 +217,11 @@ html body.ll5 .ll5line:has(.ll5val) .ll5tx { flex: 1 0 auto; max-width: 62%; }
 html body.ll5 .ll5val { flex: 0 1 auto; min-width: 0; color: var(--l5-muted); font-size: 14.5px; text-align: right; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 440px) { html body.ll5 .ll5val { max-width: 40%; font-size: 13.5px; } html body.ll5 .ll5line { gap: 12px; padding-left: 14px; } }
 html body.ll5 .ll5ric { width: 38px; height: 38px; flex: none; border-radius: 12px; display: grid; place-items: center; background: var(--l5-acc-soft); color: var(--l5-acc); }
-html body.ll5 .ll5ric.go { background: rgba(34,197,94,0.13); color: var(--l5-go); }
-html body.ll5 .ll5ric.warn { background: rgba(245,158,11,0.14); color: var(--l5-warn); }
-html body.ll5 .ll5ric.late { background: rgba(239,68,68,0.12); color: var(--l5-late); }
+html body.ll5 .ll5ric.go { background: var(--l5-go-soft); color: var(--l5-go); }
+html body.ll5 .ll5ric.warn { background: var(--l5-warn-soft); color: var(--l5-warn); }
+html body.ll5 .ll5ric.late { background: var(--l5-late-soft); color: var(--l5-late); }
 html body.ll5 .ll5ric.grey { background: var(--l5-card2); color: var(--l5-muted); }
-html body.ll5 .ll5reco { margin-left: auto; font-size: 12px; font-weight: 800; color: var(--l5-go); background: rgba(34,197,94,0.12); padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+html body.ll5 .ll5reco { margin-left: auto; font-size: 12px; font-weight: 800; color: var(--l5-go); background: var(--l5-go-soft); padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
 html body.ll5 .ll5ok { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; font-weight: 700; color: var(--l5-go); }
 html body.ll5 .ll5note { margin: 12px 0 0; font-size: 14px; color: var(--l5-muted); }
 html body.ll5 .ll5err { margin: 0; font-size: 14px; color: var(--l5-late); font-weight: 600; }
@@ -224,7 +240,7 @@ html body.ll5 .ld-sms-composer.ll5compose { padding: 0; border: 0; background: t
 html body.ll5 .ld-sms-composer-counter { font-size: 13px; color: var(--l5-muted); }
 html body.ll5 .ld-sms-composer-error { font-size: 14px; color: var(--l5-late); }
 html body.ll5 .l2sug-it { border-radius: 16px; padding: 12px 14px; font-size: 15px; }
-html body.ll5 .ll5foot { position: sticky; bottom: 0; margin: 20px -20px calc(-40px - var(--sab)); padding: 12px 20px calc(16px + var(--sab)); background: linear-gradient(to top, var(--l5-bg) 70%, transparent); }
+html body.ll5 .ll5foot { position: sticky; bottom: 0; margin: 20px -20px calc(-40px - var(--sab)); padding: 12px 20px calc(16px + var(--sab)); background: var(--l5-bar); -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6); border-top: 1px solid var(--l5-line); }
 html body.ll5 .ll5form { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
 html body.ll5 .ll5form label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700; color: var(--l5-muted); }
 html body.ll5 .ll5form input, html body.ll5 .ll5form select, html body.ll5 .ll5form textarea {
@@ -284,7 +300,7 @@ html body.ll5 .ll5wrap .ld-rdvx-row + .ld-rdvx-info, html body.ll5 .ll5wrap .ld-
 html body.ll5 .ll5wrap .ld-rdvx-when { flex-basis: 100%; font-size: 19px; font-weight: 800; color: var(--l5-text); }
 html body.ll5 .ll5wrap .ld-rdvx-meta { flex-basis: 100%; font-size: 14.5px; color: var(--l5-muted); }
 html body.ll5 .ll5wrap .ld-rdvx-btn { min-height: 42px; padding: 0 14px; border-radius: 999px; font-size: 14px; display: inline-flex; align-items: center; }
-html body.ll5 .ll5wrap .ld-rdvx-btn.pres { background: var(--l5-go); border-color: transparent; color: var(--l5-on-go); }
+html body.ll5 .ll5wrap .ld-rdvx-btn.pres { background: var(--l5-go-bg); border-color: transparent; color: var(--l5-on-go); }
 html body.ll5 .ll5rdvempty { margin-top: 16px; }
 
 html body.ll5 .ll5wrap .ld-rail-block.ll5rail { margin: 16px 0 0; padding: 16px; border: 0; border-radius: 20px; background: var(--l5-card); box-shadow: var(--l5-shadow); }
@@ -327,14 +343,128 @@ html body.ll5 .ld-toast { border-radius: 999px; }
 html body.ll5 .ldpres, html body.ll5 .l2fs, html body.ll5 .l2ag, html body.ll5 .l2menu,
 html body.ll5 .rvo, html body.ll5 .ld-popup, html body.ll5 .ld-booking-modal,
 html body.ll5 #createLeadOverlay > div, html body.ll5 .ld-frame {
-  background: var(--l5-card) !important;
+  background: var(--l5-modal) !important;
   background-image: none !important;
-  -webkit-backdrop-filter: none !important;
-  backdrop-filter: none !important;
+  -webkit-backdrop-filter: blur(30px) saturate(1.8) !important;
+  backdrop-filter: blur(30px) saturate(1.8) !important;
+  border: 1px solid var(--l5-border) !important;
   color: var(--l5-text);
 }
 html body.ll5 .ldpres-bd.on, html body.ll5 .l2fs-backdrop.on, html body.ll5 .l2ag-backdrop.on { background: rgba(5,6,10,0.55); }
 html body.ll5 .ldpres-opt { background: var(--l5-card2) !important; background-image: none !important; box-shadow: none !important; border-color: transparent; }
 html body.ll5 .ldpres-opt.sel { box-shadow: 0 0 0 2px var(--l5-go) !important; }
 html body.ll5 .ldpres-go { min-height: 52px; border-radius: 16px; font-size: 16px; }
-html body.ll5 .ldpres-go:not(.ghost):not(:disabled) { background: var(--l5-go); border-color: transparent; color: var(--l5-on-go); }
+html body.ll5 .ldpres-go:not(.ghost):not(:disabled) { background: var(--l5-go-bg); border-color: transparent; color: var(--l5-on-go); }
+
+/* Pilote de closing sur l'écran du lead (bouton « OK pour le closing, c'est parti ») */
+html body.ll5:not(.ld-pilot-on) .ll5railhome { display: none; }
+html body.ll5 .ll5wrap .ll5rail:empty { display: none; }
+html body.ll5 .ll5wrap .ld-rail-block.ll5rail.ll5railhome { margin: 18px 0 0; padding: 0; border: 0; background: transparent; box-shadow: none; }
+html body.ll5 .ll5wrap .cp-strip { margin: 0; padding: 14px; border: 0; border-radius: 20px; background: var(--l5-card); box-shadow: var(--l5-shadow); }
+html body.ll5 .ll5wrap .cp-go { min-height: 58px; border-radius: 18px; font-size: 17px; }
+html body.ll5 .ll5wrap .cp-prog i { background: var(--l5-card2); }
+html body.ll5 .ll5wrap .cp-prog i.d { background: var(--l5-go); }
+html body.ll5 .ll5wrap .cp-prog i.n { background: var(--l5-warn); }
+
+/* ═══ Contrastes : modules historiques recolorés avec les jetons de la vue ═══
+   Leurs couleurs d'origine sont pensées pour le fond sombre (texte blanc à
+   30-50 %, violet pâle…) : illisibles sur fond clair (retour Adrien 16/10). */
+/* WhatsApp (whatsapp-lead.js) */
+html body.ll5 .ll5wa .wal { margin: 0; padding: 14px; color: var(--l5-text); }
+html body.ll5 .ll5wa .wal-t { color: var(--l5-go); font-size: 12px; letter-spacing: 0.3px; }
+html body.ll5 .ll5wa .wal-f { font-size: 12px; padding: 4px 10px; }
+html body.ll5 .ll5wa .wal-f.on { background: var(--l5-go-soft); color: var(--l5-go); }
+html body.ll5 .ll5wa .wal-f.off { background: var(--l5-warn-soft); color: var(--l5-warn); }
+html body.ll5 .ll5wa .wal-fil { scrollbar-color: var(--l5-faint) transparent; }
+html body.ll5 .ll5wa .wal-fil::-webkit-scrollbar-thumb { background: var(--l5-faint); }
+html body.ll5 .ll5wa .wal-b { padding: 9px 12px; border-radius: 14px; font-size: 15px; color: var(--l5-text); }
+html body.ll5 .ll5wa .wal-b.in { background: var(--l5-card2); }
+html body.ll5 .ll5wa .wal-b.out { background: var(--l5-go-soft); }
+html body.ll5 .ll5wa .wal-m { font-size: 11.5px; color: var(--l5-muted); opacity: 1; }
+html body.ll5 .ll5wa .wal-vide, html body.ll5 .ll5wa .wal-file, html body.ll5 .ll5wa .wal-tpl-c, html body.ll5 .ll5wa .wal-var label { color: var(--l5-muted); font-size: 13px; }
+html body.ll5 .ll5wa .wal textarea, html body.ll5 .ll5wa .wal-var input {
+  min-height: 52px; padding: 12px 14px; border: 0; border-radius: 14px; background: var(--l5-card2); color: var(--l5-text); font-size: 16px;
+}
+html body.ll5 .ll5wa .wal-clip { min-height: 38px; padding: 8px 12px; border-color: var(--l5-line); color: var(--l5-muted); font-size: 13px; }
+html body.ll5 .ll5wa .wal-btn { min-height: 46px; padding: 0 18px; border-radius: 14px; font-size: 15px; background: var(--l5-go-bg); color: var(--l5-on-go); }
+html body.ll5 .ll5wa .wal-btn.ghost { background: var(--l5-card2); color: var(--l5-text); box-shadow: none; }
+html body.ll5 .ll5wa .wal-bloc { padding: 12px 14px; border-radius: 14px; background: var(--l5-warn-soft); border-color: var(--l5-warn); color: var(--l5-text); font-size: 14px; }
+html body.ll5 .ll5wa .wal-tpl button { padding: 12px 14px; border-radius: 14px; background: var(--l5-card2); color: var(--l5-text); }
+html body.ll5 .ll5wa .wal-tpl-n { color: var(--l5-go); font-size: 13px; }
+html body.ll5 .ll5wa .wal-ap { background: var(--l5-go-soft); color: var(--l5-text); font-size: 15px; }
+html body.ll5 .ll5wa .wal-fichier { background: var(--l5-card2); }
+/* Conseil de l'IA, propositions de messages */
+html body.ll5 .ll5wrap .l2ai-hd, html body.ll5 .ll5wrap .l2ai-call-hd, html body.ll5 .ll5wrap .l2sug-h,
+html body.ll5 .ll5wrap .l2sug-mail-h, html body.ll5 .ll5wrap .l2sug-it b, html body.ll5 .ll5wrap .l2ai-slot { color: var(--l5-acc); }
+html body.ll5 .ll5wrap .l2ai-brief, html body.ll5 .ll5wrap .l2ai-row, html body.ll5 .ll5wrap .l2ai-open, html body.ll5 .ll5wrap .l2ai-call p { color: var(--l5-text); }
+html body.ll5 .ll5wrap .l2sug-it { background: var(--l5-acc-soft); border-color: transparent; color: var(--l5-text); }
+html body.ll5 .ll5wrap .l2sug-sit { background: var(--l5-warn-soft); color: var(--l5-text); }
+html body.ll5 .ll5wrap .l2sug textarea, html body.ll5 .ll5wrap .l2sug-mail input, html body.ll5 .ll5wrap .l2sug-mail textarea { background: var(--l5-card2); color: var(--l5-text); border: 0; border-radius: 12px; font-size: 15px; }
+html body.ll5 .ll5wrap .l2tpl-ai { border-color: transparent !important; color: var(--l5-acc) !important; }
+/* Rendez-vous, parcours de close */
+html body.ll5 .ll5wrap .ld-rdvx-when, html body.ll5 .ll5wrap .ld-rail-step.next, html body.ll5 .ll5wrap .ld-rail-step.done { color: var(--l5-text); }
+html body.ll5 .ll5wrap .ld-rdvx-when .d, html body.ll5 .ll5wrap .ld-rail-head .t, html body.ll5 .ll5wrap .ld-rail-head .n, html body.ll5 .ll5wrap .ld-rail-step { color: var(--l5-muted); }
+html body.ll5 .ll5wrap .ld-rdvx-btn, html body.ll5 .ll5wrap .ld-rail-btn { background: var(--l5-acc-soft); border-color: transparent; color: var(--l5-acc); }
+html body.ll5 .ll5wrap .ld-rdvx-btn.ghost, html body.ll5 .ll5wrap .ld-rail-btn.ghost { background: var(--l5-card2); color: var(--l5-text); }
+html body.ll5 .ll5wrap .ld-rdvx-btn.meet { background: var(--l5-go-soft); color: var(--l5-go); }
+html body.ll5 .ll5wrap .ld-rdvx-info .bits { color: var(--l5-muted); }
+html body.ll5 .ll5wrap .ld-rdvx-info .msg { background: var(--l5-card2); color: var(--l5-text); }
+/* Infos, notes, historique */
+html body.ll5 .ll5wrap .ld-detail-val, html body.ll5 .ll5wrap .ld-note-item-text { color: var(--l5-text); }
+html body.ll5 .ll5wrap .ld-detail-val a, html body.ll5 .ll5wrap .mention { color: var(--l5-acc); }
+html body.ll5 .ll5wrap .ld-detail-label, html body.ll5 .ll5wrap .ld-score-hint { color: var(--l5-muted); }
+html body.ll5 .ll5wrap .ld-detail-input, html body.ll5 .ll5wrap .ld-detail-select { background: var(--l5-card2); border-color: transparent; color: var(--l5-text); }
+/* Vocaux (voice-notes) */
+html body.ll5 .ll5vn { color: var(--l5-text); }
+html body.ll5 .ll5wa input[type="file"] { display: none !important; }
+html body.ll5 .ll5wa .wal-foot { flex-wrap: wrap; }
+html body.ll5 .ll5wa .wal-foot .wal-btn { margin-left: auto; }
+
+/* ═══ Surfaces : une seule définition pour toutes les cartes ═══
+   Sombre : fond --bg2 + bordure, comme les cartes actuelles d'Alteore.
+   Clair : verre dépoli (fond blanc translucide, flou, liseré lumineux). */
+html body.ll5 .ll5group, html body.ll5 .ll5hero, html body.ll5 .ll5status, html body.ll5 .ll5search,
+html body.ll5 .ll5pill:not(.on), html body.ll5 .ll5act:not(.call) .c, html body.ll5 .ll5ta, html body.ll5 .ll5in,
+html body.ll5 details.ll5more, html body.ll5 .ll5danger, html body.ll5 .ll5wrap .l2ai,
+html body.ll5 .ll5wrap .ld-rail-block.ll5rail:not(.ll5railhome), html body.ll5 .ll5wrap .cp-strip,
+html body.ll5 .ll5wrap .ld-actions, html body.ll5 .ll5infos .ld-details, html body.ll5 .ll5wa .wal,
+html body.ll5 .ll5wrap .ld-rdvx-row, html body.ll5 .ll5wrap .ld-rdvx-info {
+  background: var(--l5-surface);
+  border: 1px solid var(--l5-border);
+  box-shadow: var(--l5-shadow);
+  -webkit-backdrop-filter: var(--l5-blur);
+  backdrop-filter: var(--l5-blur);
+}
+/* Une carte RDV = ses deux moitiés (ligne + infos) collées. */
+html body.ll5 .ll5wrap .ld-rdvx-row { border-bottom: 0; box-shadow: none; }
+html body.ll5 .ll5wrap .ld-rdvx-info { border-top: 0; }
+html body.ll5 .ll5wrap .ld-rdvx-row:last-child { border-bottom: 1px solid var(--l5-border); border-radius: 20px; margin-bottom: 12px; }
+html body.ll5 .ll5tabs { background: var(--l5-card2); }
+html body.ll5 .ll5pill.ai { color: var(--l5-acc); }
+html body.ll5 .ll5ta:focus, html body.ll5 .ll5in:focus { box-shadow: 0 0 0 2px var(--l5-acc), var(--l5-shadow); }
+html body.ll5 .ll5line:hover, html body.ll5 .ll5row:hover { background: var(--l5-card2); }
+html body.ll5 .ll5msg { background: var(--l5-go-soft); border: 1px solid var(--l5-go-soft); }
+html body.ll5 .ll5danger > summary { color: var(--l5-late); }
+html body.ll5 .ll5para { padding: 14px 16px; font-size: 16px; line-height: 1.5; color: var(--l5-text); }
+html body.ll5 .ll5para + .ll5para { border-top: 1px solid var(--l5-line); }
+html body.ll5 .ll5para small { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 700; color: var(--l5-muted); }
+html body.ll5 .ll5incall .ll5para:first-child { font-size: 17px; font-style: italic; }
+/* Les rangées de pastilles héritent du liseré « bulle » du thème clair ([class*=pill]). */
+html body.ll5 .ll5pills, html body.ll5 .l2tpl-row { box-shadow: none !important; border: 0; background: transparent; }
+/* Rappels déjà prévus : le texte passe à la ligne plutôt que d'être coupé. */
+html body.ll5 .ll5line.static .ll5tx b, html body.ll5 .ll5line.static .ll5tx > span { white-space: normal; }
+/* Pilote : au départ, juste le gros bouton vert, sans carte autour. */
+html body.ll5 .ll5wrap .cp-strip:has(> .cp-go) { background: transparent; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; padding: 0; }
+html body.ll5 .ll5wrap .cp-go { background: var(--l5-go-bg); color: var(--l5-on-go); box-shadow: 0 6px 18px -6px rgba(16,185,129,0.55); }
+html body.ll5 .ll5wrap .cp-go small { color: var(--l5-on-go); opacity: 0.9; }
+/* Fenêtre Filtres aux couleurs de la vue */
+html body.ll5 .l2fs .l2fs-l { color: var(--l5-muted); letter-spacing: 0.3px; text-transform: none; font-size: 13px; font-weight: 700; }
+html body.ll5 .l2fs .ld-filter, html body.ll5 .l2fs .ld-member-pill {
+  min-height: 40px; padding: 0 14px; border-radius: 999px; border: 0; background: var(--l5-card2); color: var(--l5-text);
+  font-family: var(--fb); font-size: 14px; font-weight: 600; box-shadow: none;
+}
+html body.ll5 .l2fs .ld-filter.active, html body.ll5 .l2fs .ld-member-pill.active { background: var(--l5-acc); color: var(--l5-on-acc); }
+html body.ll5 .l2fs .ld-filter .ld-period-count, html body.ll5 .l2fs .ld-member-pill .mp-count { color: inherit; opacity: 0.7; background: transparent; }
+html body.ll5 .l2fs .l2fs-apply { min-height: 54px; border-radius: 18px; border: 0; background: var(--l5-acc); color: var(--l5-on-acc); font-size: 16px; font-weight: 800; }
+html body.ll5 .l2fs .l2fs-reset { color: var(--l5-acc); }
+html body.ll5 .l2fs .l2fs-head .t { color: var(--l5-text); font-size: 18px; }
