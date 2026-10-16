@@ -437,10 +437,20 @@ service cloud.firestore {
       // CSM accède au module booking-admin en lecture seule globale mais
       // peut annuler / changer le statut d'un RDV à la demande d'un client
       // (rôle Customer Success). Cf. booking-admin.html mode csm.
+      // presenceConfirmed (16/10/2026) : posé UNIQUEMENT par api/rdv-presence
+      // (Admin SDK), jamais à la création, jamais modifié ni retiré ensuite.
       allow read:   if true;
-      allow create: if true;
-      allow update: if isSalesOrAdminOrCsm();
+      allow create: if !('presenceConfirmed' in request.resource.data);
+      allow update: if isSalesOrAdminOrCsm()
+        && request.resource.data.get('presenceConfirmed', null) == resource.data.get('presenceConfirmed', null);
       allow delete: if isAdmin();
+    }
+
+    // Preuves de confirmation de présence (api/rdv-presence.js) : écrites une
+    // seule fois par le serveur, immuables, lisibles par l'équipe sales.
+    match /rdv_confirmations/{bookingId} {
+      allow read:  if isSalesOrAdmin();
+      allow write: if false;
     }
 
     match /booking_events/{eventId} {

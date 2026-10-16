@@ -593,6 +593,86 @@ body.ld-pilot-on .l2fam[data-fam="closing"] { display: none; }
 .ld-rdvx-info .msg { color: var(--text); background: rgba(255,255,255,0.03); border-left: 2px solid rgba(167,139,250,0.45); border-radius: 0 7px 7px 0; padding: 5px 9px; margin-top: 5px; }
 .ld-rdvx-info .url { color: var(--muted2); font-family: var(--fm); font-size: 9.5px; margin-top: 4px; word-break: break-all; }
 
+/* ═══ Confirmation de présence au RDV (16/10/2026) ═══ */
+.ld-rdvx-btn.pres { background: rgba(52,211,153,0.12); border-color: rgba(52,211,153,0.5); color: #6ee7b7; }
+.ld-rdvx-btn.pres:hover { border-color: rgba(52,211,153,0.75); box-shadow: 0 4px 12px rgba(52,211,153,0.2); }
+.ldpres-chip {
+  display: inline-flex; align-items: center; gap: 4px; font-family: var(--fb); font-size: 10px; font-weight: 800;
+  padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border2); background: none; cursor: pointer; white-space: nowrap;
+}
+.ldpres-chip.ok { color: var(--green); border-color: rgba(52,211,153,0.5); background: rgba(52,211,153,0.1); }
+.ldpres-chip.todo { color: var(--gold); border-color: rgba(251,191,36,0.45); background: rgba(251,191,36,0.08); }
+.ldpres-bd { display: none; position: fixed; inset: 0; z-index: 320; background: rgba(3,4,10,0.6); }
+.ldpres-bd.on { display: block; }
+.ldpres {
+  position: fixed; z-index: 330; left: 0; right: 0; bottom: 0; max-height: 88dvh;
+  background: var(--bg2); border: 1px solid var(--border2); border-bottom: none; border-radius: 22px 22px 0 0;
+  display: none; flex-direction: column; box-shadow: 0 -18px 60px rgba(0,0,0,0.55);
+}
+.ldpres.on { display: flex; }
+@media (min-width: 980px) {
+  .ldpres {
+    left: 50%; right: auto; bottom: auto; top: 50%; transform: translate(-50%, -50%);
+    width: 540px; max-height: calc(100dvh - 80px); border-radius: 18px; border-bottom: 1px solid var(--border2);
+    box-shadow: 0 18px 60px rgba(0,0,0,0.55);
+  }
+  .ldpres .l2grab { display: none; }
+}
+.ldpres-head { display: flex; align-items: flex-start; gap: 10px; padding: 8px 16px 12px; border-bottom: 1px solid var(--border); }
+.ldpres-ti { flex: 1; min-width: 0; }
+.ldpres-ti .t { font-family: var(--fh); font-size: 16px; font-weight: 700; }
+.ldpres-ti .s { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+.ldpres-body { overflow-y: auto; padding: 12px 14px; -webkit-overflow-scrolling: touch; }
+.ldpres-foot { padding: 10px 14px calc(12px + var(--sab)); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+.ldpres-help { font-size: 12px; color: var(--muted); line-height: 1.55; margin-bottom: 10px; }
+.ldpres-help b { color: var(--text); }
+.ldpres-warn { font-size: 11px; color: var(--muted); line-height: 1.45; }
+.ldpres-err { font-size: 12px; color: var(--red3); margin: 8px 0; line-height: 1.45; }
+.ldpres-empty { text-align: center; color: var(--muted); font-size: 12.5px; padding: 20px 8px; line-height: 1.6; }
+.ldpres-empty .m { font-size: 11px; color: var(--muted2); margin-top: 6px; }
+.ldpres-sec { font-size: 9.5px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--muted2); margin: 14px 0 6px; }
+.ldpres-by { font-size: 12.5px; color: var(--text); line-height: 1.5; }
+.ldpres-opt {
+  display: flex; align-items: flex-start; gap: 9px; padding: 10px; margin-bottom: 6px; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--bg3); color: var(--text);
+}
+.ldpres-opt.pick { cursor: pointer; }
+.ldpres-opt.pick:hover { border-color: var(--border2); }
+.ldpres-opt.sel { border-color: rgba(52,211,153,0.6); background: rgba(52,211,153,0.08); }
+.ldpres-opt .ra { flex: none; width: 14px; font-size: 13px; color: var(--muted); line-height: 1.4; }
+.ldpres-opt.sel .ra { color: var(--green); }
+.ldpres-opt .ic { flex: none; font-size: 16px; line-height: 1.2; }
+.ldpres-opt .mn { flex: 1; min-width: 0; }
+.ldpres-opt .l1 { font-size: 12.5px; font-weight: 800; line-height: 1.4; }
+.ldpres-opt .l2 { font-size: 11.5px; color: var(--muted); margin-top: 3px; line-height: 1.45; }
+.ldpres-opt .tx {
+  font-size: 12px; margin-top: 5px; padding: 5px 9px; line-height: 1.45; white-space: pre-wrap; word-break: break-word;
+  border-left: 2px solid rgba(96,165,250,0.5); background: rgba(255,255,255,0.03); border-radius: 0 7px 7px 0;
+}
+.ldpres-mic {
+  flex: none; height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border2);
+  background: var(--bg2); color: var(--text); font-family: var(--fb); font-size: 11.5px; font-weight: 800; cursor: pointer; white-space: nowrap;
+}
+.ldpres-mic:hover { border-color: rgba(52,211,153,0.6); }
+.ldpres-refresh {
+  margin-top: 8px; padding: 6px 12px; border-radius: 9px; border: 1px solid var(--border2);
+  background: var(--bg3); color: var(--text); font-family: var(--fb); font-weight: 800; font-size: 11.5px; cursor: pointer;
+}
+.ldpres-refresh:disabled { opacity: .5; cursor: default; }
+.ldpres-go {
+  height: 42px; border-radius: 11px; border: 1px solid rgba(52,211,153,0.55); background: rgba(52,211,153,0.16);
+  color: var(--green); font-family: var(--fb); font-weight: 800; font-size: 13.5px; cursor: pointer;
+}
+.ldpres-go:disabled { opacity: .45; cursor: default; }
+.ldpres-go.ghost { border-color: var(--border2); background: var(--bg3); color: var(--text); }
+.ldpres-ai { padding: 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg3); }
+.ldpres-ai .r { font-size: 12.5px; line-height: 1.5; margin-top: 7px; }
+.ldpres-ai .q { font-size: 12px; font-style: italic; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+.ldpres-verdict { display: inline-block; font-size: 10.5px; font-weight: 800; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border2); }
+.ldpres-verdict.v-confirme { color: var(--green); border-color: rgba(52,211,153,0.5); background: rgba(52,211,153,0.1); }
+.ldpres-verdict.v-pas_clair { color: var(--gold); border-color: rgba(251,191,36,0.45); background: rgba(251,191,36,0.08); }
+.ldpres-verdict.v-non_confirme { color: var(--red3); border-color: rgba(239,68,68,0.45); background: rgba(239,68,68,0.08); }
+
 /* ── Réponses formulaire (AlteoForms) ── */
 .ld-form-answers { margin: 12px 0 4px; padding: 10px 12px; border: 1px solid rgba(91,124,250,0.25); background: rgba(91,124,250,0.05); border-radius: var(--radius); display: none; }
 .ld-form-answers.has-answers { display: block; }
@@ -3508,6 +3588,9 @@ function paintLeadRdvBox(leadId, items) {
     h += chip;
     h += '<span class="au-chip" style="color:' + (sb ? '#fbbf24' : '#a78bfa') + ';border:1px solid ' + (sb ? 'rgba(251,191,36,.4)' : 'rgba(167,139,250,.4)') + ';background:' + (sb ? 'rgba(251,191,36,.08)' : 'rgba(167,139,250,.08)') + ';border-radius:999px;padding:1px 8px;font-size:9.5px;font-weight:800">' + (sb ? 'SB' : 'NB') + '</span>';
     h += '<span class="ld-rdvx-meta">' + meta + (b.outcomeNote ? ' — <em>' + escHtml(b.outcomeNote) + '</em>' : '') + '</span>';
+    /* Confirmation de présence par le setter, avec preuve (16/10/2026) :
+       premier geste attendu sur un RDV à venir, donc premier bouton. */
+    h += ldPresRowHTML(b, past);
     /* 📹 Meet en tête des actions : c'est le geste le plus fréquent avant un
        RDV, il ne doit demander aucun aller-retour vers Booking. */
     if (meetUrl) {
@@ -3606,6 +3689,250 @@ function paintLeadRdvBox(leadId, items) {
   }
   list.innerHTML = html;
   block.classList.add('has-rdv');
+}
+
+/* ═══ CONFIRMATION DE PRÉSENCE AU RDV (16/10/2026) ═══════════════════════
+   Demande Adrien : la pré-confirmation WhatsApp de la page /merci est
+   retirée, c'est le setter qui confirme le RDV avec le prospect. Il le
+   déclare ici en rattachant la PREUVE (appel décroché ≥ 15 s, ou SMS /
+   WhatsApp envoyé par le prospect depuis la prise du RDV), retrouvée et
+   revérifiée par api/rdv-presence. Une fois validée, la confirmation est
+   IMMUABLE : rdv_confirmations/{bookingId} + bookings.presenceConfirmed,
+   verrouillés par les rules. Le résumé IA de l'appel s'ajoute dès que
+   Ringover a transcrit. Rien ici n'écrit directement en base. */
+var LDPRES_CH = { call: 'Appel', sms: 'SMS', wa: 'WhatsApp' };
+var LDPRES_VERDICT = { confirme: '✅ A confirmé sa présence', pas_clair: '❓ Pas clair', non_confirme: '❌ N\'a pas confirmé' };
+var _ldPres = { id: null };
+
+function ldPresOpenable(b) { return (b.status === 'confirmed' || b.status === 'pending') && !b.outcome; }
+/* Ligne RDV de la fiche : pastille verrouillée si confirmé, sinon le bouton. */
+function ldPresRowHTML(b, past) {
+  if (!b || !b.id) return '';
+  if (b.presenceConfirmed) {
+    var pc = b.presenceConfirmed;
+    return '<button type="button" class="ldpres-chip ok" data-pres="view" data-booking-id="' + escAttr(b.id) + '" title="Voir la preuve — ' + escAttr((LDPRES_CH[pc.channel] || '') + (pc.byName ? ', par ' + pc.byName : '')) + '">✅ Présence confirmée</button>';
+  }
+  if (past || !ldPresOpenable(b)) return '';
+  return '<button type="button" class="ld-rdvx-btn pres" data-pres="confirm" data-booking-id="' + escAttr(b.id) + '" title="Le prospect t\'a confirmé sa présence : rattache l\'appel ou le message qui le prouve">✅ Confirmer la présence</button>';
+}
+/* Pop-up Mes RDV : même information, en pastille. */
+function ldPresAgChip(b, past) {
+  if (b.presenceConfirmed) return '<span class="ldpres-chip ok" data-pres="view" data-booking-id="' + escAttr(b.id) + '" title="Présence confirmée — voir la preuve">✅ Confirmé</span>';
+  if (past || !ldPresOpenable(b)) return '';
+  return '<span class="ldpres-chip todo" data-pres="confirm" data-booking-id="' + escAttr(b.id) + '" title="Présence pas encore confirmée — confirmer">⚠️ À confirmer</span>';
+}
+
+function ldPresWhen(ms) {
+  return ms ? new Date(ms).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+}
+function ldPresDur(sec) {
+  sec = Math.round(Number(sec) || 0);
+  var m = Math.floor(sec / 60), s = sec % 60;
+  return m ? m + ' min ' + (s < 10 ? '0' : '') + s : s + ' s';
+}
+function ldPresKey(p) { return p.kind + '|' + p.id; }
+
+function ldPresEnsureDom() {
+  if (document.getElementById('ldPres')) return;
+  var bd = document.createElement('div');
+  bd.className = 'ldpres-bd'; bd.id = 'ldPresBd';
+  var p = document.createElement('section');
+  p.className = 'ldpres'; p.id = 'ldPres';
+  p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'Confirmation de présence');
+  document.body.appendChild(bd);
+  document.body.appendChild(p);
+  bd.addEventListener('click', ldPresClose);
+  p.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-presx]');
+    if (!t) return;
+    var a = t.getAttribute('data-presx');
+    if (a === 'close') ldPresClose();
+    else if (a === 'refresh') ldPresLoad();
+    else if (a === 'listen') { e.stopPropagation(); if (window.CallDetailModal) window.CallDetailModal.open(t.getAttribute('data-cid')); }
+    else if (a === 'pick') { if (!_ldPres.busy) { _ldPres.sel = t.getAttribute('data-k'); ldPresRender(); } }
+    else if (a === 'go') ldPresConfirm();
+  });
+  /* Capture : Échap ferme la fenêtre sans fermer la fiche dessous — sauf si
+     la modale d'écoute est ouverte par-dessus (elle gère son Échap). */
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && _ldPres.id && !document.querySelector('.cdm-bg.open')) { e.stopPropagation(); ldPresClose(); }
+  }, true);
+}
+
+function ldPresOpen(bookingId, mode) {
+  if (!bookingId) return;
+  ldPresEnsureDom();
+  _ldPres = { id: bookingId, mode: mode, data: null, sel: null, busy: false, loading: true, err: '' };
+  document.getElementById('ldPres').classList.add('on');
+  document.getElementById('ldPresBd').classList.add('on');
+  if (l2IsMobile()) document.body.classList.add('l2-lock');
+  ldPresRender();
+  ldPresLoad();
+}
+function ldPresClose() {
+  if (!_ldPres.id) return;
+  _ldPres.id = null;
+  var p = document.getElementById('ldPres'), bd = document.getElementById('ldPresBd');
+  if (p) p.classList.remove('on');
+  if (bd) bd.classList.remove('on');
+  var fs = document.getElementById('l2fs');
+  if (!(openCardId && l2IsMobile()) && !_ldAg.open && !(fs && fs.classList.contains('on'))) document.body.classList.remove('l2-lock');
+}
+
+function ldPresPost(body) {
+  var u = firebase.auth().currentUser;
+  if (!u) return Promise.reject(new Error('Session expirée — recharge la page'));
+  return u.getIdToken().then(function (tok) {
+    return fetch('/api/rdv-presence', { method: 'POST', headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  }).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      if (!r.ok || !j || j.ok === false) {
+        var err = new Error((j && j.error) || ('Erreur ' + r.status));
+        err.status = r.status;
+        throw err;
+      }
+      return j;
+    });
+  });
+}
+
+function ldPresLoad() {
+  var id = _ldPres.id, mode = _ldPres.mode;
+  if (!id) return;
+  _ldPres.loading = true; _ldPres.err = '';
+  ldPresRender();
+  ldPresPost({ action: mode === 'view' ? 'get' : 'proofs', bookingId: id }).then(function (j) {
+    if (_ldPres.id !== id) return;
+    _ldPres.loading = false;
+    if (mode !== 'view' && j.alreadyConfirmed) { _ldPres.mode = 'view'; ldPresLoad(); return; }
+    _ldPres.data = j;
+    if (mode !== 'view' && _ldPres.sel) {
+      var still = (j.proofs || []).some(function (p) { return ldPresKey(p) === _ldPres.sel; });
+      if (!still) _ldPres.sel = null;
+    }
+    ldPresRender();
+  }).catch(function (e) {
+    if (_ldPres.id !== id) return;
+    _ldPres.loading = false;
+    _ldPres.err = e.message;
+    ldPresRender();
+  });
+}
+
+function ldPresConfirm() {
+  if (_ldPres.busy || !_ldPres.sel || !_ldPres.id) return;
+  var id = _ldPres.id, cut = _ldPres.sel.indexOf('|');
+  _ldPres.busy = true; _ldPres.err = '';
+  ldPresRender();
+  ldPresPost({ action: 'confirm', bookingId: id, kind: _ldPres.sel.slice(0, cut), id: _ldPres.sel.slice(cut + 1) }).then(function (j) {
+    if (_ldPres.id !== id) return;
+    _ldPres.busy = false;
+    _ldPres.mode = 'view';
+    _ldPres.data = j;
+    ldPresRender();
+    toast('✅ Présence confirmée — verrouillée');
+  }).catch(function (e) {
+    if (_ldPres.id !== id) return;
+    _ldPres.busy = false;
+    if (e.status === 409 && /déjà confirmée/.test(e.message)) { toast(e.message); _ldPres.mode = 'view'; ldPresLoad(); return; }
+    _ldPres.err = e.message;
+    ldPresRender();
+  });
+}
+
+function ldPresProofHTML(p, selectable, selected) {
+  var ic = p.kind === 'call' ? '📞' : (p.kind === 'sms' ? '💬' : '🟢');
+  var l1;
+  if (p.kind === 'call') {
+    l1 = (p.direction === 'in' ? 'Appel entrant' : 'Appel sortant') + ' · ' + ldPresWhen(p.atMs) + ' · ' + ldPresDur(p.durationSec) + (p.userName ? ' · ' + p.userName : '');
+  } else {
+    l1 = (p.kind === 'sms' ? 'SMS reçu du prospect' : 'WhatsApp reçu du prospect') + ' · ' + ldPresWhen(p.atMs);
+  }
+  var h = '<div class="ldpres-opt' + (selectable ? ' pick' : '') + (selected ? ' sel' : '') + '"'
+    + (selectable ? ' role="button" tabindex="0" data-presx="pick" data-k="' + escAttr(ldPresKey(p)) + '"' : '') + '>';
+  if (selectable) h += '<span class="ra">' + (selected ? '●' : '○') + '</span>';
+  h += '<span class="ic">' + ic + '</span><span class="mn"><div class="l1">' + escHtml(l1) + '</div>';
+  if (p.kind === 'call') {
+    if (p.ringoverSummary) h += '<div class="l2">Ringover : ' + escHtml(p.ringoverSummary) + '</div>';
+    else if (!p.hasRecording && !p.hasTranscript) h += '<div class="l2">Enregistrement pas encore disponible</div>';
+  } else {
+    h += '<div class="tx">' + escHtml(p.text || '') + '</div>';
+  }
+  h += '</span>';
+  if (p.kind === 'call' && (p.hasRecording || p.hasTranscript || !selectable)) {
+    h += '<button type="button" class="ldpres-mic" data-presx="listen" data-cid="' + escAttr(p.id) + '" title="Écouter l\'appel et lire la transcription">🎙 Écouter</button>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function ldPresRender() {
+  var root = document.getElementById('ldPres');
+  if (!root || !_ldPres.id) return;
+  var s = _ldPres, d = s.data || {};
+  var view = s.mode === 'view';
+  var title, sub = '', body = '', foot = '';
+
+  if (view) {
+    var c = d.confirmation || null;
+    title = '✅ Présence confirmée';
+    if (c) sub = (c.leadName ? c.leadName + ' · ' : '') + 'RDV ' + c.rdvLabel;
+    if (s.loading && !c) body = '<div class="ldpres-empty">Chargement de la confirmation…</div>';
+    else if (s.err) body = '<div class="ldpres-err">⚠️ ' + escHtml(s.err) + '</div>';
+    if (c) {
+      body += '<div class="ldpres-by">Confirmée ' + escHtml(ldPresWhen(c.confirmedAtMs)) + ' par <b>' + escHtml((c.by && c.by.name) || '?') + '</b> · 🔒 verrouillée</div>';
+      body += '<div class="ldpres-sec">Preuve · ' + escHtml(LDPRES_CH[c.channel] || '') + '</div>';
+      body += ldPresProofHTML(c.proof || {}, false, false);
+      if (c.channel === 'call') {
+        body += '<div class="ldpres-sec">Vérification IA de l\'appel</div>';
+        if (c.summary) {
+          body += '<div class="ldpres-ai"><span class="ldpres-verdict v-' + escAttr(c.summary.verdict) + '">' + escHtml(LDPRES_VERDICT[c.summary.verdict] || c.summary.verdict) + '</span>';
+          if (c.summary.resume) body += '<div class="r">' + escHtml(c.summary.resume) + '</div>';
+          if (c.summary.citation) body += '<div class="q">« ' + escHtml(c.summary.citation) + ' »</div>';
+          body += '</div>';
+        } else if (c.summaryStatus === 'no_transcript') {
+          body += '<div class="ldpres-help">Ringover n\'a pas transcrit cet appel : écoute l\'enregistrement pour vérifier.</div>';
+        } else {
+          body += '<div class="ldpres-help">⏳ Résumé en attente de la transcription Ringover (quelques minutes après l\'appel).'
+            + (c.summaryError ? '<br>' + escHtml(c.summaryError) : '') + '</div>';
+          body += '<button type="button" class="ldpres-refresh" data-presx="refresh"' + (s.loading ? ' disabled' : '') + '>' + (s.loading ? 'Vérification…' : '↻ Actualiser') + '</button>';
+        }
+      }
+    }
+    foot = '<button type="button" class="ldpres-go ghost" data-presx="close">Fermer</button>';
+  } else {
+    var bk = d.booking || {};
+    title = '✅ Confirmer la présence';
+    if (bk.date) {
+      var dt = new Date(bk.date + 'T12:00:00');
+      sub = (bk.leadName ? bk.leadName + ' · ' : '') + 'RDV ' + dt.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + ' à ' + (bk.time || '') + (bk.personName ? ' avec ' + bk.personName : '');
+    }
+    var proofs = d.proofs || [];
+    if (s.loading && !s.data) {
+      body = '<div class="ldpres-empty">Recherche des appels et messages du prospect…</div>';
+    } else if (s.err && !s.data) {
+      body = '<div class="ldpres-err">⚠️ ' + escHtml(s.err) + '</div><button type="button" class="ldpres-refresh" data-presx="refresh">↻ Réessayer</button>';
+    } else if (!proofs.length) {
+      body = '<div class="ldpres-empty">Aucun contact exploitable depuis la prise du RDV.<br>'
+        + 'Appelle le prospect (appel décroché d\'au moins ' + (d.minCallSec || 15) + ' s) ou attends sa réponse par SMS / WhatsApp.'
+        + '<div class="m">Un appel Ringover apparaît environ une minute après le raccroché.</div>'
+        + '<button type="button" class="ldpres-refresh" data-presx="refresh"' + (s.loading ? ' disabled' : '') + '>' + (s.loading ? 'Recherche…' : '↻ Actualiser') + '</button></div>';
+    } else {
+      body = '<div class="ldpres-help">Choisis le contact où le prospect te <b>confirme qu\'il sera présent</b>. Seuls sont proposés les appels décrochés d\'au moins '
+        + (d.minCallSec || 15) + ' s et les messages <b>envoyés par le prospect</b> depuis la prise du RDV.</div>';
+      proofs.forEach(function (p) { body += ldPresProofHTML(p, true, s.sel === ldPresKey(p)); });
+      body += '<button type="button" class="ldpres-refresh" data-presx="refresh"' + (s.loading ? ' disabled' : '') + '>' + (s.loading ? 'Recherche…' : '↻ Actualiser la liste') + '</button>';
+      if (s.err) body += '<div class="ldpres-err">⚠️ ' + escHtml(s.err) + '</div>';
+    }
+    foot = '<div class="ldpres-warn">🔒 Définitif : une fois validée, la confirmation ne pourra plus être retirée, même par un admin.</div>'
+      + '<button type="button" class="ldpres-go" data-presx="go"' + (!s.sel || s.busy ? ' disabled' : '') + '>' + (s.busy ? 'Validation…' : '✅ Valider la présence') + '</button>';
+  }
+
+  root.innerHTML = '<div class="l2grab" data-presx="close"></div>'
+    + '<div class="ldpres-head"><div class="ldpres-ti"><div class="t">' + escHtml(title) + '</div>' + (sub ? '<div class="s">' + escHtml(sub) + '</div>' : '') + '</div>'
+    + '<button class="l2ag-x" type="button" data-presx="close" aria-label="Fermer">✕</button></div>'
+    + '<div class="ldpres-body">' + body + '</div>'
+    + '<div class="ldpres-foot">' + foot + '</div>';
 }
 
 /* ── Réponses du formulaire (AlteoForm) ── */
@@ -5508,6 +5835,13 @@ document.getElementById('l2PeriodBar').addEventListener('click', function (e) {
 
 /* ═══ FEED EVENTS ═══ */
 document.addEventListener('click', function(e) {
+  /* Confirmation de présence : bouton / pastille d'un RDV (fiche, Mes RDV). */
+  var presBtn = e.target.closest('[data-pres]');
+  if (presBtn && !presBtn.closest('#ldPres')) {
+    e.preventDefault(); e.stopPropagation();
+    ldPresOpen(presBtn.getAttribute('data-booking-id'), presBtn.getAttribute('data-pres') === 'view' ? 'view' : 'confirm');
+    return;
+  }
   /* Aide-mémoire du closer. Placé en tête du dispatcher : le bouton vit dans
      la carte du lead, il ne doit pas déclencher le repli de la fiche. */
   var cgBtn = e.target.closest('[data-action="closerGuide"]');
@@ -6946,7 +7280,7 @@ function ldAgRefresh() {
     if (b.leadId) (idx.lead[b.leadId] = idx.lead[b.leadId] || []).push(it);
     var em = ldAgEmail(b); if (em) (idx.em[em] = idx.em[em] || []).push(it);
     var t9 = ldAgTel9(b); if (t9) (idx.tel[t9] = idx.tel[t9] || []).push(it);
-    sig.push(b.id + ':' + (b.leadId || '') + ':' + b.time + ':' + state);
+    sig.push(b.id + ':' + (b.leadId || '') + ':' + b.time + ':' + state + ':' + (b.presenceConfirmed ? 'p' : ''));
   });
   _ldAg.idx = idx;
   sig = sig.sort().join('|');
@@ -6967,7 +7301,11 @@ function ldAgCardChip(l) {
   arr.forEach(function (it) { if (it.state !== 'past' && (!pick || it.st < pick.st)) pick = it; });
   if (!pick) pick = arr[arr.length - 1];
   var lbl = pick.state === 'now' ? 'RDV en cours' : (pick.state === 'past' ? 'RDV passé aujourd’hui' : 'RDV aujourd’hui');
-  return '<span class="l2agchip' + (pick.state ? ' ' + pick.state : '') + '" title="' + lbl + ' à ' + ldAgTime(pick.b) + '">📅 ' + ldAgTime(pick.b) + '</span>';
+  /* Présence (16/10/2026) : ✅ confirmée, ⚠️ RDV à venir encore à confirmer. */
+  var pres = '';
+  if (pick.b.presenceConfirmed) { pres = ' ✅'; lbl += ' · présence confirmée'; }
+  else if (!pick.state) { pres = ' ⚠️'; lbl += ' · présence à confirmer'; }
+  return '<span class="l2agchip' + (pick.state ? ' ' + pick.state : '') + '" title="' + lbl + ' à ' + ldAgTime(pick.b) + '">📅 ' + ldAgTime(pick.b) + pres + '</span>';
 }
 
 /* ── Pastille du bouton : mes RDV restants aujourd'hui ── */
@@ -7047,6 +7385,7 @@ function ldAgRow(b, now, isToday) {
       ? '<span class="l2ag-st soon">dans ' + mins + ' min</span>'
       : '<span class="l2ag-st">dans ' + Math.floor(mins / 60) + ' h' + (mins % 60 >= 5 ? ' ' + ('0' + (mins % 60)).slice(-2) : '') + '</span>';
   } else side = '<span class="l2ag-st">à venir</span>';
+  if (!cx) side += ldPresAgChip(b, past);
   var meetUrl = (!cx && !past) ? safeUrlLd(b.meetLink || b.meetUrl || b.calendarEventLink) : '';
   if (meetUrl) side += '<a class="l2ag-meet" href="' + escAttr(meetUrl) + '" target="_blank" rel="noopener" title="Rejoindre la visio">📹 Meet</a>';
   if (noLead) side += '<a class="l2ag-meet" href="booking-admin.html" target="_blank" rel="noopener">Booking ↗</a>';
@@ -7173,6 +7512,7 @@ function ldAgBind() {
   document.getElementById('l2agBackdrop').addEventListener('click', ldAgClose);
   panel.addEventListener('click', function (e) {
     if (e.target.closest('a')) return; // Meet / Booking : lien natif
+    if (e.target.closest('[data-pres]')) return; // présence : dispatcher du document
     var row = e.target.closest('[data-ag-booking]');
     if (row) { ldAgOpenBooking(row.getAttribute('data-ag-booking')); return; }
     var act = e.target.closest('[data-ag]');
