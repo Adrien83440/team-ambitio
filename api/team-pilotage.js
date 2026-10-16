@@ -514,8 +514,22 @@ async function handleLive(req, res) {
   outB.forEach(function (o) {
     const r = o.closerSlug ? rows[o.closerSlug] : null;
     const pr = o.presence;
-    const inMeet = o.phase === 'live' && pr && pr.ok && pr.summary && (pr.summary.teamInRoom || pr.summary.prospectInRoom);
-    if (r && inMeet && r.status !== 'call') { r.meet = { bookingId: o.id, prospect: o.prospect, since: pr.conferenceStart || o.start }; r.status = 'meet'; }
+    // « En visio » = le prospect ET l'équipe sont dans la salle, sur un RDV
+    // pas encore statué. Le compte partagé « Stratégie A&E » reste souvent
+    // seul dans une salle ouverte (constaté le 16/10/2026 sur un no-show
+    // statué) : ça ne fait pas du closeur quelqu'un « en visio ».
+    const inMeet = o.phase === 'live' && !o.outcome && pr && pr.ok && pr.summary &&
+      pr.summary.teamInRoom && pr.summary.prospectInRoom;
+    if (r && inMeet && r.status !== 'call') {
+      // Depuis : l'arrivée du dernier des deux (le face-à-face réel).
+      let since = null;
+      (pr.participants || []).forEach(function (x) {
+        if (!x.inRoom || !x.joinedAt) return;
+        if (!since || x.joinedAt > since) since = x.joinedAt;
+      });
+      r.meet = { bookingId: o.id, prospect: o.prospect, since: since || pr.conferenceStart || o.start };
+      r.status = 'meet';
+    }
   });
   outB.sort(function (a, b) { return String(a.time).localeCompare(String(b.time)); });
 

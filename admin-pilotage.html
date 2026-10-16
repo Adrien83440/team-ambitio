@@ -529,20 +529,23 @@ function renderLive() {
 function kpi(label, val) { return '<div class="pl-kpi"><span>' + esc(label) + '</span><b>' + esc(val) + '</b></div>'; }
 
 function rdvRow(b) {
-  var phaseTxt = b.phase === 'live' ? '<span class="pill pill-live">● en cours</span>' : (b.phase === 'upcoming' ? 'à venir' : 'passé');
+  // Un RDV statué est terminé, même si son créneau court encore.
+  var done = b.phase === 'past' || !!b.outcome;
+  var phaseTxt = b.outcome && b.phase !== 'past' ? 'statué' : (b.phase === 'live' ? '<span class="pill pill-live">● en cours</span>' : (b.phase === 'upcoming' ? 'à venir' : 'passé'));
   var sig = [];
   if (!b.hasMeet) sig.push('<span class="pill pill-mute">pas de lien Meet</span>');
   if (b.clicks) sig.push('<span class="pill pill-ok" title="Dernier clic à ' + esc(parisTime(b.lastClickAt)) + '">🖱️ Lien cliqué à ' + esc(parisTime(b.firstClickAt)) + (b.clicks > 1 ? ' (×' + b.clicks + ')' : '') + '</span>');
-  else if (b.tracked && b.phase !== 'upcoming') sig.push('<span class="pill pill-mute">🖱️ pas de clic</span>');
+  else if (b.tracked && (done || b.phase === 'live')) sig.push('<span class="pill pill-mute">🖱️ pas de clic</span>');
   var pr = b.presence, parts = '';
   if (pr && pr.ok) {
     var s = pr.summary || {};
-    var past = b.phase === 'past';
+    var past = done;
     if (s.prospectInRoom) sig.push('<span class="pill pill-ok">📹 Prospect dans la salle</span>');
     else if (s.prospectJoined) sig.push('<span class="pill ' + (past ? 'pill-ok' : 'pill-live') + '">📹 Prospect ' + (past ? 'venu' : 'venu, reparti') + '</span>');
     else if (past) sig.push('<span class="pill pill-bad">📹 Prospect jamais entré</span>');
     else if (pr.started) sig.push('<span class="pill pill-warn">📹 Prospect pas encore entré</span>');
     else if (b.phase === 'live') sig.push('<span class="pill pill-warn">📹 Salle encore vide</span>');
+    if (!past && s.teamInRoom && !s.prospectInRoom) sig.push('<span class="pill pill-mute">équipe seule dans la salle</span>');
     if (pr.participants && pr.participants.length) {
       parts = '<div class="pl-parts">' + pr.participants.map(function (p) {
         var k = p.kind === 'equipe' ? '🟦' : (p.kind === 'prospect' || p.kind === 'prospect_probable' ? '🟩' : (p.kind === 'bot' ? '🤖' : '⬜'));
@@ -553,7 +556,7 @@ function rdvRow(b) {
     sig.push('<span class="pill pill-mute" title="' + esc(pr.message || '') + '">📹 présence indisponible</span>');
   }
   var out = b.outcome && OUTCOME[b.outcome] ? '<span class="pill ' + OUTCOME[b.outcome][1] + '">' + OUTCOME[b.outcome][0] + '</span>' : (b.phase === 'past' ? '<span class="pill pill-warn">à statuer</span>' : '');
-  return '<div class="pl-rdv ' + esc(b.phase) + '">' +
+  return '<div class="pl-rdv ' + esc(b.outcome && b.phase === 'live' ? 'past' : b.phase) + '">' +
     '<div class="pl-rt">' + esc(b.time) + '<small>' + phaseTxt + '</small></div>' +
     '<div class="pl-rp"><b>' + leadBtn(b.leadId, b.prospect) + '</b><small>' + esc(b.typeLabel) + ' · ' + b.duration + ' min</small></div>' +
     '<div class="pl-rw">Closeur <b>' + esc(b.closerName || '—') + '</b>' + (b.setterName ? '<br>Posé par <b>' + esc(b.setterName) + '</b>' : '') + '</div>' +
