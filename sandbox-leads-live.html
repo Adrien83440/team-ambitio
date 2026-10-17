@@ -1101,11 +1101,13 @@ body.ld-pilot-on .l2fam[data-fam="closing"] { display: none; }
 .l2fs {
   position: fixed; z-index: 310; left: 0; right: 0; bottom: 0; max-height: 86dvh;
   background: var(--bg2); border: 1px solid var(--border2); border-bottom: none;
-  border-radius: 22px 22px 0 0; transform: translateY(103%);
-  transition: transform .26s cubic-bezier(.32,.72,.25,1);
+  border-radius: 22px 22px 0 0; transform: translateY(103%); visibility: hidden;
+  transition: transform .26s cubic-bezier(.32,.72,.25,1), visibility 0s linear .26s;
   display: flex; flex-direction: column; box-shadow: 0 -18px 60px rgba(0,0,0,0.55);
 }
-.l2fs.on { transform: translateY(0); }
+/* Masquée une fois fermée : sur ordinateur (bottom: 40px), le décalage de
+   103 % laissait dépasser le haut de la feuille en bas d'écran (bug 17/10). */
+.l2fs.on { transform: translateY(0); visibility: visible; transition: transform .26s cubic-bezier(.32,.72,.25,1); }
 @media (min-width: 980px) {
   .l2fs { left: auto; right: auto; width: 480px; margin: 0 auto; border-radius: 18px; bottom: 40px; border-bottom: 1px solid var(--border2); }
 }
