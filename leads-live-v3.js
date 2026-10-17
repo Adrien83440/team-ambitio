@@ -482,7 +482,7 @@
   function retour() { if (pile.length > 1) pile.pop(); anime = true; if (openCardId) l2RenderSheet(openCardId, false); }
   function accueilLead(msg) { pile = ['lead']; anime = true; if (openCardId) l2RenderSheet(openCardId, false); if (msg) toast(msg); }
 
-  var TITRES = { write: 'Écrire', 'c-sms': 'SMS', 'c-wa': 'WhatsApp', 'c-mail': 'E-mail', 'c-note': 'Note pour l’équipe', voice: 'Vocaux', fu: 'Rappel', rdv: 'Rendez-vous', hist: 'Historique', info: 'Infos et dossier', ai: 'Conseil de l’IA', stars: 'Qualité du lead', notes: 'Notes', more: 'Plus', state: 'Changer l’état', closing: 'Closing', result: 'Résultat de l’appel', result2: 'Résultat de l’appel', fuask: 'Rappel', incall: 'Appel' };
+  var TITRES = { write: 'Écrire', 'c-sms': 'SMS', 'c-wa': 'WhatsApp', 'c-mail': 'E-mail', 'c-note': 'Note pour l’équipe', voice: 'Vocaux', fu: 'Rappel', rdv: 'Rendez-vous', hist: 'Historique', info: 'Infos et dossier', ai: 'Conseil de l’IA', stars: 'Qualité du lead', notes: 'Notes', more: 'Plus', state: 'Changer l’état', closing: 'Closing', result: 'Résultat de l’appel', result2: 'Résultat de l’appel', fuask: 'Rappel', incall: 'Appel', quiz: 'Quiz' };
 
   function barre(l, e) {
     var premier = e === 'lead';
@@ -523,6 +523,7 @@
     if (wa && wa.dernierIn && wa.texte) {
       h += '<button type="button" class="ll5msg" data-ll5="go" data-v="c-wa"><span class="k">' + escHtml(prenom(l)) + ' t’a écrit sur WhatsApp' + (wa.quand ? ' · ' + escHtml(wa.quand) : '') + '</span><span class="x">« ' + escHtml(wa.texte) + ' »</span></button>';
     }
+    h += carteQuiz(l);
     h += boutonPrincipal(l, id);
     h += '<div class="ll5acts">';
     h += l.telephone ? telLien(l, id, 'll5act call', '<span class="c">' + ic('phone') + '</span>Appeler') : '<span class="ll5act off"><span class="c">' + ic('phone') + '</span>Appeler</span>';
@@ -764,6 +765,31 @@
     return '<h1 class="ll5h1">Qualité du lead</h1><p class="ll5sub">À remplir après l’avoir eu au téléphone. Touche la même note pour l’effacer.</p><div class="ll5group ll5mt ll5score">' + ldScoreBlockHTML(l, id) + '</div>';
   }
   var ancienInfos = null;
+  /* ═══ Quiz diagnostic (17/10/2026, demande Adrien) ═══════════════════
+     Note visible dès l'ouverture de la fiche + raccourci vers le détail
+     (renderQuizBlock de la page : piliers, CA, objectif, réponses). */
+  function aQuiz(l) {
+    var q = l && l.quiz;
+    if (!q || typeof q !== 'object') return false;
+    return ldQuizNum(q.score_global) !== null || !!q.pilier_prioritaire || (Array.isArray(q.reponses) && q.reponses.length > 0);
+  }
+  function carteQuiz(l) {
+    if (!aQuiz(l)) return '';
+    var q = l.quiz, g = ldQuizNum(q.score_global);
+    var niv = g === null ? '' : (g <= 40 ? 'lo' : (g <= 80 ? 'mid' : 'hi'));
+    var sous = [];
+    if (q.pilier_prioritaire) sous.push('Pilier prioritaire : ' + q.pilier_prioritaire);
+    else if (Array.isArray(q.reponses) && q.reponses.length) sous.push(q.reponses.length + ' réponse' + (q.reponses.length > 1 ? 's' : ''));
+    return '<button type="button" class="ll5quiz" data-ll5="go" data-v="quiz" aria-label="Voir le quiz diagnostic">' +
+      '<span class="sc ' + niv + '">' + (g === null ? '🧭' : g + '<small>%</small>') + '</span>' +
+      '<span class="ll5tx"><b>Quiz diagnostic</b><span>' + escHtml(sous.join(' · ') || 'Voir les réponses') + '</span></span>' +
+      '<span class="go">Voir le quiz' + ic('chev') + '</span></button>';
+  }
+  function ecranQuiz(l, id) {
+    var bloc = aQuiz(l) ? renderQuizBlock(l, id) : '';
+    return '<h1 class="ll5h1">Quiz diagnostic</h1>' +
+      (bloc ? '<div class="ll5quizfull">' + bloc + '</div>' : '<p class="ll5note">' + escHtml(prenom(l)) + ' n’a pas rempli le quiz.</p>');
+  }
   function ecranInfos(l, id) {
     var html = ancienInfos(l, id);
     var cut = html.indexOf('<div class="ld-bl-title">');
@@ -870,7 +896,7 @@
   var ECRANS = {
     lead: ecranLead, write: ecranEcrire, 'c-sms': ecranSms, 'c-wa': ecranWa, 'c-mail': ecranMail, 'c-note': ecranNoteCompose, voice: ecranVocaux,
     fu: ecranRappel, rdv: ecranRdv, closing: ecranClosing, hist: ecranHistorique, notes: ecranNotes, ai: ecranIa, stars: ecranQualite,
-    info: ecranInfos, state: ecranEtat, more: ecranPlus, result: ecranResultat, result2: ecranResultat2, fuask: ecranRappelApres, incall: ecranEnAppel
+    info: ecranInfos, state: ecranEtat, more: ecranPlus, result: ecranResultat, result2: ecranResultat2, fuask: ecranRappelApres, incall: ecranEnAppel, quiz: ecranQuiz
   };
 
   /* Assemblage (remplace l2RenderSheet) */
@@ -1362,6 +1388,7 @@
   function etapesFiche() {
     var S = '#ldSheetInner ', s = [];
     s.push({ sel: S + '.ll5status', text: 'Voici la **fiche du lead**. En haut : où il en est et ce qui s’est passé en dernier.' });
+    if (voit(S + '.ll5quiz')) s.push({ sel: S + '.ll5quiz', text: 'La **note du quiz diagnostic** quand le lead l’a rempli. Touche la carte pour voir ses 4 piliers, son CA, son objectif et toutes ses réponses avant d’appeler.' });
     if (voit(S + '.ll5big')) s.push({ sel: S + '.ll5big', text: 'Le **gros bouton** = la prochaine chose à faire pour ce lead : l’appeler, confirmer sa présence, préparer le RDV, répondre sur WhatsApp… Il change tout seul selon la situation.' });
     s.push({ sel: S + '.ll5acts', text: 'Toutes les actions à portée de main : **Appeler**, **Écrire** (SMS, WhatsApp, e-mail, vocal, note pour l’équipe), programmer un **Rappel**, poser un **RDV**, et **Plus** (changer l’état, résultat d’un appel, closing…).' });
     s.push({ text: 'Quand tu appelles, la fiche passe sur l’écran **« En appel »** : tu y notes comment ça s’est passé (a répondu, pas de réponse…) ou tu poses le RDV en deux touches. Le statut, le rappel et l’historique suivent tout seuls.' });
@@ -1377,7 +1404,7 @@
     var t0 = Date.now();
     (function attendre() {
       var G = window.AideGuide;
-      var pret = k === 'liste' ? voit('#ldFeed .ll5tabs') : voit('#ldSheetInner .ll5acts');
+      var pret = k === 'liste' ? voit('#ldFeed .ll5tabs') : (voit('#ldSheetInner .ll5acts') && tutoVu('liste'));
       if (!on || (!force && tutoVu(k)) || (k === 'fiche' && !openCardId)) { tutoAttente[k] = false; return; }
       if (!G || !pret || (G.active() && !force)) {
         if (Date.now() - t0 < 30000) setTimeout(attendre, 400);
