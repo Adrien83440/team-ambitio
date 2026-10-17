@@ -110,8 +110,9 @@
     { id: 'admin-dedup',       icon: '🔄', label: 'Dédup Clients', href: 'clients-dedup.html',    section: 'Admin', perm: '_admin' },
     // Replay closing : les appels de closing (Meet) chapitrés par l'IA, avec
     // le client rattaché — vidéo + transcription cliquable. Données servies
-    // par api/replay-closing.js, admin uniquement.
-    { id: 'admin-replay-closing', icon: '🎬', label: 'Replay closing', href: 'admin-replay-closing.html', section: 'Admin', perm: '_admin' },
+    // par api/replay-closing.js. Ouvert à toute l'équipe sales le 17/10/2026
+    // en consultation seule (tous les closings), rangé dans Outils pour eux.
+    { id: 'admin-replay-closing', icon: '🎬', label: 'Replay closing', href: 'admin-replay-closing.html', section: 'Admin', sectionNonAdmin: 'Outils', perm: '_sales' },
     // Réécoutes : tous les appels Ringover avec enregistrement, transcription
     // par locuteur et résumé IA. Rangé sous Replay closing pour les admins
     // (demande Adrien 06/10/2026) ; les sales gardent l'accès à LEURS appels,

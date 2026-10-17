@@ -163,7 +163,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
   <div id="viewPlayer" style="display:none"></div>
 </div>
 
-<div class="locked" id="lockedView" style="display:none"><div style="font-size:48px;margin-bottom:12px">🔒</div><div>Module réservé aux administrateurs.</div></div>
+<div class="locked" id="lockedView" style="display:none"><div style="font-size:48px;margin-bottom:12px">🔒</div><div>Module réservé à l'équipe sales.</div></div>
 <div class="rc-toast" id="rcToast"></div>
 
 <script>
@@ -178,6 +178,9 @@ var EDIT = null;         // copie de travail des chapitres en cours d'édition
 var FOLLOW = true;       // la transcription suit la lecture
 var lastLine = -1, lastChap = -1;
 var CFG_ERR = null;      // dernière erreur de configuration remontée par le serveur
+// Sales (17/10/2026) : consultation seule. Import, synchro, édition des
+// chapitres et appels IA restent aux admins (l'API refuse aussi en 403).
+var IS_ADMIN = false;
 
 var OUTCOMES = {
   close: '🏆 Close', non_close: '❌ Non close', offre: '💬 Offre', disqualifie: '🚫 Disqua',
@@ -300,14 +303,14 @@ function loadList() {
   return api('GET', { action: 'list', days: $('fDays').value }).then(function (j) {
     ITEMS = j.items || [];
     var b = $('connBanner'), msgs = [];
-    if (j.google && !j.google.connected) {
+    if (IS_ADMIN && j.google && !j.google.connected) {
       msgs.push('Le compte Google qui héberge les Meet de closing n\'est pas connecté : aucune transcription ne peut être importée. '
         + '<a href="admin-email-auth.html">Connecter « Meet Closing »</a> avec strategie@adrienemily.com.');
     }
-    if (CFG_ERR) {
+    if (IS_ADMIN && CFG_ERR) {
       msgs.push(esc(CFG_ERR.message) + (CFG_ERR.data.enableUrl ? ' <a href="' + escAttr(CFG_ERR.data.enableUrl) + '" target="_blank" rel="noopener">Ouvrir la console Google Cloud</a>' : ''));
     }
-    if (j.aiReady === false) msgs.push('Clé IA absente côté serveur : les chapitres ne seront pas générés.');
+    if (IS_ADMIN && j.aiReady === false) msgs.push('Clé IA absente côté serveur : les chapitres ne seront pas générés.');
     if (j.truncated) msgs.push('Période trop large : la liste est tronquée. Réduis la fenêtre.');
     b.innerHTML = msgs.join('<br/>');
     b.style.display = msgs.length ? '' : 'none';
@@ -476,7 +479,7 @@ function renderPlayer() {
     + '<div class="rp-acts">'
     + (b.leadId ? '<a class="bb bb-o bb-s" href="sales-contact.html?id=' + encodeURIComponent(b.leadId) + '" target="_blank" rel="noopener">👤 Fiche prospect</a>' : '')
     + (v.driveUrl ? '<a class="bb bb-o bb-s" href="' + escAttr(v.driveUrl) + '" target="_blank" rel="noopener">↗ Ouvrir dans Drive</a>' : '')
-    + '<button class="bb bb-o bb-s" data-action="import">' + (rp.status === 'ready' ? '↻ Réimporter' : '⬇ Importer maintenant') + '</button>'
+    + (IS_ADMIN ? '<button class="bb bb-o bb-s" data-action="import">' + (rp.status === 'ready' ? '↻ Réimporter' : '⬇ Importer maintenant') + '</button>' : '')
     + '</div></div>';
 
   h += '<div class="rp-grid"><div class="rp-left">';
@@ -500,10 +503,10 @@ function renderPlayer() {
 
   h += '<div class="rp-side"><div class="card"><h2>Sujets <span class="sp"></span>'
     + '<span id="chBtns">'
-    + (rp.status === 'ready' ? '<button class="bb bb-o bb-s" data-action="regen">✨ Régénérer (IA)</button> ' : '')
-    + (rp.status === 'ready' || v.fileId ? '<button class="bb bb-o bb-s" data-action="chEdit">✏️ Modifier</button>' : '')
+    + (IS_ADMIN && rp.status === 'ready' ? '<button class="bb bb-o bb-s" data-action="regen">✨ Régénérer (IA)</button> ' : '')
+    + (IS_ADMIN && (rp.status === 'ready' || v.fileId) ? '<button class="bb bb-o bb-s" data-action="chEdit">✏️ Modifier</button>' : '')
     + '</span></h2><div id="chBox"></div></div>'
-    + (rp.status === 'ready' ? '<div class="card"><h2>🤖 Analyse IA du closing <span class="sp"></span><button class="bb bb-o bb-s" data-action="analyze">' + (rp.analysis ? '↻ Réanalyser' : '✨ Analyser') + '</button></h2><div id="anBox"></div></div>' : '')
+    + (rp.status === 'ready' ? '<div class="card"><h2>🤖 Analyse IA du closing <span class="sp"></span>' + (IS_ADMIN ? '<button class="bb bb-o bb-s" data-action="analyze">' + (rp.analysis ? '↻ Réanalyser' : '✨ Analyser') + '</button>' : '') + '</h2><div id="anBox"></div></div>' : '')
     + '</div>';
   h += '</div>';
 
@@ -793,7 +796,9 @@ window.addEventListener('popstate', function () {
 firebase.auth().onAuthStateChanged(function (u) {
   if (!u) return;
   var role = localStorage.getItem('ambitio_role') || 'coach';
-  if (role !== 'admin') { $('lockedView').style.display = ''; return; }
+  if (role !== 'admin' && role !== 'sales') { $('lockedView').style.display = ''; return; }
+  IS_ADMIN = role === 'admin';
+  if (!IS_ADMIN) $('btnSync').style.display = 'none';
   $('mainView').style.display = '';
   var id = new URLSearchParams(window.location.search).get('id');
   loadList();

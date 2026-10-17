@@ -1,5 +1,5 @@
 // ============================================================================
-// api/replay-closing.js — module « Replay closing » (admin)
+// api/replay-closing.js — module « Replay closing » (sales + admin)
 // ----------------------------------------------------------------------------
 // Sert la page admin-replay-closing.html : liste des appels de closing avec
 // le client rattaché, replay chapitré (vidéo + chapitres + transcription
@@ -7,13 +7,16 @@
 // d'import nocturne.
 //
 // URL  : /api/replay-closing
-// Auth : • Bearer <ID token Firebase> d'un ADMIN (page)
+// Auth : • Bearer <ID token Firebase> d'un ADMIN ou d'un SALES (page) —
+//          les sales n'ont que la consultation (list, get), et seulement
+//          sur les RDV de closing (17/10/2026) ; tout le reste est admin.
 //        • Bearer <CRON_SECRET> ou x-api-key: <CRON_SECRET> (cron / curl)
 //
-// ─── ACTIONS (admin) ──────────────────────────────────────────────────────
+// ─── ACTIONS ──────────────────────────────────────────────────────────────
 //   GET  ?action=list&days=60      appels de closing passés de la fenêtre
 //   GET  ?action=get&id=<booking>  replay complet (chapitres + transcription
 //                                  + URL vidéo signée)
+//   ↑ sales + admin   ↓ admin uniquement
 //   POST { action:'import', id }             importe / réimporte un appel
 //   POST { action:'chapters', id, chapters } enregistre les chapitres édités
 //   POST { action:'regen', id }              régénère les chapitres par l'IA
@@ -37,7 +40,7 @@
 
 const crypto = require('crypto');
 const { admin, db } = require('./_firebaseAdmin');
-const { requireAdmin } = require('./_verifyFirebaseAuth');
+const { requireAuth } = require('./_verifyFirebaseAuth');
 const MT = require('./_meetTranscript');
 
 const QUERY_LIMIT = 1500;
@@ -151,11 +154,17 @@ async function loadBooking(id) {
   return snap.exists ? (snap.data() || {}) : null;
 }
 
-async function actionGet(req, res) {
+async function actionGet(req, res, auth) {
   const id = String((req.query || {}).id || '').trim();
   if (!id) { res.status(400).json({ ok: false, error: 'id_required' }); return; }
   const b = await loadBooking(id);
   if (!b) { res.status(404).json({ ok: false, error: 'booking_not_found' }); return; }
+  // Un sales ne lit que des RDV de closing : pas de séance coaching ni
+  // d'autre RDV ouvert en devinant un identifiant.
+  if (auth.role !== 'admin' && !MT.isClosingBooking(b, await MT.loadTypeMap())) {
+    res.status(404).json({ ok: false, error: 'booking_not_found' });
+    return;
+  }
   const rp = b.replay || {};
   const fileId = rp.videoFileId || MT.driveFileIdFromUrl(b.meetRecordingUrl);
   const entries = rp.status === 'ready' ? await MT.readEntries(id, rp.chunks) : [];
@@ -348,11 +357,17 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const auth = await requireAdmin(req, res);
+    const auth = await requireAuth(req, res);
     if (!auth) return;
+    if (auth.role !== 'admin' && auth.role !== 'sales') {
+      res.status(403).json({ ok: false, error: 'Accès réservé à l\'équipe sales' });
+      return;
+    }
 
     if (req.method === 'GET' && action === 'list') { await actionList(req, res); return; }
-    if (req.method === 'GET' && action === 'get') { await actionGet(req, res); return; }
+    if (req.method === 'GET' && action === 'get') { await actionGet(req, res, auth); return; }
+    // Au-delà de la consultation : écritures et appels IA, admin uniquement.
+    if (auth.role !== 'admin') { res.status(403).json({ ok: false, error: 'Admin role required' }); return; }
     if (req.method === 'POST' && action === 'import') { await actionImport(req, res, body); return; }
     if (req.method === 'POST' && action === 'chapters') { await actionChapters(req, res, body, auth); return; }
     if (req.method === 'POST' && action === 'regen') { await actionRegen(req, res, body); return; }
