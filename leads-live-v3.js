@@ -1096,7 +1096,19 @@
         appliquerTheme();
         renderFeed();
         return;
-      case 'menu': e.stopPropagation(); var m = l2El('l2Menu'); if (m) m.classList.toggle('on'); return;
+      case 'menu':
+        e.stopPropagation();
+        var m = l2El('l2Menu');
+        if (!m) return;
+        m.classList.toggle('on');
+        /* Calé sous le bouton : avec la barre latérale d'Alteore, un
+           « left: 12px » fixe passait dessous (bug 17/10). */
+        if (m.classList.contains('on')) {
+          var r = t.getBoundingClientRect(), lw = m.offsetWidth || 290;
+          m.style.left = Math.round(Math.max(12, Math.min(r.left, window.innerWidth - lw - 12))) + 'px';
+          m.style.top = Math.round(r.bottom + 8) + 'px';
+        }
+        return;
       case 'serie':
         serie = !serie;
         document.body.classList.toggle('ll5-serie', serie);
