@@ -36,7 +36,7 @@
 
   var FORCE_KEY = 'll3_force';
   var LIST_KEY = 'll3_list';
-  var THEME_KEY = 'll5_theme_v2'; // v2 (16/10) : sombre par défaut, l'ancien choix « clair » est oublié
+  var THEME_KEY = 'll5_theme_v3'; // v3 (17/10) : clair par défaut pour le test, les anciens choix sont oubliés
   var on = false;
 
   /* ═══ Interrupteur ═══════════════════════════════════════════════════ */
@@ -1117,8 +1117,8 @@
     }
   }, true);
 
-  /* ═══ Thème : sombre par défaut (demande Adrien 16/10), bascule mémorisée ═══ */
-  function themeVoulu() { try { return localStorage.getItem(THEME_KEY) || 'dark'; } catch (e) { return 'dark'; } }
+  /* ═══ Thème : clair par défaut (demande Adrien 17/10), bascule mémorisée ═══ */
+  function themeVoulu() { try { return localStorage.getItem(THEME_KEY) || 'light'; } catch (e) { return 'light'; } }
   function appliquerTheme() { if (on) document.body.classList.toggle('light-theme', themeVoulu() === 'light'); }
   document.addEventListener('click', function (e) {
     if (!on || !e.target.closest || !e.target.closest('#navThemeToggle')) return;

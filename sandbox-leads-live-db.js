@@ -103,7 +103,7 @@
   var saveT = null;
   function save() { clearTimeout(saveT); saveT = setTimeout(function () { try { localStorage.setItem(KEY, enc(DB)); } catch (e) {} }, 300); }
   save();
-  window.__SBX = { moi: { slug: 'moi', nom: MOI, uid: 'u-moi' }, db: function () { return DB; }, reset: function () { try { localStorage.removeItem(KEY); localStorage.removeItem('ll5_theme_v2'); localStorage.removeItem('ll3_list'); } catch (e) {} location.reload(); }, fire: function (c) { fire(c); }, ts: ts, save: save };
+  window.__SBX = { moi: { slug: 'moi', nom: MOI, uid: 'u-moi' }, db: function () { return DB; }, reset: function () { try { localStorage.removeItem(KEY); localStorage.removeItem('ll5_theme_v3'); localStorage.removeItem('ll3_list'); } catch (e) {} location.reload(); }, fire: function (c) { fire(c); }, ts: ts, save: save };
 
   /* ── Firestore ── */
   var listeners = [];
