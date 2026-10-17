@@ -144,11 +144,12 @@
     // sur une base locale — rien de réel n'est déclenché. Sales + admin
     // seulement (perm '_sales'), ouvert dans une fenêtre à part (newWindow).
     { id: 'sandbox-closer',    icon: '🧪', label: 'Bac à sable closer', href: 'sandbox-closer.html', section: 'Outils', perm: '_sales', newWindow: true },
-    // Labo Leads Live (16/10/2026) : la nouvelle présentation de Leads Live,
-    // à tester sur de faux leads avant ouverture à l'équipe. Page générée
-    // (scripts/build-sandbox-leads-live.js), faux Firebase + pare-feu : rien
-    // de réel ne part. Admins seulement, fenêtre à part.
-    { id: 'sandbox-leads-live', icon: '🧪', label: 'Labo Leads Live', href: 'sandbox-leads-live.html', section: 'Outils', perm: '_admin', newWindow: true },
+    // Bac à sable Leads Live (16/10/2026, ouvert aux sales le 17/10) : la
+    // nouvelle présentation de Leads Live sur de faux leads, pour s'entraîner
+    // avant de basculer. Page générée (scripts/build-sandbox-leads-live.js),
+    // faux Firebase + pare-feu : rien de réel ne part. Sales + admins
+    // (jamais coach ni CSM), fenêtre à part.
+    { id: 'sandbox-leads-live', icon: '🧪', label: 'Bac à sable Leads Live', href: 'sandbox-leads-live.html', section: 'Outils', perm: '_sales', newWindow: true },
     // Labo Tunnels (16/10/2026) : les vraies pages des tunnels, pare-feu +
     // fausse base — ni lead, ni RDV, ni Make, ni pixel. La liste des liens
     // est réservée aux admins ; un lien de test (?p=…) s'ouvre sans connexion.

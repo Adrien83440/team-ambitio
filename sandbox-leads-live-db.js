@@ -21,6 +21,10 @@
     var brut = String(window.localStorage.getItem('ambitio_name') || '').replace(/[._-]+/g, ' ').trim().split(/\s+/)[0] || '';
     if (brut && !/@/.test(brut) && brut.length > 1) MOI = brut.charAt(0).toUpperCase() + brut.slice(1).toLowerCase();
   } catch (e) {}
+  /* Son rôle (17/10/2026) : un sales s'entraîne avec un compte sales, pour
+     voir exactement ce qu'il verra en vrai. Lu lui aussi avant le cloisonnement. */
+  var ROLE = 'sales';
+  try { if (window.localStorage.getItem('ambitio_role') === 'admin') ROLE = 'admin'; } catch (e) {}
   (function cloisonner() {
     try {
       var SP = Storage.prototype, ls = window.localStorage, ss = window.sessionStorage;
@@ -32,7 +36,7 @@
     } catch (e) {}
   })();
   /* Désormais cloisonnées : sans effet sur le vrai logiciel. */
-  try { localStorage.setItem('ll3_force', '1'); localStorage.setItem('ambitio_role', 'admin'); localStorage.setItem('ambitio_name', MOI); } catch (e) {}
+  try { localStorage.setItem('ll3_choix_v2', '1'); localStorage.setItem('ambitio_role', ROLE); localStorage.setItem('ambitio_name', MOI); } catch (e) {}
   var KEY = 'llsbx_db_v6';
   var NOW = Date.now(), MIN = 60000, H = 3600000, D = 86400000;
 
@@ -100,10 +104,16 @@
   var DB = null;
   try { var raw = localStorage.getItem(KEY); if (raw) DB = dec(raw); } catch (e) { DB = null; }
   if (!DB || !DB.leads) DB = seed();
+  /* Base déjà gardée : on remet le rôle du testeur à jour. */
+  try {
+    if (DB.users && DB.users['u-moi']) DB.users['u-moi'].role = ROLE;
+    var mm = DB._meta && DB._meta.team_members && DB._meta.team_members.members && DB._meta.team_members.members.moi;
+    if (mm) mm.role = ROLE === 'admin' ? 'admin' : 'closer_setter';
+  } catch (e) {}
   var saveT = null;
   function save() { clearTimeout(saveT); saveT = setTimeout(function () { try { localStorage.setItem(KEY, enc(DB)); } catch (e) {} }, 300); }
   save();
-  window.__SBX = { moi: { slug: 'moi', nom: MOI, uid: 'u-moi' }, db: function () { return DB; }, reset: function () { try { localStorage.removeItem(KEY); localStorage.removeItem('ll5_theme_v3'); localStorage.removeItem('ll3_list'); } catch (e) {} location.reload(); }, fire: function (c) { fire(c); }, ts: ts, save: save };
+  window.__SBX = { moi: { slug: 'moi', nom: MOI, uid: 'u-moi' }, db: function () { return DB; }, reset: function () { try { localStorage.removeItem(KEY); localStorage.removeItem('ll5_theme_v3'); localStorage.removeItem('ll3_list'); localStorage.removeItem('ll5_tuto_v1:liste'); localStorage.removeItem('ll5_tuto_v1:fiche'); } catch (e) {} location.reload(); }, fire: function (c) { fire(c); }, ts: ts, save: save };
 
   /* ── Firestore ── */
   var listeners = [];
@@ -237,7 +247,7 @@
 
     put('_meta', 'team_members', { members: {
       adrien:   { slug: 'adrien', shortName: 'Adrien', displayName: 'Adrien', color: '#ef4444', initials: 'A', role: 'admin', active: true, inLeadsModule: true, firebaseUid: 'u-adrien', order: 1 },
-      moi:      { slug: 'moi', shortName: MOI, displayName: MOI, color: '#3d5af1', initials: MOI.charAt(0), role: 'admin', active: true, inLeadsModule: true, firebaseUid: 'u-moi', order: 0 },
+      moi:      { slug: 'moi', shortName: MOI, displayName: MOI, color: '#3d5af1', initials: MOI.charAt(0), role: ROLE === 'admin' ? 'admin' : 'closer_setter', active: true, inLeadsModule: true, firebaseUid: 'u-moi', order: 0 },
       vincent:  { slug: 'vincent', shortName: 'Vincent', displayName: 'Vincent', color: '#fb923c', initials: 'V', role: 'admin', active: true, inLeadsModule: true, firebaseUid: 'u-vincent', order: 2 },
       elodie:   { slug: 'elodie', shortName: 'Élodie', displayName: 'Élodie', color: '#f472b6', initials: 'É', role: 'closer_setter', active: true, inLeadsModule: true, eligibleForLeads: true, firebaseUid: 'u-elodie', order: 3 },
       steven:   { slug: 'steven', shortName: 'Steven', displayName: 'Steven', color: '#38bdf8', initials: 'S', role: 'setter_ecrit', active: true, inLeadsModule: true, firebaseUid: 'u-steven', order: 4 },
@@ -246,7 +256,7 @@
       edouard:  { slug: 'edouard', shortName: 'Edouard', displayName: 'Edouard', color: '#c084fc', initials: 'E', role: 'coach', active: true, firebaseUid: 'u-edouard', order: 7 }
     } });
     Object.keys(db._meta.team_members.members).forEach(function (k) { var m = db._meta.team_members.members[k]; m.name = m.shortName; m.fullName = m.displayName; });
-    put('users', 'u-moi', { role: 'admin', email: 'testeur@alteore.test', firstname: MOI });
+    put('users', 'u-moi', { role: ROLE, email: 'testeur@alteore.test', firstname: MOI });
     put('_config', 'sales_close_pilot', { enabled: true });  /* comme en production */
     put('_config', 'leads_live_v3', { enabled: true });
 

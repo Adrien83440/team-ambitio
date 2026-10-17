@@ -11,14 +11,21 @@
    SMS, WhatsApp, vocaux, close, présence…). Aucun champ Firestore, aucune
    règle, aucune configuration n'est modifié.
 
-   INTERRUPTEUR — l'ancienne vue reste intacte et reste la vue par défaut :
-     • ?v3=1 dans l'URL  → nouvelle vue sur CE navigateur (mémorisé)
-     • ?v3=0 dans l'URL  → retour à l'ancienne vue sur ce navigateur
-     • _config/leads_live_v3 { enabled: true }        → toute l'équipe
-       _config/leads_live_v3 { testeurs: ['slug', …] } → ces membres-là
-       (lisible par les admins seulement tant que la règle Firestore n'est
-       pas ouverte aux sales.)
-     • Menu → « Revenir à l'ancienne version ».
+   OUVERTURE À L'ÉQUIPE (17/10/2026, demande Adrien) — chacun à son rythme :
+     • admins (users/{uid}.role === 'admin') → nouvelle vue d'office ;
+     • sales → ancienne vue, avec un bouton « ✨ Nouvelle version » dans
+       l'en-tête, une entrée de menu et un bandeau (refermable) qui propose
+       de s'entraîner d'abord dans le bac à sable (sandbox-leads-live.html) ;
+     • le choix est mémorisé sur l'appareil (clé ll3_choix_v2 : les choix
+       faits pendant les tests sont oubliés) et prime sur la règle par défaut :
+       Menu → « Revenir à l'ancienne version » / bouton « Nouvelle version » ;
+     • ?v3=1 / ?v3=0 dans l'URL forcent toujours l'une ou l'autre ;
+     • _config/leads_live_v3 { enabled: true } → toute l'équipe d'un coup,
+       { testeurs: ['slug', …] } → ces membres-là (lisible par les admins
+       seulement tant que la règle Firestore n'est pas ouverte aux sales).
+   Première arrivée sur la nouvelle vue (réel comme bac à sable) : guide pas
+   à pas en deux temps — la liste, puis la première fiche ouverte — via le
+   moteur « Montre-moi » (aide-guide.js). Menu → « Revoir le guide ».
 
    Mécanique : à l'activation seulement, les fonctions globales de rendu
    (renderFeed, renderCard, l2RenderTriage, l2RenderSheet, l2SheetHeadHTML,
@@ -34,7 +41,9 @@
 (function () {
   'use strict';
 
-  var FORCE_KEY = 'll3_force';
+  var FORCE_KEY = 'll3_choix_v2'; // v2 (17/10) : ouverture à l'équipe, les choix des tests sont oubliés
+  var TUTO_KEY = 'll5_tuto_v1';
+  var INVIT_KEY = 'll5_invit_fermee_v1';
   var LIST_KEY = 'll3_list';
   var THEME_KEY = 'll5_theme_v3'; // v3 (17/10) : clair par défaut pour le test, les anciens choix sont oubliés
   var on = false;
@@ -48,7 +57,7 @@
   })();
   function forcage() { try { return localStorage.getItem(FORCE_KEY); } catch (e) { return null; } }
 
-  var cfg = null;
+  var cfg = null, role = null;
   function eligibleCfg() {
     if (!cfg) return false;
     if (cfg.enabled === true) return true;
@@ -59,13 +68,23 @@
   function peutActiver() {
     if (on) return;
     var f = forcage();
-    if (f === '0') return;
-    if (f === '1' || eligibleCfg()) activer();
+    if (f === '0') { proposer(); return; }
+    if (f === '1' || eligibleCfg() || role === 'admin') { activer(); return; }
+    if (role) proposer();
   }
   function lireCfg() {
     try {
       firebase.auth().onAuthStateChanged(function (u) {
-        if (!u || cfg) return;
+        if (!u) return;
+        /* Rôle lu à la source : en mode application (?app) la page force
+           d'abord « sales » dans window._currentRole. */
+        if (!role) {
+          firebase.firestore().collection('users').doc(u.uid).get().then(function (s) {
+            role = (s.exists && s.data() && s.data().role) || 'sales';
+            peutActiver();
+          }).catch(function () { role = 'sales'; peutActiver(); });
+        }
+        if (cfg) return;
         firebase.firestore().collection('_config').doc('leads_live_v3').get().then(function (s) {
           cfg = s.exists ? (s.data() || {}) : {};
           peutActiver();
@@ -75,6 +94,60 @@
       });
     } catch (e) { /* Firebase indisponible : ancienne vue */ }
   }
+
+  /* ═══ Invitation sur l'ancienne vue (sales) ══════════════════════════ */
+  var invite = false;
+  function invitFermee() { try { return localStorage.getItem(INVIT_KEY) === '1'; } catch (e) { return false; } }
+  function proposer() {
+    if (on || invite) return;
+    var hd = l2El('l2hd'), row = document.querySelector('#l2hd .l2hd-row1');
+    if (!hd || !row) return;
+    invite = true;
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'll5try'; b.id = 'll5Try';
+    b.setAttribute('data-ll5i', 'passer');
+    b.title = 'Passer à la nouvelle version de Leads Live';
+    b.innerHTML = '✨ <span>Nouvelle version</span>';
+    row.insertBefore(b, l2El('l2AgBtn') || null);
+    var menu = l2El('l2Menu');
+    if (menu) {
+      var mi = document.createElement('button');
+      mi.type = 'button'; mi.className = 'l2mi'; mi.id = 'll5TryMenu';
+      mi.setAttribute('data-ll5i', 'passer');
+      mi.innerHTML = '✨ <span>Passer à la nouvelle version</span>';
+      menu.insertBefore(mi, menu.firstChild);
+    }
+    if (!invitFermee()) {
+      var bd = document.createElement('div');
+      bd.className = 'll5invit'; bd.id = 'll5Invit';
+      bd.innerHTML = '<span class="t"><b>✨ Une nouvelle version de Leads Live est prête.</b> ' +
+        'Entraîne-toi d’abord dans le bac à sable, sur de faux leads (rien de réel ne part), puis passe dessus quand tu te sens à l’aise. Tu pourras toujours revenir à celle-ci.</span>' +
+        '<span class="b"><button type="button" data-ll5i="labo">🧪 M’entraîner</button>' +
+        '<button type="button" class="p" data-ll5i="passer">Passer à la nouvelle version</button>' +
+        '<button type="button" class="x" data-ll5i="fermer" aria-label="Fermer ce message" title="Fermer">✕</button></span>';
+      hd.appendChild(bd);
+    }
+  }
+  function retirerInvitation() {
+    ['ll5Try', 'll5TryMenu', 'll5Invit'].forEach(function (k) { var o = l2El(k); if (o && o.parentNode) o.parentNode.removeChild(o); });
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest ? e.target.closest('[data-ll5i]') : null;
+    if (!t || on) return;
+    var a = t.getAttribute('data-ll5i');
+    if (a === 'labo') { window.open('sandbox-leads-live.html', '_blank'); return; }
+    if (a === 'fermer') {
+      try { localStorage.setItem(INVIT_KEY, '1'); } catch (e1) {}
+      var bd = l2El('ll5Invit'); if (bd && bd.parentNode) bd.parentNode.removeChild(bd);
+      return;
+    }
+    if (a === 'passer') {
+      try { localStorage.setItem(FORCE_KEY, '1'); } catch (e2) {}
+      var m = l2El('l2Menu'); if (m) m.classList.remove('on');
+      retirerInvitation();
+      activer();
+    }
+  });
   window.addEventListener('team-members-loaded', function () {
     setTimeout(peutActiver, 0);
     if (on) setTimeout(function () { appliquerTheme(); if (allLeads && allLeads.length) renderFeed(); }, 0);
@@ -827,6 +900,7 @@
       '<div class="ll5scroll"><div class="l2body ld-card ll5wrap" data-lead-id="' + id + '">' + corps + '</div></div></div>';
     inner.setAttribute('data-ll5-ecran', e + '|' + id);
     anime = false;
+    if (e === 'lead' && !tutoVu('fiche')) setTimeout(function () { lancerTuto('fiche', false); }, 700);
     sheet.classList.add('has-lead');
 
     if (drafts) l2RestoreDrafts(inner, drafts, id);
@@ -1031,6 +1105,11 @@
         renderFeed();
         if (serie) toast('Coche jusqu’à 5 leads, puis lance les appels en bas');
         return;
+      case 'tuto':
+        var mt = l2El('l2Menu'); if (mt) mt.classList.remove('on');
+        if (openCardId && typeof l2CloseSheet === 'function' && l2IsMobile()) l2CloseSheet();
+        lancerTuto('liste', true);
+        return;
       case 'oldui':
         try { localStorage.setItem(FORCE_KEY, '0'); } catch (e4) {}
         var u = new URL(window.location.href);
@@ -1150,6 +1229,11 @@
       ob.setAttribute('data-ll5', 'oldui');
       ob.innerHTML = '↩️ <span>Revenir à l’ancienne version</span>';
       menu.insertBefore(ob, panel || null);
+      var gb = document.createElement('button');
+      gb.className = 'l2mi'; gb.id = 'll5Tuto'; gb.type = 'button';
+      gb.setAttribute('data-ll5', 'tuto');
+      gb.innerHTML = '🎓 <span>Revoir le guide</span>';
+      menu.insertBefore(gb, ob);
     }
     var ap = l2El('l2fsApply');
     if (ap) ap.textContent = 'Fermer';
@@ -1232,6 +1316,68 @@
     setTimeout(appliquerTheme, 400);
     setTimeout(appliquerTheme, 1500);
     if (typeof allLeads !== 'undefined' && allLeads && allLeads.length) renderFeed();
+    retirerInvitation();
+    setTimeout(function () { lancerTuto('liste', false); }, 1200);
+  }
+
+  /* ═══ Guide de première visite (17/10/2026) ══════════════════════════
+     Deux temps : la liste à l'arrivée, puis la fiche au premier lead ouvert.
+     Mémorisé sur l'appareil ; le bac à sable a son propre stockage (préfixe
+     sbxll:), donc le guide s'y montre aussi une fois. */
+  var tutoAttente = {};
+  function tutoVu(k) { try { return localStorage.getItem(TUTO_KEY + ':' + k) === '1'; } catch (e) { return true; } }
+  function tutoMarquer(k) { try { localStorage.setItem(TUTO_KEY + ':' + k, '1'); } catch (e) {} }
+  function voit(sel) {
+    var n = document.querySelector(sel);
+    if (!n || !n.getClientRects || !n.getClientRects().length) return false;
+    var r = n.getBoundingClientRect();
+    return r.width > 2 && r.height > 2;
+  }
+  function etapesListe() {
+    var F = '#ldFeed ', s = [];
+    s.push({ text: 'Bienvenue dans la **nouvelle version de Leads Live** 👋 En une minute, je te montre où tout se trouve. Touche « Suivant » pour avancer, ✕ pour arrêter.' });
+    if (voit(F + '.ll5hero')) s.push({ sel: F + '.ll5hero', text: '**À faire en premier** : le lead le plus urgent du moment (rappel en retard, présence à confirmer, nouveau lead…), avec le bouton pour agir tout de suite.' });
+    s.push({ sel: F + '.ll5tabs', text: 'Tes **4 listes** : « À faire » (ce qui t’attend maintenant), « À rappeler » (pas joignables et rappels programmés), « RDV » et « Tous » (toutes les arrivées). Le chiffre = le nombre de leads dedans.' });
+    s.push({ sel: F + '#l2FiltersBtn', text: 'Les **Filtres** : qui s’en occupe, arrivés quand, par quel tunnel, où il en est.' });
+    s.push({ sel: F + '[data-ll5="agenda"]', text: '**Mes RDV du jour** : ton agenda. La pastille donne le nombre de RDV qui restent aujourd’hui.' });
+    s.push({ sel: F + '[data-ll5="search"]', text: '**Rechercher** un lead par nom, téléphone, e-mail ou secteur, parmi tous les leads.' });
+    s.push({ sel: F + '[data-ll5="new"]', text: '**Créer une fiche** à la main (quelqu’un qui t’appelle, un contact Instagram…).' });
+    s.push({ sel: F + '.ll5me', text: 'Le **menu** (ton initiale) : notifications, appeler plusieurs leads à la suite, thème clair / sombre, « Revoir le guide » et « Revenir à l’ancienne version ».' });
+    if (voit(F + '.ll5card')) s.push({ sel: F + '.ll5card', text: 'Touche un lead pour **ouvrir sa fiche** : la suite du guide t’y attend.' });
+    else s.push({ text: 'C’est tout pour la liste ! Ouvre un lead : la suite du guide t’attend dans sa fiche.' });
+    return s;
+  }
+  function etapesFiche() {
+    var S = '#ldSheetInner ', s = [];
+    s.push({ sel: S + '.ll5status', text: 'Voici la **fiche du lead**. En haut : où il en est et ce qui s’est passé en dernier.' });
+    if (voit(S + '.ll5big')) s.push({ sel: S + '.ll5big', text: 'Le **gros bouton** = la prochaine chose à faire pour ce lead : l’appeler, confirmer sa présence, préparer le RDV, répondre sur WhatsApp… Il change tout seul selon la situation.' });
+    s.push({ sel: S + '.ll5acts', text: 'Toutes les actions à portée de main : **Appeler**, **Écrire** (SMS, WhatsApp, e-mail, vocal, note pour l’équipe), programmer un **Rappel**, poser un **RDV**, et **Plus** (changer l’état, résultat d’un appel, closing…).' });
+    s.push({ text: 'Quand tu appelles, la fiche passe sur l’écran **« En appel »** : tu y notes comment ça s’est passé (a répondu, pas de réponse…) ou tu poses le RDV en deux touches. Le statut, le rappel et l’historique suivent tout seuls.' });
+    if (voit(S + '[data-close-rail]')) s.push({ sel: S + '[data-close-rail]', text: 'Le **pilote de closing** : quand c’est OK pour le closing, il te guide carte par carte (contrat, paiement, RDV 72 h…).' });
+    s.push({ sel: S + '.ll5group', text: 'Tout ce qu’on sait sur le lead : **conseil de l’IA**, historique, RDV, rappels, notes, qualité du lead et son dossier. Touche une ligne pour l’ouvrir.' });
+    s.push({ sel: S + '.ll5bar .ll5ib', text: 'La **flèche** ramène à la liste (ou à l’écran précédent). C’est parti ! Tu peux revoir ce guide à tout moment depuis le menu.' });
+    return s;
+  }
+  function lancerTuto(k, force) {
+    if (!on || tutoAttente[k]) return;
+    if (!force && tutoVu(k)) return;
+    tutoAttente[k] = true;
+    var t0 = Date.now();
+    (function attendre() {
+      var G = window.AideGuide;
+      var pret = k === 'liste' ? voit('#ldFeed .ll5tabs') : voit('#ldSheetInner .ll5acts');
+      if (!on || (!force && tutoVu(k)) || (k === 'fiche' && !openCardId)) { tutoAttente[k] = false; return; }
+      if (!G || !pret || (G.active() && !force)) {
+        if (Date.now() - t0 < 30000) setTimeout(attendre, 400);
+        else tutoAttente[k] = false;
+        return;
+      }
+      tutoAttente[k] = false;
+      if (G.active()) G.stop();
+      tutoMarquer(k);
+      if (force && k === 'liste') { try { localStorage.removeItem(TUTO_KEY + ':fiche'); } catch (e) {} }
+      G.start(k === 'liste' ? etapesListe() : etapesFiche(), { title: k === 'liste' ? 'Leads Live' : 'La fiche' });
+    })();
   }
 
   document.addEventListener('DOMContentLoaded', brancherModules);

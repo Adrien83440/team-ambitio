@@ -38,7 +38,7 @@ function construire() {
   // 2. Mode application : pas de barre latérale (ses liens mènent au vrai logiciel)
   remplacer("var isAppMode = new URLSearchParams(window.location.search).has('app');", 'var isAppMode = true;');
   // 3. Identité de la page
-  html = html.replace(/<title>[^<]*<\/title>/, '<title>Alteore — Labo Leads Live</title>\n<meta name="robots" content="noindex,nofollow"/>');
+  html = html.replace(/<title>[^<]*<\/title>/, '<title>Alteore — Bac à sable Leads Live</title>\n<meta name="robots" content="noindex,nofollow"/>');
   html = html.replace(/<link rel="manifest"[^>]*>\n?/, '').replace(/<link rel="apple-touch-icon"[^>]*>\n?/, '');
   html = html.replace(/<!DOCTYPE html>\s*/i, '<!DOCTYPE html>\n<!-- GÉNÉRÉ par scripts/build-sandbox-leads-live.js depuis sales-leads.html : ne pas éditer à la main. -->\n');
   return html;
