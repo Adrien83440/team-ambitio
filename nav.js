@@ -57,114 +57,140 @@
     csm_dashboard:'Dashboard CSM',csm_clients:'Clients (CSM)'
   };
 
+  /* ─── Menu (réorganisé le 17/10/2026) ──────────────────────────────────
+     5 grands groupes (section), chacun fait de liens directs et de
+     sous-menus (children). Chaque entrée, enfant compris, porte sa propre
+     permission (perm) — mêmes règles qu'avant le rangement, voir canSee()
+     dans buildSidebar(). Un sous-menu dont aucun enfant n'est visible
+     disparaît ; s'il n'en reste qu'un, il s'affiche en lien direct.
+     `adminAlways` : enfant toujours visible pour un admin, quelle que soit
+     sa grille de modules (comportement historique des sous-menus).
+     Masquer un item ne protège pas l'URL : chaque page a son propre garde. */
   const ALL_MODULES = [
-    // ─── CUSTOMER SUCCESS — visible pour le rôle csm + admin ───
+    // ═══ COMMERCIAL ═══
+    { id: 'sales-dashboard',   icon: '📊', label: 'Dashboard',         href: 'sales-dashboard.html',   section: 'Commercial', perm: 'sales_dashboard' },
+    { id: 'sales-crm', icon: '🧩', label: 'CRM', section: 'Commercial', children: [
+      { id: 'sales-leads_live',  icon: '🔔', label: 'Leads Live',    href: 'sales-leads.html',       perm: 'sales_crm' },
+      { id: 'sales-pipeline',    icon: '▥',  label: 'Pipeline',      href: 'sales-crm.html',         perm: 'sales_crm' },
+      { id: 'sales-retargeting', icon: '🔄', label: 'Retargeting',   href: 'sales-retargeting.html', perm: 'sales_crm' },
+      { id: 'sales-suivi',       icon: '📋', label: 'Clients',       href: 'sales-clients.html',     perm: 'sales_crm' },
+    ]},
+    { id: 'sales-saisie', icon: '✏️', label: 'Saisie', section: 'Commercial', children: [
+      { id: 'sales-setting',     icon: '📞', label: 'Set NB',        href: 'sales-setting.html',     perm: 'sales_saisie' },
+      { id: 'sales-closing',     icon: '🎯', label: 'Close SB',      href: 'sales-closing.html',     perm: 'sales_saisie' },
+      { id: 'sales-eod',         icon: '📝', label: 'EOD',           href: 'sales-eod.html',         perm: 'sales_saisie' },
+    ]},
+    // Rendez-vous (sales-rdv) et Booking (booking-admin) : règles par id
+    // dans canSee() — Rendez-vous strictement commercial, Booking ouvert à la
+    // CSM en lecture seule.
+    { id: 'nav-agenda', icon: '📅', label: 'Agenda', section: 'Commercial', children: [
+      { id: 'sales-rdv',         icon: '🗓️', label: 'Rendez-vous',   href: 'sales-rdv.html',         perm: 'booking' },
+      { id: 'booking',           icon: '📅', label: 'Booking',       href: 'booking-admin.html',     perm: 'booking' },
+    ]},
+    { id: 'nav-appels', icon: '☎️', label: 'Appels & messages', section: 'Commercial', children: [
+      { id: 'sales-dialer',      icon: '☎️', label: 'Dialer',        href: 'sales-dialer.html',      perm: 'sales_dialer' },
+      { id: 'sales-whatsapp',    icon: '💬', label: 'WhatsApp',      href: 'whatsapp.html',          perm: 'sales_whatsapp' },
+      // Réécoutes : tous les appels Ringover avec enregistrement, transcription
+      // par locuteur et résumé IA ; les sales n'y voient que LEURS appels.
+      // Données servies par api/calls-list + api/call-detail.
+      { id: 'sales-appels',      icon: '🎧', label: 'Réécoutes',     href: 'sales-appels.html',      perm: 'sales_dialer' },
+      // Replay closing : les appels de closing (Meet) chapitrés par l'IA, avec
+      // le client rattaché. Données servies par api/replay-closing.js. Ouvert à
+      // toute l'équipe sales le 17/10/2026 en consultation seule.
+      { id: 'admin-replay-closing', icon: '🎬', label: 'Replay closing', href: 'admin-replay-closing.html', perm: '_sales' },
+    ]},
+    { id: 'nav-contrats', icon: '✍️', label: 'Contrats & paiements', section: 'Commercial', children: [
+      { id: 'signatures',        icon: '✍️', label: 'Signatures',    href: 'sales-signatures.html',  perm: 'signatures' },
+      { id: 'payments',          icon: '💳', label: 'Paiements',     href: 'payments.html',          perm: 'payments' },
+    ]},
+    { id: 'nav-equipe', icon: '👥', label: 'Équipe & résultats', section: 'Commercial', children: [
+      { id: 'sales-equipe',      icon: '👥', label: 'Équipe Sales',  href: 'sales-equipe.html',      perm: 'sales_equipe',      adminAlways: true },
+      { id: 'sales-commissions', icon: '💰', label: 'Commissions',   href: 'sales-commissions.html', perm: 'sales_commissions', adminAlways: true },
+      { id: 'sales-projections', icon: '📈', label: 'Projections',   href: 'sales-projections.html', perm: 'sales_projections', adminAlways: true },
+      // Pilotage équipe (16/10/2026) : en direct (appels en cours, visios Meet
+      // avec clic et présence du prospect, connectés), activité par personne et
+      // par jour, historique complet d'un prospect. api/team-pilotage.js.
+      { id: 'admin-pilotage',    icon: '🛰️', label: 'Pilotage équipe', href: 'admin-pilotage.html',  perm: '_admin' },
+    ]},
+
+    // ═══ COACHING & CLIENTS ═══
+    { id: 'coach-clients',     icon: '👥', label: 'Coaching',          href: 'coaching.html',           section: 'Coaching & clients', perm: 'coaching_clients' },
+    { id: 'coach-dashboard',   icon: '📊', label: 'Dashboard coaching', href: 'coaching-dashboard.html', section: 'Coaching & clients', perm: 'coaching_dashboard' },
     // Cockpit CSM (refonte 10/2026, programme IA) : feu tricolore, paiements,
     // renouvellements, suivis, diagnostic IA — données via api/csm-cockpit.js.
     // Les deux anciennes vues restent accessibles le temps de la transition.
-    { id: 'csm-cockpit',       icon: '💎', label: 'Cockpit CSM',   href: 'csm-cockpit.html',   section: 'Customer Success', perm: 'csm_dashboard' },
-    { id: 'csm-dashboard',     icon: '📊', label: 'Ancien dashboard', href: 'csm-dashboard.html', section: 'Customer Success', perm: 'csm_dashboard' },
-    { id: 'csm-clients',       icon: '👥', label: 'Clients (ancienne vue)', href: 'csm-clients.html',   section: 'Customer Success', perm: 'csm_clients' },
-    { id: 'csm-diagnostic',    icon: '🔍', label: 'Diagnostic',    href: 'csm-diagnostic.html', section: 'Customer Success', perm: 'csm_dashboard' },
-    { id: 'coach-clients',       icon: '👥', label: 'Coaching',      href: 'coaching.html',               section: 'Coaching', perm: 'coaching_clients' },
-    { id: 'coach-dashboard',     icon: '📊', label: 'Dashboard',     href: 'coaching-dashboard.html',     section: 'Coaching', perm: 'coaching_dashboard' },
-    { id: 'sales-dashboard',   icon: '📊', label: 'Dashboard',         href: 'sales-dashboard.html',   section: 'Sales', perm: 'sales_dashboard' },
-    { id: 'sales-funnel',      icon: '🎯', label: 'Funnel',            href: 'sales-funnel.html',      section: 'Sales', perm: '_admin' },
-    { id: 'sales-crm', icon: '🧩', label: 'CRM', href: '#', section: 'Sales', perm: 'sales_crm', children: [
-      { id: 'sales-leads_live',  icon: '🔔', label: 'Leads Live',    href: 'sales-leads.html' },
-      { id: 'sales-pipeline',    icon: '▥',  label: 'Pipeline',      href: 'sales-crm.html' },
-      { id: 'sales-retargeting', icon: '🔄', label: 'Retargeting',   href: 'sales-retargeting.html' },
-      { id: 'sales-suivi',       icon: '📋', label: 'Clients', href: 'sales-clients.html' },
+    { id: 'nav-csm', icon: '💎', label: 'Customer Success', section: 'Coaching & clients', children: [
+      { id: 'csm-cockpit',       icon: '💎', label: 'Cockpit CSM',   href: 'csm-cockpit.html',       perm: 'csm_dashboard' },
+      { id: 'csm-diagnostic',    icon: '🔍', label: 'Diagnostic',    href: 'csm-diagnostic.html',    perm: 'csm_dashboard' },
+      { id: 'csm-dashboard',     icon: '📊', label: 'Ancien dashboard', href: 'csm-dashboard.html',  perm: 'csm_dashboard' },
+      { id: 'csm-clients',       icon: '👥', label: 'Clients (ancienne vue)', href: 'csm-clients.html', perm: 'csm_clients' },
     ]},
-    { id: 'sales-saisie',      icon: '✏️', label: 'Set NB / Close SB', href: '#',                      section: 'Sales', perm: 'sales_saisie', children: [
-      { id: 'sales-setting',      icon: '📞', label: 'Set NB',       href: 'sales-setting.html' },
-      { id: 'sales-closing',      icon: '🎯', label: 'Close SB',     href: 'sales-closing.html' },
-      { id: 'sales-eod',          icon: '📝', label: 'EOD',          href: 'sales-eod.html' },
-      { id: 'sales-commissions',  icon: '💰', label: 'Commissions',  href: 'sales-commissions.html', perm: 'sales_commissions' },
-      { id: 'sales-projections',  icon: '📈', label: 'Projections',  href: 'sales-projections.html', perm: 'sales_projections' },
-      { id: 'sales-equipe',       icon: '👥', label: 'Équipe Sales', href: 'sales-equipe.html', perm: 'sales_equipe' },
-    ]},
-    { id: 'booking',           icon: '📅', label: 'Booking',     href: 'booking-admin.html',     section: 'Sales', perm: 'booking' },
-    { id: 'sales-rdv',         icon: '🗓️', label: 'Rendez-vous',  href: 'sales-rdv.html',         section: 'Sales', perm: 'booking' },
-    { id: 'sales-dialer',      icon: '☎️', label: 'Dialer',      href: 'sales-dialer.html',      section: 'Sales', perm: 'sales_dialer' },
-    { id: 'sales-whatsapp',    icon: '💬', label: 'WhatsApp',    href: 'whatsapp.html',          section: 'Sales', perm: 'sales_whatsapp' },
-    { id: 'signatures',        icon: '✍️', label: 'Signatures',  href: 'sales-signatures.html',  section: 'Sales', perm: 'signatures' },
-    // ─── FUNNEL & SITE — admin uniquement ───
-    // Funnel : les tunnels de vente hébergés (pages, A/B, réglages, stats)
-    //   dans admin-tunnels.html.
+
+    // ═══ MARKETING — admin, sauf AlteoForms (formulaires partagés) et
+    //     Témoignages (toute l'équipe) ═══
+    { id: 'sales-funnel',      icon: '🎯', label: 'Stats funnel',      href: 'sales-funnel.html',      section: 'Marketing', perm: '_admin' },
+    // Tunnels : les tunnels de vente hébergés (pages, A/B, réglages, stats).
+    { id: 'tunnels',           icon: '🧭', label: 'Tunnels',           href: 'admin-tunnels.html',     section: 'Marketing', perm: '_admin' },
     // Site & pages : le site vitrine adrienemily.com — contenu éditable
-    //   (chiffres, photos, témoignages… via api/site-config), pages HTML,
-    //   domaines et checklist de migration — dans admin-site.html.
-    { id: 'tunnels',           icon: '🧭', label: 'Funnel',        href: 'admin-tunnels.html', section: 'Funnel & Site', perm: '_admin' },
-    { id: 'site-pages',        icon: '🌐', label: 'Site & pages',  href: 'admin-site.html',    section: 'Funnel & Site', perm: '_admin' },
+    // (chiffres, photos, témoignages… via api/site-config), pages HTML,
+    // domaines et checklist de migration.
+    { id: 'site-pages',        icon: '🌐', label: 'Site & pages',      href: 'admin-site.html',        section: 'Marketing', perm: '_admin' },
     // Attribution IA (programme IA 10/2026) : provenance → RDV → close → CA.
-    { id: 'admin-attribution', icon: '📈', label: 'Attribution IA', href: 'admin-attribution.html', section: 'Funnel & Site', perm: '_admin' },
-    { id: 'admin-users',       icon: '🔑', label: 'Utilisateurs', href: 'admin-users.html',      section: 'Admin', perm: '_admin' },
-    // Offres & formules (14/10/2026) : interrupteur du nouveau format
-    // Business Phénix 6 mois (_config/business_phenix), modèle de contrat,
-    // lien de la communauté Business, personnes autorisées à ajouter des séances.
-    { id: 'admin-offres',      icon: '🔥', label: 'Offres & formules', href: 'admin-offres.html', section: 'Admin', perm: '_admin' },
-    { id: 'admin-persons',     icon: '👤', label: 'Persons',      href: 'admin-persons.html',    section: 'Admin', perm: '_admin' },
-    { id: 'admin-numbers',     icon: '📞', label: 'Numéros',      href: 'admin-numbers.html',     section: 'Admin', perm: '_admin' },
-    { id: 'admin-billing',     icon: '🧾', label: 'Facturation',  href: 'admin-facturation.html', section: 'Admin', perm: '_admin' },
-    { id: 'admin-dedup',       icon: '🔄', label: 'Dédup Clients', href: 'clients-dedup.html',    section: 'Admin', perm: '_admin' },
-    // Replay closing : les appels de closing (Meet) chapitrés par l'IA, avec
-    // le client rattaché — vidéo + transcription cliquable. Données servies
-    // par api/replay-closing.js. Ouvert à toute l'équipe sales le 17/10/2026
-    // en consultation seule (tous les closings), rangé dans Outils pour eux.
-    { id: 'admin-replay-closing', icon: '🎬', label: 'Replay closing', href: 'admin-replay-closing.html', section: 'Admin', sectionNonAdmin: 'Outils', perm: '_sales' },
-    // Réécoutes : tous les appels Ringover avec enregistrement, transcription
-    // par locuteur et résumé IA. Rangé sous Replay closing pour les admins
-    // (demande Adrien 06/10/2026) ; les sales gardent l'accès à LEURS appels,
-    // l'entrée reste alors dans la section Sales (sectionNonAdmin). Données
-    // servies par api/calls-list + api/call-detail.
-    { id: 'sales-appels',      icon: '🎧', label: 'Réécoutes',   href: 'sales-appels.html',      section: 'Admin', sectionNonAdmin: 'Sales', perm: 'sales_dialer' },
-    // Pilotage équipe (16/10/2026) : en direct (appels en cours, visios Meet
-    // avec clic et présence du prospect, connectés), activité par personne et
-    // par jour, historique complet d'un prospect. Données servies par
-    // api/team-pilotage.js, admin uniquement.
-    { id: 'admin-pilotage',    icon: '🛰️', label: 'Pilotage équipe', href: 'admin-pilotage.html', section: 'Admin', perm: '_admin' },
-    // Réglages IA (programme IA 10/2026) : budget mensuel, interrupteur,
-    // modèle par tâche, « cerveau Alteore ». Données via api/ai-admin.js.
-    { id: 'admin-ia',          icon: '🤖', label: 'Réglages IA',  href: 'admin-ia.html',          section: 'Admin', perm: '_admin' },
-    { id: 'aide-admin',        icon: '🆘', label: 'Aide Team · fiches', href: 'aide-admin.html',  section: 'Admin', perm: '_admin' },
-    { id: 'alteoforms',        icon: '📝', label: 'AlteoForms',   href: 'alteoforms.html',        section: 'Outils', perm: 'alteoforms' },
-    { id: 'payments',          icon: '💳', label: 'Paiements',    href: 'payments.html',          section: 'Outils', perm: 'payments' },
-    // Formations internes (Setting LAB / Closing LAB / Coach LAB) : accès
-    // membre par membre via users/{uid}.formationsAccess (case dans
-    // admin-users.html), admin d'office. Le flag est projeté dans
-    // localStorage par initAlteoFormsAccessWatch().
-    { id: 'formations',        icon: '🎓', label: 'Formations',   href: 'formations.html',        section: 'Outils', perm: 'formations' },
-    // Programme IA 10/2026 — ouverts à toute l'équipe (demande Adrien 08/10) :
-    // bibliothèque d'objections (détectées par l'IA dans closings et appels)
-    // et simulateur de closing contre un prospect joué par l'IA.
-    { id: 'sales-objections',  icon: '🛡️', label: 'Objections',   href: 'sales-objections.html',  section: 'Outils', perm: '_all' },
-    { id: 'training-closer',   icon: '🥊', label: 'Entraînement closer', href: 'training-closer.html', section: 'Outils', perm: '_all' },
-    // Bac à sable closer (demande Adrien 08/10/2026, miroir vivant 09/10) :
-    // faux leads + vraies pages Signatures / Paiements / signature client,
-    // sur une base locale — rien de réel n'est déclenché. Sales + admin
-    // seulement (perm '_sales'), ouvert dans une fenêtre à part (newWindow).
-    { id: 'sandbox-closer',    icon: '🧪', label: 'Bac à sable closer', href: 'sandbox-closer.html', section: 'Outils', perm: '_sales', newWindow: true },
-    // Bac à sable Leads Live (16/10/2026, ouvert aux sales le 17/10) : la
-    // nouvelle présentation de Leads Live sur de faux leads, pour s'entraîner
-    // avant de basculer. Page générée (scripts/build-sandbox-leads-live.js),
-    // faux Firebase + pare-feu : rien de réel ne part. Sales + admins
-    // (jamais coach ni CSM), fenêtre à part.
-    { id: 'sandbox-leads-live', icon: '🧪', label: 'Bac à sable Leads Live', href: 'sandbox-leads-live.html', section: 'Outils', perm: '_sales', newWindow: true },
-    // Labo Tunnels (16/10/2026) : les vraies pages des tunnels, pare-feu +
-    // fausse base — ni lead, ni RDV, ni Make, ni pixel. La liste des liens
-    // est réservée aux admins ; un lien de test (?p=…) s'ouvre sans connexion.
-    { id: 'sandbox-tunnels',   icon: '🧪', label: 'Labo Tunnels', href: 'sandbox-tunnels.html', section: 'Outils', perm: '_admin', newWindow: true },
-    // Aide Team (14/10/2026) : assistant IA des questions techniques (où
-    // cliquer, agenda, WhatsApp…) + catalogue des fiches pratiques. Sales et
-    // admins ; la bulle « ? » (aide-widget.js) est injectée plus bas.
-    { id: 'aide',              icon: '🆘', label: 'Aide Team',    href: 'aide.html',              section: 'Outils', perm: '_sales' },
-    { id: 'documents',         icon: '📚', label: 'Documents',    href: 'documents.html',         section: 'Outils', perm: '_all' },
+    { id: 'admin-attribution', icon: '📈', label: 'Attribution IA',    href: 'admin-attribution.html', section: 'Marketing', perm: '_admin' },
+    { id: 'alteoforms',        icon: '📝', label: 'AlteoForms',        href: 'alteoforms.html',        section: 'Marketing', perm: 'alteoforms' },
     // Mur de témoignages : ouvert à toute l'équipe connectée, coachs et CSM
     // compris — ce sont eux qui reçoivent le plus de retours clients. Chacun
     // dépose et édite ; seul un admin bascule un témoignage sur le mur PUBLIC
     // (temoignages-public.html, partageable sans connexion) et règle le Drive.
-    { id: 'temoignages',       icon: '⭐', label: 'Témoignages',  href: 'temoignages.html',       section: 'Outils', perm: '_all' },
+    { id: 'temoignages',       icon: '⭐', label: 'Témoignages',       href: 'temoignages.html',       section: 'Marketing', perm: '_all' },
+
+    // ═══ FORMATION & AIDE ═══
+    // Formations internes (Setting LAB / Closing LAB / Coach LAB) : accès
+    // membre par membre via users/{uid}.formationsAccess (case dans
+    // admin-users.html), admin d'office. Le flag est projeté dans
+    // localStorage par initAlteoFormsAccessWatch().
+    { id: 'formations',        icon: '🎓', label: 'Formations',        href: 'formations.html',        section: 'Formation & aide', perm: 'formations' },
+    // Programme IA 10/2026 — ouverts à toute l'équipe (demande Adrien 08/10) :
+    // bibliothèque d'objections (détectées par l'IA dans closings et appels)
+    // et simulateur de closing contre un prospect joué par l'IA.
+    { id: 'sales-objections',  icon: '🛡️', label: 'Objections',        href: 'sales-objections.html',  section: 'Formation & aide', perm: '_all' },
+    { id: 'training-closer',   icon: '🥊', label: 'Entraînement closer', href: 'training-closer.html', section: 'Formation & aide', perm: '_all' },
+    // Bacs à sable — rien de réel n'est déclenché, fenêtre à part (newWindow) :
+    //  - closer (08/10/2026, miroir vivant 09/10) : faux leads + vraies pages
+    //    Signatures / Paiements / signature client sur une base locale ;
+    //  - Leads Live (16/10/2026, ouvert aux sales le 17/10) : la nouvelle
+    //    présentation sur de faux leads, page générée
+    //    (scripts/build-sandbox-leads-live.js), faux Firebase + pare-feu ;
+    //  - Labo Tunnels (16/10/2026) : les vraies pages des tunnels, pare-feu +
+    //    fausse base — ni lead, ni RDV, ni Make, ni pixel. Liste réservée aux
+    //    admins ; un lien de test (?p=…) s'ouvre sans connexion.
+    { id: 'nav-sandbox', icon: '🧪', label: 'Bacs à sable', section: 'Formation & aide', children: [
+      { id: 'sandbox-closer',     icon: '🧪', label: 'Bac à sable closer',     href: 'sandbox-closer.html',     perm: '_sales', newWindow: true },
+      { id: 'sandbox-leads-live', icon: '🧪', label: 'Bac à sable Leads Live', href: 'sandbox-leads-live.html', perm: '_sales', newWindow: true },
+      { id: 'sandbox-tunnels',    icon: '🧪', label: 'Labo Tunnels',           href: 'sandbox-tunnels.html',    perm: '_admin', newWindow: true },
+    ]},
+    // Aide Team (14/10/2026) : assistant IA des questions techniques (où
+    // cliquer, agenda, WhatsApp…) + catalogue des fiches pratiques. Sales et
+    // admins ; la bulle « ? » (aide-widget.js) est injectée plus bas.
+    { id: 'aide',              icon: '🆘', label: 'Aide Team',         href: 'aide.html',              section: 'Formation & aide', perm: '_sales' },
+    { id: 'documents',         icon: '📚', label: 'Documents',         href: 'documents.html',         section: 'Formation & aide', perm: '_all' },
+
+    // ═══ ADMINISTRATION — admin uniquement ═══
+    { id: 'admin-users',       icon: '🔑', label: 'Utilisateurs',      href: 'admin-users.html',       section: 'Administration', perm: '_admin' },
+    // Offres & formules (14/10/2026) : interrupteur du nouveau format
+    // Business Phénix 6 mois (_config/business_phenix), modèle de contrat,
+    // lien de la communauté Business, personnes autorisées à ajouter des séances.
+    { id: 'admin-offres',      icon: '🔥', label: 'Offres & formules', href: 'admin-offres.html',      section: 'Administration', perm: '_admin' },
+    { id: 'admin-billing',     icon: '🧾', label: 'Facturation',       href: 'admin-facturation.html', section: 'Administration', perm: '_admin' },
+    // Réglages IA (programme IA 10/2026) : budget mensuel, interrupteur,
+    // modèle par tâche, « cerveau Alteore ». Données via api/ai-admin.js.
+    { id: 'admin-ia',          icon: '🤖', label: 'Réglages IA',       href: 'admin-ia.html',          section: 'Administration', perm: '_admin' },
+    { id: 'nav-donnees', icon: '🗂️', label: 'Données', section: 'Administration', children: [
+      { id: 'admin-persons',     icon: '👤', label: 'Persons',           href: 'admin-persons.html',     perm: '_admin' },
+      { id: 'admin-numbers',     icon: '📞', label: 'Numéros',           href: 'admin-numbers.html',     perm: '_admin' },
+      { id: 'admin-dedup',       icon: '🔄', label: 'Dédup clients',     href: 'clients-dedup.html',     perm: '_admin' },
+      { id: 'aide-admin',        icon: '🆘', label: 'Aide Team · fiches', href: 'aide-admin.html',       perm: '_admin' },
+    ]},
   ];
 
   /* `light` : variantes des accents pour le thème clair (theme-light.css) —
@@ -415,8 +441,11 @@
     .nav-children.open { display:block; }
     .nav-children .nav-item { font-size:12px; padding:7px 10px; opacity:0.85; }
     .nav-children .nav-item.active { opacity:1; }
-    #ambitio-sidebar.collapsed .nav-children { display:none !important; }
-    #ambitio-sidebar.collapsed .nav-parent-caret { opacity:0; }
+    /* Mode réduit : la ligne parente disparaît, ses sous-onglets s'affichent
+       directement en icônes (+ info-bulle), quel que soit l'état plié. */
+    #ambitio-sidebar.collapsed .nav-parent { display:none; }
+    #ambitio-sidebar.collapsed .nav-children { display:block !important; margin-left:0; padding-left:0; border-left:none; }
+    #ambitio-sidebar.collapsed .nav-children .nav-item { font-size:13px; padding:9px 10px; opacity:1; }
 
     #ambitio-sidebar.collapsed .nav-item-label,
     #ambitio-sidebar.collapsed .nav-item-badge,
@@ -637,7 +666,9 @@
     const role    = getRole();
     const theme   = THEMES[role]  || THEMES.coach;
     const perms   = getUserModules();
-    const modules = ALL_MODULES.filter(m => {
+    // Visibilité d'une entrée (lien direct ou enfant d'un sous-menu).
+    const canSee = m => {
+      if (m.adminAlways && role === 'admin') return true;
       if (m.perm === '_admin') return role === 'admin';
       // '_sales' : équipe commerciale + admins, jamais coach ni CSM.
       if (m.perm === '_sales') return role === 'sales' || role === 'admin';
@@ -693,28 +724,22 @@
       if (m.perm === '_all') return true;
       var p = perms[m.perm];
       return p && p !== 'none';
-    });
-    /* ─── Sous-menus : chacun peut porter sa PROPRE permission ───────────
-       Historiquement les enfants d'un parent (« Set NB / Close SB ») étaient
-       tous affichés dès que la permission du PARENT était accordée. Résultat :
-       impossible de donner Set NB à un setter sans lui ouvrir Commissions,
-       Projections et Équipe Sales — les clés existaient dans la grille admin
-       mais ne servaient à rien. Un enfant SANS `perm` continue d'hériter du
-       parent (Leads Live, Pipeline, Set NB, Close SB, EOD…).
+    };
+    /* ─── Sous-menus : chaque enfant porte sa PROPRE permission ──────────
+       et passe par canSee() comme un lien direct (depuis le rangement du
+       17/10/2026). Un sous-menu sans enfant visible disparaît ; avec un seul,
+       il devient un lien direct dans son groupe.
        Rappel : masquer un item du menu ne protège pas l'URL — chaque page
        concernée porte en plus son propre garde d'accès. */
-    const visibleChild = c => {
-      if (!c.perm) return true;
-      if (role === 'admin') return true;
-      var pc = perms[c.perm];
-      return pc && pc !== 'none';
-    };
-    const modulesTree = modules.map(m => {
-      if (!m.children) return m;
-      var kids = m.children.filter(visibleChild);
-      if (kids.length === m.children.length) return m;
-      return Object.assign({}, m, { children: kids });
-    }).filter(m => !m.children || m.children.length > 0);
+    const modulesTree = [];
+    ALL_MODULES.forEach(m => {
+      if (!m.children) { if (canSee(m)) modulesTree.push(m); return; }
+      const kids = m.children.filter(canSee);
+      if (!kids.length) return;
+      // Un seul enfant visible : lien direct, pas de sous-menu.
+      if (kids.length === 1) { modulesTree.push(Object.assign({}, kids[0], { section: m.section })); return; }
+      modulesTree.push(Object.assign({}, m, { children: kids }));
+    });
 
     const user    = getUserInfo();
     const { path } = getActivePage();
@@ -733,17 +758,17 @@
        Les modules sont regroupés par section et rendus en accordéons :
          - la section contenant la page active est TOUJOURS ouverte ;
          - les autres suivent l'état mémorisé par l'utilisateur dans
-           localStorage ('nav_sections_open'), fermées par défaut ;
+           localStorage ('nav_sections_open_v2'), fermées par défaut ;
          - un rôle qui ne voit qu'une seule section (ex : coach) a une
            liste directe, sans en-tête repliable ;
          - en mode réduit, les en-têtes disparaissent et tous les items
            restent accessibles en icônes + tooltips (géré en CSS).       */
     let secState = {};
-    try { secState = JSON.parse(localStorage.getItem('nav_sections_open') || '{}') || {}; } catch (e) { secState = {}; }
+    try { secState = JSON.parse(localStorage.getItem('nav_sections_open_v2') || '{}') || {}; } catch (e) { secState = {}; }
 
     const groups = [];
     modulesTree.forEach(m => {
-      const secName = (role !== 'admin' && m.sectionNonAdmin) || m.section || 'Autres';
+      const secName = m.section || 'Autres';
       let g = groups.find(x => x.name === secName);
       if (!g) { g = { name: secName, items: [] }; groups.push(g); }
       g.items.push(m);
@@ -760,7 +785,7 @@
         h += `<div class="nav-children${childActive?' open':''}" data-parent="${m.id}">`;
         m.children.forEach(c => {
           const cActive = path === c.href.split('#')[0];
-          h += `<a class="nav-item${cActive?' active':''}" href="${c.href}" data-id="${c.id}" data-label="${c.label}">
+          h += `<a class="nav-item${cActive?' active':''}" href="${c.href}"${c.newWindow?' target="_blank" rel="noopener"':''} data-id="${c.id}" data-label="${c.label}">
             <span class="nav-item-icon">${c.icon}</span>
             <span class="nav-item-label">${c.label}</span>
           </a>`;
@@ -870,9 +895,9 @@
         const grp = head.parentElement;
         const open = grp.classList.toggle('open');
         try {
-          const st = JSON.parse(localStorage.getItem('nav_sections_open') || '{}') || {};
+          const st = JSON.parse(localStorage.getItem('nav_sections_open_v2') || '{}') || {};
           st[grp.dataset.sec] = open;
-          localStorage.setItem('nav_sections_open', JSON.stringify(st));
+          localStorage.setItem('nav_sections_open_v2', JSON.stringify(st));
         } catch (e) {}
       });
     });
