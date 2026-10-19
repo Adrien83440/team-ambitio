@@ -688,7 +688,8 @@ function ensureRawDoc() {
     steps: [], assets: [],
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    createdBy: (firebase.auth().currentUser || {}).uid || ''
+    createdBy: (firebase.auth().currentUser || {}).uid || '',
+    lastEdit: editStamp()
   };
   return db.collection('tunnels').add(doc).then(function (ref) {
     RAW_DOC = { id: ref.id, name: doc.name, slug: slug, kind: 'raw', steps: [] };
@@ -697,6 +698,26 @@ function ensureRawDoc() {
   });
 }
 
+/* Auteur d'une écriture, lu par la Cloud Function onTunnelHistory
+   (historique des tunnels) : lastEdit inchangé = écriture d'un script. */
+function editStamp() {
+  var u = firebase.auth().currentUser || {};
+  return { uid: u.uid || '', email: u.email || '', at: Date.now(), nonce: Math.random().toString(36).slice(2, 10), source: 'admin-site' };
+}
+/* Historique du code : chaque publication est aussi copiée dans
+   …/versions/<version>.html (api/tunnel-source?ver=, différences et
+   restauration dans admin-tunnels → 🕓 Historique). */
+function rawVersionPath(docId, stepId, version) { return 'tunnels/' + docId + '/' + stepId + '/a/versions/' + version + '.html'; }
+/* Page publiée avant l'historique : la version en place est copiée avant
+   d'être écrasée. Un échec ne bloque pas l'enregistrement. */
+function rawKeepPrevious(docId, s0, html0) {
+  var v0 = s0 && Array.isArray(s0.variants) ? s0.variants.filter(function (x) { return x && x.id === 'a'; })[0] : null;
+  if (!v0 || !v0.html || !v0.html.version || !html0) return Promise.resolve();
+  var ref = storage.ref(rawVersionPath(docId, s0.id, v0.html.version));
+  return ref.getMetadata().then(function () {}, function () {
+    return ref.put(new Blob([html0], { type: 'text/html; charset=utf-8' }), { contentType: 'text/html; charset=utf-8', cacheControl: 'no-cache' });
+  })['catch'](function (e) { if (window.console) console.warn('[site] version précédente non conservée :', e && e.message); });
+}
 /* Modification du tableau steps en transaction. fn(steps) modifie le
    tableau sur place et retourne un message d'erreur ou null. */
 function rawMutate(fn) {
@@ -707,7 +728,7 @@ function rawMutate(fn) {
         var steps = (snap.exists && Array.isArray((snap.data() || {}).steps)) ? snap.data().steps : [];
         var err = fn(steps);
         if (err) throw new Error(err);
-        tx.update(ref, { steps: steps, status: 'live', updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        tx.update(ref, { steps: steps, status: 'live', updatedAt: firebase.firestore.FieldValue.serverTimestamp(), lastEdit: editStamp() });
         return steps;
       });
     });
@@ -836,8 +857,15 @@ function rawSave() {
     var version = Date.now();
     var path = 'tunnels/' + docId + '/' + ed.stepId + '/a/index.html';
     var blob = new Blob([html], { type: 'text/html; charset=utf-8' });
-    return storage.ref(path).put(blob, { contentType: 'text/html; charset=utf-8', cacheControl: 'no-cache', customMetadata: { version: String(version) } }).then(function (snap) {
-      return snap.ref.getDownloadURL().then(function (url) {
+    return rawKeepPrevious(docId, s0, ed.html0).then(function () {
+      return Promise.all([
+        storage.ref(path).put(blob, { contentType: 'text/html; charset=utf-8', cacheControl: 'no-cache', customMetadata: { version: String(version) } }),
+        storage.ref(rawVersionPath(docId, ed.stepId, version)).put(blob, { contentType: 'text/html; charset=utf-8', cacheControl: 'no-cache' }).then(null, function (e) {
+          if (window.console) console.warn('[site] copie de version impossible :', e && e.message);
+        })
+      ]);
+    }).then(function (res) {
+      return res[0].ref.getDownloadURL().then(function (url) {
         meta = { path: path, url: url, version: version, size: html.length, updatedAt: new Date().toISOString(), fileName: ed.fileName || '' };
       });
     });
@@ -1064,7 +1092,7 @@ function readInventory(el) {
 }
 function saveInventory() {
   var rows = INV.map(function (r) { return { group: r.group, path: r.path, title: r.title, decision: r.decision, target: r.target, note: r.note }; });
-  return db.collection('_config').doc('tunnels').set({ sioPages: rows, sioPagesUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }).then(function () {
+  return db.collection('_config').doc('tunnels').set({ sioPages: rows, sioPagesUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(), lastEdit: editStamp() }, { merge: true }).then(function () {
     INV_SAVED = JSON.stringify(INV); invState(); toast('✅ Inventaire enregistré');
   })['catch'](function (e) { toast('❌ ' + (e && e.message), true); });
 }
@@ -1137,7 +1165,7 @@ function saveRedirects() {
     if (!/^https?:\/\//i.test(to) && to.charAt(0) !== '/') to = '/' + to;
     return { from: from, to: to, code: r.code === 302 ? 302 : 301 };
   });
-  return db.collection('_config').doc('tunnels').set({ redirects: clean, redirectsUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }).then(function () {
+  return db.collection('_config').doc('tunnels').set({ redirects: clean, redirectsUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(), lastEdit: editStamp() }, { merge: true }).then(function () {
     REDIR = clean; REDIR_SAVED = JSON.stringify(REDIR); renderRedirects(); toast('✅ Redirections enregistrées');
   })['catch'](function (e) { toast('❌ ' + (e && e.message), true); });
 }

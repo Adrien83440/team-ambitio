@@ -143,6 +143,38 @@ pre.guide{background:var(--bg3,#14141f);border:1px solid var(--border);border-ra
 .favrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .favprev{width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);object-fit:contain;padding:4px;flex:none}
 .locked{text-align:center;padding:80px 20px;color:rgba(255,255,255,.35)}
+/* Historique (19/10/2026) */
+.hist-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.hist-filters .bs{width:auto;min-width:150px}
+.hist-g{background:var(--bg2,#0f0f1a);border:1px solid var(--border);border-radius:12px;padding:12px 16px;margin-bottom:10px}
+.hist-gh{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:rgba(255,255,255,.5);margin-bottom:8px}
+.hist-gh b{color:#fff;font-size:13px}
+.hist-gh .tn-name{color:#67e8f9;font-weight:600}
+.hist-c{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-top:1px solid rgba(255,255,255,.04);font-size:12.5px;line-height:1.5;color:rgba(255,255,255,.78)}
+.hist-c:first-of-type{border-top:0}
+.hist-c .ic{flex:none;width:20px;text-align:center}
+.hist-c .bd{flex:1;min-width:0;word-break:break-word}
+.hist-c .ctx{color:rgba(255,255,255,.45);font-size:11.5px}
+.hist-c .lb{font-weight:600;color:#fff}
+.hist-c .old{color:#fca5a5;text-decoration:line-through;text-decoration-color:rgba(252,165,165,.45)}
+.hist-c .new{color:#6ee7b7}
+.hist-c .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.hist-c details summary{cursor:pointer;color:#67e8f9;font-size:11.5px}
+.hist-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+.hist-pair pre,.hist-snap{background:var(--bg3,#14141f);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-family:var(--font-m);font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto;margin:3px 0 0;color:rgba(255,255,255,.75)}
+.hist-pair span{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.4)}
+.hist-more{text-align:center;margin:14px 0}
+.hist-modal{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;display:none;align-items:flex-start;justify-content:center;padding:30px 16px;overflow-y:auto}   /* hors de .modal : sales.css la borne à 500 px */
+.hist-modal.open{display:flex}
+.hist-note{font-size:11.5px;color:rgba(255,255,255,.4);margin-top:4px}
+.hdf{background:#0b0b16;border:1px solid rgba(255,255,255,.08);border-radius:10px;font-family:var(--font-m);font-size:11.5px;line-height:1.55;overflow:auto;max-height:calc(100vh - 220px)}
+.hdf-l{display:flex;white-space:pre-wrap;word-break:break-all;padding:0 10px}
+.hdf-l i{flex:none;width:16px;font-style:normal;color:rgba(255,255,255,.35);user-select:none}
+.hdf-l.add{background:rgba(52,211,153,.1);color:#a7f3d0}
+.hdf-l.del{background:rgba(239,68,68,.1);color:#fecaca}
+.hdf-l.eq{color:rgba(255,255,255,.55)}
+.hdf-sep{padding:3px 10px;color:rgba(255,255,255,.35);background:rgba(255,255,255,.03);font-style:italic}
+@media (max-width:640px){.hist-pair{grid-template-columns:1fr}}
 @media (max-width:640px){.tn{padding:14px 14px 80px}.modal-box{padding:16px}.step .acts{width:100%}}
 </style>
 </head>
@@ -153,6 +185,7 @@ pre.guide{background:var(--bg3,#14141f);border:1px solid var(--border);border-ra
     <div><h1>Tunnels de vente</h1><small>Pages hébergées, A/B test, stats, reliées à Leads Live</small></div>
     <div class="sp"></div>
     <a class="bb bb-o" id="btnBack" style="display:none" data-action="back">← Tous les tunnels</a>
+    <button class="bb bb-o" id="btnJournal" data-action="journal" title="Toutes les modifications de tous les tunnels, domaines et redirections">🕓 Journal</button>
     <button class="bb bb-o" id="btnNewTest" data-action="newTest" title="Pages HTML visibles seulement dans le Labo Tunnels : jamais en ligne, rien n'est envoyé">🧪 Nouveau tunnel de test</button>
     <button class="bb bb-p" id="btnNew" data-action="new">+ Nouveau tunnel</button>
   </div>
@@ -193,6 +226,13 @@ pre.guide{background:var(--bg3,#14141f);border:1px solid var(--border);border-ra
   </div>
 </div>
 
+<div class="hist-modal" id="histDiffModal"><div class="modal-box" style="max-width:1100px">
+  <h2 id="histDiffTitle">Différences</h2>
+  <div class="help" id="histDiffSum" style="margin:-6px 0 10px"></div>
+  <div class="hdf" id="histDiffBody"></div>
+  <div class="modal-foot"><button class="bb bb-o" data-action="histDiffClose">Fermer</button></div>
+</div></div>
+
 <div class="tn-toast" id="tnToast"></div>
 
 <script>
@@ -224,6 +264,7 @@ var _pasteCtx = null;        // { stepId, variantId } pour la modale « coller �
 var _saveTimer = null;
 var _statsCache = {};        // clé tunnel|début|fin → Promise des stats (onglet Stats + modale étape)
 var _code = null;            // éditeur de code ouvert : { stepId, variantId, html0, dirty, timer, seq, fileName }
+var HIST = null;             // historique affiché : { tunnelId (null = journal global), docs, last, done, who, area, step }
 
 var LEAD_TYPES = [
   { id: 'vsl_elite', label: 'VSL Élite' },
@@ -386,7 +427,7 @@ function renderList() {
   $('viewList').style.display = '';
   $('viewEditor').style.display = 'none';
   $('btnBack').style.display = 'none';
-  $('btnNew').style.display = ''; $('btnNewTest').style.display = '';
+  $('btnNew').style.display = ''; $('btnNewTest').style.display = ''; $('btnJournal').style.display = '';
   $('domainBanner').innerHTML = '<div>🌐 <strong>Domaine des tunnels :</strong> <code>' + esc(CFG.primaryHost) + '</code> — chaque étape répond sur <code>https://' + esc(CFG.primaryHost) + '/&lt;chemin&gt;</code>. '
     + 'Aperçu interne : <code>team.alteore.com/t/&lt;chemin&gt;</code> (brouillons visibles, aucune mesure). Pour faire tester un parcours à l\'équipe (formulaires, RDV), le lien 🧪 du Labo Tunnels : la même page, et rien n\'est envoyé.</div>';
   var grid = $('tunnelGrid');
@@ -445,7 +486,8 @@ function createTunnel(kind) {
     steps: [], assets: [],
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    createdBy: (firebase.auth().currentUser || {}).uid || ''
+    createdBy: (firebase.auth().currentUser || {}).uid || '',
+    lastEdit: editStamp()
   };
   db.collection('tunnels').add(doc).then(function (ref) {
     toast(isTest ? 'Tunnel de test créé — ajoute une page, puis 🧪 Test' : 'Tunnel créé');
@@ -462,7 +504,8 @@ function createPagesDoc() {
     steps: [], assets: [],
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    createdBy: (firebase.auth().currentUser || {}).uid || ''
+    createdBy: (firebase.auth().currentUser || {}).uid || '',
+    lastEdit: editStamp()
   };
   db.collection('tunnels').add(doc).then(function (ref) {
     toast('Espace « Pages communes » créé');
@@ -491,6 +534,12 @@ function validateTunnel(t) {
   }
   return null;
 }
+/* Auteur d'une écriture : la Cloud Function onTunnelHistory compare lastEdit
+   avant / après — inchangé (nonce identique) = écriture d'un script. */
+function editStamp() {
+  var u = firebase.auth().currentUser || {};
+  return { uid: u.uid || '', email: u.email || '', at: Date.now(), nonce: Math.random().toString(36).slice(2, 10), source: 'admin-tunnels' };
+}
 function saveTunnel(silent) {
   if (!CUR) return Promise.resolve();
   var err = validateTunnel(CUR);
@@ -498,7 +547,7 @@ function saveTunnel(silent) {
   var patch = {
     name: CUR.name, slug: CUR.slug, kind: kindOf(CUR), status: CUR.status, homeStepId: CUR.homeStepId || '',
     settings: CUR.settings, steps: CUR.steps, assets: CUR.assets || [],
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(), lastEdit: editStamp()
   };
   return db.collection('tunnels').doc(CUR.id).update(patch).then(function () {
     for (var i = 0; i < TUNNELS.length; i++) if (TUNNELS[i].id === CUR.id) TUNNELS[i] = JSON.parse(JSON.stringify(CUR));
@@ -521,7 +570,7 @@ function renderEditor() {
   $('viewList').style.display = 'none';
   $('viewEditor').style.display = '';
   $('btnBack').style.display = '';
-  $('btnNew').style.display = 'none'; $('btnNewTest').style.display = 'none';
+  $('btnNew').style.display = 'none'; $('btnNewTest').style.display = 'none'; $('btnJournal').style.display = 'none';
   var t = CUR;
   var home = t.steps.filter(function (s) { return s.id === t.homeStepId; })[0];
   var first = home || t.steps[0];
@@ -546,6 +595,7 @@ function renderEditor() {
     + '<button class="tab' + (TAB === 'settings' ? ' on' : '') + '" data-action="tab" data-tab="settings">⚙️ Réglages</button>'
     + '<button class="tab' + (TAB === 'stats' ? ' on' : '') + '" data-action="tab" data-tab="stats">📊 Stats</button>'
     + '<button class="tab' + (TAB === 'guide' ? ' on' : '') + '" data-action="tab" data-tab="guide">📖 Guide des pages</button>'
+    + '<button class="tab' + (TAB === 'history' ? ' on' : '') + '" data-action="tab" data-tab="history">🕓 Historique</button>'
     + '</div>';
   h += '<div id="tabBody"></div>';
   $('viewEditor').innerHTML = h;
@@ -553,6 +603,7 @@ function renderEditor() {
   if (TAB === 'steps') renderSteps();
   else if (TAB === 'settings') renderSettings();
   else if (TAB === 'stats') renderStats();
+  else if (TAB === 'history') renderHistory(CUR.id);
   else renderGuide();
 }
 
@@ -901,25 +952,54 @@ function publishHtml(variantId, html, fileName) {
   var s = currentModalStep(); if (!s) return Promise.reject(new Error('étape fermée'));
   readStepForm(s);
   var v = s.variants.filter(function (x) { return x.id === variantId; })[0]; if (!v) return Promise.reject(new Error('variante inconnue'));
-  html = String(html || '');
-  var bad = html.length < 40 || html.indexOf('<') < 0 ? 'Ce contenu ne ressemble pas à une page HTML'
+  return publishVariantHtml(s, v, html, fileName).then(function () {
+    renderVariants(s);
+    toast('Page publiée' + (s.status === 'live' && CUR.status === 'live' ? ' — en ligne sous 20 s' : ' (étape ou tunnel en brouillon : aperçu seulement)'));
+    return true;
+  });
+}
+function htmlProblem(html) {
+  return html.length < 40 || html.indexOf('<') < 0 ? 'Ce contenu ne ressemble pas à une page HTML'
     : html.length > 4 * 1024 * 1024 ? 'Page trop lourde (4 Mo max) : externalise les images / vidéos'
     : /window\.ALTEO_TUNNEL\s*=\s*\{|__alteoRuntime|tunnel-runtime\.js/.test(html) ? 'La page contient déjà le runtime Alteore (config injectée) : retire-le, il est ajouté à la publication' : '';   // lire window.ALTEO_TUNNEL dans la page reste permis
+}
+/* Historique du code (19/10/2026) : chaque publication est aussi copiée dans
+   …/versions/<version>.html (lue par api/tunnel-source?ver=, pour les
+   différences et la restauration). index.html reste la page servie. */
+function versionPath(stepId, variantId, version) { return 'tunnels/' + CUR.id + '/' + stepId + '/' + variantId + '/versions/' + version + '.html'; }
+/* Page publiée avant l'historique : sa version est copiée avant d'être
+   écrasée, pour pouvoir y revenir. Un échec ne bloque pas la publication. */
+function keepPreviousVersion(s, v) {
+  if (!v.html || !v.html.path || !v.html.version) return Promise.resolve();
+  var ref = storage.ref(versionPath(s.id, v.id, v.html.version));
+  return ref.getMetadata().then(function () {}, function () {
+    return fetchSource(s.id, v.id).then(function (old) {
+      return ref.put(new Blob([old], { type: 'text/html; charset=utf-8' }), { contentType: 'text/html; charset=utf-8', cacheControl: 'no-cache' });
+    });
+  }).catch(function (e) { if (window.console) console.warn('[tunnels] version précédente non conservée :', e && e.message); });
+}
+/* Dépôt Storage (page servie + copie versionnée) puis référence sur la
+   variante et enregistrement du tunnel. */
+function publishVariantHtml(s, v, html, fileName) {
+  html = String(html || '');
+  var bad = htmlProblem(html);
   if (bad) { toast(bad, true); return Promise.reject(new Error(bad)); }
   var version = Date.now();
   var path = 'tunnels/' + CUR.id + '/' + s.id + '/' + v.id + '/index.html';
   var blob = new Blob([html], { type: 'text/html; charset=utf-8' });
   toast('Publication…');
-  var task = storage.ref(path).put(blob, { contentType: 'text/html; charset=utf-8', cacheControl: 'no-cache', customMetadata: { version: String(version) } });
-  return task.then(function (snap) {
-    return snap.ref.getDownloadURL().then(function (url) {
+  return keepPreviousVersion(s, v).then(function () {
+    return Promise.all([
+      storage.ref(path).put(blob, { contentType: 'text/html; charset=utf-8', cacheControl: 'no-cache', customMetadata: { version: String(version) } }),
+      storage.ref(versionPath(s.id, v.id, version)).put(blob, { contentType: 'text/html; charset=utf-8', cacheControl: 'no-cache' }).then(null, function (e) {
+        if (window.console) console.warn('[tunnels] copie de version impossible :', e && e.message);
+      })
+    ]);
+  }).then(function (res) {
+    return res[0].ref.getDownloadURL().then(function (url) {
       v.html = { path: path, url: url, version: version, size: html.length, updatedAt: new Date().toISOString(), fileName: fileName || '' };
       return saveTunnel(true);
     });
-  }).then(function () {
-    renderVariants(s);
-    toast('Page publiée' + (s.status === 'live' && CUR.status === 'live' ? ' — en ligne sous 20 s' : ' (étape ou tunnel en brouillon : aperçu seulement)'));
-    return true;
   }).catch(function (e) { toast('Publication impossible : ' + e.message, true); throw e; });
 }
 function uploadHtmlFile(variantId, file) {
@@ -1293,6 +1373,348 @@ function exportCsv() {
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 
+/* ═══ HISTORIQUE (19/10/2026) ═══
+   tunnel_history : une entrée par écriture sur tunnels/{id} ou _config/tunnels,
+   calculée par la Cloud Function onTunnelHistory (avant → après, auteur).
+   Affichage : les écritures d'une même personne sur un même tunnel à moins de
+   2 minutes d'écart forment un bloc ; dans un bloc, un champ modifié plusieurs
+   fois (sauvegarde automatique) n'apparaît qu'une fois, première valeur →
+   dernière valeur. Le code HTML garde chaque publication. */
+var HIST_PAGE = 150;
+var HIST_GAP_MS = 2 * 60 * 1000;
+var HIST_AREAS = [
+  ['', 'Tous les changements'], ['html', 'Code HTML'], ['step', 'Étapes'], ['variant', 'Variantes A/B'],
+  ['settings', 'Réglages'], ['tunnel', 'Nom, statut, ordre'], ['asset', 'Médias'], ['config', 'Domaines & redirections']
+];
+function renderHistory(tunnelId) {
+  HIST = { tunnelId: tunnelId || null, docs: [], last: null, done: false, loading: false, who: '', area: '', step: '' };
+  var h = '<div class="hist-filters" id="histFilters"></div>'
+    + '<div id="histBody"><div class="tn-empty">Chargement…</div></div>'
+    + '<div class="hist-more" id="histMore"></div>';
+  var box = tunnelId ? $('tabBody') : $('viewEditor');
+  if (!tunnelId) {
+    h = '<div class="ed-head"><div class="name" style="border:0;padding:0">🕓 Journal de tous les tunnels</div></div>'
+      + '<div class="tn-banner">Toutes les modifications : tunnels de vente, site vitrine, pages communes, pages simples, tunnels de test, domaines et redirections. Qui, quand, ancienne valeur → nouvelle valeur. L\'historique démarre le 19/10/2026 : avant cette date, seul l\'« état de départ » de chaque tunnel est connu.</div>' + h;
+  }
+  box.innerHTML = h;
+  loadHistory();
+}
+function openJournal() {
+  CUR = null;
+  try { history.replaceState(null, '', 'admin-tunnels.html?journal=1'); } catch (e) {}
+  $('viewList').style.display = 'none';
+  $('viewEditor').style.display = '';
+  $('btnBack').style.display = '';
+  $('btnNew').style.display = 'none'; $('btnNewTest').style.display = 'none'; $('btnJournal').style.display = 'none';
+  renderHistory(null);
+}
+function loadHistory() {
+  if (!HIST || HIST.loading || HIST.done) return;
+  var H = HIST;
+  H.loading = true;
+  var q = db.collection('tunnel_history');
+  if (H.tunnelId) q = q.where('tunnelId', '==', H.tunnelId);
+  q = q.orderBy('at', 'desc').limit(HIST_PAGE);
+  if (H.last) q = q.startAfter(H.last);
+  if ($('histMore')) $('histMore').innerHTML = H.docs.length ? '<span class="help">Chargement…</span>' : '';
+  q.get().then(function (snap) {
+    if (HIST !== H) return;
+    H.loading = false;
+    snap.forEach(function (doc) { var d = doc.data(); d.id = doc.id; H.docs.push(d); });
+    if (snap.docs.length) H.last = snap.docs[snap.docs.length - 1];
+    if (snap.docs.length < HIST_PAGE) H.done = true;
+    renderHistoryBody();
+  }).catch(function (e) {
+    if (HIST !== H) return;
+    H.loading = false;
+    if (!$('histBody')) return;
+    var msg = esc(e.message).replace(/(https:\/\/console\.firebase\.google\.com\S+)/, '<a href="$1" target="_blank" rel="noopener" style="color:#67e8f9">créer l\'index</a>');
+    $('histBody').innerHTML = '<div class="tn-empty">Historique indisponible : ' + msg + (/index/i.test(e.message) ? '<br><small>Un index Firestore (tunnelId + at) est demandé : clique sur le lien ci-dessus, attends quelques minutes, puis recharge.</small>' : '') + '</div>';
+    if (window.console) console.error('[tunnels] historique', e);
+  });
+}
+function histMs(d) { return d && d.at && d.at.toMillis ? d.at.toMillis() : 0; }
+function histWho(d) { return (d.by && d.by.uid) || '__none'; }
+function histFmtTime(ms) {
+  var d = new Date(ms);
+  return d.toLocaleString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+function histChangeKey(c) {
+  return [c.area, c.stepId || '', c.variantId || '', c.field || '', c.key || '', c.area === 'html' ? (c.after && c.after.version) || 'x' : ''].join('|');
+}
+function histSame(a, b) { return JSON.stringify(a == null ? null : a) === JSON.stringify(b == null ? null : b); }
+/* Blocs : même tunnel, même auteur, moins de 2 minutes entre deux écritures. */
+function histGroups(docs) {
+  var groups = [], g = null;
+  docs.forEach(function (d) {
+    var ms = histMs(d), who = histWho(d);
+    var single = d.op === 'baseline' || d.op === 'create';
+    if (g && !single && !g.single && g.tunnelId === d.tunnelId && g.who === who && g.startMs - ms <= HIST_GAP_MS) {
+      g.entries.push(d); g.startMs = ms; g.truncated += d.truncated || 0;
+      return;
+    }
+    g = { tunnelId: d.tunnelId, tunnelName: d.tunnelName || '', who: who, by: d.by || null, single: single, op: d.op, endMs: ms, startMs: ms, entries: [d], truncated: d.truncated || 0 };
+    groups.push(g);
+  });
+  groups.forEach(function (gr) {
+    var merged = {}, order = [];
+    gr.entries.slice().reverse().forEach(function (d) {
+      (d.changes || []).forEach(function (c) {
+        var k = histChangeKey(c);
+        if (merged[k]) { merged[k].after = c.after; merged[k].snapshot = c.snapshot || merged[k].snapshot; return; }
+        merged[k] = JSON.parse(JSON.stringify(c)); order.push(k);
+      });
+    });
+    gr.changes = order.map(function (k) { return merged[k]; }).filter(function (c) { return c.op !== 'change' || !histSame(c.before, c.after); });
+  });
+  return groups;
+}
+function histFilterChange(c) {
+  if (HIST.area && c.area !== HIST.area) return false;
+  if (HIST.step && c.stepId !== HIST.step) return false;
+  return true;
+}
+function renderHistoryFilters() {
+  var H = HIST, who = {}, steps = {};
+  H.docs.forEach(function (d) {
+    who[histWho(d)] = d.by ? (d.by.name || d.by.email || d.by.uid) : 'Script ou serveur';
+    (d.changes || []).forEach(function (c) { if (c.stepId && !steps[c.stepId]) steps[c.stepId] = c.stepName || c.stepId; });
+  });
+  if (CUR && H.tunnelId) CUR.steps.forEach(function (s) { steps[s.id] = s.name || s.slug; });
+  var h = '<select class="bs" data-hfilter="who"><option value="">Toutes les personnes</option>'
+    + Object.keys(who).map(function (k) { return '<option value="' + escAttr(k) + '"' + (H.who === k ? ' selected' : '') + '>' + esc(who[k]) + '</option>'; }).join('') + '</select>'
+    + '<select class="bs" data-hfilter="area">' + HIST_AREAS.filter(function (a) { return a[0] !== 'config' || !H.tunnelId; }).map(function (a) { return '<option value="' + a[0] + '"' + (H.area === a[0] ? ' selected' : '') + '>' + esc(a[1]) + '</option>'; }).join('') + '</select>';
+  if (H.tunnelId) h += '<select class="bs" data-hfilter="step"><option value="">Toutes les étapes</option>'
+    + Object.keys(steps).map(function (k) { return '<option value="' + escAttr(k) + '"' + (H.step === k ? ' selected' : '') + '>' + esc(steps[k]) + '</option>'; }).join('') + '</select>';
+  h += '<div style="flex:1"></div><span class="help" style="margin:0">' + fmtNum(H.docs.length) + ' enregistrement' + (H.docs.length > 1 ? 's' : '') + (H.done ? '' : ' (les plus récents)') + '</span>'
+    + '<button class="bb bb-o bb-s" data-action="histReload" title="Recharger (une modification apparaît quelques secondes après l\'enregistrement)">↻</button>';
+  $('histFilters').innerHTML = h;
+}
+function renderHistoryBody() {
+  var H = HIST;
+  if (!$('histBody')) return;
+  renderHistoryFilters();
+  var groups = histGroups(H.docs.filter(function (d) { return !H.who || histWho(d) === H.who; }));
+  var h = '', shown = 0;
+  groups.forEach(function (g) {
+    var changes = g.single ? g.changes : g.changes.filter(histFilterChange);
+    if (g.op === 'baseline' && (H.area || H.step)) return;
+    if (!g.single && !changes.length) return;
+    shown++;
+    var who = g.op === 'baseline' ? 'Début de l\'historique'
+      : g.by ? esc(g.by.name || g.by.email || g.by.uid) + (g.by.source === 'admin-site' ? ' <span style="opacity:.6">(Site &amp; pages)</span>' : '') : '<span style="opacity:.7">Script ou serveur</span>';
+    var when = histFmtTime(g.endMs) + (g.endMs - g.startMs > 60000 ? ' <span style="opacity:.6">(depuis ' + new Date(g.startMs).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ')</span>' : '');
+    h += '<div class="hist-g"><div class="hist-gh"><b>' + who + '</b><span>' + when + '</span>'
+      + (!H.tunnelId ? '<span class="tn-name">' + esc(g.tunnelName || g.tunnelId) + '</span>' + (g.tunnelId !== '_config' && TUNNELS.some(function (t) { return t.id === g.tunnelId; }) ? '<button class="bb bb-o bb-s" data-action="open" data-id="' + escAttr(g.tunnelId) + '">Ouvrir</button>' : '') : '')
+      + '</div>';
+    if (g.op === 'baseline') h += histBaseline(g.entries[0]);
+    else changes.forEach(function (c) { h += histChange(c, g); });
+    if (g.truncated) h += '<div class="hist-note">+ ' + fmtNum(g.truncated) + ' changement(s) non détaillé(s) (modification trop volumineuse).</div>';
+    h += '</div>';
+  });
+  if (!shown) h = '<div class="tn-empty">' + (H.docs.length ? 'Aucun changement pour ces filtres.' : 'Aucune modification enregistrée pour l\'instant. Chaque enregistrement apparaît ici quelques secondes après.') + '</div>';
+  $('histBody').innerHTML = h;
+  $('histMore').innerHTML = H.done ? (H.docs.length ? '<span class="help">Début de l\'historique</span>' : '') : '<button class="bb bb-o" data-action="histMore">Charger plus ancien</button>';
+}
+function histStepLabel(id, tunnelId) {
+  var t = CUR || TUNNELS.filter(function (x) { return x.id === tunnelId; })[0];
+  var s = t ? t.steps.filter(function (x) { return x.id === id; })[0] : null;
+  return s ? (s.name || s.slug) : (id || '');
+}
+function histNext(n, tunnelId) {
+  if (!n || !n.mode || n.mode === 'auto') return 'Étape suivante dans l\'ordre';
+  if (n.mode === 'none') return 'Rester sur la page';
+  if (n.mode === 'url') return 'URL ' + (n.url || '');
+  if (n.mode === 'step') return 'Étape « ' + histStepLabel(n.stepId, tunnelId) + ' »';
+  return JSON.stringify(n);
+}
+/* Valeur lisible ; null = trop long pour une ligne (affiché dans un dépliant). */
+function histVal(c, v, tunnelId) {
+  if (v == null || v === '') return '<span style="opacity:.6">vide</span>';
+  if (v && v.__clip) return null;
+  var f = c.field;
+  if (f === 'status') return c.area === 'variant' ? (v === 'live' ? 'Publiée' : 'En pause') : (v === 'live' ? 'En ligne' : 'Brouillon');
+  if (f === 'next') return esc(histNext(v, tunnelId));
+  if (f === 'homeStepId') return esc(histStepLabel(v, tunnelId));
+  if (f === 'weight') return esc(v) + ' %';
+  if (f === 'type') return esc(stepTypeObj(v).icon + ' ' + stepTypeObj(v).label);
+  if (f === 'trackingSource') return esc(trackingLabel(v));
+  if (f === 'previews' && Array.isArray(v)) return v.length ? esc(v.map(function (p) { return p.label + ' | ' + p.query; }).join(' ; ')) : '<span style="opacity:.6">aucun</span>';
+  if (v === true) return 'Oui';
+  if (v === false) return 'Non';
+  var s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+  return s.length > 90 || s.indexOf('\n') >= 0 ? null : esc(s);
+}
+function histRaw(v) {
+  if (v == null) return '';
+  if (v.__clip) return v.text + '\n… (' + fmtNum(v.length) + ' caractères au total, tronqué)';
+  return typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v);
+}
+function histCtx(c, tunnelId) {
+  var parts = [];
+  if (c.stepId) parts.push('Étape « ' + esc(c.stepName || histStepLabel(c.stepId, tunnelId)) + ' »');
+  if (c.variantId) parts.push('variante ' + esc(String(c.variantId).toUpperCase()));
+  return parts.length ? '<div class="ctx">' + parts.join(' · ') + '</div>' : '';
+}
+function histChange(c, g) {
+  var icon = { html: '📄', step: '🧩', variant: '🅰️', settings: '⚙️', tunnel: '🧭', asset: '🖼', config: '🌐' }[c.area] || '•';
+  if (c.op === 'add') icon = c.area === 'html' ? '📄' : '＋';
+  if (c.op === 'remove') icon = '🗑';
+  var body = '';
+  if (c.area === 'html') body = histHtmlChange(c, g);
+  else if (c.op === 'move') body = '<span class="lb">' + esc(c.label) + '</span><br><span class="old">' + esc((c.before || []).join(' → ')) + '</span><br><span class="new">' + esc((c.after || []).join(' → ')) + '</span>';
+  else if (c.area === 'step' && (c.op === 'add' || c.op === 'remove')) {
+    var sm = c.after || c.before || {};
+    body = '<span class="lb">' + esc(c.label) + '</span> : ' + esc(sm.name || '') + ' <span class="ctx">/' + esc(sm.slug || '') + '</span>'
+      + (c.snapshot ? '<details><summary>Contenu de l\'étape au moment du retrait</summary><pre class="hist-snap">' + esc(histRaw(c.snapshot)) + '</pre></details>' : '');
+  } else if (c.area === 'variant' && (c.op === 'add' || c.op === 'remove')) {
+    var vm = c.after || c.before || {};
+    body = '<span class="lb">' + esc(c.label) + '</span> ' + esc(String(c.variantId || '').toUpperCase()) + (vm.label ? ' — ' + esc(vm.label) : '') + (vm.weight != null ? ' · poids ' + esc(vm.weight) + ' %' : '');
+  } else if (c.area === 'asset') {
+    var am = c.after || c.before || {};
+    body = '<span class="lb">' + esc(c.label) + '</span> : ' + (am.url ? '<a href="' + escAttr(am.url) + '" target="_blank" rel="noopener" style="color:#67e8f9">' + esc(am.name || am.url) + '</a>' : esc(am.name || '')) + (am.size ? ' · ' + fmtSize(am.size) : '');
+  } else if (c.area === 'config' && (c.op === 'add' || c.op === 'remove')) {
+    var cm = c.after || c.before || {};
+    body = '<span class="lb">' + esc(c.label) + '</span> : /' + esc(c.key || '') + (cm.to ? ' → ' + esc(cm.to) + (cm.code ? ' (' + esc(cm.code) + ')' : '') : '') + (cm.decision ? ' · ' + esc(cm.decision) : '');
+  } else {
+    var b = histVal(c, c.before, g.tunnelId), a = histVal(c, c.after, g.tunnelId);
+    if (b != null && a != null) body = '<span class="lb">' + esc(c.label) + '</span> : <span class="old">' + b + '</span> → <span class="new">' + a + '</span>';
+    else body = '<details><summary><span class="lb" style="color:#fff">' + esc(c.label) + '</span> modifié — voir avant / après</summary><div class="hist-pair"><div><span>Avant</span><pre>' + esc(histRaw(c.before)) + '</pre></div><div><span>Après</span><pre>' + esc(histRaw(c.after)) + '</pre></div></div></details>';
+  }
+  return '<div class="hist-c"><div class="ic">' + icon + '</div><div class="bd">' + histCtx(c, g.tunnelId) + body + '</div></div>';
+}
+function histHtmlChange(c, g) {
+  var b = c.before, a = c.after;
+  var verb = c.op === 'add' ? 'Code HTML publié' : c.op === 'remove' ? 'Code HTML retiré' : 'Code HTML republié';
+  var h = '<span class="lb">' + verb + '</span>'
+    + (a ? ' · ' + fmtSize(a.size) + (b ? ' <span style="opacity:.6">(avant ' + fmtSize(b.size) + ')</span>' : '') + (a.fileName ? ' · <span class="ctx">' + esc(a.fileName) + '</span>' : '') : '');
+  var t = g.tunnelId, ds = 'data-t="' + escAttr(t) + '" data-s="' + escAttr(c.stepId) + '" data-v="' + escAttr(c.variantId) + '"';
+  var acts = '';
+  if (b && b.version && a && a.version) acts += '<button class="bb bb-o bb-s" data-action="histDiff" ' + ds + ' data-a="' + escAttr(b.version) + '" data-b="' + escAttr(a.version) + '">🔍 Voir les différences</button>';
+  if (a && a.version) acts += '<button class="bb bb-o bb-s" data-action="histDl" ' + ds + ' data-ver="' + escAttr(a.version) + '">⬇ Cette version</button>';
+  if (b && b.version) acts += '<button class="bb bb-o bb-s" data-action="histDl" ' + ds + ' data-ver="' + escAttr(b.version) + '">⬇ Version d\'avant</button>';
+  if (b && b.version && HIST.tunnelId && CUR) acts += '<button class="bb bb-o bb-s" data-action="histRestore" ' + ds + ' data-ver="' + escAttr(b.version) + '">↩ Revenir à la version d\'avant</button>';
+  return h + (acts ? '<div class="acts">' + acts + '</div>' : '');
+}
+function histBaseline(d) {
+  var sn = d.snapshot || {};
+  var h = '<div class="hist-c"><div class="ic">📸</div><div class="bd"><span class="lb">État de départ</span> — le tunnel tel qu\'il était au début de l\'historique';
+  if (sn.__clip) h += '<details><summary>Voir l\'état complet</summary><pre class="hist-snap">' + esc(histRaw(sn)) + '</pre></details>';
+  else {
+    var steps = Array.isArray(sn.steps) ? sn.steps : [];
+    h += '<div class="ctx">' + esc(sn.name || '') + ' · ' + (sn.status === 'live' ? 'en ligne' : 'brouillon') + ' · ' + steps.length + ' étape' + (steps.length > 1 ? 's' : '') + '</div>';
+    steps.forEach(function (s) {
+      h += '<div class="ctx">— ' + esc(s.name || '') + ' (/' + esc(s.slug || '') + ', ' + (s.status === 'live' ? 'en ligne' : 'brouillon') + ') : '
+        + (s.variants || []).map(function (v) { return esc(String(v.id).toUpperCase()) + ' ' + esc(v.weight == null ? '' : v.weight) + ' %' + (v.archived ? ' archivée' : '') + (v.html && v.html.size ? ' · ' + fmtSize(v.html.size) : ' · ∅'); }).join(' · ') + '</div>';
+    });
+    h += '<details><summary>Voir l\'état complet (réglages compris)</summary><pre class="hist-snap">' + esc(JSON.stringify(sn, null, 2)) + '</pre></details>';
+  }
+  return h + '</div></div>';
+}
+function histSource(t, s, v, ver) {
+  return apiFetch('/api/tunnel-source?t=' + encodeURIComponent(t) + '&s=' + encodeURIComponent(s) + '&v=' + encodeURIComponent(v) + '&ver=' + encodeURIComponent(ver))
+    .then(function (r) { return r.text(); });
+}
+function histVerDate(ver) { var n = Number(ver); return n ? new Date(n).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : String(ver); }
+function histDownload(el) {
+  var ver = el.getAttribute('data-ver');
+  toast('Téléchargement…');
+  histSource(el.getAttribute('data-t'), el.getAttribute('data-s'), el.getAttribute('data-v'), ver).then(function (html) {
+    saveTextFile(html, 'page-' + el.getAttribute('data-v') + '-' + ver + '.html'); toast('Fichier téléchargé');
+  }).catch(function (e) { toast(e.message, true); });
+}
+/* Différences ligne à ligne. Les lignes très longues (HTML minifié) sont
+   recoupées après chaque « > » pour rester comparables. */
+function diffLines(text) {
+  var out = [];
+  String(text || '').replace(/\r\n?/g, '\n').split('\n').forEach(function (line) {
+    if (line.length <= 400) { out.push(line); return; }
+    var parts = line.replace(/>/g, '>\u0000').split('\u0000');
+    var cur = '';
+    parts.forEach(function (p) { if (cur.length + p.length > 200 && cur) { out.push(cur); cur = ''; } cur += p; });
+    if (cur) out.push(cur);
+  });
+  return out;
+}
+function lineDiff(aText, bText) {
+  var A = diffLines(aText), B = diffLines(bText);
+  var pre = 0;
+  while (pre < A.length && pre < B.length && A[pre] === B[pre]) pre++;
+  var suf = 0;
+  while (suf < A.length - pre && suf < B.length - pre && A[A.length - 1 - suf] === B[B.length - 1 - suf]) suf++;
+  var a = A.slice(pre, A.length - suf), b = B.slice(pre, B.length - suf);
+  var ops = [], i, j;
+  for (i = 0; i < pre; i++) ops.push({ t: '=', s: A[i] });
+  var n = a.length, m = b.length;
+  if (n * m > 6000000) {
+    a.forEach(function (x) { ops.push({ t: '-', s: x }); });
+    b.forEach(function (x) { ops.push({ t: '+', s: x }); });
+  } else {
+    var W = m + 1, L = new Uint32Array((n + 1) * W);
+    for (i = n - 1; i >= 0; i--) for (j = m - 1; j >= 0; j--) {
+      L[i * W + j] = a[i] === b[j] ? L[(i + 1) * W + j + 1] + 1 : Math.max(L[(i + 1) * W + j], L[i * W + j + 1]);
+    }
+    i = 0; j = 0;
+    while (i < n && j < m) {
+      if (a[i] === b[j]) { ops.push({ t: '=', s: a[i] }); i++; j++; }
+      else if (L[(i + 1) * W + j] >= L[i * W + j + 1]) { ops.push({ t: '-', s: a[i] }); i++; }
+      else { ops.push({ t: '+', s: b[j] }); j++; }
+    }
+    for (; i < n; i++) ops.push({ t: '-', s: a[i] });
+    for (; j < m; j++) ops.push({ t: '+', s: b[j] });
+  }
+  for (i = A.length - suf; i < A.length; i++) ops.push({ t: '=', s: A[i] });
+  return ops;
+}
+function renderDiff(ops) {
+  var CONTEXT = 3, MAX = 4000, keep = new Array(ops.length), i, k, add = 0, del = 0;
+  for (i = 0; i < ops.length; i++) {
+    if (ops[i].t === '=') continue;
+    if (ops[i].t === '+') add++; else del++;
+    for (k = Math.max(0, i - CONTEXT); k <= Math.min(ops.length - 1, i + CONTEXT); k++) keep[k] = true;
+  }
+  var h = '', skipped = 0, shown = 0;
+  for (i = 0; i < ops.length; i++) {
+    if (!keep[i]) { skipped++; continue; }
+    if (skipped) { h += '<div class="hdf-sep">… ' + fmtNum(skipped) + ' ligne' + (skipped > 1 ? 's' : '') + ' identique' + (skipped > 1 ? 's' : '') + ' …</div>'; skipped = 0; }
+    if (++shown > MAX) { h += '<div class="hdf-sep">… affichage limité à ' + fmtNum(MAX) + ' lignes : télécharge les deux versions pour tout comparer.</div>'; break; }
+    var o = ops[i];
+    h += '<div class="hdf-l ' + (o.t === '+' ? 'add' : o.t === '-' ? 'del' : 'eq') + '"><i>' + (o.t === '=' ? ' ' : o.t) + '</i><span>' + esc(o.s) + '</span></div>';
+  }
+  if (skipped && shown <= MAX) h += '<div class="hdf-sep">… ' + fmtNum(skipped) + ' ligne' + (skipped > 1 ? 's' : '') + ' identique' + (skipped > 1 ? 's' : '') + ' …</div>';
+  return { html: h || '<div class="hdf-sep">Aucune différence de contenu.</div>', add: add, del: del };
+}
+function histDiff(el) {
+  var t = el.getAttribute('data-t'), s = el.getAttribute('data-s'), v = el.getAttribute('data-v');
+  var va = el.getAttribute('data-a'), vb = el.getAttribute('data-b');
+  $('histDiffTitle').textContent = 'Code HTML — variante ' + String(v).toUpperCase() + ' : version du ' + histVerDate(va) + ' → ' + histVerDate(vb);
+  $('histDiffSum').textContent = 'Chargement des deux versions…';
+  $('histDiffBody').innerHTML = '';
+  $('histDiffModal').classList.add('open');
+  Promise.all([histSource(t, s, v, va), histSource(t, s, v, vb)]).then(function (res) {
+    var r = renderDiff(lineDiff(res[0], res[1]));
+    $('histDiffSum').innerHTML = '<span style="color:#6ee7b7">+ ' + fmtNum(r.add) + ' ligne' + (r.add > 1 ? 's' : '') + ' ajoutée' + (r.add > 1 ? 's' : '') + '</span> · <span style="color:#fca5a5">− ' + fmtNum(r.del) + ' ligne' + (r.del > 1 ? 's' : '') + ' retirée' + (r.del > 1 ? 's' : '') + '</span> · ' + fmtSize(res[0].length) + ' → ' + fmtSize(res[1].length);
+    $('histDiffBody').innerHTML = r.html;
+  }).catch(function (e) { $('histDiffSum').textContent = ''; $('histDiffBody').innerHTML = '<div class="hdf-sep">' + esc(e.message) + '</div>'; });
+}
+/* Republie une version passée : nouvelle publication (la version actuelle
+   reste dans l'historique, on peut revenir en arrière dans l'autre sens). */
+function histRestore(el) {
+  if (!CUR) return;
+  var sid = el.getAttribute('data-s'), vid = el.getAttribute('data-v'), ver = el.getAttribute('data-ver');
+  var s = findStep(sid);
+  var v = s ? (s.variants || []).filter(function (x) { return x.id === vid; })[0] : null;
+  if (!s || !v) { toast('Cette étape ou variante n\'est plus dans le tunnel : télécharge la version et republie-la à la main', true); return; }
+  if (v.html && String(v.html.version) === String(ver)) { toast('C\'est déjà la version en ligne'); return; }
+  if (!window.confirm('Republier la version du ' + histVerDate(ver) + ' sur « ' + (s.name || s.slug) + ' », variante ' + vid.toUpperCase() + ' ? La version actuelle reste dans l\'historique.')) return;
+  histSource(CUR.id, sid, vid, ver).then(function (html) {
+    return publishVariantHtml(s, v, html, 'restauration du ' + histVerDate(ver));
+  }).then(function () {
+    toast('Version restaurée' + (s.status === 'live' && CUR.status === 'live' ? ' — en ligne sous 20 s' : ''));
+    setTimeout(function () { if (HIST && HIST.tunnelId === CUR.id && TAB === 'history') renderHistory(CUR.id); }, 3000);
+  }).catch(function (e) { toast('Restauration impossible : ' + e.message, true); });
+}
+
 /* ═══ ACTIONS (délégation) ═══ */
 document.addEventListener('click', function (ev) {
   var el = ev.target;
@@ -1303,6 +1725,13 @@ document.addEventListener('click', function (ev) {
   if (act === 'new') { createTunnel(); return; }
   if (act === 'newTest') { createTunnel('test'); return; }
   if (act === 'newPages') { createPagesDoc(); return; }
+  if (act === 'journal') { openJournal(); return; }
+  if (act === 'histMore') { loadHistory(); return; }
+  if (act === 'histReload') { renderHistory(HIST && HIST.tunnelId); return; }
+  if (act === 'histDiff') { histDiff(el); return; }
+  if (act === 'histDiffClose') { $('histDiffModal').classList.remove('open'); return; }
+  if (act === 'histDl') { histDownload(el); return; }
+  if (act === 'histRestore') { histRestore(el); return; }
   if (act === 'open') { openTunnel(el.getAttribute('data-id')); return; }
   if (act === 'back') { CUR = null; try { history.replaceState(null, '', 'admin-tunnels.html'); } catch (e) {} loadTunnels().then(renderList); return; }
   if (act === 'tab') { TAB = el.getAttribute('data-tab'); renderEditor(); return; }
@@ -1313,7 +1742,7 @@ document.addEventListener('click', function (ev) {
   }
   if (act === 'archiveTunnel') {
     if (!window.confirm('Archiver le tunnel « ' + CUR.name + ' » ? Ses pages ne seront plus servies ; les stats et fiches restent.')) return;
-    db.collection('tunnels').doc(CUR.id).update({ archived: true, status: 'draft', updatedAt: firebase.firestore.FieldValue.serverTimestamp() }).then(function () {
+    db.collection('tunnels').doc(CUR.id).update({ archived: true, status: 'draft', updatedAt: firebase.firestore.FieldValue.serverTimestamp(), lastEdit: editStamp() }).then(function () {
       toast('Tunnel archivé'); CUR = null; loadTunnels().then(renderList);
     }).catch(function (e) { toast(e.message, true); });
     return;
@@ -1354,6 +1783,10 @@ document.addEventListener('click', function (ev) {
   if (act === 'removeFavicon') { CUR.settings.faviconUrl = ''; saveTunnel(true).then(function () { renderSettings(); toast('Favicon retiré'); }); return; }
 });
 document.addEventListener('change', function (ev) {
+  var hf = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-hfilter');
+  if (hf && HIST) { HIST[hf] = ev.target.value; renderHistoryBody(); return; }
+});
+document.addEventListener('change', function (ev) {
   var el = ev.target;
   if (!el || el.tagName !== 'INPUT' || el.type !== 'file') return;
   var act = el.getAttribute('data-action');
@@ -1362,7 +1795,7 @@ document.addEventListener('change', function (ev) {
   if (act === 'uploadFavicon') { uploadFavicon(el.files[0]); el.value = ''; }
 });
 document.addEventListener('keydown', function (ev) {
-  if (ev.key === 'Escape') { if (_code) codeClose(); else $('pasteModal').classList.remove('open'); }
+  if (ev.key === 'Escape') { if (_code) codeClose(); else { $('pasteModal').classList.remove('open'); $('histDiffModal').classList.remove('open'); } }
   /* Éditeur de code : Cmd/Ctrl+S publie, Tab insère deux espaces. */
   if (_code && (ev.metaKey || ev.ctrlKey) && (ev.key === 's' || ev.key === 'S')) { ev.preventDefault(); codePublish(); }
 });
@@ -1386,6 +1819,7 @@ firebase.auth().onAuthStateChanged(function (u) {
   Promise.all([loadConfig(), loadBookingTypes(), loadTunnels()]).then(function () {
     var id = new URLSearchParams(window.location.search).get('id');
     if (id && TUNNELS.some(function (t) { return t.id === id; })) openTunnel(id);
+    else if (new URLSearchParams(window.location.search).get('journal')) openJournal();
     else renderList();
   }).catch(function (e) { toast('Chargement impossible : ' + e.message, true); });
 });

@@ -4740,6 +4740,12 @@ async function _step4bFlagAlert(type, data) {
    ═══════════════════════════════════════════════════════════════════════ */
 Object.assign(exports, require('./_sync'));
 
+/* Historique des Tunnels de vente (19/10/2026) : chaque modification de
+   tunnels/{id} et de _config/tunnels → tunnel_history (voir _tunnelHistory.js). */
+const _tunnelHistory = require('./_tunnelHistory');
+exports.onTunnelHistory = _tunnelHistory.onTunnelHistory;
+exports.onTunnelConfigHistory = _tunnelHistory.onTunnelConfigHistory;
+
 /* ── BOUCLIER createdAt (fix « leads qui ne remontent pas » dans Leads Live) ──
    Force createdAt en Timestamp à la création de TOUT lead, quelle que soit la
    source (pont self-booking, écriture Make directe dans /leads/, etc.).

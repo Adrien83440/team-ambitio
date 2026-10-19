@@ -9,6 +9,13 @@
 //   GET /api/tunnel-source?t=<tunnelId>&s=<stepId>&v=<variantId>
 //   → 200 text/plain (UTF-8) : le HTML brut, jamais mis en cache.
 //
+//   GET /api/tunnel-source?t=…&s=…&v=…&ver=<version>   (historique, 19/10/2026)
+//   → une version précédemment publiée, copiée à la publication dans
+//     tunnels/<t>/<s>/<v>/versions/<version>.html. L'étape peut avoir été
+//     archivée depuis (retirée du document) : seul le tunnel doit exister.
+//     404 « Version non conservée » pour une publication antérieure à
+//     l'historique.
+//
 // Auth : admin uniquement (Bearer Firebase). Lecture seule, aucune écriture.
 // Le document tunnel est lu directement (pas le registre en cache) : une
 // variante archivée ou une étape en brouillon reste lisible ici.
@@ -30,9 +37,35 @@ module.exports = async (req, res) => {
   const stepId = clean(url.searchParams.get('s'), 80);
   const variantId = clean(url.searchParams.get('v'), 20);
   if (!tunnelId || !stepId || !variantId) { res.status(400).json({ error: 'Paramètres t, s, v requis' }); return; }
+  const ver = clean(url.searchParams.get('ver'), 20);
+  if (ver && !/^\d{1,16}$/.test(ver)) { res.status(400).json({ error: 'Version invalide' }); return; }
+  if (ver && !/^[A-Za-z0-9_-]+$/.test(tunnelId + stepId + variantId)) { res.status(400).json({ error: 'Identifiants invalides' }); return; }
 
   const doc = await db.collection('tunnels').doc(tunnelId).get();
   if (!doc.exists) { res.status(404).json({ error: 'Tunnel introuvable' }); return; }
+
+  if (ver) {
+    const vpath = 'tunnels/' + tunnelId + '/' + stepId + '/' + variantId + '/versions/' + ver + '.html';
+    let vhtml;
+    try {
+      const file = storage.bucket().file(vpath);
+      const [exists] = await file.exists();
+      if (!exists) { res.status(404).json({ error: 'Version non conservée (publiée avant le début de l\'historique)' }); return; }
+      const [vbuf] = await file.download();
+      vhtml = vbuf.toString('utf8');
+    } catch (e) {
+      console.error('[tunnel-source] lecture version :', vpath, e && e.message);
+      res.status(502).json({ error: 'Lecture Storage impossible' });
+      return;
+    }
+    res.status(200);
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Alteo-Version', ver);
+    res.end(vhtml);
+    return;
+  }
   const steps = Array.isArray(doc.data().steps) ? doc.data().steps : [];
   const step = steps.filter(function (s) { return s && s.id === stepId; })[0];
   const variant = step && Array.isArray(step.variants) ? step.variants.filter(function (v) { return v && v.id === variantId; })[0] : null;
