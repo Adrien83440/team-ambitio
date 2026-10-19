@@ -185,6 +185,7 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
   <div class="ag-loading">Chargement…</div>
 </div>
 
+<script src="funnel-pages-table.js"></script>
 <script>
 (function () {
   'use strict';
@@ -483,45 +484,9 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
   }
   var k_labels = null;
   var SIO_SHOW = false;   // historique System.io déplié
-  /* Funnel quiz (28/09/2026) : même étape que la VSL, colonne Leads en plus
-     (le quiz garde un questionnaire d'opt-in avant le RDV). */
-  function vslRow(label, c, showForms) {
-    var r = function (a, b) { return b > 0 ? fmtPct(a / b * 100) : '—'; };
-    return '<tr><td><strong>' + label + '</strong></td>'
-      + '<td class="num">' + fmtNum(c.views) + '</td>'
-      + '<td class="num">' + fmtNum(c.ctas) + '</td><td class="num">' + r(c.ctas, c.views) + '</td>'
-      + (showForms ? '<td class="num">' + (c.leads > 0 ? fmtNum(c.leads) : '—') + '</td><td class="num">' + r(c.leads, c.views) + '</td>' : '')
-      + '<td class="num">' + fmtNum(c.bookings) + '</td><td class="num">' + r(c.bookings, c.views) + '</td>'
-      + (showForms ? '<td class="num">' + r(c.bookings, c.leads) + '</td>' : '')
-      + '<td class="num">' + fmtNum(c.present) + '</td><td class="num">' + r(c.present, c.bookings) + '</td>'
-      + '<td class="num">' + fmtNum(c.closes) + '</td><td class="num">' + r(c.closes, c.bookings) + '</td>'
-      + '</tr>';
-  }
-  function vslHead(first, showForms, withAb) {
-    return '<thead><tr><th>' + first + '</th><th class="num">Vues</th><th class="num">Clics</th><th class="num">Clics ÷ vues</th>'
-      + (showForms ? '<th class="num">Formulaires</th><th class="num">Form. ÷ vues</th>' : '')
-      + '<th class="num">RDV pris</th><th class="num">RDV ÷ vues</th>' + (showForms ? '<th class="num">RDV ÷ form.</th>' : '')
-      + '<th class="num">Présents</th><th class="num">Présents ÷ RDV</th><th class="num">Closes</th><th class="num">Closes ÷ RDV</th>'
-      + (withAb ? '<th class="num">Δ RDV ÷ vues</th><th>Significativité (95 %)</th>' : '') + '</tr></thead>';
-  }
-  function vslAbCells(ref, v, idx) {
-    if (idx === 0) return '<td class="num">—</td><td><span style="color:var(--muted2)">référence</span></td>';
-    var refRate = ref.views > 0 ? ref.bookings / ref.views * 100 : null;
-    var rate = v.views > 0 ? v.bookings / v.views * 100 : null;
-    var delta = (rate != null && refRate != null) ? fmtPts(rate - refRate) : '—';
-    var st = abSignif(ref.views, ref.bookings, v.views, v.bookings);
-    var sig;
-    if (!st) sig = '<span style="color:var(--muted2)">échantillon insuffisant (≥ 30 vues/variante)</span>';
-    else if (st.p < 0.05) sig = '<span class="ag-badge ' + ((rate || 0) >= (refRate || 0) ? 'ok' : 'bad') + '">✓ significatif · p = ' + st.p.toFixed(3) + '</span>';
-    else sig = '<span class="ag-badge warn">en cours · p = ' + st.p.toFixed(2) + '</span>';
-    return '<td class="num">' + delta + '</td><td>' + sig + '</td>';
-  }
-  function vslVariantName(v) {
-    var n = '↳ ' + esc(String(v.id).toUpperCase());
-    if (v.label) n += ' · ' + esc(v.label);
-    if (v.weight != null && v.weight > 0) n += ' <span style="color:var(--muted2);font-weight:500">(' + v.weight + ' %)</span>';
-    return n;
-  }
+  /* Tableau par tunnel : funnel-pages-table.js, le même rendu que le
+     funnel interne (pages dans l'ordre du parcours, taux sous chaque
+     chiffre, verdict A/B en une phrase, anciennes adresses regroupées). */
   function renderVsl(k) {
     k_labels = k.vslLabels || null;
     var hasLeads = (k.vslLeads || 0) > 0;
@@ -534,32 +499,12 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     h += kpi(fmtNum(k.vslPresent || 0), 'Présents', 'présents ÷ RDV ' + fmtPct(k.vslBookings > 0 ? (k.vslPresent || 0) / k.vslBookings * 100 : null), !k.vslPresent);
     h += kpi(fmtEuro2(k.vslCpr), 'CPR', 'dépense pub ÷ RDV pris depuis ces pages', k.vslCpr == null);
     h += '</div>';
-    var funnels = k.vslFunnels || [];
-    for (var fi = 0; fi < funnels.length; fi++) {
-      var f = funnels[fi];
-      h += '<div class="ag-sub" style="color:var(--muted)">🧭 ' + esc(f.name) + '</div>';
-      h += '<div class="ag-table-wrap"><table class="ag-table">' + vslHead('Page · variante', hasLeads, true) + '<tbody>';
-      for (var si = 0; si < f.steps.length; si++) {
-        var s = f.steps[si];
-        var named = []; for (var q = 0; q < s.variants.length; q++) if (s.variants[q].id !== '_') named.push(s.variants[q]);
-        var multi = named.length >= 2;
-        h += vslRow(esc(s.name), s, hasLeads).replace('</tr>', '<td class="num">' + (multi ? 'A/B' : '—') + '</td><td></td></tr>');
-        if (s.variants.length > 1 || (s.variants[0] && s.variants[0].id !== '_')) {
-          for (var vi = 0; vi < s.variants.length; vi++) {
-            h += vslRow(vslVariantName(s.variants[vi]), s.variants[vi], hasLeads).replace('</tr>', (multi ? vslAbCells(s.variants[0], s.variants[vi], vi) : '<td class="num">—</td><td></td>') + '</tr>');
-          }
-        }
-      }
-      if (f.steps.length > 1) h += vslRow('Total ' + esc(f.name), f, hasLeads).replace('</tr>', '<td></td><td></td></tr>');
-      h += '</tbody></table></div>';
-    }
+    h += FunnelPagesTable.render(k);
     if (k.vslLegacy && k.vslLegacy.length) {
       var lt = k.vslLegacyTotals || {};
       h += '<div class="ag-sub" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="swb swb-o swb-s" data-sio-toggle style="padding:5px 10px;font-size:11px;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:0;color:rgba(255,255,255,.7);cursor:pointer">' + (SIO_SHOW ? '▾' : '▸') + ' Historique System.io</button><span style="font-size:11.5px;color:var(--muted2);font-weight:500;text-transform:none;letter-spacing:0">' + k.vslLegacy.length + ' page(s) · ' + fmtNum(lt.views) + ' vues · ' + fmtNum(lt.bookings) + ' RDV — hors totaux, arrêté à la bascule du domaine</span></div>';
       if (SIO_SHOW) {
-        h += '<div class="ag-table-wrap"><table class="ag-table">' + vslHead('Page System.io', hasLeads, false) + '<tbody>';
-        for (var li = 0; li < k.vslLegacy.length; li++) h += vslRow(esc(vslPageLabel(k.vslLegacy[li].page)), k.vslLegacy[li], hasLeads);
-        h += '</tbody></table></div>';
+        h += FunnelPagesTable.legacy(k.vslLegacy, vslPageLabel);
       }
     }
     h += '</div><div class="ag-arrow">▼</div>';
@@ -1183,6 +1128,11 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
         }
         if (el.hasAttribute('data-utm-more')) {
           UTM_SHOWALL = !UTM_SHOWALL;
+          if (LASTDATA) render(LASTDATA);
+          return;
+        }
+        if (el.hasAttribute('data-fpt-old')) {
+          FunnelPagesTable.toggleOld(el.getAttribute('data-fpt-old'));
           if (LASTDATA) render(LASTDATA);
           return;
         }

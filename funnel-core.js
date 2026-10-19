@@ -1557,7 +1557,11 @@
       var lbl = String(k.vslLabels[pg] || ''), lblParts = lbl.split(' · ');
       if (!byFunnel[tslug]) byFunnel[tslug] = zero({ slug: tslug, name: (m && m.name) || lblParts[0] || tslug, kind: m ? m.kind : 'funnel', steps: [] });
       var f = byFunnel[tslug];
-      var step = zero({ page: pg, slug: sslug, name: (ms && ms.name) || lblParts[1] || sslug, type: ms ? ms.type : '', variants: [] });
+      /* order : rang de la page dans le parcours (Admin → Tunnels) ;
+         orphan : adresse absente du tunnel (page renommée ou supprimée) —
+         ses leads et RDV restent comptés, la page les range à part. */
+      var step = zero({ page: pg, slug: sslug, name: (ms && ms.name) || lblParts[1] || sslug, type: ms ? ms.type : '', variants: [],
+        order: ms && ms.order != null ? ms.order : 9999, orphan: !!m && !ms });
       addTo(step, tot);
       vars.forEach(function (c) {
         var mv = ms && ms.variants ? ms.variants[c.variant] : null;
@@ -1572,6 +1576,9 @@
       if (named.length >= 2) k.vslTests.push({ page: pg, variants: named });
     });
     k.vslFunnels = Object.keys(byFunnel).map(function (kk) { return byFunnel[kk]; });
+    k.vslFunnels.forEach(function (f) {
+      f.steps.sort(function (a, b) { return (a.order - b.order) || (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0); });
+    });
     k.vslFunnels.sort(function (a, b) { return a.name < b.name ? -1 : 1; });
     var all = zero({});
     k.vslFunnels.forEach(function (f) { addTo(all, f); });
@@ -2415,13 +2422,13 @@
         var t = doc.data() || {};
         if (t.archived === true || !t.slug) return;
         var steps = {};
-        (t.steps || []).forEach(function (s) {
+        (t.steps || []).forEach(function (s, si) {
           if (!s || !s.slug || s.archived === true) return;
           var vars = {};
           (s.variants || []).forEach(function (v) {
             if (v && v.id) vars[String(v.id)] = { label: v.label || '', weight: Number(v.weight) || 0, status: v.status || '' };
           });
-          steps[String(s.slug)] = { name: s.name || s.slug, type: s.type || 'page', variants: vars, source: s.trackingSource || '' };
+          steps[String(s.slug)] = { name: s.name || s.slug, type: s.type || 'page', variants: vars, source: s.trackingSource || '', order: si };
         });
         DATA.tunnelsMeta[String(t.slug)] = { name: t.name || t.slug, kind: t.kind || 'funnel', steps: steps,
           source: (t.settings && t.settings.trackingSource) || '' };
