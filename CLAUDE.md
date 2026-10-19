@@ -81,7 +81,10 @@ HTML / CSS / JavaScript **vanilla**, aucun build, aucun bundler. Chaque page est
 
 **Deux SDK Firebase coexistent — ne jamais les mélanger dans une même page :**
 - Pages **sales** → SDK **compat v9.23.0**, objet global `firebase`
-- Pages **coaching / admin / CSM** → SDK **modulaire v10**, via `window._db`, `window._getDoc`, etc.
+- Pages **coaching / admin** → SDK **modulaire v10**, via `window._db`, `window._getDoc`, etc.
+- Pages **CSM** → **compat v9.23.0** (`csm-cockpit`, `csm-notes`, `csm-clients`, `csm-diagnostic`,
+  `csm-import`), ES5 ; seule exception, `csm-dashboard.html` (ancienne vue) en compat v8
+  — toujours vérifier le `<script src>` de la page avant d'écrire du code Firebase.
 
 ### Backend — deux runtimes, une raison
 

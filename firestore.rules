@@ -179,6 +179,15 @@ service cloud.firestore {
       allow delete:         if isAdmin();
     }
 
+    // ═══ MES NOTES CSM — consignes datées par client (10/2026) ═══
+    // csm_consignes/{id} : lu et écrit UNIQUEMENT par api/csm-consignes.js
+    // (Admin SDK, rôles admin + csm vérifiés côté serveur). Fermé au
+    // navigateur : accusés de lecture, droits d'édition et historique
+    // restent garantis par le serveur. Jamais supprimé (archived:true).
+    match /csm_consignes/{consigneId} {
+      allow read, write: if false;
+    }
+
 
     // ═══ SAISIES SALES ═══
     match /saisies/{userId}/mois/{monthKey} {

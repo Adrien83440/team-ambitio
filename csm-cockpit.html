@@ -16,7 +16,8 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
    csm-cockpit.html — Cockpit CSM (refonte du module CSM, programme IA 10/2026)
    Une seule page pour piloter le portefeuille : feu tricolore par client
    (règles validées par Adrien + signal IA), coaching, paiements, renouvellements,
-   notes, suivis, diagnostic IA. Toutes les données via api/csm-cockpit.js
+   notes, suivis, diagnostic IA. Consignes en cours (Mes Notes) en tête de
+   fiche, via api/csm-consignes.js. Toutes les données via api/csm-cockpit.js
    (Admin SDK) — corrige l'ancien écran où la CSM ne voyait aucun paiement.
    Thème crème du module CSM. Rôles : admin + csm.
    ═══════════════════════════════════════════════════════════════════════ */
@@ -129,6 +130,19 @@ textarea.in{width:100%;min-height:74px;resize:vertical;line-height:1.5}
 .msg{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.55;white-space:pre-wrap}
 .opp{background:linear-gradient(135deg,var(--violetBg),rgba(20,184,166,.07));border-color:rgba(124,58,237,.25)}
 .back{display:none}
+/* Mes Notes : consignes en cours, en tête de fiche (api/csm-consignes.js) */
+.cs-band{border:1.5px solid rgba(217,119,6,.35);background:linear-gradient(135deg,var(--orangeBg),rgba(255,255,255,.7));border-radius:var(--r);padding:12px 16px;margin-bottom:12px}
+.cs-band h3{margin:0 0 6px;font-size:11.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#b45309;display:flex;align-items:center;gap:8px}
+.cs-band h3 .sp{flex:1}
+.cs-it{padding:8px 0;border-top:1px solid rgba(217,119,6,.18);font-size:13px;line-height:1.5}
+.cs-it:first-of-type{border-top:0}
+.cs-it .tx{white-space:pre-wrap;font-weight:600}
+.cs-it small{display:block;color:var(--muted);font-size:11.5px;margin-top:2px}
+.cs-it.unr .tx:before{content:'NON LU';display:inline-block;font-size:9.5px;font-weight:800;background:#2563eb;color:#fff;border-radius:999px;padding:1px 6px;margin-right:6px;vertical-align:1px}
+.cs-it .row{margin-top:5px}
+.cs-none{font-size:12px;color:var(--muted)}
+.chip.pin{background:var(--orangeBg);border-color:rgba(217,119,6,.3);color:#b45309}
+.chip.pin.unr{background:#2563eb;border-color:#2563eb;color:#fff}
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;font-size:13px;font-weight:600;padding:10px 18px;border-radius:10px;opacity:0;transition:all .25s;pointer-events:none;z-index:3000;max-width:90vw}
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast.err{background:var(--red)}
@@ -184,7 +198,8 @@ textarea.in{width:100%;min-height:74px;resize:vertical;line-height:1.5}
 <script>
 (function () {
 var API = '/api/csm-cockpit';
-var S = { list: [], kpis: {}, scope: 'active', filter: '', q: '', coach: '', sort: 'risk', sel: null, detail: null, busy: {} };
+var S = { list: [], kpis: {}, scope: 'active', filter: '', q: '', coach: '', sort: 'risk', sel: null, detail: null, busy: {}, cons: {} };
+var CONS_TYPE = { pause: '⏸ Pause', ne_pas_proposer: '🚫 Ne pas proposer', engagement: '🤝 Engagement pris', paiement: '💳 Paiement', info: 'ℹ️ Info' };
 var LVL_ICON = { rouge: '🔴', orange: '🟠', vert: '🟢' };
 var LVL_TXT = { rouge: 'Client en danger', orange: 'À surveiller', vert: 'Tout va bien' };
 var STATUS_TXT = { active: 'Actif', paused: 'En pause', completed: 'Terminé', stopped: 'Arrêté', procedure: 'Procédure' };
@@ -198,13 +213,14 @@ function dFr(s) { if (!s) return '—'; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(
 function ago(d) { return d == null ? '—' : (d === 0 ? 'aujourd\'hui' : (d === 1 ? 'hier' : 'il y a ' + d + ' j')); }
 function toast(m, err) { var t = $('toast'); t.textContent = m; t.className = 'toast on' + (err ? ' err' : ''); clearTimeout(toast._t); toast._t = setTimeout(function () { t.className = 'toast'; }, 3000); }
 
-function api(method, qs, body) {
+function api(method, qs, body) { return apiAt(API, method, qs, body); }
+function apiAt(base, method, qs, body) {
   var u = firebase.auth().currentUser;
   if (!u) return Promise.reject(new Error('Session expirée'));
   return u.getIdToken().then(function (tok) {
     var opt = { method: method, headers: { Authorization: 'Bearer ' + tok } };
     if (body) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
-    return fetch(API + (qs || ''), opt);
+    return fetch(base + (qs || ''), opt);
   }).then(function (r) {
     return r.json().catch(function () { return {}; }).then(function (j) {
       if (!r.ok || j.ok === false) throw new Error(j.message || j.error || ('Erreur ' + r.status));
@@ -269,7 +285,7 @@ function renderList() {
     if (c.nextSession) sub.push('prochaine ' + dFr(c.nextSession));
     if (c.coach) sub.push(c.coach);
     h += '<div class="cl' + (S.sel === c.id ? ' sel' : '') + '" data-id="' + esc(c.id) + '"><span class="dot ' + (c.level || 'none') + '"></span><div class="cl-m">';
-    h += '<div class="cl-n"><span>' + esc(c.nom) + '</span>' + (c.unpaid ? '<span class="chip red">💸</span>' : '') + (c.opportunity ? '<span class="chip vio">💎</span>' : '') + (!c.active ? '<span class="chip">' + esc(STATUS_TXT[c.clientStatus] || 'Inactif') + '</span>' : '') + '</div>';
+    h += '<div class="cl-n"><span>' + esc(c.nom) + '</span>' + (c.unpaid ? '<span class="chip red">💸</span>' : '') + (c.opportunity ? '<span class="chip vio">💎</span>' : '') + consChip(c.id) + (!c.active ? '<span class="chip">' + esc(STATUS_TXT[c.clientStatus] || 'Inactif') + '</span>' : '') + '</div>';
     h += '<div class="cl-s">' + esc(sub.join(' · ')) + '</div>';
     if (c.reasons && c.reasons.length) h += '<div class="cl-r">' + esc(c.reasons[0]) + (c.reasons.length > 1 ? ' <span style="color:var(--soft)">+' + (c.reasons.length - 1) + '</span>' : '') + '</div>';
     h += '</div></div>';
@@ -284,7 +300,46 @@ function loadList() {
     sel.innerHTML = '<option value="">Tous les coachs</option>' + (j.coaches || []).map(function (c) { return '<option' + (c === cur ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('');
     $('subTitle').textContent = (S.kpis.actifs || 0) + ' clients actifs · feu tricolore recalculé à chaque ouverture';
     renderKpis(); renderList();
+    loadConsignes();
   }).catch(function (e) { toast(e.message, true); $('list').innerHTML = '<div class="empty">⚠️ ' + esc(e.message) + '</div>'; });
+}
+
+/* ═══ MES NOTES — consignes en cours par client (csm-notes.html) ═══ */
+function loadConsignes() {
+  return apiAt('/api/csm-consignes', 'GET', '').then(function (j) {
+    var by = {};
+    (j.consignes || []).forEach(function (k) {
+      if (k.status !== 'active' && k.status !== 'ending' && k.status !== 'upcoming') return;
+      (by[k.clientId] = by[k.clientId] || []).push(k);
+    });
+    Object.keys(by).forEach(function (id) {
+      by[id].sort(function (a, b) { if (!!a.unread !== !!b.unread) return a.unread ? -1 : 1; return String(b.createdAt || '') < String(a.createdAt || '') ? -1 : 1; });
+    });
+    S.cons = by;
+    renderList();
+    if (S.detail) renderDetail();
+  }).catch(function (e) { if (window.console) console.warn('[cockpit] consignes', e && e.message); });
+}
+function consChip(id) {
+  var l = (S.cons[id] || []).filter(function (k) { return k.status !== 'upcoming'; });
+  if (!l.length) return '';
+  var un = l.some(function (k) { return k.unread; });
+  return '<span class="chip pin' + (un ? ' unr' : '') + '" title="' + l.length + ' consigne(s) en cours — Mes Notes">📌' + (l.length > 1 ? l.length : '') + '</span>';
+}
+function consBand(c) {
+  var l = S.cons[c.id] || [];
+  var h = '<div class="cs-band"><h3>📌 Consignes à respecter<span class="sp"></span>';
+  h += '<a class="btn sm" href="csm-notes.html?q=' + encodeURIComponent(c.nom) + '">Toutes</a>';
+  h += '<a class="btn sm pri" href="csm-notes.html?new=' + encodeURIComponent(c.id) + '">＋ Consigne</a></h3>';
+  if (!l.length) return h + '<div class="cs-none">Aucune consigne en cours pour ce client.</div></div>';
+  l.forEach(function (k) {
+    var fin = k.status === 'upcoming' ? 'à partir du ' + dFr(k.debut) + (k.fin ? ' jusqu\'au ' + dFr(k.fin) : '') : (k.fin ? 'jusqu\'au ' + dFr(k.fin) + (k.daysLeft != null ? ' (' + (k.daysLeft <= 0 ? 'dernier jour' : 'dans ' + k.daysLeft + ' j') + ')' : '') : 'sans fin');
+    h += '<div class="cs-it' + (k.unread ? ' unr' : '') + '"><div class="tx"><b>' + esc(CONS_TYPE[k.type] || 'ℹ️ Info') + '</b> — ' + esc(k.texte) + '</div>';
+    h += '<small>' + (k.perso ? '🗒 Rappel perso · ' : '') + esc(k.createdByName || '') + ' · ' + (k.createdAt ? new Date(k.createdAt).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '') + ' · ' + esc(fin) + '</small>';
+    if (k.unread) h += '<div class="row" style="margin-top:5px"><button class="btn sm" type="button" data-act="consRead" data-cid="' + esc(k.id) + '">✓ J\'ai lu</button></div>';
+    h += '</div>';
+  });
+  return h + '</div>';
 }
 
 /* ═══ DÉTAIL ═══ */
@@ -304,6 +359,7 @@ function renderDetail() {
   var d = S.detail; if (!d) return;
   var c = d.client;
   var h = '<button type="button" class="btn sm back" data-act="back" style="margin-bottom:10px">← Liste</button>';
+  h += consBand(c);
   // Hero
   h += '<div class="hero"><div class="hero-top"><div class="lvl ' + (c.level || 'none') + '">' + (LVL_ICON[c.level] || '⚪') + '</div><div style="min-width:0;flex:1">';
   h += '<h2>' + esc(c.nom) + '</h2><div class="sub">' + esc([c.programme, c.coach ? 'coach ' + c.coach : '', LVL_TXT[c.level] || ''].filter(Boolean).join(' · ')) + '</div>';
@@ -406,6 +462,14 @@ function act(a, el) {
   var d = S.detail; if (!d) return;
   var id = d.client.id;
   if (a === 'back') { S.sel = null; document.body.classList.remove('has-sel'); renderList(); try { history.replaceState(null, '', location.pathname); } catch (e) {} return; }
+  if (a === 'consRead') {
+    el.disabled = true;
+    apiAt('/api/csm-consignes', 'POST', '', { action: 'read', id: el.getAttribute('data-cid') }).then(function () {
+      toast('Consigne marquée comme lue'); loadConsignes();
+      if (typeof window.alteoRefreshCsmNotesBadge === 'function') window.alteoRefreshCsmNotesBadge();
+    }).catch(function (e) { el.disabled = false; toast(e.message, true); });
+    return;
+  }
   if (a === 'copyMsg') { var t = $('dgMsg'); if (t && navigator.clipboard) navigator.clipboard.writeText(t.textContent).then(function () { toast('Message copié'); }); return; }
   if (a === 'note') {
     var txt = $('noteTxt').value.trim(); if (!txt) return;

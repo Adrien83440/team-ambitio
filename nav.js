@@ -119,6 +119,10 @@
     // Les deux anciennes vues restent accessibles le temps de la transition.
     { id: 'nav-csm', icon: '💎', label: 'Customer Success', section: 'Coaching & clients', children: [
       { id: 'csm-cockpit',       icon: '💎', label: 'Cockpit CSM',   href: 'csm-cockpit.html',       perm: 'csm_dashboard' },
+      // Mes Notes (10/2026) : consignes datées des admins à la CSM par client
+      // (pause, ne pas proposer…), reliées à la fiche du cockpit.
+      // api/csm-consignes.js. Compteur des non-lues (CSM) : initCsmNotesBadge.
+      { id: 'csm-notes',         icon: '📌', label: 'Mes Notes',     href: 'csm-notes.html',         perm: 'csm_dashboard' },
       { id: 'csm-diagnostic',    icon: '🔍', label: 'Diagnostic',    href: 'csm-diagnostic.html',    perm: 'csm_dashboard' },
       { id: 'csm-dashboard',     icon: '📊', label: 'Ancien dashboard', href: 'csm-dashboard.html',  perm: 'csm_dashboard' },
       { id: 'csm-clients',       icon: '👥', label: 'Clients (ancienne vue)', href: 'csm-clients.html', perm: 'csm_clients' },
@@ -1917,8 +1921,63 @@
     }, 500);
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // MES NOTES — compteur des consignes non lues sur l'entrée de menu, pour la
+  // CSM uniquement (10/2026). GET /api/csm-consignes?count=1, rafraîchi toutes
+  // les 5 min ; csm-notes.html et le cockpit le relancent après un « J'ai lu »
+  // via window.alteoRefreshCsmNotesBadge(). Silencieux en cas d'erreur.
+  // ─────────────────────────────────────────────────────────────────────────
+  function initCsmNotesBadge() {
+    if (window.__csmNotesBadgeInit) return;
+    window.__csmNotesBadgeInit = true;
+    if (typeof fetch !== 'function') return;
+    if ((localStorage.getItem('ambitio_role') || '') !== 'csm') return;
+    var count = 0;
+
+    function getUser() {
+      try {
+        if (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) return firebase.auth().currentUser;
+      } catch (_) {}
+      if (window._auth && window._auth.currentUser) return window._auth.currentUser;
+      return null;
+    }
+    function put(el, before) {
+      if (!el) return;
+      var b = el.querySelector('[data-csm-notes-badge]');
+      if (!count) { if (b) b.parentNode.removeChild(b); return; }
+      if (!b) {
+        b = document.createElement('span');
+        b.className = 'nav-item-badge num';
+        b.setAttribute('data-csm-notes-badge', '1');
+        var ref = before ? el.querySelector(before) : null;
+        if (ref) el.insertBefore(b, ref); else el.appendChild(b);
+      }
+      b.textContent = String(count);
+    }
+    function apply() {
+      put(document.querySelector('a.nav-item[data-id="csm-notes"]'), null);
+      put(document.querySelector('.nav-parent[data-id="nav-csm"]'), '.nav-parent-caret');
+    }
+    function refresh() {
+      var user = getUser();
+      if (!user) return;
+      user.getIdToken().then(function (tok) {
+        return fetch('/api/csm-consignes?count=1', { headers: { Authorization: 'Bearer ' + tok } });
+      }).then(function (r) { return r.json(); }).then(function (j) {
+        if (j && j.ok !== false) { count = Number(j.unread) || 0; apply(); }
+      }).catch(function () {});
+    }
+    window.alteoRefreshCsmNotesBadge = refresh;
+    window.addEventListener('team-members-loaded', apply);
+    var pollStart = Date.now();
+    var pollId = setInterval(function () {
+      if (getUser()) { clearInterval(pollId); refresh(); setInterval(refresh, 5 * 60 * 1000); }
+      else if ((Date.now() - pollStart) > 30000) clearInterval(pollId);
+    }, 500);
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { injectInboxWidget(); injectInfosWidget(); injectCelebrationWidget(); injectPendingUsersWidget(); injectAiFollowupWidget(); injectAideWidget(); initActivityTracker(); });
+    document.addEventListener('DOMContentLoaded', function () { injectInboxWidget(); injectInfosWidget(); injectCelebrationWidget(); injectPendingUsersWidget(); injectAiFollowupWidget(); injectAideWidget(); initActivityTracker(); initCsmNotesBadge(); });
   } else {
     injectInboxWidget();
     injectInfosWidget();
@@ -1927,6 +1986,7 @@
     injectAiFollowupWidget();
     injectAideWidget();
     initActivityTracker();
+    initCsmNotesBadge();
   }
 })();
 
