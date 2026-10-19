@@ -816,7 +816,11 @@ function rvRowState(b, startMin, duration) {
 var aWho=null,aView='list',rWeek=null,_rvDbl={},_bkSlotMax=2,_bkSlotMaxLoaded=false;
 (function(){
   var v=null;try{v=new URLSearchParams(window.location.search).get('vue');}catch(e){}
-  if(v==='mes-rdv')aWho='mine';else if(v==='equipe')aWho='team';
+  /* ?vue=mes-rdv (redirection de sales-rdv.html, liens Funnel / Close SB)
+     ne force rien : un sales est de toute façon en « Mes RDV », et l'ancien
+     module montrait TOUT à un admin — l'y enfermer donnait une liste vide.
+     Seul ?vue=equipe impose la vue équipe. */
+  if(v==='equipe')aWho='team';
   else{try{var w=localStorage.getItem('bk_who');if(w==='mine'||w==='team')aWho=w;}catch(e){}}
   try{if(localStorage.getItem('bk_view')==='week')aView='week';}catch(e){}
 })();
@@ -994,7 +998,7 @@ function rRdv(){syncScopeUI();var td=tISO(),fP=document.getElementById('rFP').va
    Il disparaissait purement et simplement de Booking. */
 var ca=fl.filter(function(b){return b.status==='cancelled';}),
     up=fl.filter(function(b){return b.date>=td&&(b.status==='confirmed'||b.status==='pending');}),
-    pa=fl.filter(function(b){return b.status!=='cancelled'&&!(b.date>=td&&(b.status==='confirmed'||b.status==='pending'));});up.sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time);});pa.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time);});ca.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time);});document.getElementById('cR').textContent=up.length;var wE=new Date();wE.setDate(wE.getDate()+7);var ws=wE.getFullYear()+'-'+String(wE.getMonth()+1).padStart(2,'0')+'-'+String(wE.getDate()).padStart(2,'0');var tw=up.filter(function(b){return b.date<=ws;}),tl=up.filter(function(b){return b.date===td;});document.getElementById('rSt').innerHTML=rvStatsHTML(fl,up,ca,tl,tw);_rvDbl=rvDoubleMap(B);if(aView==='week'){document.getElementById('rL').innerHTML=rvWeekHTML(fl);return;}var ls=aRT==='up'?up:aRT==='past'?pa:ca,el=document.getElementById('rL');if(!ls.length){el.innerHTML='<div class="rv-em">Aucun rendez-vous '+(aRT==='up'?'à venir':aRT==='past'?'passé':'annulé')+'</div>';return;}var gr={};ls.forEach(function(b){if(!gr[b.date])gr[b.date]=[];gr[b.date].push(b);});var dk=Object.keys(gr).sort(aRT==='up'?undefined:function(a,b){return b.localeCompare(a);});var h='';dk.forEach(function(dt){var its=gr[dt];h+='<div class="rv-dh"><span>📅</span><span class="rv-dl">'+dFR(dt)+'</span><span class="rv-dc">'+its.length+' Rendez-vous</span></div>';its.forEach(function(b){h+=rvRowHTML(b);});});el.innerHTML=h;}
+    pa=fl.filter(function(b){return b.status!=='cancelled'&&!(b.date>=td&&(b.status==='confirmed'||b.status==='pending'));});up.sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time);});pa.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time);});ca.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time);});document.getElementById('cR').textContent=up.length;var wE=new Date();wE.setDate(wE.getDate()+7);var ws=wE.getFullYear()+'-'+String(wE.getMonth()+1).padStart(2,'0')+'-'+String(wE.getDate()).padStart(2,'0');var tw=up.filter(function(b){return b.date<=ws;}),tl=up.filter(function(b){return b.date===td;});document.getElementById('rSt').innerHTML=rvStatsHTML(fl,up,ca,tl,tw);_rvDbl=rvDoubleMap(B);if(aView==='week'){document.getElementById('rL').innerHTML=rvWeekHTML(fl);return;}var ls=aRT==='up'?up:aRT==='past'?pa:ca,el=document.getElementById('rL');if(!ls.length){el.innerHTML='<div class="rv-em">Aucun rendez-vous '+(aRT==='up'?'à venir':aRT==='past'?'passé':'annulé')+(_mine?'<div style="margin-top:8px;font-size:12px;opacity:.8">« Mes RDV » ne montre que les RDV de ton agenda et ceux que tu as posés.</div><button type="button" class="bb bb-p" data-who-go="team" style="margin-top:12px">👥 Voir l\'équipe</button>':'')+'</div>';return;}var gr={};ls.forEach(function(b){if(!gr[b.date])gr[b.date]=[];gr[b.date].push(b);});var dk=Object.keys(gr).sort(aRT==='up'?undefined:function(a,b){return b.localeCompare(a);});var h='';dk.forEach(function(dt){var its=gr[dt];h+='<div class="rv-dh"><span>📅</span><span class="rv-dl">'+dFR(dt)+'</span><span class="rv-dc">'+its.length+' Rendez-vous</span></div>';its.forEach(function(b){h+=rvRowHTML(b);});});el.innerHTML=h;}
 /* Clics de la liste : résultat, sinon ouverture de la fiche du RDV — sauf
    sur un lien, un bouton ou le sélecteur de statut. */
 document.getElementById('rL').addEventListener('click',function(e){
@@ -1002,6 +1006,8 @@ document.getElementById('rL').addEventListener('click',function(e){
   if(o){bkOutcomeFromList(o.getAttribute('data-rv-outcome'));return;}
   var w=e.target.closest('[data-rw]');
   if(w){var k=w.getAttribute('data-rw'),m=rWeek||rvMonday(new Date());rWeek=k==='today'?rvMonday(new Date()):new Date(m.getFullYear(),m.getMonth(),m.getDate()+(k==='prev'?-7:7));rRdv();return;}
+  var tg=e.target.closest('[data-who-go]');
+  if(tg){aWho='team';try{localStorage.setItem('bk_who',aWho);}catch(_e){}rRdv();return;}
   var c=e.target.closest('[data-rv-call]');
   if(c){bookingDialerCall(c);return;}
   if(e.target.closest('a,button,select,input,[data-action]'))return;
