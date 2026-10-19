@@ -154,7 +154,12 @@ function replyFromLead(l) {
 async function replyFromCalls(leadId, tel) {
   let last = 0;
   const qs = [db.collection('call_logs').where('leadId', '==', leadId).get()];
-  if (tel) qs.push(db.collection('call_logs').where('toNumber', '==', tel).get());
+  // call_logs.toNumber est en E.164 ; certaines fiches gardent encore un 06… brut.
+  const raw = String(tel || '').replace(/[\s.\-()]/g, '');
+  const e164 = /^0\d{9}$/.test(raw) ? '+33' + raw.slice(1) : (/^33\d{9}$/.test(raw) ? '+' + raw : raw);
+  [raw, e164].filter(function (v, k, arr) { return v && arr.indexOf(v) === k; }).forEach(function (n) {
+    qs.push(db.collection('call_logs').where('toNumber', '==', n).get());
+  });
   const snaps = await Promise.all(qs.map(function (p) { return p.catch(function () { return null; }); }));
   snaps.forEach(function (s) {
     if (!s) return;
