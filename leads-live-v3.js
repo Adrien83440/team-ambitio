@@ -161,6 +161,8 @@
     cal: '<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 9.5h16M8.5 3v4M15.5 3v4"/>',
     dots: '<circle cx="6" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18" cy="12" r="1.2"/>',
     chev: '<path d="M9.5 6l6 6-6 6"/>',
+    down: '<path d="M6 9.5l6 6 6-6"/>',
+    up: '<path d="M6 14.5l6-6 6 6"/>',
     back: '<path d="M14.5 6l-6 6 6 6"/>',
     x: '<path d="M6 6l12 12M18 6L6 18"/>',
     spark: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>',
@@ -337,8 +339,8 @@
     var st = l.status || 'nouveau', so = getStatusObj(st);
     var late = fuProchain(l, true), b = rdvAVenir(l)[0], fut = fuProchain(l, false), la = l2LastActivity(l);
     if (late && !terminal(l)) return { dot: 'late', ligne: 'Rappel prévu ' + quand(new Date(late)) + ' · en retard', titre: so.label, detail: 'Rappel prévu ' + quand(new Date(late)) + ', en retard', retard: true };
-    if (b && !b.presenceConfirmed) return { dot: 'warn', ligne: 'RDV ' + ldPresRdvLabel(b) + ' · présence à confirmer', titre: 'RDV ' + ldPresRdvLabel(b), detail: 'Présence pas encore confirmée' + (b.personName ? ' · avec ' + b.personName : '') };
-    if (b) return { dot: 'ok', ligne: 'RDV ' + ldPresRdvLabel(b) + ' · présence confirmée', titre: 'RDV ' + ldPresRdvLabel(b), detail: 'Présence confirmée' + (b.personName ? ' · avec ' + b.personName : '') };
+    if (b && !b.presenceConfirmed) return { dot: 'warn', ligne: 'RDV ' + ldPresRdvLabel(b) + ' · présence à confirmer', titre: 'RDV ' + ldPresRdvLabel(b), detail: 'Présence pas encore confirmée' + (b.personName ? ' · avec ' + b.personName : ''), rdvId: b.id, pres: false };
+    if (b) return { dot: 'ok', ligne: 'RDV ' + ldPresRdvLabel(b) + ' · présence confirmée', titre: 'RDV ' + ldPresRdvLabel(b), detail: 'Présence confirmée' + (b.presenceConfirmed.byName ? ' par ' + b.presenceConfirmed.byName : '') + (b.personName ? ' · avec ' + b.personName : ''), rdvId: b.id, pres: true };
     if (estClient(l)) return { dot: 'ok', ligne: 'Client · closing en cours', titre: 'Client signé', detail: 'Suis le closing jusqu’au bout' };
     if (l2IsUntouched(l)) {
       var arr = l2ArrivalLabel(_getLeadEffectiveDate(l) || l.createdAt);
@@ -518,7 +520,15 @@
     var so = SETTERS[l.assignedTo] || null;
     var h = '<h1 class="ll5h1 l2sh-name">' + escHtml(l.nom || '—') + '</h1>';
     h += '<p class="ll5sub">' + escHtml(bits.join(' · ')) + (so ? (bits.length ? ' · ' : '') + 'suivi par ' + escHtml(so.name) : '') + '</p>';
-    h += '<div class="ll5status ' + (s.retard ? 'late' : '') + '"><i class="ll5dot ' + s.dot + '"></i><span><b>' + escHtml(s.titre) + '</b><span>' + escHtml(s.detail) + '</span></span></div>';
+    if (s.rdvId) {
+      /* RDV à venir : la carte ouvre la preuve de présence (canal choisi par le
+         setter ou le closer, par qui, quand, message ou appel) — pop-up ldPres
+         de la page, via son écouteur [data-pres]. */
+      h += '<button type="button" class="ll5status ll5statusbtn" data-pres="' + (s.pres ? 'view' : 'confirm') + '" data-booking-id="' + escAttr(s.rdvId) + '"><i class="ll5dot ' + s.dot + '"></i><span class="ll5stx"><b>' + escHtml(s.titre) + '</b><span>' + escHtml(s.detail) + '</span></span>' +
+        '<span class="ll5see">' + (s.pres ? 'Voir la preuve' : 'Confirmer') + ic('chev') + '</span></button>';
+    } else {
+      h += '<div class="ll5status ' + (s.retard ? 'late' : '') + '"><i class="ll5dot ' + s.dot + '"></i><span><b>' + escHtml(s.titre) + '</b><span>' + escHtml(s.detail) + '</span></span></div>';
+    }
     var wa = waCache[id];
     if (wa && wa.dernierIn && wa.texte) {
       h += '<button type="button" class="ll5msg" data-ll5="go" data-v="c-wa"><span class="k">' + escHtml(prenom(l)) + ' t’a écrit sur WhatsApp' + (wa.quand ? ' · ' + escHtml(wa.quand) : '') + '</span><span class="x">« ' + escHtml(wa.texte) + ' »</span></button>';
@@ -693,6 +703,208 @@
     if (!m) { var t = Date.parse(s); return isNaN(t) ? 0 : t; }
     return new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5]).getTime();
   }
+  /* Compléments serveur de l'historique (api/lead-history, 19/10/2026) :
+     appels Ringover de call_logs (écoute, transcription), SMS Twilio
+     automatiques ou non délivrés, WhatsApp (reçus, envoyés, non partis).
+     L'écoute et la transcription passent par /api/call-detail, qui applique
+     la règle de Réécoutes (admin, canListenCalls ou son propre appel). */
+  var histSrv = {};   // leadId → { lu, busy, data, err }
+  var appelDet = {};  // callLogId → { busy } | { data } | { err, status }
+  var appelOuv = {};  // clé de ligne → { conv, audio }
+  var appelInv = {};  // callLogId → locuteurs inversés à la main
+  function postApi(path, corps) {
+    var u = firebase.auth().currentUser;
+    if (!u) return Promise.reject(new Error('Session expirée — recharge la page'));
+    return u.getIdToken().then(function (tok) {
+      return fetch(path, { method: 'POST', headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify(corps) });
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (!r.ok || (j && j.ok === false)) { var er = new Error((j && j.error) || ('Erreur ' + r.status)); er.status = r.status; throw er; }
+        return j;
+      });
+    });
+  }
+  function repeindreHist(id) { if (openCardId === id && ecran() === 'hist') l2RenderSheet(id, true); }
+  function chargerHist(l) {
+    var id = l.id, s = histSrv[id];
+    if (s && (s.busy || Date.now() - s.lu < 60000)) return;
+    var avant = s && s.data;
+    histSrv[id] = { lu: Date.now(), busy: true, data: avant, err: '' };
+    postApi('/api/lead-history', { leadId: id }).then(function (j) {
+      histSrv[id] = { lu: Date.now(), busy: false, data: j, err: '' };
+      repeindreHist(id);
+    }).catch(function (e) {
+      histSrv[id] = { lu: Date.now(), busy: false, data: avant, err: (e && e.message) || 'erreur' };
+      repeindreHist(id);
+    });
+  }
+  function chargerAppel(cid, leadId) {
+    if (!cid || appelDet[cid]) return;
+    appelDet[cid] = { busy: true };
+    postApi('/api/call-detail', { callLogId: cid }).then(function (j) {
+      appelDet[cid] = { data: j };
+      repeindreHist(leadId);
+    }).catch(function (e) {
+      appelDet[cid] = { status: e && e.status, err: e && e.status === 403 ? 'Écoute réservée : les appels des autres ne s’écoutent qu’avec l’autorisation d’un admin.' : ((e && e.message) || 'erreur') };
+      repeindreHist(leadId);
+    });
+  }
+
+  /* Rattache les appels de la fiche (écrits par Make, sans lien) à ceux de
+     call_logs, ajoute ceux qui manquent, puis les SMS Twilio et les WhatsApp. */
+  function cleSms(s) { return String(s || '').replace(/^\s*message\s*:\s*/i, '').replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 60); }
+  function fusionner(items, srv) {
+    if (!srv) return;
+    var pris = {};
+    var appels = srv.calls || [];
+    items.forEach(function (it) {
+      if (!it.c || it.c.type !== 'call' || !it.t) return;
+      var dur = Number(it.c.duration) || 0, jourSeul = ldDayOnlyDate(it.c.date), best = null, bs = Infinity;
+      appels.forEach(function (a) {
+        if (pris[a.id]) return;
+        if (it.c.callLogId) { if (a.id === it.c.callLogId) { best = a; bs = -1; } return; }
+        var dt = Math.abs(a.atMs - it.t);
+        if (jourSeul) {
+          if (new Date(a.atMs).toDateString() !== new Date(it.t).toDateString() || Math.abs(a.durationSec - dur) > 3) return;
+          dt = 0;
+        } else if (dt > 6 * 60000 + dur * 1000) return;
+        var sc = dt / 1000 + Math.abs(a.durationSec - dur) * 4;
+        if (sc < bs) { bs = sc; best = a; }
+      });
+      if (best) { pris[best.id] = 1; it.api = best; }
+    });
+    appels.forEach(function (a) { if (!pris[a.id]) items.push({ t: a.atMs, api: a, sortant: a.direction === 'out' }); });
+
+    var smsFiche = items.filter(function (it) { return it.c && it.c.type === 'sms'; });
+    (srv.sms || []).forEach(function (s) {
+      var out = s.direction === 'out', k = cleSms(s.body), m = null;
+      for (var i = 0; i < smsFiche.length; i++) {
+        var f = smsFiche[i];
+        if (f.tw) continue;
+        var sid = f.c.providerMessageSid || f.c.providerMessageId;
+        if ((sid && sid === s.sid) || (f.sortant === out && Math.abs(f.t - s.atMs) < 5 * 60000 && cleSms(f.c.content) === k)) { m = f; break; }
+      }
+      if (m) { m.tw = s; return; }
+      items.push({ t: s.atMs, tw: s, sortant: out });
+    });
+    (srv.whatsapp || []).forEach(function (w) { items.push({ t: w.atMs, wa: w, sortant: w.direction === 'out' }); });
+  }
+
+  /* Qui parle ? Ringover ne dit pas quel canal est le poste de l'équipe
+     (0 ou 1, ça varie) : même devinette que Réécoutes (sales-appels.html),
+     corrigeable avec « Inverser ». */
+  var AGENT_RX = [/equipe d ?'?adrien/, /adrien et/, /emilie/, /je me permet/, /questionnaire/, /formulaire/, /notre equipe/, /je vous appel/, /je me presente/, /suite a votre/, /vous aviez demande/, /je reviens vers vous/];
+  var LEAD_RX = [/vous avez essaye de me joindre/, /vous m'avez appel/, /qui est a l'appareil/, /c'est a quel sujet/, /c'est pour quoi/];
+  function plat(s) {
+    s = String(s || '').toLowerCase().replace(/[’`]/g, '\'');
+    try { s = s.normalize('NFD').replace(/[̀-ͯ]/g, ''); } catch (e) {}
+    return s;
+  }
+  function canalEquipe(speeches, det, l) {
+    var score = [0, 0], first = speeches.length && speeches[0].channelId === 1 ? 1 : 0;
+    var agent = plat(String(det.userName || '').split(/\s+/)[0]), pl = plat(prenom(l));
+    if (agent.length < 3) agent = '';
+    if (pl.length < 3 || pl === 'ce lead') pl = '';
+    speeches.forEach(function (s) {
+      var t = plat(s.text), c = s.channelId === 1 ? 1 : 0, i;
+      for (i = 0; i < AGENT_RX.length; i++) if (AGENT_RX[i].test(t)) score[c] += 2;
+      for (i = 0; i < LEAD_RX.length; i++) if (LEAD_RX[i].test(t)) score[c] -= 2;
+      if (agent && t.indexOf(agent) >= 0) score[c] += 1;
+      if (pl) {
+        if (new RegExp('(c\'est|je suis|ici) ' + pl).test(t) || new RegExp(pl + ' a l\'appareil').test(t)) score[c] -= 2;
+        else if (t.indexOf(pl) >= 0) score[c] += 1;
+      }
+    });
+    if (score[0] !== score[1]) return score[0] > score[1] ? 0 : 1;
+    return det.direction === 'inbound' ? first : (first === 0 ? 1 : 0);
+  }
+  function cleLigne(s) { return String(s).replace(/[^A-Za-z0-9_-]/g, '_'); }
+
+  /* Une ligne d'appel : titre, puis « Conversation » (déplier) et « Écouter ». */
+  function rangAppel(l, id, it, heure) {
+    var c = it.c || {}, a = it.api || null;
+    var dur = a ? a.durationSec : (Number(c.duration) || 0);
+    var sortant = a ? a.direction === 'out' : it.sortant;
+    var qui = c.ownerName || (a && a.userName) || '';
+    var durTxt = dur ? (Math.floor(dur / 60) ? Math.floor(dur / 60) + ' min ' + deux(dur % 60) : (dur % 60) + ' s') : '';
+    var titre = (sortant ? 'Appel' + (qui ? ' de ' + qui : '') : 'Appel reçu' + (qui ? ' par ' + qui : '')) + ' · ' + (durTxt || (sortant ? 'pas de réponse' : 'manqué'));
+    var cid = a ? a.id : (c.callLogId || '');
+    var cle = cleLigne(cid || ('f' + (c.date || '') + '_' + dur));
+    var ouv = appelOuv[cle] || {};
+    var trFiche = String(c.transcription || '').trim(), recFiche = c.recordingUrl || '';
+    var peut = a ? a.canListen : true;
+    var aConv = !!trFiche || !!(a && (a.hasTranscript || a.hasRecording || a.summary)) || (!a && !!c.callLogId);
+    var aAudio = !!recFiche || !!(a && a.hasRecording) || (!a && !!c.callLogId);
+
+    var extra = '';
+    if ((aConv || aAudio) && !peut) {
+      extra = '<span class="ll5hacts"><span class="ll5pill ll5off">' + ic('lock') + 'Écoute réservée</span></span>';
+    } else if (aConv || aAudio) {
+      extra = '<span class="ll5hacts">';
+      if (aConv) extra += '<button type="button" class="ll5pill' + (ouv.conv ? ' on' : '') + '" data-ll5="hconv" data-k="' + cle + '" data-cid="' + escAttr(cid) + '" aria-expanded="' + !!ouv.conv + '">' + ic(ouv.conv ? 'up' : 'down') + 'Conversation</button>';
+      if (aAudio) extra += '<button type="button" class="ll5pill' + (ouv.audio ? ' on' : '') + '" data-ll5="haudio" data-k="' + cle + '" data-cid="' + escAttr(cid) + '" aria-expanded="' + !!ouv.audio + '">' + ic('mic') + 'Écouter</button>';
+      extra += '</span>';
+      var det = cid ? appelDet[cid] : null;
+      if ((ouv.conv || ouv.audio) && cid && !det) { chargerAppel(cid, id); det = appelDet[cid]; }
+      if (ouv.audio) {
+        var src = '';
+        if (det && det.data) src = det.data.recordingSignedUrl || det.data.ringoverRecordingUrl || recFiche;
+        else if (!cid) src = recFiche;
+        if (src) extra += '<audio class="ll5audio" controls preload="metadata" data-ll5-audio="' + cle + '" src="' + escAttr(src) + '"></audio>';
+        else if (det && det.busy) extra += '<span class="ll5hnote">Chargement de l’enregistrement…</span>';
+        else if (det && det.err) extra += '<span class="ll5hnote late">' + escHtml(det.err) + '</span>';
+        else extra += '<span class="ll5hnote">Pas encore d’enregistrement : Ringover le dépose quelques minutes après l’appel.</span>';
+      }
+      if (ouv.conv) extra += panneauConv(l, id, cid, det, trFiche, a);
+    }
+    var cls = sortant ? 'grey' : (dur ? 'go' : 'late');
+    return '<div class="ll5hist"><span class="ll5ric ' + cls + '">' + ic('phone') + '</span><span class="ll5tx"><b>' + escHtml(titre) + '</b>' + extra + '</span><span class="tm">' + heure + '</span></div>';
+  }
+  function panneauConv(l, id, cid, det, trFiche, a) {
+    var h = '<span class="ll5conv">';
+    if (!cid) return h + '<span class="ll5trtxt">' + escHtml(trFiche) + '</span></span>';
+    if (!det || det.busy) return h + '<span class="ll5hnote">Chargement de la conversation…</span></span>';
+    if (det.err) return h + '<span class="ll5hnote late">' + escHtml(det.err) + '</span></span>';
+    var d = det.data || {};
+    var resume = (d.aiCall && d.aiCall.resume) || (d.aiAnalysis && d.aiAnalysis.summary) || d.aiSummary || (a && a.summary) || '';
+    if (resume) h += '<span class="ll5trsum"><b>Résumé</b>' + escHtml(resume) + '</span>';
+    var sp = Array.isArray(d.transcriptSpeeches) ? d.transcriptSpeeches : [];
+    var txt = d.transcriptionText || d.transcriptText || trFiche;
+    if (sp.length) {
+      var eq = canalEquipe(sp, d, l);
+      if (appelInv[cid]) eq = eq ? 0 : 1;
+      var nomEq = String(d.userName || (a && a.userName) || 'Équipe').split(/\s+/)[0];
+      h += '<span class="ll5trbar"><span>Locuteurs devinés</span><button type="button" class="ll5pill" data-ll5="hinv" data-cid="' + escAttr(cid) + '">⇄ Inverser</button></span><span class="ll5tr">';
+      sp.forEach(function (s) {
+        var nous = (s.channelId === 1 ? 1 : 0) === eq;
+        var t = Math.max(0, Math.floor(Number(s.start) || 0));
+        h += '<span class="ll5bub ' + (nous ? 'me' : 'them') + '"><span class="w">' + escHtml(nous ? nomEq : prenom(l)) + ' · ' + Math.floor(t / 60) + ':' + deux(t % 60) + '</span>' + escHtml(s.text) + '</span>';
+      });
+      h += '</span>';
+    } else if (txt) {
+      h += '<span class="ll5trtxt">' + escHtml(txt) + '</span>';
+    } else {
+      h += '<span class="ll5hnote">' + (d.transcriptionStatus === 'failed' ? 'Ringover n’a pas pu transcrire cet appel.' : 'Pas encore de transcription : Ringover transcrit quelques minutes après l’appel.') + '</span>';
+    }
+    return h + '</span>';
+  }
+
+  /* Ligne « Conversation WhatsApp » : le dernier message, lisible sans ouvrir. */
+  function ligneWa(l, srv) {
+    var w = srv && srv.whatsapp && srv.whatsapp[0], wc = waCache[l.id];
+    var meta = '', texte = '';
+    if (w) {
+      meta = (w.direction === 'in' ? prenom(l) : (w.par || 'L’équipe')) + ' · ' + quand(new Date(w.atMs)) + (w.bad ? ' · non parti' : (w.statut === 'read' ? ' · lu' : ''));
+      texte = w.texte;
+    } else if (wc && wc.dernierIn && wc.texte) {
+      meta = prenom(l) + (wc.quand ? ' · ' + wc.quand : '');
+      texte = wc.texte;
+    }
+    var bas = texte ? '<span class="ll5wak' + (w && w.bad ? ' late' : '') + '">' + escHtml(meta) + '</span><span class="ll5wax">' + escHtml(texte) + '</span>'
+      : '<span>' + (srv ? 'Aucun message pour l’instant' : 'Messages et modèles') + '</span>';
+    return '<button type="button" class="ll5line big ll5waln" data-ll5="go" data-v="c-wa"><span class="ll5ric go">' + ic('wa') + '</span><span class="ll5tx"><b>Conversation WhatsApp</b>' + bas + '</span><span class="ll5chev">' + ic('chev') + '</span></button>';
+  }
+
   function ecranHistorique(l, id) {
     var items = [], vus = [];
     (l.communications || []).forEach(function (c) {
@@ -707,14 +919,19 @@
       items.push({ t: t, c: c, sortant: sortant });
     });
     (l.notesHistory || []).forEach(function (n, i) { items.push({ t: dateNote(n.date), note: n, idx: i }); });
+    var se = histSrv[id], srv = se && se.data;
+    fusionner(items, srv);
     items.sort(function (a, b) { return b.t - a.t; });
 
-    var h = '<h1 class="ll5h1">Historique</h1><p class="ll5sub">Appels, SMS, e-mails et notes, du plus récent au plus ancien.</p>';
+    var h = '<h1 class="ll5h1">Historique</h1><p class="ll5sub">Appels, SMS, WhatsApp, e-mails et notes, du plus récent au plus ancien.</p>';
     h += '<div class="ll5group ll5mt">';
-    if (l.telephone) h += ligne('wa', 'go', 'Conversation WhatsApp', sous('Messages et modèles'), 'data-ll5="go" data-v="c-wa"');
+    if (l.telephone) h += ligneWa(l, srv);
     h += ligne('mic', 'grey', 'Vocaux de l’équipe', sous('Avec transcription et résumé'), 'data-ll5="go" data-v="voice"');
     h += '</div>';
-    if (!items.length) return h + '<p class="ll5sub ll5mt">Rien pour l’instant. Les appels Ringover, SMS et e-mails apparaîtront ici.</p>';
+    if (se && se.busy && !srv) h += '<p class="ll5note">Recherche des appels Ringover, SMS automatiques et WhatsApp…</p>';
+    if (se && se.err) h += '<p class="ll5note late">Appels Ringover, SMS automatiques et WhatsApp indisponibles : ' + escHtml(se.err) + '</p>';
+    if (srv && srv.smsError) h += '<p class="ll5note">SMS automatiques indisponibles pour l’instant (Twilio ne répond pas).</p>';
+    if (!items.length) return h + '<p class="ll5sub ll5mt">Rien pour l’instant. Les appels Ringover, SMS, WhatsApp et e-mails apparaîtront ici.</p>';
     var jour = '';
     items.forEach(function (it) {
       var d = it.t ? new Date(it.t) : null;
@@ -725,21 +942,33 @@
         h += '<div class="ll5hist"><span class="ll5ric grey">' + ic('note') + '</span><span class="ll5tx"><b>Note' + (it.note.authorName ? ' de ' + escHtml(it.note.authorName) : '') + '</b><span class="q">' + highlightMentions(it.note.text || '') + '</span></span><span class="tm">' + heure + '</span></div>';
         return;
       }
-      var c = it.c, titre, icone = 'msg', q = '', extra = '';
-      if (c.type === 'call') {
-        icone = 'phone';
-        var dur = c.duration ? (Math.floor(c.duration / 60) ? Math.floor(c.duration / 60) + ' min ' + deux(c.duration % 60) : (c.duration % 60) + ' s') : '';
-        titre = (it.sortant ? 'Appel' + (c.ownerName ? ' de ' + c.ownerName : '') : 'Appel reçu') + ' · ' + (dur || (it.sortant ? 'pas de réponse' : 'manqué'));
-        if (c.callLogId) extra = '<button type="button" class="ll5pill" data-action="callDetail" data-cid="' + escAttr(c.callLogId) + '">Écouter, lire, analyse</button>';
-      } else if (c.type === 'sms') {
+      if (it.api || (it.c && it.c.type === 'call')) { h += rangAppel(l, id, it, heure); return; }
+      var titre, icone = 'msg', q = '', cls = it.sortant ? 'grey' : 'go', sousL = '';
+      if (it.wa) {
+        var w = it.wa;
+        icone = 'wa';
+        if (w.direction === 'in') titre = 'WhatsApp reçu';
+        else if (w.bad) { titre = 'WhatsApp non parti'; cls = 'late'; sousL = w.erreur; }
+        else titre = 'WhatsApp envoyé' + (w.par ? ' par ' + w.par : '') + (w.statut === 'read' ? ' · lu' : (w.statut === 'delivered' ? ' · distribué' : ''));
+        q = escHtml(w.texte);
+      } else if (!it.c) {
+        var s = it.tw;
+        if (!it.sortant) titre = 'SMS reçu';
+        else if (s.failed) { titre = 'SMS automatique non délivré'; cls = 'late'; sousL = 'Statut Twilio : ' + s.status; }
+        else titre = 'SMS automatique';
+        q = escHtml(s.body);
+      } else if (it.c.type === 'sms') {
+        var c = it.c;
         titre = it.sortant ? 'SMS envoyé' + (c.ownerName ? ' par ' + c.ownerName : '') : 'SMS reçu';
+        if (it.tw && it.tw.failed) { titre = 'SMS non délivré' + (c.ownerName ? ' (envoyé par ' + c.ownerName + ')' : ''); cls = 'late'; sousL = 'Statut Twilio : ' + it.tw.status; }
         q = sanitizeCommContent(c.content || '');
       } else {
+        var ce = it.c;
         icone = 'mail';
-        titre = it.sortant ? 'E-mail envoyé' + (c.ownerName ? ' par ' + c.ownerName : '') : 'E-mail reçu';
-        q = escHtml(c.subject ? c.subject : String(c.content || '').split('\n')[0]);
+        titre = it.sortant ? 'E-mail envoyé' + (ce.ownerName ? ' par ' + ce.ownerName : '') : 'E-mail reçu';
+        q = escHtml(ce.subject ? ce.subject : String(ce.content || '').split('\n')[0]);
       }
-      h += '<div class="ll5hist"><span class="ll5ric ' + (it.sortant ? 'grey' : 'go') + '">' + ic(icone) + '</span><span class="ll5tx"><b>' + escHtml(titre) + '</b>' + (q ? '<span class="q">' + q + '</span>' : '') + extra + '</span><span class="tm">' + heure + '</span></div>';
+      h += '<div class="ll5hist"><span class="ll5ric ' + cls + '">' + ic(icone) + '</span><span class="ll5tx"><b>' + escHtml(titre) + '</b>' + (sousL ? '<span class="ll5hnote late">' + escHtml(sousL) + '</span>' : '') + (q ? '<span class="q">' + q + '</span>' : '') + '</span><span class="tm">' + heure + '</span></div>';
     });
     return h + '</div>';
   }
@@ -913,6 +1142,11 @@
     var scroller = inner.querySelector('.ll5scroll');
     var pos = (preserve && memeEcran && scroller) ? scroller.scrollTop : 0;
 
+    /* Un enregistrement en cours de lecture survit au repeint de l'écran
+       (la fiche se redessine à chaque mise à jour du lead). */
+    var jeu = inner.querySelector('audio[data-ll5-audio]');
+    if (jeu && (jeu.paused || jeu.ended)) jeu = null;
+
     var oldVn = inner.querySelector('.vn-container');
     if (oldVn && window.VoiceNotes) { try { window.VoiceNotes.detach(oldVn); } catch (er) {} }
 
@@ -930,6 +1164,10 @@
     sheet.classList.add('has-lead');
 
     if (drafts) l2RestoreDrafts(inner, drafts, id);
+    if (jeu) {
+      var place = inner.querySelector('audio[data-ll5-audio="' + jeu.getAttribute('data-ll5-audio') + '"]');
+      if (place && place.parentNode) place.parentNode.replaceChild(jeu, place);
+    }
     var sc = inner.querySelector('.ll5scroll');
     if (sc) sc.scrollTop = pos;
 
@@ -959,6 +1197,7 @@
       try { window.WhatsAppLead.detach(id); } catch (er2) {}
     }
     if (e === 'lead') chargerWa(l);
+    if (e === 'hist') { chargerWa(l); chargerHist(l); }
   }
 
   /* Présence / RDV : repeindre l'accueil du lead quand ses RDV changent. */
@@ -1105,6 +1344,18 @@
       case 'open': l2OpenLead(id); return;
       case 'go': aller(v); return;
       case 'back': retour(); return;
+      case 'hconv':
+      case 'haudio':
+        var k = t.getAttribute('data-k'), part = a === 'hconv' ? 'conv' : 'audio';
+        appelOuv[k] = appelOuv[k] || {};
+        appelOuv[k][part] = !appelOuv[k][part];
+        if (openCardId) l2RenderSheet(openCardId, true);
+        return;
+      case 'hinv':
+        var ci = t.getAttribute('data-cid');
+        appelInv[ci] = !appelInv[ci];
+        if (openCardId) l2RenderSheet(openCardId, true);
+        return;
       case 'home': accueilLead(); return;
       case 'list':
         liste = v;

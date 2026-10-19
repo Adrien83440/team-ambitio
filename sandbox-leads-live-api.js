@@ -90,8 +90,32 @@
       if (b.action === 'get') return rep({ ok: true, confirmation: confirmation(bk.presenceConfirmed) });
       return rep({ ok: true, alreadyConfirmed: !!bk.presenceConfirmed, proofs: proofs, minCallSec: 15, booking: { date: bk.date, time: bk.time, personName: bk.personName, leadName: lp.nom } });
     }
+    if (/lead-history/.test(path)) {
+      /* Compléments de l'historique : les appels de la fiche deviennent des
+         appels « Ringover » écoutables, un SMS automatique par RDV, et les
+         WhatsApp de la conversation de test. */
+      var lh = lead(b.leadId) || {}, base = window.__SBX.db();
+      var calls = (lh.communications || []).filter(function (c) { return c && c.type === 'call'; }).map(function (c, i) {
+        var d = Number(c.duration) || 0;
+        return { id: 'sbx-call-' + i, atMs: Date.parse(c.date) || Date.now(), direction: (/^(in|entr)/.test(String(c.direction || '')) && !c.ownerName) ? 'in' : 'out', durationSec: d, answered: d >= 5, userName: c.ownerName || MOI.nom, hasRecording: d >= 5, hasTranscript: d >= 5, summary: '', canListen: true };
+      });
+      var sms = [];
+      Object.keys(base.bookings || {}).forEach(function (k) {
+        var bh = base.bookings[k];
+        if (!bh || bh.leadId !== b.leadId || !bh.date) return;
+        sms.push({ sid: 'sbx-sms-' + k, atMs: Date.parse(bh.date + 'T' + (bh.time || '10:00') + ':00') - 86400000, direction: 'out', status: 'delivered', failed: false, body: 'Bonjour ' + prenom(lh) + ', petit rappel : votre rendez-vous avec Alteore est demain à ' + (bh.time || '') + '. À demain !' });
+      });
+      var numh = String(lh.telephone || '').replace(/\D/g, '');
+      if (numh.indexOf('0') === 0 && numh.length === 10) numh = '33' + numh.slice(1);
+      var msgs = base['whatsapp_conversations/' + numh + '/messages'] || {};
+      var wa = Object.keys(msgs).map(function (k) {
+        var w = msgs[k] || {};
+        return { id: k, atMs: Number(w.at) || 0, direction: w.sens === 'in' ? 'in' : 'out', texte: w.texte || '(sans texte)', statut: w.statut || '', bad: false, erreur: '', par: w.sens === 'in' ? '' : MOI.nom };
+      }).sort(function (x, y) { return y.atMs - x.atMs; });
+      return attendre(400).then(function () { return rep({ ok: true, leadId: b.leadId, calls: calls, sms: sms, smsError: null, whatsapp: wa }); });
+    }
     if (/calendar-followup-event/.test(path)) return rep({ ok: true, eventId: 'evt-test', eventLink: '#', memberName: MOI.nom, personId: MOI.slug });
-    if (/call-detail/.test(path)) return rep({ ok: true, callLogId: b.callLogId, direction: 'outbound', status: 'completed', durationSec: 130, transcriptText: 'Bonjour, c’est ' + MOI.nom + ' d’Alteore… Oui c’est noté pour demain, je serai là.', aiSummary: 'Le prospect confirme sa présence.' });
+    if (/call-detail/.test(path)) return rep({ ok: true, callLogId: b.callLogId, direction: 'outbound', status: 'completed', durationSec: 130, userName: MOI.nom, transcriptSpeeches: [{ channelId: 1, start: 0, end: 2, text: 'Allô ?' }, { channelId: 0, start: 2, end: 8, text: 'Bonjour, c’est ' + MOI.nom + ' de l’équipe d’Adrien et Émilie, je vous appelle suite à votre questionnaire.' }, { channelId: 1, start: 8, end: 12, text: 'Ah oui, bonjour ! Oui c’est noté pour demain, je serai là.' }, { channelId: 0, start: 12, end: 15, text: 'Parfait, à demain alors !' }], aiSummary: 'Le prospect confirme sa présence (démonstration).' });
     return rep({ ok: true });
   }
 
