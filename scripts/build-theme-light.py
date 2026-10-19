@@ -491,7 +491,10 @@ def map_shadow(val):
 def is_chip_like(sel, decls):
     """Pastille / avatar / bloc d'agenda coloré par style inline : le texte
     blanc doit rester blanc même si le bloc CSS ne déclare aucun fond."""
-    if re.search(r'(av\b|avatar|badge|swatch|fill|chip|pill|dot|tag)', sel):
+    # `av` seul (« .ec-av », « .cd-head-av ») et non la fin de « nav » : le
+    # motif `av\b` attrapait « .cd-nav-label » et laissait les libellés du
+    # menu des consultations de Booking en blanc sur fond clair (19/10/2026).
+    if re.search(r'((?<![a-z0-9])av\b|avatar|badge|swatch|fill|chip|pill|dot|tag)', sel):
         return True
     props = {p for p, _, _ in decls}
     if 'border-radius' in props and 'width' in props and 'height' in props:
