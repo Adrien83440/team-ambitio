@@ -301,10 +301,10 @@ var OUTCOME = {
 };
 var KIND = {
   call: ['📞', 'Appels'], booking: ['📅', 'RDV'], booking_set: ['🗓️', 'RDV'], meet_click: ['🖱️', 'Visio'], meet_join: ['📹', 'Visio'],
-  action: ['⚡', 'Actions'], message: ['✉️', 'Messages'], whatsapp: ['💬', 'Messages'], note: ['📝', 'Notes'],
+  action: ['⚡', 'Actions'], sms: ['📱', 'SMS'], whatsapp: ['💬', 'WhatsApp'], email: ['✉️', 'E-mails'], message: ['✉️', 'Messages'], note: ['📝', 'Notes'],
   journal: ['·', 'Journal'], creation: ['✨', 'Journal']
 };
-var KIND_ORDER = ['Appels', 'RDV', 'Visio', 'Messages', 'Notes', 'Actions', 'Journal'];
+var KIND_ORDER = ['Appels', 'RDV', 'Visio', 'SMS', 'WhatsApp', 'E-mails', 'Messages', 'Notes', 'Actions', 'Journal'];
 
 var TAB = 'live';
 var LIVE = null;
@@ -781,6 +781,7 @@ function renderLead() {
     h += '</div>';
     if (LEAD.total > LEAD.events.length) h += '<p class="pl-note">' + (LEAD.total - LEAD.events.length) + ' événements plus anciens non affichés.</p>';
   }
+  if (LEAD.smsError) h += '<p class="pl-note">⚠️ SMS automatiques (Twilio) non chargés : ' + esc(LEAD.smsError) + '. Seuls les SMS tracés sur la fiche sont affichés.</p>';
   if (!anyOn && hasRicher()) h += '<p class="pl-note">Le journal brut de la fiche est masqué par défaut (il double souvent les autres événements) : filtre « Journal » pour l\'afficher.</p>';
   $('leadView').innerHTML = h;
 }

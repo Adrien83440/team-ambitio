@@ -1263,6 +1263,58 @@ function clip(s, n) {
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
 
+// Téléphone de fiche → E.164 (France par défaut). Les fiches gardent souvent
+// la saisie brute « 06 70 08 66 83 » : sans ça, la conversation WhatsApp
+// (clé 33XXXXXXXXX) et les SMS Twilio du prospect sont introuvables.
+function toE164(raw, normalized9) {
+  const s = String(raw || '').trim();
+  const d = s.replace(/[^0-9]/g, '');
+  if (s.charAt(0) === '+' && d.length >= 8 && d.length <= 15) return '+' + d;
+  if (d.indexOf('00') === 0 && d.length >= 10 && d.length <= 17) return '+' + d.slice(2);
+  if (d.length === 10 && d.charAt(0) === '0') return '+33' + d.slice(1);
+  if (d.length === 11 && d.indexOf('33') === 0) return '+' + d;
+  if (d.length === 9 && /^[67]/.test(d)) return '+33' + d;
+  const n9 = String(normalized9 || '');
+  return /^\d{9}$/.test(n9) ? '+33' + n9 : null;
+}
+
+// SMS Twilio envoyés au prospect ou reçus de lui. Seule trace des SMS
+// automatiques (rappels J-1 / H-1 et confirmation des Cloud Functions,
+// automatisations) : ils ne sont pas écrits sur la fiche.
+const TWILIO_TIMEOUT_MS = 8000;
+async function loadTwilioSms(e164) {
+  const { getTwilioClient } = require('./_twilioClient');
+  const client = await getTwilioClient();
+  let timer = null;
+  const timeout = new Promise(function (_, reject) {
+    timer = setTimeout(function () { reject(new Error('Twilio ne répond pas')); }, TWILIO_TIMEOUT_MS);
+  });
+  try {
+    const r = await Promise.race([Promise.all([
+      client.messages.list({ to: e164, limit: 200, pageSize: 100 }),
+      client.messages.list({ from: e164, limit: 200, pageSize: 100 }),
+    ]), timeout]);
+    return r[0].concat(r[1]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function smsBodyKey(s) {
+  return String(s || '').replace(/^\s*message\s*:\s*/i, '').replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 60);
+}
+
+const WA_STATUT_FR = { read: ' · lu', delivered: ' · distribué', failed: ' · NON délivré', refuse: ' · NON parti', echec: ' · NON parti' };
+function waText(w) {
+  const t = String(w.texte || '').trim();
+  if (w.modele && (!t || t === '[' + w.modele + ']')) {
+    const p = Array.isArray(w.params) ? w.params.filter(Boolean) : [];
+    return 'modèle « ' + w.modele + ' »' + (p.length ? ' (' + p.join(' · ') + ')' : '');
+  }
+  if (!t && (w.media || w.nomFichier)) return 'fichier ' + (w.nomFichier || '');
+  return t || '(sans texte)';
+}
+
 async function handleLead(req, res, body) {
   let leadId = String(body.leadId || '').trim();
   if (!/^[A-Za-z0-9_-]{3,80}$/.test(leadId)) { res.status(400).json({ error: 'leadId invalide' }); return; }
@@ -1279,17 +1331,19 @@ async function handleLead(req, res, body) {
   const persons = await loadPersons();
   const slugs = R.list.map(function (m) { return m.slug; });
   const tel = String(l.telephone || '').trim();
-  const waNum = tel.replace(/[^0-9]/g, '');
+  const e164 = toE164(tel, l.phoneNormalized);
+  const waNum = e164 ? e164.slice(1) : '';
 
   function nameOf(m, fallback) { return m ? m.name : (fallback || null); }
 
   const calls = {};
   const callQs = [db.collection('call_logs').where('leadId', '==', leadId).limit(200)];
-  if (/^\+\d{8,15}$/.test(tel)) {
-    callQs.push(db.collection('call_logs').where('toNumber', '==', tel).limit(200));
-    callQs.push(db.collection('call_logs').where('fromNumber', '==', tel).limit(200));
-  }
-  const [callSnaps, bookSnap, actSnaps, waSnap] = await Promise.all([
+  [e164, tel].filter(function (p, i, a) { return /^\+\d{8,15}$/.test(p || '') && a.indexOf(p) === i; }).forEach(function (p) {
+    callQs.push(db.collection('call_logs').where('toNumber', '==', p).limit(200));
+    callQs.push(db.collection('call_logs').where('fromNumber', '==', p).limit(200));
+  });
+  let smsError = null;
+  const [callSnaps, bookSnap, actSnaps, waSnap, waOutSnap, twSms] = await Promise.all([
     Promise.all(callQs.map(function (q) { return q.select.apply(q, CALL_FIELDS.concat(['aiSummary'])).get().catch(function () { return null; }); })),
     db.collection('bookings').where('leadId', '==', leadId).limit(100).get().catch(function () { return null; }),
     Promise.all(slugs.map(function (s) {
@@ -1298,12 +1352,21 @@ async function handleLead(req, res, body) {
     waNum.length >= 10
       ? db.collection('whatsapp_conversations').doc(waNum).collection('messages').orderBy('at', 'desc').limit(200).get().catch(function () { return null; })
       : Promise.resolve(null),
+    // Journal d'envoi : seul endroit où restent les WhatsApp refusés ou en échec.
+    waNum.length >= 10
+      ? db.collection('whatsapp_messages').where('to', '==', waNum).limit(200).get().catch(function () { return null; })
+      : Promise.resolve(null),
+    e164
+      ? loadTwilioSms(e164).catch(function (e) { console.warn('[team-pilotage] twilio', e.message); smsError = e.message || 'erreur'; return null; })
+      : Promise.resolve(null),
   ]);
 
   const ev = [];
   function push(ms, kind, who, text, extra) {
-    if (!ms) return;
-    ev.push(Object.assign({ at: isoOf(ms), kind: kind, who: who || null, text: text || '' }, extra || {}));
+    if (!ms) return null;
+    const o = Object.assign({ at: isoOf(ms), kind: kind, who: who || null, text: text || '' }, extra || {});
+    ev.push(o);
+    return o;
   }
 
   push(toMs(l.createdAt), 'creation', null, 'Fiche créée' + (l.source ? ' — source ' + l.source : ''));
@@ -1361,20 +1424,93 @@ async function handleLead(req, res, body) {
     });
   });
 
+  // SMS et e-mails tracés sur la fiche. Les SMS sont gardés de côté pour
+  // dédoublonner ceux que Twilio renvoie ci-dessous.
+  const smsOnFile = [];
   (Array.isArray(l.communications) ? l.communications : []).forEach(function (c) {
     if (!c || c.type === 'call' || c.type === 'appel') return;
     const m = commMember(c, R);
-    const label = c.type === 'sms' ? 'SMS' : (c.type === 'email' ? 'E-mail' : (c.type || 'Message'));
-    push(toMs(c.date || c.createdAt), 'message', nameOf(m, c.ownerName),
-      label + (c.direction === 'inbound' ? ' reçu' : ' envoyé') + ' — ' + clip(c.content, 220), { channel: c.type || null, direction: c.direction || null });
+    const inbound = /^(in|entr)/.test(String(c.direction || '').toLowerCase());
+    // Make n'écrit que le jour dans `date` ; l'heure (Paris) est dans `createdAt`.
+    const ms = /^\d{4}-\d{2}-\d{2}$/.test(String(c.date || '')) ? (toMs(c.createdAt) || toMs(c.date)) : toMs(c.date || c.createdAt);
+    if (c.type === 'sms') {
+      const txt = String(c.content || '').replace(/^\s*message\s*:\s*/i, '');
+      // Ringover et Make écrivent chacun le même SMS sur la fiche.
+      // On garde la première, complétée de l'auteur et de l'identifiant de l'autre.
+      const who = inbound ? null : nameOf(m, c.ownerName);
+      const sid = c.providerMessageSid || c.providerMessageId || null;
+      const dup = smsOnFile.find(function (s) { return s.inbound === inbound && s.key === smsBodyKey(txt) && Math.abs(s.ms - ms) < 10 * 60000; });
+      if (dup) {
+        if (who && dup.ev && !dup.ev.who) dup.ev.who = who;
+        if (sid && !dup.sid) dup.sid = sid;
+        return;
+      }
+      const o = push(ms, 'sms', who, 'SMS ' + (inbound ? 'reçu' : 'envoyé') + ' — ' + clip(txt, 600),
+        { channel: 'sms', direction: inbound ? 'inbound' : 'outbound' });
+      smsOnFile.push({ ms: ms, inbound: inbound, sid: sid, key: smsBodyKey(txt), ev: o });
+      return;
+    }
+    const label = c.type === 'email' ? 'E-mail' : (c.type || 'Message');
+    push(ms, c.type === 'email' ? 'email' : 'message', nameOf(m, c.ownerName),
+      label + (inbound ? ' reçu' : ' envoyé') + ' — ' + clip(c.content, 220), { channel: c.type || null, direction: inbound ? 'inbound' : 'outbound' });
   });
   (Array.isArray(l.notesHistory) ? l.notesHistory : []).forEach(function (n) {
     if (!n) return;
     push(toMs(n.date || n.createdAt), 'note', nameOf(noteMember(n, R), n.authorName), clip(n.text, 400));
   });
+
+  // SMS Twilio : ceux déjà sur la fiche sont complétés (non délivré), les
+  // autres — rappels automatiques surtout — sont ajoutés.
+  if (Array.isArray(twSms)) {
+    const seenSid = {};
+    twSms.forEach(function (t) {
+      if (!t || !t.sid || seenSid[t.sid]) return;
+      seenSid[t.sid] = 1;
+      const ms = toMs(t.dateSent || t.dateCreated);
+      const inbound = String(t.direction || '') === 'inbound';
+      const failed = /^(failed|undelivered|canceled)$/.test(String(t.status || ''));
+      const key = smsBodyKey(t.body);
+      const match = smsOnFile.find(function (s) {
+        if (s.used) return false;
+        if (s.sid) return s.sid === t.sid;
+        return s.inbound === inbound && Math.abs(s.ms - ms) < 5 * 60000 && s.key === key;
+      });
+      if (match) {
+        match.used = true;
+        if (failed && match.ev) match.ev.text = match.ev.text.replace(/^SMS envoyé/, 'SMS NON délivré (' + t.status + ')');
+        return;
+      }
+      push(ms, 'sms', inbound ? null : 'Automatique',
+        (inbound ? 'SMS reçu' : (failed ? 'SMS NON délivré (' + t.status + ')' : 'SMS envoyé')) + ' — ' + clip(t.body, 600),
+        { channel: 'sms', direction: inbound ? 'inbound' : 'outbound' });
+    });
+  }
+
+  // WhatsApp : la conversation (reçus et envoyés) puis le journal d'envoi pour
+  // les messages refusés ou en échec, absents de la conversation.
+  const waSeen = {};
+  function pushWa(w) {
+    const inbound = w.sens === 'in';
+    const ctx = w.contexte || {};
+    const m = ctx.uid ? R.byUid[ctx.uid] : null;
+    const who = inbound ? null : (m ? m.name : (ctx.par ? String(ctx.par).split('@')[0] : 'Automatique'));
+    const st = String(w.statut || '');
+    const bad = st === 'refuse' || st === 'echec' || st === 'failed';
+    push(toMs(w.at), 'whatsapp', who,
+      'WhatsApp ' + (inbound ? 'reçu' : (bad ? 'NON parti' + (w.erreur ? ' (' + clip(w.erreur, 120) + ')' : '') : 'envoyé' + (WA_STATUT_FR[st] || ''))) + ' — ' + clip(waText(w), 600),
+      { channel: 'whatsapp', direction: inbound ? 'inbound' : 'outbound' });
+  }
   if (waSnap) waSnap.forEach(function (d) {
     const w = d.data() || {};
-    push(toMs(w.at), 'whatsapp', null, 'WhatsApp ' + (w.sens === 'in' ? 'reçu' : 'envoyé') + ' — ' + clip(w.texte, 220), { direction: w.sens === 'in' ? 'inbound' : 'outbound' });
+    waSeen[d.id] = 1;
+    if (w.wamid) waSeen[w.wamid] = 1;
+    pushWa(w);
+  });
+  if (waOutSnap) waOutSnap.forEach(function (d) {
+    const w = d.data() || {};
+    if ((w.wamid && waSeen[w.wamid]) || waSeen[d.id]) return;
+    if (w.wamid) waSeen[w.wamid] = 1;
+    pushWa(w);
   });
   (Array.isArray(l.timeline_history) ? l.timeline_history : []).forEach(function (t) {
     if (!t) return;
@@ -1392,6 +1528,7 @@ async function handleLead(req, res, body) {
       createdAt: isoOf(toMs(l.createdAt)),
     },
     events: ev.slice(0, 800), total: ev.length,
+    smsError: smsError,
   });
 }
 
