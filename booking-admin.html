@@ -30,13 +30,16 @@
 .rv-st{display:flex;margin-bottom:16px}.rv-st div{padding:8px 16px;font-size:12px;font-weight:600;color:rgba(255,255,255,.48);cursor:pointer;border-bottom:2px solid transparent}.rv-st div:hover{color:#fff}.rv-st div.on{color:#a78bfa;border-bottom-color:#8b5cf6}
 .rv-stats{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap}.rv-stat{flex:1;min-width:90px;background:var(--bg2,#0e0e1a);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px;text-align:center}.rv-sn{font-family:'Bricolage Grotesque',sans-serif;font-size:24px;font-weight:800}.rv-sl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.48);margin-top:2px}
 .rv-dh{display:flex;align-items:center;gap:10px;margin:16px 0 8px}.rv-dl{font-family:'Bricolage Grotesque',sans-serif;font-size:14px;font-weight:700}.rv-dc{font-size:11px;color:#a78bfa;font-weight:700;margin-left:auto}
-.rv-r{display:flex;align-items:center;gap:14px;padding:12px 16px;background:var(--bg2,#0e0e1a);border:1px solid rgba(255,255,255,.07);border-radius:10px;margin-bottom:6px}.rv-r:hover{border-color:rgba(255,255,255,.13)}
+/* Ligne de RDV (refonte 19/10/2026, inspiree de Leads Live) : 4 zones fixes
+   heure | prospect + consultation/expert | presence + etats | actions.
+   La presence a sa propre colonne et n'est jamais tronquee. */
+.rv-r{display:grid;grid-template-columns:78px minmax(0,1fr) auto auto;grid-template-areas:"t m s a";align-items:center;column-gap:18px;row-gap:10px;padding:12px 16px;background:var(--bg2,#0e0e1a);border:1px solid rgba(255,255,255,.07);border-radius:12px;margin-bottom:6px;cursor:pointer;transition:border-color .15s,background .15s}.rv-r:hover{border-color:rgba(255,255,255,.13)}
 /* Etats de ligne : une ligne annulee ou en retard doit se lire d'un coup
    d'oeil, sans aller chercher le menu de statut a droite. */
 .rv-r{border-left:3px solid transparent}
 .rv-r.rv-cancelled{opacity:.5;border-left-color:#ef4444;background:rgba(239,68,68,.04)}
 .rv-r.rv-cancelled:hover{opacity:.78}
-.rv-r.rv-cancelled .rv-tn,.rv-r.rv-cancelled .rv-t{text-decoration:line-through;text-decoration-color:rgba(239,68,68,.55)}
+.rv-r.rv-cancelled .rv-nm>span:first-child,.rv-r.rv-cancelled .rv-t b{text-decoration:line-through;text-decoration-color:rgba(239,68,68,.55)}
 .rv-r.rv-late{opacity:.62;background:rgba(255,255,255,.015)}
 .rv-r.rv-late:hover{opacity:.9}
 .rv-r.rv-todo{opacity:.8;border-left-color:#fbbf24;background:rgba(251,191,36,.05)}
@@ -51,9 +54,24 @@
 .bk-pres.todo{background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.35)}.bk-pres.todo b{color:#fcd34d}
 .bk-pres.none b{color:rgba(255,255,255,.55)}
 .rv-flag-ok{background:rgba(52,211,153,.14);color:#6ee7b7;border:1px solid rgba(52,211,153,.35)}
-.rv-t{font-size:13px;font-weight:600;color:#a78bfa;min-width:100px}.rv-tp{display:flex;align-items:center;gap:8px;min-width:180px}.rv-tb{font-size:10px;font-weight:800;width:24px;height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff}.rv-tn{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rv-ex{display:flex;align-items:center;gap:8px;min-width:140px}.rv-ea{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-family:'Bricolage Grotesque',sans-serif;font-size:12px;font-weight:800;color:#fff}.rv-en{font-size:13px;font-weight:600}
-.rv-cl{flex:1;font-size:13px;color:rgba(255,255,255,.48)}.rv-mail{padding:4px 7px;font-size:13px;line-height:1;flex-shrink:0}.rv-mail:disabled{opacity:.5;cursor:wait}.rv-ss{padding:5px 10px;border-radius:6px;font-size:11px;font-weight:600;border:1px solid rgba(255,255,255,.07);background:var(--bg3,#141420);color:#fff;font-family:'Figtree',sans-serif;outline:0;cursor:pointer}
+.rv-t{grid-area:t;display:flex;flex-direction:column;line-height:1.15;color:#a78bfa}.rv-t b{font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:800}.rv-t span{font-size:11px;font-weight:600;color:rgba(255,255,255,.48);margin-top:3px;white-space:nowrap}
+.rv-main{grid-area:m;min-width:0}
+.rv-nm{display:flex;align-items:center;gap:7px;min-width:0;font-size:14.5px;font-weight:800}.rv-nm>span{flex:none}.rv-nm>span:first-child{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rv-mt{display:flex;align-items:center;gap:7px;min-width:0;overflow:hidden;margin-top:5px;font-size:12px;font-weight:600;color:rgba(255,255,255,.55)}
+.rv-tb{flex:none;font-size:10px;font-weight:800;width:20px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff}
+.rv-tl{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rv-sep{flex:none;color:rgba(255,255,255,.25)}
+.rv-ex{flex:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}.rv-ea{flex:none;width:20px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff}
+.rv-stx{grid-area:s;display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-width:200px}
+.rv-tags{display:flex;flex-wrap:wrap;align-items:center;gap:5px}.rv-tags .rv-flag{margin-left:0}
+.rv-pres{display:flex;align-items:center;gap:8px;padding:6px 12px 6px 9px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);line-height:1.2;white-space:nowrap}
+.rv-pres i{font-style:normal;font-size:14px}.rv-pres b{display:block;font-size:12px;font-weight:800}.rv-pres small{display:block;font-size:10.5px;font-weight:600;color:rgba(255,255,255,.55);margin-top:2px}
+.rv-pres.ok{background:rgba(52,211,153,.1);border-color:rgba(52,211,153,.4)}.rv-pres.ok b{color:#6ee7b7}
+.rv-pres.todo{background:rgba(251,191,36,.1);border-color:rgba(251,191,36,.4)}.rv-pres.todo b{color:#fcd34d}
+.rv-pres.none{border-style:dashed}.rv-pres.none b{color:rgba(255,255,255,.55)}
+.rv-act{grid-area:a;display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px}
+.rv-act .bb{height:32px;padding:0 11px;font-size:11.5px;white-space:nowrap}.rv-act .rv-ic{width:32px;padding:0;justify-content:center;font-size:14px;text-decoration:none}
+.rv-mail:disabled{opacity:.5;cursor:wait}.rv-ss{height:32px;padding:0 10px;border-radius:8px;font-size:11.5px;font-weight:600;border:1px solid rgba(255,255,255,.07);background:var(--bg3,#141420);color:#fff;font-family:'Figtree',sans-serif;outline:0;cursor:pointer}
+@media(max-width:1320px){.rv-r{grid-template-columns:78px minmax(0,1fr) auto;grid-template-areas:"t m s" "t a a"}.rv-act{justify-content:flex-start}}
 .rv-em{text-align:center;padding:40px;color:rgba(255,255,255,.48);font-size:13px}
 .cg{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}.cc{background:var(--bg2,#0e0e1a);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:20px;position:relative}.cc:hover{border-color:rgba(255,255,255,.13)}.cc-bar{position:absolute;top:0;left:0;right:0;height:4px;border-radius:14px 14px 0 0}.cc-n{font-family:'Bricolage Grotesque',sans-serif;font-size:15px;font-weight:700;margin-top:8px}.cc-m{font-size:12px;color:rgba(255,255,255,.48);margin-top:4px;display:flex;gap:12px}.cc-ex{display:flex;margin-top:10px}.cc-ea{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;border:2px solid var(--bg2,#0e0e1a);margin-left:-4px}.cc-ea:first-child{margin-left:0}.cc-ac{display:flex;gap:6px;margin-top:12px;align-items:center}.cc-sh{font-size:11px;color:#60a5fa;cursor:pointer;margin-left:auto}.cc-sh:hover{text-decoration:underline}
 .eg{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}.ec{background:var(--bg2,#0e0e1a);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:20px}.ec:hover{border-color:rgba(255,255,255,.13)}.ec-top{display:flex;align-items:center;gap:12px;margin-bottom:10px}.ec-av{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:800;color:#fff}.ec-nm{font-family:'Bricolage Grotesque',sans-serif;font-size:15px;font-weight:700}.ec-rl{font-size:12px;color:rgba(255,255,255,.48)}.ec-tb{font-size:9px;font-weight:700;padding:2px 8px;border-radius:5px;display:inline-block;margin:0 3px 3px 0}
@@ -84,7 +102,7 @@
 #mAvailFrame{margin-top:10px}
 .mf{margin-bottom:12px}.mf label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:rgba(255,255,255,.48);margin-bottom:4px}.mf input,.mf select,.mf textarea{width:100%;padding:9px 12px;background:var(--bg3,#141420);border:1.5px solid rgba(255,255,255,.07);border-radius:8px;color:#fff;font-family:'Figtree',sans-serif;font-size:13px;outline:0}.mf input:focus,.mf select:focus,.mf textarea:focus{border-color:#8b5cf6}.mf input::placeholder,.mf textarea::placeholder{color:rgba(255,255,255,.2)}.mf select option{background:var(--bg3,#141420)}.mf textarea{resize:vertical;min-height:56px}.mfr{display:grid;grid-template-columns:1fr 1fr;gap:10px}.mfd{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.2);margin:14px 0 10px;padding-top:12px;border-top:1px solid rgba(255,255,255,.07)}.mo-s{width:100%;padding:11px;border:0;border-radius:10px;background:#8b5cf6;color:#fff;font-family:'Figtree',sans-serif;font-size:14px;font-weight:700;cursor:pointer;margin-top:6px}.mo-s:disabled{opacity:.5;cursor:not-allowed}
 .bk-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2e1a;border:1px solid rgba(16,185,129,.3);color:#6ee7b7;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none}.bk-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-@media(max-width:640px){.rv-r{flex-wrap:wrap;gap:8px}.rv-tp,.rv-ex{min-width:auto}.cg,.eg{grid-template-columns:1fr}}
+@media(max-width:640px){.rv-r{grid-template-columns:56px minmax(0,1fr);grid-template-areas:"t m" "s s" "a a";column-gap:12px;padding:12px}.rv-stx{min-width:0;flex-direction:row;flex-wrap:wrap;align-items:center}.cg,.eg{grid-template-columns:1fr}}
 /* CONSULTATION DETAIL */
 .cd{display:none;animation:pi .25s ease both}.cd.on{display:flex;gap:0;min-height:400px}
 .cd-head{display:flex;align-items:center;gap:14px;padding:16px 20px;background:var(--bg2,#0e0e1a);border:1px solid rgba(255,255,255,.07);border-radius:14px;margin-bottom:16px}
@@ -673,11 +691,50 @@ function bkPresDetail(b) {
   if (pc.at) bits.push(new Date(pc.at).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }));
   return bits.join(' · ');
 }
-function bkPresChip(b) {
+/* Bloc présence de la ligne (refonte 19/10/2026) : colonne dédiée, jamais
+   tronquée. L'ancienne pastille vivait dans le titre de la consultation, coupé
+   en « … », et n'apparaissait donc jamais. */
+function bkPresBlock(b) {
   var st = bkPres(b);
-  if (st === 'ok') return '<span class="rv-flag rv-flag-ok" title="Présence confirmée ' + escA(bkPresDetail(b)) + '">✅ Présence confirmée</span>';
-  if (st === 'todo') return '<span class="rv-flag rv-flag-todo" title="Le setter n\'a pas encore confirmé la présence du prospect (Leads Live)">⚠️ Présence à confirmer</span>';
+  if (st === 'ok') {
+    var pc = b.presenceConfirmed || {}, sub = [];
+    if (pc.byName) sub.push(String(pc.byName).split(' ')[0]);
+    if (BK_PRES_CH[pc.channel]) sub.push(BK_PRES_CH[pc.channel]);
+    return '<div class="rv-pres ok" title="Présence confirmée ' + escA(bkPresDetail(b)) + '"><i>✅</i><span><b>Présence confirmée</b>' + (sub.length ? '<small>' + esc(sub.join(' · ')) + '</small>' : '') + '</span></div>';
+  }
+  if (st === 'todo') return '<div class="rv-pres todo" title="Le setter n\'a pas encore confirmé la présence du prospect (Leads Live)"><i>⚠️</i><span><b>Présence à confirmer</b><small>par le setter · Leads Live</small></span></div>';
+  if (st === 'none') return '<div class="rv-pres none" title="Aucune confirmation enregistrée avant le RDV"><i>○</i><span><b>Présence non confirmée</b></span></div>';
   return '';
+}
+/* Une ligne de la liste des RDV. Clics par délégation (listener sur #rL,
+   sous rRdv) : plus de onclick ni de stopPropagation sur les boutons — celui
+   du ✉️ empêchait son propre gestionnaire data-action de s'exécuter. */
+function rvRowHTML(b) {
+  var tO = T.find(function (t) { return t.id === b.type; }), pO = P.find(function (p) { return p.id === b.personId; });
+  var tc = tO ? tO.color : '#8b5cf6', pc = pO ? pO.color : '#666';
+  var pN = b.prospect ? ((b.prospect.prenom || '') + ' ' + (b.prospect.nom || '')).trim() : '';
+  var du = b.duration || 30, hm = (b.time || '09:00').split(':'), sm = parseInt(hm[0]) * 60 + parseInt(hm[1]);
+  var rs = rvRowState(b, sm, du), sales = bkScope(b) === 'sales', id = escA(b._id);
+  var tags = rs.badge + (b.outcome && sales && window.RdvOutcome ? window.RdvOutcome.chip(b) : '');
+  var h = '<div class="rv-r' + rs.cls + '" data-rv-open="' + id + '">';
+  h += '<div class="rv-t"><b>' + esc(b.time || '—') + '</b><span>→ ' + mToT(sm + du) + '</span></div>';
+  h += '<div class="rv-main"><div class="rv-nm"><span title="' + escA(pN) + '">' + esc(pN || 'Inconnu') + '</span>' + bkScopeBadge(b) + '</div>';
+  h += '<div class="rv-mt"><span class="rv-tb" style="background:' + tc + '">' + (tO && tO.label ? esc(tO.label[0].toUpperCase()) : '?') + '</span>';
+  h += '<span class="rv-tl" title="' + escA(b.typeLabel || '') + '">' + esc(b.typeLabel || '—') + '</span><span class="rv-sep">·</span>';
+  h += '<span class="rv-ex"><span class="rv-ea" style="background:' + pc + '">' + (pO && pO.name ? esc(pO.name[0].toUpperCase()) : '?') + '</span>' + esc(pO ? pO.name : '—') + '</span></div></div>';
+  h += '<div class="rv-stx">' + bkPresBlock(b) + (tags ? '<div class="rv-tags">' + tags + '</div>' : '') + '</div>';
+  h += '<div class="rv-act">';
+  if (sales) h += '<button type="button" class="bb bb-p" data-rv-outcome="' + id + '" title="Résultat de l\'appel (Close, Non close, Offre, Disqua…)">' + (b.outcome ? '✎ Résultat' : '🎯 Résultat') + '</button>';
+  if (sales && b.leadId) {
+    h += '<a class="bb bb-o rv-ic" href="sales-contact.html?id=' + encodeURIComponent(b.leadId) + '" title="Ouvrir la fiche prospect">👤</a>';
+    h += '<button type="button" class="bb bb-o" data-ai-prep="' + id + '" title="Dossier de préparation IA (prêt ~1 h avant le RDV)">📋 Dossier IA</button>';
+  }
+  if (b.prospect && b.prospect.email && b.status !== 'cancelled') h += '<button type="button" class="bb bb-o rv-ic rv-mail" data-action="resendMail" data-bid="' + id + '" title="Renvoyer l\'e-mail de confirmation à ' + escA(b.prospect.email) + '">✉️</button>';
+  h += '<select class="rv-ss" data-action="chSt" data-bid="' + id + '" title="Statut du RDV">';
+  [['confirmed', 'À venir'], ['completed', 'Terminé'], ['cancelled', 'Annulé'], ['no_show', 'No-show']].forEach(function (o) {
+    h += '<option value="' + o[0] + '"' + (b.status === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+  });
+  return h + '</select></div></div>';
 }
 function rvRowState(b, startMin, duration) {
   if (b.status === 'cancelled') return { cls: ' rv-cancelled', badge: '<span class="rv-flag rv-flag-x">Annulé</span>' };
@@ -697,7 +754,16 @@ function rRdv(){syncScopeUI();var td=tISO(),fP=document.getElementById('rFP').va
    Il disparaissait purement et simplement de Booking. */
 var ca=fl.filter(function(b){return b.status==='cancelled';}),
     up=fl.filter(function(b){return b.date>=td&&(b.status==='confirmed'||b.status==='pending');}),
-    pa=fl.filter(function(b){return b.status!=='cancelled'&&!(b.date>=td&&(b.status==='confirmed'||b.status==='pending'));});up.sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time);});pa.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time);});ca.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time);});document.getElementById('cR').textContent=up.length;var wE=new Date();wE.setDate(wE.getDate()+7);var ws=wE.getFullYear()+'-'+String(wE.getMonth()+1).padStart(2,'0')+'-'+String(wE.getDate()).padStart(2,'0');var tw=up.filter(function(b){return b.date<=ws;}),tl=up.filter(function(b){return b.date===td;});document.getElementById('rSt').innerHTML='<div class="rv-stat"><div class="rv-sn" style="color:#a78bfa">'+up.length+'</div><div class="rv-sl">À venir</div></div><div class="rv-stat"><div class="rv-sn" style="color:#34d399">'+tl.length+'</div><div class="rv-sl">Aujourd\'hui</div></div><div class="rv-stat"><div class="rv-sn" style="color:#60a5fa">'+tw.length+'</div><div class="rv-sl">Cette semaine</div></div><div class="rv-stat"><div class="rv-sn" style="color:#fca5a5">'+ca.length+'</div><div class="rv-sl">Annulés</div></div>';var ls=aRT==='up'?up:aRT==='past'?pa:ca,el=document.getElementById('rL');if(!ls.length){el.innerHTML='<div class="rv-em">Aucun rendez-vous '+(aRT==='up'?'à venir':aRT==='past'?'passé':'annulé')+'</div>';return;}var gr={};ls.forEach(function(b){if(!gr[b.date])gr[b.date]=[];gr[b.date].push(b);});var dk=Object.keys(gr).sort(aRT==='up'?undefined:function(a,b){return b.localeCompare(a);});var h='';dk.forEach(function(dt){var its=gr[dt];h+='<div class="rv-dh"><span>📅</span><span class="rv-dl">'+dFR(dt)+'</span><span class="rv-dc">'+its.length+' Rendez-vous</span></div>';its.forEach(function(b){var tO=T.find(function(t){return t.id===b.type;}),pO=P.find(function(p){return p.id===b.personId;}),tc=tO?tO.color:'#8b5cf6',pc=pO?pO.color:'#666',pN=b.prospect?((b.prospect.prenom||'')+' '+(b.prospect.nom||'')).trim():'Inconnu',du=b.duration||30,sm=parseInt((b.time||'09:00').split(':')[0])*60+parseInt((b.time||'09:00').split(':')[1]),et=mToT(sm+du);var _rvS=rvRowState(b,sm,du);h+='<div class="rv-r'+_rvS.cls+'" style="cursor:pointer" onclick="openRdvDetail(\''+b._id+'\')"><div class="rv-t">'+(b.time||'—')+' - '+et+'</div><div class="rv-tp"><span class="rv-tb" style="background:'+tc+'">'+(tO?tO.label[0].toUpperCase():'?')+'</span><span class="rv-tn">'+esc(b.typeLabel||'—')+bkScopeBadge(b)+_rvS.badge+bkPresChip(b)+'</span></div><div class="rv-ex"><span class="rv-ea" style="background:'+pc+'">'+(pO?(pO.name||'?')[0].toUpperCase():'?')+'</span><span class="rv-en">'+esc(pO?pO.name:'—')+'</span></div><div class="rv-cl">👤 '+esc(pN)+(b.outcome&&window.RdvOutcome&&bkScope(b)==='sales'?' '+window.RdvOutcome.chip(b):'')+'</div>'+(bkScope(b)==='sales'?'<button class="bb bb-p" style="padding:5px 10px;font-size:11px;flex-shrink:0" onclick="event.stopPropagation();bkOutcomeFromList(\''+b._id+'\')" title="Résultat de l\'appel (Close, Non close, Offre, Disqua…)">'+(b.outcome?'✎':'🎯 Résultat')+'</button>':'')+(b.leadId&&bkScope(b)==='sales'?'<a href="sales-contact.html?id='+encodeURIComponent(b.leadId)+'" onclick="event.stopPropagation()" title="Ouvrir la fiche prospect" style="text-decoration:none;font-size:14px;padding:4px 6px;flex-shrink:0">👤</a>':'')+(b.leadId&&bkScope(b)==='sales'?'<button type="button" class="bb bb-o" data-ai-prep="'+b._id+'" title="Dossier de préparation IA (prêt ~1 h avant le RDV)" style="padding:4px 8px;font-size:12px;flex-shrink:0">📋 Dossier IA</button>':'')+(b.prospect&&b.prospect.email&&b.status!=='cancelled'?'<button class="bb bb-o rv-mail" data-action="resendMail" data-bid="'+b._id+'" onclick="event.stopPropagation()" title="Renvoyer l\'e-mail de confirmation à '+escA(b.prospect.email)+'">✉️</button>':'')+'<select class="rv-ss" data-action="chSt" data-bid="'+b._id+'" onclick="event.stopPropagation()"><option value="confirmed"'+(b.status==='confirmed'?' selected':'')+'>À venir</option><option value="completed"'+(b.status==='completed'?' selected':'')+'>Terminé</option><option value="cancelled"'+(b.status==='cancelled'?' selected':'')+'>Annulé</option><option value="no_show"'+(b.status==='no_show'?' selected':'')+'>No-show</option></select></div>';});});el.innerHTML=h;}
+    pa=fl.filter(function(b){return b.status!=='cancelled'&&!(b.date>=td&&(b.status==='confirmed'||b.status==='pending'));});up.sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time);});pa.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time);});ca.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time);});document.getElementById('cR').textContent=up.length;var wE=new Date();wE.setDate(wE.getDate()+7);var ws=wE.getFullYear()+'-'+String(wE.getMonth()+1).padStart(2,'0')+'-'+String(wE.getDate()).padStart(2,'0');var tw=up.filter(function(b){return b.date<=ws;}),tl=up.filter(function(b){return b.date===td;});document.getElementById('rSt').innerHTML='<div class="rv-stat"><div class="rv-sn" style="color:#a78bfa">'+up.length+'</div><div class="rv-sl">À venir</div></div><div class="rv-stat"><div class="rv-sn" style="color:#34d399">'+tl.length+'</div><div class="rv-sl">Aujourd\'hui</div></div><div class="rv-stat"><div class="rv-sn" style="color:#60a5fa">'+tw.length+'</div><div class="rv-sl">Cette semaine</div></div><div class="rv-stat"><div class="rv-sn" style="color:#fca5a5">'+ca.length+'</div><div class="rv-sl">Annulés</div></div>';var ls=aRT==='up'?up:aRT==='past'?pa:ca,el=document.getElementById('rL');if(!ls.length){el.innerHTML='<div class="rv-em">Aucun rendez-vous '+(aRT==='up'?'à venir':aRT==='past'?'passé':'annulé')+'</div>';return;}var gr={};ls.forEach(function(b){if(!gr[b.date])gr[b.date]=[];gr[b.date].push(b);});var dk=Object.keys(gr).sort(aRT==='up'?undefined:function(a,b){return b.localeCompare(a);});var h='';dk.forEach(function(dt){var its=gr[dt];h+='<div class="rv-dh"><span>📅</span><span class="rv-dl">'+dFR(dt)+'</span><span class="rv-dc">'+its.length+' Rendez-vous</span></div>';its.forEach(function(b){h+=rvRowHTML(b);});});el.innerHTML=h;}
+/* Clics de la liste : résultat, sinon ouverture de la fiche du RDV — sauf
+   sur un lien, un bouton ou le sélecteur de statut. */
+document.getElementById('rL').addEventListener('click',function(e){
+  var o=e.target.closest('[data-rv-outcome]');
+  if(o){bkOutcomeFromList(o.getAttribute('data-rv-outcome'));return;}
+  if(e.target.closest('a,button,select,input,[data-action]'))return;
+  var r=e.target.closest('[data-rv-open]');
+  if(r)openRdvDetail(r.getAttribute('data-rv-open'));
+});
 function rCs(){var EVT_LABELS={private:'👤 En privé',group:'👥 Groupe',roundrobin:'🔄 Round-robin',collective:'🤝 Collectif'};
 // CSM voit toutes les consultations comme admin (vue Customer Success).
 // Sales ne voit que celles qui lui sont assignées.
