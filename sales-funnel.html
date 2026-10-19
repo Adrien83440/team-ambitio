@@ -1531,7 +1531,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
       h += '<div class="fn-stage-note" style="margin-top:6px">🔁 <strong>Deux questions, deux totaux — les deux sont justes.</strong> « Combien de RDV a-t-on <strong>pris</strong> sur la période ? » → ' + fmtNum(k.chAll.n) + (k.createdDueLater ? ' (dont ' + fmtNum(k.createdDueLater) + ' qui auront lieu après)' : '') + ' · « Combien de RDV <strong>ont lieu</strong> sur la période ? » (héro L2 · Tenue) → ' + fmtNum(k.rdvMois) + ', dont ' + fmtNum(k.dueCreatedBefore) + ' pris avant la période. Un RDV pris le mois dernier pour cette période compte dans le 2ᵉ total, pas dans le 1ᵉʳ.</div>';
     }
     if (!k.ocHasData) {
-      h += '<div class="fn-stage-note" style="margin-top:6px">ℹ Aucun résultat d\'appel saisi sur la période — statue les RDV (Close, Non close, Offre, Disqua, No-show, Annulé, Replanifié) depuis <a href="sales-rdv.html" style="color:var(--blue)">Rendez-vous</a> ou la fiche prospect : kept / live / closes / collecté se rempliront tout seuls.</div>';
+      h += '<div class="fn-stage-note" style="margin-top:6px">ℹ Aucun résultat d\'appel saisi sur la période — statue les RDV (Close, Non close, Offre, Disqua, No-show, Annulé, Replanifié) depuis <a href="booking-admin.html?vue=mes-rdv" style="color:var(--blue)">Agenda</a> ou la fiche prospect : kept / live / closes / collecté se rempliront tout seuls.</div>';
     }
     /* — Ligne 1 : SELF BOOKING — */
     h += '<div style="font-size:10.5px;color:var(--gold);font-weight:800;letter-spacing:0.7px;margin:12px 0 8px">🔗 Self Booking — le lead prend RDV seul (lien public)</div>';
@@ -1581,7 +1581,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     h += '</div>';
     if (k.bookedAdmin > 0) h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + k.bookedAdmin + ' RDV manuels (admin) — hors LTB / hors funnel.</div>';
     if (k.unknownLeadBookings > 0 && tunnelFilter === 'all') h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + k.unknownLeadBookings + ' RDV de leads hors période (non rattachés à la cohorte) — inclus dans les totaux « Tous », hors taux de récupération.</div>';
-    if (k.ocDue.aStatuer > 0) h += '<div class="fn-alert">⏳ <strong>' + k.ocDue.aStatuer + ' RDV passé(s) sans résultat</strong> — à statuer dans <a href="sales-rdv.html">Rendez-vous</a> ou depuis la fiche prospect pour des lignes SB / NB exactes.</div>';
+    if (k.ocDue.aStatuer > 0) h += '<div class="fn-alert">⏳ <strong>' + k.ocDue.aStatuer + ' RDV passé(s) sans résultat</strong> — à statuer dans <a href="booking-admin.html?vue=mes-rdv">Agenda</a> ou depuis la fiche prospect pour des lignes SB / NB exactes.</div>';
     if (k.closesCancelled > 0) h += '<div class="fn-alert">🚫 <strong>' + k.closesCancelled + ' close(s) annulé(s)</strong>' + (k.closesCancelledNames && k.closesCancelledNames.length ? ' (' + esc(k.closesCancelledNames.join(', ')) + ')' : '') + ' — paiement annulé ou client stoppé sans aucun prélèvement : retiré(s) des closes, du contracté et du collecté.</div>';
     if (k.collecteMissing > 0) h += '<div class="fn-alert">💶 <strong>' + k.collecteMissing + ' close(s) sans paiement</strong>' + (k.collecteMissingNames.length ? ' (' + esc(k.collecteMissingNames.join(', ')) + ')' : '') + ' — le client est compté mais aucun paiement GoCardless (module Paiements) ne lui correspond : son encaissé déclaré n\'est PAS compté dans le collecté. Crée le paiement : le collecté remontera automatiquement.</div>';
     if (k.payCloseNames && k.payCloseNames.length) h += '<div class="fn-alert">💳 <strong>' + k.payCloseNames.length + ' close(s) compté(s) via le module Paiements</strong> (' + esc(k.payCloseNames.join(', ')) + ') — paiement créé dans la période sans fiche gagnée correspondante. Valide les cartes du close sur la fiche pour un rattachement propre.</div>';
@@ -1609,7 +1609,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     h += kpiCard(fmtNum(k.dueCompleted), 'Tenus (statués)', k.dueUpcoming ? '+ ' + k.dueUpcoming + ' à venir' : null);
     if (k.showup != null) h += kpiCard(fmtPct(k.showup, 0), 'Show-up', 'présents du mois ÷ kept (résultats RDV)', targetBadge('showup', k.showup));
     h += '</div>';
-    if (k.dueToStatus > 0) h += '<div class="fn-alert">⚠ <strong>' + k.dueToStatus + ' RDV passé(s) sans statut</strong> — à marquer Tenu / Annulé / No-show dans <a href="sales-rdv.html">Rendez-vous</a> ou <a href="booking-admin.html">Booking</a> pour des stats fiables.</div>';
+    if (k.dueToStatus > 0) h += '<div class="fn-alert">⚠ <strong>' + k.dueToStatus + ' RDV passé(s) sans statut</strong> — à marquer Tenu / Annulé / No-show dans l\'<a href="booking-admin.html?vue=mes-rdv">Agenda</a> pour des stats fiables.</div>';
     h += '</div>';
     h += '<div class="fn-arrow">▼</div>';
 

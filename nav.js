@@ -53,7 +53,7 @@
     sales_crm:'CRM',sales_dashboard:'Dashboard (Sales)',sales_saisie:'Set NB / Close SB / EOD',
     sales_dialer:'Dialer',
     sales_whatsapp:'WhatsApp',
-    sales_equipe:'Équipe',sales_commissions:'Commissions',sales_projections:'Projections',booking:'Booking',alteoforms:'AlteoForms',
+    sales_equipe:'Équipe',sales_commissions:'Commissions',sales_projections:'Projections',booking:'Agenda',alteoforms:'AlteoForms',
     csm_dashboard:'Dashboard CSM',csm_clients:'Clients (CSM)'
   };
 
@@ -80,13 +80,11 @@
       { id: 'sales-closing',     icon: '🎯', label: 'Close SB',      href: 'sales-closing.html',     perm: 'sales_saisie' },
       { id: 'sales-eod',         icon: '📝', label: 'EOD',           href: 'sales-eod.html',         perm: 'sales_saisie' },
     ]},
-    // Rendez-vous (sales-rdv) et Booking (booking-admin) : règles par id
-    // dans canSee() — Rendez-vous strictement commercial, Booking ouvert à la
-    // CSM en lecture seule.
-    { id: 'nav-agenda', icon: '📅', label: 'Agenda', section: 'Commercial', children: [
-      { id: 'sales-rdv',         icon: '🗓️', label: 'Rendez-vous',   href: 'sales-rdv.html',         perm: 'booking' },
-      { id: 'booking',           icon: '📅', label: 'Booking',       href: 'booking-admin.html',     perm: 'booking' },
-    ]},
+    // Agenda (booking-admin) : Rendez-vous et Booking fusionnés le 19/10/2026
+    // (👤 Mes RDV / 👥 Équipe dans la page). sales-rdv.html redirige vers
+    // booking-admin.html?vue=mes-rdv. Règle par id dans canSee() : ouvert à
+    // la CSM en lecture seule.
+    { id: 'booking',           icon: '📅', label: 'Agenda',            href: 'booking-admin.html',     section: 'Commercial', perm: 'booking' },
     { id: 'nav-appels', icon: '☎️', label: 'Appels & messages', section: 'Commercial', children: [
       { id: 'sales-dialer',      icon: '☎️', label: 'Dialer',        href: 'sales-dialer.html',      perm: 'sales_dialer' },
       { id: 'sales-whatsapp',    icon: '💬', label: 'WhatsApp',      href: 'whatsapp.html',          perm: 'sales_whatsapp' },

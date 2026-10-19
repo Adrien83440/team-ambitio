@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Ambitio — Booking</title>
+<title>Ambitio — Agenda</title>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -247,7 +247,29 @@
 .rdv-p-row{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04)}
 .rdv-p-row:last-child{border-bottom:0}
 .rdv-p-label{font-size:12px;font-weight:600;color:rgba(255,255,255,.38);width:120px;flex-shrink:0}.rdv-p-val{font-size:13px;font-weight:600;flex:1}
-.rdv-p-actions{padding:20px 24px;border-top:1px solid rgba(255,255,255,.07);display:flex;gap:8px}
+.rdv-p-actions{padding:20px 24px 28px;border-top:1px solid rgba(255,255,255,.07);display:flex;flex-wrap:wrap;gap:8px}
+/* Agenda unifié (19/10/2026) : Mes RDV / Équipe, vue semaine, créneaux, Leads Live */
+body.bk-rdv-open .aidw-fab,body.bk-rdv-open .aio-fab,body.bk-rdv-open #ambitio-inbox-fab,body.bk-rdv-open #alteoInfosBell{display:none!important}
+.rdv-p-ll{text-decoration:none;flex-shrink:0}.rdv-p-noll{font-size:11px;font-weight:600;color:rgba(255,255,255,.35);flex-shrink:0}
+.bn-sep{display:flex;align-items:center;margin-left:auto;padding:0 8px 0 18px;font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:rgba(255,255,255,.3);white-space:nowrap;border-left:1px solid rgba(255,255,255,.07)}
+.rv-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}.rv-bar .sp{flex:1}
+.rv-seg{display:inline-flex;padding:3px;border-radius:10px;background:var(--bg2,#0e0e1a);border:1px solid rgba(255,255,255,.07)}
+.rv-seg button{border:0;background:0;color:rgba(255,255,255,.55);font-family:'Figtree',sans-serif;font-size:12px;font-weight:700;padding:7px 14px;border-radius:8px;cursor:pointer;white-space:nowrap}.rv-seg button:hover{color:#fff}.rv-seg button.on{background:rgba(139,92,246,.18);color:#c4b5fd}
+.rv-who-cap{font-size:12px;font-weight:600;color:rgba(255,255,255,.55)}
+.rv-stat.warn .rv-sn{color:#fbbf24!important}
+.rv-flag-open{background:rgba(251,146,60,.13);color:#fdba74;border:1px solid rgba(251,146,60,.35)}.rv-flag-dbl{background:rgba(239,68,68,.14);color:#fca5a5;border:1px solid rgba(239,68,68,.35)}
+.bb-w{background:rgba(251,146,60,.13);color:#fdba74;border:1px solid rgba(251,146,60,.35)}.bb-w:hover{background:rgba(251,146,60,.22)}
+.rv-slot-desc{font-size:13px;line-height:1.55;color:rgba(255,255,255,.7)}.rv-slot-info{margin-top:12px;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);font-size:12.5px;line-height:1.5}
+.rw-nav{display:flex;align-items:center;gap:6px;margin-bottom:12px;flex-wrap:wrap}.rw-lbl{font-size:13px;font-weight:700;margin-left:6px}
+.rw-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+.rw-g{display:grid;grid-template-columns:repeat(7,minmax(118px,1fr));gap:8px;min-width:840px}
+.rw-c{background:var(--bg2,#0e0e1a);border:1px solid rgba(255,255,255,.07);border-radius:12px;min-height:220px;display:flex;flex-direction:column}.rw-c.today{border-color:rgba(139,92,246,.45)}
+.rw-h{display:flex;align-items:baseline;gap:6px;padding:10px 10px 8px;border-bottom:1px solid rgba(255,255,255,.06);font-size:11px;font-weight:700;text-transform:uppercase;color:rgba(255,255,255,.5)}.rw-h b{font-size:16px;color:#fff}.rw-c.today .rw-h b{color:#c4b5fd}.rw-h i{margin-left:auto;font-style:normal;font-size:10px;padding:1px 7px;border-radius:10px;background:rgba(139,92,246,.14);color:#c4b5fd}
+.rw-b{padding:8px;display:flex;flex-direction:column;gap:6px}.rw-none{font-size:12px;color:rgba(255,255,255,.2);text-align:center;padding:10px 0}
+.rw-e{border-left:3px solid #8b5cf6;background:rgba(255,255,255,.035);border-radius:7px;padding:6px 8px;cursor:pointer;min-width:0}.rw-e:hover{background:rgba(255,255,255,.07)}
+.rw-t{font-size:10.5px;font-weight:800;color:rgba(255,255,255,.6)}.rw-n{font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}.rw-m{font-size:10.5px;color:rgba(255,255,255,.45);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rw-e.x{opacity:.45}.rw-e.x .rw-n{text-decoration:line-through}.rw-e.done{opacity:.6}.rw-e.todo{background:rgba(251,191,36,.08);box-shadow:inset 0 0 0 1px rgba(251,191,36,.3)}
+@media(max-width:640px){.rv-bar .sp{display:none}.bn-sep{margin-left:0}}
 /* ── READ-ONLY (non-admin) ── */
 .ex-ro-banner{margin:0 0 16px;padding:12px 14px;border-radius:10px;background:linear-gradient(90deg,rgba(251,146,60,.12),rgba(251,146,60,.04));border:1px solid rgba(251,146,60,.28);color:#fed7aa;font-size:12px;font-weight:600;display:flex;gap:10px;align-items:center}
 .ex-ro-banner .ex-ro-icon{font-size:16px}
@@ -333,9 +355,9 @@ body.csm-mode #csG [data-action="delT"]{display:none !important}
 </head>
 <body>
 <div class="bk">
-<div class="bk-top"><div class="bk-ic">📅</div><div><h1>Booking</h1><small>Gestion des rendez-vous</small></div><div class="sp"></div><button class="bb bb-p" id="newRdv">+ Nouveau rendez-vous</button></div>
-<div class="bn"><div class="bn-i on" data-p="rdv"><span>📋</span> Rendez-vous <span class="bn-c" id="cR">0</span></div><div class="bn-i" data-p="cs"><span>🏷</span> Consultations <span class="bn-c" id="cC">0</span></div><div class="bn-i" data-p="ex"><span>👥</span> Experts <span class="bn-c" id="cE">0</span></div><div class="bn-i" data-p="pg"><span>🔗</span> Pages de réservation</div><div class="bn-i" data-p="st"><span>⚙️</span> Réglages</div></div>
-<div class="bp on" id="p-rdv"><div class="rv-st"><div class="on" data-rt="up">À venir</div><div data-rt="past">Passé</div><div data-rt="cancel">Annulé</div></div><div class="rv-st" id="rScope" style="margin-top:-4px"><div data-sc="sales">🎯 Setting &amp; Sales</div><div data-sc="coaching">🎓 Coaching &amp; Clients</div><div data-sc="all">Tous</div></div><div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap"><input type="text" class="bi" id="rQ" placeholder="🔍 Rechercher…" style="width:200px"/><select class="bs" id="rFP"><option value="">Tous les experts</option></select><select class="bs" id="rFT"><option value="">Toutes les consultations</option></select></div><div class="rv-stats" id="rSt"></div><div id="rL"></div></div>
+<div class="bk-top"><div class="bk-ic">📅</div><div><h1>Agenda</h1><small>Rendez-vous, disponibilités et pages de réservation</small></div><div class="sp"></div><button class="bb bb-p" id="newRdv">+ Nouveau rendez-vous</button></div>
+<div class="bn"><div class="bn-i on" data-p="rdv"><span>📋</span> Rendez-vous <span class="bn-c" id="cR">0</span></div><div class="bn-sep">Configuration</div><div class="bn-i" data-p="cs"><span>🏷</span> Consultations <span class="bn-c" id="cC">0</span></div><div class="bn-i" data-p="ex"><span>👥</span> Experts &amp; dispos <span class="bn-c" id="cE">0</span></div><div class="bn-i" data-p="pg"><span>🔗</span> Pages de réservation</div><div class="bn-i" data-p="st"><span>⚙️</span> Réglages</div></div>
+<div class="bp on" id="p-rdv"><div class="rv-bar"><div class="rv-seg" id="rWho" style="display:none"><button type="button" data-who="mine">👤 Mes RDV</button><button type="button" data-who="team">👥 Équipe</button></div><div class="rv-who-cap" id="rWhoCap">👤 Mes RDV — ceux que tu as posés et ceux de ton agenda</div><div class="sp"></div><div class="rv-seg" id="rView"><button type="button" data-rview="list">📋 Liste</button><button type="button" data-rview="week">🗓️ Semaine</button></div></div><div class="rv-st" id="rRt"><div class="on" data-rt="up">À venir</div><div data-rt="past">Passé</div><div data-rt="cancel">Annulé</div></div><div class="rv-st" id="rScope" style="margin-top:-4px"><div data-sc="sales">🎯 Setting &amp; Sales</div><div data-sc="coaching">🎓 Coaching &amp; Clients</div><div data-sc="all">Tous</div></div><div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap"><input type="text" class="bi" id="rQ" placeholder="🔍 Rechercher…" style="width:200px"/><select class="bs" id="rFP"><option value="">Tous les experts</option></select><select class="bs" id="rFT"><option value="">Toutes les consultations</option></select></div><div class="rv-stats" id="rSt"></div><div id="rL"></div></div>
 <div class="bp" id="p-cs">
 <!-- GRID VIEW -->
 <div id="csGridView"><div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><div style="font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:700;flex:1">Consultations actives <span class="bn-c" id="cC2">0</span></div><button class="bb bb-g" id="addT">+ Nouvelle Consultation</button></div><div class="cg" id="csG"></div><div id="addTF" style="display:none;margin-top:16px;padding:16px;background:var(--bg2,#0e0e1a);border:1px solid rgba(255,255,255,.07);border-radius:14px"><div style="font-family:'Bricolage Grotesque',sans-serif;font-size:14px;font-weight:700;margin-bottom:12px">Nouvelle consultation</div><div class="mf" style="margin-bottom:12px"><label>Type d'événement</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px"><div class="evt-type-opt on" data-evt="private" onclick="selectEvtType(this)"><div style="font-size:16px">👤</div><div style="font-size:12px;font-weight:700">En privé</div><div style="font-size:10px;color:rgba(255,255,255,.38)">1:1 · Un seul invité</div></div><div class="evt-type-opt" data-evt="group" onclick="selectEvtType(this)"><div style="font-size:16px">👥</div><div style="font-size:12px;font-weight:700">Groupe</div><div style="font-size:10px;color:rgba(255,255,255,.38)">Plusieurs invités</div></div><div class="evt-type-opt" data-evt="roundrobin" onclick="selectEvtType(this)"><div style="font-size:16px">🔄</div><div style="font-size:12px;font-weight:700">Round-robin</div><div style="font-size:10px;color:rgba(255,255,255,.38)">Attribution tournante</div></div><div class="evt-type-opt" data-evt="collective" onclick="selectEvtType(this)"><div style="font-size:16px">🤝</div><div style="font-size:12px;font-weight:700">Collectif</div><div style="font-size:10px;color:rgba(255,255,255,.38)">Tous les experts présents</div></div></div></div><div class="mfr" style="margin-bottom:10px"><div class="mf"><label>Nom</label><input class="bi" id="tN" placeholder="Ex: Coaching 1:1 Business"/></div><div class="mf"><label>Durée</label><select class="bs" id="tD" style="width:100%"><option value="15">15 min</option><option value="30" selected>30 min</option><option value="45">45 min</option><option value="60">1h</option><option value="90">1h30</option><option value="120">2h</option></select></div></div><div class="mfr" style="margin-bottom:10px"><div class="mf"><label>Couleur</label><input type="color" id="tCo" value="#8b5cf6" style="width:100%;height:36px;border:0;border-radius:8px;cursor:pointer"/></div><div class="mf"><label>Description</label><input class="bi" id="tDs" placeholder="Optionnel"/></div></div><div style="display:flex;gap:8px;justify-content:flex-end"><button class="bb bb-o" onclick="document.getElementById('addTF').style.display='none'">Annuler</button><button class="bb bb-p" id="tSub">Créer</button></div></div></div>
@@ -551,7 +573,7 @@ body.csm-mode #csG [data-action="delT"]{display:none !important}
 <div class="bk-toast" id="bkT"></div>
 <script>
 var db=firebase.firestore(),CR=db.collection('booking_config'),T=[],P=[],S={},B=[],aRT='up';
-var _bUnsub=null;
+var _bUnsub=null,_bSlug=null;
 var JR=['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimanche'],JS=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'],JF=['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'],MF=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 function toast(m){var t=document.getElementById('bkT');t.textContent=m;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2200);}
 function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
@@ -574,32 +596,63 @@ function mToT(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60
 document.querySelectorAll('.bn-i').forEach(function(t){t.addEventListener('click',function(){document.querySelectorAll('.bn-i').forEach(function(x){x.classList.remove('on');});t.classList.add('on');document.querySelectorAll('.bp').forEach(function(p){p.classList.remove('on');});document.getElementById('p-'+t.dataset.p).classList.add('on');});});
 function loadAll(){CR.get().then(function(sn){var _oldCdId=cdType?cdType.id:null;var _oldExId=(typeof exPerson!=='undefined'&&exPerson)?exPerson.id:null;T=[];P=[];S={};sn.forEach(function(d){var v=d.data();if(d.id==='_types')T=v.list||[];else if(d.id==='_settings')S=v;else if(v.__type==='person'){v.id=d.id;P.push(v);}});P.sort(function(a,b){return(a.name||'').localeCompare(b.name||'');});window._selfPersonId=null;if(window._currentUid){var _sp=P.find(function(p){return p.firebaseUid===window._currentUid;});if(_sp)window._selfPersonId=_sp.id;}if(_oldCdId){var _fresh=T.find(function(t){return t.id===_oldCdId;});if(_fresh)cdType=_fresh;}if(_oldExId){var _freshEx=P.find(function(p){return p.id===_oldExId;});if(_freshEx)exPerson=_freshEx;}renderAll();loadB();try{if(document.getElementById('cMo').classList.contains('show')){fillTypeSelect();fillExpertSelect();}}catch(_e){}var _calPid=sessionStorage.getItem('_calConnectPid');if(_calPid){sessionStorage.removeItem('_calConnectPid');setTimeout(function(){document.querySelectorAll('.bn-i').forEach(function(x){x.classList.remove('on');});document.querySelector('[data-p="ex"]').classList.add('on');document.querySelectorAll('.bp').forEach(function(p){p.classList.remove('on');});document.getElementById('p-ex').classList.add('on');openExDetail(_calPid);exSection='calendar';renderExNav();renderExSection();},500);}}).catch(function(e){console.error(e);});}
 function loadB(){
-var isAdmin=window._currentRole==='admin';
 // La CSM (Customer Success) voit tous les RDV de l'équipe comme un admin
 // (vue globale pour gérer le support client), mais elle ne peut pas
 // éditer les paramètres (cf. UI gating + Firestore rules).
 var canViewAll=(window._currentRole==='admin'||window._currentRole==='csm');
-var selfId=window._selfPersonId;
 // Détache l'ancien listener si on en attache un nouveau (évite les doublons
 // si loadB est rappelée, ex. après changement de rôle ou mutation manuelle).
 if(_bUnsub){try{_bUnsub();}catch(e){}_bUnsub=null;}
-// Non-admin/non-csm sans selfId résolu : rien charger (évite d'exposer tous les RDV)
-if(!canViewAll&&!selfId){B=[];rRdv();return;}
-var q=canViewAll?db.collection('bookings'):db.collection('bookings').where('personId','==',selfId);
 // Listener temps réel : B et la vue se rafraîchissent automatiquement à
 // chaque création / mise à jour / annulation / suppression de booking,
 // sans rechargement de page.
-_bUnsub=q.onSnapshot(function(sn){
-  B=[];
-  sn.forEach(function(d){var v=d.data();v._id=d.id;B.push(v);});
-  B.sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time);});
+if(canViewAll){
+  _bUnsub=db.collection('bookings').onSnapshot(function(sn){
+    B=[];
+    sn.forEach(function(d){var v=d.data();v._id=d.id;B.push(v);});
+    bkAfterB();
+  },function(err){console.error('[bookings onSnapshot]',err);B=[];rRdv();});
+  return;
+}
+/* Agenda unifié (19/10/2026) — « Mes RDV », ex-module Rendez-vous
+   (sales-rdv.html). Avant, un non-admin ne voyait que personId == sa fiche
+   expert : un setter ne retrouvait JAMAIS les RDV qu'il avait posés sur
+   l'agenda d'un closer, et un setter sans fiche expert ne voyait rien.
+   On couvre les deux bouts de la chaîne, comme sales-rdv :
+     - le RDV qui EST SUR MON AGENDA → personId ∈ mes fiches booking_config
+     - le RDV que J'AI POSÉ          → bookedByUid / bookedBySlug
+   plus les champs legacy des RDV transférés (assignedToUid, ownerSlug,
+   personId == slug). Une requête par champ (égalité simple, aucun index
+   composite), fusionnées sans doublon. Rien d'autre n'est chargé : un
+   non-admin ne voit toujours pas l'agenda du reste de l'équipe. */
+var uid=window._currentUid,slug=bkSelfSlug(),pids=Object.keys(bkMyPids()).slice(0,10);
+var col=db.collection('bookings'),qs=[];
+if(pids.length)qs.push(col.where('personId','in',pids));
+if(uid){qs.push(col.where('bookedByUid','==',uid));qs.push(col.where('assignedToUid','==',uid));}
+if(slug){qs.push(col.where('bookedBySlug','==',slug));qs.push(col.where('ownerSlug','==',slug));if(pids.indexOf(slug)<0)qs.push(col.where('personId','==',slug));}
+_bSlug=slug;
+if(!qs.length){B=[];rRdv();return;}
+var parts=[],uns=[];
+qs.forEach(function(q,i){
+  parts[i]=[];
+  uns.push(q.onSnapshot(function(sn){
+    var a=[];sn.forEach(function(d){var v=d.data();v._id=d.id;a.push(v);});
+    parts[i]=a;
+    var seen={};B=[];
+    parts.forEach(function(p){p.forEach(function(v){if(seen[v._id])return;seen[v._id]=1;B.push(v);});});
+    bkAfterB();
+  },function(err){console.error('[bookings onSnapshot mes RDV]',err);}));
+});
+_bUnsub=function(){uns.forEach(function(u){try{u();}catch(e){}});};
+}
+function bkAfterB(){
+  B.sort(function(a,b){return((a.date||'')+(a.time||'')).localeCompare((b.date||'')+(b.time||''));});
   rRdv();
   // Si la fiche expert est ouverte sur l'onglet "Vue planning", on
   // rafraîchit aussi le mini calendrier pour refléter les nouveaux RDVs.
   if(typeof exSection!=='undefined'&&exSection==='vue'&&typeof _vuRender==='function'){
     try{_vuRender();}catch(e){}
   }
-},function(err){console.error('[bookings onSnapshot]',err);B=[];rRdv();});
 }
 function renderAll(){rRdv();rCs();rEx();rPg();lSt();pFlt();}
 function pFlt(){
@@ -715,7 +768,7 @@ function rvRowHTML(b) {
   var pN = b.prospect ? ((b.prospect.prenom || '') + ' ' + (b.prospect.nom || '')).trim() : '';
   var du = b.duration || 30, hm = (b.time || '09:00').split(':'), sm = parseInt(hm[0]) * 60 + parseInt(hm[1]);
   var rs = rvRowState(b, sm, du), sales = bkScope(b) === 'sales', id = escA(b._id);
-  var tags = rs.badge + (b.outcome && sales && window.RdvOutcome ? window.RdvOutcome.chip(b) : '');
+  var tags = rs.badge + rvExtraFlags(b) + (b.outcome && sales && window.RdvOutcome ? window.RdvOutcome.chip(b) : '');
   var h = '<div class="rv-r' + rs.cls + '" data-rv-open="' + id + '">';
   h += '<div class="rv-t"><b>' + esc(b.time || '—') + '</b><span>→ ' + mToT(sm + du) + '</span></div>';
   h += '<div class="rv-main"><div class="rv-nm"><span title="' + escA(pN) + '">' + esc(pN || 'Inconnu') + '</span>' + bkScopeBadge(b) + '</div>';
@@ -726,9 +779,13 @@ function rvRowHTML(b) {
   h += '<div class="rv-act">';
   if (sales) h += '<button type="button" class="bb bb-p" data-rv-outcome="' + id + '" title="Résultat de l\'appel (Close, Non close, Offre, Disqua…)">' + (b.outcome ? '✎ Résultat' : '🎯 Résultat') + '</button>';
   if (sales && b.leadId) {
-    h += '<a class="bb bb-o rv-ic" href="sales-contact.html?id=' + encodeURIComponent(b.leadId) + '" title="Ouvrir la fiche prospect">👤</a>';
+    h += bkCanLeadsLive()
+      ? '<a class="bb bb-o rv-ic" href="sales-leads.html?leadId=' + encodeURIComponent(b.leadId) + '" title="Ouvrir la fiche du prospect dans Leads Live">👤</a>'
+      : '<a class="bb bb-o rv-ic" href="sales-contact.html?id=' + encodeURIComponent(b.leadId) + '" title="Ouvrir la fiche prospect">👤</a>';
     h += '<button type="button" class="bb bb-o" data-ai-prep="' + id + '" title="Dossier de préparation IA (prêt ~1 h avant le RDV)">📋 Dossier IA</button>';
   }
+  if (bkCanSlot(b)) h += '<button type="button" class="bb ' + (b.slotOpen === true ? 'bb-w' : 'bb-o') + ' rv-ic" data-rv-slot="' + id + '" title="' + (b.slotOpen === true ? 'Créneau ouvert à d\'autres réservations — cliquer pour le fermer' : 'Créneau fermé — cliquer pour le rouvrir à d\'autres réservations (SMS + e-mail de reconfirmation)') + '">' + (b.slotOpen === true ? '🟠' : '🔒') + '</button>';
+  if (bkCanLeadsLive() && b.prospect && b.prospect.telephone) h += '<button type="button" class="bb bb-o rv-ic" data-rv-call="1" data-phone="' + escA(b.prospect.telephone) + '" data-name="' + escA(pN) + '" data-lead-id="' + escA(b.leadId || '') + '" title="Appeler via Ringover">📞</button>';
   if (b.prospect && b.prospect.email && b.status !== 'cancelled') h += '<button type="button" class="bb bb-o rv-ic rv-mail" data-action="resendMail" data-bid="' + id + '" title="Renvoyer l\'e-mail de confirmation à ' + escA(b.prospect.email) + '">✉️</button>';
   h += '<select class="rv-ss" data-action="chSt" data-bid="' + id + '" title="Statut du RDV">';
   [['confirmed', 'À venir'], ['completed', 'Terminé'], ['cancelled', 'Annulé'], ['no_show', 'No-show']].forEach(function (o) {
@@ -747,19 +804,206 @@ function rvRowState(b, startMin, duration) {
     : { cls: ' rv-late', badge: '<span class="rv-flag">Passé</span>' };
 }
 
-function rRdv(){syncScopeUI();var td=tISO(),fP=document.getElementById('rFP').value,fT=document.getElementById('rFT').value;var _canViewAll=(window._currentRole==='admin'||window._currentRole==='csm');if(!_canViewAll&&window._selfPersonId)fP=window._selfPersonId;var q=(document.getElementById('rQ').value||'').toLowerCase();var fl=B.filter(function(b){if(aScope!=='all'&&bkScope(b)!==aScope)return false;if(fP&&b.personId!==fP)return false;if(fT&&b.type!==fT)return false;if(q){var n=b.prospect?((b.prospect.prenom||'')+' '+(b.prospect.nom||'')):b.personName||'';if(n.toLowerCase().indexOf(q)<0&&(b.typeLabel||'').toLowerCase().indexOf(q)<0)return false;}return true;});/* Repartition EXHAUSTIVE : tout RDV doit tomber dans exactement un onglet.
+/* ═══ AGENDA UNIFIÉ (19/10/2026) ═══════════════════════════════════════
+   L'ex-module « Rendez-vous » (sales-rdv.html) vit désormais ici :
+   - 👤 Mes RDV / 👥 Équipe : un admin ou la CSM bascule entre les deux ;
+     un sales / coach ne voit que « Mes RDV » (cf. loadB) ;
+   - 📋 Liste / 🗓️ Semaine ;
+   - ouverture / fermeture du créneau (bookings.slotOpen, api/booking-toggle-slot) ;
+   - stats imminents, créneaux ouverts, résultats à saisir ;
+   - 👤 / 🎯 ouvrent la fiche dans Leads Live (sales-leads.html?leadId=).
+   sales-rdv.html redirige vers booking-admin.html?vue=mes-rdv. */
+var aWho=null,aView='list',rWeek=null,_rvDbl={},_bkSlotMax=2,_bkSlotMaxLoaded=false;
+(function(){
+  var v=null;try{v=new URLSearchParams(window.location.search).get('vue');}catch(e){}
+  if(v==='mes-rdv')aWho='mine';else if(v==='equipe')aWho='team';
+  else{try{var w=localStorage.getItem('bk_who');if(w==='mine'||w==='team')aWho=w;}catch(e){}}
+  try{if(localStorage.getItem('bk_view')==='week')aView='week';}catch(e){}
+})();
+function bkCanViewAll(){return window._currentRole==='admin'||window._currentRole==='csm';}
+function bkWho(){return bkCanViewAll()?(aWho||'team'):'mine';}
+function bkCanLeadsLive(){return window._currentRole==='sales'||window._currentRole==='admin';}
+function bkSelfSlug(){
+  var uid=window._currentUid;if(!uid)return null;
+  var l=window.TEAM_MEMBERS_LIST||[];
+  for(var i=0;i<l.length;i++){if(l[i]&&l[i].firebaseUid===uid)return l[i].slug||null;}
+  return null;
+}
+function bkMyPids(){
+  var o={},uid=window._currentUid;
+  if(window._selfPersonId)o[window._selfPersonId]=true;
+  if(uid)P.forEach(function(p){if(p.firebaseUid===uid)o[p.id]=true;});
+  return o;
+}
+function bkIsMine(b){
+  var uid=window._currentUid,slug=bkSelfSlug(),pids=bkMyPids();
+  if(b.personId&&pids[b.personId])return true;
+  if(uid&&(b.bookedByUid===uid||b.assignedToUid===uid))return true;
+  if(slug&&(b.bookedBySlug===slug||b.ownerSlug===slug||b.personId===slug))return true;
+  return false;
+}
+function syncWhoUI(){
+  var all=bkCanViewAll(),w=document.getElementById('rWho'),c=document.getElementById('rWhoCap'),who=bkWho();
+  if(w)w.style.display=all?'':'none';
+  if(c)c.style.display=all?'none':'';
+  document.querySelectorAll('#rWho [data-who]').forEach(function(x){x.classList.toggle('on',x.dataset.who===who);});
+  document.querySelectorAll('#rView [data-rview]').forEach(function(x){x.classList.toggle('on',x.dataset.rview===aView);});
+  var rt=document.getElementById('rRt');if(rt)rt.style.display=aView==='week'?'none':'';
+}
+document.querySelectorAll('#rWho [data-who]').forEach(function(t){t.addEventListener('click',function(){
+  aWho=t.dataset.who;try{localStorage.setItem('bk_who',aWho);}catch(e){}rRdv();
+});});
+document.querySelectorAll('#rView [data-rview]').forEach(function(t){t.addEventListener('click',function(){
+  aView=t.dataset.rview;try{localStorage.setItem('bk_view',aView);}catch(e){}rRdv();
+});});
+// Le slug d'équipe arrive avec _meta/team_members : s'il manquait au premier
+// chargement, on relance les requêtes « posés par moi ».
+window.addEventListener('team-members-loaded',function(){
+  if(!bkCanViewAll()&&window._currentUid&&bkSelfSlug()!==_bSlug)loadB();
+});
+function rvStartMin(b){var hm=(b.time||'09:00').split(':');return parseInt(hm[0],10)*60+parseInt(hm[1]||'0',10);}
+function rvStartDate(b){var e=rvEndDate(b,rvStartMin(b),0);return e;}
+function rvIsImminent(b){
+  if(b.status!=='confirmed'&&b.status!=='pending')return false;
+  var d=rvStartDate(b);if(!d)return false;
+  var h=(d.getTime()-Date.now())/3600000;return h>0&&h<4;
+}
+function rvTodo(b){
+  if(b.outcome||bkScope(b)!=='sales')return false;
+  if(b.status!=='confirmed'&&b.status!=='pending')return false;
+  var e=rvEndDate(b,rvStartMin(b),b.duration||30);
+  return !!e&&Date.now()>=e.getTime()+RV_LATE_MS;
+}
+function rvStatsHTML(fl,up,ca,tl,tw){
+  var imm=up.filter(rvIsImminent).length;
+  var open=up.filter(function(b){return b.slotOpen===true&&bkScope(b)==='sales';}).length;
+  var todo=fl.filter(rvTodo).length;
+  function st(n,l,c,warn,tip){return '<div class="rv-stat'+(warn?' warn':'')+'"'+(tip?' title="'+escA(tip)+'"':'')+'><div class="rv-sn" style="color:'+c+'">'+n+'</div><div class="rv-sl">'+l+'</div></div>';}
+  return st(up.length,'À venir','#a78bfa')
+    +st(tl.length,'Aujourd\'hui','#34d399')
+    +st(imm,'Imminents (&lt; 4 h)','#60a5fa',imm>0,'RDV qui commencent dans moins de 4 heures')
+    +st(tw.length,'Cette semaine','#60a5fa')
+    +st(open,'Créneaux ouverts','#fdba74',false,'RDV dont le créneau est rouvert à d\'autres réservations')
+    +st(todo,'Résultat à saisir','#34d399',todo>0,'RDV terminés sans résultat d\'appel')
+    +st(ca.length,'Annulés','#fca5a5');
+}
+function rvDoubleMap(list){
+  var m={};
+  list.forEach(function(b){if(b.status==='cancelled'||!b.personId)return;var k=b.date+'|'+b.time+'|'+b.personId;m[k]=(m[k]||0)+1;});
+  return m;
+}
+function rvExtraFlags(b){
+  var h='';
+  if(b.status!=='cancelled'&&b.personId&&_rvDbl[b.date+'|'+b.time+'|'+b.personId]>1)h+='<span class="rv-flag rv-flag-dbl" title="Plusieurs RDV sur ce créneau chez le même expert">⚠ Double-booké</span>';
+  if(b.slotOpen===true&&b.status==='confirmed'&&bkScope(b)==='sales')h+='<span class="rv-flag rv-flag-open" title="Créneau rouvert à d\'autres réservations">🟠 Créneau ouvert</span>';
+  return h;
+}
+function rvMonday(d){var x=new Date(d.getFullYear(),d.getMonth(),d.getDate());x.setDate(x.getDate()-((x.getDay()+6)%7));return x;}
+function rvKey(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function rvWeekHTML(fl){
+  var mon=rWeek||rvMonday(new Date()),td=tISO(),days=[],i;
+  for(i=0;i<7;i++)days.push(new Date(mon.getFullYear(),mon.getMonth(),mon.getDate()+i));
+  var d0=days[0],d6=days[6];
+  var lbl=d0.getDate()+' '+MF[d0.getMonth()]+' → '+d6.getDate()+' '+MF[d6.getMonth()]+' '+d6.getFullYear();
+  var h='<div class="rw-nav"><button type="button" class="bb bb-o" data-rw="prev" title="Semaine précédente">←</button><button type="button" class="bb bb-o" data-rw="today">Cette semaine</button><button type="button" class="bb bb-o" data-rw="next" title="Semaine suivante">→</button><span class="rw-lbl">'+esc(lbl)+'</span></div>';
+  h+='<div class="rw-wrap"><div class="rw-g">';
+  days.forEach(function(d){
+    var k=rvKey(d);
+    var its=fl.filter(function(b){return b.date===k;}).sort(function(a,b){return(a.time||'').localeCompare(b.time||'');});
+    h+='<div class="rw-c'+(k===td?' today':'')+'"><div class="rw-h"><span>'+JS[(d.getDay()+6)%7]+'</span><b>'+d.getDate()+'</b>'+(its.length?'<i>'+its.length+'</i>':'')+'</div><div class="rw-b">';
+    if(!its.length)h+='<div class="rw-none">—</div>';
+    its.forEach(function(b){
+      var tO=T.find(function(t){return t.id===b.type;}),pO=P.find(function(p){return p.id===b.personId;});
+      var pN=b.prospect?((b.prospect.prenom||'')+' '+(b.prospect.nom||'')).trim():'';
+      var cls='rw-e';
+      if(b.status==='cancelled')cls+=' x';else if(rvTodo(b))cls+=' todo';else if(b.status==='completed'||b.status==='no_show')cls+=' done';
+      var mk=(bkPres(b)==='ok'?' ✅':'')+(b.slotOpen===true&&b.status==='confirmed'&&bkScope(b)==='sales'?' 🟠':'')+(bkScope(b)==='coaching'?' 🎓':'');
+      h+='<div class="'+cls+'" data-rv-open="'+escA(b._id)+'" style="border-left-color:'+escA(tO&&tO.color?tO.color:'#8b5cf6')+'" title="'+escA((b.time||'')+' · '+(pN||'Inconnu')+' · '+(b.typeLabel||''))+'">';
+      h+='<div class="rw-t">'+esc(b.time||'—')+mk+'</div><div class="rw-n">'+esc(pN||'Inconnu')+'</div><div class="rw-m">'+esc(pO?pO.name:(b.typeLabel||''))+'</div></div>';
+    });
+    h+='</div></div>';
+  });
+  return h+'</div></div>';
+}
+function rvLeadsLiveBtn(b){
+  if(!bkCanLeadsLive())return '';
+  if(!b.leadId)return '<span class="rdv-p-noll" title="Ce RDV n\'est rattaché à aucune fiche lead">Aucune fiche Leads Live</span>';
+  return '<a class="bb bb-p rdv-p-ll" href="sales-leads.html?leadId='+encodeURIComponent(b.leadId)+'" title="Ouvrir la fiche du prospect dans Leads Live">🎯 Fiche Leads Live</a>';
+}
+/* Ouvrir / fermer le créneau — repris tel quel de sales-rdv.html.
+   api/booking-toggle-slot n'accepte que sales et admin. */
+function bkCanSlot(b){
+  if(window._currentRole!=='sales'&&window._currentRole!=='admin')return false;
+  if(b.status!=='confirmed'||bkScope(b)!=='sales')return false;
+  var s=rvStartDate(b);return !s||s.getTime()>Date.now();
+}
+document.addEventListener('click',function(e){
+  var t=e.target.closest('[data-rv-slot]');if(!t)return;
+  e.preventDefault();bkSlotModal(t.getAttribute('data-rv-slot'));
+});
+function bkSlotModal(bid){
+  var b=B.find(function(x){return x._id===bid;});if(!b)return;
+  if(!_bkSlotMaxLoaded){
+    _bkSlotMaxLoaded=true;
+    db.collection('_meta').doc('booking_slot_settings').get().then(function(s){
+      if(s.exists&&typeof s.data().maxBookingsPerOpenSlot==='number'){_bkSlotMax=s.data().maxBookingsPerOpenSlot;var mx=document.getElementById('bkSlotMax');if(mx)mx.textContent=_bkSlotMax;}
+    }).catch(function(){});
+  }
+  var act=b.slotOpen===true?'close':'open';
+  var pr=b.prospect||{},nm=((pr.prenom||'')+' '+(pr.nom||'')).trim()||'Prospect';
+  var bg=document.getElementById('bkSlotMo');
+  if(!bg){
+    bg=document.createElement('div');bg.id='bkSlotMo';bg.className='mo-bg';bg.style.zIndex='1200';
+    document.body.appendChild(bg);
+    bg.addEventListener('click',function(e){
+      if(e.target===bg||e.target.closest('[data-slot-x]')){bg.classList.remove('show');return;}
+      var g=e.target.closest('[data-slot-go]');if(g)bkSlotGo(g);
+    });
+  }
+  var desc=act==='open'
+    ?'Le créneau redeviendra réservable par d\'autres prospects (jusqu\'à <strong><span id="bkSlotMax">'+_bkSlotMax+'</span> réservations max</strong> sur ce créneau).<br><br>Un <strong>SMS + e-mail de reconfirmation</strong> est envoyé automatiquement au prospect actuel.'
+    :'Le créneau sera verrouillé : aucun autre prospect ne pourra réserver dessus.<br><br>À utiliser quand le prospect a confirmé sa présence.';
+  bg.innerHTML='<div class="mo" style="max-width:440px"><div class="mo-h"><div class="mo-t">'+(act==='open'?'🟠 Rouvrir le créneau ?':'🔒 Fermer le créneau ?')+'</div><button type="button" class="mo-x" data-slot-x>✕</button></div>'
+    +'<div class="mo-b"><p class="rv-slot-desc">'+desc+'</p><div class="rv-slot-info"><strong>'+esc(nm)+'</strong><br>'+esc(dFR(b.date))+' à '+esc(b.time||'')+'</div>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:16px"><button type="button" class="bb bb-o" data-slot-x>Annuler</button>'
+    +'<button type="button" class="bb '+(act==='open'?'bb-w':'bb-p')+'" data-slot-go data-bid="'+escA(b._id)+'" data-act="'+act+'">'+(act==='open'?'🟠 Rouvrir + envoyer':'🔒 Fermer le créneau')+'</button></div></div></div>';
+  bg.classList.add('show');
+}
+function bkSlotGo(btn){
+  var bid=btn.getAttribute('data-bid'),act=btn.getAttribute('data-act'),orig=btn.textContent;
+  var u=firebase.auth().currentUser;if(!u){toast('❌ Session expirée — recharge la page');return;}
+  btn.disabled=true;btn.textContent='Envoi…';
+  u.getIdToken().then(function(tok){
+    return fetch('/api/booking-toggle-slot',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:JSON.stringify({bookingId:bid,action:act})})
+      .then(function(r){return r.json().catch(function(){return {};}).then(function(d){if(!r.ok)throw new Error(d.error||('Erreur API ('+r.status+')'));return d;});});
+  }).then(function(d){
+    var msg=act==='open'?'🟠 Créneau rouvert':'🔒 Créneau fermé';
+    if(act==='open'&&d.sms&&d.email)msg+=' — SMS '+(d.sms.sent?'✓':'✗')+' / E-mail '+(d.email.sent?'✓':'✗');
+    toast(msg);
+    var bg=document.getElementById('bkSlotMo');if(bg)bg.classList.remove('show');
+    var b=B.find(function(x){return x._id===bid;});if(b)b.slotOpen=(act==='open');
+    rRdv();
+    if(document.getElementById('rdvPanel').classList.contains('show')&&window._bkDetailB&&window._bkDetailB.id===bid)openRdvDetail(bid);
+  }).catch(function(e){toast('❌ '+(e.message||'Erreur'));btn.disabled=false;btn.textContent=orig;});
+}
+
+function rRdv(){syncScopeUI();var td=tISO(),fP=document.getElementById('rFP').value,fT=document.getElementById('rFT').value;var _canViewAll=(window._currentRole==='admin'||window._currentRole==='csm');syncWhoUI();var _mine=_canViewAll&&bkWho()==='mine';var q=(document.getElementById('rQ').value||'').toLowerCase();var fl=B.filter(function(b){if(_mine&&!bkIsMine(b))return false;if(aScope!=='all'&&bkScope(b)!==aScope)return false;if(fP&&b.personId!==fP)return false;if(fT&&b.type!==fT)return false;if(q){var n=b.prospect?((b.prospect.prenom||'')+' '+(b.prospect.nom||'')):b.personName||'';if(n.toLowerCase().indexOf(q)<0&&(b.typeLabel||'').toLowerCase().indexOf(q)<0)return false;}return true;});/* Repartition EXHAUSTIVE : tout RDV doit tomber dans exactement un onglet.
    L'ancien decoupage laissait des trous — un RDV du JOUR passe en no-show
    n'etait ni « a venir » (statut != confirmed), ni « passe » (sa date n'est
    pas < aujourd'hui, et son statut n'est pas completed), ni « annule ».
    Il disparaissait purement et simplement de Booking. */
 var ca=fl.filter(function(b){return b.status==='cancelled';}),
     up=fl.filter(function(b){return b.date>=td&&(b.status==='confirmed'||b.status==='pending');}),
-    pa=fl.filter(function(b){return b.status!=='cancelled'&&!(b.date>=td&&(b.status==='confirmed'||b.status==='pending'));});up.sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time);});pa.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time);});ca.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time);});document.getElementById('cR').textContent=up.length;var wE=new Date();wE.setDate(wE.getDate()+7);var ws=wE.getFullYear()+'-'+String(wE.getMonth()+1).padStart(2,'0')+'-'+String(wE.getDate()).padStart(2,'0');var tw=up.filter(function(b){return b.date<=ws;}),tl=up.filter(function(b){return b.date===td;});document.getElementById('rSt').innerHTML='<div class="rv-stat"><div class="rv-sn" style="color:#a78bfa">'+up.length+'</div><div class="rv-sl">À venir</div></div><div class="rv-stat"><div class="rv-sn" style="color:#34d399">'+tl.length+'</div><div class="rv-sl">Aujourd\'hui</div></div><div class="rv-stat"><div class="rv-sn" style="color:#60a5fa">'+tw.length+'</div><div class="rv-sl">Cette semaine</div></div><div class="rv-stat"><div class="rv-sn" style="color:#fca5a5">'+ca.length+'</div><div class="rv-sl">Annulés</div></div>';var ls=aRT==='up'?up:aRT==='past'?pa:ca,el=document.getElementById('rL');if(!ls.length){el.innerHTML='<div class="rv-em">Aucun rendez-vous '+(aRT==='up'?'à venir':aRT==='past'?'passé':'annulé')+'</div>';return;}var gr={};ls.forEach(function(b){if(!gr[b.date])gr[b.date]=[];gr[b.date].push(b);});var dk=Object.keys(gr).sort(aRT==='up'?undefined:function(a,b){return b.localeCompare(a);});var h='';dk.forEach(function(dt){var its=gr[dt];h+='<div class="rv-dh"><span>📅</span><span class="rv-dl">'+dFR(dt)+'</span><span class="rv-dc">'+its.length+' Rendez-vous</span></div>';its.forEach(function(b){h+=rvRowHTML(b);});});el.innerHTML=h;}
+    pa=fl.filter(function(b){return b.status!=='cancelled'&&!(b.date>=td&&(b.status==='confirmed'||b.status==='pending'));});up.sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time);});pa.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time);});ca.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time);});document.getElementById('cR').textContent=up.length;var wE=new Date();wE.setDate(wE.getDate()+7);var ws=wE.getFullYear()+'-'+String(wE.getMonth()+1).padStart(2,'0')+'-'+String(wE.getDate()).padStart(2,'0');var tw=up.filter(function(b){return b.date<=ws;}),tl=up.filter(function(b){return b.date===td;});document.getElementById('rSt').innerHTML=rvStatsHTML(fl,up,ca,tl,tw);_rvDbl=rvDoubleMap(B);if(aView==='week'){document.getElementById('rL').innerHTML=rvWeekHTML(fl);return;}var ls=aRT==='up'?up:aRT==='past'?pa:ca,el=document.getElementById('rL');if(!ls.length){el.innerHTML='<div class="rv-em">Aucun rendez-vous '+(aRT==='up'?'à venir':aRT==='past'?'passé':'annulé')+'</div>';return;}var gr={};ls.forEach(function(b){if(!gr[b.date])gr[b.date]=[];gr[b.date].push(b);});var dk=Object.keys(gr).sort(aRT==='up'?undefined:function(a,b){return b.localeCompare(a);});var h='';dk.forEach(function(dt){var its=gr[dt];h+='<div class="rv-dh"><span>📅</span><span class="rv-dl">'+dFR(dt)+'</span><span class="rv-dc">'+its.length+' Rendez-vous</span></div>';its.forEach(function(b){h+=rvRowHTML(b);});});el.innerHTML=h;}
 /* Clics de la liste : résultat, sinon ouverture de la fiche du RDV — sauf
    sur un lien, un bouton ou le sélecteur de statut. */
 document.getElementById('rL').addEventListener('click',function(e){
   var o=e.target.closest('[data-rv-outcome]');
   if(o){bkOutcomeFromList(o.getAttribute('data-rv-outcome'));return;}
+  var w=e.target.closest('[data-rw]');
+  if(w){var k=w.getAttribute('data-rw'),m=rWeek||rvMonday(new Date());rWeek=k==='today'?rvMonday(new Date()):new Date(m.getFullYear(),m.getMonth(),m.getDate()+(k==='prev'?-7:7));rRdv();return;}
+  var c=e.target.closest('[data-rv-call]');
+  if(c){bookingDialerCall(c);return;}
   if(e.target.closest('a,button,select,input,[data-action]'))return;
   var r=e.target.closest('[data-rv-open]');
   if(r)openRdvDetail(r.getAttribute('data-rv-open'));
@@ -1609,7 +1853,7 @@ var h='';
 h+='<div class="rdv-p-head"><div style="flex:1"><div class="rdv-p-date">'+dFR(b.date)+'</div><div class="rdv-p-sub">'+(b.time||'')+' – '+et+' · '+(du>=60?(du/60)+'h':du+' min')+'</div><div style="margin-top:6px"><span style="font-size:11px;padding:4px 10px;border-radius:6px;background:'+(b.status==='confirmed'?'rgba(52,211,153,.1);color:#34d399':b.status==='cancelled'?'rgba(239,68,68,.1);color:#fca5a5':'rgba(139,92,246,.1);color:#a78bfa')+';font-weight:700">'+(statusLabels[b.status]||b.status)+'</span></div></div><button class="rdv-p-close" onclick="closeRdvDetail()">✕</button></div>';
 
 // Client info bar
-h+='<div class="rdv-p-client"><div class="rdv-p-client-av">'+clientName[0].toUpperCase()+'</div><div style="flex:1"><div class="rdv-p-client-nm">'+esc(clientName)+'</div><div class="rdv-p-client-em">'+esc(pr.email||'')+'</div></div></div>';
+h+='<div class="rdv-p-client"><div class="rdv-p-client-av">'+clientName[0].toUpperCase()+'</div><div style="flex:1"><div class="rdv-p-client-nm">'+esc(clientName)+'</div><div class="rdv-p-client-em">'+esc(pr.email||'')+'</div></div>'+rvLeadsLiveBtn(b)+'</div>';
 /* Refonte 07/2026 : périmètre + résultat d'appel visibles dans le panneau détail.
    Coaching/clients = hors périmètre setting/closing (pas d'outcome, pas de commission). */
 if(bkScope(b)==='coaching'){
@@ -1640,6 +1884,9 @@ if(pO)h+='<span style="display:inline-block;width:20px;height:20px;border-radius
 h+=esc(pO?pO.name:'—')+'</span></div>';
 h+='<div class="rdv-p-row"><span class="rdv-p-label">Heure</span><span class="rdv-p-val">'+(b.time||'')+' – '+et+' ('+(du>=60?(du/60)+'h':du+' min')+')</span></div>';
 h+='<div class="rdv-p-row"><span class="rdv-p-label">Statut</span><span class="rdv-p-val"><select class="bs" data-action="chSt" data-bid="'+b._id+'" style="font-size:12px;padding:4px 8px"><option value="confirmed"'+(b.status==='confirmed'?' selected':'')+'>À venir</option><option value="completed"'+(b.status==='completed'?' selected':'')+'>Terminé</option><option value="cancelled"'+(b.status==='cancelled'?' selected':'')+'>Annulé</option><option value="no_show"'+(b.status==='no_show'?' selected':'')+'>No-show</option></select></span></div>';
+if(bkScope(b)==='sales'&&b.status==='confirmed'){
+h+='<div class="rdv-p-row"><span class="rdv-p-label">Créneau</span><span class="rdv-p-val">'+(b.slotOpen===true?'<span style="color:#fdba74">🟠 Ouvert à d\'autres réservations</span>':'🔒 Fermé (réservé à ce prospect)')+'</span></div>';
+}
 if(b.status==='cancelled'&&b.rescheduled!==true){
 var _cl=(window.AlteoreFlow&&window.AlteoreFlow.cancellationLabel)?window.AlteoreFlow.cancellationLabel(b):'';
 h+='<div class="rdv-p-row"><span class="rdv-p-label">Annulation</span><span class="rdv-p-val" style="color:#fca5a5">🔴 '+esc(_cl||'origine non renseignée')+'</span></div>';
@@ -1712,6 +1959,7 @@ h+='<button class="bb bb-o" data-action="resendMail" data-bid="'+b._id+'" title=
 }
 if(b.status==='confirmed'){
 h+='<button class="bb bb-o" onclick="bkRescheduleModal()">📅 Replanifier</button>';
+if(bkCanSlot(b))h+='<button type="button" class="bb '+(b.slotOpen===true?'bb-g':'bb-w')+'" data-rv-slot="'+escA(b._id)+'">'+(b.slotOpen===true?'🔒 Fermer le créneau':'🟠 Rouvrir le créneau')+'</button>';
 h+='<button class="bb bb-r" onclick="cancelRdv(\''+b._id+'\')">Annuler le RDV</button>';
 }
 if((b.status==='cancelled'||b.status==='completed')&&_canDeleteRdv){
@@ -1722,8 +1970,9 @@ h+='</div>';
 document.getElementById('rdvContent').innerHTML=h;
 document.getElementById('rdvBg').classList.add('show');
 document.getElementById('rdvPanel').classList.add('show');
+document.body.classList.add('bk-rdv-open');
 }
-function closeRdvDetail(){rdvTab='info';document.getElementById('rdvBg').classList.remove('show');document.getElementById('rdvPanel').classList.remove('show');}
+function closeRdvDetail(){document.body.classList.remove('bk-rdv-open');rdvTab='info';document.getElementById('rdvBg').classList.remove('show');document.getElementById('rdvPanel').classList.remove('show');}
 /* Refonte 07/2026 : modale résultat + replanification (composants partagés) */
 function bkOutcomeModal(){
   var b=window._bkDetailB;

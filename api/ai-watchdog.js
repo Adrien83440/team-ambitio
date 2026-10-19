@@ -65,7 +65,7 @@ async function checks() {
       if (b.date < today && !b.outcome && (b.status === 'confirmed' || b.status === 'pending')) noOutcome.push(b.date + ' ' + (b.time || '') + ' · ' + who + ' · ' + (b.personName || '?'));
       if (b.date >= today && b.timezone && b.timezone !== 'Europe/Paris' && b.status !== 'cancelled') tz.push(b.date + ' ' + (b.time || '') + ' · ' + who + ' · posé depuis ' + b.timezone);
     });
-    add('rdv_sans_issue', 'haute', 'RDV passés sans issue saisie (commissions et stats faussées)', noOutcome, 'sales-rdv.html');
+    add('rdv_sans_issue', 'haute', 'RDV passés sans issue saisie (commissions et stats faussées)', noOutcome, 'booking-admin.html?vue=mes-rdv');
     add('rdv_fuseau', 'moyenne', 'RDV à venir posés depuis un autre fuseau horaire que Paris — vérifier le créneau', tz, 'booking-admin.html');
   });
 
