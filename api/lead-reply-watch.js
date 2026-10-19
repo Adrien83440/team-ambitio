@@ -10,10 +10,17 @@
 // à 23 h donne donc une alerte à 11 h le lendemain s'il est resté sans suite.
 //
 // Compte comme une réponse, postérieure au message entrant :
-//   • un SMS ou un appel sortant dans `leads.communications` ;
+//   • un SMS sortant dans `leads.communications` ;
 //   • un WhatsApp humain (`leads.whatsappEnvoye.at`, posé par whatsapp-send) ;
-//   • un appel sortant dans `call_logs` (par leadId ou par numéro), même sans
-//     décroché — le setter a essayé.
+//   • un appel DÉCROCHÉ avec une vraie conversation dans `call_logs` (par
+//     leadId ou par numéro, sortant ou entrant). Règle validée par Adrien le
+//     19/10/2026 : une messagerie, un répondeur ou un appel sans décroché ne
+//     remplace PAS une réponse écrite. Décroché = règle du Funnel
+//     (funnel-core.js isAnsweredCall : ≥ 5 s de parole, pas la signature
+//     répondeur sonnerie ≥ 15 s + parole < 15 s), et ni AMD répondeur ni
+//     analyse IA « messagerie » / « faux_numero ».
+//   Les appels de `leads.communications` (via Make) ne comptent pas : ils ne
+//   disent pas si quelqu'un a décroché.
 //
 // Exclus : numéros sans fiche lead, fiches `_merged`, clients déjà closés.
 // Une seule popup par prospect tant qu'il reste sans réponse ; elle est
@@ -142,7 +149,7 @@ function replyFromLead(l) {
   let last = 0;
   (Array.isArray(l.communications) ? l.communications : []).forEach(function (c) {
     if (!c || !isOut(c.direction)) return;
-    if (c.type !== 'sms' && c.type !== 'call' && c.type !== 'whatsapp') return;
+    if (c.type !== 'sms' && c.type !== 'whatsapp') return;
     const ms = toMs(c.date) || toMs(c.createdAt);
     if (ms > last) last = ms;
   });
@@ -150,22 +157,42 @@ function replyFromLead(l) {
   if (wa > last) last = wa;
   return last;
 }
-// Appels sortants du journal téléphonique (dialer, Ringover app, Twilio).
+// Vraie conversation téléphonique — même seuils que funnel-core.js / team-pilotage.js.
+const ANSWERED_MIN_SEC = 5;
+const VOICEMAIL_MIN_RING_SEC = 15;
+const VOICEMAIL_MAX_TALK_SEC = 15;
+function isConversation(c) {
+  if (c.amd === true) return false;
+  const ia = c.aiCall && c.aiCall.resultat;
+  if (ia === 'messagerie' || ia === 'faux_numero') return false;
+  const talk = Number(c.durationSec) || 0;
+  if (talk < ANSWERED_MIN_SEC) return false;
+  let ring = Number(c.ringingDurationSec);
+  if (c.ringingDurationSec == null || !isFinite(ring) || ring < 0) {
+    const a = toMs(c.answeredAt), i = toMs(c.initiatedAt);
+    ring = a && i && a >= i ? Math.round((a - i) / 1000) : null;
+  }
+  if (ring == null) return true;
+  return !(ring >= VOICEMAIL_MIN_RING_SEC && talk < VOICEMAIL_MAX_TALK_SEC);
+}
+
+// Appels aboutis du journal téléphonique (dialer, Ringover app, Twilio).
 async function replyFromCalls(leadId, tel) {
   let last = 0;
   const qs = [db.collection('call_logs').where('leadId', '==', leadId).get()];
-  // call_logs.toNumber est en E.164 ; certaines fiches gardent encore un 06… brut.
+  // call_logs.toNumber / fromNumber sont en E.164 ; certaines fiches gardent un 06… brut.
   const raw = String(tel || '').replace(/[\s.\-()]/g, '');
   const e164 = /^0\d{9}$/.test(raw) ? '+33' + raw.slice(1) : (/^33\d{9}$/.test(raw) ? '+' + raw : raw);
   [raw, e164].filter(function (v, k, arr) { return v && arr.indexOf(v) === k; }).forEach(function (n) {
     qs.push(db.collection('call_logs').where('toNumber', '==', n).get());
+    qs.push(db.collection('call_logs').where('fromNumber', '==', n).get());
   });
   const snaps = await Promise.all(qs.map(function (p) { return p.catch(function () { return null; }); }));
   snaps.forEach(function (s) {
     if (!s) return;
     s.forEach(function (d) {
       const c = d.data() || {};
-      if (!isOut(c.direction)) return;
+      if (!isConversation(c)) return;
       const ms = toMs(c.initiatedAt) || toMs(c.createdAt);
       if (ms > last) last = ms;
     });
