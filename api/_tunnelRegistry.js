@@ -59,6 +59,14 @@ function pageLabel(tunnel, step) {
   return s ? t + ' · ' + s : t;
 }
 
+/* Nom du tunnel affiché dans Leads Live (ligne 🧭 Tunnel, origine, recherche) :
+   réglage settings.crmLabel, sinon nom du tunnel. Distinct de pageLabel, qui
+   reste la clé lisible des stats (page_views_daily, Funnel Sales). */
+function crmLabelOf(tunnel) {
+  const c = String((tunnel && tunnel.settings && tunnel.settings.crmLabel) || '').trim().slice(0, 80);
+  return c || (tunnel && tunnel.name) || (tunnel && tunnel.slug) || 'Tunnel';
+}
+
 /* Chemin public d'une étape : '/' pour la page d'accueil du domaine,
    sinon '/<slug>'. */
 function stepPath(tunnel, step) {
@@ -273,7 +281,7 @@ function trackingSourceOf(tunnel, step) {
 }
 
 module.exports = {
-  cleanSlug, cleanPath, pageKey, isTunnelPageKey, pageLabel, stepPath, normalizeTunnel,
+  cleanSlug, cleanPath, pageKey, isTunnelPageKey, pageLabel, crmLabelOf, stepPath, normalizeTunnel,
   getTunnels, invalidate, findByPath, findByPage, findByIds, isKnownPage, nextUrlOf, isTestTunnel,
   getConfig, findRedirect, trackingSourceOf
 };

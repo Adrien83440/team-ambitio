@@ -87,7 +87,8 @@ async function buildLanding(body) {
   if (tunnelHit) {
     out.tunnelId = tunnelHit.tunnel.id;
     out.stepId = tunnelHit.step.id;
-    out.label = Reg.pageLabel(tunnelHit.tunnel, tunnelHit.step);
+    out.label = Reg.crmLabelOf(tunnelHit.tunnel);   // nom affiché dans Leads Live
+    out.stepLabel = tunnelHit.step.name || tunnelHit.step.slug || '';
     out.leadType = String((tunnelHit.tunnel.settings && tunnelHit.tunnel.settings.leadType) || '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 40);
   }
   out.capturedAt = new Date().toISOString();

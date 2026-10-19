@@ -93,6 +93,9 @@ const parseBody = require('./_parseBody');
 // Parsing d'attribution : implémentation UNIQUE, partagée avec le funnel
 // (même module que celui qui relit ces champs — aucune dérive possible).
 const Core = require('../funnel-core.js');
+// Registre des tunnels hébergés : relie la clé de page `<tunnel>__<etape>`
+// (lp du quiz) au tunnel, pour son nom Leads Live et son type de lead.
+const Reg = require('./_tunnelRegistry');
 
 // ─── ATTRIBUTION PUBLICITAIRE (chantier UTM 17/08/2026) ───────────────
 // Le champ `utm` reste écrit tel quel (Leads Live, CRM, export en
@@ -218,6 +221,8 @@ function canonicalizeType(rawType) {
   if (!rawType) return 'vsl_elite';
   const t = String(rawType).toLowerCase().trim();
   if (t.indexOf('business') >= 0) return 'business';
+  // Quiz Funnel (19/10/2026) : le quiz a remplacé la VSL Élite.
+  if (t.indexOf('quiz') >= 0) return 'quiz_funnel';
   if (t.indexOf('elite') >= 0 || t.indexOf('élite') >= 0) return 'vsl_elite';
   // RÈGLE MÉTIER (Adrien, 28/09/2026) : `self_booking` = un RDV réellement
   // pris, jamais un simple opt-in, peu importe la source de trafic. Un type
@@ -263,7 +268,11 @@ function landingFromUrl(url) {
 
 // body.landing explicite (page whitelistée) > lp / v de l'URL de la page >
 // déduction quiz > rien.
-function buildLanding(body, type, hasQuiz) {
+// Page d'un tunnel hébergé : le libellé est le nom Leads Live du tunnel
+// (settings.crmLabel, sinon son nom — 19/10/2026), l'étape va dans
+// stepLabel, et le type de lead du tunnel est rendu dans `leadType`
+// (retiré avant écriture).
+async function buildLanding(body, type, hasQuiz) {
   let src = body && typeof body.landing === 'object' ? body.landing : null;
   const url0 = String((src && src.pageUrl) || (body && (body.landingUrl || body.pageUrl || body.url)) || '').slice(0, 500);
   if (!src || !landingSlug(src.page, 90)) {
@@ -281,6 +290,17 @@ function buildLanding(body, type, hasQuiz) {
     via: 'optin',
     capturedAt: new Date().toISOString()
   };
+  if (TUNNEL_KEY_RE.test(page) && !LANDING_PAGES[page]) {
+    let hit = null;
+    try { hit = await Reg.findByPage(page); } catch (e) { console.warn('[lead-optin] registre tunnels :', e && e.message); }
+    if (hit) {
+      out.tunnelId = hit.tunnel.id;
+      out.stepId = hit.step.id;
+      out.label = Reg.crmLabelOf(hit.tunnel);
+      out.stepLabel = hit.step.name || hit.step.slug || '';
+      out.leadType = String((hit.tunnel.settings && hit.tunnel.settings.leadType) || '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 40);
+    }
+  }
   const url = String((src && src.pageUrl) || (body && (body.landingUrl || body.pageUrl || body.url)) || '').slice(0, 500);
   if (url) out.pageUrl = url;
   return out;
@@ -326,14 +346,22 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const type        = canonicalizeType(typeRaw);
+  let type          = canonicalizeType(typeRaw);
   const phoneNorm   = phoneNormalized(tel);
   const quiz        = sanitizeQuiz(body && body.quiz);
-  const landing     = buildLanding(body, type, !!quiz);
-  // Libellé du tunnel : celui de la page d'entrée quand elle est connue
-  // (« Funnel Quiz Élite » plutôt que « VSL Élite » pour un lead du quiz),
-  // sinon le type. Sert de sourceDetail et d'UTM de repli.
-  const tunnelLabel = landing && landing.page.indexOf('quiz_') === 0 ? landing.label
+  const landing     = await buildLanding(body, type, !!quiz);
+  // Type de lead : celui du tunnel hébergé quand la page est reconnue
+  // (jamais self_booking à l'opt-in, cf. canonicalizeType) ; sinon un
+  // opt-in porteur d'un quiz est un Quiz Funnel, pas une VSL Élite.
+  const tunnelType  = landing ? (landing.leadType || '') : '';
+  if (landing) delete landing.leadType;
+  if (tunnelType && tunnelType !== 'self_booking') type = tunnelType;
+  else if (quiz && type === 'vsl_elite') type = 'quiz_funnel';
+  // Libellé du tunnel : nom Leads Live du tunnel hébergé, ou libellé de la
+  // page d'entrée (« Funnel Quiz Élite » plutôt que « VSL Élite » pour un
+  // lead du quiz), sinon le type. Sert de sourceDetail et d'UTM de repli.
+  const tunnelLabel = landing && (landing.tunnelId || landing.page.indexOf('quiz_') === 0) ? landing.label
+                    : type === 'quiz_funnel' ? 'Quiz Funnel'
                     : type === 'business' ? 'VSL Business'
                     : type === 'vsl_elite' ? 'VSL Élite'
                     : (typeRaw || type);

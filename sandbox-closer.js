@@ -39,7 +39,7 @@
     /* Plus de ligne « Closing » (09/10/2026) : le gros bouton du pilote la
        remplace, comme dans Leads Live. */
   ];
-  var LEAD_TYPES = { vsl_elite: { l: 'VSL ÉLITE', c: '#fbbf24' }, self_booking: { l: 'Self-Booking', c: '#60a5fa' } };
+  var LEAD_TYPES = { quiz_funnel: { l: 'QUIZ FUNNEL', c: '#5eead4' }, vsl_elite: { l: 'VSL ÉLITE', c: '#fbbf24' }, self_booking: { l: 'Self-Booking', c: '#60a5fa' } };
   /* AlteoreFlow.OUTCOMES (alteore-flow.js:26) */
   var OUTCOMES = {
     close: { label: 'Close', icon: '🏆', color: '#34d399', desc: 'Vente conclue — génère les commissions' },

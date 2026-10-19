@@ -327,6 +327,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap;
 }
 .ld-badge.vsl      { background: rgba(167,139,250,0.13); color: #c4b5fd; }
+.ld-badge.quiz     { background: rgba(45,212,191,0.13);  color: #5eead4; }
+.ld-tunnel-step    { font-size: 11px; color: var(--muted); font-weight: 600; }
+.ld-tunnel-first   { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
 .ld-badge.self     { background: rgba(251,191,36,0.13);  color: #fcd34d; }
 .ld-badge.nb       { background: rgba(251,146,60,0.15);  color: #fb923c; }
 .ld-badge.business { background: rgba(239,68,68,0.12);   color: var(--red3); }
@@ -1484,7 +1487,7 @@ body.ld-pilot-on .l2fam[data-fam="closing"] { display: none; }
          client. L'arobase est retirée à l'enregistrement. -->
     <div style="margin-top:10px"><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Instagram <span style="color:var(--muted2);font-weight:500">— pseudo, pour relier les GO et les DM à cette fiche</span></label><input id="clInsta" autocomplete="off" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)" placeholder="@pseudo"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
-      <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Type</label><select id="clType" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)"><option value="vsl_elite">VSL Élite</option><option value="self_booking">Self Booking</option><option value="business">Business</option><option value="webinaire">Webinaire</option></select></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Type</label><select id="clType" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)"><option value="vsl_elite">VSL Élite</option><option value="quiz_funnel">Quiz Funnel</option><option value="self_booking">Self Booking</option><option value="business">Business</option><option value="webinaire">Webinaire</option></select></div>
       <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Attribuer à</label><select id="clAssign" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)"><option value="">Non attribué</option></select></div>
     </div>
     <!-- Provenance — liste fermée (17/08/2026). Ce champ était en texte
@@ -1722,6 +1725,7 @@ function buildAssignSelectOptions(currentSlug, includeEmpty) {
 }
 
 var LEAD_TYPES = {
+  quiz_funnel:  { label: 'QUIZ FUNNEL',   badgeClass: 'quiz' },
   vsl_elite:    { label: 'VSL ÉLITE',     badgeClass: 'vsl' },
   self_booking: { label: 'Self-Booking',   badgeClass: 'self' },
   business:     { label: 'Business',       badgeClass: 'business' }
@@ -1988,6 +1992,29 @@ function escAttr(s) {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+/* Tunnel d'une fiche (19/10/2026) : le DERNIER engagement (landingLast),
+   repli landingFirst pour les fiches d'avant. label = nom Leads Live du
+   tunnel (réglage « Nom affiché dans Leads Live »), stepLabel = étape. Les
+   fiches d'avant portent « Tunnel · étape » dans label, sans stepLabel. */
+function landingTunnelOf(l) {
+  var la = l && l.landingLast && l.landingLast.label ? l.landingLast : (l && l.landingFirst && l.landingFirst.label ? l.landingFirst : null);
+  return la;
+}
+function landingTunnelHtml(l) {
+  var la = landingTunnelOf(l);
+  if (!la) return '';
+  var bits = [];
+  if (la.stepLabel) bits.push(la.stepLabel);
+  if (la.variant) bits.push('variante ' + String(la.variant).toUpperCase());
+  var h = escHtml(la.label);
+  if (bits.length) h += ' <span class="ld-tunnel-step">· ' + escHtml(bits.join(' · ')) + '</span>';
+  var lf = l.landingFirst;
+  var sameFirst = !lf || !lf.label || lf === la
+    || (lf.tunnelId && la.tunnelId ? lf.tunnelId === la.tunnelId : lf.page === la.page);
+  if (!sameFirst) h += '<span class="ld-tunnel-first">1er tunnel : ' + escHtml(lf.label) + '</span>';
+  return h;
+}
+
 /* URL de confiance pour un href construit en innerHTML : http(s) uniquement.
    Bloque javascript: / data: quelle que soit l'origine du champ. */
 function safeUrlLd(u) {
@@ -2199,7 +2226,8 @@ function processPopupQueue() {
   if (lead.telephone) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Téléphone</span><span class="ld-popup-field-val">' + escHtml(lead.telephone) + '</span></div>';
   if (lead.email) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Email</span><span class="ld-popup-field-val">' + escHtml(lead.email) + '</span></div>';
   if (lead.utm) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Source</span><span class="ld-popup-field-val">' + escHtml(decodeUtm(lead.utm)) + '</span></div>';
-  if (lead.landingFirst && lead.landingFirst.label) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">🧭 Tunnel</span><span class="ld-popup-field-val">' + escHtml(lead.landingFirst.label) + '</span></div>';
+  var _lt = landingTunnelOf(lead);
+  if (_lt) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">🧭 Tunnel</span><span class="ld-popup-field-val">' + escHtml(_lt.label) + '</span></div>';
   if (lead.secteur) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Secteur</span><span class="ld-popup-field-val">' + escHtml(lead.secteur) + '</span></div>';
   if (lead.ca) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">CA</span><span class="ld-popup-field-val">' + escHtml(lead.ca) + '</span></div>';
   if (setterObj) {
@@ -2624,7 +2652,7 @@ function getFilteredLeads() {
         l.disponibilite, l.timeline, l.stage, l.type, typeLabel,
         l.status, statusLabel, assigned, memberFull, l.id,
         // Tunnels hébergés (admin-tunnels.html) : nom du tunnel · étape
-        l.sourceDetail, (l.landingFirst && l.landingFirst.label)
+        l.sourceDetail, (l.landingFirst && l.landingFirst.label), (l.landingLast && l.landingLast.label)
       ].filter(Boolean).join(' \u0001 '));
       // Digits du téléphone (9 derniers)
       var phone9 = phoneNormalized(l.telephone) || '';
@@ -2770,7 +2798,7 @@ function updatePeriodCounts() {
         l.disponibilite, l.timeline, l.stage, l.type, typeLabel,
         l.status, statusLabel, assigned, memberFull, l.id,
         // Tunnels hébergés (admin-tunnels.html) : nom du tunnel · étape
-        l.sourceDetail, (l.landingFirst && l.landingFirst.label)
+        l.sourceDetail, (l.landingFirst && l.landingFirst.label), (l.landingLast && l.landingLast.label)
       ].filter(Boolean).join(' \u0001 '));
       var phone9 = phoneNormalized(l.telephone) || '';
       var phoneFull = _digitsOnly(l.telephone);
@@ -5222,7 +5250,7 @@ function l2SegInfos(l, id) {
   if (l.telephone) h += '<div class="ld-detail-row"><span class="ld-detail-label">Téléphone</span><span class="ld-detail-val"><a href="#" data-action="dialerCall" data-phone="' + normalizeTel(l.telephone).replace(/\s/g, '') + '" data-lead-id="' + id + '" data-name="' + escAttr(l.nom || '') + '" title="Appeler via Ringover">' + escHtml(normalizeTel(l.telephone)) + '</a></span></div>';
   if (l.email) h += '<div class="ld-detail-row"><span class="ld-detail-label">Email</span><span class="ld-detail-val"><a href="mailto:' + escHtml(l.email) + '">' + escHtml(l.email) + '</a></span></div>';
   if (l.utm) h += '<div class="ld-detail-row"><span class="ld-detail-label">UTM / Source</span><span class="ld-detail-val">' + escHtml(decodeUtm(l.utm)) + '</span></div>';
-  if (l.landingFirst && l.landingFirst.label) h += '<div class="ld-detail-row"><span class="ld-detail-label">🧭 Tunnel</span><span class="ld-detail-val">' + escHtml(l.landingFirst.label + (l.landingFirst.variant ? ' · variante ' + String(l.landingFirst.variant).toUpperCase() : '')) + '</span></div>';
+  if (landingTunnelOf(l)) h += '<div class="ld-detail-row"><span class="ld-detail-label">🧭 Tunnel</span><span class="ld-detail-val">' + landingTunnelHtml(l) + '</span></div>';
   if (l.secteur) h += '<div class="ld-detail-row"><span class="ld-detail-label">Secteur</span><span class="ld-detail-val">' + escHtml(l.secteur) + '</span></div>';
   if (l.ca) h += '<div class="ld-detail-row"><span class="ld-detail-label">CA actuel</span><span class="ld-detail-val">' + escHtml(l.ca) + '</span></div>';
   if (l.defi) h += '<div class="ld-detail-row"><span class="ld-detail-label">Défi</span><span class="ld-detail-val">' + escHtml(l.defi) + '</span></div>';
@@ -5264,6 +5292,7 @@ function l2SegInfos(l, id) {
   h += '<div class="ld-detail-row"><span class="ld-detail-label">UTM / Source</span><input class="ld-detail-input" data-edit="utm" data-id="' + id + '" value="' + escAttr(decodeUtm(l.utm) || '') + '"/></div>';
   h += '<div class="ld-detail-row"><span class="ld-detail-label">Type</span><select class="ld-detail-select" data-edit="type" data-id="' + id + '">';
   h += '<option value="vsl_elite"' + (l.type === 'vsl_elite' ? ' selected' : '') + '>VSL ÉLITE</option>';
+  h += '<option value="quiz_funnel"' + (l.type === 'quiz_funnel' ? ' selected' : '') + '>Quiz Funnel</option>';
   h += '<option value="self_booking"' + (l.type === 'self_booking' ? ' selected' : '') + '>Self-Booking</option>';
   h += '<option value="business"' + (l.type === 'business' ? ' selected' : '') + '>Business</option>';
   h += '</select></div>';

@@ -48,7 +48,7 @@ const CONFIG_IGNORE = { lastEdit: 1, updatedAt: 1, sioPagesUpdatedAt: 1, redirec
 
 const TUNNEL_LABELS = { name: 'Nom', slug: 'Slug', kind: 'Nature', status: 'Statut', homeStepId: 'Page d\'accueil', archived: 'Archivé' };
 const SETTINGS_LABELS = {
-  host: 'Domaine', trackingSource: 'Source de tracking', pixelId: 'ID pixel Meta', leadType: 'Type de lead',
+  host: 'Domaine', trackingSource: 'Source de tracking', pixelId: 'ID pixel Meta', leadType: 'Type de lead', crmLabel: 'Nom affiché dans Leads Live',
   defaultChannel: 'Canal par défaut', bookingType: 'Type de RDV lié', requiredFields: 'Champs obligatoires à l\'opt-in',
   noindex: 'noindex', faviconUrl: 'Favicon', ogImage: 'Image de partage', headHtml: 'Code <head>', notes: 'Notes'
 };

@@ -39,6 +39,8 @@
 //     · assignedTo INTOUCHÉ (continuité commerciale) ;
 //     · attributionLast rafraîchi, attributionFirst posé s'il manquait ;
 //     · landingLast rafraîchi, landingFirst posé s'il manquait.
+//   landing.label = nom affiché dans Leads Live (settings.crmLabel, sinon nom
+//   du tunnel), landing.stepLabel = nom de l'étape — même sourceDetail.
 //   Fiche NEUVE : id déterministe `tn_<sha1 contact>` (double envoi = même
 //     fiche), type = réglage du tunnel, source 'tunnel', utm = créative
 //     Meta si connue sinon nom du tunnel, formAnswers = réponses (affichées
@@ -56,7 +58,7 @@ const Reg = require('./_tunnelRegistry');
 const Core = require('../funnel-core.js');
 
 const str = Lookup.str;
-const KNOWN_TYPES = { vsl_elite: 1, business: 1, self_booking: 1, webinaire: 1 };
+const KNOWN_TYPES = { vsl_elite: 1, quiz_funnel: 1, business: 1, self_booking: 1, webinaire: 1 };
 
 function todayIsoParis() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
@@ -232,11 +234,12 @@ module.exports = async (req, res) => {
 
   const FV = admin.firestore.FieldValue;
   const dateFR = Lookup.dateNowFR();
-  const label = Reg.pageLabel(tunnel, step);
+  const label = Reg.pageLabel(tunnel, step);       // « Tunnel · étape » (formulaire, notes)
+  const crmLabel = Reg.crmLabelOf(tunnel);          // nom affiché dans Leads Live
   const pageK = Reg.pageKey(tunnel, step);
   const type = leadTypeOf(tunnel);
   const attribution = buildAttribution(body, pageUrl, tunnel, step);
-  const landing = { page: pageK, variant: variant, tunnelId: tunnel.id, stepId: step.id, label: label, capturedAt: new Date().toISOString() };
+  const landing = { page: pageK, variant: variant, tunnelId: tunnel.id, stepId: step.id, label: crmLabel, stepLabel: step.name || step.slug || '', capturedAt: new Date().toISOString() };
   if (pageUrl) landing.pageUrl = pageUrl;
 
   // Réponses affichées par Leads Live (même format que les AlteoForms).
@@ -252,7 +255,7 @@ module.exports = async (req, res) => {
     if (v && l) formAnswers.push({ fieldId: keyPart(x.name || l) || 'champ', label: l, type: 'text', value: v });
   });
 
-  const utmLabel = (attribution && (attribution.utm_content || attribution.utm_campaign)) || tunnel.name;
+  const utmLabel = (attribution && (attribution.utm_content || attribution.utm_campaign)) || crmLabel;
   const directFields = {};
   if (str(fields.secteur, 200)) directFields.secteur = str(fields.secteur, 200);
   if (str(fields.ca, 120)) directFields.ca = str(fields.ca, 120);
@@ -269,7 +272,7 @@ module.exports = async (req, res) => {
       const update = Object.assign({
         type: type,
         source: 'tunnel',
-        sourceDetail: label,
+        sourceDetail: crmLabel,
         utm: prev.utm ? prev.utm : Core.decodeUtm(utmLabel),
         formId: 'tunnel:' + tunnel.id + ':' + step.id,
         formTitle: label,
@@ -332,7 +335,7 @@ module.exports = async (req, res) => {
       phoneNormalized: phoneNorm,
       type: type,
       source: 'tunnel',
-      sourceDetail: label,
+      sourceDetail: crmLabel,
       utm: Core.decodeUtm(utmLabel),
       stage: 'lead',
       status: 'nouveau',

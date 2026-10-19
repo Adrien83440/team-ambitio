@@ -67,6 +67,7 @@
 const { db, admin } = require('./_firebaseAdmin');
 const parseBody = require('./_parseBody');
 const Core = require('../funnel-core.js');
+const Reg = require('./_tunnelRegistry');
 
 // ─── ATTRIBUTION PUBLICITAIRE (chantier UTM 17/08/2026) ───────────────
 // AVANT : ce fichier posait `utm: 'AlteoForm - ' + formTitle` en dur, à la
@@ -116,12 +117,24 @@ function landingLabelOf(page) {
   if (page.indexOf('vsl_') === 0)  return biz ? 'VSL Business' : 'VSL Élite';
   return biz ? 'Opt-in Business' : 'Opt-in Élite';
 }
-function buildLanding(body) {
+// Page d'un tunnel hébergé : libellé = nom Leads Live du tunnel
+// (settings.crmLabel, sinon son nom), étape dans stepLabel (19/10/2026).
+async function buildLanding(body) {
   const src = body && typeof body.landing === 'object' ? body.landing : null;
   if (!src) return null;
   const page = landingSlug(src.page, 90);
   if (!page || (!LANDING_PAGES[page] && !TUNNEL_KEY_RE.test(page))) return null;
   const out = { page: page, variant: landingSlug(src.variant, 20) || null, label: landingLabelOf(page), via: 'optin', capturedAt: new Date().toISOString() };
+  if (TUNNEL_KEY_RE.test(page) && !LANDING_PAGES[page]) {
+    let hit = null;
+    try { hit = await Reg.findByPage(page); } catch (e) { console.warn('[alteoform-submit] registre tunnels :', e && e.message); }
+    if (hit) {
+      out.tunnelId = hit.tunnel.id;
+      out.stepId = hit.step.id;
+      out.label = Reg.crmLabelOf(hit.tunnel);
+      out.stepLabel = hit.step.name || hit.step.slug || '';
+    }
+  }
   const url = String(src.pageUrl || (body && (body.pageUrl || body.landingUrl)) || '').slice(0, 500);
   if (url) out.pageUrl = url;
   return out;
@@ -185,7 +198,7 @@ module.exports = async (req, res) => {
   const contact = body.contact || {};
   const answers = body.answers || {};
   let attribution = buildAttribution(body, 'form');
-  const landing = buildLanding(body);
+  const landing = await buildLanding(body);
 
   if (!formId || typeof formId !== 'string') {
     res.status(400).json({ error: 'formId_required' });
