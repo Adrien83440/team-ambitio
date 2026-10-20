@@ -484,7 +484,7 @@
   function retour() { if (pile.length > 1) pile.pop(); anime = true; if (openCardId) l2RenderSheet(openCardId, false); }
   function accueilLead(msg) { pile = ['lead']; anime = true; if (openCardId) l2RenderSheet(openCardId, false); if (msg) toast(msg); }
 
-  var TITRES = { write: 'Écrire', 'c-sms': 'SMS', 'c-wa': 'WhatsApp', 'c-mail': 'E-mail', 'c-note': 'Note pour l’équipe', voice: 'Vocaux', fu: 'Rappel', rdv: 'Rendez-vous', hist: 'Historique', info: 'Infos et dossier', ai: 'Conseil de l’IA', stars: 'Qualité du lead', notes: 'Notes', more: 'Plus', state: 'Changer l’état', closing: 'Closing', result: 'Résultat de l’appel', result2: 'Résultat de l’appel', fuask: 'Rappel', incall: 'Appel', quiz: 'Quiz' };
+  var TITRES = { 'h-mail': 'E-mail', 'h-sms': 'Conversation SMS', write: 'Écrire', 'c-sms': 'SMS', 'c-wa': 'WhatsApp', 'c-mail': 'E-mail', 'c-note': 'Note pour l’équipe', voice: 'Vocaux', fu: 'Rappel', rdv: 'Rendez-vous', hist: 'Historique', info: 'Infos et dossier', ai: 'Conseil de l’IA', stars: 'Qualité du lead', notes: 'Notes', more: 'Plus', state: 'Changer l’état', closing: 'Closing', result: 'Résultat de l’appel', result2: 'Résultat de l’appel', fuask: 'Rappel', incall: 'Appel', quiz: 'Quiz' };
 
   function barre(l, e) {
     var premier = e === 'lead';
@@ -724,7 +724,7 @@
       });
     });
   }
-  function repeindreHist(id) { if (openCardId === id && ecran() === 'hist') l2RenderSheet(id, true); }
+  function repeindreHist(id) { if (openCardId === id && (ecran() === 'hist' || ecran() === 'h-sms')) l2RenderSheet(id, true); }
   function chargerHist(l) {
     var id = l.id, s = histSrv[id];
     if (s && (s.busy || Date.now() - s.lu < 60000)) return;
@@ -858,7 +858,9 @@
       if (ouv.conv) extra += panneauConv(l, id, cid, det, trFiche, a);
     }
     var cls = sortant ? 'grey' : (dur ? 'go' : 'late');
-    return '<div class="ll5hist"><span class="ll5ric ' + cls + '">' + ic('phone') + '</span><span class="ll5tx"><b>' + escHtml(titre) + '</b>' + extra + '</span><span class="tm">' + heure + '</span></div>';
+    // Toute la ligne déplie la conversation, pas seulement la pastille.
+    var clic = (aConv && peut) ? ' ll5hclic" data-ll5="hconv" data-k="' + cle + '" data-cid="' + escAttr(cid) : '';
+    return '<div class="ll5hist' + clic + '"><span class="ll5ric ' + cls + '">' + ic('phone') + '</span><span class="ll5tx"><b>' + escHtml(titre) + '</b>' + extra + '</span><span class="tm">' + heure + '</span></div>';
   }
   function panneauConv(l, id, cid, det, trFiche, a) {
     var h = '<span class="ll5conv">';
@@ -905,7 +907,9 @@
     return '<button type="button" class="ll5line big ll5waln" data-ll5="go" data-v="c-wa"><span class="ll5ric go">' + ic('wa') + '</span><span class="ll5tx"><b>Conversation WhatsApp</b>' + bas + '</span><span class="ll5chev">' + ic('chev') + '</span></button>';
   }
 
-  function ecranHistorique(l, id) {
+  /* Éléments de l'historique (fiche + compléments serveur), du plus récent
+     au plus ancien. Partagé par l'historique et la conversation SMS. */
+  function elementsHist(l, id) {
     var items = [], vus = [];
     (l.communications || []).forEach(function (c) {
       if (!c || (c.type !== 'call' && c.type !== 'sms' && c.type !== 'email')) return;
@@ -919,9 +923,14 @@
       items.push({ t: t, c: c, sortant: sortant });
     });
     (l.notesHistory || []).forEach(function (n, i) { items.push({ t: dateNote(n.date), note: n, idx: i }); });
-    var se = histSrv[id], srv = se && se.data;
-    fusionner(items, srv);
+    fusionner(items, histSrv[id] && histSrv[id].data);
     items.sort(function (a, b) { return b.t - a.t; });
+    return items;
+  }
+  function ecranHistorique(l, id) {
+    var se = histSrv[id], srv = se && se.data;
+    var items = elementsHist(l, id);
+    histItems[id] = items;
 
     var h = '<h1 class="ll5h1">Historique</h1><p class="ll5sub">Appels, SMS, WhatsApp, e-mails et notes, du plus récent au plus ancien.</p>';
     h += '<div class="ll5group ll5mt">';
@@ -933,13 +942,13 @@
     if (srv && srv.smsError) h += '<p class="ll5note">SMS automatiques indisponibles pour l’instant (Twilio ne répond pas).</p>';
     if (!items.length) return h + '<p class="ll5sub ll5mt">Rien pour l’instant. Les appels Ringover, SMS, WhatsApp et e-mails apparaîtront ici.</p>';
     var jour = '';
-    items.forEach(function (it) {
+    items.forEach(function (it, k) {
       var d = it.t ? new Date(it.t) : null;
       var j = d ? majuscule(d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })) : 'Date inconnue';
       if (j !== jour) { h += (jour ? '</div>' : '') + '<div class="ll5gt">' + escHtml(j) + '</div><div class="ll5group">'; jour = j; }
       var heure = d && !(it.c && ldDayOnlyDate(it.c.date)) ? hm(d) : '';
       if (it.note) {
-        h += '<div class="ll5hist"><span class="ll5ric grey">' + ic('note') + '</span><span class="ll5tx"><b>Note' + (it.note.authorName ? ' de ' + escHtml(it.note.authorName) : '') + '</b><span class="q">' + highlightMentions(it.note.text || '') + '</span></span><span class="tm">' + heure + '</span></div>';
+        h += '<div class="ll5hist ll5hclic" data-ll5="hopen" data-k="' + k + '"><span class="ll5ric grey">' + ic('note') + '</span><span class="ll5tx"><b>Note' + (it.note.authorName ? ' de ' + escHtml(it.note.authorName) : '') + '</b><span class="q">' + highlightMentions(it.note.text || '') + '</span></span><span class="tm">' + heure + '</span></div>';
         return;
       }
       if (it.api || (it.c && it.c.type === 'call')) { h += rangAppel(l, id, it, heure); return; }
@@ -975,9 +984,71 @@
           q = escHtml(ce.subject ? ce.subject : String(ce.content || '').split('\n')[0]);
         }
       }
-      h += '<div class="ll5hist"><span class="ll5ric ' + cls + '">' + ic(icone) + '</span><span class="ll5tx"><b>' + escHtml(titre) + '</b>' + (sousL ? '<span class="ll5hnote late">' + escHtml(sousL) + '</span>' : '') + (q ? '<span class="q">' + q + '</span>' : '') + '</span><span class="tm">' + heure + '</span></div>';
+      h += '<div class="ll5hist ll5hclic" data-ll5="hopen" data-k="' + k + '"><span class="ll5ric ' + cls + '">' + ic(icone) + '</span><span class="ll5tx"><b>' + escHtml(titre) + '</b>' + (sousL ? '<span class="ll5hnote late">' + escHtml(sousL) + '</span>' : '') + (q ? '<span class="q">' + q + '</span>' : '') + '</span><span class="tm">' + heure + '</span></div>';
     });
     return h + '</div>';
+  }
+
+  /* Historique cliquable (20/10/2026) : chaque ligne ouvre son détail DANS
+     la fiche — l'e-mail en entier, la conversation SMS, le WhatsApp, les
+     rendez-vous (note « RDV posé »), les notes. Un appel déplie sa
+     conversation sur place. */
+  var histItems = {}, histSel = {};
+  var RX_RDV = /\bRDV\b|rendez-vous|audit strat/i;
+  function ouvrirHist(id, k) {
+    var it = (histItems[id] || [])[k];
+    if (!it) return;
+    if (it.wa) { aller('c-wa'); return; }
+    if (it.note) { aller(RX_RDV.test(it.note.text || '') ? 'rdv' : 'notes'); return; }
+    if (it.c && it.c.type === 'email') { histSel[id] = { mail: it.c, t: it.t, sortant: it.sortant }; aller('h-mail'); return; }
+    if (it.tw || (it.c && it.c.type === 'sms')) { histSel[id] = { sms: it.t }; aller('h-sms'); }
+  }
+  // Même nettoyage que l'onglet E-mails de sales-contact (corps parfois en HTML).
+  function texteMail(s) {
+    return String(s || '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div)>/gi, '\n').replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\n{3,}/g, '\n\n').trim();
+  }
+  function quandLong(ms) {
+    return majuscule(new Date(ms).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }));
+  }
+  function ecranHistMail(l, id) {
+    var s = histSel[id], c = s && s.mail;
+    if (!c) return '<h1 class="ll5h1">E-mail</h1><p class="ll5sub">Ouvre un e-mail depuis l’historique.</p>';
+    var objet = c.subject || '(sans objet)';
+    var corps = texteMail(c.content);
+    // Les e-mails envoyés depuis la fiche stockent « objet + texte » : pas d'objet en double.
+    if (c.subject && corps.indexOf(c.subject) === 0) corps = corps.slice(c.subject.length).replace(/^\s+/, '');
+    var qui = s.sortant
+      ? 'Envoyé' + (c.ownerName ? ' par ' + c.ownerName : '') + ' à ' + (c.emailTo || l.email || prenom(l))
+      : 'De ' + (c.emailFromName ? c.emailFromName + ' · ' : '') + (c.emailFrom || l.email || prenom(l));
+    var h = '<h1 class="ll5h1">' + escHtml(objet) + '</h1><p class="ll5sub">' + escHtml(qui) + (s.t ? '<br>' + escHtml(quandLong(s.t)) : '') + '</p>';
+    h += '<div class="ll5group ll5mt"><div class="ll5hist"><span class="ll5tx"><span class="q plain">' + (corps ? escHtml(corps) : '<i>E-mail sans texte</i>') + '</span></span></div></div>';
+    if (RX_RDV.test(objet + ' ' + corps)) h += '<div class="ll5group ll5mt">' + ligne('cal', 'grey', 'Voir les rendez-vous', '', 'data-ll5="go" data-v="rdv"') + '</div>';
+    if (l.email) h += '<div class="ll5foot"><button type="button" class="ll5big pri" data-ll5="mailre" data-id="' + id + '">' + ic('mail') + 'Répondre par e-mail</button></div>';
+    return h;
+  }
+  function ecranHistSms(l, id) {
+    var items = elementsHist(l, id).filter(function (it) { return it.tw || (it.c && it.c.type === 'sms'); }).reverse();
+    var cible = histSel[id] && histSel[id].sms, se = histSrv[id];
+    var h = '<h1 class="ll5h1">Conversation SMS</h1><p class="ll5sub">' + escHtml(l.nom || '') + (l.telephone ? ' · ' + escHtml(normalizeTel(l.telephone)) : '') + '</p>';
+    if (se && se.busy && !se.data) h += '<p class="ll5note">Recherche des SMS automatiques…</p>';
+    if (!items.length) {
+      h += '<p class="ll5sub ll5mt">Aucun SMS avec ' + escHtml(prenom(l)) + ' pour l’instant.</p>';
+    } else {
+      h += '<div class="ll5group ll5mt"><div class="ll5hist"><span class="ll5tx"><span class="ll5tr ll5smsfil">';
+      items.forEach(function (it) {
+        var c = it.c, tw = it.tw;
+        var qui = it.sortant ? ((c && c.ownerName) || (c ? 'L’équipe' : 'SMS automatique')) : prenom(l);
+        var txt = c ? sanitizeCommContent(c.content || '') : escHtml(tw.body || '');
+        var rate = tw && tw.failed;
+        var dt = it.t ? new Date(it.t).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+        h += '<span class="ll5bub ' + (it.sortant ? 'me' : 'them') + (cible && it.t === cible ? ' sel' : '') + '"><span class="w">' + escHtml(qui) + (dt ? ' · ' + escHtml(dt) : '') + '</span>' + txt +
+          (rate ? '<span class="w late">Non délivré · ' + escHtml(tw.status || '') + '</span>' : '') + '</span>';
+      });
+      h += '</span></span></div></div>';
+    }
+    if (l.telephone && !stopSms(l)) h += '<div class="ll5foot"><button type="button" class="ll5big pri" data-ll5="go" data-v="c-sms">' + ic('msg') + 'Répondre par SMS</button></div>';
+    return h;
   }
 
   /* Notes, IA, qualité, infos, état, plus */
@@ -1131,7 +1202,7 @@
 
   var ECRANS = {
     lead: ecranLead, write: ecranEcrire, 'c-sms': ecranSms, 'c-wa': ecranWa, 'c-mail': ecranMail, 'c-note': ecranNoteCompose, voice: ecranVocaux,
-    fu: ecranRappel, rdv: ecranRdv, closing: ecranClosing, hist: ecranHistorique, notes: ecranNotes, ai: ecranIa, stars: ecranQualite,
+    fu: ecranRappel, rdv: ecranRdv, closing: ecranClosing, hist: ecranHistorique, 'h-mail': ecranHistMail, 'h-sms': ecranHistSms, notes: ecranNotes, ai: ecranIa, stars: ecranQualite,
     info: ecranInfos, state: ecranEtat, more: ecranPlus, result: ecranResultat, result2: ecranResultat2, fuask: ecranRappelApres, incall: ecranEnAppel, quiz: ecranQuiz
   };
 
@@ -1205,6 +1276,11 @@
     }
     if (e === 'lead') chargerWa(l);
     if (e === 'hist') { chargerWa(l); chargerHist(l); }
+    if (e === 'h-sms') {
+      chargerHist(l);
+      // À l'arrivée seulement : centrer sur le SMS cliqué (pas à chaque repeint).
+      if (!memeEcran) setTimeout(function () { var b = inner.querySelector('.ll5bub.sel'); if (b && b.scrollIntoView) b.scrollIntoView({ block: 'center' }); }, 40);
+    }
   }
 
   /* Présence / RDV : repeindre l'accueil du lead quand ses RDV changent. */
@@ -1347,7 +1423,19 @@
     var t = e.target.closest ? e.target.closest('[data-ll5]') : null;
     if (!t || t.disabled) return;
     var a = t.getAttribute('data-ll5'), id = t.getAttribute('data-id') || openCardId, v = t.getAttribute('data-v');
+    /* Ligne d'historique cliquable : pas quand on manipule le lecteur audio,
+       la transcription dépliée, un lien, ou qu'on sélectionne du texte. */
+    if (t.classList && t.classList.contains('ll5hclic')) {
+      if (e.target.closest('audio, a, .ll5conv')) return;
+      if (window.getSelection && String(window.getSelection())) return;
+    }
     switch (a) {
+      case 'hopen': ouvrirHist(id, +t.getAttribute('data-k')); return;
+      case 'mailre':
+        var mre = histSel[id] && histSel[id].mail, obj = (mre && mre.subject) || '';
+        mailEtat[id] = { objet: /^re\s*:/i.test(obj) ? obj : 'Re: ' + obj, corps: '' };
+        aller('c-mail');
+        return;
       case 'open': l2OpenLead(id); return;
       case 'go': aller(v); return;
       case 'back': retour(); return;
