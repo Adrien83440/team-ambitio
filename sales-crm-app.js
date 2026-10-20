@@ -191,7 +191,7 @@ function toast(m){var t=document.getElementById('crmToast');t.textContent=m;t.cl
 function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 function escA(s){if(!s)return'';return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
 function decodeUtm(v){if(v==null)return v;var s=String(v);if(s.indexOf('%')===-1)return s;try{return decodeURIComponent(s);}catch(e){return s.replace(/(?:%[0-9A-Fa-f]{2})+/g,function(m){try{return decodeURIComponent(m);}catch(_){return m;}});}}
-function fmtNow(){var d=new Date();return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+function fmtNow(){var o={};new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Paris',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()).forEach(function(p){o[p.type]=p.value;});return o.day+'/'+o.month+'/'+o.year+' '+(o.hour==='24'?'00':o.hour)+':'+o.minute;}
 function fmtDate(ts){if(!ts)return'—';var d;if(ts instanceof Date)d=ts;else if(ts.toDate)d=ts.toDate();else if(typeof ts==='string'){d=new Date(ts.replace(' ','T'));if(isNaN(d.getTime()))return'—';}else d=new Date(ts);return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();}
 
 /* ═══ FILTERING ═══ */

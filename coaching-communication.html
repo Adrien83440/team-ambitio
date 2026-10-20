@@ -708,7 +708,7 @@ async function sendMessage(){
     input.value = '';
     input.style.height = 'auto';
     if(_msgType === 'pin'){
-      _pinnedMessages.unshift({text, sender:senderName, time:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})});
+      _pinnedMessages.unshift({text, sender:senderName, time:new Date().toLocaleTimeString('fr-FR',{timeZone:'Europe/Paris',hour:'2-digit',minute:'2-digit'})});
       localStorage.setItem('ambitio_pins_'+_currentChannel, JSON.stringify(_pinnedMessages));
       renderContextPanel();
     }
@@ -791,7 +791,7 @@ function createAlarm(){
     clientId, clientName,
     msg, assign,
     by: senderName,
-    time: new Date().toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}),
+    time: new Date().toLocaleString('fr-FR',{timeZone:'Europe/Paris',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}),
     channel: _currentChannel,
     dismissed: false,
   };

@@ -343,7 +343,7 @@ var m2=content.match(/(https?:\/\/cdn\.ringover\.com\/[^\s<"']+)/i);
 if(m2)return m2[1];
 return'';
 }
-function fmtNow(){var d=new Date();return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+function fmtNow(){var o={};new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Paris',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()).forEach(function(p){o[p.type]=p.value;});return o.day+'/'+o.month+'/'+o.year+' '+(o.hour==='24'?'00':o.hour)+':'+o.minute;}
 /* Note signée (16/10/2026, module Pilotage équipe) : mêmes champs auteur que
    les notes de Leads Live (authorUid / authorName / authorSlug) — sans eux, la
    note ne peut être rattachée à personne dans l'activité par personne. */
@@ -1220,7 +1220,7 @@ function remonterManuelLead(){
   var isTerminal=TERMINAL.indexOf(lead.stage)>=0;
   var who=(window._currentUserName||localStorage.getItem('ambitio_name')||'admin');
   var tlText='🔁 Remonté manuellement par '+who+(reason?' · '+reason:'');
-  var newTl=(lead.timeline_history||[]).concat([{text:tlText,date:customDate.toLocaleString('fr-FR'),color:'#fb923c'}]);
+  var newTl=(lead.timeline_history||[]).concat([{text:tlText,date:customDate.toLocaleString('fr-FR',{timeZone:'Europe/Paris'}),color:'#fb923c'}]);
   var update={
     lastOptinAt:firebase.firestore.Timestamp.fromDate(customDate),
     lastOptinSource:'manual',

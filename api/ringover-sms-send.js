@@ -110,7 +110,7 @@ module.exports = async (req, res) => {
     const smsDate = new Date();
     const nowIso  = smsDate.toISOString();
     const pad     = n => String(n).padStart(2, '0');
-    const tlDate  = `${pad(smsDate.getDate())}/${pad(smsDate.getMonth()+1)}/${smsDate.getFullYear()} ${pad(smsDate.getHours())}:${pad(smsDate.getMinutes())}`;
+    const tlDate  = smsDate.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
 
     if (leadId && lead) await db.collection('leads').doc(leadId).update({
       communications: admin.firestore.FieldValue.arrayUnion({

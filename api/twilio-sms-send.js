@@ -186,7 +186,7 @@ module.exports = async (req, res) => {
     // (pad + slash + plain text format avec icône et début du contenu)
     const d = new Date();
     const pad = n => String(n).padStart(2, '0');
-    const tlDate = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const tlDate = d.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
     const preview = trimmed.substring(0, 100);
     const timelineEntry = {
       text: '💬 SMS sortant (twilio-sms) — ' + preview,

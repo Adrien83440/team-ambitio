@@ -175,7 +175,7 @@ module.exports = async (req, res) => {
 
         const d = new Date();
         const pad = n => String(n).padStart(2, '0');
-        const tlDate = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        const tlDate = d.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
         const timelineEntry = {
           text: '📧 Email mandat envoyé (strategie) — ' + (subject || '').substring(0, 100),
           date: tlDate,

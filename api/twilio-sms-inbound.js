@@ -219,7 +219,7 @@ async function autoCloseNextOpenSlot(leadId, leadName) {
     try {
       const d = new Date();
       const pad = n => String(n).padStart(2, '0');
-      const tlDate = pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+      const tlDate = d.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
       await db.collection('leads').doc(leadId).update({
         timeline_history: admin.firestore.FieldValue.arrayUnion({
           text: '✅ Présence confirmée par SMS — slot du ' + (target.data.date || '?') + ' à ' + (target.data.time || '?') + ' refermé automatiquement',
@@ -315,7 +315,7 @@ module.exports = async (req, res) => {
 
     const d = new Date();
     const pad = n => String(n).padStart(2, '0');
-    const tlDate = pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    const tlDate = d.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
     const preview = smsContent.substring(0, 100);
     const timelineEntry = {
       text: '💬 SMS entrant (twilio-sms) — ' + preview,

@@ -225,7 +225,7 @@
         if (bt.classList.contains('sbx-x')) { ov.parentNode.removeChild(ov); return; }
         var id = 'bk' + Date.now();
         db().collection('bookings').doc(id).set({ leadId: l.id, date: bt.getAttribute('data-d'), time: bt.getAttribute('data-h'), duration: 60, status: 'confirmed', source: 'setter', bookedBySlug: MOI.slug, personName: MOI.nom, personId: MOI.slug, typeName: 'Appel stratégique Élite', prospect: { email: l.email || '', telephone: l.telephone || '' }, meetLink: 'https://meet.google.com/test-test-test', createdAt: ts(Date.now()) })
-          .then(function () { return db().collection('leads').doc(l.id).update({ status: 'rdv_pose', stage: 'set', notesHistory: window.firebase.firestore.FieldValue.arrayUnion({ text: '📅 RDV posé — ' + bt.textContent + ' avec ' + MOI.nom, date: new Date().toLocaleString('fr-FR'), authorName: MOI.nom }) }); })
+          .then(function () { return db().collection('leads').doc(l.id).update({ status: 'rdv_pose', stage: 'set', notesHistory: window.firebase.firestore.FieldValue.arrayUnion({ text: '📅 RDV posé — ' + bt.textContent + ' avec ' + MOI.nom, date: new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }), authorName: MOI.nom }) }); })
           .then(function () { toastSbx('✅ RDV confirmé — ' + bt.textContent); });
         ov.parentNode.removeChild(ov);
       });

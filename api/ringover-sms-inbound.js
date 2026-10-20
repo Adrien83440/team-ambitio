@@ -182,7 +182,7 @@ module.exports = async (req, res) => {
     const smsDate = (msgTime && msgTime > 0) ? new Date(msgTime * 1000) : new Date();
     const nowIso  = smsDate.toISOString();
     const pad     = n => String(n).padStart(2, '0');
-    const tlDate  = `${pad(smsDate.getDate())}/${pad(smsDate.getMonth()+1)}/${smsDate.getFullYear()} ${pad(smsDate.getHours())}:${pad(smsDate.getMinutes())}`;
+    const tlDate  = smsDate.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
 
     // ── Écrire dans leads ──────────────────────────────────────────────────
     if (lead) {

@@ -940,6 +940,15 @@ function populateForm(data) {
   _eodApplyRolePanels();
 }
 
+function frNowParis(d) {
+  /* Heure de Paris quel que soit le fuseau de l'appareil (setter à l'étranger :
+     note « RDV posé » datée 17:08 au lieu de 12:08, 20/10/2026). */
+  var o = {};
+  new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(d || new Date()).forEach(function (p) { o[p.type] = p.value; });
+  return o.day + '/' + o.month + '/' + o.year + ' ' + (o.hour === '24' ? '00' : o.hour) + ':' + o.minute;
+}
+
 function renderFeedback(list) {
   var el = document.getElementById('feedbackList');
   var countEl = document.getElementById('discussionCount');
@@ -992,7 +1001,7 @@ document.getElementById('feedbackAddBtn').addEventListener('click', function() {
   if (!dateStr) return;
   var authorName = window._currentUserName || localStorage.getItem('ambitio_name') || 'Admin';
   var now = new Date();
-  var fmtD = String(now.getDate()).padStart(2,'0') + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + now.getFullYear() + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+  var fmtD = frNowParis(now);
   var ref = db.collection('eod').doc(VIEWING_UID).collection('jours').doc(dateStr);
   ref.get().then(function(snap) {
     var data = snap.exists ? snap.data() : {};

@@ -158,11 +158,21 @@
   function pad2(n) { return String(n).padStart(2, '0'); }
   function dayKey(d) { d = d || new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
   function monthKey(d) { d = d || new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1); }
-  function frDateTime(d) {
-    d = d || new Date();
-    return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  /* Toujours l'heure de Paris, quel que soit le fuseau de l'appareil (un
+     setter à l'étranger datait ses notes et sa timeline à son heure locale,
+     20/10/2026). */
+  function parisParts(d) {
+    var o = {};
+    new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(d || new Date()).forEach(function (p) { o[p.type] = p.value; });
+    if (o.hour === '24') o.hour = '00';
+    return o;
   }
-  function frDate(d) { d = d || new Date(); return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear(); }
+  function frDateTime(d) {
+    var o = parisParts(d);
+    return o.day + '/' + o.month + '/' + o.year + ' ' + o.hour + ':' + o.minute;
+  }
+  function frDate(d) { var o = parisParts(d); return o.day + '/' + o.month + '/' + o.year; }
 
   /* ═══ ANNULATION — ORIGINE, AUTEUR, RAISON (28/09/2026) ═══════════════
      Un seul bloc `cancellation` sur le RDV, écrit par TOUS les chemins qui

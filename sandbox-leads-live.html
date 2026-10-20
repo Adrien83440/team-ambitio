@@ -2175,6 +2175,15 @@ function timeAgo(ts) {
   return Math.floor(diff / 86400) + 'j';
 }
 
+function frNowParis(d) {
+  /* Heure de Paris quel que soit le fuseau de l'appareil (setter à l'étranger :
+     note « RDV posé » datée 17:08 au lieu de 12:08, 20/10/2026). */
+  var o = {};
+  new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(d || new Date()).forEach(function (p) { o[p.type] = p.value; });
+  return o.day + '/' + o.month + '/' + o.year + ' ' + (o.hour === '24' ? '00' : o.hour) + ':' + o.minute;
+}
+
 function formatDateTimeFr(ts) {
   if (!ts) return '—';
   var d = ts.toDate ? ts.toDate() : new Date(ts);
@@ -5213,7 +5222,7 @@ function l2LockSetter(leadId, slug, btn) {
         setterVia: 'manual_pick',
         timeline_history: firebase.firestore.FieldValue.arrayUnion({
           text: '🎯 Setting par ' + name + (by && me.slug !== slug ? ' · désigné par ' + by : ''),
-          date: new Date().toLocaleString('fr-FR'),
+          date: new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }),
           color: '#fb923c'
         })
       };
@@ -6321,7 +6330,7 @@ document.addEventListener('click', function(e) {
     if (!text) { toast('⚠️ Écris une note d\'abord'); return; }
     // Format date
     var now = new Date();
-    var dateStr = String(now.getDate()).padStart(2,'0') + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + now.getFullYear() + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+    var dateStr = frNowParis(now);
 
     // Parser les mentions @slug → résoudre vers les firebaseUid via TEAM_MEMBERS
     var mentionedUids = parseMentions(text);
@@ -6553,7 +6562,7 @@ document.addEventListener('click', function(e) {
       if (window.AlteoreFlow && window.AlteoreFlow.recordAssignment) {
         window.AlteoreFlow.recordAssignment(raId, raLead || null, prevSetter, raTarget, { origin: 'leads_live' });
       }
-      var raNote = { text: '📥 Réattribué de ' + nameOfSlug(prevSetter) + ' à ' + nameOfSlug(raTarget), date: new Date().toLocaleString('fr-FR') };
+      var raNote = { text: '📥 Réattribué de ' + nameOfSlug(prevSetter) + ' à ' + nameOfSlug(raTarget), date: new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }) };
       var notes = (raLead && raLead.notesHistory) ? raLead.notesHistory.slice() : [];
       notes.push(raNote);
       db.collection('leads').doc(raId).update({ notesHistory: notes });
@@ -7179,7 +7188,7 @@ function slCatchUpSetter(bookingId, b) {
       setterLinkTypeId: b.type || '',
       timeline_history: firebase.firestore.FieldValue.arrayUnion({
         text: '🎯 Setting par ' + name + ' · RDV pris via son lien (' + (b.typeLabel || b.type || '') + ')',
-        date: new Date().toLocaleString('fr-FR'),
+        date: new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }),
         color: '#fb923c'
       })
     });
@@ -8163,7 +8172,7 @@ function startBookingBridge() {
         var be = change.doc.data();
         var beId = change.doc.id;
         var beRef = change.doc.ref;
-        var nowFr = new Date().toLocaleString('fr-FR');
+        var nowFr = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
 
         findExistingLead(be.email, be.telephone).then(function(existing) {
           return resolveEventBookingClass(existing ? existing.id : null, be.email).then(function (bkClass) {
@@ -8673,7 +8682,7 @@ window.addEventListener('message', function(e) {
     }
 
     var notes = (fresh.notesHistory || (lead && lead.notesHistory) || []).slice();
-    notes.push({ text: noteText, date: new Date().toLocaleString('fr-FR') });
+    notes.push({ text: noteText, date: new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }) });
     updates.notesHistory = notes;
 
     // Update local state
@@ -8746,8 +8755,8 @@ function submitCreateLead() {
     assignedTo: assign,
     utm: utm || 'Création manuelle',
     tags: [],
-    notesHistory: [{ text: '📝 Fiche créée manuellement', date: new Date().toLocaleString('fr-FR') }],
-    timeline_history: [{ text: '✨ Fiche créée manuellement', date: new Date().toLocaleString('fr-FR'), color: '#a78bfa' }],
+    notesHistory: [{ text: '📝 Fiche créée manuellement', date: new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }) }],
+    timeline_history: [{ text: '✨ Fiche créée manuellement', date: new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }), color: '#a78bfa' }],
     communications: [],
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -8772,7 +8781,7 @@ function submitCreateLead() {
          changer, la fiche garde ce qui était vrai à sa création. */
       lead.setterRole = _cvRole;
       lead.setterAt = firebase.firestore.FieldValue.serverTimestamp();
-      lead.timeline_history.push({ text: '🎯 Setting par ' + (_cvu.name || _cvu.slug) + (_cvRole === 'setter_ecrit' ? ' (setting écrit)' : ''), date: new Date().toLocaleString('fr-FR'), color: '#60a5fa' });
+      lead.timeline_history.push({ text: '🎯 Setting par ' + (_cvu.name || _cvu.slug) + (_cvRole === 'setter_ecrit' ? ' (setting écrit)' : ''), date: new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }), color: '#60a5fa' });
     }
   }
   /* Attribution structurée — `declared: true` est important : cette origine

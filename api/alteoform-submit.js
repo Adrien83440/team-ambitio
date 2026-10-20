@@ -174,7 +174,7 @@ async function isBlockedContact(emailLc, phoneNorm) {
 }
 
 function dateNowFR() {
-  return new Date().toLocaleString('fr-FR');
+  return new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
 }
 
 module.exports = async (req, res) => {
