@@ -21,6 +21,10 @@
   let phoneUnsub = null;
   let usersCache = []; // [{uid, displayName, email, role}]
   let numbersCache = []; // numéros depuis Firestore
+  // Liaisons poste Ringover ↔ dialer : { uid: { dedicated, keyEnd, userId, ownerName, linkedAt, linkedByName } }
+  // (api/admin-ringover-link — jamais la clé elle-même). null = pas encore chargé.
+  let dialerLinks = null;
+  let sharedRingoverUserId = null;
 
   // ─── Toasts ───────────────────────────────────────────────────────────
   function toast(msg, type = 'info') {
@@ -197,8 +201,11 @@
         ? `<button class="an-btn an-btn-danger" data-action="unlink" data-id="${esc(n.id)}" data-num="${esc(n.phoneNumber)}">Retirer</button>`
         : `<button class="an-btn an-btn-danger" data-action="release" data-id="${esc(n.id)}" data-num="${esc(n.phoneNumber)}">Libérer</button>`;
       const op = isRingover
-        ? `<span class="an-badge an-badge-mobile">Ringover${n.ringoverUserId ? ' · ' + esc(n.ringoverUserId) : ''}</span>`
+        ? `<span class="an-badge an-badge-mobile">Ringover${n.ringoverUserId ? ' · ' + esc(n.ringoverUserId) : ''}</span>${dialerBadge(n)}`
         : '<span class="an-badge an-badge-local">Twilio</span>';
+      const dialerBtn = (isRingover && n.assignedTo && n.ringoverUserId)
+        ? `<button class="an-btn an-btn-ghost" data-action="dialer" data-id="${esc(n.id)}">🔑 Dialer</button>`
+        : '';
       return `
       <tr>
         <td><strong>${esc(n.phoneNumber)}</strong></td>
@@ -208,11 +215,133 @@
         <td>${userLabel(n.assignedToSlug, n.assignedTo)}</td>
         <td>${esc(n.locality || n.region || (n.regionIndicatif ? 'Indicatif ' + String(n.regionIndicatif).replace(/^0+/, '0') : (n.countryCode || '')))}</td>
         <td class="an-row-actions">
+          ${dialerBtn}
           <button class="an-btn an-btn-ghost" data-action="edit" data-id="${esc(n.id)}">Modifier</button>
           ${action}
         </td>
       </tr>`;
     }).join('');
+  }
+
+  // ─── Liaison poste Ringover ↔ dialer ──────────────────────────────────
+  // Le dialer fait sonner le poste PROPRIÉTAIRE de la clé API utilisée. Sans
+  // clé à lui, un commercial dont la ligne est sur un autre poste que la clé
+  // partagée est bloqué (ringover-call-initiate, code ringover_poste_non_relie).
+  function dialerState(n) {
+    if (!n.assignedTo || !n.ringoverUserId) return null;
+    if (dialerLinks === null) return { kind: 'loading' };
+    const l = dialerLinks[n.assignedTo];
+    if (l && l.dedicated) return { kind: 'ok', link: l };
+    if (sharedRingoverUserId && String(n.ringoverUserId) === sharedRingoverUserId) return { kind: 'main' };
+    return { kind: 'off' };
+  }
+
+  function dialerBadge(n) {
+    const st = dialerState(n);
+    if (!st || st.kind === 'loading') return '';
+    if (st.kind === 'ok') return `<br><span class="an-dialer an-dialer-ok" title="Clé …${esc(st.link.keyEnd)}">✅ Dialer relié</span>`;
+    if (st.kind === 'main') return '<br><span class="an-dialer an-dialer-main" title="Ce poste porte la clé principale">✅ Dialer (clé principale)</span>';
+    return '<br><span class="an-dialer an-dialer-off">⚠️ Dialer non relié</span>';
+  }
+
+  async function loadDialerLinks() {
+    try {
+      const r = await window.SalesDialerAPI.ringoverLinks();
+      dialerLinks = (r && r.links) || {};
+      sharedRingoverUserId = (r && r.sharedUserId) || null;
+    } catch (e) {
+      console.warn('[admin-numbers] liaisons dialer:', e);
+      dialerLinks = {};
+    }
+    renderNumbers();
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch (_) { return ''; }
+  }
+
+  function openDialerModal(numberId) {
+    const n = numbersCache.find(x => x.id === numberId);
+    if (!n || !n.assignedTo) { toast("Ligne introuvable ou non assignée.", 'error'); return; }
+    const modal = $('#dialer-modal');
+    modal.dataset.uid = n.assignedTo;
+    modal.dataset.numberId = numberId;
+    const who = n.assignedToSlug && window.TEAM_MEMBERS && window.TEAM_MEMBERS[n.assignedToSlug]
+      ? (window.TEAM_MEMBERS[n.assignedToSlug].fullName || window.TEAM_MEMBERS[n.assignedToSlug].shortName || n.assignedToSlug)
+      : (n.assignedToSlug || n.assignedTo);
+    $('#dm-sub').textContent = `${who} · ligne ${n.phoneNumber} · poste Ringover ${n.ringoverUserId}`;
+    const st = dialerState(n) || { kind: 'off' };
+    let html;
+    if (st.kind === 'ok') {
+      const l = st.link;
+      html = `✅ <strong>Relié</strong> — clé …${esc(l.keyEnd)}${l.ownerName ? ' (poste de ' + esc(l.ownerName) + ')' : ''}`
+        + (l.linkedAt ? `, le ${esc(fmtDate(l.linkedAt))}` : '') + (l.linkedByName ? ` par ${esc(l.linkedByName)}` : '')
+        + '. Coller une nouvelle clé pour la remplacer.';
+    } else if (st.kind === 'main') {
+      html = "✅ Ce poste porte la <strong>clé principale</strong> du dialer : rien à faire, sauf pour lui donner une clé à lui.";
+    } else {
+      html = "⚠️ <strong>Non relié</strong> : le bouton « Appeler » du dialer est bloqué pour ce membre (il appelle depuis l'app Ringover en attendant).";
+    }
+    $('#dm-state').innerHTML = html;
+    $('#dm-unlink').hidden = st.kind !== 'ok';
+    $('#dm-key').value = '';
+    $('#dm-err').hidden = true;
+    $('#dm-confirm').disabled = false;
+    $('#dm-confirm').textContent = 'Vérifier et relier';
+    modal.hidden = false;
+    setTimeout(() => $('#dm-key').focus(), 0);
+  }
+
+  function closeDialerModal() {
+    const modal = $('#dialer-modal');
+    modal.hidden = true;
+    $('#dm-key').value = '';
+    delete modal.dataset.uid;
+    delete modal.dataset.numberId;
+  }
+
+  function dialerError(msg) {
+    const el = $('#dm-err');
+    el.textContent = msg;
+    el.hidden = false;
+  }
+
+  async function confirmDialerLink() {
+    const modal = $('#dialer-modal');
+    const uid = modal.dataset.uid;
+    const apiKey = $('#dm-key').value.trim();
+    if (!uid) return;
+    if (!apiKey) { dialerError('Coller la clé API Ringover.'); return; }
+    $('#dm-err').hidden = true;
+    const btn = $('#dm-confirm');
+    btn.disabled = true; btn.textContent = 'Vérification chez Ringover…';
+    try {
+      const r = await window.SalesDialerAPI.ringoverLink({ uid, apiKey });
+      toast(`Dialer relié${r && r.link && r.link.ownerName ? ' au poste de ' + r.link.ownerName : ''}.`, 'success');
+      closeDialerModal();
+      loadDialerLinks();
+    } catch (e) {
+      dialerError(e.message);
+      btn.disabled = false; btn.textContent = 'Vérifier et relier';
+    }
+  }
+
+  async function confirmDialerUnlink() {
+    const modal = $('#dialer-modal');
+    const uid = modal.dataset.uid;
+    if (!uid) return;
+    if (!confirm("Délier ce poste du dialer ?\n\nLe bouton « Appeler » sera de nouveau bloqué pour ce membre (il pourra toujours appeler depuis l'app Ringover).")) return;
+    try {
+      await window.SalesDialerAPI.ringoverUnlink({ uid });
+      toast('Poste délié du dialer.', 'success');
+      closeDialerModal();
+      loadDialerLinks();
+    } catch (e) {
+      dialerError(e.message);
+    }
   }
 
   // ─── Render résultats de recherche ────────────────────────────────────
@@ -567,6 +696,8 @@
         handleRelease(btn.dataset.id, btn.dataset.num);
       } else if (action === 'unlink') {
         handleUnlink(btn.dataset.id, btn.dataset.num);
+      } else if (action === 'dialer') {
+        openDialerModal(btn.dataset.id);
       }
     });
 
@@ -574,6 +705,16 @@
     $('#purchase-modal').addEventListener('click', (ev) => {
       if (ev.target.id === 'purchase-modal') closePurchaseModal();
     });
+
+    // Modale « Relier au dialer »
+    $('#dm-cancel').addEventListener('click', closeDialerModal);
+    $('#dm-confirm').addEventListener('click', confirmDialerLink);
+    $('#dm-unlink').addEventListener('click', confirmDialerUnlink);
+    $('#dm-key').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') confirmDialerLink(); });
+    $('#dialer-modal').addEventListener('click', (ev) => {
+      if (ev.target.id === 'dialer-modal') closeDialerModal();
+    });
+    loadDialerLinks();
   }
 
   // ─── Boot ─────────────────────────────────────────────────────────────

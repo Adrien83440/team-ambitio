@@ -2,17 +2,25 @@
 const { db } = require('./_firebaseAdmin');
 
 const RINGOVER_API_BASE = 'https://public-api.ringover.com/v2';
+/* Cache court (60 s) : une instance Vercel restée chaude gardait sinon les
+   identifiants à vie — une clé de poste reliée depuis Admin → Numéros
+   (admin-ringover-link) n'aurait été vue qu'au prochain démarrage à froid. */
+const CREDS_TTL_MS = 60 * 1000;
 let _cachedCreds = null;
+let _cachedAt = 0;
 
 async function getRingoverCreds() {
-  if (_cachedCreds) return _cachedCreds;
+  if (_cachedCreds && Date.now() - _cachedAt < CREDS_TTL_MS) return _cachedCreds;
   const snap = await db.collection('_config').doc('telco_credentials').get();
   if (!snap.exists) throw new Error('_config/telco_credentials introuvable');
   const creds = (snap.data().ringover) || {};
   if (!creds.apiKey) throw new Error('telco_credentials missing ringover.apiKey');
   _cachedCreds = creds;
+  _cachedAt = Date.now();
   return creds;
 }
+
+function clearRingoverCredsCache() { _cachedCreds = null; _cachedAt = 0; }
 
 /* Poste Ringover d'un utilisateur donné.
    Un seul compte Ringover ne peut pas servir plusieurs commerciaux : la clé
@@ -82,4 +90,4 @@ async function ringoverFetch(path, { method = 'GET', body = null, apiKey = null 
   return data;
 }
 
-module.exports = { getRingoverCreds, getRingoverCredsForUser, ringoverFetch };
+module.exports = { getRingoverCreds, getRingoverCredsForUser, ringoverFetch, clearRingoverCredsCache };

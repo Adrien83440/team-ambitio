@@ -180,6 +180,32 @@
     </div>
   </div>
 
+  <!-- Modale « Relier au dialer » : clé API Ringover du poste d'un commercial
+       (api/admin-ringover-link.js — la clé n'est jamais relue par le navigateur) -->
+  <div id="dialer-modal" class="an-modal" hidden>
+    <div class="an-modal-content an-dm">
+      <h3>🔑 Relier au dialer</h3>
+      <p class="an-dm-sub" id="dm-sub"></p>
+      <div class="an-dm-state" id="dm-state"></div>
+      <ol class="an-dm-steps">
+        <li>Se connecter au tableau de bord Ringover <strong>avec le compte de ce commercial</strong>.</li>
+        <li>Développeur → Clé API → <strong>Créer une clé API</strong>, permissions <strong>Calls Write</strong> et <strong>Users Read</strong>, <strong>sans Monitoring</strong>.</li>
+        <li>Coller la clé ci-dessous : elle est vérifiée chez Ringover avant d'être enregistrée.</li>
+      </ol>
+      <div class="an-field">
+        <label for="dm-key">Clé API Ringover</label>
+        <input id="dm-key" type="password" autocomplete="off" spellcheck="false" placeholder="Coller la clé">
+      </div>
+      <div class="an-dm-err" id="dm-err" hidden></div>
+      <div class="an-modal-actions">
+        <button class="an-btn an-btn-danger" id="dm-unlink" hidden>Délier</button>
+        <span class="an-dm-spacer"></span>
+        <button class="an-btn an-btn-ghost" id="dm-cancel">Annuler</button>
+        <button class="an-btn an-btn-primary" id="dm-confirm">Vérifier et relier</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast-container" class="an-toast-container"></div>
 
   <script src="nav.js"></script>

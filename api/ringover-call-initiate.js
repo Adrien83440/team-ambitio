@@ -86,8 +86,8 @@ module.exports = async (req, res) => {
         error: "Votre poste Ringover n'est pas relié au dialer : lancer l'appel ici "
              + "ferait sonner le téléphone d'un autre commercial. Appelez depuis votre "
              + "application Ringover — l'appel sera rattaché à votre fiche automatiquement. "
-             + "(Pour activer le dialer : ajouter la clé API de ce poste dans "
-             + "_config/telco_credentials.ringover.users.)",
+             + "(Pour activer le dialer : un administrateur relie ce poste dans "
+             + "Admin → Numéros → 🔑 Dialer.)",
         code: 'ringover_poste_non_relie',
       });
     }

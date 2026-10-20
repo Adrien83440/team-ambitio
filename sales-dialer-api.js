@@ -20,6 +20,7 @@
     purchaseNumber: `${API_BASE}/dialer-purchase-number`,
     releaseNumber:  `${API_BASE}/dialer-release-number`,
     syncNumbers:    `${API_BASE}/dialer-sync-numbers`,
+    ringoverLink:   `${API_BASE}/admin-ringover-link`,
   };
 
   async function getIdToken() {
@@ -217,6 +218,20 @@
 
     async syncNumbers() {
       return authedFetch(ENDPOINTS.syncNumbers, { method: 'POST' });
+    },
+
+    /**
+     * Liaison poste Ringover ↔ dialer (admin). La clé n'est jamais renvoyée.
+     * @returns {Promise<{ links: Object, sharedUserId: string|null }>}
+     */
+    async ringoverLinks() {
+      return authedFetch(ENDPOINTS.ringoverLink);
+    },
+    async ringoverLink({ uid, apiKey } = {}) {
+      return authedFetch(ENDPOINTS.ringoverLink, { method: 'POST', body: { action: 'link', uid, apiKey } });
+    },
+    async ringoverUnlink({ uid } = {}) {
+      return authedFetch(ENDPOINTS.ringoverLink, { method: 'POST', body: { action: 'unlink', uid } });
     },
   };
 
