@@ -1286,11 +1286,16 @@ function hasAvailableSlotsFor(_p, dateStr) {
   var gcBusy = getBusyForDate(dateStr, _p);
   if (gcBusy.length > 0 && daySlots.length > 0) {
     var dur = S.selType ? S.selType.duration : 30;
+    /* Fix 20/10/2026 : même pas que computeSlotsFor (intervalle de la
+       consultation), sinon un créneau décalé (14h30 entre deux RDV, pas de
+       60 min) n'était jamais testé et toute la journée passait « non
+       disponible » alors que la grille l'aurait proposé. */
+    var step = parseInt(S.selType && S.selType.rules && S.selType.rules.slotInterval, 10) || dur;
     var anyFree = false;
     for (var si = 0; si < daySlots.length && !anyFree; si++) {
       var rStart = timeToMin(daySlots[si].start);
       var rEnd = timeToMin(daySlots[si].end);
-      for (var m = rStart; m + dur <= rEnd; m += dur) {
+      for (var m = rStart; m + dur <= rEnd; m += step) {
         var blocked = false;
         for (var bi = 0; bi < gcBusy.length; bi++) {
           if (m < gcBusy[bi].end && m + dur > gcBusy[bi].start) { blocked = true; break; }

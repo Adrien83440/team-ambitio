@@ -75,12 +75,19 @@ async function fetchAndStoreBusy(personId) {
         console.error("Calendar list refresh error for " + personId + ":", e.message);
       }
 
-      var calItems = [{ id: "primary" }];
+      // Fix 20/10/2026 : "primary" n'est plus interrogé d'office. L'agenda
+      // principal suit son interrupteur « vérifier les conflits » comme les
+      // autres — sinon un expert branché sur une boîte partagée
+      // (strategie@, coaching@) était bloqué par les RDV de tous les autres
+      // malgré l'interrupteur coupé (cas Claire / agenda d'Anthony).
+      // "primary" ne sert plus que de repli quand la liste est inconnue.
+      var calItems = [];
       calList.forEach(function(cal) {
         if (cal.checkConflicts !== false && cal.id && cal.id !== "primary") {
           calItems.push({ id: cal.id });
         }
       });
+      if (!calList.length) calItems.push({ id: "primary" });
       var resp = await calendar.freebusy.query({
         requestBody: { timeMin: now.toISOString(), timeMax: end.toISOString(), timeZone: "Europe/Paris", items: calItems }
       });
