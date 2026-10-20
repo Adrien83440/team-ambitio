@@ -98,6 +98,42 @@
 .cli-quota.warn{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.22);color:#fcd34d}
 /* Modal élargi quand l'iframe de réservation est affichée */
 .mo.mo-wide{max-width:920px;transition:max-width .2s ease}
+/* Fenêtres Partager / Dupliquer (20/10/2026) : sur la base .mo-bg/.mo, en
+   classes et non plus en styles inline, pour que le thème clair les prenne
+   en charge (theme-light-pages.css régénéré). */
+.mo.shm{max-width:560px;background:var(--bg4,#1a1a2e)}
+.mo.shm .bi,.mo.shm .bs{box-sizing:border-box;max-width:100%}
+.shm-row{display:flex;gap:8px;margin-bottom:16px}
+.shm-url{flex:1;min-width:0;font-family:monospace;font-size:12px}
+.shm-old{margin:-6px 0 14px;text-align:right}
+.shm-old-btn{padding:5px 10px;background:0;border:1px solid rgba(251,191,36,.25);border-radius:6px;color:#fbbf24;font-family:inherit;font-size:11px;font-weight:700;cursor:pointer}
+.shm-old-box{display:none;margin-top:8px;text-align:left;padding:10px 12px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.2);border-radius:8px}
+.shm-old-box.open{display:block}
+.shm-qr{display:flex;gap:16px;align-items:center;padding:16px;background:var(--bg3,#141420);border:1px solid rgba(255,255,255,.07);border-radius:12px;margin-bottom:18px}
+.shm-qr img{width:120px;height:120px;border-radius:8px;background:#fff;padding:6px;flex-shrink:0}
+.shm-t{font-size:13px;font-weight:700;color:rgba(255,255,255,.85);margin-bottom:4px}
+.shm-d{font-size:11px;color:rgba(255,255,255,.45);line-height:1.5}
+.shm-a{font-size:11px;font-weight:600;color:#60a5fa;margin-top:8px;display:inline-block;text-decoration:none}
+.shm-tabs{display:flex;gap:4px;background:var(--bg3,#141420);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:3px;margin-bottom:14px}
+.shm-tab{flex:1;padding:7px 10px;border:0;border-radius:7px;background:0;color:rgba(255,255,255,.45);font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s}
+.shm-tab:hover{color:rgba(255,255,255,.8)}
+.shm-tab.on{background:rgba(139,92,246,.16);color:#a78bfa}
+.shm-pane{display:none}.shm-pane.on{display:block}
+.shm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.shm-opt{padding:14px 10px;background:var(--bg3,#141420);border:1px solid rgba(255,255,255,.07);border-radius:10px;cursor:pointer;text-align:center;font-family:inherit;color:inherit;transition:border-color .15s}
+.shm-opt:hover{border-color:rgba(139,92,246,.45)}
+.shm-opt-i{font-size:22px;margin-bottom:6px}
+.shm-opt .shm-t{font-size:12px;margin-bottom:2px}
+.shm-code{width:100%;font-family:monospace;font-size:11px;resize:none;margin-bottom:8px}
+.shm-lbl{font-size:11px;color:rgba(255,255,255,.45);margin-bottom:6px}
+.shm-intro{font-size:12px;color:rgba(255,255,255,.5);line-height:1.5;margin-bottom:16px}
+.shm-hint{font-size:11px;color:rgba(255,255,255,.45);margin-top:4px;line-height:1.4}
+.shm-warn{font-size:11px;color:#fbbf24;margin:0 0 6px;line-height:1.4}
+.shm-err{font-size:12px;color:#f87171;margin-top:8px}
+.shm-chk{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:rgba(255,255,255,.75);margin-bottom:6px;cursor:pointer;line-height:1.4}
+.shm-chk input{margin-top:2px}
+.shm-foot{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+@media(max-width:580px){.shm-grid{grid-template-columns:1fr}.shm-qr{flex-direction:column;text-align:center}}
 #mAvailFrame iframe{width:100%;height:600px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:#fff;display:block}
 #mAvailFrame{margin-top:10px}
 .mf{margin-bottom:12px}.mf label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:rgba(255,255,255,.48);margin-bottom:4px}.mf input,.mf select,.mf textarea{width:100%;padding:9px 12px;background:var(--bg3,#141420);border:1.5px solid rgba(255,255,255,.07);border-radius:8px;color:#fff;font-family:'Figtree',sans-serif;font-size:13px;outline:0}.mf input:focus,.mf select:focus,.mf textarea:focus{border-color:#8b5cf6}.mf input::placeholder,.mf textarea::placeholder{color:rgba(255,255,255,.2)}.mf select option{background:var(--bg3,#141420)}.mf textarea{resize:vertical;min-height:56px}.mfr{display:grid;grid-template-columns:1fr 1fr;gap:10px}.mfd{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.2);margin:14px 0 10px;padding-top:12px;border-top:1px solid rgba(255,255,255,.07)}.mo-s{width:100%;padding:11px;border:0;border-radius:10px;background:#8b5cf6;color:#fff;font-family:'Figtree',sans-serif;font-size:14px;font-weight:700;cursor:pointer;margin-top:6px}.mo-s:disabled{opacity:.5;cursor:not-allowed}
@@ -1430,20 +1466,18 @@ function openDupTypeModal(tid){
   var old=document.getElementById('dupTMo');if(old)old.remove();
   var exps=P.slice().sort(function(a,b){return String(a.name||'').localeCompare(String(b.name||''),'fr');});
   var srcEx=P.filter(function(p){return(p.types||[]).indexOf(src.id)>=0;}).map(function(p){return p.name||p.id;});
-  var h='<div style="background:var(--bg4,#1a1a2e);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:24px;max-width:480px;width:92%;max-height:85vh;overflow-y:auto">';
-  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div style="font-size:16px;font-weight:800">⧉ Dupliquer la consultation</div><button type="button" id="dupTX" style="border:none;background:transparent;color:rgba(255,255,255,.5);font-size:20px;cursor:pointer">✕</button></div>';
-  h+='<div style="font-size:12px;color:rgba(255,255,255,.48);margin-bottom:16px;line-height:1.5">Copie de « '+esc(src.label||src.id)+' » : durée, lieu, règles, notifications, formulaire et réglages coaching / setter sont repris. Les experts'+(srcEx.length?' ('+esc(srcEx.join(', '))+')':'')+', le lien court'+(src.attributedSetterSlug?' et le setter attribué':'')+' ne le sont pas.</div>';
-  h+='<div class="mf" style="margin-bottom:12px"><label>Nom *</label><input class="bi" id="dupTN" style="width:100%" value="'+escA((src.label||src.id)+' (copie)')+'"/></div>';
-  h+='<div class="mf" style="margin-bottom:12px"><label>Lien court (facultatif)</label><input class="bi" id="dupTS" style="width:100%" placeholder="ex. appel-strategique-prenom"/><div id="dupTSH" style="font-size:11px;color:rgba(255,255,255,.4);margin-top:4px">Laisser vide : le lien utilisera l\'identifiant technique (modifiable ensuite dans Détails).</div></div>';
-  h+='<div class="mf" style="margin-bottom:10px"><label>Expert à assigner</label><select class="bs" id="dupTP" style="width:100%"><option value="">— Aucun pour l\'instant —</option>';
+  var h='<div class="mo shm" style="max-width:480px"><div class="mo-h"><div class="mo-t">⧉ Dupliquer la consultation</div><button type="button" class="mo-x" id="dupTX">✕</button></div><div class="mo-b">';
+  h+='<div class="shm-intro">Copie de « '+esc(src.label||src.id)+' » : durée, lieu, règles, notifications, formulaire et réglages coaching / setter sont repris. Les experts'+(srcEx.length?' ('+esc(srcEx.join(', '))+')':'')+', le lien court'+(src.attributedSetterSlug?' et le setter attribué':'')+' ne le sont pas.</div>';
+  h+='<div class="cd-field"><div class="cd-field-label">Nom *</div><input class="bi" id="dupTN" style="width:100%" value="'+escA((src.label||src.id)+' (copie)')+'"/></div>';
+  h+='<div class="cd-field"><div class="cd-field-label">Lien court (facultatif)</div><input class="bi" id="dupTS" style="width:100%" placeholder="ex. appel-strategique-prenom"/><div class="shm-hint">Laisser vide : le lien utilisera l\'identifiant technique (modifiable ensuite dans Détails).</div></div>';
+  h+='<div class="cd-field"><div class="cd-field-label">Expert à assigner</div><select class="bs" id="dupTP" style="width:100%"><option value="">— Aucun pour l\'instant —</option>';
   exps.forEach(function(p){h+='<option value="'+escA(p.id)+'">'+esc(p.name||p.id)+(p.role?' · '+esc(p.role):'')+'</option>';});
-  h+='</select><div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:4px">Le nouveau closer doit déjà avoir sa fiche dans « Experts &amp; dispos ».</div></div>';
-  h+='<label id="dupTDW" style="display:none;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,.75);margin-bottom:6px;cursor:pointer"><input type="checkbox" id="dupTD"/> En faire sa consultation par défaut (son lien nominatif arrive directement sur le calendrier)</label>';
-  h+='<div id="dupTDI" style="display:none;font-size:11px;color:#fbbf24;margin-bottom:6px"></div>';
-  h+='<div id="dupTE" style="display:none;font-size:12px;color:#f87171;margin-top:8px"></div>';
-  h+='<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><button type="button" class="bb bb-o" id="dupTC">Annuler</button><button type="button" class="bb bb-p" id="dupTOk">Dupliquer</button></div></div>';
-  var d=document.createElement('div');d.id='dupTMo';
-  d.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+  h+='</select><div class="shm-hint">Le nouveau closer doit déjà avoir sa fiche dans « Experts &amp; dispos ».</div></div>';
+  h+='<label class="shm-chk" id="dupTDW" style="display:none"><input type="checkbox" id="dupTD"/><span>En faire sa consultation par défaut (son lien nominatif arrive directement sur le calendrier)</span></label>';
+  h+='<div class="shm-warn" id="dupTDI" style="display:none"></div>';
+  h+='<div class="shm-err" id="dupTE" style="display:none"></div>';
+  h+='<div class="shm-foot"><button type="button" class="bb bb-o" id="dupTC">Annuler</button><button type="button" class="bb bb-p" id="dupTOk">Dupliquer</button></div></div></div>';
+  var d=document.createElement('div');d.id='dupTMo';d.className='mo-bg show';d.style.zIndex='9999';
   d.innerHTML=h;document.body.appendChild(d);
   function close(){d.remove();}
   d.addEventListener('click',function(ev){if(ev.target===d)close();});
@@ -1680,49 +1714,41 @@ var _shT=kind==='type'?T.find(function(x){return x.id===id;}):null;
 var url=kind==='type'?(_shT?typeBookingUrl(_shT):base+'?type='+id):base+'?person='+id;
 var _shOld=(_shT&&_shT.slug&&window._currentRole==='admin')?base+'?type='+encodeURIComponent(_shT.id):'';
 var label='';
-if(kind==='type'){var t=T.find(function(x){return x.id===id;});label=t?t.label:id;}
+if(kind==='type'){label=_shT?_shT.label:id;}
 else{var p=P.find(function(x){return x.id===id;});label=p?p.name:id;}
 var qrUrl='https://api.qrserver.com/v1/create-qr-code/?data='+encodeURIComponent(url)+'&size=150x150&bgcolor=ffffff&color=1a1a2e';
 var existing=document.getElementById('shareModal');if(existing)existing.remove();
-var d=document.createElement('div');d.id='shareModal';
-d.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center';
-d.innerHTML='<div style="background:var(--bg4,#1a1a2e);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:28px;max-width:560px;width:92%;max-height:85vh;overflow-y:auto">'
-+'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><div style="font-size:16px;font-weight:800">Partager — '+esc(label)+'</div><button onclick="document.getElementById(\'shareModal\').remove()" style="border:none;background:transparent;color:rgba(255,255,255,.5);font-size:20px;cursor:pointer">✕</button></div>'
-// Link + Copy
-+(_shOld?'<div style="margin:-8px 0 16px;text-align:right"><button type="button" id="shOldBtn" style="padding:5px 10px;background:transparent;border:1px solid rgba(251,191,36,.25);border-radius:6px;color:#fbbf24;font-size:11px;font-weight:700;cursor:pointer">🔒 Ancien lien (admin)</button><div id="shOldBox" style="display:none;margin-top:8px;text-align:left;padding:10px 12px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.2);border-radius:8px"><div style="font-size:11px;color:rgba(255,255,255,.55);margin-bottom:6px">Toujours actif pour les liens déjà envoyés. Ne plus le partager.</div><div style="display:flex;gap:8px"><input id="shOldUrl" value="'+escA(_shOld)+'" readonly style="flex:1;min-width:0;padding:8px 10px;background:var(--bg3,#141420);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:rgba(255,255,255,.6);font-size:11px;font-family:monospace"/><button type="button" id="shOldCopy" style="padding:8px 12px;background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.3);border-radius:6px;color:#fbbf24;font-weight:700;font-size:11px;cursor:pointer">Copier</button></div></div></div>':'')
-+'<div style="display:flex;gap:8px;margin-bottom:16px"><input id="shareUrl" value="'+escA(url)+'" readonly style="flex:1;padding:10px 12px;background:var(--bg3,#141420);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:rgba(255,255,255,.7);font-size:12px;font-family:monospace"/><button onclick="navigator.clipboard.writeText(document.getElementById(\'shareUrl\').value);this.textContent=\'✓ Copié\';var b=this;setTimeout(function(){b.textContent=\'Copier\'},1500)" style="padding:10px 16px;background:#6366f1;border:none;border-radius:8px;color:white;font-weight:700;font-size:12px;cursor:pointer">Copier</button></div>'
-// QR Code
-+'<div style="display:flex;gap:16px;align-items:center;padding:16px;background:var(--bg3,#141420);border:1px solid rgba(255,255,255,.07);border-radius:10px;margin-bottom:20px"><img src="'+qrUrl+'" style="width:120px;height:120px;border-radius:8px;background:white;padding:6px"/><div><div style="font-size:13px;font-weight:700;color:rgba(255,255,255,.8);margin-bottom:4px">QR Code</div><div style="font-size:11px;color:rgba(255,255,255,.4);line-height:1.5">Partagez ce code QR pour ouvrir instantanément la page de réservation sur n\'importe quel appareil.</div><a href="'+qrUrl+'&format=png" download="qr-'+(_shT?typeLinkKey(_shT):id)+'.png" style="font-size:11px;color:#60a5fa;margin-top:6px;display:inline-block">⬇ Télécharger QR</a></div></div>'
-// Tabs
-+'<div style="display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,.07);margin-bottom:16px" id="shareTabs">'
-+'<button class="share-tab active" onclick="switchShareTab(\'embed\')" style="padding:10px 16px;border:none;background:transparent;color:rgba(255,255,255,.7);font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid #6366f1">Incorporer</button>'
-+'<button class="share-tab" onclick="switchShareTab(\'iframe\')" style="padding:10px 16px;border:none;background:transparent;color:rgba(255,255,255,.4);font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid transparent">Iframe</button>'
-+'<button class="share-tab" onclick="switchShareTab(\'button\')" style="padding:10px 16px;border:none;background:transparent;color:rgba(255,255,255,.4);font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid transparent">Bouton</button>'
-+'</div>'
-// Tab content
-+'<div id="shareTabEmbed" style="display:block">'
-+'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
-+'<div style="padding:14px;background:var(--bg3,#141420);border:1px solid rgba(255,255,255,.07);border-radius:10px;cursor:pointer;text-align:center" onclick="copyEmbed(\'inline\',\''+escA(url)+'\')">'
-+'<div style="font-size:24px;margin-bottom:6px">📄</div><div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.8)">Inline Embed</div><div style="font-size:10px;color:rgba(255,255,255,.38)">Directement dans votre site</div></div>'
-+'<div style="padding:14px;background:var(--bg3,#141420);border:2px solid rgba(99,102,241,.3);border-radius:10px;cursor:pointer;text-align:center" onclick="copyEmbed(\'button\',\''+escA(url)+'\')">'
-+'<div style="font-size:24px;margin-bottom:6px">🔘</div><div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.8)">Embed as Button</div><div style="font-size:10px;color:rgba(255,255,255,.38)">Pop-up au clic sur un bouton</div></div>'
-+'<div style="padding:14px;background:var(--bg3,#141420);border:1px solid rgba(255,255,255,.07);border-radius:10px;cursor:pointer;text-align:center" onclick="copyEmbed(\'link\',\''+escA(url)+'\')">'
-+'<div style="font-size:24px;margin-bottom:6px">🔗</div><div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.8)">Embed as Link</div><div style="font-size:10px;color:rgba(255,255,255,.38)">Lien cliquable vers la page</div></div>'
-+'</div></div>'
-+'<div id="shareTabIframe" style="display:none"><div style="font-size:11px;color:rgba(255,255,255,.38);margin-bottom:6px">Code iframe à intégrer :</div><textarea readonly id="shareIframeCode" style="width:100%;padding:10px;background:var(--bg3,#141420);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:rgba(255,255,255,.6);font-size:11px;font-family:monospace;resize:none" rows="3">&lt;iframe src=&quot;'+esc(url)+'&quot; width=&quot;100%&quot; height=&quot;700&quot; frameborder=&quot;0&quot;&gt;&lt;/iframe&gt;</textarea><button onclick="copyEmbed(\'inline\',\''+escA(url)+'\')" style="margin-top:8px;padding:8px 16px;background:#6366f1;border:none;border-radius:8px;color:white;font-size:12px;font-weight:700;cursor:pointer">📋 Copier le code</button></div>'
-+'<div id="shareTabButton" style="display:none"><div style="font-size:11px;color:rgba(255,255,255,.38);margin-bottom:6px">Code bouton HTML :</div><textarea readonly id="shareBtnCode" style="width:100%;padding:10px;background:var(--bg3,#141420);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:rgba(255,255,255,.6);font-size:11px;font-family:monospace;resize:none" rows="3">&lt;a href=&quot;'+esc(url)+'&quot; target=&quot;_blank&quot; style=&quot;display:inline-block;padding:12px 24px;background:#6366f1;color:white;font-weight:bold;border-radius:8px;text-decoration:none&quot;&gt;📅 Réserver un RDV&lt;/a&gt;</textarea><button onclick="copyEmbed(\'button\',\''+escA(url)+'\')" style="margin-top:8px;padding:8px 16px;background:#6366f1;border:none;border-radius:8px;color:white;font-size:12px;font-weight:700;cursor:pointer">📋 Copier le code</button></div>'
-+'</div>';
+var iframeCode='<iframe src="'+url+'" width="100%" height="700" frameborder="0"></iframe>';
+var btnCode='<a href="'+url+'" target="_blank" style="display:inline-block;padding:12px 24px;background:#6366f1;color:white;font-weight:bold;border-radius:8px;text-decoration:none">📅 Réserver un RDV</a>';
+var h='<div class="mo shm"><div class="mo-h"><div class="mo-t">Partager — '+esc(label)+'</div><button type="button" class="mo-x" data-shm="close">✕</button></div><div class="mo-b">';
+if(_shOld)h+='<div class="shm-old"><button type="button" class="shm-old-btn" data-shm="old">🔒 Ancien lien (admin)</button><div class="shm-old-box" id="shOldBox"><div class="shm-lbl">Toujours actif pour les liens déjà envoyés. Ne plus le partager.</div><div class="shm-row" style="margin:0"><input class="bi shm-url" id="shOldUrl" value="'+escA(_shOld)+'" readonly/><button type="button" class="bb bb-o" data-shm="copy" data-src="shOldUrl">Copier</button></div></div></div>';
+h+='<div class="shm-row"><input class="bi shm-url" id="shareUrl" value="'+escA(url)+'" readonly/><button type="button" class="bb bb-p" data-shm="copy" data-src="shareUrl">Copier</button></div>';
+h+='<div class="shm-qr"><img src="'+qrUrl+'" alt="QR code"/><div><div class="shm-t">QR Code</div><div class="shm-d">Partagez ce code QR pour ouvrir instantanément la page de réservation sur n\'importe quel appareil.</div><a class="shm-a" href="'+qrUrl+'&format=png" download="qr-'+escA(_shT?typeLinkKey(_shT):id)+'.png">⬇ Télécharger le QR</a></div></div>';
+h+='<div class="shm-tabs"><button type="button" class="shm-tab on" data-shm="tab" data-tab="embed">Incorporer</button><button type="button" class="shm-tab" data-shm="tab" data-tab="iframe">Iframe</button><button type="button" class="shm-tab" data-shm="tab" data-tab="button">Bouton</button></div>';
+h+='<div class="shm-pane on" data-pane="embed"><div class="shm-grid">';
+h+='<button type="button" class="shm-opt" data-shm="embed" data-kind="inline"><div class="shm-opt-i">📄</div><div class="shm-t">Intégré</div><div class="shm-d">Directement dans votre site</div></button>';
+h+='<button type="button" class="shm-opt" data-shm="embed" data-kind="button"><div class="shm-opt-i">🔘</div><div class="shm-t">Bouton</div><div class="shm-d">Bouton vers la page</div></button>';
+h+='<button type="button" class="shm-opt" data-shm="embed" data-kind="link"><div class="shm-opt-i">🔗</div><div class="shm-t">Lien</div><div class="shm-d">Lien cliquable vers la page</div></button>';
+h+='</div></div>';
+h+='<div class="shm-pane" data-pane="iframe"><div class="shm-lbl">Code iframe à intégrer :</div><textarea class="bi shm-code" readonly rows="3">'+esc(iframeCode)+'</textarea><button type="button" class="bb bb-o" data-shm="embed" data-kind="inline">📋 Copier le code</button></div>';
+h+='<div class="shm-pane" data-pane="button"><div class="shm-lbl">Code bouton HTML :</div><textarea class="bi shm-code" readonly rows="3">'+esc(btnCode)+'</textarea><button type="button" class="bb bb-o" data-shm="embed" data-kind="button">📋 Copier le code</button></div>';
+h+='</div></div>';
+var d=document.createElement('div');d.id='shareModal';d.className='mo-bg show';d.style.zIndex='9999';d.innerHTML=h;
 document.body.appendChild(d);
-d.addEventListener('click',function(e){if(e.target===d)d.remove();});
-var _sob=document.getElementById('shOldBtn');if(_sob)_sob.addEventListener('click',function(){var bx=document.getElementById('shOldBox');bx.style.display=bx.style.display==='none'?'block':'none';});
-var _soc=document.getElementById('shOldCopy');if(_soc)_soc.addEventListener('click',function(){navigator.clipboard.writeText(document.getElementById('shOldUrl').value);_soc.textContent='✓ Copié';setTimeout(function(){_soc.textContent='Copier';},1500);});
+d.addEventListener('click',function(e){
+  if(e.target===d){d.remove();return;}
+  var a=e.target.closest('[data-shm]');if(!a)return;var ac=a.getAttribute('data-shm');
+  if(ac==='close')d.remove();
+  else if(ac==='old')document.getElementById('shOldBox').classList.toggle('open');
+  else if(ac==='copy'){navigator.clipboard.writeText(document.getElementById(a.getAttribute('data-src')).value);var t0=a.textContent;a.textContent='✓ Copié';setTimeout(function(){a.textContent=t0;},1500);}
+  else if(ac==='embed')copyEmbed(a.getAttribute('data-kind'),url);
+  else if(ac==='tab')switchShareTab(a.getAttribute('data-tab'));
+});
 }
 function switchShareTab(tab){
-document.querySelectorAll('#shareTabs button').forEach(function(b){b.style.color='rgba(255,255,255,.4)';b.style.borderBottomColor='transparent';});
-event.target.style.color='rgba(255,255,255,.7)';event.target.style.borderBottomColor='#6366f1';
-['Embed','Iframe','Button'].forEach(function(t){document.getElementById('shareTab'+t).style.display='none';});
-var map={embed:'Embed',iframe:'Iframe',button:'Button'};
-document.getElementById('shareTab'+map[tab]).style.display='block';
+var m=document.getElementById('shareModal');if(!m)return;
+m.querySelectorAll('.shm-tab').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-tab')===tab);});
+m.querySelectorAll('.shm-pane').forEach(function(p){p.classList.toggle('on',p.getAttribute('data-pane')===tab);});
 }
 function copyEmbed(type,url){
 var code='';
