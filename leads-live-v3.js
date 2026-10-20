@@ -911,8 +911,10 @@
      au plus ancien. Partagé par l'historique et la conversation SMS. */
   function elementsHist(l, id) {
     var items = [], vus = [];
+    var mailsCron = (l.communications || []).filter(function (c) { return c && c.type === 'email' && c.gmailMessageId; });
     (l.communications || []).forEach(function (c) {
       if (!c || (c.type !== 'call' && c.type !== 'sms' && c.type !== 'email')) return;
+      if (c.type === 'email' && doublonMake(c, mailsCron)) return;
       var t = c.date ? new Date(c.date).getTime() : 0;
       var sortant = !!c.ownerName || /^(out|sort)/.test(String(c.direction || '').toLowerCase());
       if (c.type === 'sms') {
@@ -975,11 +977,11 @@
         var ce = it.c;
         icone = 'mail';
         titre = it.sortant ? 'E-mail envoyé' + (ce.ownerName ? ' par ' + ce.ownerName : '') : 'E-mail reçu';
-        if (!it.sortant && ce.gmailMessageId) {
-          // Réponse d'un prospect relevée dans Gmail (gmail-inbound-sync) : le
-          // texte compte autant que l'objet, on montre les deux.
+        if (!it.sortant) {
+          // E-mail reçu : l'objet et le début du texte ; le clic ouvre l'e-mail en entier.
           titre = 'E-mail reçu' + (ce.emailFromName ? ' de ' + ce.emailFromName : '');
-          q = (ce.subject ? '<b>' + escHtml(ce.subject) + '</b>\n' : '') + escHtml(String(ce.content || ''));
+          var ap = mailPropre(ce).corps.replace(/\s+/g, ' ');
+          q = (ce.subject ? '<b>' + escHtml(ce.subject) + '</b>\n' : '') + escHtml(ap.length > 280 ? ap.slice(0, 280).replace(/\s\S*$/, '') + '…' : ap);
         } else {
           q = escHtml(ce.subject ? ce.subject : String(ce.content || '').split('\n')[0]);
         }
@@ -1008,6 +1010,42 @@
     return String(s || '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div)>/gi, '\n').replace(/<[^>]*>/g, '')
       .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\n{3,}/g, '\n\n').trim();
   }
+  /* Le scénario Make trace aussi les e-mails de strategie@, mais aplatis sur
+     une ligne. Quand gmail-inbound-sync a la version propre du même e-mail
+     (même sens, même objet, même minute), on n'affiche qu'elle — rien n'est
+     supprimé en base. */
+  function doublonMake(c, mailsCron) {
+    if (c.gmailMessageId || !mailsCron.length) return false;
+    var t = Date.parse(c.date || '') || 0, inC = !/^out/i.test(String(c.direction || ''));
+    return mailsCron.some(function (m) {
+      return !/^out/i.test(String(m.direction || '')) === inC && String(m.subject || '') === String(c.subject || '') &&
+        Math.abs((Date.parse(m.date || '') || 0) - t) < 180000;
+    });
+  }
+  /* Texte lisible d'un e-mail : sans l'objet répété, sans la citation de
+     notre message, signature et mentions légales mises à part. */
+  var RX_SIG = /^(--\s*$|L\.?\s?D\.?\s*:|T[ée]l(\.|[ée]phone)?\s*:|Portable\s*:|Mobile\s*:|Fax\s*:|Avant d.imprimer|L.int[ée]grit[ée] de ce message|Ce (message|courriel|mail|e-mail) (et ses|est confidentiel|contient|peut)|This (e-?mail|message) (and|is|may|contains)|Pensez à l.environnement)/i;
+  var RX_SIG_LIGNE = /\s(L\.?\s?D\.?\s*:|T[ée]l\.?\s*:|Portable\s*:|Mobile\s*:|Fax\s*:|Avant d.imprimer|L.int[ée]grit[ée] de ce message|This (e-?mail|message) (and|is|may|contains))/i;
+  function mailPropre(c) {
+    var corps = texteMail(c.content);
+    if (c.subject && corps.indexOf(c.subject) === 0) corps = corps.slice(c.subject.length).replace(/^\s+/, '');
+    var aplati = corps.indexOf('\n') < 0 && corps.length > 200;
+    if (aplati) {
+      // Ancien relevé Make, sans retours à la ligne : on coupe la citation en ligne.
+      corps = corps.replace(/\s(Le|On)\s.{0,200}?(a\s+écrit|wrote)\s*:[\s\S]*$/i, '')
+        .replace(/\s(De|From)\s*:\s.{0,160}?(Envoy[ée]|Sent|Date)\s*:[\s\S]*$/i, '').trim();
+      var m = RX_SIG_LIGNE.exec(corps);
+      if (m && m.index > 20) return { corps: corps.slice(0, m.index).trim(), signature: corps.slice(m.index).trim(), aplati: true };
+      return { corps: corps, signature: '', aplati: true };
+    }
+    var lignes = corps.split('\n');
+    for (var i = 1; i < lignes.length; i++) {
+      if (RX_SIG.test(lignes[i].trim())) {
+        return { corps: lignes.slice(0, i).join('\n').trim(), signature: lignes.slice(i).join('\n').trim(), aplati: false };
+      }
+    }
+    return { corps: corps, signature: '', aplati: false };
+  }
   function quandLong(ms) {
     return majuscule(new Date(ms).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }));
   }
@@ -1015,14 +1053,15 @@
     var s = histSel[id], c = s && s.mail;
     if (!c) return '<h1 class="ll5h1">E-mail</h1><p class="ll5sub">Ouvre un e-mail depuis l’historique.</p>';
     var objet = c.subject || '(sans objet)';
-    var corps = texteMail(c.content);
-    // Les e-mails envoyés depuis la fiche stockent « objet + texte » : pas d'objet en double.
-    if (c.subject && corps.indexOf(c.subject) === 0) corps = corps.slice(c.subject.length).replace(/^\s+/, '');
+    var mp = mailPropre(c), corps = mp.corps;
     var qui = s.sortant
       ? 'Envoyé' + (c.ownerName ? ' par ' + c.ownerName : '') + ' à ' + (c.emailTo || l.email || prenom(l))
       : 'De ' + (c.emailFromName ? c.emailFromName + ' · ' : '') + (c.emailFrom || l.email || prenom(l));
     var h = '<h1 class="ll5h1">' + escHtml(objet) + '</h1><p class="ll5sub">' + escHtml(qui) + (s.t ? '<br>' + escHtml(quandLong(s.t)) : '') + '</p>';
-    h += '<div class="ll5group ll5mt"><div class="ll5hist"><span class="ll5tx"><span class="q plain">' + (corps ? escHtml(corps) : '<i>E-mail sans texte</i>') + '</span></span></div></div>';
+    h += '<div class="ll5group ll5mt"><div class="ll5hist ll5mailcorps"><span class="ll5tx"><span class="q plain">' + (corps ? escHtml(corps) : '<i>E-mail sans texte</i>') + '</span>';
+    if (mp.signature) h += '<details class="ll5sig"><summary>Signature et mentions légales</summary><span class="q plain">' + escHtml(mp.signature) + '</span></details>';
+    if (mp.aplati) h += '<span class="ll5hnote">Relevé sans mise en forme (ancien suivi des e-mails) : la citation de notre message a été retirée.</span>';
+    h += '</span></div></div>';
     if (RX_RDV.test(objet + ' ' + corps)) h += '<div class="ll5group ll5mt">' + ligne('cal', 'grey', 'Voir les rendez-vous', '', 'data-ll5="go" data-v="rdv"') + '</div>';
     if (l.email) h += '<div class="ll5foot"><button type="button" class="ll5big pri" data-ll5="mailre" data-id="' + id + '">' + ic('mail') + 'Répondre par e-mail</button></div>';
     return h;

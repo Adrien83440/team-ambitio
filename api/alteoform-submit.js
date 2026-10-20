@@ -68,6 +68,7 @@ const { db, admin } = require('./_firebaseAdmin');
 const parseBody = require('./_parseBody');
 const Core = require('../funnel-core.js');
 const Reg = require('./_tunnelRegistry');
+const { toE164 } = require('./_leadLookup');
 
 // ─── ATTRIBUTION PUBLICITAIRE (chantier UTM 17/08/2026) ───────────────
 // AVANT : ce fichier posait `utm: 'AlteoForm - ' + formTitle` en dur, à la
@@ -509,7 +510,9 @@ module.exports = async (req, res) => {
   const newLead = {
     nom: fullName,
     email: emailLc,
-    telephone: telRaw,
+    // Format canonique E.164 (+33XXXXXXXXX) : un « +33 0 7… » saisi tel quel
+    // envoyait WhatsApp vers un numéro fantôme (20/10/2026).
+    telephone: toE164(telRaw) || telRaw,
     phoneNormalized: phoneNorm,
     type: 'alteoform',
     source: 'alteoform',

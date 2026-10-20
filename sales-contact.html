@@ -650,6 +650,9 @@ h+='</div>'; // pConvo
 // Emails
 h+='<div class="fr-panel" id="pEmails">';
 var emailsAll=(l.communications||[]).filter(function(c){return c.type==='email';});
+/* Doublon Make : même e-mail que la version propre de gmail-inbound-sync (même sens, même objet, même minute) — masqué à l'affichage, rien n'est supprimé. */
+var emailsCron=emailsAll.filter(function(c){return !!c.gmailMessageId;});
+emailsAll=emailsAll.filter(function(c){if(c.gmailMessageId||!emailsCron.length)return true;var t=Date.parse(c.date||'')||0,i=!/^out/i.test(String(c.direction||''));return !emailsCron.some(function(m){return !/^out/i.test(String(m.direction||''))===i&&String(m.subject||'')===String(c.subject||'')&&Math.abs((Date.parse(m.date||'')||0)-t)<180000;});});
 if(!emailsAll.length){h+='<div class="email-empty"><div class="email-empty-icon">\u2709\ufe0f</div>Aucun email synchronis\u00e9<br/><span style="font-size:11px;color:var(--muted2)">Les emails appara\u00eetront ici automatiquement</span></div>';}
 else{
 for(var ei=emailsAll.length-1;ei>=0;ei--){

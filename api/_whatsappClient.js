@@ -80,6 +80,10 @@ function normaliserNumero(brut) {
   else if (n.startsWith('0') && n.length === 10) e164 = '+33' + n.slice(1);
   else if (n.startsWith('33') && n.length >= 11) e164 = '+' + n;
   else return null;
+  /* « +33 0 6… » : le 0 national saisi derrière l'indicatif (formulaires).
+     Sans ce retrait, la conversation s'ouvrait sur un numéro fantôme
+     330768307932 au lieu de 33768307932 (fiche Meyer, 20/10/2026). */
+  if (/^\+330\d{9}$/.test(e164)) e164 = '+33' + e164.slice(4);
   const chiffres = e164.replace(/[^0-9]/g, '');
   return chiffres.length >= 10 ? chiffres : null;
 }

@@ -222,6 +222,8 @@
     else if (n.charAt(0) === '0' && n.length === 10) e = '+33' + n.slice(1);
     else if (n.indexOf('33') === 0 && n.length >= 11) e = '+' + n;
     else return null;
+    // « +33 0 6… » : 0 national en trop derrière l'indicatif (même règle que le serveur).
+    if (/^\+330\d{9}$/.test(e)) e = '+33' + e.slice(4);
     var c = e.replace(/[^0-9]/g, '');
     return c.length >= 10 ? c : null;
   }
