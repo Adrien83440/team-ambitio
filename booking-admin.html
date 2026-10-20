@@ -1031,7 +1031,7 @@ var el=document.getElementById('csG');if(!visibleT.length){el.innerHTML='<div cl
 h+='<div class="cc-bar" style="background:'+t.color+'"></div>';
 h+='<div style="display:flex;align-items:center;gap:10px">';
 if(t.image)h+='<img src="'+t.image+'" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0"/>';
-h+='<div style="flex:1;min-width:0"><div class="cc-n" style="margin:0">'+esc(t.label)+(t.isCoaching?' <span style="font-size:10px;padding:2px 7px;border-radius:5px;background:rgba(167,139,250,.15);color:#c4b5fd;border:1px solid rgba(167,139,250,.3);margin-left:6px;font-weight:700;letter-spacing:.3px">🎯 COACHING</span>':'')+(t.isSetterOnly?' <span style="font-size:10px;padding:2px 7px;border-radius:5px;background:rgba(251,146,60,.15);color:#fb923c;border:1px solid rgba(251,146,60,.3);margin-left:6px;font-weight:700;letter-spacing:.3px">🎧 SETTER</span>':'')+(t.attributedSetterSlug?' <span style="font-size:10px;padding:2px 7px;border-radius:5px;background:rgba(236,72,153,.15);color:#f472b6;border:1px solid rgba(236,72,153,.3);margin-left:6px;font-weight:700;letter-spacing:.3px">🔗 '+esc(t.attributedSetterName||t.attributedSetterSlug)+'</span>':'')+'</div><div class="cc-m"><span>⏱ '+(t.duration>=60?(t.duration/60)+'h':t.duration+' min')+'</span><span>'+evtLabel+'</span></div></div></div>';var _lc={meet:'📹 Meet',zoom:'📹 Zoom',teams:'📹 Teams',phone:'📞',inperson:'📍',custom:'🔗'};var _anyCalConn=P.some(function(p){return p.calendarConnected===true;});if(t.location&&_lc[t.location]){h+='<div style="font-size:11px;color:#60a5fa;margin-top:4px">'+_lc[t.location];if(t.location==='meet'&&_anyCalConn)h+=' · <span style="color:#34d399;font-weight:600">✨ Auto</span>';else if(t.locationUrl)h+=' · <span style="color:rgba(255,255,255,.38)">'+esc(t.locationUrl).slice(0,30)+'</span>';h+='</div>';}h+='<div class="cc-ex">';as.forEach(function(p){h+='<span class="cc-ea" style="background:'+p.color+'">'+(p.name||'?')[0].toUpperCase()+'</span>';});if(!as.length)h+='<span style="font-size:11px;color:rgba(255,255,255,.48)">Aucun expert</span>';h+='</div><div class="cc-ac">'+(isAdmin?'<span style="font-size:11px;color:rgba(255,255,255,.24);cursor:pointer" data-action="delT" data-idx="'+i+'">Supprimer</span>':'')+'<span class="cc-sh" data-action="shT" data-tid="'+t.id+'">↗ Partager</span></div></div>';});el.innerHTML=h;}
+h+='<div style="flex:1;min-width:0"><div class="cc-n" style="margin:0">'+esc(t.label)+(t.isCoaching?' <span style="font-size:10px;padding:2px 7px;border-radius:5px;background:rgba(167,139,250,.15);color:#c4b5fd;border:1px solid rgba(167,139,250,.3);margin-left:6px;font-weight:700;letter-spacing:.3px">🎯 COACHING</span>':'')+(t.isSetterOnly?' <span style="font-size:10px;padding:2px 7px;border-radius:5px;background:rgba(251,146,60,.15);color:#fb923c;border:1px solid rgba(251,146,60,.3);margin-left:6px;font-weight:700;letter-spacing:.3px">🎧 SETTER</span>':'')+(t.attributedSetterSlug?' <span style="font-size:10px;padding:2px 7px;border-radius:5px;background:rgba(236,72,153,.15);color:#f472b6;border:1px solid rgba(236,72,153,.3);margin-left:6px;font-weight:700;letter-spacing:.3px">🔗 '+esc(t.attributedSetterName||t.attributedSetterSlug)+'</span>':'')+'</div><div class="cc-m"><span>⏱ '+(t.duration>=60?(t.duration/60)+'h':t.duration+' min')+'</span><span>'+evtLabel+'</span></div></div></div>';var _lc={meet:'📹 Meet',zoom:'📹 Zoom',teams:'📹 Teams',phone:'📞',inperson:'📍',custom:'🔗'};var _anyCalConn=P.some(function(p){return p.calendarConnected===true;});if(t.location&&_lc[t.location]){h+='<div style="font-size:11px;color:#60a5fa;margin-top:4px">'+_lc[t.location];if(t.location==='meet'&&_anyCalConn)h+=' · <span style="color:#34d399;font-weight:600">✨ Auto</span>';else if(t.locationUrl)h+=' · <span style="color:rgba(255,255,255,.38)">'+esc(t.locationUrl).slice(0,30)+'</span>';h+='</div>';}h+='<div class="cc-ex">';as.forEach(function(p){h+='<span class="cc-ea" style="background:'+p.color+'">'+(p.name||'?')[0].toUpperCase()+'</span>';});if(!as.length)h+='<span style="font-size:11px;color:rgba(255,255,255,.48)">Aucun expert</span>';h+='</div><div class="cc-ac">'+(isAdmin?'<span style="font-size:11px;color:rgba(255,255,255,.24);cursor:pointer" data-action="delT" data-idx="'+i+'">Supprimer</span><span style="font-size:11px;color:#a78bfa;cursor:pointer;font-weight:600" data-action="dupT" data-tid="'+t.id+'" title="Créer une copie de cette consultation (ex. le lien d\'un nouveau closer)">⧉ Dupliquer</span>':'')+'<span class="cc-sh" data-action="shT" data-tid="'+t.id+'">↗ Partager</span></div></div>';});el.innerHTML=h;}
 document.getElementById('addT').addEventListener('click',function(){document.getElementById('addTF').style.display='';});
 function selectEvtType(el){document.querySelectorAll('.evt-type-opt').forEach(function(o){o.classList.remove('on');});el.classList.add('on');}
 window.selectEvtType=selectEvtType;
@@ -1082,7 +1082,7 @@ function closeCsDetail(){document.getElementById('csDetailView').style.display='
 function renderCdHead(){var EVT_LABELS={private:'En privé',group:'Groupe',roundrobin:'Round-robin',collective:'Collectif'};var locLabels={meet:'📹 Google Meet',zoom:'📹 Zoom',teams:'📹 Teams',phone:'📞 Téléphone',inperson:'📍 En personne',custom:'🔗 Lien custom'};var _cC=P.some(function(p){return p.calendarConnected===true;});var locBadge='';if(cdType.location){var _lbl=locLabels[cdType.location]||'';if(cdType.location==='meet'&&_cC){locBadge='<span class="cd-head-badge" style="background:rgba(52,211,153,.1);color:#34d399;border:1px solid rgba(52,211,153,.15)">✨ '+_lbl+' · Auto</span>';}else{locBadge='<span class="cd-head-badge" style="background:rgba(96,165,250,.1);color:#60a5fa;border:1px solid rgba(96,165,250,.15)">'+_lbl+'</span>';}}var evtLabel=EVT_LABELS[cdType.eventType||'private']||'En privé';var h='<span class="cd-back" onclick="closeCsDetail()">← Retour aux consultations</span><div class="cd-head-main">';
 if(cdType.image)h+='<img src="'+cdType.image+'" style="width:48px;height:48px;border-radius:13px;object-fit:cover;flex-shrink:0"/>';
 else h+='<div class="cd-head-av" style="background:'+cdType.color+';flex-shrink:0">'+cdType.label[0].toUpperCase()+'</div>';
-h+='<div class="cd-head-txt"><div class="cd-head-nm"><span>'+esc(cdType.label)+'</span>'+locBadge+'</div><div class="cd-head-sub">'+evtLabel+' · '+(cdType.duration>=60?(cdType.duration/60)+'h':cdType.duration+' min')+'</div></div></div><div class="cd-head-acts"><button class="bb bb-o" data-action="shT" data-tid="'+cdType.id+'">↗ Partager</button>'+(window._currentRole==='admin'?'<button class="bb bb-r" data-action="delTid" data-tid="'+cdType.id+'" data-ro-hide title="Retirer cette consultation du booking (copie conservée dans _types_trash)">🗑 Supprimer</button>':'')+'</div>';document.getElementById('cdHead').innerHTML=h;}
+h+='<div class="cd-head-txt"><div class="cd-head-nm"><span>'+esc(cdType.label)+'</span>'+locBadge+'</div><div class="cd-head-sub">'+evtLabel+' · '+(cdType.duration>=60?(cdType.duration/60)+'h':cdType.duration+' min')+'</div></div></div><div class="cd-head-acts"><button class="bb bb-o" data-action="shT" data-tid="'+cdType.id+'">↗ Partager</button>'+(window._currentRole==='admin'?'<button class="bb bb-o" data-action="dupT" data-tid="'+cdType.id+'" title="Créer une copie de cette consultation (ex. le lien d\'un nouveau closer)">⧉ Dupliquer</button>':'')+(window._currentRole==='admin'?'<button class="bb bb-r" data-action="delTid" data-tid="'+cdType.id+'" data-ro-hide title="Retirer cette consultation du booking (copie conservée dans _types_trash)">🗑 Supprimer</button>':'')+'</div>';document.getElementById('cdHead').innerHTML=h;}
 function renderCdNav(){document.querySelectorAll('[data-cds]').forEach(function(n){n.classList.toggle('on',n.dataset.cds===cdSection);});}
 document.addEventListener('click',function(e){var n=e.target.closest('[data-cds]');if(n){cdSection=n.dataset.cds;renderCdNav();renderCdSection();}});
 
@@ -1414,6 +1414,89 @@ function deleteTypeById(tid){
     .then(function(){if(typeof cdType!=='undefined'&&cdType&&cdType.id===tid){try{closeCsDetail();}catch(_e){}}renderAll();toast('🗑 Consultation supprimée (copie dans _types_trash)');})
     .catch(function(e){console.error('[delType]',e);toast('❌ '+e.message);});
 }
+/* Duplication d'une consultation (admin) — 20/10/2026.
+   Pour donner vite son lien perso à un nouveau closer (comme celui
+   d'Anthony) : la copie reprend tous les réglages enregistrés (cleanType :
+   durée, lieu/Meet, règles, notifications, formulaire, redirection, drapeaux
+   coaching / setter — donc même classement des RDV) avec un nouvel id.
+   Ne sont PAS repris : les experts (seul l'expert choisi ici est assigné,
+   sinon les RDV du nouveau lien tomberaient chez l'expert d'origine), le
+   lien court (unique) et le setter attribué (un lien par setter, sinon la
+   commission Setting irait au mauvais setter). */
+function dupTypeNewId(label){var base=String(label||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'_').slice(0,20)||'consultation';var id='';do{id=base+'_'+gid().slice(0,3);}while(T.some(function(x){return x.id===id||x.slug===id;}));return id;}
+function openDupTypeModal(tid){
+  if(window._currentRole!=='admin'){toast('⛔ Réservé à un admin');return;}
+  var src=T.find(function(t){return t.id===tid;});if(!src)return;
+  var old=document.getElementById('dupTMo');if(old)old.remove();
+  var exps=P.slice().sort(function(a,b){return String(a.name||'').localeCompare(String(b.name||''),'fr');});
+  var srcEx=P.filter(function(p){return(p.types||[]).indexOf(src.id)>=0;}).map(function(p){return p.name||p.id;});
+  var h='<div style="background:var(--bg4,#1a1a2e);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:24px;max-width:480px;width:92%;max-height:85vh;overflow-y:auto">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div style="font-size:16px;font-weight:800">⧉ Dupliquer la consultation</div><button type="button" id="dupTX" style="border:none;background:transparent;color:rgba(255,255,255,.5);font-size:20px;cursor:pointer">✕</button></div>';
+  h+='<div style="font-size:12px;color:rgba(255,255,255,.48);margin-bottom:16px;line-height:1.5">Copie de « '+esc(src.label||src.id)+' » : durée, lieu, règles, notifications, formulaire et réglages coaching / setter sont repris. Les experts'+(srcEx.length?' ('+esc(srcEx.join(', '))+')':'')+', le lien court'+(src.attributedSetterSlug?' et le setter attribué':'')+' ne le sont pas.</div>';
+  h+='<div class="mf" style="margin-bottom:12px"><label>Nom *</label><input class="bi" id="dupTN" style="width:100%" value="'+escA((src.label||src.id)+' (copie)')+'"/></div>';
+  h+='<div class="mf" style="margin-bottom:12px"><label>Lien court (facultatif)</label><input class="bi" id="dupTS" style="width:100%" placeholder="ex. appel-strategique-prenom"/><div id="dupTSH" style="font-size:11px;color:rgba(255,255,255,.4);margin-top:4px">Laisser vide : le lien utilisera l\'identifiant technique (modifiable ensuite dans Détails).</div></div>';
+  h+='<div class="mf" style="margin-bottom:10px"><label>Expert à assigner</label><select class="bs" id="dupTP" style="width:100%"><option value="">— Aucun pour l\'instant —</option>';
+  exps.forEach(function(p){h+='<option value="'+escA(p.id)+'">'+esc(p.name||p.id)+(p.role?' · '+esc(p.role):'')+'</option>';});
+  h+='</select><div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:4px">Le nouveau closer doit déjà avoir sa fiche dans « Experts &amp; dispos ».</div></div>';
+  h+='<label id="dupTDW" style="display:none;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,.75);margin-bottom:6px;cursor:pointer"><input type="checkbox" id="dupTD"/> En faire sa consultation par défaut (son lien nominatif arrive directement sur le calendrier)</label>';
+  h+='<div id="dupTDI" style="display:none;font-size:11px;color:#fbbf24;margin-bottom:6px"></div>';
+  h+='<div id="dupTE" style="display:none;font-size:12px;color:#f87171;margin-top:8px"></div>';
+  h+='<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><button type="button" class="bb bb-o" id="dupTC">Annuler</button><button type="button" class="bb bb-p" id="dupTOk">Dupliquer</button></div></div>';
+  var d=document.createElement('div');d.id='dupTMo';
+  d.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+  d.innerHTML=h;document.body.appendChild(d);
+  function close(){d.remove();}
+  d.addEventListener('click',function(ev){if(ev.target===d)close();});
+  document.getElementById('dupTX').addEventListener('click',close);
+  document.getElementById('dupTC').addEventListener('click',close);
+  var selP=document.getElementById('dupTP'),defW=document.getElementById('dupTDW'),defC=document.getElementById('dupTD'),defI=document.getElementById('dupTDI');
+  selP.addEventListener('change',function(){
+    var p=P.find(function(x){return x.id===selP.value;});
+    if(!p){defW.style.display='none';defI.style.display='none';return;}
+    defW.style.display='flex';
+    var cur=p.defaultTypeId?T.find(function(t){return t.id===p.defaultTypeId;}):null;
+    defC.checked=!cur;
+    if(cur){defI.style.display='';defI.textContent='Consultation par défaut actuelle : « '+(cur.label||cur.id)+' ». Cocher pour la remplacer (les liens déjà envoyés restent valables).';}else defI.style.display='none';
+  });
+  document.getElementById('dupTN').focus();
+  document.getElementById('dupTOk').addEventListener('click',function(){
+    var btn=this,errEl=document.getElementById('dupTE');
+    function fail(m){errEl.style.display='';errEl.textContent=m;}
+    errEl.style.display='none';
+    var label=document.getElementById('dupTN').value.trim();if(!label){fail('Le nom est obligatoire.');return;}
+    var slug=normTypeSlug(document.getElementById('dupTS').value);
+    if(slug){var clash=T.filter(function(x){return x.id===slug||x.slug===slug;})[0];if(clash){fail('Lien court déjà utilisé par « '+(clash.label||clash.id)+' ».');return;}}
+    var pid=selP.value,pO=pid?P.find(function(x){return x.id===pid;}):null;
+    var setDef=!!pO&&defC.checked===true;
+    var copy=JSON.parse(JSON.stringify(cleanType(src)));
+    copy.id=dupTypeNewId(label);copy.label=label;
+    delete copy.slug;delete copy.attributedSetterSlug;delete copy.attributedSetterName;
+    if(slug)copy.slug=slug;
+    var si=T.findIndex(function(t){return t.id===src.id;});
+    btn.disabled=true;btn.textContent='Duplication…';
+    T.splice(si>=0?si+1:T.length,0,copy);
+    var saved=false;
+    saveTypes().then(function(){
+      saved=true;
+      if(!pO)return null;
+      var types=(pO.types||[]).slice();if(types.indexOf(copy.id)<0)types.push(copy.id);
+      var u={types:types};if(setDef)u.defaultTypeId=copy.id;
+      return CR.doc(pO.id).update(u).then(function(){pO.types=types;if(setDef)pO.defaultTypeId=copy.id;});
+    }).then(function(){
+      close();
+      if(typeof cdType!=='undefined'&&cdType){try{closeCsDetail();}catch(_e){}}else renderAll();
+      openCsDetail(copy.id);
+      toast('✅ Consultation dupliquée'+(pO?' · assignée à '+(pO.name||pO.id):''));
+    }).catch(function(e){
+      console.error('[dupType]',e);
+      if(saved){close();renderAll();alert('⚠️ Consultation « '+label+' » créée, mais l\'expert n\'a pas pu être assigné : '+e.message+'\nAssigne-le depuis l\'onglet Experts de la consultation.');return;}
+      var ci=T.findIndex(function(t){return t.id===copy.id;});if(ci>=0)T.splice(ci,1);
+      btn.disabled=false;btn.textContent='Dupliquer';
+      fail('Erreur : '+e.message);
+    });
+  });
+}
+window.openDupTypeModal=openDupTypeModal;
 function saveCdDetails(silent){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;T[i].label=document.getElementById('cd-name').value.trim()||T[i].label;T[i].duration=parseInt(document.getElementById('cd-dur').value)||30;T[i].color=document.getElementById('cd-color').value;T[i].active=document.getElementById('cd-active').value!=='false';T[i].eventType=document.getElementById('cd-eventType').value;T[i].description=document.getElementById('cd-desc').value.trim();var _sgEl=document.getElementById('cd-slug'),_sgHint=document.getElementById('cd-slug-hint');if(_sgEl){var _sg=normTypeSlug(_sgEl.value),_sgErr='';if(_sg){var _sgClash=T.filter(function(x,j){return j!==i&&(x.id===_sg||x.slug===_sg);})[0];if(_sgClash)_sgErr='⚠️ Déjà utilisé par « '+(_sgClash.label||_sgClash.id)+' » — non enregistré.';else if(_sg===T[i].id)_sg='';}if(!_sgErr){if(_sg)T[i].slug=_sg;else delete T[i].slug;}if(_sgHint){if(_sgErr){_sgHint.style.color='#fbbf24';_sgHint.textContent=_sgErr;}else{_sgHint.style.color='rgba(255,255,255,.55)';_sgHint.innerHTML='Lien partagé : <span style="color:#a78bfa;user-select:all">'+esc(typeBookingUrl(T[i]))+'</span>';}}}T[i].location=document.getElementById('cd-location').value;T[i].locationUrl=document.getElementById('cd-locUrl').value.trim();var _crEl=document.getElementById('cd-confirmRedirect');if(_crEl)T[i].confirmationRedirect=_crEl.checked===true;var _cruEl=document.getElementById('cd-confirmRedirectUrl');if(_cruEl){var _cru=_cruEl.value.trim();if(_cru&&!/^https?:\/\//i.test(_cru))_cru='https://'+_cru;T[i].confirmationRedirectUrl=_cru;}var _icEl=document.getElementById('cd-isCoaching');if(_icEl)T[i].isCoaching=_icEl.checked===true;var _isoEl=document.getElementById('cd-isSetterOnly');if(_isoEl)T[i].isSetterOnly=_isoEl.checked===true;var _slkEl=document.getElementById('cd-isSetterLink');if(_slkEl){var _slsEl=document.getElementById('cd-setterLinkSlug');var _slv=(_slkEl.checked===true&&_slsEl)?_slsEl.value:'';if(_slv){T[i].attributedSetterSlug=_slv;var _slm=cdSetterLinkMembers().filter(function(m){return m.slug===_slv;})[0];if(_slm)T[i].attributedSetterName=_slm.name;else if(!T[i].attributedSetterName)T[i].attributedSetterName=_slv;}else if(_slkEl.checked!==true||_slsEl){delete T[i].attributedSetterSlug;delete T[i].attributedSetterName;}}if(cdType.image)T[i].image=cdType.image;else delete T[i].image;cdType=T[i];saveTypes().then(function(){renderCdHead();var ind=document.getElementById('cd-autosave-status');if(silent&&ind)autoSaveDone(ind);else if(!silent)toast('✅ Enregistré');}).catch(function(e){console.error('Save error:',e);if(!silent)alert('Erreur de sauvegarde: '+e.message);});}
 function previewCdImage(input){var f=input.files[0];if(!f)return;if(f.size>200*1024){toast('❌ Image trop lourde (max 200KB)');return;}var r=new FileReader();r.onload=function(e){cdType.image=e.target.result;var i=T.findIndex(function(t){return t.id===cdType.id;});if(i>=0)T[i].image=cdType.image;renderCdSection();};r.readAsDataURL(f);}
 function removeCdImage(){delete cdType.image;var i=T.findIndex(function(t){return t.id===cdType.id;});if(i>=0)delete T[i].image;renderCdSection();}
@@ -3942,7 +4025,7 @@ function bkAdminCheckDupe(personId,date,time,email){
   }).catch(function(e){console.warn('[booking-admin] check doublon:',e&&e.message);return false;});
 }
 document.getElementById('moSub').addEventListener('click',function(){var ti=document.getElementById('mT').value,pi=document.getElementById('mP').value,dt=document.getElementById('mD').value,tm=document.getElementById('mH').value,fn=document.getElementById('mFn').value.trim(),ln=document.getElementById('mLn').value.trim(),em=document.getElementById('mEm').value.trim();if(!ti||!pi||!dt||!tm||!fn||!ln||!em){alert('Remplissez tous les champs obligatoires.');return;}var tO=T.find(function(t){return t.id===ti;}),pO=P.find(function(p){return p.id===pi;});var bk={type:ti,typeLabel:tO?tO.label:'',personId:pi,personName:pO?pO.name:'',date:dt,time:tm,duration:tO?tO.duration:30,status:'confirmed',source:'admin_manual',prospect:{prenom:fn,nom:ln,email:em,telephone:document.getElementById('mPh').value.trim(),message:document.getElementById('mNo').value.trim()},createdAt:firebase.firestore.FieldValue.serverTimestamp()};if(tO&&tO.isCoaching===true)bk.isCoaching=true;if(_selectedLeadId)bk.leadId=_selectedLeadId;var btn=this;btn.disabled=true;btn.textContent='Création…';bkAdminCheckDupe(pi,dt,tm,em).then(function(dup){if(dup&&!confirm('⚠️ Un RDV confirmé existe déjà pour ce prospect le '+dt+' à '+tm+' chez cet expert.\n\nCréer quand même un second rendez-vous ?'))return null;return db.collection('bookings').add(bk);}).then(function(_r){if(!_r){btn.disabled=false;btn.textContent='Créer le rendez-vous';return;}if(_selectedLeadId){db.collection('leads').doc(_selectedLeadId).update({status:'rdv_pose',rdvDate:dt,rdvHeure:tm,assignedTo:pi,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).catch(function(){});}else{db.collection('leads').add({nom:fn+' '+ln,email:em,telephone:document.getElementById('mPh').value.trim(),type:'manual_booking',stage:'rdv_manual',status:'rdv_pose',assignedTo:pi,utm:'Admin - '+(tO?tO.label:''),rdvDate:dt,rdvHeure:tm,notesHistory:[{text:'RDV créé manuellement',date:new Date().toLocaleString('fr-FR')}],createdAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});}btn.disabled=false;btn.textContent='Créer le rendez-vous';document.getElementById('cMo').classList.remove('show');_selectedLeadId=null;loadB();toast('✅ RDV créé');}).catch(function(e){btn.disabled=false;btn.textContent='Créer le rendez-vous';alert('Erreur: '+e.message);});});
-document.addEventListener('click',function(e){var a=e.target.closest('[data-action]');if(!a)return;var ac=a.dataset.action;if(ac==='resendMail'){e.stopPropagation();bkResendConfirmation(a,a.dataset.bid);}else if(ac==='delT'){var _tDel=T[+a.dataset.idx];if(_tDel)deleteTypeById(_tDel.id);}else if(ac==='delTid'){deleteTypeById(a.dataset.tid);}
+document.addEventListener('click',function(e){var a=e.target.closest('[data-action]');if(!a)return;var ac=a.dataset.action;if(ac==='resendMail'){e.stopPropagation();bkResendConfirmation(a,a.dataset.bid);}else if(ac==='delT'){var _tDel=T[+a.dataset.idx];if(_tDel)deleteTypeById(_tDel.id);}else if(ac==='delTid'){deleteTypeById(a.dataset.tid);}else if(ac==='dupT'){e.stopPropagation();openDupTypeModal(a.dataset.tid);}
 else if(ac==='openCs'){openCsDetail(a.dataset.tid);}
 else if(ac==='assignEx'){var ap=P.find(function(x){return x.id===a.dataset.pid;});if(ap){ap.types=ap.types||[];if(ap.types.indexOf(cdType.id)<0)ap.types.push(cdType.id);CR.doc(ap.id).update({types:ap.types}).then(function(){renderCdSection();toast('✅ Expert assigné');});}}
 else if(ac==='unassignEx'){var up=P.find(function(x){return x.id===a.dataset.pid;});if(up){up.types=up.types||[];var ui=up.types.indexOf(cdType.id);if(ui>=0)up.types.splice(ui,1);CR.doc(up.id).update({types:up.types}).then(function(){renderCdSection();toast('✅ Expert retiré');});}}
