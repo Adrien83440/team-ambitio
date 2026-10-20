@@ -227,8 +227,8 @@
     async ringoverLinks() {
       return authedFetch(ENDPOINTS.ringoverLink);
     },
-    async ringoverLink({ uid, apiKey } = {}) {
-      return authedFetch(ENDPOINTS.ringoverLink, { method: 'POST', body: { action: 'link', uid, apiKey } });
+    async ringoverLink({ uid, apiKey, confirmUnverified = false } = {}) {
+      return authedFetch(ENDPOINTS.ringoverLink, { method: 'POST', body: { action: 'link', uid, apiKey, confirmUnverified: confirmUnverified === true } });
     },
     async ringoverUnlink({ uid } = {}) {
       return authedFetch(ENDPOINTS.ringoverLink, { method: 'POST', body: { action: 'unlink', uid } });

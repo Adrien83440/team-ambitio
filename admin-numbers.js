@@ -239,7 +239,7 @@
   function dialerBadge(n) {
     const st = dialerState(n);
     if (!st || st.kind === 'loading') return '';
-    if (st.kind === 'ok') return `<br><span class="an-dialer an-dialer-ok" title="Clé …${esc(st.link.keyEnd)}">✅ Dialer relié</span>`;
+    if (st.kind === 'ok') return `<br><span class="an-dialer an-dialer-ok" title="Clé …${esc(st.link.keyEnd)}${st.link.verified === false ? ' — propriétaire confirmé par un admin, non vérifié chez Ringover' : ''}">✅ Dialer relié${st.link.verified === false ? ' (non vérifié)' : ''}</span>`;
     if (st.kind === 'main') return '<br><span class="an-dialer an-dialer-main" title="Ce poste porte la clé principale">✅ Dialer (clé principale)</span>';
     return '<br><span class="an-dialer an-dialer-off">⚠️ Dialer non relié</span>';
   }
@@ -273,11 +273,15 @@
       ? (window.TEAM_MEMBERS[n.assignedToSlug].fullName || window.TEAM_MEMBERS[n.assignedToSlug].shortName || n.assignedToSlug)
       : (n.assignedToSlug || n.assignedTo);
     $('#dm-sub').textContent = `${who} · ligne ${n.phoneNumber} · poste Ringover ${n.ringoverUserId}`;
+    $('#dm-confirm-who').textContent = who;
+    $('#dm-confirm-wrap').hidden = true;
+    $('#dm-confirm-unverified').checked = false;
     const st = dialerState(n) || { kind: 'off' };
     let html;
     if (st.kind === 'ok') {
       const l = st.link;
       html = `✅ <strong>Relié</strong> — clé …${esc(l.keyEnd)}${l.ownerName ? ' (poste de ' + esc(l.ownerName) + ')' : ''}`
+        + (l.verified === false ? ', propriétaire confirmé à la main' : '')
         + (l.linkedAt ? `, le ${esc(fmtDate(l.linkedAt))}` : '') + (l.linkedByName ? ` par ${esc(l.linkedByName)}` : '')
         + '. Coller une nouvelle clé pour la remplacer.';
     } else if (st.kind === 'main') {
@@ -316,16 +320,25 @@
     if (!uid) return;
     if (!apiKey) { dialerError('Coller la clé API Ringover.'); return; }
     $('#dm-err').hidden = true;
+    const askConfirm = !$('#dm-confirm-wrap').hidden;
+    const confirmUnverified = askConfirm && $('#dm-confirm-unverified').checked;
+    if (askConfirm && !confirmUnverified) { dialerError("Cocher la confirmation ci-dessous, ou annuler."); return; }
     const btn = $('#dm-confirm');
     btn.disabled = true; btn.textContent = 'Vérification chez Ringover…';
     try {
-      const r = await window.SalesDialerAPI.ringoverLink({ uid, apiKey });
+      const r = await window.SalesDialerAPI.ringoverLink({ uid, apiKey, confirmUnverified });
       toast(`Dialer relié${r && r.link && r.link.ownerName ? ' au poste de ' + r.link.ownerName : ''}.`, 'success');
       closeDialerModal();
       loadDialerLinks();
     } catch (e) {
       dialerError(e.message);
       btn.disabled = false; btn.textContent = 'Vérifier et relier';
+      // Clé valide mais propriétaire non identifiable chez Ringover : on
+      // demande à l'admin de confirmer ce qu'il voit dans Ringover.
+      if (e.payload && e.payload.code === 'owner_unknown') {
+        $('#dm-confirm-wrap').hidden = false;
+        btn.textContent = 'Confirmer et relier';
+      }
     }
   }
 
@@ -711,6 +724,13 @@
     $('#dm-confirm').addEventListener('click', confirmDialerLink);
     $('#dm-unlink').addEventListener('click', confirmDialerUnlink);
     $('#dm-key').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') confirmDialerLink(); });
+    // Une confirmation donnée pour une clé ne vaut pas pour une autre.
+    $('#dm-key').addEventListener('input', () => {
+      if ($('#dm-confirm-wrap').hidden) return;
+      $('#dm-confirm-wrap').hidden = true;
+      $('#dm-confirm-unverified').checked = false;
+      $('#dm-confirm').textContent = 'Vérifier et relier';
+    });
     $('#dialer-modal').addEventListener('click', (ev) => {
       if (ev.target.id === 'dialer-modal') closeDialerModal();
     });

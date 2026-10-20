@@ -8,12 +8,21 @@
 //
 //   GET                          → état des liaisons, SANS les clés
 //                                  { links: { uid: { userId, keyEnd, ... } }, sharedUserId }
-//   POST { action:'link', uid, apiKey }
-//        → la clé est essayée chez Ringover (GET /users) : sans Monitoring,
-//          Ringover ne renvoie QUE le propriétaire de la clé. Refus si la clé
-//          est invalide, si elle voit toute l'équipe (Monitoring : impossible
-//          de savoir quel poste sonnerait), ou si son propriétaire n'est pas
-//          le poste de la ligne Ringover déclarée pour ce membre.
+//   POST { action:'link', uid, apiKey, confirmUnverified? }
+//        → la clé est essayée chez Ringover pour trouver son propriétaire :
+//          1. GET /users — sans Monitoring, Ringover ne renvoie QUE le
+//             propriétaire. Mais l'écran Ringover grise la permission
+//             « Utilisateurs » quand Monitoring est désactivé (20/10/2026) :
+//             une clé normale reçoit donc 401 ici ;
+//          2. GET /teams — aucune permission requise (sert aussi de test de
+//             validité de la clé) ; sans Monitoring, données « limitées » :
+//             un seul utilisateur renvoyé = le propriétaire.
+//          Refus si la clé est invalide, si elle voit toute l'équipe
+//          (Monitoring), ou si son propriétaire n'est pas le poste de la ligne
+//          du membre. Si Ringover ne permet pas d'identifier le propriétaire,
+//          409 code 'owner_unknown' : l'admin peut confirmer (champ
+//          « Utilisateur » de la clé dans Ringover) et renvoyer avec
+//          confirmUnverified:true → liaison enregistrée verified:false.
 //   POST { action:'unlink', uid } → retire la clé du membre.
 //
 // La clé n'est JAMAIS renvoyée au navigateur (4 derniers caractères seulement).
@@ -55,6 +64,40 @@ async function ligneRingoverDe(uid) {
   return lignes;
 }
 
+function nomRingover(u) {
+  return u.concat_name || [u.firstname, u.lastname].filter(Boolean).join(' ') || u.email || String(u.user_id);
+}
+
+/* Propriétaire d'une clé API Ringover.
+   → { owner: { id, name } } | { owner: null } (clé valide, propriétaire inconnu)
+   | { error, status } (clé refusée, Monitoring, Ringover indisponible). */
+async function proprietaireCle(apiKey) {
+  // 1. /users (permission « Users Read », rarement disponible sans Monitoring)
+  try {
+    const d = await ringoverFetch('/users', { apiKey });
+    const list = (d && Array.isArray(d.list)) ? d.list : [];
+    if (list.length > 1) {
+      return { status: 409, error: "Cette clé voit " + list.length + " utilisateurs Ringover (option « Monitoring » activée) : impossible de savoir quel téléphone sonnerait. Créer la clé SANS Monitoring." };
+    }
+    if (list.length === 1 && list[0].user_id != null) return { owner: { id: String(list[0].user_id), name: nomRingover(list[0]) } };
+  } catch (e) {
+    if (e.status !== 401 && e.status !== 403) console.warn('[admin-ringover-link] /users:', e.status, e.message);
+  }
+  // 2. /teams (aucune permission requise : sert aussi de test de validité)
+  try {
+    const t = await ringoverFetch('/teams', { apiKey });
+    const users = (t && Array.isArray(t.users)) ? t.users : [];
+    if (users.length === 1 && users[0].user_id != null) return { owner: { id: String(users[0].user_id), name: nomRingover(users[0]) } };
+    return { owner: null };
+  } catch (e) {
+    if (e.status === 401 || e.status === 403) {
+      return { status: 400, error: "Ringover refuse cette clé : elle est invalide ou a été supprimée. Copier la clé entière depuis Ringover → Développeur → Clé API." };
+    }
+    console.error('[admin-ringover-link] /teams:', e.status, e.message);
+    return { status: 502, error: 'Ringover ne répond pas (' + (e.status || 'réseau') + ') : réessayer dans un instant.' };
+  }
+}
+
 module.exports = async (req, res) => {
   const auth = await requireAuth(req, res);
   if (!auth) return;
@@ -73,6 +116,7 @@ module.exports = async (req, res) => {
           keyEnd: keyEnd(u.apiKey),
           userId: u.userId ? String(u.userId) : null,
           ownerName: u.ownerName || null,
+          verified: u.verified !== false,
           linkedAt: tsToIso(u.linkedAt),
           linkedByName: u.linkedByName || null,
         };
@@ -121,23 +165,19 @@ module.exports = async (req, res) => {
     const poste = posteIds[0];
 
     // Contrôle chez Ringover : à qui appartient cette clé ?
-    let data;
-    try {
-      data = await ringoverFetch('/users', { apiKey });
-    } catch (e) {
-      if (e.status === 401 || e.status === 403) {
-        return res.status(400).json({ error: "Ringover refuse cette clé : elle est invalide, ou il lui manque la permission « Users Read » (lecture des utilisateurs). Les permissions à cocher sont « Calls Write » et « Users Read »." });
-      }
-      console.error('[admin-ringover-link] Ringover /users:', e.status, e.message);
-      return res.status(502).json({ error: 'Ringover ne répond pas (' + (e.status || 'réseau') + ') : réessayer dans un instant.' });
+    const probe = await proprietaireCle(apiKey);
+    if (probe.error) return res.status(probe.status).json({ error: probe.error });
+    let ownerId, ownerName, verified;
+    if (probe.owner) {
+      ownerId = probe.owner.id; ownerName = probe.owner.name; verified = true;
+    } else if (body.confirmUnverified === true) {
+      ownerId = poste; ownerName = null; verified = false;
+    } else {
+      return res.status(409).json({
+        code: 'owner_unknown',
+        error: "La clé est valide, mais Ringover ne dit pas à quel utilisateur elle appartient (droit « Utilisateurs » indisponible sans Monitoring). Vérifier dans Ringover que le champ « Utilisateur » de cette clé est bien ce commercial, puis confirmer ci-dessous.",
+      });
     }
-    const list = (data && Array.isArray(data.list)) ? data.list : [];
-    if (list.length !== 1) {
-      return res.status(409).json({ error: "Cette clé voit " + list.length + " utilisateurs Ringover (option « Monitoring » activée) : impossible de savoir quel téléphone sonnerait. Créer la clé SANS Monitoring, depuis le compte Ringover du commercial." });
-    }
-    const owner = list[0] || {};
-    const ownerId = owner.user_id != null ? String(owner.user_id) : '';
-    const ownerName = owner.concat_name || [owner.firstname, owner.lastname].filter(Boolean).join(' ') || owner.email || ownerId;
     if (ownerId !== poste) {
       return res.status(409).json({ error: "Cette clé appartient au poste Ringover de « " + ownerName + " » (ID " + ownerId + "), pas à celui de la ligne de ce membre (ID " + poste + "). L'enregistrer ferait sonner le mauvais téléphone." });
     }
@@ -156,7 +196,8 @@ module.exports = async (req, res) => {
       apiKey,
       userId: ownerId,
       fromNumber: ligne.phoneNumber || null,
-      ownerName,
+      ownerName: ownerName || null,
+      verified,
       linkedAt: admin.firestore.FieldValue.serverTimestamp(),
       linkedBy: auth.uid,
       linkedByName: auteur,
@@ -165,11 +206,11 @@ module.exports = async (req, res) => {
     await CRED_REF().update(fieldPath, entree);
     await db.collection('telco_link_log').add({
       action: prev ? 'replace' : 'link', provider: 'ringover', uid, slug: ligne.slug,
-      userId: ownerId, ownerName, keyEnd: keyEnd(apiKey), previousKeyEnd: prev ? keyEnd(prev.apiKey) : null,
+      userId: ownerId, ownerName: ownerName || null, verified, keyEnd: keyEnd(apiKey), previousKeyEnd: prev ? keyEnd(prev.apiKey) : null,
       by: auth.uid, byName: auteur, at: admin.firestore.FieldValue.serverTimestamp(),
     });
     clearRingoverCredsCache();
-    return res.status(200).json({ ok: true, link: { dedicated: true, keyEnd: keyEnd(apiKey), userId: ownerId, ownerName } });
+    return res.status(200).json({ ok: true, link: { dedicated: true, keyEnd: keyEnd(apiKey), userId: ownerId, ownerName: ownerName || null, verified } });
   } catch (e) {
     console.error('[admin-ringover-link]', e);
     return res.status(500).json({ error: e.message || 'Erreur serveur' });
