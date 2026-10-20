@@ -225,7 +225,7 @@ async function actionChapters(req, res, body, auth) {
   res.status(200).json({ ok: true, chapters: chapters });
 }
 
-async function actionRegen(req, res, body) {
+async function actionRegen(req, res, body, auth) {
   const id = String(body.id || '').trim();
   if (!id) { res.status(400).json({ ok: false, error: 'id_required' }); return; }
   const b = await loadBooking(id);
@@ -236,6 +236,7 @@ async function actionRegen(req, res, body) {
   if (!entries.length) { res.status(409).json({ ok: false, error: 'no_transcript' }); return; }
   const ai = await MT.generateChapters(entries, rp.speakers || [], {
     closer: b.personName || b.expertName || '', client: MT.clientName(b), durationSec: rp.durationSec,
+    uid: auth.uid, bookingId: id,
   });
   // Les chapitres remplacés restent en base (chaptersPrev) : une régénération
   // ne fait jamais perdre un découpage retouché à la main.
@@ -378,7 +379,7 @@ module.exports = async (req, res) => {
     if (auth.role !== 'admin') { res.status(403).json({ ok: false, error: 'Admin role required' }); return; }
     if (req.method === 'POST' && action === 'import') { await actionImport(req, res, body); return; }
     if (req.method === 'POST' && action === 'chapters') { await actionChapters(req, res, body, auth); return; }
-    if (req.method === 'POST' && action === 'regen') { await actionRegen(req, res, body); return; }
+    if (req.method === 'POST' && action === 'regen') { await actionRegen(req, res, body, auth); return; }
     if (req.method === 'POST' && action === 'analyze') { await actionAnalyze(req, res, body, auth); return; }
     if (req.method === 'POST' && action === 'sync') { await actionSync(req, res, body, 365); return; }
     res.status(400).json({ ok: false, error: 'unknown_action' });

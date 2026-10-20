@@ -17,6 +17,8 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
    admin-ia.html — Réglages IA (programme IA Alteore, 10/2026)
    Budget mensuel, interrupteur global, modèle par tâche, « cerveau
    Alteore » (contexte injecté dans tous les prompts), consommation.
+   Onglet Dépenses (20/10/2026) : où, par qui et comment l'IA consomme
+   (api/ai-admin.js?report=…), pistes d'économie, accès direct au réglage.
    Toutes les données passent par api/ai-admin.js (Admin SDK). Admin only.
    ═══════════════════════════════════════════════════════════════════════ */
 .ia{padding:20px 24px 80px;max-width:1180px;margin:0 auto;font-family:'Figtree',sans-serif}
@@ -78,7 +80,44 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
 .ia-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .ia-toast.err{background:#2e1a1a;border-color:rgba(239,68,68,.35);color:#fca5a5}
 .locked{text-align:center;padding:80px 20px;color:rgba(255,255,255,.35)}
-@media (max-width:900px){.grid2{grid-template-columns:minmax(0,1fr)}}
+/* ─── Onglets + tableau de bord Dépenses (20/10/2026) ─── */
+.ia-tabs{display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,.07);flex-wrap:wrap}
+.ia-tab{background:0;border:0;border-bottom:2px solid transparent;color:rgba(255,255,255,.55);font-family:'Figtree',sans-serif;font-size:13px;font-weight:700;padding:9px 14px;cursor:pointer;margin-bottom:-1px}
+.ia-tab:hover{color:#fff}
+.ia-tab.on{color:#fff;border-bottom-color:#818cf8}
+.seg{display:inline-flex;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:2px;flex-wrap:wrap}
+.seg button{background:0;border:0;color:rgba(255,255,255,.55);font-family:'Figtree',sans-serif;font-size:11.5px;font-weight:700;padding:5px 11px;border-radius:6px;cursor:pointer}
+.seg button.on{background:rgba(129,140,248,.18);color:#c7d2fe}
+.sp-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.sp-kpi{background:var(--bg2,#0f0f1a);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px 14px;min-width:0}
+.sp-kpi-l{font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:rgba(255,255,255,.45)}
+.sp-kpi-v{font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:800;letter-spacing:-.3px;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sp-kpi-s{font-size:11.5px;color:rgba(255,255,255,.45);margin-top:2px}
+.sp-kpi-v.warn{color:#fbbf24}.sp-kpi-v.over{color:#f87171}
+.sp-chart{position:relative;height:170px;display:flex;align-items:flex-end;gap:2px;padding-top:14px;border-bottom:1px solid rgba(255,255,255,.12)}
+.sp-chart-col{flex:1;min-width:0;height:100%;display:flex;align-items:flex-end;cursor:default}
+.sp-chart-bar{width:100%;max-width:26px;margin:0 auto;border-radius:4px 4px 0 0;background:#818cf8;min-height:1px}
+.sp-chart-col:hover .sp-chart-bar{background:#a5b4fc}
+.sp-chart-col.today .sp-chart-bar{background:rgba(129,140,248,.55)}
+.sp-chart-ref{position:absolute;left:0;right:0;border-top:1px dashed rgba(251,191,36,.6);pointer-events:none}
+.sp-chart-ref span{position:absolute;right:0;top:-16px;font-size:10.5px;color:#fcd34d;background:var(--bg2,#0f0f1a);padding:0 4px}
+.sp-chart-max{position:absolute;left:0;top:-2px;font-size:10.5px;color:rgba(255,255,255,.4)}
+.sp-chart-x{display:flex;justify-content:space-between;font-size:10.5px;color:rgba(255,255,255,.4);margin-top:5px}
+.sp-chart-tip{position:fixed;z-index:1500;background:#1b1b2b;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:7px 10px;font-size:12px;line-height:1.5;pointer-events:none;display:none;box-shadow:0 6px 20px rgba(0,0,0,.35);max-width:240px}
+.sp-chart-tip b{font-weight:800}
+.tsub{display:block;font-size:11px;color:rgba(255,255,255,.42);margin-top:1px}
+.bar-in{display:block;height:4px;border-radius:999px;background:rgba(255,255,255,.06);margin-top:4px;overflow:hidden}
+.bar-in i{display:block;height:100%;background:#818cf8;border-radius:999px}
+.tt td.num,.tt th.num{text-align:right;white-space:nowrap}
+.pill{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;background:rgba(255,255,255,.06);color:rgba(255,255,255,.65);white-space:nowrap}
+.pill.auto{background:rgba(251,191,36,.12);color:#fcd34d}
+.pill.user{background:rgba(52,211,153,.12);color:#6ee7b7}
+.pill.off{background:rgba(248,113,113,.12);color:#fca5a5}
+.tip-l{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:12.5px;line-height:1.55}
+.tip-l:last-child{border-bottom:0}
+.lnk{background:0;border:0;color:#a5b4fc;font-family:'Figtree',sans-serif;font-size:11.5px;font-weight:700;cursor:pointer;padding:0;text-decoration:underline}
+tr.flash td{background:rgba(129,140,248,.12)}
+@media (max-width:900px){.grid2{grid-template-columns:minmax(0,1fr)}.sp-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:640px){.ia{padding:14px 16px 80px}.tt .hide-m{display:none}.frm{grid-template-columns:minmax(0,1fr)}}
 </style>
 </head>
@@ -91,6 +130,64 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
     <button class="bb bb-o" data-action="brief">☀️ Générer le brief du matin</button>
   </div>
 
+  <div class="ia-tabs" role="tablist">
+    <button class="ia-tab on" data-action="tab" data-tab="spend" role="tab">💶 Dépenses</button>
+    <button class="ia-tab" data-action="tab" data-tab="settings" role="tab">⚙️ Réglages</button>
+  </div>
+
+  <!-- ═══ ONGLET DÉPENSES : où, par qui, comment ═══ -->
+  <div id="tab-spend">
+    <div class="ia-top" style="margin-bottom:12px">
+      <div class="seg" id="spPeriod">
+        <button data-action="period" data-p="month" class="on">Ce mois</button>
+        <button data-action="period" data-p="prev">Mois dernier</button>
+        <button data-action="period" data-p="7d">7 jours</button>
+        <button data-action="period" data-p="30d">30 jours</button>
+      </div>
+      <span class="hint" id="spLabel"></span>
+      <div class="sp"></div>
+      <button class="bb bb-o" data-action="spReload" style="padding:5px 12px;font-size:11px">↻ Actualiser</button>
+    </div>
+
+    <div class="sp-kpis" id="spKpis"><div class="sp-kpi"><div class="sp-kpi-l">Chargement…</div></div></div>
+
+    <div class="card">
+      <h2>📈 Dépense par jour <span class="sp"></span><span class="hint" id="spDayHint"></span></h2>
+      <div class="sp-chart" id="spChart"></div>
+      <div class="sp-chart-x" id="spChartX"></div>
+    </div>
+
+    <div class="card">
+      <h2>💡 Pistes d'économie</h2>
+      <div id="spTips"><div class="hint">Chargement…</div></div>
+    </div>
+
+    <div class="card">
+      <h2>🧩 Par fonctionnalité <span class="sp"></span><span class="hint">où, comment, combien</span></h2>
+      <div style="overflow-x:auto"><table class="tt" id="spTasks"></table></div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h2>👤 Par personne</h2>
+        <div style="overflow-x:auto"><table class="tt" id="spUsers"></table></div>
+      </div>
+      <div class="card">
+        <h2>🧠 Par modèle</h2>
+        <div id="spModels"></div>
+        <div class="hint" style="margin-top:10px">Tarifs Anthropic en $ par million de tokens (entrée / sortie) :<br/><span id="spPricing"></span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🕳️ Non suivi ici</h2>
+      <div class="hint">Ces appels IA ne passent pas par le socle : ils n'apparaissent pas dans les chiffres ci-dessus et ne sont pas bridés par le budget.</div>
+      <div id="spUntracked" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <!-- ═══ ONGLET RÉGLAGES ═══ -->
+  <div id="tab-settings" style="display:none">
   <div class="grid2">
     <div class="card">
       <h2>💶 Consommation du mois <span class="sp"></span><span class="mono" id="uMonth"></span></h2>
@@ -105,12 +202,13 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
         <label>IA activée</label><div><button class="sw" id="cEnabled" data-action="toggle" aria-label="Activer l'IA"></button></div>
         <label for="cBudget">Budget mensuel (€)</label><input class="bi" id="cBudget" type="number" min="0" step="5"/>
         <label for="cAlert">Alerte à (%)</label><input class="bi" id="cAlert" type="number" min="10" max="100" step="5"/>
+        <label for="cAutoStop">Pause des tâches auto à (%)</label><input class="bi" id="cAutoStop" type="number" min="10" max="100" step="5" title="100 = pas de pause anticipée"/>
         <label for="cRate">Taux 1 $ → €</label><input class="bi" id="cRate" type="number" min="0.5" max="1.5" step="0.01"/>
         <label for="cAccount">Compte d'envoi</label>
         <select class="bi" id="cAccount"><option value="contact">contact</option><option value="coaching">coaching</option><option value="strategie">strategie</option></select>
         <label for="cExtra">Emails en plus</label><input class="bi" id="cExtra" type="text" placeholder="séparés par des virgules (en plus des admins)"/>
       </div>
-      <div class="ctx-bar"><span class="hint">Au-delà du budget, les fonctions IA se mettent en pause jusqu'au mois suivant.</span><span class="sp"></span><button class="bb bb-p" data-action="saveCfg">Enregistrer</button></div>
+      <div class="ctx-bar"><span class="hint">À « Pause des tâches auto », les crons IA s'arrêtent ; ce que l'équipe déclenche continue jusqu'au budget, puis tout s'arrête jusqu'au mois suivant.</span><span class="sp"></span><button class="bb bb-p" data-action="saveCfg">Enregistrer</button></div>
     </div>
   </div>
 
@@ -134,7 +232,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
 
   <div class="card">
     <h2>🎛️ Modèle par tâche <span class="sp"></span><button class="bb bb-p bb-s" data-action="saveTasks" style="padding:5px 12px;font-size:11px">Enregistrer</button></h2>
-    <div class="hint" style="margin-bottom:8px">Opus 5.5 pour ce qui rapporte, Haiku 4.5 pour le volume. Ne change un modèle que si la qualité ou le coût le justifie.</div>
+    <div class="hint" style="margin-bottom:8px">Opus 5.5 pour ce qui rapporte, Sonnet 5.5 pour l'analyse courante, Haiku pour le volume (Haiku 5.5 coûte ~10 fois moins que Haiku 4.5 par token). Ne change un modèle que si la qualité ou le coût le justifie — l'onglet Dépenses montre l'effet dès le lendemain.</div>
     <div style="overflow-x:auto"><table class="tt" id="tasksTable"></table></div>
   </div>
 
@@ -142,14 +240,16 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
     <h2>🧾 Derniers appels IA</h2>
     <div style="overflow-x:auto"><table class="tt" id="recentTable"></table></div>
   </div>
+  </div>
 </div>
+<div class="sp-chart-tip" id="chartTip"></div>
 <div class="locked" id="lockedView" style="display:none">🔒 Réservé aux administrateurs</div>
 <div class="ia-toast" id="toast"></div>
 
 <script>
 (function () {
 var API = '/api/ai-admin';
-var state = { cfg: null, defaults: null };
+var state = { cfg: null, defaults: null, usage: null, period: 'month', report: null };
 
 var TASK_LABELS = {
   lead_score: 'Score lead + brief pré-appel',
@@ -173,15 +273,69 @@ var TASK_LABELS = {
   training: 'Entraînement closer',
   command: 'Barre de commande ⌘K',
   training_debrief: 'Débrief d\'entraînement',
-  aide_team: 'Aide Team (questions techniques)'
+  aide_team: 'Aide Team (questions techniques)',
+  contract_edit: 'Atelier de contrats — réécriture',
+  contract_import: 'Atelier de contrats — import PDF',
+  coaching_plan_suggest: 'Plan coaching — proposition',
+  coaching_plan_revise: 'Plan coaching — révision',
+  coaching_brief: 'Brief client coaching',
+  academy_path: 'Academy — route de formation',
+  academy_workbook: 'Academy — workbook',
+  replay_chapters: 'Replay closing — chapitres'
 };
+/* Où et comment chaque tâche se déclenche (lu dans le code au 20/10/2026).
+   auto = cron sans personne derrière ; user = déclenché par quelqu'un. */
+var TASK_INFO = {
+  lead_score: ['Leads Live · Dialer', 'cron 10 min (leads < 72 h) + ouverture d\'une fiche', 'mix'],
+  morning_brief: ['Dashboards', 'cron 6 h / 7 h + bouton', 'mix'],
+  closing_prep: ['Close SB · RDV closing', 'cron 15 min avant chaque RDV + bouton', 'mix'],
+  closing_analysis: ['Replay closing · Close SB', 'après chaque closing transcrit + bouton', 'mix'],
+  closing_followup: ['Relances des non-closés', 'cron 15 min', 'auto'],
+  objection_playbook: ['Objections', 'bouton', 'user'],
+  close_probability: ['Kanban (retirée le 20/10/2026)', '—', 'off'],
+  call_summary: ['Réécoutes · fiche lead', 'cron 10 min (appels transcrits) + bouton', 'mix'],
+  call_rating: ['Feedback setters', 'cron 17 h 30', 'auto'],
+  presence_check: ['Confirmation de présence', 'bouton', 'user'],
+  message_assist: ['Leads Live (DM / SMS)', 'bouton', 'user'],
+  client_risk: ['CSM · clients', 'cron 5 h 20', 'auto'],
+  session_report: ['Coaching', 'bouton', 'user'],
+  csm_diagnostic: ['Cockpit CSM', 'bouton', 'user'],
+  invoice_check: ['Facturation', 'bouton', 'user'],
+  ask_alteore: ['Demande à Alteore', 'chat admin', 'user'],
+  watchdog: ['Réglages IA', 'cron 5 h 40 + bouton', 'mix'],
+  attribution: ['Attribution marketing', 'bouton', 'user'],
+  training: ['Entraînement closer', 'chaque réplique', 'user'],
+  training_debrief: ['Entraînement closer', 'fin de session', 'user'],
+  command: ['Barre ⌘K', 'chaque commande', 'user'],
+  aide_team: ['Aide Team', 'chaque question', 'user'],
+  contract_edit: ['Atelier de contrats', 'bouton', 'user'],
+  contract_import: ['Atelier de contrats', 'bouton', 'user'],
+  coaching_plan_suggest: ['Coaching', 'bouton', 'user'],
+  coaching_plan_revise: ['Coaching', 'bouton', 'user'],
+  coaching_brief: ['Coaching', 'ouverture fiche (si séances nouvelles)', 'user'],
+  academy_path: ['Coaching → Academy', 'bouton', 'user'],
+  academy_workbook: ['Coaching → Academy', 'bouton', 'user'],
+  replay_chapters: ['Replay closing', 'import des enregistrements + bouton', 'mix']
+};
+var UNTRACKED = [
+  ['Notes vocales (Cloud Function onVoiceNoteCreated)', 'Transcription Whisper (OpenAI, facturé à part) + résumé Haiku 4.5, clé dans _config/ai_credentials — à rapatrier au prochain déploiement des Cloud Functions.']
+];
 var MODELS = [
   ['', 'Défaut'],
   ['claude-opus-5-5', 'Opus 5.5'],
   ['claude-sonnet-5-5', 'Sonnet 5.5'],
-  ['claude-haiku-4-5', 'Haiku 4.5']
+  ['claude-haiku-5-5', 'Haiku 5.5'],
+  ['claude-haiku-4-5', 'Haiku 4.5'],
+  ['claude-opus-5', 'Opus 5 (ancien)'],
+  ['claude-sonnet-4-6', 'Sonnet 4.6 (ancien)']
 ];
-var MODEL_SHORT = { 'claude-opus-5-5': 'Opus 5.5', 'claude-sonnet-5-5': 'Sonnet 5.5', 'claude-haiku-4-5': 'Haiku 4.5' };
+var MODEL_SHORT = { 'claude-opus-5-5': 'Opus 5.5', 'claude-sonnet-5-5': 'Sonnet 5.5', 'claude-haiku-5-5': 'Haiku 5.5', 'claude-haiku-4-5': 'Haiku 4.5', 'claude-opus-5': 'Opus 5', 'claude-sonnet-4-6': 'Sonnet 4.6' };
+function modelShort(m) {
+  m = String(m || '');
+  if (MODEL_SHORT[m]) return MODEL_SHORT[m];
+  for (var k in MODEL_SHORT) { if (m.indexOf(k) === 0) return MODEL_SHORT[k]; }
+  return m || '?';
+}
 var EFFORTS = ['', 'low', 'medium', 'high', 'xhigh'];
 
 var TEMPLATE = [
@@ -225,6 +379,12 @@ function $(id) { return document.getElementById(id); }
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 function eur(usd) { var r = (state.cfg && state.cfg.eurPerUsd) || 0.86; return (Number(usd) || 0) * r; }
 function fmtEur(v) { return (Math.round(v * 100) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; }
+function fmtEurFine(v) { return v > 0 && v < 0.1 ? (Math.round(v * 1000) / 1000).toLocaleString('fr-FR', { minimumFractionDigits: 3 }) + ' €' : fmtEur(v); }
+function fmtInt(n) { return Math.round(Number(n) || 0).toLocaleString('fr-FR'); }
+function fmtK(n) { n = Number(n) || 0; return n >= 1000 ? (Math.round(n / 100) / 10).toLocaleString('fr-FR') + ' k' : fmtInt(n); }
+function pctOf(a, b) { return b ? Math.round(a / b * 100) : 0; }
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* stockage indisponible */ } }
 function toast(msg, err) {
   var t = $('toast'); t.textContent = msg; t.className = 'ia-toast show' + (err ? ' err' : '');
   clearTimeout(toast._t); toast._t = setTimeout(function () { t.className = 'ia-toast' + (err ? ' err' : ''); }, 3200);
@@ -272,6 +432,7 @@ function renderCfg() {
   $('cEnabled').classList.toggle('on', c.enabled !== false);
   $('cBudget').value = c.monthlyBudgetEur;
   $('cAlert').value = c.alertPct;
+  $('cAutoStop').value = c.autoStopPct != null ? c.autoStopPct : 80;
   $('cRate').value = c.eurPerUsd;
   $('cAccount').value = c.emailAccount || 'contact';
   $('cExtra').value = (c.extraEmails || []).join(', ');
@@ -279,11 +440,15 @@ function renderCfg() {
 
 function renderTasks() {
   var d = state.defaults.tasks, over = state.cfg.tasks || {};
-  var h = '<tr><th>Tâche</th><th class="hide-m">Par défaut</th><th>Modèle</th><th>Effort</th><th>Active</th></tr>';
-  Object.keys(d).forEach(function (k) {
+  var by = (state.usage && state.usage.current && state.usage.current.byTask) || {};
+  var h = '<tr><th>Tâche</th><th class="hide-m">Par défaut</th><th class="hide-m num">Ce mois</th><th>Modèle</th><th>Effort</th><th>Active</th></tr>';
+  Object.keys(d).sort(function (a, b) { return ((by[b] && by[b].costUsd) || 0) - ((by[a] && by[a].costUsd) || 0); }).forEach(function (k) {
     var o = over[k] || {};
-    h += '<tr data-task="' + k + '"><td>' + esc(TASK_LABELS[k] || k) + '</td>';
-    h += '<td class="hide-m dflt">' + esc(MODEL_SHORT[d[k].model] || d[k].model) + (d[k].effort ? ' · ' + d[k].effort : '') + '</td>';
+    var info = TASK_INFO[k] || [];
+    var u = by[k] || {};
+    h += '<tr data-task="' + k + '"><td>' + esc(TASK_LABELS[k] || k) + (info[1] ? '<span class="tsub">' + esc(info[1]) + '</span>' : '') + '</td>';
+    h += '<td class="hide-m dflt">' + esc(modelShort(d[k].model)) + (d[k].effort ? ' · ' + d[k].effort : '') + '</td>';
+    h += '<td class="hide-m num mono">' + (u.calls ? fmtEur(eur(u.costUsd)) + '<span class="tsub">' + fmtInt(u.calls) + ' appels</span>' : '<span class="hint">—</span>') + '</td>';
     h += '<td><select class="bi" data-f="model">';
     MODELS.forEach(function (m) { h += '<option value="' + m[0] + '"' + ((o.model || '') === m[0] ? ' selected' : '') + '>' + m[1] + '</option>'; });
     h += '</select></td><td><select class="bi" data-f="effort">';
@@ -297,7 +462,7 @@ function renderRecent(list) {
   var h = '<tr><th>Quand</th><th>Tâche</th><th class="hide-m">Modèle</th><th class="hide-m">Tokens</th><th>Coût</th><th></th></tr>';
   (list || []).forEach(function (r) {
     var d = r.at ? new Date(r.at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
-    h += '<tr><td class="mono">' + d + '</td><td>' + esc(TASK_LABELS[r.task] || r.task) + '</td><td class="hide-m">' + esc(MODEL_SHORT[r.model] || r.model || '') + '</td>' +
+    h += '<tr><td class="mono">' + d + '</td><td>' + esc(TASK_LABELS[r.task] || r.task) + '</td><td class="hide-m">' + esc(modelShort(r.model)) + '</td>' +
          '<td class="hide-m mono">' + (r.tokens || 0).toLocaleString('fr-FR') + '</td><td class="mono">' + fmtEur(eur(r.costUsd)) + '</td>' +
          '<td>' + (r.ok ? '<span class="ok">✓</span>' : '<span class="ko" title="' + esc(r.error || '') + '">✕</span>') + '</td></tr>';
   });
@@ -327,7 +492,7 @@ function loadWatch() {
 function load() {
   loadWatch();
   api(API, 'GET').then(function (j) {
-    state.cfg = j.config; state.defaults = j.defaults;
+    state.cfg = j.config; state.defaults = j.defaults; state.usage = j.usage;
     renderCfg(); renderUsage(j.usage); renderTasks(); renderRecent(j.recent);
     $('ctxText').value = j.context || '';
     $('ctxText').placeholder = 'Décris Alteore ici (ou clique « Insérer le plan type »)…';
@@ -336,12 +501,199 @@ function load() {
   }).catch(function (e) { toast(e.message, true); });
 }
 
+/* ═══ ONGLET DÉPENSES ═══ */
+function kpi(label, value, sub, cls) {
+  return '<div class="sp-kpi"><div class="sp-kpi-l">' + esc(label) + '</div><div class="sp-kpi-v' + (cls ? ' ' + cls : '') + '">' + value + '</div>' + (sub ? '<div class="sp-kpi-s">' + sub + '</div>' : '') + '</div>';
+}
+
+function frDay(dk) { var p = String(dk).split('-'); return p.length === 3 ? p[2] + '/' + p[1] : dk; }
+
+function renderSpendKpis(r) {
+  var t = r.totals || {};
+  var budget = Number(state.cfg && state.cfg.monthlyBudgetEur) || 0;
+  var spent = eur(t.costUsd);
+  var h = kpi('Dépensé', fmtEur(spent), fmtInt(t.calls) + ' appels' + (r.period === 'month' && budget ? ' · ' + pctOf(spent, budget) + ' % du budget' : ''),
+    r.period === 'month' && budget ? (spent >= budget ? 'over' : (spent >= budget * (state.cfg.alertPct || 80) / 100 ? 'warn' : '')) : '');
+  if (r.projection) {
+    var pj = eur(r.projection.costUsd);
+    h += kpi('Projection fin de mois', fmtEur(pj), 'rythme ' + fmtEur(eur(r.projection.perDayUsd)) + ' / jour', budget && pj > budget ? 'over' : '');
+  } else {
+    var nd = (r.days || []).length || 1;
+    h += kpi('Moyenne par jour', fmtEur(spent / nd), 'sur ' + nd + ' jours');
+  }
+  h += kpi('Coût moyen par appel', fmtEurFine(t.calls ? spent / t.calls : 0), t.errors ? fmtInt(t.errors) + ' en erreur' : 'aucune erreur');
+  h += kpi('Part automatique', pctOf(t.autoCostUsd, t.costUsd) + ' %', fmtEur(eur(t.autoCostUsd)) + ' · crons sans personne');
+  h += kpi('Part équipe', pctOf(t.costUsd - t.autoCostUsd, t.costUsd) + ' %', fmtEur(eur(t.costUsd - t.autoCostUsd)) + ' · déclenché à la main');
+  $('spKpis').innerHTML = h;
+  $('spLabel').textContent = r.period === 'month' || r.period === 'prev' ? 'Mois ' + r.label : r.label;
+}
+
+function renderSpendChart(r) {
+  var days = r.days || [], by = r.byDay || {};
+  var max = 0;
+  days.forEach(function (dk) { var c = eur((by[dk] && by[dk].costUsd) || 0); if (c > max) max = c; });
+  var budget = Number(state.cfg && state.cfg.monthlyBudgetEur) || 0;
+  var pace = 0;
+  if (budget && (r.period === 'month' || r.period === 'prev')) {
+    var dim = r.projection ? r.projection.daysInMonth : days.length;
+    pace = budget / (dim || 30);
+  }
+  var top = Math.max(max, pace) * 1.1 || 1;
+  var today = r.period === 'prev' ? '' : days[days.length - 1];
+  var h = '<span class="sp-chart-max">' + fmtEur(top) + '</span>';
+  if (pace) h += '<div class="sp-chart-ref" style="bottom:' + (pace / top * 100) + '%"><span>rythme du budget · ' + fmtEur(pace) + ' / j</span></div>';
+  days.forEach(function (dk) {
+    var c = eur((by[dk] && by[dk].costUsd) || 0);
+    h += '<div class="sp-chart-col' + (dk === today ? ' today' : '') + '" data-day="' + esc(dk) + '"><div class="sp-chart-bar" style="height:' + (c / top * 100) + '%"></div></div>';
+  });
+  $('spChart').innerHTML = h;
+  var n = days.length;
+  $('spChartX').innerHTML = n ? '<span>' + frDay(days[0]) + '</span>' + (n > 2 ? '<span>' + frDay(days[Math.floor(n / 2)]) + '</span>' : '') + '<span>' + frDay(days[n - 1]) + (today ? ' (en cours)' : '') + '</span>' : '';
+  $('spDayHint').textContent = max ? 'pic : ' + fmtEur(max) : '';
+}
+
+function showDayTip(col, ev) {
+  var r = state.report; if (!r) return;
+  var dk = col.getAttribute('data-day');
+  var d = (r.byDay || {})[dk] || {};
+  var tip = $('chartTip');
+  tip.innerHTML = '<b>' + esc(new Date(dk + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })) + '</b><br/>' +
+    fmtEur(eur(d.costUsd || 0)) + ' · ' + fmtInt(d.calls || 0) + ' appels<br/><span class="hint">dont automatique : ' + fmtEur(eur(d.autoCostUsd || 0)) + '</span>';
+  tip.style.display = 'block';
+  var x = Math.min(ev.clientX + 14, window.innerWidth - tip.offsetWidth - 8);
+  var y = Math.max(8, ev.clientY - tip.offsetHeight - 12);
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+}
+
+function triggerPill(k, t) {
+  var info = TASK_INFO[k] || [];
+  if (info[2] === 'off') return '<span class="pill off">retirée</span>';
+  var over = (state.cfg && state.cfg.tasks && state.cfg.tasks[k]) || {};
+  if (over.enabled === false) return '<span class="pill off">désactivée</span>';
+  var a = pctOf(t.autoCalls, t.calls);
+  if (a >= 80) return '<span class="pill auto">auto ' + a + ' %</span>';
+  if (a <= 20) return '<span class="pill user">équipe ' + (100 - a) + ' %</span>';
+  return '<span class="pill">auto ' + a + ' % · équipe ' + (100 - a) + ' %</span>';
+}
+
+function renderSpendTasks(r) {
+  var by = r.byTask || {}, total = (r.totals && r.totals.costUsd) || 0;
+  var keys = Object.keys(by).sort(function (a, b) { return by[b].costUsd - by[a].costUsd; });
+  var h = '<tr><th>Fonctionnalité</th><th>Déclenchement</th><th class="num">Appels</th><th class="num">Coût</th><th class="num hide-m">€ / appel</th>' +
+    '<th class="num hide-m">Tokens moyens<span class="tsub">entrée · sortie · cache lu</span></th><th class="hide-m">Modèle</th><th class="hide-m">Qui</th><th></th></tr>';
+  keys.forEach(function (k) {
+    var t = by[k], info = TASK_INFO[k] || [];
+    var share = pctOf(t.costUsd, total);
+    var models = Object.keys(t.models || {}).sort(function (a, b) { return t.models[b] - t.models[a]; }).map(modelShort);
+    var n = t.calls || 1;
+    h += '<tr><td>' + esc(TASK_LABELS[k] || k) + '<span class="tsub">' + esc(info[0] || '') + '</span></td>' +
+      '<td>' + triggerPill(k, t) + (info[1] ? '<span class="tsub">' + esc(info[1]) + '</span>' : '') + '</td>' +
+      '<td class="num mono">' + fmtInt(t.calls) + (t.errors ? '<span class="tsub ko" title="' + esc(t.lastError || '') + '">' + fmtInt(t.errors) + ' erreurs</span>' : '') + '</td>' +
+      '<td class="num mono"><b>' + fmtEur(eur(t.costUsd)) + '</b><span class="tsub">' + share + ' %</span><span class="bar-in"><i style="width:' + share + '%"></i></span></td>' +
+      '<td class="num mono hide-m">' + fmtEurFine(eur(t.costUsd) / n) + '</td>' +
+      '<td class="num mono hide-m">' + fmtK(t.inTok / n) + ' · ' + fmtK(t.outTok / n) + ' · ' + fmtK(t.cacheRead / n) + '</td>' +
+      '<td class="hide-m">' + esc(models.join(', ')) + '</td>' +
+      '<td class="hide-m">' + ((t.users || []).length ? esc(t.users.slice(0, 3).map(function (u) { return u.name + ' (' + u.calls + ')'; }).join(', ')) : '<span class="hint">crons</span>') + '</td>' +
+      '<td>' + (state.defaults && state.defaults.tasks && state.defaults.tasks[k] ? '<button class="lnk" data-action="gotoTask" data-task="' + esc(k) + '">Régler</button>' : '') + '</td></tr>';
+  });
+  if (!keys.length) h += '<tr><td colspan="9" class="hint">Aucun appel IA sur la période.</td></tr>';
+  $('spTasks').innerHTML = h;
+}
+
+function renderSpendUsers(r) {
+  var by = r.byUser || {}, total = (r.totals && r.totals.costUsd) || 0;
+  var keys = Object.keys(by).sort(function (a, b) { return by[b].costUsd - by[a].costUsd; });
+  var h = '<tr><th>Qui</th><th class="num">Appels</th><th class="num">Coût</th><th class="hide-m">Surtout</th></tr>';
+  keys.forEach(function (k) {
+    var u = by[k];
+    var tops = Object.keys(u.tasks || {}).sort(function (a, b) { return u.tasks[b].costUsd - u.tasks[a].costUsd; }).slice(0, 2)
+      .map(function (tk) { return (TASK_LABELS[tk] || tk) + ' ' + fmtEur(eur(u.tasks[tk].costUsd)); });
+    h += '<tr><td>' + esc(u.name) + (u.role ? '<span class="tsub">' + esc(u.role) + '</span>' : '') + '</td><td class="num mono">' + fmtInt(u.calls) + '</td>' +
+      '<td class="num mono"><b>' + fmtEur(eur(u.costUsd)) + '</b><span class="tsub">' + pctOf(u.costUsd, total) + ' %</span></td><td class="hide-m hint">' + esc(tops.join(' · ')) + '</td></tr>';
+  });
+  if (!keys.length) h += '<tr><td colspan="4" class="hint">—</td></tr>';
+  $('spUsers').innerHTML = h;
+}
+
+function renderSpendModels(r) {
+  var by = r.byModel || {}, total = (r.totals && r.totals.costUsd) || 0;
+  var keys = Object.keys(by).sort(function (a, b) { return by[b].costUsd - by[a].costUsd; });
+  $('spModels').innerHTML = keys.map(function (k) {
+    return '<div class="kv"><span>' + esc(modelShort(k)) + ' <span class="hint">· ' + fmtInt(by[k].calls) + ' appels</span></span><b>' + fmtEur(eur(by[k].costUsd)) + ' <span class="hint">' + pctOf(by[k].costUsd, total) + ' %</span></b></div>';
+  }).join('') || '<div class="hint">—</div>';
+  var pr = r.pricing || {};
+  $('spPricing').textContent = Object.keys(pr).map(function (k) { return modelShort(k) + ' ' + pr[k].inp + ' / ' + pr[k].out; }).join(' · ');
+  $('spUntracked').innerHTML = UNTRACKED.map(function (u) { return '<div class="kv"><span><b>' + esc(u[0]) + '</b><span class="tsub">' + esc(u[1]) + '</span></span></div>'; }).join('');
+}
+
+/* Pistes calculées sur la période affichée — des suggestions, rien n'est
+   appliqué automatiquement. */
+function renderSpendTips(r) {
+  var by = r.byTask || {}, total = (r.totals && r.totals.costUsd) || 0;
+  var tips = [];
+  var budget = Number(state.cfg && state.cfg.monthlyBudgetEur) || 0;
+  if (r.projection && budget) {
+    var pj = eur(r.projection.costUsd), perDay = eur(r.projection.perDayUsd), spent = eur(r.totals.costUsd);
+    if (pj > budget && perDay > 0) {
+      var left = (budget - spent) / perDay;
+      var dt = new Date(Date.now() + Math.max(0, left) * 86400000);
+      tips.push('🚨 À ce rythme (' + fmtEur(perDay) + ' / jour), le budget de ' + budget + ' € sera atteint vers le <b>' + dt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) + '</b> — projection ' + fmtEur(pj) + '.');
+    }
+  }
+  Object.keys(by).sort(function (a, b) { return by[b].costUsd - by[a].costUsd; }).forEach(function (k) {
+    var t = by[k], lab = '<b>' + esc(TASK_LABELS[k] || k) + '</b>';
+    var c = eur(t.costUsd), per = c / (t.calls || 1), share = pctOf(t.costUsd, total);
+    var models = Object.keys(t.models || {}).join(' ');
+    var info = TASK_INFO[k] || [];
+    if (info[2] === 'off') return;
+    if (share >= 10 && pctOf(t.autoCalls, t.calls) >= 70) tips.push('⏱️ ' + lab + ' : ' + share + ' % de la dépense, surtout en automatique (' + fmtInt(t.autoCalls) + ' appels sans personne). Espacer le cron ou la désactiver si personne ne s\'en sert.');
+    if (/haiku-4-5/.test(models) && c >= 0.5) tips.push('🪶 ' + lab + ' tourne sur Haiku 4.5 (' + fmtEur(c) + ') : Haiku 5.5 est ~10 fois moins cher par token. À tester sur quelques résultats avant de le garder.');
+    if (/opus/.test(models) && per >= 0.08 && t.calls >= 3) tips.push('💎 ' + lab + ' coûte ' + fmtEurFine(per) + ' par appel sur Opus : Sonnet 5.5 est 2 fois moins cher, souvent suffisant pour une analyse simple.');
+    if (t.calls >= 5 && t.errors / t.calls >= 0.2) tips.push('⚠️ ' + lab + ' échoue souvent (' + t.errors + ' / ' + t.calls + ')' + (t.lastError ? ' — dernier message : « ' + esc(t.lastError) + ' »' : '') + '.');
+  });
+  $('spTips').innerHTML = tips.length ? tips.slice(0, 8).map(function (x) { return '<div class="tip-l">' + x + '</div>'; }).join('') : '<div class="hint">✅ Rien de notable sur la période.</div>';
+}
+
+function loadSpend() {
+  $('spKpis').innerHTML = '<div class="sp-kpi"><div class="sp-kpi-l">Chargement…</div></div>';
+  api(API + '?report=' + encodeURIComponent(state.period), 'GET').then(function (r) {
+    state.report = r;
+    renderSpendKpis(r); renderSpendChart(r); renderSpendTips(r);
+    renderSpendTasks(r); renderSpendUsers(r); renderSpendModels(r);
+  }).catch(function (e) { $('spKpis').innerHTML = '<div class="sp-kpi"><div class="sp-kpi-l">⚠️ ' + esc(e.message) + '</div></div>'; });
+}
+
+function setTab(tab) {
+  var tabs = document.querySelectorAll('.ia-tab');
+  for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('on', tabs[i].getAttribute('data-tab') === tab);
+  $('tab-spend').style.display = tab === 'spend' ? '' : 'none';
+  $('tab-settings').style.display = tab === 'settings' ? '' : 'none';
+  lsSet('ambitio_ia_tab', tab);
+}
+
 /* ═══ ACTIONS ═══ */
 document.addEventListener('click', function (e) {
   var t = e.target.closest ? e.target.closest('[data-action]') : null;
   if (!t) return;
   var a = t.getAttribute('data-action');
   if (a === 'toggle') { t.classList.toggle('on'); return; }
+  if (a === 'tab') { setTab(t.getAttribute('data-tab')); return; }
+  if (a === 'period') {
+    state.period = t.getAttribute('data-p');
+    var bs = document.querySelectorAll('#spPeriod button');
+    for (var bi = 0; bi < bs.length; bi++) bs[bi].classList.toggle('on', bs[bi] === t);
+    loadSpend(); return;
+  }
+  if (a === 'spReload') { loadSpend(); return; }
+  if (a === 'gotoTask') {
+    setTab('settings');
+    var row = document.querySelector('#tasksTable tr[data-task="' + t.getAttribute('data-task') + '"]');
+    if (row) {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      row.classList.add('flash'); setTimeout(function () { row.classList.remove('flash'); }, 1800);
+    }
+    return;
+  }
   if (a === 'template') {
     var ta = $('ctxText');
     if (ta.value.trim() && !confirm('Ajouter le plan type à la fin du texte actuel ?')) return;
@@ -354,6 +706,7 @@ document.addEventListener('click', function (e) {
       enabled: $('cEnabled').classList.contains('on'),
       monthlyBudgetEur: Number($('cBudget').value),
       alertPct: Number($('cAlert').value),
+      autoStopPct: Number($('cAutoStop').value),
       eurPerUsd: Number($('cRate').value),
       emailAccount: $('cAccount').value,
       extraEmails: $('cExtra').value.split(',')
@@ -383,7 +736,7 @@ document.addEventListener('click', function (e) {
     }
     t.disabled = true;
     api(API, 'POST', { config: { tasks: tasks } })
-      .then(function () { toast('Modèles enregistrés'); load(); })
+      .then(function () { toast('Modèles enregistrés'); load(); loadSpend(); })
       .catch(function (er) { toast(er.message, true); })
       .then(function () { t.disabled = false; });
     return;
@@ -407,6 +760,10 @@ document.addEventListener('click', function (e) {
   }
 });
 document.addEventListener('input', function (e) { if (e.target && e.target.id === 'ctxText') renderCtxLen(); });
+document.addEventListener('mousemove', function (e) {
+  var col = e.target.closest ? e.target.closest('.sp-chart-col') : null;
+  if (col) showDayTip(col, e); else $('chartTip').style.display = 'none';
+});
 
 /* ═══ BOOT ═══ */
 firebase.auth().onAuthStateChanged(function (u) {
@@ -414,7 +771,9 @@ firebase.auth().onAuthStateChanged(function (u) {
   var role = localStorage.getItem('ambitio_role') || 'coach';
   if (role !== 'admin') { $('lockedView').style.display = ''; return; }
   $('mainView').style.display = '';
+  setTab(lsGet('ambitio_ia_tab') === 'settings' ? 'settings' : 'spend');
   load();
+  loadSpend();
 });
 })();
 </script>

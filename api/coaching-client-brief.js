@@ -23,6 +23,7 @@
 // ============================================================================
 
 const { requireAuth } = require('./_verifyFirebaseAuth');
+const { callClaude, humanError } = require('./_ai');
 const { admin, db } = require('./_firebaseAdmin');
 
 const ROLES = ['admin', 'coach', 'csm'];
@@ -110,23 +111,12 @@ function buildPrompt(c) {
   return L.join('\n');
 }
 
-async function askClaude(prompt) {
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 700,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-  const j = await r.json().catch(function () { return null; });
-  if (!j || !Array.isArray(j.content)) return '';
-  return j.content.filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text; }).join('\n').trim();
+// Passe par le socle IA (api/_ai.js) depuis le 20/10/2026 : appel compté dans
+// Réglages IA, soumis au budget, modèle réglable (tâche coaching_brief).
+async function askClaude(prompt, uid, ref) {
+  const r = await callClaude({ task: 'coaching_brief', prompt: prompt, noContext: true, uid: uid || null, source: 'page:coaching', ref: ref || null });
+  if (!r.ok && /^ai_(budget|disabled|task)/.test(r.error)) return { blocked: r.error, text: '', model: null };
+  return { text: r.ok ? r.text : '', model: r.model || null };
 }
 
 // ---------------------------------------------------------------------------
@@ -184,7 +174,9 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const text = await askClaude(buildPrompt(c));
+    const ai = await askClaude(buildPrompt(c), auth.uid, 'client:' + clientId);
+    if (ai.blocked) { res.status(200).json({ ok: false, error: ai.blocked, message: humanError(ai.blocked) }); return; }
+    const text = ai.text;
     if (!text) {
       res.status(200).json({ ok: false, error: 'ia_empty_response' });
       return;
@@ -194,7 +186,7 @@ module.exports = async (req, res) => {
       text: cap(text, 4000),
       key: key,
       generatedAt: Date.now(),
-      model: MODEL,
+      model: ai.model || MODEL,
       sessionsCount: done.length,
     };
 

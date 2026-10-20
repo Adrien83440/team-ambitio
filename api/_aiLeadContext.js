@@ -38,6 +38,17 @@ function aiLeadKey(l) {
     String(l.status || '') + ':' + String(l.stage || '') + ':' + (l.quiz ? 1 : 0);
 }
 
+// Le score est-il encore à jour ? Depuis le 20/10/2026, un nouvel échange
+// (SMS, appel, WhatsApp) ne suffit plus à le recalculer : seuls une note, un
+// changement de statut / d'étape ou un quiz le font (le score lead pesait
+// 39 % de la facture IA). Le 1er segment de la clé (nb d'échanges) est donc
+// ignoré ; le format de la clé ne change pas, les scores existants restent
+// valides. Copie STRICTEMENT identique dans sales-leads.html et sales-dialer.js.
+function aiLeadFresh(aiLead, l) {
+  if (!aiLead || !aiLead.key) return false;
+  return String(aiLead.key).split(':').slice(1).join(':') === aiLeadKey(l).split(':').slice(1).join(':');
+}
+
 function speechesText(sp) {
   if (!Array.isArray(sp) || !sp.length) return '';
   return sp.slice().sort(function (a, b) { return (Number(a.start) || 0) - (Number(b.start) || 0); })
@@ -255,4 +266,4 @@ function situationText(b) {
   return L.length ? L.join('\n') : '- Aucun événement récent particulier.';
 }
 
-module.exports = { loadLeadBundle: loadLeadBundle, bundleToText: bundleToText, aiLeadKey: aiLeadKey, callTranscript: callTranscript, situationText: situationText };
+module.exports = { loadLeadBundle: loadLeadBundle, bundleToText: bundleToText, aiLeadKey: aiLeadKey, aiLeadFresh: aiLeadFresh, callTranscript: callTranscript, situationText: situationText };

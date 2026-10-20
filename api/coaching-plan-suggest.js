@@ -39,6 +39,7 @@
 // ============================================================================
 
 const { requireAuth } = require('./_verifyFirebaseAuth');
+const { callClaude, humanError } = require('./_ai');
 const { admin, db } = require('./_firebaseAdmin');
 
 const ROLES = ['admin', 'coach', 'csm'];
@@ -475,43 +476,24 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        /* Opus 5 réfléchit par défaut : max_tokens couvre réflexion + réponse,
-           d'où la marge très au-dessus de la taille du JSON attendu. */
-        max_tokens: 24000,
-        output_config: { effort: 'high' },
-        /* Le plan de l'assistant est passé au prompt : c'est lui qui porte les
-           consignes que le modèle doit respecter. */
-        messages: [{ role: 'user', content: buildPrompt(
+    /* Passe par le socle IA (api/_ai.js) depuis le 20/10/2026 : appel compté
+       dans Réglages IA, soumis au budget, modèle réglable (tâche coaching_plan_suggest,
+       Opus 5 effort high, 24 000 tokens réflexion comprise). */
+    const r = await callClaude({
+      task: 'coaching_plan_suggest', noContext: true, uid: auth.uid, source: 'page:coaching', ref: 'client:' + clientId,
+      prompt: buildPrompt(
           planCourant ? Object.assign({}, client, { planV2: planCourant }) : client,
-          qSafe, notes) }],
-      }),
+          qSafe, notes),
     });
-
     if (!r.ok) {
-      const t = await r.text().catch(() => '');
-      console.error('[coaching-plan-suggest] anthropic', r.status, t.slice(0, 300));
+      if (r.error === 'ai_refusal') { res.status(200).json({ ok: false, error: 'ai_refused' }); return; }
+      if (/^ai_(budget|disabled|task)/.test(r.error)) { res.status(200).json({ ok: false, error: r.error, message: humanError(r.error) }); return; }
+      console.error('[coaching-plan-suggest] anthropic', String(r.error || '').slice(0, 300));
       res.status(200).json({ ok: false, error: 'ai_unavailable' });
       return;
     }
 
-    const j = await r.json();
-    /* Un refus des garde-fous revient en HTTP 200 avec un contenu vide :
-       sans ce test, on lirait du vide et on croirait à une panne. */
-    if (j.stop_reason === 'refusal') {
-      console.warn('[coaching-plan-suggest] refus', JSON.stringify(j.stop_details || {}).slice(0, 200));
-      res.status(200).json({ ok: false, error: 'ai_refused' });
-      return;
-    }
-    const txt = ((j.content || []).find((c) => c.type === 'text') || {}).text || '';
+    const txt = r.text || '';
     const suggestion = sanitize(parseJson(txt));
     if (!suggestion || (!suggestion.pointA && !suggestion.verrou)) {
       console.warn('[coaching-plan-suggest] réponse inexploitable:', txt.slice(0, 200));
@@ -526,7 +508,7 @@ module.exports = async (req, res) => {
         planSuggestion: {
           data: suggestion,
           key,
-          model: MODEL,
+          model: r.model || MODEL,
           generatedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
       });
@@ -534,7 +516,7 @@ module.exports = async (req, res) => {
       console.warn('[coaching-plan-suggest] cache:', e && e.message);
     }
 
-    res.status(200).json({ ok: true, suggestion, cached: false, model: MODEL });
+    res.status(200).json({ ok: true, suggestion, cached: false, model: r.model || MODEL });
   } catch (e) {
     console.error('[coaching-plan-suggest]', e && e.message);
     res.status(500).json({ ok: false, error: 'server_error' });

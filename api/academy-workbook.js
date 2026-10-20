@@ -37,11 +37,12 @@
 // ============================================================================
 
 const { requireAuth } = require('./_verifyFirebaseAuth');
+const { callClaude, humanError } = require('./_ai');
 const { admin, db } = require('./_firebaseAdmin');
 
 const ACADEMY_URL = (process.env.ACADEMY_BRIDGE_URL || 'https://academy.adrienemily.com').replace(/\/$/, '');
 const ROLES = ['admin', 'coach', 'csm'];
-const MODEL = 'claude-sonnet-4-6';
+// Modèle : tâche academy_workbook de api/_ai.js (Sonnet 4.6 par défaut).
 
 // ---------------------------------------------------------------------------
 //  Fiche coaching → contexte pour l'IA (même lecture que le copilote)
@@ -114,23 +115,12 @@ async function fetchDossier(email, key) {
   return j;
 }
 
-async function askClaude(prompt) {
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 4500,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-  const j = await r.json().catch(function () { return null; });
-  if (!j || !Array.isArray(j.content)) return '';
-  return j.content.filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text; }).join('\n');
+// Passe par le socle IA (api/_ai.js) depuis le 20/10/2026 : appel compté dans
+// Réglages IA, soumis au budget, modèle réglable (tâche academy_workbook).
+async function askClaude(prompt, uid, ref) {
+  const r = await callClaude({ task: 'academy_workbook', prompt: prompt, noContext: true, uid: uid || null, source: 'page:coaching', ref: ref || null });
+  if (!r.ok && /^ai_(budget|disabled|task)/.test(r.error)) return { blocked: r.error, text: '', model: null };
+  return { text: r.ok ? r.text : '', model: r.model || null };
 }
 
 function parseJson(text) {
@@ -298,7 +288,9 @@ module.exports = async (req, res) => {
 
       // 4) L'IA rédige.
       const prompt = buildPrompt(ctxJ.courseName || '', subject, coachingContext(client), winsTxt);
-      const raw = await askClaude(prompt);
+      const ai = await askClaude(prompt, auth.uid, 'client:' + clientId);
+      if (ai.blocked) { res.status(200).json({ ok: false, error: ai.blocked, message: humanError(ai.blocked) }); return; }
+      const raw = ai.text;
       const parsed = parseJson(raw);
       if (!parsed || !Array.isArray(parsed.sections) || parsed.sections.length === 0) {
         res.status(200).json({ ok: false, error: 'ia_invalid_response' });

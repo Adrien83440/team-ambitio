@@ -31,6 +31,11 @@ const API_URL = 'https://api.anthropic.com/v1/messages';
 const OPUS  = 'claude-opus-5-5';
 const HAIKU = 'claude-haiku-4-5';
 const SONNET = 'claude-sonnet-5-5';
+// Modèles hérités des fonctions coaching / Academy / replay, rapatriées dans
+// le socle le 20/10/2026 sans changer de modèle (réglable dans Réglages IA).
+const OPUS5    = 'claude-opus-5';
+const SONNET46 = 'claude-sonnet-4-6';
+const HAIKU55  = 'claude-haiku-5-5';
 
 // Tarifs en $ par million de tokens (entrée / sortie). Lecture de cache =
 // 10 % du tarif d'entrée, écriture de cache (TTL 5 min) = 125 %.
@@ -38,7 +43,19 @@ const PRICING = {
   'claude-opus-5-5':   { inp: 4, out: 20 },
   'claude-sonnet-5-5': { inp: 2, out: 10 },
   'claude-haiku-4-5':  { inp: 1, out: 5 },
+  'claude-haiku-5-5':  { inp: 0.1, out: 0.5 },
+  'claude-opus-5':     { inp: 5, out: 25 },
+  'claude-sonnet-4-6': { inp: 3, out: 15 },
 };
+
+// Le modèle servi revient parfois daté (claude-haiku-4-5-20251001) : on
+// retombe sur le tarif du modèle de base.
+function priceOf(model) {
+  const m = String(model || '');
+  if (PRICING[m]) return PRICING[m];
+  const k = Object.keys(PRICING).filter(function (x) { return m.indexOf(x) === 0; }).sort(function (a, b) { return b.length - a.length; })[0];
+  return k ? PRICING[k] : PRICING[OPUS];
+}
 
 // Modèle par tâche. Opus pour ce qui rapporte (closing, chat, prépa, synthèse),
 // Haiku pour le volume (score de lead, résumés, notation d'appels).
@@ -46,11 +63,11 @@ const PRICING = {
 const DEFAULT_TASKS = {
   lead_score:       { model: HAIKU, maxTokens: 1500 },
   morning_brief:    { model: OPUS,  effort: 'medium', maxTokens: 6000 },
-  closing_prep:     { model: OPUS,  effort: 'medium', maxTokens: 6000 },
-  closing_analysis: { model: OPUS,  effort: 'medium', maxTokens: 8000 },
+  // Sonnet depuis le 20/10/2026 (validé Adrien : une analyse simple suffit).
+  closing_prep:     { model: SONNET, effort: 'medium', maxTokens: 6000 },
+  closing_analysis: { model: SONNET, effort: 'medium', maxTokens: 8000 },
   closing_followup: { model: OPUS,  effort: 'medium', maxTokens: 3000 },
   objection_playbook: { model: OPUS, effort: 'medium', maxTokens: 4000 },
-  close_probability:{ model: HAIKU, maxTokens: 800 },
   call_summary:     { model: HAIKU, maxTokens: 2000 },
   call_rating:      { model: HAIKU, maxTokens: 2000 },
   // Confirmation de présence au RDV (api/rdv-presence.js, 16/10/2026).
@@ -73,12 +90,24 @@ const DEFAULT_TASKS = {
   // Aide Team (aide-widget.js) : questions techniques des setters / closers.
   // Sonnet effort bas : réponse rapide à partir des fiches (validé 14/10/2026).
   aide_team:        { model: SONNET, effort: 'low',   maxTokens: 3000 },
+  // Rapatriées dans le socle le 20/10/2026 (avant : appels directs, ni
+  // comptés ni bridés). Modèles et plafonds inchangés.
+  coaching_plan_suggest: { model: OPUS5,    effort: 'high', maxTokens: 24000 },
+  coaching_plan_revise:  { model: OPUS5,    effort: 'high', maxTokens: 24000 },
+  coaching_brief:        { model: HAIKU,    maxTokens: 700 },
+  academy_path:          { model: SONNET46, maxTokens: 2500 },
+  academy_workbook:      { model: SONNET46, maxTokens: 4500 },
+  replay_chapters:       { model: OPUS5,    effort: 'medium', maxTokens: 16000 },
 };
 
 const DEFAULT_CONFIG = {
   enabled: true,
   monthlyBudgetEur: 50,
   alertPct: 80,
+  // Au-delà de ce % du budget, les tâches AUTOMATIQUES (crons, sans uid) se
+  // mettent en pause ; celles qu'une personne déclenche continuent jusqu'à
+  // 100 %. 100 = pas de pause anticipée.
+  autoStopPct: 80,
   eurPerUsd: 0.86,   // taux de conversion indicatif, modifiable dans _config/ai
   tasks: {},
 };
@@ -142,7 +171,7 @@ async function getMonthUsage(key) {
 function usdToEur(cfg, usd) { return (Number(usd) || 0) * (Number(cfg.eurPerUsd) || DEFAULT_CONFIG.eurPerUsd); }
 
 function costUsd(model, usage) {
-  const p = PRICING[model] || PRICING[OPUS];
+  const p = priceOf(model);
   const u = usage || {};
   const inp   = Number(u.input_tokens) || 0;
   const out   = Number(u.output_tokens) || 0;
@@ -163,7 +192,8 @@ async function maybeSendBudgetAlert(cfg, key, month) {
       '⚠️ IA Alteore — ' + Math.round(spentEur * 100) / 100 + ' € consommés sur ' + budget + ' €',
       '<p>Le budget IA du mois <b>' + key + '</b> a atteint <b>' + Math.round(spentEur / budget * 100) + ' %</b> ' +
       '(' + (Math.round(spentEur * 100) / 100) + ' € sur ' + budget + ' €).</p>' +
-      '<p>Au-delà du plafond, les fonctionnalités IA se mettent en pause jusqu\'au mois suivant. ' +
+      '<p>À ' + (Number(cfg.autoStopPct) || 80) + ' % du budget, les tâches IA automatiques se mettent en pause ; ' +
+      'au-delà du plafond, toutes les fonctionnalités IA s\'arrêtent jusqu\'au mois suivant. ' +
       'Le plafond se règle dans <a href="https://team.alteore.com/admin-ia.html">Réglages IA</a>.</p>'
     );
   } catch (e) { console.warn('[_ai] alerte budget non envoyée', e.message); }
@@ -188,6 +218,8 @@ async function maybeSendBudgetAlert(cfg, key, month) {
  *                                 fiches…) mises en cache côté Anthropic
  * @param {string} [o.uid]         utilisateur à l'origine (traçabilité)
  * @param {string} [o.ref]         référence métier (leadId, clientId…)
+ * @param {string} [o.source]      origine affichée dans Réglages IA (défaut :
+ *                                 'user' si uid, sinon 'auto' = cron)
  * @returns {Promise<{ok, text, json, content, stopReason, costUsd, error}>}
  */
 async function callClaude(o) {
@@ -202,7 +234,13 @@ async function callClaude(o) {
   const key = monthKey();
   const month = await getMonthUsage(key);
   const budget = Number(cfg.monthlyBudgetEur) || 0;
-  if (budget && usdToEur(cfg, month.costUsd) >= budget) return { ok: false, error: 'ai_budget_exceeded' };
+  const spentEur = usdToEur(cfg, month.costUsd);
+  if (budget && spentEur >= budget) return { ok: false, error: 'ai_budget_exceeded' };
+  // Appel sans uid = tâche automatique (cron) : coupée plus tôt pour garder
+  // la fin du budget aux demandes faites par l'équipe.
+  const auto = !o.uid;
+  const autoStop = Number(cfg.autoStopPct) || DEFAULT_CONFIG.autoStopPct;
+  if (budget && auto && autoStop < 100 && spentEur >= budget * autoStop / 100) return { ok: false, error: 'ai_budget_auto_paused' };
 
   const st = taskSettings(cfg, task);
   const model = st.model;
@@ -273,6 +311,7 @@ async function callClaude(o) {
         costUsd: cost,
         uid: o.uid || null,
         ref: o.ref || null,
+        source: o.source || (auto ? 'auto' : 'user'),
         month: key,
         at: Date.now(),
       }),
@@ -347,6 +386,7 @@ function humanError(code) {
     case 'ai_disabled': return 'IA désactivée dans les réglages';
     case 'ai_task_disabled': return 'Cette fonction IA est désactivée';
     case 'ai_budget_exceeded': return 'Budget IA du mois atteint';
+    case 'ai_budget_auto_paused': return 'Tâches IA automatiques en pause (budget du mois presque atteint)';
     case 'anthropic_not_configured': return 'Clé Anthropic absente';
     case 'ai_refusal': return 'L\'IA a décliné cette demande';
     default: return 'Erreur IA : ' + code;
@@ -370,4 +410,5 @@ module.exports = {
   OPUS: OPUS,
   HAIKU: HAIKU,
   SONNET: SONNET,
+  PRICING: PRICING,
 };

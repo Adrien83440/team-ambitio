@@ -32,6 +32,7 @@
 // ============================================================================
 
 const { requireAuth } = require('./_verifyFirebaseAuth');
+const { callClaude, humanError } = require('./_ai');
 const { db } = require('./_firebaseAdmin');
 
 const ROLES = ['admin', 'coach', 'csm'];
@@ -420,37 +421,22 @@ module.exports = async (req, res) => {
       Object.keys(plan.collecte || {}).map((k) => String(plan.collecte[k] || '')).join('\n'),
     ].filter((x) => x.trim()).join('\n\n');
 
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        /* Opus 5 réfléchit par défaut : max_tokens couvre réflexion + réponse. */
-        max_tokens: 24000,
-        output_config: { effort: 'high' },
-        messages: [{ role: 'user', content: buildPrompt(plan, instructions, contexte) }],
-      }),
+    /* Passe par le socle IA (api/_ai.js) depuis le 20/10/2026 : appel compté
+       dans Réglages IA, soumis au budget, modèle réglable (tâche coaching_plan_revise,
+       Opus 5 effort high, 24 000 tokens réflexion comprise). */
+    const r = await callClaude({
+      task: 'coaching_plan_revise', noContext: true, uid: auth.uid, source: 'page:coaching', ref: 'client:' + clientId,
+      prompt: buildPrompt(plan, instructions, contexte),
     });
-
     if (!r.ok) {
-      const t = await r.text().catch(() => '');
-      console.error('[coaching-plan-revise] anthropic', r.status, t.slice(0, 300));
+      if (r.error === 'ai_refusal') { res.status(200).json({ ok: false, error: 'ai_refused' }); return; }
+      if (/^ai_(budget|disabled|task)/.test(r.error)) { res.status(200).json({ ok: false, error: r.error, message: humanError(r.error) }); return; }
+      console.error('[coaching-plan-revise] anthropic', String(r.error || '').slice(0, 300));
       res.status(200).json({ ok: false, error: 'ai_unavailable' });
       return;
     }
 
-    const j = await r.json();
-    if (j.stop_reason === 'refusal') {
-      console.warn('[coaching-plan-revise] refus', JSON.stringify(j.stop_details || {}).slice(0, 200));
-      res.status(200).json({ ok: false, error: 'ai_refused' });
-      return;
-    }
-
-    const txt = ((j.content || []).find((c) => c.type === 'text') || {}).text || '';
+    const txt = r.text || '';
     const s = sanitize(parseJson(txt));
     if (!s) {
       console.warn('[coaching-plan-revise] réponse inexploitable:', txt.slice(0, 200));
@@ -462,7 +448,7 @@ module.exports = async (req, res) => {
       ok: true,
       plan: merge(plan, s),
       resume: s.resume || 'Plan mis à jour.',
-      model: MODEL,
+      model: r.model || MODEL,
     });
   } catch (e) {
     console.error('[coaching-plan-revise]', e && e.message);

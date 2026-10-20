@@ -648,13 +648,18 @@
 
   // ─── Brief IA pré-appel (programme IA 10/2026) ──────────────────────────
   // leads.aiLead { proba, niveau, raison, angle, ouverture, brief[3], key }
-  // écrit par api/ai-lead.js. aiLeadKey() doit rester STRICTEMENT identique
-  // à api/_aiLeadContext.js (le score est recalculé quand la fiche bouge).
+  // écrit par api/ai-lead.js. aiLeadKey() et aiLeadFresh() doivent rester
+  // STRICTEMENT identiques à api/_aiLeadContext.js (le score est recalculé
+  // sur note / statut / étape, plus à chaque échange depuis le 20/10/2026).
   const aiState = { pendingFor: null, error: null };
   function aiLeadKey(l) {
     l = l || {};
     return (l.communications || []).length + ':' + (l.notesHistory || []).length + ':' +
       String(l.status || '') + ':' + String(l.stage || '') + ':' + (l.quiz ? 1 : 0);
+  }
+  function aiLeadFresh(a, l) {
+    if (!a || !a.key) return false;
+    return String(a.key).split(':').slice(1).join(':') === aiLeadKey(l).split(':').slice(1).join(':');
   }
   function aiEsc(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -707,7 +712,7 @@
   function ensureAi() {
     const L = activeLeadData;
     if (!L || !activeLeadId || L._merged) return;
-    if (L.aiLead && L.aiLead.key === aiLeadKey(L)) return;
+    if (aiLeadFresh(L.aiLead, L)) return;
     requestAi(false);
   }
 

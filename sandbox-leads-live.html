@@ -4674,14 +4674,20 @@ function l2LastActivity(l) {
 /* ═══ IA : score de probabilité de RDV + brief pré-appel (programme IA 10/2026) ═══
    Champ leads.aiLead { proba, niveau, raison, angle, ouverture, brief[3], key,
    generatedAt } écrit par api/ai-lead.js (Haiku). Calculé à l'arrivée par le
-   cron (≤ 10 min) et recalculé à l'ouverture de la fiche quand elle a bougé.
-   aiLeadKey() doit rester STRICTEMENT identique à api/_aiLeadContext.js. */
+   cron (≤ 10 min) et recalculé à l'ouverture de la fiche quand elle a bougé
+   (note, statut, étape — un nouvel échange ne suffit plus depuis le 20/10/2026).
+   aiLeadKey() et aiLeadFresh() doivent rester STRICTEMENT identiques à
+   api/_aiLeadContext.js. */
 var l2AiPending = {};
 var l2AiErr = {};
 function aiLeadKey(l) {
   l = l || {};
   return (l.communications || []).length + ':' + (l.notesHistory || []).length + ':' +
     String(l.status || '') + ':' + String(l.stage || '') + ':' + (l.quiz ? 1 : 0);
+}
+function aiLeadFresh(a, l) {
+  if (!a || !a.key) return false;
+  return String(a.key).split(':').slice(1).join(':') === aiLeadKey(l).split(':').slice(1).join(':');
 }
 function l2AiLevelCls(n) { return n === 'chaud' ? 'chaud' : (n === 'tiède' ? 'tiede' : 'froid'); }
 function l2AiBadgeHTML(l) {
@@ -4822,7 +4828,7 @@ function l2AiRepaint(id) {
 }
 function l2AiEnsure(l) {
   if (!l || !l.id || l._merged) return;
-  if (l.aiLead && l.aiLead.key === aiLeadKey(l)) return;
+  if (aiLeadFresh(l.aiLead, l)) return;
   if (l2AiErr[l.id]) return; // pas de boucle sur erreur : ↻ pour réessayer
   l2AiRequest(l.id, false);
 }

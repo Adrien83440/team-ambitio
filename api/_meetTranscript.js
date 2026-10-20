@@ -52,6 +52,7 @@
 
 const { google } = require('googleapis');
 const { admin, db } = require('./_firebaseAdmin');
+const AI = require('./_ai');
 
 const CFG_PATH = '_config/replay_closing';
 const DEFAULT_TOKEN = 'meet_closing';
@@ -60,7 +61,6 @@ const CHUNK_CHARS = 500000;       // taille max d'un chunk de transcription
 const MATCH_WINDOW_MS = 12 * 3600000; // écart max RDV ↔ conférence Meet
 const GRACE_DAYS = 5;             // au-delà : on arrête de chercher
 const MAX_CHECKS = 8;
-const AI_MODEL = 'claude-opus-5';
 const MIN_ENTRIES_FOR_AI = 12;
 
 // ─── OAuth Google (même mécanique que formations-drive) ──────────────────
@@ -416,35 +416,24 @@ function parseJsonLoose(text) {
   return null;
 }
 
-async function callClaude(prompt, structured) {
-  const body = {
-    model: AI_MODEL,
-    max_tokens: 16000,
-    messages: [{ role: 'user', content: prompt }],
-    output_config: { effort: 'medium' },
-  };
-  if (structured) body.output_config.format = { type: 'json_schema', schema: CHAPTER_SCHEMA };
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify(body),
+// Passe par le socle IA (api/_ai.js) depuis le 20/10/2026 : appel compté
+// dans Réglages IA, soumis au budget, modèle réglable (tâche replay_chapters).
+async function askChapters(prompt, structured, ctx) {
+  const r = await AI.callClaude({
+    task: 'replay_chapters', prompt: prompt, noContext: true,
+    schema: structured ? CHAPTER_SCHEMA : null,
+    uid: ctx.uid || null,
+    source: ctx.uid ? 'page:replay-closing' : 'cron:replay-closing',
+    ref: ctx.bookingId ? 'booking:' + ctx.bookingId : 'replay',
   });
-  const j = await r.json().catch(function () { return null; });
-  if (!r.ok || !j) {
-    const msg = j && j.error && j.error.message ? j.error.message : ('HTTP ' + r.status);
-    const err = new Error('IA : ' + msg);
-    err.status = r.status;
+  if (r.stopReason === 'max_tokens') throw new Error('IA : réponse tronquée');
+  if (!r.ok) {
+    if (r.error === 'ai_invalid_json') return { parsed: parseJsonLoose(r.text), model: r.model };
+    const err = new Error('IA : ' + (/^ai_/.test(r.error) ? AI.humanError(r.error) : r.error));
+    err.aiCode = /^ai_/.test(r.error) ? r.error : null;
     throw err;
   }
-  if (j.stop_reason === 'refusal') throw new Error('IA : demande refusée par le modèle');
-  if (j.stop_reason === 'max_tokens') throw new Error('IA : réponse tronquée');
-  const text = (j.content || []).filter(function (b) { return b.type === 'text'; })
-    .map(function (b) { return b.text; }).join('\n');
-  return parseJsonLoose(text);
+  return { parsed: structured ? r.json : parseJsonLoose(r.text), model: r.model };
 }
 
 // Normalise des chapitres (venus de l'IA ou de l'éditeur) : temps bornés,
@@ -471,18 +460,20 @@ function cleanChapters(list, durationSec) {
 async function generateChapters(entries, speakers, ctx) {
   if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY absente');
   const prompt = buildChapterPrompt(ctx, transcriptForAi(entries, speakers));
-  let parsed = null;
+  let out = null;
   try {
-    parsed = await callClaude(prompt, true);
+    out = await askChapters(prompt, true, ctx);
   } catch (e) {
-    // Sortie structurée refusée par l'API (400) : on retente en JSON libre.
-    if (e.status !== 400) throw e;
-    parsed = await callClaude(prompt, false);
+    // Sortie structurée refusée par l'API : on retente en JSON libre — sauf
+    // si c'est le socle qui bloque (budget, tâche coupée, refus).
+    if (e.aiCode) throw e;
+    out = await askChapters(prompt, false, ctx);
   }
+  const parsed = out && out.parsed;
   if (!parsed) throw new Error('IA : réponse illisible');
   const chapters = cleanChapters(parsed.chapters, ctx.durationSec);
   if (!chapters.length) throw new Error('IA : aucun chapitre exploitable');
-  return { summary: String(parsed.summary || '').trim().slice(0, 2500), chapters: chapters, model: AI_MODEL };
+  return { summary: String(parsed.summary || '').trim().slice(0, 2500), chapters: chapters, model: out.model || null };
 }
 
 function clientName(b) {
@@ -505,6 +496,7 @@ async function refreshChapters(ref, b, prev, entries, speakers, durationSec, now
   try {
     const ai = await generateChapters(entries, speakers, {
       closer: b.personName || b.expertName || '', client: clientName(b), durationSec: durationSec,
+      bookingId: ref.id,
     });
     const upd = {
       summary: ai.summary, chapters: ai.chapters, chaptersAi: ai.chapters,

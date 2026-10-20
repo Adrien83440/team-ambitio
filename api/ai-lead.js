@@ -10,7 +10,9 @@
 //   • brief     : 3 lignes « qui est-ce / ce qu'il a fait / ce qu'il veut ».
 // Stocké sur leads/{id}.aiLead = { …, key, generatedAt, model }.
 // `key` = aiLeadKey() (cf. _aiLeadContext.js) : le front ne redemande un score
-// que si la fiche a bougé (nouvel échange, note, statut).
+// que si la fiche a bougé (note, statut, étape — plus à chaque échange depuis
+// le 20/10/2026, cf. aiLeadFresh). Sans le « cerveau Alteore » (noContext) :
+// les consignes de la tâche suffisent et l'appel coûte bien moins cher.
 //
 // Écrit UNIQUEMENT le champ aiLead : aucun trigger leads/{id} ne réagit à ce
 // champ (vérifié : onLeadNoteMentionNotify, resurrectLeadOnReengagement).
@@ -25,7 +27,7 @@ const { requireAuth } = require('./_verifyFirebaseAuth');
 const parseBody = require('./_parseBody');
 const { db } = require('./_firebaseAdmin');
 const { callClaude, humanError, tsToMs } = require('./_ai');
-const { loadLeadBundle, bundleToText, aiLeadKey } = require('./_aiLeadContext');
+const { loadLeadBundle, bundleToText, aiLeadKey, aiLeadFresh } = require('./_aiLeadContext');
 
 const ROLES = ['admin', 'sales'];
 const CRON_BATCH = 15;
@@ -114,7 +116,9 @@ async function scoreLead(leadId, uid) {
     system: SYSTEM,
     prompt: bundleToText(bundle, { maxCalls: 3, transcriptChars: 1800 }),
     schema: SCHEMA,
+    noContext: true,
     uid: uid || null,
+    source: uid ? 'page:leads' : 'cron:ai-lead',
     ref: 'lead:' + leadId,
   });
   if (!r.ok) return r;
@@ -144,7 +148,7 @@ async function runCron(res) {
   snap.forEach(function (d) {
     const l = d.data() || {};
     if (l._merged === true || l.isClient === true) return;
-    if (l.aiLead && l.aiLead.key === aiLeadKey(l)) return;
+    if (aiLeadFresh(l.aiLead, l)) return;
     // Laisse 2 min à onNewLead pour fusionner un éventuel doublon.
     if (Date.now() - tsToMs(l.createdAt) < 2 * 60 * 1000) return;
     todo.push(d.id);
@@ -156,7 +160,7 @@ async function runCron(res) {
       if (r.ok) done.push(todo[i]);
       else {
         errors.push(todo[i] + ':' + r.error);
-        if (r.error === 'ai_budget_exceeded' || r.error === 'ai_disabled' || r.error === 'ai_task_disabled') break;
+        if (/^ai_(budget|disabled|task)/.test(r.error)) break;
       }
     } catch (e) { errors.push(todo[i] + ':' + (e && e.message)); }
   }
@@ -190,7 +194,7 @@ module.exports = async function (req, res) {
       const s = await db.collection('leads').doc(leadId).get();
       if (!s.exists) { res.status(404).json({ ok: false, error: 'lead_not_found' }); return; }
       const l = s.data() || {};
-      if (l.aiLead && l.aiLead.key === aiLeadKey(l)) { res.status(200).json({ ok: true, cached: true, aiLead: l.aiLead }); return; }
+      if (aiLeadFresh(l.aiLead, l)) { res.status(200).json({ ok: true, cached: true, aiLead: l.aiLead }); return; }
     }
     const r = await scoreLead(leadId, auth.uid);
     if (!r.ok) { res.status(200).json({ ok: false, error: r.error, message: humanError(r.error) }); return; }
