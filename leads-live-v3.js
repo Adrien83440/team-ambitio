@@ -966,7 +966,14 @@
         var ce = it.c;
         icone = 'mail';
         titre = it.sortant ? 'E-mail envoyé' + (ce.ownerName ? ' par ' + ce.ownerName : '') : 'E-mail reçu';
-        q = escHtml(ce.subject ? ce.subject : String(ce.content || '').split('\n')[0]);
+        if (!it.sortant && ce.gmailMessageId) {
+          // Réponse d'un prospect relevée dans Gmail (gmail-inbound-sync) : le
+          // texte compte autant que l'objet, on montre les deux.
+          titre = 'E-mail reçu' + (ce.emailFromName ? ' de ' + ce.emailFromName : '');
+          q = (ce.subject ? '<b>' + escHtml(ce.subject) + '</b>\n' : '') + escHtml(String(ce.content || ''));
+        } else {
+          q = escHtml(ce.subject ? ce.subject : String(ce.content || '').split('\n')[0]);
+        }
       }
       h += '<div class="ll5hist"><span class="ll5ric ' + cls + '">' + ic(icone) + '</span><span class="ll5tx"><b>' + escHtml(titre) + '</b>' + (sousL ? '<span class="ll5hnote late">' + escHtml(sousL) + '</span>' : '') + (q ? '<span class="q">' + q + '</span>' : '') + '</span><span class="tm">' + heure + '</span></div>';
     });

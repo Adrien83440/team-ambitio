@@ -2,7 +2,7 @@
 // api/lead-reply-watch.js — VEILLE « PROSPECT SANS RÉPONSE » (Leads Live)
 // ----------------------------------------------------------------------------
 // Toutes les 10 min (cron Vercel). Un prospect qui nous écrit (SMS Twilio,
-// SMS Ringover, WhatsApp) et qui n'a reçu AUCUNE réponse 2 h ouvrées plus
+// SMS Ringover, WhatsApp, e-mail humain relevé par gmail-inbound-sync) et qui n'a reçu AUCUNE réponse 2 h ouvrées plus
 // tard déclenche une popup ⚡ ciblée sur les admins (cloche Infos équipe,
 // collection `announcements`, même mécanisme que Mes Notes CSM).
 //
@@ -12,6 +12,8 @@
 // Compte comme une réponse, postérieure au message entrant :
 //   • un SMS sortant dans `leads.communications` ;
 //   • un WhatsApp humain (`leads.whatsappEnvoye.at`, posé par whatsapp-send) ;
+//   • un e-mail envoyé DEPUIS LA FICHE par l'équipe (ownerUid / ownerName,
+//     ou source 'app') — jamais une confirmation ou une relance automatique ;
 //   • un appel DÉCROCHÉ avec une vraie conversation dans `call_logs` (par
 //     leadId ou par numéro, sortant ou entrant). Règle validée par Adrien le
 //     19/10/2026 : une messagerie, un répondeur ou un appel sans décroché ne
@@ -48,7 +50,7 @@ const DEFAULT_DELAY_MIN = 120;
 const DEFAULT_START = 9;
 const DEFAULT_END = 20;
 const LOOKBACK_MS = 5 * 86400000;   // couvre un week-end entier d'heures fermées
-const TYPES = { sms: 'SMS', whatsapp: 'WhatsApp' };
+const TYPES = { sms: 'SMS', whatsapp: 'WhatsApp', email: 'e-mail' };
 const DEPARTED = { guillaumes: 1 };
 
 /* ── Dates ─────────────────────────────────────────────────────────────── */
@@ -149,7 +151,10 @@ function replyFromLead(l) {
   let last = 0;
   (Array.isArray(l.communications) ? l.communications : []).forEach(function (c) {
     if (!c || !isOut(c.direction)) return;
-    if (c.type !== 'sms' && c.type !== 'whatsapp') return;
+    if (c.type === 'email') {
+      // Seul un e-mail écrit par l'équipe répond au prospect.
+      if (!c.ownerUid && !c.ownerName && c.source !== 'app') return;
+    } else if (c.type !== 'sms' && c.type !== 'whatsapp') return;
     const ms = toMs(c.date) || toMs(c.createdAt);
     if (ms > last) last = ms;
   });
@@ -224,7 +229,8 @@ async function run(opts) {
   const byLead = {};
   ns.forEach(function (d) {
     const n = d.data() || {};
-    if (n.direction !== 'inbound' || !TYPES[n.type] || !n.leadId) return;
+    // copyOf : copie de la cloche pour le closer — un seul message compté.
+    if (n.direction !== 'inbound' || !TYPES[n.type] || !n.leadId || n.copyOf) return;
     const ms = toMs(n.createdAt);
     if (!ms || ms < since) return;
     (byLead[n.leadId] = byLead[n.leadId] || []).push({

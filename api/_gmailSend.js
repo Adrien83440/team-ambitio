@@ -285,4 +285,6 @@ async function sendEmailFromAccount({ accountKey, to, cc, subject, bodyHtml, bod
   return { ok: false, error: 'Unknown send failure' };
 }
 
-module.exports = { sendEmailFromAccount, loadOauthConfig };
+// loadAccountTokens / refreshAccessToken : aussi utilisés en LECTURE par
+// api/gmail-inbound-sync.js (e-mails reçus des prospects, 20/10/2026).
+module.exports = { sendEmailFromAccount, loadOauthConfig, loadAccountTokens, refreshAccessToken };

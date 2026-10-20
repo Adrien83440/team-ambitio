@@ -148,6 +148,7 @@
     if (type === 'call_missed') return { cls: 'missed', glyph: '📵' };
     if (type === 'call')        return { cls: 'call',   glyph: '📞' };
     if (type === 'whatsapp')    return { cls: 'whatsapp', glyph: '📲' };
+    if (type === 'email')       return { cls: 'sms',    glyph: '✉️' };
     return { cls: 'sms', glyph: '🔔' };
   }
 
@@ -156,6 +157,7 @@
     if (type === 'call_missed') return 'Appel manqué';
     if (type === 'call')        return 'Appel entrant';
     if (type === 'whatsapp')    return 'WhatsApp';
+    if (type === 'email')       return 'E-mail';
     return 'Notif';
   }
 
@@ -164,6 +166,7 @@
     if (source.includes('twilio'))   return 'Twilio';
     if (source.includes('ringover')) return 'Ringover';
     if (source === 'whatsapp')       return 'WhatsApp';
+    if (source === 'gmail')          return 'Gmail';
     return source;
   }
 
@@ -179,6 +182,13 @@
     if (notif && notif.deepLinkUrl) return notif.deepLinkUrl;
     var num = (notif && notif.fromNumber) ? String(notif.fromNumber).replace(/[^0-9]/g, '') : '';
     return num ? ('whatsapp.html?n=' + encodeURIComponent(num)) : 'whatsapp.html';
+  }
+
+  // E-mail reçu (api/gmail-inbound-sync) : le closer reçoit une COPIE de la
+  // notif (champ `copyOf`). L'admin voit déjà l'original — la copie lui est
+  // masquée, sinon il aurait deux lignes et deux « ding » pour un message.
+  function visibleForMe(notif) {
+    return !(currentRole === 'admin' && notif && notif.copyOf);
   }
 
   // ---------- SON ----------
@@ -1268,7 +1278,8 @@
     unsubscribeListener = q.onSnapshot(snap => {
       const newNotifs = [];
       snap.forEach(doc => {
-        newNotifs.push(Object.assign({ id: doc.id }, doc.data()));
+        const n = Object.assign({ id: doc.id }, doc.data());
+        if (visibleForMe(n)) newNotifs.push(n);
       });
 
       // Détecter les arrivées (pour son + toast + browser notif)
@@ -1308,7 +1319,7 @@
     const doPoll = () => {
       q.get().then(snap => {
         const newNotifs = [];
-        snap.forEach(doc => newNotifs.push(Object.assign({ id: doc.id }, doc.data())));
+        snap.forEach(doc => { const n = Object.assign({ id: doc.id }, doc.data()); if (visibleForMe(n)) newNotifs.push(n); });
         // Détecter les nouvelles notifs
         newNotifs.forEach(notif => {
           if (!_lastPollIds.has(notif.id) && isUnreadByMe(notif)) {
