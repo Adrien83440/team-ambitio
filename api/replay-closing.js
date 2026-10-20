@@ -94,6 +94,7 @@ function bookingSummary(id, b) {
     outcome: b.outcome || null,
     status: b.status || 'confirmed',
     hasVideo: !!fileId,
+    videoPending: !!rp.videoPending,
     hasMeetLink: !!MT.meetCodeFromLink(b.meetLink),
     replayStatus: rp.status || null,
     replayReason: rp.reason || null,
@@ -183,6 +184,10 @@ async function actionGet(req, res, auth) {
       analysisError: rp.analysisError || null,
       speakers: rp.speakers || [],
       durationSec: rp.durationSec || null,
+      // Durée filmée : les anciens imports n'avaient que durationSec, qui
+      // valait alors la durée de la vidéo.
+      videoDurationSec: rp.videoDurationSec || (rp.videoSize ? rp.durationSec || null : null),
+      videoPending: !!rp.videoPending,
       videoError: rp.videoError || null,
     },
     entries: entries,
@@ -291,7 +296,10 @@ async function actionSync(req, res, q, maxDays) {
     const st = b.status || 'confirmed';
     if (st !== 'confirmed' && st !== 'completed') return false;
     const rp = b.replay || {};
-    if (rp.status === 'ready' || rp.status === 'video_only' || rp.status === 'none') return false;
+    // Un replay prêt repasse tant que Meet n'a pas publié la vidéo, ou si
+    // ses chapitres sont à régénérer (générés sur une vidéo tronquée).
+    if (rp.status === 'ready' && !rp.videoPending && !rp.chaptersStale) return false;
+    if (rp.status === 'video_only' || rp.status === 'none') return false;
     if ((Number(rp.checks) || 0) >= MT.MAX_CHECKS) return false;
     return !!(MT.meetCodeFromLink(b.meetLink) || b.meetRecordingUrl);
   });

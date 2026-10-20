@@ -26,7 +26,14 @@
 //   reason        motif court quand status !== 'ready'
 //   checks        nombre de tentatives d'import
 //   meetCode, conferenceRecord
-//   videoFileId, videoSize, videoMime, durationSec
+//   videoFileId, videoSize, videoMime
+//   durationSec        durée de l'APPEL (max vidéo / fin de transcription)
+//   videoDurationSec   durée FILMÉE (peut être plus courte : enregistrement
+//                      arrêté en cours d'appel)
+//   videoPending       true = Meet n'a pas encore publié la vidéo : le replay
+//                      est prêt (transcription) et la synchro repassera
+//   chaptersStale      true = chapitres à régénérer (générés sur une vidéo
+//                      tronquée) ; ignoré s'ils ont été retouchés à la main
 //   recordingStartMs   origine des temps (ms epoch)
 //   entriesCount, chunks, speakers[]
 //   summary, chapters[{ t, title, summary }]   (t en secondes)
@@ -232,30 +239,55 @@ async function findConferenceRecord(auth, code, startMs) {
 // date de création, quand l'API Meet ne connaît plus la réunion (plus de
 // 30 jours). Meet nomme le fichier « <titre de l'événement> - <date> -
 // Recording » ; le titre contient le nom du prospect.
+// Règle stricte (20/10/2026) : le nom du fichier DOIT contenir le prénom ou le
+// nom du prospect, et l'heure inscrite dans le nom doit tomber près du RDV.
+// L'ancienne tolérance « fichier seul sur le créneau » a rattaché au replay de
+// Chanel l'enregistrement d'un autre prospect (Meet n'avait pas encore publié
+// le bon fichier) : mieux vaut aucune vidéo que celle d'un autre client.
+const NAME_TIME_WINDOW_MS = 3 * 3600000;
+function recordingTimeFromName(name) {
+  const m = /(\d{4})\/(\d{2})\/(\d{2}) (\d{1,2}):(\d{2})/.exec(String(name || ''));
+  return m ? parisToUtcMs(m[1] + '-' + m[2] + '-' + m[3], m[4] + ':' + m[5]) : 0;
+}
 async function findDriveRecording(drive, b) {
   const start = bookingStartMs(b), end = bookingEndMs(b);
   if (!start) return null;
-  const q = "mimeType contains 'video/' and trashed = false" +
-    " and createdTime > '" + new Date(start - 3600000).toISOString() + "'" +
-    " and createdTime < '" + new Date(end + 4 * 3600000).toISOString() + "'";
-  const r = await drive.files.list({
-    q: q, pageSize: 20, fields: 'files(id,name,createdTime)',
-    supportsAllDrives: true, includeItemsFromAllDrives: true,
-  });
-  const files = (r.data && r.data.files) || [];
-  if (!files.length) return null;
   const norm = function (x) { return String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); };
   const pr = b.prospect || {};
   const keys = [norm(pr.prenom), norm(pr.nom)].filter(function (k) { return k.length >= 3; });
-  const named = files.filter(function (f) {
-    const n = norm(f.name);
-    return keys.some(function (k) { return n.indexOf(k) >= 0; });
+  if (!keys.length) return null;
+  const q = "mimeType contains 'video/' and trashed = false" +
+    " and createdTime > '" + new Date(start - 3600000).toISOString() + "'" +
+    " and createdTime < '" + new Date(end + 6 * 3600000).toISOString() + "'";
+  const r = await drive.files.list({
+    q: q, pageSize: 50, fields: 'files(id,name,createdTime)',
+    supportsAllDrives: true, includeItemsFromAllDrives: true,
   });
-  // Sans nom reconnu, on n'accepte le fichier que s'il est seul sur le créneau.
-  const pool = named.length ? named : (files.length === 1 ? files : []);
+  const files = (r.data && r.data.files) || [];
+  const pool = files.filter(function (f) {
+    const n = norm(f.name);
+    if (!keys.some(function (k) { return n.indexOf(k) >= 0; })) return false;
+    const t = recordingTimeFromName(f.name);
+    return !t || Math.abs(t - start) <= NAME_TIME_WINDOW_MS;
+  });
   if (!pool.length) return null;
   pool.sort(function (x, y) { return Math.abs(Date.parse(x.createdTime) - end) - Math.abs(Date.parse(y.createdTime) - end); });
   return pool[0].id;
+}
+
+// Enregistrement à retenir parmi ceux de la conférence. Un enregistrement
+// arrêté puis relancé en donne plusieurs : on garde le plus long. `pending` =
+// Meet connaît un enregistrement dont le fichier n'est pas encore publié
+// (STARTED / ENDED) : il faut attendre, surtout pas chercher ailleurs — la
+// transcription arrive souvent des heures avant la vidéo.
+function pickRecording(recs) {
+  const span = function (r) { return (Date.parse(r.endTime || '') || 0) - (Date.parse(r.startTime || '') || 0); };
+  const done = recs.filter(function (r) {
+    return r.driveDestination && r.driveDestination.file && (!r.state || r.state === 'FILE_GENERATED');
+  });
+  done.sort(function (x, y) { return span(y) - span(x); });
+  const pending = recs.some(function (r) { return r.state && r.state !== 'FILE_GENERATED'; });
+  return { rec: done[0] || null, pending: !done.length && pending };
 }
 
 function participantLabel(p) {
@@ -458,6 +490,36 @@ function clientName(b) {
   return ((pr.prenom || '') + ' ' + (pr.nom || '')).trim() || 'Inconnu';
 }
 
+// Chapitres IA d'un replay. On ne régénère pas ce qui existe déjà (un
+// réimport ne doit pas écraser des chapitres retouchés à la main), SAUF s'ils
+// sont marqués périmés (chaptersStale : générés sur une vidéo tronquée) et
+// jamais retouchés. Les anciens restent dans chaptersPrev.
+async function refreshChapters(ref, b, prev, entries, speakers, durationSec, now, out) {
+  const has = !!(prev.chapters && prev.chapters.length);
+  const stale = !!prev.chaptersStale && !prev.chaptersEditedAt;
+  if (has && !stale) {
+    if (prev.chaptersStale) await ref.set({ replay: { chaptersStale: false } }, { merge: true });
+    return;
+  }
+  if (entries.length < MIN_ENTRIES_FOR_AI) return;
+  try {
+    const ai = await generateChapters(entries, speakers, {
+      closer: b.personName || b.expertName || '', client: clientName(b), durationSec: durationSec,
+    });
+    const upd = {
+      summary: ai.summary, chapters: ai.chapters, chaptersAi: ai.chapters,
+      chaptersModel: ai.model, chaptersGeneratedAt: now, chaptersError: null, chaptersStale: false,
+    };
+    if (has) upd.chaptersPrev = prev.chapters;
+    await ref.set({ replay: upd }, { merge: true });
+    out.chapters = ai.chapters.length;
+  } catch (e) {
+    console.error('[replay] chapitres', ref.id, e.message);
+    await ref.set({ replay: { chaptersError: String(e.message || e).slice(0, 300) } }, { merge: true });
+    out.chaptersError = e.message;
+  }
+}
+
 // ─── Import d'un RDV ─────────────────────────────────────────────────────
 // opts : { dry, google } — `google` = résultat de getGoogle() (réutilisé par
 // le cron). Retourne { status, reason?, entries?, chapters?, error? }.
@@ -465,7 +527,7 @@ function clientName(b) {
 async function importBooking(bookingId, b, opts) {
   opts = opts || {};
   const ref = db.collection('bookings').doc(bookingId);
-  const prev = b.replay || {};
+  let prev = b.replay || {};
   const checks = (Number(prev.checks) || 0) + 1;
   const now = admin.firestore.FieldValue.serverTimestamp();
   const startMs = bookingStartMs(b);
@@ -484,14 +546,20 @@ async function importBooking(bookingId, b, opts) {
 
   // 1. Conférence Meet + enregistrement + segments de transcription
   let record = null, recordingStart = null, rawEntries = [], participants = [];
+  let videoPending = false;
   if (code) {
     record = await findConferenceRecord(g.auth, code, startMs);
     if (record) {
       const recs = await meetListAll(g.auth, record.name + '/recordings', 'recordings');
-      const rec = recs.filter(function (r) { return r.driveDestination && r.driveDestination.file; })[0] || null;
-      if (rec) {
-        fileId = rec.driveDestination.file;
-        recordingStart = Date.parse(rec.startTime || '') || null;
+      const pick = pickRecording(recs);
+      if (pick.rec) {
+        fileId = pick.rec.driveDestination.file;
+        recordingStart = Date.parse(pick.rec.startTime || '') || null;
+      } else if (pick.pending) {
+        // Vidéo pas encore publiée par Meet : on n'en rattache AUCUNE (pas
+        // même un ancien rattachement) et on repassera.
+        videoPending = true;
+        fileId = null;
       }
       const trs = await meetListAll(g.auth, record.name + '/transcripts', 'transcripts');
       for (const tr of trs) {
@@ -504,7 +572,7 @@ async function importBooking(bookingId, b, opts) {
     }
   }
 
-  if (!fileId) {
+  if (!fileId && (!videoPending || tooOld)) {
     try { fileId = await findDriveRecording(g.drive, b); }
     catch (e) { console.warn('[replay] recherche Drive', bookingId, e.message); }
   }
@@ -522,7 +590,7 @@ async function importBooking(bookingId, b, opts) {
       video.videoSize = Number(d.size) || null;
       video.videoMime = d.mimeType || 'video/mp4';
       const ms = d.videoMediaMetadata && Number(d.videoMediaMetadata.durationMillis);
-      if (ms) video.durationSec = Math.round(ms / 1000);
+      if (ms) { video.durationSec = Math.round(ms / 1000); video.videoDurationSec = video.durationSec; }
     } catch (e) {
       // Fichier illisible par ce compte (autre propriétaire, non partagé…) :
       // on garde l'identifiant pour le lecteur Drive intégré.
@@ -531,13 +599,23 @@ async function importBooking(bookingId, b, opts) {
     }
   }
 
+  // Délai de grâce écoulé : on cesse d'attendre Meet.
+  video.videoPending = !fileId && videoPending && !tooOld;
+
   // 3. Pas de transcription exploitable
   if (!rawEntries.length) {
     // Réimport tardif : Google a purgé les segments (30 jours) mais on les a
     // déjà en base — on ne dégrade surtout pas un replay prêt.
     if (prev.status === 'ready' && prev.chunks) {
-      if (!opts.dry && video.videoFileId) await ref.set({ replay: Object.assign({ checkedAt: now }, video) }, { merge: true });
-      return { status: 'ready', kept: true, entries: prev.entriesCount || 0, chapters: (prev.chapters || []).length };
+      const keep = { checks: checks, checkedAt: now, videoPending: false };
+      if (video.videoFileId) Object.assign(keep, video, { durationSec: Math.max(Number(prev.durationSec) || 0, video.videoDurationSec || 0) || null });
+      if (!opts.dry) await ref.set({ replay: keep }, { merge: true });
+      const kept = { status: 'ready', kept: true, entries: prev.entriesCount || 0, chapters: (prev.chapters || []).length };
+      if (!opts.dry && prev.chaptersStale) {
+        const stored = await readEntries(bookingId, prev.chunks);
+        await refreshChapters(ref, b, prev, stored, prev.speakers || [], keep.durationSec || prev.durationSec, now, kept);
+      }
+      return kept;
     }
     if (fileId) {
       const why = !code ? 'no_meet_link' : (!record ? 'conference_not_found' : 'no_transcript');
@@ -572,11 +650,15 @@ async function importBooking(bookingId, b, opts) {
   entries.sort(function (a, b2) { return a.s - b2.s; });
   if (!entries.length) return finish(fileId ? 'video_only' : 'none', 'no_transcript', video);
 
-  const durationSec = video.durationSec || Math.ceil(entries[entries.length - 1].e);
+  // Durée de l'APPEL (et non de la vidéo) : un enregistrement coupé en cours
+  // de route ne doit plus tronquer les chapitres. La durée filmée est gardée
+  // à part (videoDurationSec) pour le lecteur.
+  const durationSec = Math.max(video.videoDurationSec || 0, Math.ceil(entries[entries.length - 1].e));
+  delete video.durationSec;
   const chunks = chunkEntries(entries);
 
   if (opts.dry) {
-    return { status: 'ready', dry: true, entries: entries.length, speakers: speakers, hasVideo: !!fileId };
+    return { status: 'ready', dry: true, entries: entries.length, speakers: speakers, hasVideo: !!fileId, videoPending: video.videoPending };
   }
 
   // 5. Écriture : transcription d'abord, puis le doc du RDV
@@ -590,27 +672,23 @@ async function importBooking(bookingId, b, opts) {
     recordingStartMs: base, durationSec: durationSec,
     entriesCount: entries.length, chunks: chunks.length, speakers: speakers,
   }, video);
+  if (!video.videoFileId) Object.assign(patch, { videoFileId: null, videoSize: null, videoDurationSec: null });
+  // Origine des temps déplacée (vidéo enfin publiée, autre enregistrement…) :
+  // les chapitres existants suivent, pour rester calés sur la vidéo.
+  const shift = Number(prev.recordingStartMs) ? (Number(prev.recordingStartMs) - base) / 1000 : 0;
+  if (shift && Math.abs(shift) < 3600 && prev.chapters && prev.chapters.length) {
+    const mv = function (list) {
+      return (list || []).map(function (c) { return Object.assign({}, c, { t: Math.max(0, Math.round(c.t + shift)) }); });
+    };
+    patch.chapters = mv(prev.chapters);
+    if (prev.chaptersAi) patch.chaptersAi = mv(prev.chaptersAi);
+    prev = Object.assign({}, prev, { chapters: patch.chapters });
+  }
   await ref.set({ replay: patch }, { merge: true });
 
-  // 6. Chapitres IA — on ne régénère pas ce qui existe déjà (un réimport ne
-  // doit pas écraser des chapitres retouchés à la main).
-  const out = { status: 'ready', entries: entries.length, hasVideo: !!fileId, chapters: (prev.chapters || []).length };
-  if (!(prev.chapters && prev.chapters.length) && entries.length >= MIN_ENTRIES_FOR_AI) {
-    try {
-      const ai = await generateChapters(entries, speakers, {
-        closer: b.personName || b.expertName || '', client: clientName(b), durationSec: durationSec,
-      });
-      await ref.set({ replay: {
-        summary: ai.summary, chapters: ai.chapters, chaptersAi: ai.chapters,
-        chaptersModel: ai.model, chaptersGeneratedAt: now, chaptersError: null,
-      } }, { merge: true });
-      out.chapters = ai.chapters.length;
-    } catch (e) {
-      console.error('[replay] chapitres', bookingId, e.message);
-      await ref.set({ replay: { chaptersError: String(e.message || e).slice(0, 300) } }, { merge: true });
-      out.chaptersError = e.message;
-    }
-  }
+  // 6. Chapitres IA
+  const out = { status: 'ready', entries: entries.length, hasVideo: !!fileId, videoPending: !!video.videoPending, chapters: (prev.chapters || []).length };
+  await refreshChapters(ref, b, prev, entries, speakers, durationSec, now, out);
 
   // 7. Analyse IA du closing (programme IA, Lot 2) — une fois par appel, dans
   // son propre try : un échec ici ne doit jamais être compté comme un échec

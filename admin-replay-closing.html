@@ -103,6 +103,8 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
 .tr-x{color:rgba(255,255,255,.82)}
 .tr mark{background:rgba(251,191,36,.3);color:#fff;border-radius:3px;padding:0 1px}
 .rp-note{font-size:12px;color:rgba(255,255,255,.45);line-height:1.6}
+.rp-warn{margin-top:8px;padding:9px 12px;border-radius:9px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.28);color:#fcd34d;font-size:12px;line-height:1.55}
+.ch.nofilm,.tr.nofilm{opacity:.5}
 
 .rc-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2e1a;border:1px solid rgba(16,185,129,.3);color:#6ee7b7;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none;max-width:90vw}
 .rc-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -258,6 +260,7 @@ function api(method, params, body) {
 /* ═══ LISTE ═══ */
 function statusTag(it) {
   if (it.replayStatus === 'ready') {
+    if (it.videoPending) return '<span class="tag tag-wait">⏳ Vidéo en attente de Google</span>';
     return it.chaptersCount
       ? '<span class="tag tag-ready">✓ ' + it.chaptersCount + ' chapitres</span>'
       : '<span class="tag tag-ready">✓ Transcrit</span>';
@@ -394,9 +397,25 @@ function backToList(push) {
   if (push !== false) { try { history.pushState({}, '', window.location.pathname); } catch (e) {} }
 }
 
+// Fin de la partie filmée quand l'enregistrement s'est arrêté avant la fin
+// de l'appel (la transcription, elle, continue) ; null sinon.
+function filmedUntil() {
+  var vd = Number(CUR.replay.videoDurationSec) || 0, en = CUR.entries || [];
+  if (!CUR.video || !CUR.video.fileId || !vd || !en.length) return null;
+  return en[en.length - 1].s > vd + 20 ? vd : null;
+}
+function cutAttr(t) {
+  var cut = filmedUntil();
+  return cut !== null && t > cut ? ' nofilm" title="Passage non filmé : l\'enregistrement vidéo s\'arrête à ' + clock(cut) : '';
+}
+
 function videoHtml() {
   var v = CUR.video || {};
-  if (!v.fileId) return '<div class="rp-novideo">Aucun enregistrement vidéo rattaché à cet appel.</div>';
+  if (!v.fileId) {
+    return '<div class="rp-novideo">' + (CUR.replay.videoPending
+      ? 'Google n\'a pas encore publié la vidéo de cet appel (cela prend parfois quelques heures).<br/>Elle sera rattachée automatiquement à la prochaine synchronisation.'
+      : 'Aucun enregistrement vidéo rattaché à cet appel.') + '</div>';
+  }
   if (MODE === 'native' && v.streamUrl) {
     return '<video id="rpVideo" controls preload="metadata" playsinline src="' + escAttr(v.streamUrl) + '"></video>';
   }
@@ -428,7 +447,7 @@ function chaptersHtml() {
   }
   h += '<div class="ch-list" id="chList">';
   list.forEach(function (c, i) {
-    h += '<div class="ch" data-action="seek" data-t="' + c.t + '" data-ch="' + i + '">'
+    h += '<div class="ch' + cutAttr(c.t) + '" data-action="seek" data-t="' + c.t + '" data-ch="' + i + '">'
       + '<div class="ch-t">' + clock(c.t) + '</div>'
       + '<div class="ch-b"><div class="ch-ti">' + esc(c.title) + '</div>'
       + (c.summary ? '<div class="ch-su">' + esc(c.summary) + '</div>' : '') + '</div></div>';
@@ -451,7 +470,7 @@ function transcriptRows() {
   (CUR.entries || []).forEach(function (e, i) {
     if (ql && e.t.toLowerCase().indexOf(ql) < 0) return;
     n++;
-    h += '<div class="tr" data-action="seek" data-t="' + e.s + '" data-ln="' + i + '">'
+    h += '<div class="tr' + cutAttr(e.s) + '" data-action="seek" data-t="' + e.s + '" data-ln="' + i + '">'
       + '<div class="tr-t">' + clock(e.s) + '</div>'
       + '<div><span class="tr-sp s' + (e.p % 4) + '">' + esc(sp[e.p] || 'Participant') + '</span> '
       + '<span class="tr-x">' + highlight(e.t, q) + '</span></div></div>';
@@ -486,7 +505,13 @@ function renderPlayer() {
   h += '<div><div class="rp-video" id="rpVideoBox">' + videoHtml() + '</div>'
     + '<div class="rp-vbar"><span id="rpModeNote"></span><span class="sp"></span>'
     + (v.fileId && v.streamUrl ? '<button class="bb bb-o bb-s" data-action="mode" id="btnMode"></button>' : '')
-    + '</div></div>';
+    + '</div>';
+  var cut = filmedUntil();
+  if (cut !== null) {
+    h += '<div class="rp-warn">⚠️ L\'enregistrement vidéo s\'est arrêté à ' + clock(cut) + ' alors que l\'appel a continué jusqu\'à '
+      + clock((CUR.entries[CUR.entries.length - 1] || {}).e || rp.durationSec) + ' (enregistrement coupé dans Meet). La suite n\'existe qu\'en transcription : les passages non filmés sont grisés.</div>';
+  }
+  h += '</div>';
   if (rp.summary) h += '<div class="card"><h2>Résumé de l\'appel</h2><div class="rp-summary">' + esc(rp.summary) + '</div></div>';
 
   h += '<div class="card"><h2>Transcription <span class="sp"></span><span class="rc-count" id="trCount"></span></h2>';
@@ -545,7 +570,12 @@ function currentTime() {
 
 function seek(t) {
   t = Math.max(0, Number(t) || 0);
-  var v = $('rpVideo'), f = $('rpFrame');
+  var v = $('rpVideo'), f = $('rpFrame'), cut = filmedUntil();
+  if (cut !== null && t > cut) {
+    markActive(t);
+    toast('Passage non filmé : l\'enregistrement vidéo s\'arrête à ' + clock(cut), true);
+    return;
+  }
   if (v) {
     v.currentTime = t;
     var p = v.play();
