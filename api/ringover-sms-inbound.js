@@ -1,6 +1,7 @@
 // api/ringover-sms-inbound.js  (v5 — écritures avant res.end + logs granulaires)
 const { db, admin } = require('./_firebaseAdmin');
 const { ringoverFetch } = require('./_ringoverClient');
+const { phoneNormalized, telVariants } = require('./_leadLookup');
 
 const OPT_OUT = new Set(['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit']);
 
@@ -14,15 +15,21 @@ function normalizeE164(raw) {
   return null;
 }
 
-function phoneVariants(e164) {
+// Clés de recherche du lead, de la plus fiable à la plus laxiste :
+// phoneNormalized (9 derniers chiffres), puis les écritures historiques du
+// champ `telephone` (E.164, 0X, 33X, « 06 81 54 38 72 », « 06.81.54.38.72 »,
+// 9 chiffres nus). Les fiches anciennes stockent le numéro avec des espaces :
+// une recherche limitée aux formes compactes les ratait (SMS classé
+// « Numéro inconnu » alors que la fiche existe — cas Céline du 21/10/2026).
+function phoneLookups(e164) {
   if (!e164) return [];
-  const v = new Set([e164]);
-  if (e164.startsWith('+33')) {
-    v.add('0' + e164.slice(3));
-    v.add('33' + e164.slice(3));
-    v.add(e164.slice(3));
-  }
-  return Array.from(v).filter(Boolean);
+  const out = [];
+  const norm = phoneNormalized(e164);
+  if (norm && norm.length === 9) out.push(['phoneNormalized', norm]);
+  const tels = telVariants(e164);
+  if (/^\+33\d{9}$/.test(e164)) tels.push(e164.slice(3));
+  tels.forEach(v => out.push(['telephone', v]));
+  return out;
 }
 
 // Retire le préfixe « Message: » / « Message : » que Ringover place parfois en
@@ -70,9 +77,9 @@ async function alreadyProcessed(msgId, lead, text) {
 }
 
 async function findLead(fromNumber) {
-  for (const variant of phoneVariants(fromNumber)) {
+  for (const [field, value] of phoneLookups(fromNumber)) {
     try {
-      const q = await db.collection('leads').where('telephone', '==', variant).limit(3).get();
+      const q = await db.collection('leads').where(field, '==', value).limit(3).get();
       if (q.empty) continue;
       const docs = q.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => !d._merged);
       if (!docs.length) continue;

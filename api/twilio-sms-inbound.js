@@ -31,6 +31,7 @@
 
 const { db, admin } = require('./_firebaseAdmin');
 const { requireValidSignature } = require('./_twilioSignature');
+const { phoneNormalized, telVariants } = require('./_leadLookup');
 const twilio = require('twilio');
 const MessagingResponse = twilio.twiml.MessagingResponse;
 
@@ -86,11 +87,18 @@ function phoneVariants(raw) {
 // Si plusieurs leads matchent (doublons), priorise celui avec le plus de
 // communications, à défaut celui avec lastContactAt le plus récent.
 async function findBestLeadByPhone(phone) {
-  const variants = phoneVariants(phone);
+  // Variantes compactes + écritures historiques avec espaces / points
+  // (« 06 81 54 38 72 ») et clé phoneNormalized (9 derniers chiffres).
+  const variants = Array.from(new Set(phoneVariants(phone).concat(telVariants(phone))));
   const allMatches = [];
+  const norm = phoneNormalized(phone);
+  if (norm && norm.length === 9) {
+    const snapN = await db.collection('leads').where('phoneNormalized', '==', norm).get();
+    snapN.forEach(d => { if (d.data()._merged !== true) allMatches.push({ id: d.id, data: d.data() }); });
+  }
   for (const v of variants) {
     const snap = await db.collection('leads').where('telephone', '==', v).get();
-    snap.forEach(d => allMatches.push({ id: d.id, data: d.data() }));
+    snap.forEach(d => { if (d.data()._merged !== true) allMatches.push({ id: d.id, data: d.data() }); });
   }
   const uniq = {};
   allMatches.forEach(m => { uniq[m.id] = m; });
