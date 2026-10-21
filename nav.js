@@ -166,10 +166,13 @@
     //  - Labo Tunnels (16/10/2026) : les vraies pages des tunnels, pare-feu +
     //    fausse base — ni lead, ni RDV, ni Make, ni pixel. Liste réservée aux
     //    admins ; un lien de test (?p=…) s'ouvre sans connexion.
+    //  - Labo Pipeline (21/10/2026) : le nouveau Pipeline (pipeline-v2.js) sur
+    //    de faux leads, sans Firebase ni réseau. Admins, le temps de valider.
     { id: 'nav-sandbox', icon: '🧪', label: 'Bacs à sable', section: 'Formation & aide', children: [
       { id: 'sandbox-closer',     icon: '🧪', label: 'Bac à sable closer',     href: 'sandbox-closer.html',     perm: '_sales', newWindow: true },
       { id: 'sandbox-leads-live', icon: '🧪', label: 'Bac à sable Leads Live', href: 'sandbox-leads-live.html', perm: '_sales', newWindow: true },
       { id: 'sandbox-tunnels',    icon: '🧪', label: 'Labo Tunnels',           href: 'sandbox-tunnels.html',    perm: '_admin', newWindow: true },
+      { id: 'sandbox-pipeline',   icon: '🧪', label: 'Labo Pipeline',          href: 'sandbox-pipeline.html',   perm: '_admin', newWindow: true },
     ]},
     // Aide Team (14/10/2026) : assistant IA des questions techniques (où
     // cliquer, agenda, WhatsApp…) + catalogue des fiches pratiques. Sales et
