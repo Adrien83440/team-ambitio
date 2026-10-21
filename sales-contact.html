@@ -15,6 +15,7 @@
 <!-- Refonte 07/2026 : journal d'actions setting + résultats RDV -->
 <script src="alteore-flow.js"></script>
 <script src="rdv-outcome.js"></script>
+<script src="rdv-history.js"></script>
 <script src="close-wizard.js"></script>
 <script>
 if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}
@@ -1092,6 +1093,8 @@ function paintRdvBox(items){
     h+='<div style="font-size:11px;color:var(--muted);padding:6px 0;font-style:italic">Aucun RDV</div>';
     box.innerHTML=h;return;
   }
+  /* Date de prise / replanification + rang du RDV (rdv-history.js, 21/10/2026). */
+  var hist=window.RdvHistory?window.RdvHistory.analyze(visible,window._fcTypeMap||{}):null;
   var JOURS=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
   var MOIS_FR=['janv','févr','mars','avr','mai','juin','juil','août','sept','oct','nov','déc'];
   var upcoming=visible.filter(function(b){return !isRdvPast(b)&&(b.status==='confirmed'||b.status==='pending');});
@@ -1120,6 +1123,7 @@ function paintRdvBox(items){
       '<div class="fl-rdv-info">'+
         '<div class="fl-rdv-type">'+esc(subInfo)+sbChip+'</div>'+
         ((b.status==='cancelled'&&b.rescheduled!==true&&AF&&AF.cancellationLabel)?'<div style="font-size:10px;color:#fca5a5;margin-top:3px">🔴 '+esc(AF.cancellationLabel(b))+'</div>':'')+
+        (hist?window.RdvHistory.takenHTML(b,hist):'')+
         '<div style="margin-top:3px">'+chip+(b.outcomeNote?' <span style="font-size:10px;color:var(--muted);font-style:italic">'+esc(b.outcomeNote)+'</span>':'')+'</div>'+
         (past?'':'<div class="fl-rdv-status '+(open?'open':'closed')+'" style="margin-top:3px">'+(open?'🟠 Slot ouvert':'🔒 Slot fermé')+'</div>')+
       '</div>'+

@@ -13,6 +13,7 @@
 <!-- Refonte 07/2026 : résultats d'appel + replanification -->
 <script src="alteore-flow.js" defer></script>
 <script src="rdv-outcome.js" defer></script>
+<script src="rdv-history.js" defer></script>
 <script src="close-wizard.js" defer></script>
 <link rel="stylesheet" href="sales.css"/>
 <style>
@@ -849,7 +850,7 @@ function rvRowState(b, startMin, duration) {
    - stats imminents, créneaux ouverts, résultats à saisir ;
    - 👤 / 🎯 ouvrent la fiche dans Leads Live (sales-leads.html?leadId=).
    sales-rdv.html redirige vers booking-admin.html?vue=mes-rdv. */
-var aWho=null,aView='list',rWeek=null,_rvDbl={},_bkSlotMax=2,_bkSlotMaxLoaded=false;
+var aWho=null,aView='list',rWeek=null,_rvDbl={},_rvHist={},_bkSlotMax=2,_bkSlotMaxLoaded=false;
 (function(){
   var v=null;try{v=new URLSearchParams(window.location.search).get('vue');}catch(e){}
   /* ?vue=mes-rdv (redirection de sales-rdv.html, liens Funnel / Close SB)
@@ -932,8 +933,46 @@ function rvDoubleMap(list){
   list.forEach(function(b){if(b.status==='cancelled'||!b.personId)return;var k=b.date+'|'+b.time+'|'+b.personId;m[k]=(m[k]||0)+1;});
   return m;
 }
+/* ═══ HISTORIQUE DES RDV (21/10/2026) ═══════════════════════════════════
+   Date de prise, replanifications, RDV n°1 / n°2… d'un prospect, reconstitués
+   depuis les bookings par rdv-history.js (rien n'est écrit en base). Même
+   numérotation que la fiche Leads Live. Périmètre Setting & Sales. */
+function bkTypeMap(){var m={};T.forEach(function(t){if(t&&t.id)m[t.id]=t;});return m;}
+function bkHistIndex(){try{return window.RdvHistory?window.RdvHistory.indexAll(B,bkTypeMap()):{};}catch(e){console.error('[historique RDV]',e);return{};}}
+function bkPersonName(x){var p=P.find(function(q){return q.id===x.personId;});return p?p.name:(x.personName||'');}
+function bkTel9(v){return String(v||'').replace(/\D/g,'').slice(-9);}
+/* RDV du même prospect : même lead, même e-mail, même téléphone, ou chaînage. */
+function bkHistGroup(b,extra){
+  var pr=b.prospect||{},em=String(pr.email||'').trim().toLowerCase(),t9=bkTel9(pr.telephone),seen={},out=[];
+  B.concat(extra||[]).forEach(function(x){
+    var id=x._id||x.id;if(!id||seen[id])return;
+    var xp=x.prospect||{};
+    var ok=id===b._id||(b.leadId&&x.leadId===b.leadId)||(em&&String(xp.email||'').trim().toLowerCase()===em)||(t9.length===9&&bkTel9(xp.telephone)===t9)||x.rescheduledFromId===b._id||x.rescheduledToId===b._id;
+    if(ok){seen[id]=true;out.push(x);}
+  });
+  return out;
+}
+function bkPaintHist(b,extra){
+  var box=document.getElementById('rdvHistBox');
+  if(!box||box.getAttribute('data-bid')!==b._id||!window.RdvHistory)return;
+  var an=window.RdvHistory.analyze(bkHistGroup(b,extra),bkTypeMap());
+  box.innerHTML=window.RdvHistory.timelineHTML(an,{personName:bkPersonName});
+  var tk=document.getElementById('rdvTakenVal');
+  if(tk)tk.textContent=window.RdvHistory.takenText(b,an);
+}
+/* Un non-admin ne charge que son agenda et ses RDV posés : on complète avec
+   tous les RDV du lead pour que la numérotation soit la même partout. */
+function bkLoadHist(b){
+  bkPaintHist(b);
+  if(!b.leadId)return;
+  db.collection('bookings').where('leadId','==',b.leadId).get().then(function(sn){
+    var extra=[];sn.forEach(function(d){var v=d.data();v._id=d.id;extra.push(v);});
+    bkPaintHist(b,extra);
+  }).catch(function(e){console.warn('[historique RDV] lead',e&&e.message);});
+}
 function rvExtraFlags(b){
   var h='';
+  if(window.RdvHistory&&bkScope(b)==='sales')h+=window.RdvHistory.badgeHTML(b,_rvHist);
   if(b.status!=='cancelled'&&b.personId&&_rvDbl[b.date+'|'+b.time+'|'+b.personId]>1)h+='<span class="rv-flag rv-flag-dbl" title="Plusieurs RDV sur ce créneau chez le même expert">⚠ Double-booké</span>';
   if(b.slotOpen===true&&b.status==='confirmed'&&bkScope(b)==='sales')h+='<span class="rv-flag rv-flag-open" title="Créneau rouvert à d\'autres réservations">🟠 Créneau ouvert</span>';
   return h;
@@ -1034,7 +1073,7 @@ function rRdv(){syncScopeUI();var td=tISO(),fP=document.getElementById('rFP').va
    Il disparaissait purement et simplement de Booking. */
 var ca=fl.filter(function(b){return b.status==='cancelled';}),
     up=fl.filter(function(b){return b.date>=td&&(b.status==='confirmed'||b.status==='pending');}),
-    pa=fl.filter(function(b){return b.status!=='cancelled'&&!(b.date>=td&&(b.status==='confirmed'||b.status==='pending'));});up.sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time);});pa.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time);});ca.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time);});document.getElementById('cR').textContent=up.length;var wE=new Date();wE.setDate(wE.getDate()+7);var ws=wE.getFullYear()+'-'+String(wE.getMonth()+1).padStart(2,'0')+'-'+String(wE.getDate()).padStart(2,'0');var tw=up.filter(function(b){return b.date<=ws;}),tl=up.filter(function(b){return b.date===td;});document.getElementById('rSt').innerHTML=rvStatsHTML(fl,up,ca,tl,tw);_rvDbl=rvDoubleMap(B);if(aView==='week'){document.getElementById('rL').innerHTML=rvWeekHTML(fl);return;}var ls=aRT==='up'?up:aRT==='past'?pa:ca,el=document.getElementById('rL');if(!ls.length){el.innerHTML='<div class="rv-em">Aucun rendez-vous '+(aRT==='up'?'à venir':aRT==='past'?'passé':'annulé')+(_mine?'<div style="margin-top:8px;font-size:12px;opacity:.8">« Mes RDV » ne montre que les RDV de ton agenda et ceux que tu as posés.</div><button type="button" class="bb bb-p" data-who-go="team" style="margin-top:12px">👥 Voir l\'équipe</button>':'')+'</div>';return;}var gr={};ls.forEach(function(b){if(!gr[b.date])gr[b.date]=[];gr[b.date].push(b);});var dk=Object.keys(gr).sort(aRT==='up'?undefined:function(a,b){return b.localeCompare(a);});var h='';dk.forEach(function(dt){var its=gr[dt];h+='<div class="rv-dh"><span>📅</span><span class="rv-dl">'+dFR(dt)+'</span><span class="rv-dc">'+its.length+' Rendez-vous</span></div>';its.forEach(function(b){h+=rvRowHTML(b);});});el.innerHTML=h;}
+    pa=fl.filter(function(b){return b.status!=='cancelled'&&!(b.date>=td&&(b.status==='confirmed'||b.status==='pending'));});up.sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time);});pa.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time);});ca.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time);});document.getElementById('cR').textContent=up.length;var wE=new Date();wE.setDate(wE.getDate()+7);var ws=wE.getFullYear()+'-'+String(wE.getMonth()+1).padStart(2,'0')+'-'+String(wE.getDate()).padStart(2,'0');var tw=up.filter(function(b){return b.date<=ws;}),tl=up.filter(function(b){return b.date===td;});document.getElementById('rSt').innerHTML=rvStatsHTML(fl,up,ca,tl,tw);_rvDbl=rvDoubleMap(B);_rvHist=bkHistIndex();if(aView==='week'){document.getElementById('rL').innerHTML=rvWeekHTML(fl);return;}var ls=aRT==='up'?up:aRT==='past'?pa:ca,el=document.getElementById('rL');if(!ls.length){el.innerHTML='<div class="rv-em">Aucun rendez-vous '+(aRT==='up'?'à venir':aRT==='past'?'passé':'annulé')+(_mine?'<div style="margin-top:8px;font-size:12px;opacity:.8">« Mes RDV » ne montre que les RDV de ton agenda et ceux que tu as posés.</div><button type="button" class="bb bb-p" data-who-go="team" style="margin-top:12px">👥 Voir l\'équipe</button>':'')+'</div>';return;}var gr={};ls.forEach(function(b){if(!gr[b.date])gr[b.date]=[];gr[b.date].push(b);});var dk=Object.keys(gr).sort(aRT==='up'?undefined:function(a,b){return b.localeCompare(a);});var h='';dk.forEach(function(dt){var its=gr[dt];h+='<div class="rv-dh"><span>📅</span><span class="rv-dl">'+dFR(dt)+'</span><span class="rv-dc">'+its.length+' Rendez-vous</span></div>';its.forEach(function(b){h+=rvRowHTML(b);});});el.innerHTML=h;}
 /* Clics de la liste : résultat, sinon ouverture de la fiche du RDV — sauf
    sur un lien, un bouton ou le sélecteur de statut. */
 document.getElementById('rL').addEventListener('click',function(e){
@@ -2002,6 +2041,12 @@ h+='<div class="rdv-p-row"><span class="rdv-p-label">Statut</span><span class="r
 if(bkScope(b)==='sales'&&b.status==='confirmed'){
 h+='<div class="rdv-p-row"><span class="rdv-p-label">Créneau</span><span class="rdv-p-val">'+(b.slotOpen===true?'<span style="color:#fdba74">🟠 Ouvert à d\'autres réservations</span>':'🔒 Fermé (réservé à ce prospect)')+'</span></div>';
 }
+if(bkScope(b)==='sales'&&window.RdvHistory){
+h+='<div class="rdv-p-row"><span class="rdv-p-label">Pris le</span><span class="rdv-p-val" id="rdvTakenVal">'+esc(window.RdvHistory.takenText(b,_rvHist))+'</span></div>';
+}else if(b.createdAt&&window.RdvHistory){
+var _ca=window.RdvHistory.toDate(b.createdAt);
+if(_ca)h+='<div class="rdv-p-row"><span class="rdv-p-label">Pris le</span><span class="rdv-p-val">'+esc(window.RdvHistory.fmtDateTime(_ca))+'</span></div>';
+}
 if(b.status==='cancelled'&&b.rescheduled!==true){
 var _cl=(window.AlteoreFlow&&window.AlteoreFlow.cancellationLabel)?window.AlteoreFlow.cancellationLabel(b):'';
 h+='<div class="rdv-p-row"><span class="rdv-p-label">Annulation</span><span class="rdv-p-val" style="color:#fca5a5">🔴 '+esc(_cl||'origine non renseignée')+'</span></div>';
@@ -2012,6 +2057,7 @@ h+='<div class="rdv-p-row"><span class="rdv-p-label">Événement</span><span cla
 if(meetUrl){
 h+='<div class="rdv-p-row"><span class="rdv-p-label">Lien Meet</span><span class="rdv-p-val"><a href="'+esc(meetUrl)+'" target="_blank" style="color:#60a5fa;font-size:12px;word-break:break-all">'+esc(meetUrl)+'</a></span></div>';
 }
+if(bkScope(b)==='sales')h+='<div id="rdvHistBox" data-bid="'+escA(b._id)+'"></div>';
 }
 else if(rdvTab==='client'){
 h+='<div class="rdv-p-row"><span class="rdv-p-label">Prénom</span><span class="rdv-p-val">'+esc(pr.prenom||'—')+'</span></div>';
@@ -2052,7 +2098,7 @@ else if(rdvTab==='audit'){
 h+='<div class="rdv-p-row"><span class="rdv-p-label">ID Booking</span><span class="rdv-p-val" style="font-size:11px;color:rgba(255,255,255,.38);word-break:break-all">'+esc(b._id)+'</span></div>';
 h+='<div class="rdv-p-row"><span class="rdv-p-label">Source</span><span class="rdv-p-val">'+esc(b.source||'self_booking')+'</span></div>';
 if(b.timezone)h+='<div class="rdv-p-row"><span class="rdv-p-label">Fuseau horaire</span><span class="rdv-p-val">'+esc(b.timezone)+'</span></div>';
-if(b.createdAt){var cd=b.createdAt.toDate?b.createdAt.toDate():new Date(b.createdAt);h+='<div class="rdv-p-row"><span class="rdv-p-label">Créé le</span><span class="rdv-p-val">'+cd.toLocaleString('fr-FR')+'</span></div>';}
+if(b.createdAt){var cd=b.createdAt.toDate?b.createdAt.toDate():new Date(b.createdAt);h+='<div class="rdv-p-row"><span class="rdv-p-label">Créé le</span><span class="rdv-p-val">'+cd.toLocaleString('fr-FR',{timeZone:'Europe/Paris'})+'</span></div>';}
 if(b.calendarEventId)h+='<div class="rdv-p-row"><span class="rdv-p-label">Event Calendar</span><span class="rdv-p-val" style="font-size:11px;color:rgba(255,255,255,.38)">'+esc(b.calendarEventId)+'</span></div>';
 if(b.calendarSynced)h+='<div class="rdv-p-row"><span class="rdv-p-label">Calendar</span><span class="rdv-p-val" style="color:#34d399">✅ Synchronisé</span></div>';
 }
@@ -2083,6 +2129,7 @@ h+='<button class="bb bb-r" onclick="bkDeleteRdv(this,\''+b._id+'\')">🗑 Suppr
 h+='</div>';
 
 document.getElementById('rdvContent').innerHTML=h;
+if(rdvTab==='info'&&bkScope(b)==='sales')bkLoadHist(b);
 document.getElementById('rdvBg').classList.add('show');
 document.getElementById('rdvPanel').classList.add('show');
 document.body.classList.add('bk-rdv-open');

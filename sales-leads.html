@@ -29,6 +29,7 @@
 <!-- Refonte 07/2026 : journal d'actions setting + résultats RDV -->
 <script src="alteore-flow.js" defer></script>
 <script src="rdv-outcome.js" defer></script>
+<script src="rdv-history.js" defer></script>
 <script src="whatsapp-lead.js" defer></script>
 <script src="close-wizard.js" defer></script>
 <script src="close-pilot.js" defer></script>
@@ -3625,12 +3626,22 @@ function paintLeadRdvBox(leadId, items) {
   try { ldPresPaintBanner(leadId); } catch (ePres) { console.error('[présence] bandeau', leadId, ePres); }
   var block = document.querySelector('[data-rdv-block="' + leadId + '"]');
   var list  = document.querySelector('[data-rdv-list="'  + leadId + '"]');
-  if (!block || !list) return;
   /* On exclut les RDV coaching/CSM du parcours commercial */
   var AF = window.AlteoreFlow;
   var visible = (items || []).filter(function (b) {
     return !AF || AF.classifyBooking(b, _ldTypeMap || {}) !== 'excluded';
   });
+  /* Historique des RDV (21/10/2026) : date de prise, replanifications,
+     RDV n°1 / n°2… reconstitués depuis les bookings (rdv-history.js).
+     Peint AVANT le test de la boîte RDV : l'emplacement de la frise vit
+     aussi sur des onglets / écrans qui n'ont pas de boîte RDV. */
+  var hist = null;
+  try {
+    if (window.RdvHistory) hist = window.RdvHistory.analyze(visible, _ldTypeMap || {});
+    var histHtml = hist ? window.RdvHistory.timelineHTML(hist) : '';
+    Array.prototype.forEach.call(document.querySelectorAll('[data-rdv-hist="' + leadId + '"]'), function (el) { el.innerHTML = histHtml; });
+  } catch (eHist) { console.error('[historique RDV]', leadId, eHist); }
+  if (!block || !list) return;
   if (visible.length === 0) {
     block.classList.remove('has-rdv');
     list.innerHTML = '';
@@ -3679,6 +3690,8 @@ function paintLeadRdvBox(leadId, items) {
       h += '<button class="ld-rdvx-btn ghost" data-action="rdvOutcome" data-lead-id="' + leadId + '" data-booking-id="' + b.id + '" title="Statuer ce RDV (annulation anticipée, no-show, résultat…)">🎯 Statut</button>';
     }
     h += '</div>';
+    /* Quand le RDV a été pris / replanifié, et son rang (21/10/2026). */
+    if (window.RdvHistory) h += window.RdvHistory.takenHTML(b, hist);
     h += rdvInfoLine(b, meetUrl);
     return h;
   }
@@ -5298,6 +5311,9 @@ function l2SegInfos(l, id) {
 
   // Réponses du formulaire (AlteoForms) + historique des soumissions
   h += renderFormAnswersBlock(l, id);
+
+  // 📜 Historique des RDV — peint par paintLeadRdvBox (rdv-history.js)
+  h += '<div data-rdv-hist="' + id + '"></div>';
 
   // 📜 Historique des passages (engagementHistory[])
   h += renderEngagementHistoryBlock(l, id);

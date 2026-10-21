@@ -683,6 +683,8 @@
     var h = '<h1 class="ll5h1">Rendez-vous</h1>';
     h += '<div class="ld-rdv-block ll5rdv" data-rdv-block="' + id + '"><div class="ld-rdv-list" data-rdv-list="' + id + '"></div></div>';
     h += '<p class="ll5sub ll5rdvempty">Aucun rendez-vous avec ' + escHtml(prenom(l)) + ' pour l’instant.</p>';
+    /* Frise prise / replanifications / RDV n°… (rdv-history.js, peinte par paintLeadRdvBox). */
+    h += '<div data-rdv-hist="' + id + '"></div>';
     h += '<div class="ll5foot"><button type="button" class="ll5big pri" data-action="openBooking" data-id="' + id + '">' + ic('plus') + 'Prendre un RDV</button></div>';
     return h;
   }
@@ -942,6 +944,8 @@
     if (se && se.busy && !srv) h += '<p class="ll5note">Recherche des appels Ringover, SMS automatiques et WhatsApp…</p>';
     if (se && se.err) h += '<p class="ll5note late">Appels Ringover, SMS automatiques et WhatsApp indisponibles : ' + escHtml(se.err) + '</p>';
     if (srv && srv.smsError) h += '<p class="ll5note">SMS automatiques indisponibles pour l’instant (Twilio ne répond pas).</p>';
+    /* Historique des RDV : quand chaque RDV a été pris, replanifié, son rang (21/10/2026). */
+    h += '<div data-rdv-hist="' + id + '"></div>';
     if (!items.length) return h + '<p class="ll5sub ll5mt">Rien pour l’instant. Les appels Ringover, SMS, WhatsApp et e-mails apparaîtront ici.</p>';
     var jour = '';
     items.forEach(function (it, k) {
