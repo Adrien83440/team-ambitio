@@ -40,6 +40,7 @@ const company = require('./_companyLookup');
 const { buildPreviewPdf, buildSignedPdf, finishSigned, EVENT_LABELS } = require('./_sign-pdf');
 const render = require('./_contract-render');
 const { timestamp } = require('./_tsa');
+const { notifyCloseSms } = require('./_closeSms');
 
 /* Événements que la page peut journaliser. Tout le reste est ignoré : le
    journal ne doit contenir que des actions qui ont un sens probatoire. */
@@ -908,6 +909,11 @@ async function finalize(found, ctx, v, info, body) {
     templateName: R.templateName || '',
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
+
+  /* Signé + prélèvement déjà parti = close : SMS « Nouvelle vente »
+     (21/10/2026). Le cas courant (paiement après signature) part de
+     gocardless-payment. Ne lève jamais. */
+  await notifyCloseSms(R.leadId, 'signature');
 
   return { ok: true, final: true, certificateId: certId, sha256: finalSha, sealed: !!out.seal };
 }

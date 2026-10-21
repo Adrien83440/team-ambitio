@@ -12,6 +12,7 @@
 const { db } = require('./_firebaseAdmin');
 const { requireAuth } = require('./_verifyFirebaseAuth');
 const parseBody = require('./_parseBody');
+const { notifyCloseSms } = require('./_closeSms');
 
 const GC_BASE = process.env.GOCARDLESS_ENVIRONMENT === 'sandbox'
   ? 'https://api-sandbox.gocardless.com'
@@ -133,6 +134,9 @@ module.exports = async (req, res) => {
       else if (subStatus === 'active') updateData.status = 'active';
     }
     await paySnap.ref.update(updateData);
+    /* Abonnement devenu actif ici : le close a pu se réaliser à cet instant.
+       Idempotent et borné par _config/sales_close_sms.since. */
+    if (updateData.status === 'active' || updateData.status === 'completed') await notifyCloseSms(pay.leadId, 'gc-status');
 
     res.json(result);
   } catch (e) {

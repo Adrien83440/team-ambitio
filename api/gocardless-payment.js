@@ -13,6 +13,7 @@
 const { db, admin } = require('./_firebaseAdmin');
 const { requirePaymentsTrigger } = require('./_verifyFirebaseAuth');
 const parseBody = require('./_parseBody');
+const { notifyCloseSms } = require('./_closeSms');
 
 const GC_BASE = process.env.GOCARDLESS_ENVIRONMENT === 'sandbox'
   ? 'https://api-sandbox.gocardless.com'
@@ -123,6 +124,9 @@ module.exports = async (req, res) => {
     }
 
     await db.collection('payments').doc(paymentId).update(update);
+    /* Signé + prélèvement parti = close : SMS « Nouvelle vente » (21/10/2026).
+       Avant res.json — Vercel coupe la fonction dès la réponse. Ne lève jamais. */
+    await notifyCloseSms(pay.leadId, 'paiement');
     res.json({ gcId, gcType });
 
   } catch (e) {

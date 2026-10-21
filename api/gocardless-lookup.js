@@ -12,6 +12,7 @@
 const { db, admin } = require('./_firebaseAdmin');
 const { requireAuth } = require('./_verifyFirebaseAuth');
 const parseBody = require('./_parseBody');
+const { notifyCloseSms } = require('./_closeSms');
 
 const GC_BASE = process.env.GOCARDLESS_ENVIRONMENT === 'sandbox'
   ? 'https://api-sandbox.gocardless.com'
@@ -259,6 +260,9 @@ module.exports = async (req, res) => {
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       });
     }
+    /* Paiement retrouvé déjà parti : le close a pu se réaliser à cet instant.
+       Idempotent et borné par _config/sales_close_sms.since. */
+    if (gcFields.status === 'active' || gcFields.status === 'completed') await notifyCloseSms(leadId, 'gc-lookup');
 
     res.json(result);
 
