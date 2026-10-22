@@ -347,7 +347,7 @@
     f: { src: '', pb: '', par: '', last: '' },
     fold: { client: true, ecarte: true }, lim: {},
     drawer: null, full: null, ft: 'fil', fevf: 'tout', cmp: 'note', tr: {},
-    rap: [{ s: 'home' }], mine: false, sess: null, sheet: null, drag: null, dark: false, okOther: {}
+    stages: [], rap: [{ s: 'home' }], mine: false, sess: null, sheet: null, drag: null, dark: false, okOther: {}
   };
   function lead(id) { var a = H.leads(); for (var i = 0; i < a.length; i++) if (a[i].id === id) return a[i]; return null; }
   function fam(id) { for (var i = 0; i < FAMS.length; i++) if (FAMS[i].id === id) return FAMS[i]; return null; }
@@ -362,7 +362,26 @@
     if (S.per === 'an1') return new Date(r).getFullYear() === now.getFullYear() - 1;
     return true;
   }
-  function okFilters(l, d, sansMembre) {
+  /* Statut précis (22/10/2026) : NRP 1, SET, No show (setting)… — plusieurs à la fois */
+  function stageOk(d, famId) {
+    var sel = S.stages;
+    if (famId) sel = sel.filter(function (x) { return FAM_OF[x] === famId; });
+    return !sel.length || sel.indexOf(d.stage) > -1;
+  }
+  function stagesLabel() {
+    if (!S.stages.length) return 'Statut';
+    var n = S.stages.map(function (x) { return STAGE_LABEL[x]; });
+    return n.length <= 2 ? n.join(', ') : n.slice(0, 2).join(', ') + ' +' + (n.length - 2);
+  }
+  function subChips(stages, counts) {
+    var list = stages.filter(function (x) { return counts[x] || S.stages.indexOf(x) > -1; });
+    if (list.length < 2 && !list.some(function (x) { return S.stages.indexOf(x) > -1; })) return '';
+    return '<div class="pv2-subs">' + list.map(function (x) {
+      return '<button class="pv2-sub" data-a="stg" data-v="' + x + '" aria-pressed="' + (S.stages.indexOf(x) > -1) + '">' + esc(STAGE_LABEL[x]) + ' <span>' + (counts[x] || 0) + '</span></button>'; }).join('') + '</div>';
+  }
+  function countStages(rows) { var c = {}; rows.forEach(function (l) { var k = derive(l).stage; c[k] = (c[k] || 0) + 1; }); return c; }
+  function okFilters(l, d, sansMembre, sansStatut) {
+    if (!sansStatut && !stageOk(d)) return false;
     if (!sansMembre && S.who && (l.assignedTo || '') !== (S.who === '_none' ? '' : S.who)) return false;
     if (S.f.src && d.src.short !== S.f.src) return false;
     if (S.f.pb && d.pb.pilier !== S.f.pb) return false;
@@ -376,7 +395,7 @@
     if (S.f.last && !(d.days == null || d.days > +S.f.last)) return false;
     return true;
   }
-  function filtered() {
+  function filtered(sansStatut) {
     var q = S.q.trim().toLowerCase(), qd = q.replace(/\D/g, '');
     return H.leads().filter(function (l) {
       if (l._merged) return false;
@@ -385,7 +404,7 @@
         if (d.blob.indexOf(q) < 0 && !(qd.length >= 4 && d.blob.indexOf(qd.replace(/^0/, '')) > -1)) return false;
         return true;
       }
-      return okPeriod(d) && okFilters(l, d);
+      return okPeriod(d) && okFilters(l, d, false, sansStatut);
     });
   }
   function sortLeads(a) {
@@ -434,14 +453,15 @@
   }
 
   function viewPipe() {
-    var rows = sortLeads(filtered()), total = H.leads().length, h = header();
+    var rows = sortLeads(filtered()), stc = countStages(filtered(true)), total = H.leads().length, h = header();
     h += '<div class="pv2-tools"><label class="pv2-search">' + ic('search') + '<input id="pv2q" value="' + esc(S.q) + '" placeholder="Nom, téléphone, e-mail, mot d\'une note" autocomplete="off">' + (S.q ? '<button class="pv2-clr" data-a="clearq" aria-label="Effacer">' + ic('x') + '</button>' : '') + '</label>';
     h += '<div class="pv2-pills" role="group" aria-label="Arrivés">' + [['tout', 'Arrivés : tout'], ['mois', 'Ce mois-ci'], ['3m', '3 mois'], ['6m', '6 mois'], ['an', 'Cette année'], ['an1', 'L\'an dernier']].map(function (p) {
       return '<button class="pv2-pill" data-a="per" data-v="' + p[0] + '" aria-pressed="' + (S.per === p[0]) + '">' + p[1] + '</button>'; }).join('') + '</div>';
     h += whoSelect();
+    h += '<button class="pv2-pill" data-a="stages" aria-pressed="' + (S.stages.length > 0) + '">' + esc(stagesLabel()) + ' ▾</button>';
     var fc = activeFilterCount();
     h += '<button class="pv2-pill" data-a="filters" aria-pressed="' + (fc > 0) + '">Plus de filtres' + (fc ? '<span class="pv2-n">' + fc + '</span>' : '') + '</button></div>';
-    var restricted = S.q || S.per !== 'tout' || S.who || fc, bulk = bulkCandidates(rows);
+    var restricted = S.q || S.per !== 'tout' || S.who || fc || S.stages.length, bulk = bulkCandidates(rows);
     h += '<div class="pv2-result"><span><b>' + rows.length + '</b> lead' + (rows.length > 1 ? 's' : '') + (restricted ? ' sur ' + total + ' · <button data-a="reset">Tout effacer</button>' : '') + (S.q ? ' · la recherche ignore les filtres' : '') + '</span>' +
       (bulk.ok.length ? '<button class="pv2-take" data-a="bulktake">Prendre ces ' + plural(bulk.ok.length, 'lead') + '</button>' : '') + '<span class="pv2-sp"></span>' +
       '<label>Trier : <select class="pv2-sort" id="pv2sort">' + [['arr', 'arrivée récente d\'abord'], ['oubli', 'oubliés depuis longtemps d\'abord'], ['chaud', 'les plus chauds d\'abord'], ['nom', 'par nom']].map(function (o) {
@@ -453,7 +473,7 @@
       var lim = S.lim[f.id] || 25;
       h += '<section class="pv2-col" data-col="' + f.id + '"><div class="pv2-ch"><span class="pv2-t">' + f.t + '</span><span class="pv2-c">' + cs.length + '</span>' +
         (f.id === 'client' || f.id === 'ecarte' ? '<button class="pv2-fold" data-a="fold" data-v="' + f.id + '" title="Replier" aria-label="Replier">' + ic('fold') + '</button>' : '') + '</div>' +
-        (f.s ? '<div class="pv2-chs">' + f.s + '</div>' : '') + '<div class="pv2-cards">';
+        (f.s ? '<div class="pv2-chs">' + f.s + '</div>' : '') + (S.q ? '' : subChips(f.st, stc)) + '<div class="pv2-cards">';
       h += cs.length ? cs.slice(0, lim).map(card).join('') : '<div class="pv2-empty">Aucun lead</div>';
       if (cs.length > lim) h += '<button class="pv2-more" data-a="more" data-v="' + f.id + '">Voir les ' + (cs.length - lim) + ' autres</button>';
       h += '</div></section>';
@@ -609,11 +629,12 @@
   }
 
   /* Vue Rappels : écrans façon Leads Live + séance un par un */
-  function basketLeads(id) {
+  function basketLeads(id, sansStatut) {
     return H.leads().filter(function (l) {
       if (l._merged) return false;
       var d = derive(l);
       if (d.fam !== id) return false;
+      if (!sansStatut && !stageOk(d, id)) return false;
       if (S.mine && l.assignedTo !== H.me.slug) return false;
       return okPeriod(d);
     }).sort(function (a, b) { var da = derive(a).days, db = derive(b).days; return (db == null ? 1e9 : db) - (da == null ? 1e9 : da); });
@@ -627,7 +648,7 @@
       h += '<div class="pv2-gt">Ou</div><div class="pv2-group"><button class="pv2-row" data-a="view" data-v="pipe"><span class="pv2-tile">' + ic('search') + '</span><div class="pv2-tx"><div class="pv2-tt">Voir tout le pipeline</div><div class="pv2-st">Tous les leads, par étape</div></div><span class="pv2-chev">' + ic('chev') + '</span></button></div>';
     } else if (c.s === 'list') {
       var b = basketById(c.bk), grp = basketGroups(c.bk), g = grp.g, ord = grp.ord, rows = grp.flat;
-      h += '<div class="pv2-bar"><button class="pv2-back" data-a="rback">' + ic('back') + 'Rappels</button></div><h2 class="pv2-name">' + b.t + '</h2><p class="pv2-lead">' + b.s + '. Rangés par mois d\'arrivée, les plus oubliés en tête de chaque mois.</p>' + rapPills();
+      h += '<div class="pv2-bar"><button class="pv2-back" data-a="rback">' + ic('back') + 'Rappels</button></div><h2 class="pv2-name">' + b.t + '</h2><p class="pv2-lead">' + b.s + '. Rangés par mois d\'arrivée, les plus oubliés en tête de chaque mois.</p>' + rapPills() + subChips(fam(c.bk).st, countStages(basketLeads(c.bk, true)));
       h += '<div style="margin-top:14px"><button class="pv2-big pv2-blue" data-a="sess" data-v="' + c.bk + '"' + (rows.length ? '' : ' disabled') + '>' + ic('play') + 'Les rappeler un par un (' + rows.length + ')</button></div>';
       if (!rows.length) h += '<p class="pv2-muted" style="margin-top:18px">Personne dans ce panier avec ces réglages.</p>';
       ord.forEach(function (m) {
@@ -796,6 +817,13 @@
       h += '<h2>' + nm + ' à ' + esc(l.nom) + '</h2><p>' + esc(sh.ch === 'email' ? (l.email || 'Pas d\'e-mail') : (l.telephone || 'Pas de téléphone')) + '</p><textarea id="pv2msg" placeholder="Votre message"></textarea><button class="pv2-big pv2-blue" data-a="msgsend">Envoyer</button>';
     } else if (sh.k === 'tag') {
       h += '<h2>Ajouter un tag</h2><p>' + esc(l.nom) + '</p><input id="pv2tag" placeholder="Ex. : Associé, Budget OK"><button class="pv2-big pv2-blue" data-a="tagsave">Ajouter</button>';
+    } else if (sh.k === 'stages') {
+      var cs = countStages(filtered(true));
+      h += '<h2>Statut précis</h2><p>Coche un ou plusieurs statuts. Les chiffres tiennent compte des autres filtres.</p>' + FAMS.map(function (f) {
+        return '<div class="pv2-gt">' + f.t + '</div><div class="pv2-group">' + f.st.map(function (x) {
+          var on = S.stages.indexOf(x) > -1;
+          return '<button class="pv2-row" data-a="stg" data-v="' + x + '" aria-pressed="' + on + '"><div class="pv2-tx"><div class="pv2-tt" style="font-size:15.5px">' + esc(STAGE_LABEL[x]) + '</div></div><span class="pv2-cnt">' + (cs[x] || 0) + '</span><span class="pv2-box' + (on ? ' pv2-on' : '') + '">' + (on ? '✓' : '') + '</span></button>'; }).join('') + '</div>';
+      }).join('') + '<button class="pv2-big pv2-blue" data-a="sclose">Voir les leads</button>' + (S.stages.length ? '<button class="pv2-soft" style="width:100%;margin-top:10px" data-a="stgclear">Tous les statuts</button>' : '');
     } else if (sh.k === 'ask') {
       var dd = derive(l), ok = canTake(l), quand = dd.days == null ? 'jamais contacté' : dd.days === 0 ? 'contacté aujourd\'hui' : 'contacté il y a ' + plural(dd.days, 'jour');
       h += '<h2>Ce lead est suivi par ' + esc(dd.who) + '</h2><p>' + esc(l.nom) + ' · ' + quand + '. ' + (ok ? 'Tu veux le prendre ?' : 'Seul un admin peut le réattribuer avant ' + TAKE_DAYS + ' jours sans contact.') + '</p>' +
@@ -888,7 +916,7 @@
       case 'per': S.per = v; savePrefs(); render(); break;
       case 'mine': S.mine = !S.mine; savePrefs(); render(); break;
       case 'clearq': S.q = ''; render(); break;
-      case 'reset': S.q = ''; S.per = 'tout'; S.who = null; S.f = { src: '', pb: '', par: '', last: '' }; savePrefs(); render(); break;
+      case 'reset': S.q = ''; S.per = 'tout'; S.who = null; S.stages = []; S.f = { src: '', pb: '', par: '', last: '' }; savePrefs(); render(); break;
       case 'filters': S.sheet = { k: 'filters' }; render(); break;
       case 'applyf': ['src', 'pb', 'par', 'last'].forEach(function (k) { S.f[k] = val('pv2f-' + k); }); S.sheet = null; render(); break;
       case 'fold': S.fold[v] = true; savePrefs(); render(); break;
@@ -960,6 +988,9 @@
         S.sheet = null; H.createLead({ nom: nn, telephone: val('pv2nt'), email: val('pv2ne') }, done('Lead créé'));
         break;
       case 'sclose': S.sheet = null; render(true); break;
+      case 'stg': var ix = S.stages.indexOf(v); if (ix > -1) S.stages.splice(ix, 1); else S.stages.push(v); render(true); break;
+      case 'stgclear': S.stages = []; render(true); break;
+      case 'stages': S.sheet = { k: 'stages' }; render(true); break;
       case 'take': l = lead(curLeadId()); H.setAssigned(l, H.me.slug, done('Tu suis maintenant ' + l.nom)); break;
       case 'assignto': S.sheet = { k: 'assign', id: curLeadId() }; render(true); break;
       case 'assignset': l = lead(S.sheet.id); S.sheet = null; H.setAssigned(l, v, done(v ? l.nom + ' → ' + memberName(v) : l.nom + ' n\'est plus attribué')); break;

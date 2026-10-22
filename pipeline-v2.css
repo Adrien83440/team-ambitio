@@ -28,7 +28,9 @@
   color-scheme:dark;
 }
 .pv2 *,.pv2 *::before,.pv2 *::after{box-sizing:border-box}
-.pv2 button,.pv2 select,.pv2 input,.pv2 textarea{font:inherit;color:inherit}
+/* :where() = spécificité nulle : la police et la couleur propres à chaque bouton
+   (.pv2-big blanc, .pv2-pill 13,5 px…) ne sont plus écrasées par cette remise à zéro */
+:where(.pv2) button,:where(.pv2) select,:where(.pv2) input,:where(.pv2) textarea{font:inherit;color:inherit}
 .pv2 button{cursor:pointer}
 .pv2 :focus-visible{outline:2px solid var(--p-acc);outline-offset:2px}
 .pv2 svg.pv2i{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
@@ -67,7 +69,7 @@
 .pv2-whosel.pv2-on{border-color:var(--p-text)}
 .pv2-owner{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;margin-top:10px;font-size:14.5px;color:var(--p-muted)}
 .pv2-owner b{color:var(--p-text)}
-.pv2-take{border:0;border-radius:999px;background:var(--p-acc);color:#fff;font-weight:700;font-size:13.5px;padding:7px 14px}
+.pv2-take{border:0;border-radius:999px;background:var(--p-acc);color:#fff;font-weight:800;font-size:14.5px;padding:9px 18px;box-shadow:0 4px 12px rgba(52,81,224,.28)}
 .pv2-ownnote{font-size:13px;color:var(--p-faint)}
 .pv2-ownt{display:inline-flex;align-items:center;gap:5px;font-weight:700;color:var(--p-muted);white-space:nowrap}
 .pv2-ownt i{display:inline-block;width:8px;height:8px;border-radius:50%}
@@ -254,3 +256,13 @@ button.pv2-row:hover{background:var(--p-soft)}
   .pv2-enter,.pv2-drawer{animation:none}
   .pv2-toast,.pv2-card,.pv2-prog .pv2-fl{transition:none}
 }
+
+/* ── Statut précis (22/10/2026) ── */
+.pv2-subs{display:flex;flex-wrap:wrap;gap:5px;padding:0 4px 10px}
+.pv2-narrow .pv2-subs{padding:10px 0 0}
+.pv2-sub{border:1px solid var(--p-line);background:var(--p-card);border-radius:999px;padding:4px 10px;font-size:12.5px;font-weight:700;color:var(--p-muted)}
+.pv2-sub span{color:var(--p-faint);font-weight:600}
+.pv2-sub[aria-pressed="true"]{background:var(--p-acc);border-color:var(--p-acc);color:#fff}
+.pv2-sub[aria-pressed="true"] span{color:rgba(255,255,255,.8)}
+.pv2-box{width:24px;height:24px;border-radius:8px;border:2px solid var(--p-line);display:grid;place-items:center;font-size:14px;font-weight:800;color:#fff;flex:none}
+.pv2-box.pv2-on{background:var(--p-acc);border-color:var(--p-acc)}
