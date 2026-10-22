@@ -38,21 +38,22 @@
 
   /* ═══ 1. Modèle ═══ */
   var FAMS = [
-    { id: 'joindre',  t: 'À joindre',      s: 'Jamais eu au téléphone',          st: ['lead', 'nrp1', 'nrp2', 'nrp3', 'all_nrp'] },
-    { id: 'relance',  t: 'En relance',     s: 'Joints, une suite est prévue',    st: ['follow_up_pm', 'follow_up_closing'] },
-    { id: 'rdv',      t: 'RDV posé',       s: 'Un rendez-vous arrive',           st: ['set', 'rdv_self_booking', 'rdv_confirmes', 'partenariats'] },
-    { id: 'sansuite', t: 'RDV sans suite', s: 'Absents, annulés ou non closés',  st: ['rdv_annules_prospect', 'rdv_annules_equipe', 'no_show_self', 'no_show_setting', 'closed_lost'] },
-    { id: 'client',   t: 'Client',         s: '',                                st: ['closed_won_setting', 'closed_won_self'] },
-    { id: 'ecarte',   t: 'Écarté',         s: '',                                st: ['faux_numero', 'poubelle', 'disqualification', 'disqualifie_closing'] }
+    /* Noms des colonnes = vocabulaire des SOP (retour Vincent du 22/10/2026) */
+    { id: 'joindre',  t: 'Nouveau / NRP',                 s: 'Pas encore eu au téléphone',   st: ['lead', 'nrp1', 'nrp2', 'nrp3', 'all_nrp'] },
+    { id: 'relance',  t: 'Follow Up',                     s: 'Rappel convenu',               st: ['follow_up_pm', 'follow_up_closing'] },
+    { id: 'rdv',      t: 'SET / RDV posé',                s: 'RDV à venir',                  st: ['set', 'rdv_self_booking', 'rdv_confirmes', 'partenariats'] },
+    { id: 'sansuite', t: 'No show / Annulé / Closed Lost', s: 'RDV passé sans signature',    st: ['rdv_annules_prospect', 'rdv_annules_equipe', 'no_show_self', 'no_show_setting', 'closed_lost'] },
+    { id: 'client',   t: 'Closing',                       s: '',                             st: ['closed_won_setting', 'closed_won_self'] },
+    { id: 'ecarte',   t: 'Disqualifié / Poubelle',        s: '',                             st: ['faux_numero', 'poubelle', 'disqualification', 'disqualifie_closing'] }
   ];
   var STAGE_LABEL = {
-    lead: 'Lead', nrp1: 'NRP 1', nrp2: 'NRP 2', nrp3: 'NRP 3', all_nrp: 'All NRP',
-    follow_up_pm: 'Follow Up (PM)', follow_up_closing: 'Follow-Up closing',
-    set: 'SET', rdv_self_booking: 'RDV Self Booking', rdv_confirmes: 'RDV confirmés', partenariats: 'Partenariats',
-    rdv_annules_prospect: 'RDV annulé prospect', rdv_annules_equipe: 'RDV annulé équipe',
-    no_show_self: 'No show self booking', no_show_setting: 'No show setting', closed_lost: 'Closed Lost',
+    lead: 'Nouveau', nrp1: 'NRP 1', nrp2: 'NRP 2', nrp3: 'NRP 3', all_nrp: 'All NRP',
+    follow_up_pm: 'Follow Up PM', follow_up_closing: 'Follow-Up closing',
+    set: 'SET', rdv_self_booking: 'RDV Self Booking', rdv_confirmes: 'RDV posé', partenariats: 'Partenariats',
+    rdv_annules_prospect: 'RDV annulé (prospect)', rdv_annules_equipe: 'RDV annulé (équipe)',
+    no_show_self: 'No show (self booking)', no_show_setting: 'No show (setting)', closed_lost: 'Closed Lost',
     closed_won_setting: 'Closing (setting)', closed_won_self: 'Closing (self booking)',
-    faux_numero: 'Faux numéro', poubelle: 'Poubelle', disqualification: 'Disqualification', disqualifie_closing: 'Disqualifié closing'
+    faux_numero: 'Faux numéro', poubelle: 'Poubelle', disqualification: 'Disqualifié', disqualifie_closing: 'Disqualifié (closing)'
   };
   var FAM_OF = {};
   FAMS.forEach(function (f) { f.st.forEach(function (s) { FAM_OF[s] = f.id; }); });
@@ -64,9 +65,9 @@
   var DAY = 864e5;
 
   var BASKETS = [
-    { id: 'sansuite', ic: 'check', t: 'RDV sans suite', s: 'Ont vu un closer, n\'ont pas signé' },
-    { id: 'joindre',  ic: 'off',   t: 'Jamais joints',  s: 'Personne ne les a encore eus au téléphone' },
-    { id: 'relance',  ic: 'redo',  t: 'À relancer',     s: 'Joints, une suite était prévue' }
+    { id: 'sansuite', ic: 'check', t: 'No show / Closed Lost', s: 'Ont eu un RDV, n\'ont pas signé' },
+    { id: 'joindre',  ic: 'off',   t: 'Nouveaux / NRP',        s: 'Pas encore eus au téléphone' },
+    { id: 'relance',  ic: 'redo',  t: 'Follow Up',             s: 'Rappel convenu avec eux' }
   ];
 
   var IC = {
@@ -264,7 +265,7 @@
       d.conseil = 'Rien à faire côté vente'; tone = 'go'; ct = 'go';
     } else if (d.fam === 'ecarte') {
       d.ligne = d.stageLabel + (note ? ' · ' + cut(note.text, 60) : '');
-      d.situ = 'Écarté : ' + d.stageLabel.toLowerCase() + '.' + (note ? ' « ' + cut(note.text, 160) + ' »' : '');
+      d.situ = d.stageLabel + '.' + (note ? ' « ' + cut(note.text, 160) + ' »' : '');
       d.conseil = 'Rien à faire'; tone = 'grey'; ct = 'go';
     } else if (d.upcoming) {
       var u = d.upcoming, us = bookingStart(u), pres = !!u.presenceConfirmed;
@@ -295,7 +296,7 @@
       tone = (d.arrDays || 0) <= 2 ? 'go' : (d.arrDays || 0) <= 14 ? 'warn' : 'late';
     } else if (!ans) {
       d.ligne = plural(calls, 'appel') + ' sans réponse' + (msgs ? '' : ', aucun message envoyé');
-      d.situ = plural(calls, 'appel') + ', jamais décroché. Dernier appel le ' + fdate(lastCall) + '. ' + (msgs ? plural(msgs, 'message envoyé', 'messages envoyés') + '.' : 'Aucun SMS ni WhatsApp envoyé.');
+      d.situ = plural(calls, 'appel') + ', jamais décroché. Dernier appel le ' + fdate(lastCall).replace(/\.$/, '') + '. ' + (msgs ? plural(msgs, 'message envoyé', 'messages envoyés') + '.' : 'Aucun SMS ni WhatsApp envoyé.');
       d.conseil = calls >= 3 && !msgs ? 'Essayer un WhatsApp ou un SMS plutôt qu\'un nouvel appel' : 'Nouvel appel'; ct = 'go';
     } else {
       d.ligne = 'Joint le ' + fdate(lastAns.ms) + ' · ' + since(d.days);
@@ -346,7 +347,7 @@
     f: { src: '', pb: '', par: '', last: '' },
     fold: { client: true, ecarte: true }, lim: {},
     drawer: null, full: null, ft: 'fil', fevf: 'tout', cmp: 'note', tr: {},
-    rap: [{ s: 'home' }], mine: false, sess: null, sheet: null, drag: null, dark: false
+    rap: [{ s: 'home' }], mine: false, sess: null, sheet: null, drag: null, dark: false, okOther: {}
   };
   function lead(id) { var a = H.leads(); for (var i = 0; i < a.length; i++) if (a[i].id === id) return a[i]; return null; }
   function fam(id) { for (var i = 0; i < FAMS.length; i++) if (FAMS[i].id === id) return FAMS[i]; return null; }
@@ -361,8 +362,8 @@
     if (S.per === 'an1') return new Date(r).getFullYear() === now.getFullYear() - 1;
     return true;
   }
-  function okFilters(l, d) {
-    if (S.who && (l.assignedTo || '') !== (S.who === '_none' ? '' : S.who)) return false;
+  function okFilters(l, d, sansMembre) {
+    if (!sansMembre && S.who && (l.assignedTo || '') !== (S.who === '_none' ? '' : S.who)) return false;
     if (S.f.src && d.src.short !== S.f.src) return false;
     if (S.f.pb && d.pb.pilier !== S.f.pb) return false;
     var p = S.f.par;
@@ -397,12 +398,32 @@
       return (dy.real || 0) - (dx.real || 0);
     });
   }
+  /* Reprise d'un lead (retour Vincent du 22/10/2026) : un sales peut prendre
+     le lead d'un autre s'il n'a eu aucun contact depuis plus de 7 jours ;
+     un admin peut toujours. Seul assignedTo change : le setter d'origine
+     (setterSlug, verrouillé, commissions) ne bouge jamais. */
+  var TAKE_DAYS = 7;
+  function isMine(l) { return (l.assignedTo || '') === H.me.slug; }
+  function isAdmin() { return H.me.role === 'admin'; }
+  function canTake(l) {
+    if (isMine(l)) return false;
+    if (isAdmin() || !l.assignedTo) return true;
+    var d = derive(l);
+    return d.days == null || d.days > TAKE_DAYS;
+  }
+  function ownerHTML(l) {
+    var d = derive(l), h = '<div class="pv2-owner"><span>Suivi par <b>' + esc(isMine(l) ? 'toi' : d.who) + '</b></span>';
+    if (canTake(l)) h += '<button class="pv2-take" data-a="take">Je le prends</button>';
+    else if (!isMine(l)) h += '<span class="pv2-ownnote">Contacté ' + (d.days === 0 ? 'aujourd\'hui' : 'il y a ' + plural(d.days, 'jour')) + ' : seul un admin peut le réattribuer</span>';
+    if (isAdmin()) h += '<button class="pv2-lk" style="padding:0" data-a="assignto">Attribuer à…</button>';
+    return h + '</div>';
+  }
   function activeFilterCount() { var n = 0; for (var k in S.f) if (S.f[k]) n++; return n; }
 
   /* ═══ 5. Rendus ═══ */
-  function mini(slug, small) {
-    var n = memberName(slug);
-    return '<span class="pv2-mini" style="background:' + esc(slug ? memberColor(slug) : '#9096ad') + '" title="Suivi par ' + esc(n) + '">' + esc(slug ? n.slice(0, 2) : '?') + '</span>';
+  function ownTag(l) {
+    var slug = l.assignedTo || '';
+    return '<span class="pv2-ownt" title="Suivi par ' + esc(memberName(slug)) + '"><i style="background:' + esc(slug ? memberColor(slug) : '#9096ad') + '"></i>' + esc(slug ? (isMine(l) ? 'Moi' : memberName(slug)) : 'Personne') + '</span>';
   }
   function ini(n) { return String(n || '?').split(/\s+/).map(function (x) { return x.charAt(0); }).join('').slice(0, 2).toUpperCase(); }
   function header() {
@@ -417,13 +438,12 @@
     h += '<div class="pv2-tools"><label class="pv2-search">' + ic('search') + '<input id="pv2q" value="' + esc(S.q) + '" placeholder="Nom, téléphone, e-mail, mot d\'une note" autocomplete="off">' + (S.q ? '<button class="pv2-clr" data-a="clearq" aria-label="Effacer">' + ic('x') + '</button>' : '') + '</label>';
     h += '<div class="pv2-pills" role="group" aria-label="Arrivés">' + [['tout', 'Arrivés : tout'], ['mois', 'Ce mois-ci'], ['3m', '3 mois'], ['6m', '6 mois'], ['an', 'Cette année'], ['an1', 'L\'an dernier']].map(function (p) {
       return '<button class="pv2-pill" data-a="per" data-v="' + p[0] + '" aria-pressed="' + (S.per === p[0]) + '">' + p[1] + '</button>'; }).join('') + '</div>';
-    h += '<div class="pv2-avs"><span class="pv2-lb">Suivi par</span>' + H.team.filter(function (m) { return m.pipeline !== false; }).map(function (m) {
-      return '<button class="pv2-mini' + (S.who && S.who !== m.slug ? ' pv2-dim' : '') + '" data-a="who" data-v="' + esc(m.slug) + '" aria-pressed="' + (S.who === m.slug) + '" style="background:' + esc(m.color) + '" title="' + esc(m.name) + '">' + esc(m.name.slice(0, 2)) + '</button>'; }).join('') +
-      '<button class="pv2-mini' + (S.who && S.who !== '_none' ? ' pv2-dim' : '') + '" data-a="who" data-v="_none" aria-pressed="' + (S.who === '_none') + '" style="background:#9096ad" title="Personne">?</button></div>';
+    h += whoSelect();
     var fc = activeFilterCount();
     h += '<button class="pv2-pill" data-a="filters" aria-pressed="' + (fc > 0) + '">Plus de filtres' + (fc ? '<span class="pv2-n">' + fc + '</span>' : '') + '</button></div>';
-    var restricted = S.q || S.per !== 'tout' || S.who || fc;
-    h += '<div class="pv2-result"><span><b>' + rows.length + '</b> lead' + (rows.length > 1 ? 's' : '') + (restricted ? ' sur ' + total + ' · <button data-a="reset">Tout effacer</button>' : '') + (S.q ? ' · la recherche ignore les filtres' : '') + '</span><span class="pv2-sp"></span>' +
+    var restricted = S.q || S.per !== 'tout' || S.who || fc, bulk = bulkCandidates(rows);
+    h += '<div class="pv2-result"><span><b>' + rows.length + '</b> lead' + (rows.length > 1 ? 's' : '') + (restricted ? ' sur ' + total + ' · <button data-a="reset">Tout effacer</button>' : '') + (S.q ? ' · la recherche ignore les filtres' : '') + '</span>' +
+      (bulk.ok.length ? '<button class="pv2-take" data-a="bulktake">Prendre ces ' + plural(bulk.ok.length, 'lead') + '</button>' : '') + '<span class="pv2-sp"></span>' +
       '<label>Trier : <select class="pv2-sort" id="pv2sort">' + [['arr', 'arrivée récente d\'abord'], ['oubli', 'oubliés depuis longtemps d\'abord'], ['chaud', 'les plus chauds d\'abord'], ['nom', 'par nom']].map(function (o) {
       return '<option value="' + o[0] + '"' + (S.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label></div>';
     h += '<div class="pv2-boardwrap"><div class="pv2-board">';
@@ -441,17 +461,43 @@
     h += '</div></div><div class="pv2-legend"><span><i class="pv2-dot pv2-d-go"></i>Contact récent ou action prévue</span><span><i class="pv2-dot pv2-d-warn"></i>À reprendre</span><span><i class="pv2-dot pv2-d-late"></i>Oublié ou en retard</span><span>Glisse une carte vers une autre colonne pour changer d\'étape</span></div>';
     return h;
   }
+  /* Menu « Suivi par » avec le nombre de leads de chacun (période et filtres appliqués) */
+  function whoSelect() {
+    var cnt = { '': 0, _none: 0 };
+    if (!S.q) H.leads().forEach(function (l) {
+      if (l._merged) return;
+      var d = derive(l);
+      if (!okPeriod(d) || !okFilters(l, d, true)) return;
+      cnt[''] = (cnt[''] || 0) + 1;
+      var k = l.assignedTo || '_none'; cnt[k] = (cnt[k] || 0) + 1;
+    });
+    var mem = H.team.filter(function (m) { return m.pipeline !== false && m.slug !== H.me.slug; });
+    var o = [['', 'Tout le monde', cnt['']], [H.me.slug, 'Les miens', cnt[H.me.slug] || 0]].concat(mem.map(function (m) { return [m.slug, m.name, cnt[m.slug] || 0]; })).concat([['_none', 'Personne', cnt._none || 0]]);
+    return '<label class="pv2-whosel' + (S.who ? ' pv2-on' : '') + '"><span>Suivi par</span><select id="pv2who">' + o.map(function (x) {
+      return '<option value="' + esc(x[0]) + '"' + ((S.who || '') === x[0] ? ' selected' : '') + '>' + esc(x[1]) + (S.q ? '' : ' (' + x[2] + ')') + '</option>'; }).join('') + '</select></label>';
+  }
+  /* « Prendre ces N leads » : seulement quand on regarde les leads de quelqu'un d'autre */
+  function bulkCandidates(rows) {
+    var r = { ok: [], kept: 0 };
+    if (!S.who || S.who === H.me.slug || S.q) return r;
+    rows.forEach(function (l) {
+      var f = derive(l).fam;
+      if (f === 'client' || f === 'ecarte') return;
+      if (canTake(l)) r.ok.push(l.id); else r.kept++;
+    });
+    return r;
+  }
   function card(l) {
     var d = derive(l);
     return '<button class="pv2-card" draggable="true" data-a="open" data-v="' + esc(l.id) + '" data-id="' + esc(l.id) + '"><div class="pv2-k1"><i class="pv2-dot pv2-d-' + d.tone + '"></i><span class="pv2-nm">' + esc(l.nom || 'Sans nom') + '</span></div>' +
-      '<div class="pv2-k2">' + esc(d.ligne) + '</div><div class="pv2-k3"><span class="pv2-etp">' + esc(d.stageLabel) + '</span><span class="pv2-src">' + esc(d.src.short) + ' · ' + fdate(d.real) + '</span>' + mini(l.assignedTo) + '</div></button>';
+      '<div class="pv2-k2">' + esc(d.ligne) + '</div><div class="pv2-k3"><span class="pv2-etp">' + esc(d.stageLabel) + '</span><span class="pv2-src">' + esc(d.src.short) + ' · ' + fdate(d.real) + '</span>' + ownTag(l) + '</div></button>';
   }
 
   /* Fiche courte : tiroir du pipeline, écran de la vue Rappels, carte de séance */
   function fiche(l, o) {
     o = o || {};
     var d = derive(l), first = String(l.nom || '').split(' ')[0], stop = l.smsOptedOut || l.smsOptOut;
-    var h = '<h2 class="pv2-name">' + esc(l.nom) + '</h2><div class="pv2-who">' + esc([l.secteur, l.ca].filter(Boolean).join(' · ') || 'Secteur non renseigné') + ' · suivi par ' + esc(d.who) + '</div>';
+    var h = '<h2 class="pv2-name">' + esc(l.nom) + '</h2><div class="pv2-who">' + esc([l.secteur, l.ca].filter(Boolean).join(' · ') || 'Secteur non renseigné') + '</div>' + ownerHTML(l);
     h += '<div class="pv2-status">' + esc(d.situ) + '<small class="pv2-' + d.ctone + '">→ ' + esc(d.conseil) + '</small></div>';
     if (!o.noCall) h += '<button class="pv2-big" data-a="call" data-v="' + esc(l.id) + '"' + (l.telephone ? '' : ' disabled') + '>' + ic('phone') + 'Appeler ' + esc(first) + '</button>';
     h += '<div class="pv2-acts">' +
@@ -508,13 +554,9 @@
     h = '<h2 class="pv2-name">Infos</h2>' + top + '<div class="pv2-group" style="margin-top:16px">' +
       kv('Téléphone', '<span style="user-select:all">' + esc(l.telephone || '—') + '</span>') + kv('E-mail', '<span style="user-select:all">' + esc(l.email || '—') + '</span>') +
       (l.instagramUsername ? kv('Instagram', '@' + esc(l.instagramUsername)) : '') + kv('Setter d\'origine', esc(l.setterName || memberName(l.setterSlug) || '—') + (l.setterSlug ? ' · ne change jamais' : '')) + '</div>';
-    h += '<div class="pv2-pane" style="margin-top:14px"><div class="pv2-flds"><label>Suivi par' + assignSelect(l) + '</label></div></div>';
+    h += '<div class="pv2-pane" style="margin-top:14px">' + ownerHTML(l) + '</div>';
     h += '<div class="pv2-gt">Tags</div>' + tagsHTML(l);
     return h;
-  }
-  function assignSelect(l) {
-    return '<select data-a="assign">' + '<option value="">Personne</option>' + H.team.filter(function (m) { return m.pipeline !== false; }).map(function (m) {
-      return '<option value="' + esc(m.slug) + '"' + (l.assignedTo === m.slug ? ' selected' : '') + '>' + esc(m.name) + '</option>'; }).join('') + '</select>';
   }
   function tagsHTML(l) { return '<div class="pv2-tags">' + (l.tags || []).map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '<button data-a="tag">+ tag</button></div>'; }
 
@@ -631,7 +673,7 @@
     var d = derive(l), fi = -1;
     for (var i = 0; i < FAMS.length; i++) if (FAMS[i].id === d.fam) fi = i;
     var h = '<div class="pv2-full"><div class="pv2-bar"><button class="pv2-back" data-a="fclose">' + ic('back') + 'Retour</button></div><div class="pv2-fgrid"><aside class="pv2-fleft">';
-    h += '<div class="pv2-idt"><div class="pv2-av">' + esc(ini(l.nom)) + '</div><div style="min-width:0"><h2 class="pv2-name" style="font-size:25px">' + esc(l.nom) + '</h2><div class="pv2-who">' + esc([l.secteur, l.ca].filter(Boolean).join(' · ') || 'Secteur non renseigné') + '</div><span class="pv2-badge">' + (d.fam === 'client' ? 'Client' : d.fam === 'ecarte' ? 'Écarté' : 'Lead') + '</span></div></div>';
+    h += '<div class="pv2-idt"><div class="pv2-av">' + esc(ini(l.nom)) + '</div><div style="min-width:0"><h2 class="pv2-name" style="font-size:25px">' + esc(l.nom) + '</h2><div class="pv2-who">' + esc([l.secteur, l.ca].filter(Boolean).join(' · ') || 'Secteur non renseigné') + '</div><span class="pv2-badge">' + (d.fam === 'client' ? 'Closing' : d.fam === 'ecarte' ? 'Disqualifié' : 'Lead') + '</span></div></div>' + ownerHTML(l);
     h += '<div class="pv2-steps" title="Étape">' + FAMS.map(function (f, i) { return '<i class="' + (i === fi ? 'pv2-on' : (i < fi && fi < 4 ? 'pv2-past' : '')) + '"></i>'; }).join('') + '</div>' +
       '<div class="pv2-stepl"><b>' + fam(d.fam).t + '</b> · ' + esc(d.stageLabel) + ' · <button class="pv2-lk" style="padding:0" data-a="fstage">changer</button></div>';
     h += '<div class="pv2-status">' + esc(d.situ) + '<small class="pv2-' + d.ctone + '">→ ' + esc(d.conseil) + '</small></div>';
@@ -639,7 +681,7 @@
     var stop = l.smsOptedOut || l.smsOptOut;
     h += '<div class="pv2-acts"><button class="pv2-act" data-a="msg" data-v="sms"' + (stop ? ' disabled' : '') + '><span>' + ic('sms') + '</span>' + (stop ? 'STOP SMS' : 'SMS') + '</button><button class="pv2-act" data-a="msg" data-v="whatsapp"><span>' + ic('wa') + '</span>WhatsApp</button><button class="pv2-act" data-a="fu"><span>' + ic('clock') + '</span>Rappel</button><button class="pv2-act" data-a="rdv"><span>' + ic('cal') + '</span>RDV</button></div>';
     h += '<div class="pv2-gt">Contact</div><div class="pv2-group">' + kv('Téléphone', '<span style="user-select:all">' + esc(l.telephone || '—') + '</span>') + kv('E-mail', '<span style="user-select:all">' + esc(l.email || '—') + '</span>') + kv('Instagram', l.instagramUsername ? '@' + esc(l.instagramUsername) : '—') + '</div>';
-    h += '<div class="pv2-gt">Qui s\'en occupe</div><div class="pv2-group">' + kv('Suivi par', esc(d.who)) + kv('Setter d\'origine', esc(l.setterName || (l.setterSlug ? memberName(l.setterSlug) : '—')) + (l.setterSlug ? ' · ne change jamais' : '')) + kv('Closer', esc(l.closeur || (d.bookings.length ? d.bookings[d.bookings.length - 1].personName : '') || '—')) + '</div>';
+    h += '<div class="pv2-gt">Qui s\'en occupe</div><div class="pv2-group">' + kv('Setter d\'origine', esc(l.setterName || (l.setterSlug ? memberName(l.setterSlug) : '—')) + (l.setterSlug ? ' · ne change jamais' : '')) + kv('Closer', esc(l.closeur || (d.bookings.length ? d.bookings[d.bookings.length - 1].personName : '') || '—')) + '</div>';
     h += '<div class="pv2-gt">Tags</div>' + tagsHTML(l);
     h += '<div class="pv2-group" style="margin-top:18px"><button class="pv2-row" data-a="bump"><span class="pv2-tile">' + ic('up') + '</span><div class="pv2-tx"><div class="pv2-tt">Remonter dans Leads Live</div><div class="pv2-st">Le remet en tête de liste des setters</div></div></button></div>';
     h += '</aside><main style="min-width:0">';
@@ -713,7 +755,7 @@
     h += '<div class="pv2-pane"><h3>Entreprise et besoin</h3><div class="pv2-flds">' + fld(l, 'secteur', 'Secteur') + fld(l, 'ca', 'Chiffre d\'affaires') + fld(l, 'defi', 'Défi') + fld(l, 'disponibilite', 'Disponibilités') + fld(l, 'timeline', 'Délai pour démarrer') + fld(l, 'description', 'Description') + '</div></div>';
     var at = l.attributionFirst || {};
     h += '<div class="pv2-pane"><h3>Provenance · remplie automatiquement</h3><div class="pv2-flds">' + ro('Source', d.src.label) + ro('Campagne', d.src.campaign) + ro('Page d\'arrivée', (l.landingFirst && (l.landingFirst.label || l.landingFirst.page)) || '') + ro('Date d\'arrivée', d.real ? fdate(d.real) : '') + ro('Webinaire', l.dateWebinaire ? fdate(toMs(l.dateWebinaire)) + (l.present ? ' · présent' : '') : '') + ro('UTM', [at.utm_source, at.utm_medium, at.utm_campaign].filter(Boolean).join(' / ') || l.utm || '') + '</div></div>';
-    h += '<div class="pv2-pane"><h3>Suivi</h3><div class="pv2-flds"><label>Suivi par' + assignSelect(l) + '</label>' + ro('Setter d\'origine', l.setterName || (l.setterSlug ? memberName(l.setterSlug) : '')) + fld(l, 'closeur', 'Closeur') + fld(l, 'setting', 'Setting') + '</div></div>';
+    h += '<div class="pv2-pane"><h3>Suivi</h3>' + ownerHTML(l) + '<div class="pv2-flds" style="margin-top:12px">' + ro('Setter d\'origine', l.setterName || (l.setterSlug ? memberName(l.setterSlug) : '')) + fld(l, 'closeur', 'Closeur') + fld(l, 'setting', 'Setting') + '</div></div>';
     return h + '<div class="pv2-pane"><details class="pv2-old"><summary>Anciennes données (Zoho, Bigin, webinaires)</summary><div class="pv2-flds" style="margin-top:12px">' + ro('Origine Zoho', l.zohoOrigine || '') + ro('Gestionnaire Zoho', l.zohoGestionnaire || '') + ro('Tags webinaire', l.tagsWebi || '') + ro('Rejet mails', l.rejetMails || '') + ro('Prospect webinaire', l.prospectWebinaire || '') + ro('Date de réception', l.dateReceptionLead || '') + '</div></details></div>';
   }
   function fld(l, k, lb) { return '<label>' + lb + '<input data-field="' + k + '" value="' + esc(l[k] == null ? '' : l[k]) + '"></label>'; }
@@ -728,7 +770,7 @@
       h += '<h2>Plus de filtres</h2><p>Pour fouiller plus finement. La recherche, elle, cherche partout.</p>' +
         selF('src', 'Arrivés par', [['', 'Toutes les sources']].concat(Object.keys(srcs).sort().map(function (x) { return [x, x]; }))) +
         selF('pb', 'Leur problème (point faible au quiz)', [['', 'Tous']].concat(Object.keys(pbs).sort().map(function (x) { return [x, x]; }))) +
-        selF('par', 'Leur parcours', [['', 'Peu importe'], ['jamais', 'Jamais appelés'], ['nonjoint', 'Appelés, jamais joints'], ['joint', 'Joints au moins une fois'], ['rdv', 'Ont eu un RDV'], ['absent', 'Absents à un RDV'], ['nonclose', 'RDV non closé ou offre envoyée']]) +
+        selF('par', 'Leur parcours', [['', 'Peu importe'], ['jamais', 'Nouveau (jamais appelé)'], ['nonjoint', 'NRP (appelé, jamais joint)'], ['joint', 'Décroché au moins une fois'], ['rdv', 'RDV posé au moins une fois'], ['absent', 'No show'], ['nonclose', 'Closed Lost ou offre envoyée']]) +
         selF('last', 'Dernier contact', [['', 'Peu importe'], ['7', 'Il y a plus de 7 jours'], ['30', 'Il y a plus de 30 jours'], ['90', 'Il y a plus de 3 mois']]) +
         '<button class="pv2-big pv2-blue" data-a="applyf">Voir les leads</button>';
     } else if (sh.k === 'move') {
@@ -739,10 +781,10 @@
           return '<button class="pv2-row" data-a="setstage" data-v="' + x + '"><div class="pv2-tx">' + esc(STAGE_LABEL[x]) + '</div>' + (x === cur ? '<span class="pv2-check">✓</span>' : '<span class="pv2-chev">' + ic('chev') + '</span>') + '</button>'; }).join('') + '</div>';
       }).join('');
     } else if (sh.k === 'result') {
-      h += '<h2>Comment s\'est passé l\'appel ?</h2><p>' + esc(l.nom) + '</p><div class="pv2-group">' + [['answered', 'Décroché'], ['noanswer', 'Pas de réponse'], ['voicemail', 'Messagerie'], ['wrong', 'Faux numéro']].map(function (x) {
+      h += '<h2>Comment s\'est passé l\'appel ?</h2><p>' + esc(l.nom) + '</p><div class="pv2-group">' + [['answered', 'Décroché'], ['noanswer', 'NRP (pas de réponse)'], ['voicemail', 'Messagerie'], ['wrong', 'Faux numéro']].map(function (x) {
         return '<button class="pv2-row" data-a="res" data-v="' + x[0] + '"><div class="pv2-tx"><div class="pv2-tt">' + x[1] + '</div></div><span class="pv2-chev">' + ic('chev') + '</span></button>'; }).join('') + '</div><button class="pv2-soft" style="width:100%;margin-top:12px" data-a="sclose">Je n\'ai pas appelé</button>';
     } else if (sh.k === 'result2') {
-      h += '<h2>Et ensuite ?</h2><p>' + esc(l.nom) + ' a décroché.</p><div class="pv2-group">' + [['rdv', 'Un RDV est posé'], ['fu', 'À rappeler plus tard'], ['nope', 'Pas intéressé'], ['none', 'Rien de plus']].map(function (x) {
+      h += '<h2>Et ensuite ?</h2><p>' + esc(l.nom) + ' a décroché.</p><div class="pv2-group">' + [['rdv', 'SET : un RDV est posé'], ['fu', 'Follow Up : à rappeler'], ['nope', 'Pas intéressé'], ['none', 'Rien de plus']].map(function (x) {
         return '<button class="pv2-row" data-a="res2" data-v="' + x[0] + '"><div class="pv2-tx"><div class="pv2-tt">' + x[1] + '</div></div><span class="pv2-chev">' + ic('chev') + '</span></button>'; }).join('') + '</div>';
     } else if (sh.k === 'fu') {
       h += '<h2>Programmer un rappel</h2><p>' + esc(l.nom) + '</p><div class="pv2-group">' + [['d1', 'Demain à 10 h'], ['d3', 'Dans 3 jours à 10 h'], ['w1', 'Dans une semaine à 10 h'], ['m1', 'Dans un mois à 10 h']].map(function (x) {
@@ -754,8 +796,20 @@
       h += '<h2>' + nm + ' à ' + esc(l.nom) + '</h2><p>' + esc(sh.ch === 'email' ? (l.email || 'Pas d\'e-mail') : (l.telephone || 'Pas de téléphone')) + '</p><textarea id="pv2msg" placeholder="Votre message"></textarea><button class="pv2-big pv2-blue" data-a="msgsend">Envoyer</button>';
     } else if (sh.k === 'tag') {
       h += '<h2>Ajouter un tag</h2><p>' + esc(l.nom) + '</p><input id="pv2tag" placeholder="Ex. : Associé, Budget OK"><button class="pv2-big pv2-blue" data-a="tagsave">Ajouter</button>';
+    } else if (sh.k === 'ask') {
+      var dd = derive(l), ok = canTake(l), quand = dd.days == null ? 'jamais contacté' : dd.days === 0 ? 'contacté aujourd\'hui' : 'contacté il y a ' + plural(dd.days, 'jour');
+      h += '<h2>Ce lead est suivi par ' + esc(dd.who) + '</h2><p>' + esc(l.nom) + ' · ' + quand + '. ' + (ok ? 'Tu veux le prendre ?' : 'Seul un admin peut le réattribuer avant ' + TAKE_DAYS + ' jours sans contact.') + '</p>' +
+        (ok ? '<button class="pv2-big pv2-blue" data-a="askyes">Oui, je le prends</button>' : '') +
+        '<button class="pv2-soft" style="width:100%;margin-top:10px" data-a="askno">' + (ok ? 'Non, juste cette fois' : 'Continuer sans le prendre') + '</button>';
+    } else if (sh.k === 'assign') {
+      h += '<h2>Attribuer à…</h2><p>' + esc(l.nom) + ' · le setter d\'origine ne change pas</p><div class="pv2-group">' + H.team.filter(function (m) { return m.pipeline !== false; }).concat([{ slug: '', name: 'Personne' }]).map(function (m) {
+        return '<button class="pv2-row" data-a="assignset" data-v="' + esc(m.slug) + '"><div class="pv2-tx">' + esc(m.name) + (m.slug === H.me.slug ? ' (moi)' : '') + '</div>' + ((l.assignedTo || '') === m.slug ? '<span class="pv2-check">✓</span>' : '') + '</button>'; }).join('') + '</div>';
+    } else if (sh.k === 'bulk') {
+      h += '<h2>Prendre ' + plural(sh.ids.length, 'lead') + ' ?</h2><p>Suivis aujourd\'hui par ' + esc(memberName(S.who === '_none' ? '' : S.who)) + '. Ils passent dans tes leads ; le setter d\'origine ne change pas.' +
+        (sh.kept ? ' ' + plural(sh.kept, 'lead contacté', 'leads contactés') + ' il y a moins de ' + TAKE_DAYS + ' jours ' + (sh.kept > 1 ? 'restent' : 'reste') + ' à ' + esc(memberName(S.who)) + '.' : '') + '</p>' +
+        '<button class="pv2-big pv2-blue" data-a="bulkyes">Oui, je les prends</button><button class="pv2-soft" style="width:100%;margin-top:10px" data-a="sclose">Annuler</button>';
     } else if (sh.k === 'new') {
-      h += '<h2>Nouveau lead</h2><p>Il arrive dans « À joindre ».</p><label for="pv2nn">Nom et prénom</label><input id="pv2nn"><label for="pv2nt">Téléphone</label><input id="pv2nt" inputmode="tel"><label for="pv2ne">E-mail</label><input id="pv2ne" inputmode="email"><button class="pv2-big pv2-blue" data-a="newsave">Créer le lead</button>';
+      h += '<h2>Nouveau lead</h2><p>Il arrive dans « Nouveau / NRP ».</p><label for="pv2nn">Nom et prénom</label><input id="pv2nn"><label for="pv2nt">Téléphone</label><input id="pv2nt" inputmode="tel"><label for="pv2ne">E-mail</label><input id="pv2ne" inputmode="email"><button class="pv2-big pv2-blue" data-a="newsave">Créer le lead</button>';
     }
     return h + '</div>';
   }
@@ -817,13 +871,21 @@
   function onClick(e) {
     var t = e.target.closest ? e.target.closest('[data-a]') : null;
     if (!t || !ROOT.contains(t) || t.disabled) return;
-    var a = t.getAttribute('data-a'), v = t.getAttribute('data-v'), l;
-    if (a === 'assign' || t.tagName === 'SELECT') return;
+    var a = t.getAttribute('data-a'), v = t.getAttribute('data-v');
+    if (t.tagName === 'SELECT') return;
+    act(a, v);
+  }
+  function act(a, v) {
+    var l, p;
+    /* Agir sur le lead d'un autre : on demande d'abord s'il faut le prendre */
+    if ((a === 'call' || a === 'msg' || a === 'fu') && !S.sheet) {
+      l = lead(a === 'call' ? v : curLeadId());
+      if (l && l.assignedTo && !isMine(l) && !S.okOther[l.id]) { S.sheet = { k: 'ask', id: l.id, a: a, v: v }; render(true); return; }
+    }
     switch (a) {
       case 'view': S.view = v; S.full = null; S.drawer = null; if (v === 'rap') S.rap = [{ s: 'home' }]; savePrefs(); render(); window.scrollTo(0, 0); break;
       case 'theme': S.dark = !S.dark; applyTheme(); savePrefs(); break;
       case 'per': S.per = v; savePrefs(); render(); break;
-      case 'who': S.who = S.who === v ? null : v; render(); break;
       case 'mine': S.mine = !S.mine; savePrefs(); render(); break;
       case 'clearq': S.q = ''; render(); break;
       case 'reset': S.q = ''; S.per = 'tout'; S.who = null; S.f = { src: '', pb: '', par: '', last: '' }; savePrefs(); render(); break;
@@ -867,7 +929,7 @@
         l = lead(S.sheet.id);
         if (v === 'rdv') { S.sheet = null; render(true); H.openBooking(l); }
         else if (v === 'fu') { S.sheet = { k: 'fu', id: l.id, q: 'd3' }; render(true); }
-        else if (v === 'nope') { S.sheet = null; H.setStage(l, 'disqualification', done(l.nom + ' → Disqualification')); }
+        else if (v === 'nope') { S.sheet = null; H.setStage(l, 'disqualification', done(l.nom + ' → Disqualifié')); }
         else { S.sheet = null; render(true); }
         break;
       case 'msg': l = lead(curLeadId()); S.sheet = { k: 'msg', id: l.id, ch: v }; render(true); setTimeout(function () { var m = document.getElementById('pv2msg'); if (m) m.focus(); }, 30); break;
@@ -898,6 +960,19 @@
         S.sheet = null; H.createLead({ nom: nn, telephone: val('pv2nt'), email: val('pv2ne') }, done('Lead créé'));
         break;
       case 'sclose': S.sheet = null; render(true); break;
+      case 'take': l = lead(curLeadId()); H.setAssigned(l, H.me.slug, done('Tu suis maintenant ' + l.nom)); break;
+      case 'assignto': S.sheet = { k: 'assign', id: curLeadId() }; render(true); break;
+      case 'assignset': l = lead(S.sheet.id); S.sheet = null; H.setAssigned(l, v, done(v ? l.nom + ' → ' + memberName(v) : l.nom + ' n\'est plus attribué')); break;
+      case 'askyes':
+        p = S.sheet; S.sheet = null; S.okOther[p.id] = true; l = lead(p.id);
+        H.setAssigned(l, H.me.slug, function (err) { if (err) { done()(err); return; } toast('Tu suis maintenant ' + l.nom); act(p.a, p.v); });
+        break;
+      case 'askno': p = S.sheet; S.sheet = null; S.okOther[p.id] = true; act(p.a, p.v); break;
+      case 'bulktake': var bc = bulkCandidates(sortLeads(filtered())); S.sheet = { k: 'bulk', ids: bc.ok, kept: bc.kept }; render(true); break;
+      case 'bulkyes':
+        var ids = S.sheet.ids, n = 0; S.sheet = null; render(true);
+        ids.forEach(function (id) { H.setAssigned(lead(id), H.me.slug, function () { n++; if (n === ids.length) { toast(plural(n, 'lead repris', 'leads repris')); render(true); } }); });
+        break;
       case 'bk': S.rap.push({ s: 'list', bk: v }); render(); window.scrollTo(0, 0); break;
       case 'rlead': S.rap.push({ s: 'fiche', id: v }); render(); window.scrollTo(0, 0); break;
       case 'rback': if (S.rap[S.rap.length - 1].s === 'sess') S.sess = null; S.rap.pop(); if (!S.rap.length) S.rap = [{ s: 'home' }]; render(); window.scrollTo(0, 0); break;
@@ -910,9 +985,9 @@
   function onChange(e) {
     var t = e.target;
     if (t.id === 'pv2sort') { S.sort = t.value; savePrefs(); render(); return; }
+    if (t.id === 'pv2who') { S.who = t.value || null; render(); return; }
     var l = lead(curLeadId());
     if (!l) return;
-    if (t.getAttribute('data-a') === 'assign') { H.setAssigned(l, t.value, done('Suivi par ' + memberName(t.value))); return; }
     var f = t.getAttribute('data-field');
     if (f && !t.readOnly) H.update(l, f, t.value, done('Enregistré'));
   }
@@ -959,7 +1034,8 @@
   function refresh() { BOOK = H.bookings() || {}; CACHE = {}; render(true); }
 
   window.PipelineV2 = {
-    start: start, refresh: refresh, toast: function (m) { if (TOAST) toast(m); },
+    start: start, refresh: refresh,
+    canTake: function (l) { return canTake(l); }, toast: function (m) { if (TOAST) toast(m); },
     FAMS: FAMS, STAGE_LABEL: STAGE_LABEL,
     /* exposés pour les tests */
     _derive: derive, _feed: feed, _toMs: toMs

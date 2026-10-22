@@ -203,12 +203,10 @@
     talk: ['#60a5fa', 'rgba(96,165,250,0.13)'], rdv: ['#a78bfa', 'rgba(167,139,250,0.14)'],
     win: ['#fbbf24', 'rgba(251,191,36,0.16)'], done: ['#8f97b2', 'rgba(143,151,178,0.14)']
   };
-  var MOTS = {
-    decroche: 'A répondu', nrp1: 'Pas répondu · 1ʳᵉ fois', nrp2: 'Pas répondu · 2ᵉ fois',
-    nrp3: 'Pas répondu · 3ᵉ fois', all_nrp: 'Ne répond jamais', faux_numero: 'Mauvais numéro',
-    follow_up_pm: 'Rappel convenu', set: 'RDV calé par l’équipe', rdv_self_booking: 'RDV pris par le prospect',
-    disqualifie: 'Pas pour nous', client: 'Client signé'
-  };
+  /* 22/10/2026 (retour Vincent) : on garde les noms des SOP (NRP 1, All NRP,
+     Follow Up PM, SET…) partout. Les libellés reformulés (« Pas répondu ·
+     1ʳᵉ fois »…) ne correspondaient plus à la formation : plus aucun renommage. */
+  var MOTS = {};
   var NRP_SUIVANT = { nrp1: 'nrp2', nrp2: 'nrp3', nrp3: 'all_nrp', all_nrp: 'all_nrp' };
   function patcherStatuts() {
     for (var i = 0; i < STATUSES.length; i++) {
@@ -341,7 +339,7 @@
     if (late && !terminal(l)) return { dot: 'late', ligne: 'Rappel prévu ' + quand(new Date(late)) + ' · en retard', titre: so.label, detail: 'Rappel prévu ' + quand(new Date(late)) + ', en retard', retard: true };
     if (b && !b.presenceConfirmed) return { dot: 'warn', ligne: 'RDV ' + ldPresRdvLabel(b) + ' · présence à confirmer', titre: 'RDV ' + ldPresRdvLabel(b), detail: 'Présence pas encore confirmée' + (b.personName ? ' · avec ' + b.personName : ''), rdvId: b.id, pres: false };
     if (b) return { dot: 'ok', ligne: 'RDV ' + ldPresRdvLabel(b) + ' · présence confirmée', titre: 'RDV ' + ldPresRdvLabel(b), detail: 'Présence confirmée' + (b.presenceConfirmed.byName ? ' par ' + b.presenceConfirmed.byName : '') + (b.personName ? ' · avec ' + b.personName : ''), rdvId: b.id, pres: true };
-    if (estClient(l)) return { dot: 'ok', ligne: 'Client · closing en cours', titre: 'Client signé', detail: 'Suis le closing jusqu’au bout' };
+    if (estClient(l)) return { dot: 'ok', ligne: 'Client · closing en cours', titre: 'Closing', detail: 'Suis le closing jusqu’au bout' };
     if (l2IsUntouched(l)) {
       var arr = l2ArrivalLabel(_getLeadEffectiveDate(l) || l.createdAt);
       var a = (/^\d\d:\d\d$/.test(arr) ? 'à ' : '') + arr;
@@ -1189,7 +1187,7 @@
       choixR('check', 'go', 'Il a répondu', '', 'data-ll5="r1" data-v="yes" data-id="' + id + '"') +
       choixR('phone', 'grey', 'Pas de réponse', 'Ce sera « ' + getStatusObj(suiv).label + ' »', 'data-ll5="r1" data-v="no" data-id="' + id + '"') +
       choixR('msg', 'grey', 'Messagerie', '', 'data-ll5="r1" data-v="vm" data-id="' + id + '"') +
-      choixR('x', 'grey', 'Mauvais numéro', '', 'data-ll5="r1" data-v="bad" data-id="' + id + '"') + '</div>';
+      choixR('x', 'grey', 'Faux numéro', '', 'data-ll5="r1" data-v="bad" data-id="' + id + '"') + '</div>';
   }
   function ecranResultat2(l, id) {
     return '<h1 class="ll5h1">Qu’est-ce qu’il veut ?</h1><p class="ll5sub">Question 2 sur 2</p><div class="ll5group ll5mt">' +
@@ -1197,7 +1195,7 @@
       choixR('clock', '', 'Être rappelé', 'Tu choisis quand', 'data-ll5="r2" data-v="fu" data-id="' + id + '"') +
       choixR('msg', 'grey', 'Rien de décidé', 'On a juste parlé', 'data-ll5="r2" data-v="talk" data-id="' + id + '"') +
       choixR('x', 'grey', 'Pas intéressé', '', 'data-ll5="r2" data-v="no" data-id="' + id + '"') +
-      choixR('x', 'grey', 'Pas pour nous', 'Hors cible', 'data-ll5="r2" data-v="dq" data-id="' + id + '"') +
+      choixR('x', 'grey', 'Disqualifié', 'Hors cible', 'data-ll5="r2" data-v="dq" data-id="' + id + '"') +
       choixR('trophy', '', 'Il a signé', 'Les étapes du close s’ouvrent', 'data-ll5="r2" data-v="win" data-id="' + id + '"') + '</div>';
   }
   var appelTermine = false;
@@ -1213,13 +1211,13 @@
     h += choixR('clock', '', 'Il veut être rappelé', 'Tu choisis quand', 'data-ll5="r2" data-v="fu" data-id="' + id + '"');
     h += choixR('msg', 'grey', 'Rien de décidé', 'On a juste parlé', 'data-ll5="r2" data-v="talk" data-id="' + id + '"');
     h += choixR('x', 'grey', 'Pas intéressé', '', 'data-ll5="r2" data-v="no" data-id="' + id + '"');
-    h += choixR('x', 'grey', 'Pas pour nous', 'Hors cible', 'data-ll5="r2" data-v="dq" data-id="' + id + '"');
+    h += choixR('x', 'grey', 'Disqualifié', 'Hors cible', 'data-ll5="r2" data-v="dq" data-id="' + id + '"');
     h += choixR('trophy', '', 'Il a signé', 'Les étapes du close s’ouvrent', 'data-ll5="r2" data-v="win" data-id="' + id + '"');
     h += '</div><div class="ll5gt">Il n’a pas décroché</div><div class="ll5group">';
     var suiv = NRP_SUIVANT[l.status || 'nouveau'] || 'nrp1';
     h += choixR('phone', 'grey', 'Pas de réponse', 'Ce sera « ' + getStatusObj(suiv).label + ' »', 'data-ll5="r1" data-v="no" data-id="' + id + '"');
     h += choixR('msg', 'grey', 'Messagerie', '', 'data-ll5="r1" data-v="vm" data-id="' + id + '"');
-    h += choixR('x', 'grey', 'Mauvais numéro', '', 'data-ll5="r1" data-v="bad" data-id="' + id + '"');
+    h += choixR('x', 'grey', 'Faux numéro', '', 'data-ll5="r1" data-v="bad" data-id="' + id + '"');
     h += '</div>';
     return h;
   }
@@ -1400,7 +1398,7 @@
     var l = leadDe(id);
     if (!l) return;
     if (v === 'rdv') { accueilLead(); if (typeof openBookingModal === 'function') openBookingModal(l); return; }
-    if (v === 'fu') { poserStatut(id, 'follow_up_pm'); infoRappel = 'Rappel convenu'; pile = ['lead', 'fuask']; anime = true; l2RenderSheet(id, false); return; }
+    if (v === 'fu') { poserStatut(id, 'follow_up_pm'); infoRappel = 'Follow Up PM'; pile = ['lead', 'fuask']; anime = true; l2RenderSheet(id, false); return; }
     var map = { talk: 'decroche', no: 'pas_interesse', dq: 'disqualifie', win: 'client' };
     accueilLead();
     if (map[v]) poserStatut(id, map[v]);

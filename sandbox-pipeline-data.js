@@ -13,23 +13,33 @@
    ═══════════════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
-  var KEY = 'sbxpl:db_v1', PREF = 'sbxpl:pref:';
+  var KEY = 'sbxpl:db_v2', PREF = 'sbxpl:pref:';
 
   /* ── Le testeur : prénom du compte Alteore ouvert sur ce navigateur (lecture seule) ── */
+  /* Équipe commerciale actuelle (en vrai : _meta/team_members, sales + admins
+     actifs). Élodie est partie le 10/10/2026 : elle reste connue pour
+     l'historique (notes, setter d'origine) mais n'apparaît plus dans les menus. */
   var TEAM = [
-    { slug: 'elodie', name: 'Élodie', color: '#e0567a' },
+    { slug: 'anthony', name: 'Anthony', color: '#e0567a' },
+    { slug: 'claire', name: 'Claire', color: '#d97706' },
     { slug: 'steven', name: 'Steven', color: '#3b82f6' },
     { slug: 'valentin', name: 'Valentin', color: '#0d9488' },
-    { slug: 'vincent', name: 'Vincent', color: '#7c3aed' }
+    { slug: 'vincent', name: 'Vincent', color: '#7c3aed' },
+    { slug: 'elodie', name: 'Élodie', color: '#9096ad', pipeline: false }
   ];
-  var ME = { slug: 'vincent', name: 'Vincent' };
+  var ME = { slug: 'vincent', name: 'Vincent', role: 'admin' };
   try {
     var brut = String(window.localStorage.getItem('ambitio_name') || '').replace(/[._-]+/g, ' ').trim().split(/\s+/)[0] || '';
     if (brut && !/@/.test(brut) && brut.length > 1) {
       var prenom = brut.charAt(0).toUpperCase() + brut.slice(1).toLowerCase(), norm = prenom.normalize ? prenom.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase() : prenom.toLowerCase();
-      ME = { slug: norm, name: prenom };
-      for (var i = 0; i < TEAM.length; i++) if (TEAM[i].slug === norm) ME = { slug: TEAM[i].slug, name: TEAM[i].name };
+      ME = { slug: norm, name: prenom, role: 'admin' };
+      for (var i = 0; i < TEAM.length; i++) if (TEAM[i].slug === norm) ME = { slug: TEAM[i].slug, name: TEAM[i].name, role: 'admin' };
     }
+  } catch (e) {}
+  /* Rôle : celui du compte ouvert, ou celui choisi avec le bouton du bandeau */
+  try {
+    var forced = window.localStorage.getItem('sbxpl:pref:role');
+    ME.role = forced || (window.localStorage.getItem('ambitio_role') === 'admin' ? 'admin' : 'sales');
   } catch (e) {}
 
   /* ── Dates relatives à aujourd'hui ── */
@@ -187,6 +197,14 @@
       communications: [call(18, 9, 0, 'Valentin', 0, { result: 'numéro inexistant' })]
     });
 
+    /* Leads d'Anthony laissés en plan cette semaine (cas raconté par Vincent) */
+    add({ id: 'sbx_antho1', nom: 'Grégory Lebon', email: 'g.lebon@exemple.fr', secteur: 'Couverture', ca: '38 k€/mois', createdAt: iso(10, 19), type: 'vsl_elite', source: 'webhook', stage: 'nrp1', assignedTo: 'anthony',
+      defi: 'Je n\'arrive pas à suivre les devis, j\'en perds la moitié.', communications: [call(9, 10, 30, 'Anthony', 0)] });
+    add({ id: 'sbx_antho2', nom: 'Sonia Ferreira', email: 's.ferreira@exemple.fr', secteur: 'Salon de coiffure', ca: '20 k€/mois', createdAt: iso(9, 12), type: 'quiz_funnel', landingFirst: { page: 'quiz_elite' }, source: 'webhook', stage: 'nrp1', assignedTo: 'anthony',
+      quiz: { score_global: 51, scores: { systematisation: 60, delegation: 33, pilotage: 55, croissance: 58 }, pilier_prioritaire: 'delegation' }, communications: [call(8, 14, 0, 'Anthony', 0, { result: 'messagerie' })] });
+    add({ id: 'sbx_antho3', nom: 'Kevin Marchetti', email: 'k.marchetti@exemple.fr', secteur: 'Pizzeria', ca: '32 k€/mois', createdAt: iso(5, 20), type: 'vsl_elite', source: 'webhook', stage: 'nrp1', assignedTo: 'anthony',
+      defi: 'Je travaille 7 jours sur 7.', communications: [call(4, 11, 0, 'Anthony', 0)] });
+
     /* ── Leads générés : de la matière pour remplir les colonnes ── */
     var PRE = ['Camille', 'Laurent', 'Émilie', 'Jérôme', 'Aurélie', 'Nicolas', 'Céline', 'Franck', 'Sabrina', 'David', 'Marion', 'Sébastien', 'Audrey', 'Christophe', 'Laetitia', 'Mathieu', 'Virginie', 'Stéphane', 'Caroline', 'Julien', 'Sandra', 'Yannick', 'Karine', 'Rachid', 'Elsa', 'Bruno', 'Inès', 'Pascal', 'Manon', 'Cédric'];
     var NOM = ['Faure', 'Roussel', 'Blanchard', 'Gauthier', 'Perrot', 'Renaud', 'Colin', 'Vidal', 'Caron', 'Picard', 'Arnaud', 'Lemaire', 'Dupuis', 'Brun', 'Barbier', 'Fontaine', 'Meunier', 'Bertrand', 'Marchand', 'Leclerc', 'Robin', 'Moulin', 'Lucas', 'Henry', 'Rivière', 'Noël', 'Royer', 'Benoît', 'Masson', 'Hubert'];
@@ -195,8 +213,8 @@
     var PB = { delegation: ['Mon équipe vient me voir pour tout', 'Je n\'arrive pas à lâcher les tâches'], pilotage: ['Je ne connais pas ma rentabilité réelle', 'Je pilote au feeling, sans chiffres'], systematisation: ['Rien n\'est écrit, tout est dans ma tête', 'Chaque client est traité différemment'], croissance: ['Je plafonne depuis 3 ans', 'Je ne sais pas comment trouver de nouveaux clients'] };
     var PIL = ['delegation', 'pilotage', 'systematisation', 'croissance'];
     var NOTE_NC = ['Intéressé mais veut comparer avec un autre accompagnement.', 'Pas le bon moment, trésorerie tendue ce trimestre.', 'Doit en parler à sa femme, associée dans l\'entreprise.', 'Trouve le programme trop long, veut quelque chose de plus court.'];
-    var SALES = ['elodie', 'steven', 'valentin', 'elodie', 'steven'];
-    var NAMEOF = { elodie: 'Élodie', steven: 'Steven', valentin: 'Valentin', vincent: 'Vincent' };
+    var SALES = ['anthony', 'steven', 'valentin', 'claire', 'anthony', 'claire'];
+    var NAMEOF = { anthony: 'Anthony', claire: 'Claire', steven: 'Steven', valentin: 'Valentin', vincent: 'Vincent' };
     var PLAN = ['lead', 'lead', 'nrp1', 'nrp1', 'nrp2', 'nrp2', 'nrp3', 'all_nrp', 'all_nrp', 'nrp1', 'lead', 'nrp2',
       'follow_up_pm', 'follow_up_pm', 'follow_up_closing', 'follow_up_pm',
       'set', 'rdv_confirmes', 'rdv_self_booking',
@@ -240,6 +258,9 @@
       if (stage === 'disqualification') o.notesHistory = [note(last, 11, who, 'Activité trop petite pour l\'accompagnement (auto-entrepreneur seul).')];
       add(o, books);
     });
+    /* Fin de mission d'Élodie (10/10/2026) : ses leads passent à Anthony, sauf
+       les clients gagnés ; setterSlug ne change jamais. */
+    L.forEach(function (l) { if (l.assignedTo === 'elodie' && !l.isClient) { l.assignedTo = 'anthony'; l.archivedFromSlug = 'elodie'; } });
     return { leads: L, bookings: B };
   }
 
@@ -299,7 +320,13 @@
       bump(l); later(cb);
     },
     update: function (l, f, v, cb) { l[f] = v; bump(l); later(cb); },
-    setAssigned: function (l, slug, cb) { l.assignedTo = slug; bump(l); later(cb); },
+    setAssigned: function (l, slug, cb) {
+      var nom = function (x) { for (var i = 0; i < TEAM.length; i++) if (TEAM[i].slug === x) return TEAM[i].name; return x === ME.slug ? ME.name : (x || 'personne'); };
+      var avant = l.assignedTo || '';
+      l.assignedTo = slug; l.assignedAt = new Date().toISOString(); l.assignedVia = 'pipeline';
+      l.timeline_history = (l.timeline_history || []).concat([{ text: (slug === ME.slug ? 'Repris par ' + ME.name : 'Attribué à ' + nom(slug) + ' par ' + ME.name) + ' (suivi avant par ' + nom(avant) + ')', date: frNow() }]);
+      bump(l); later(cb);
+    },
     addTag: function (l, t, cb) { if ((l.tags || []).indexOf(t) < 0) l.tags = (l.tags || []).concat([t]); bump(l); later(cb); },
     bump: function (l, cb) {
       l.lastOptinAt = new Date().toISOString(); l.lastOptinSource = 'Remonté à la main par ' + ME.name;
@@ -336,10 +363,15 @@
     window.PipelineV2.start(document.getElementById('pv2root'), HOST);
     var bd = document.createElement('div');
     bd.className = 'sbxpl-band';
-    bd.innerHTML = '<span>🧪 Labo Pipeline · faux leads · rien n\'est envoyé</span><button type="button" data-sbx="reset">Réinitialiser</button><button type="button" data-sbx="close">Fermer</button>';
+    var roleLabel = function () { return ME.role === 'admin' ? 'Vu en admin' : 'Vu en sales'; };
+    bd.innerHTML = '<span>🧪 Labo Pipeline · faux leads · rien n\'est envoyé</span><button type="button" data-sbx="role" title="Voir le Pipeline comme un admin ou comme un sales">' + roleLabel() + '</button><button type="button" data-sbx="reset">Réinitialiser</button><button type="button" data-sbx="close">Fermer</button>';
     bd.addEventListener('click', function (e) {
       var b = e.target.closest('[data-sbx]'); if (!b) return;
-      if (b.getAttribute('data-sbx') === 'reset') {
+      if (b.getAttribute('data-sbx') === 'role') {
+        ME.role = ME.role === 'admin' ? 'sales' : 'admin';
+        try { window.localStorage.setItem('sbxpl:pref:role', ME.role); } catch (x) {}
+        b.textContent = roleLabel(); window.PipelineV2.refresh(); labo(ME.role === 'admin' ? 'Tu vois le Pipeline comme un admin' : 'Tu vois le Pipeline comme un sales : reprise possible après 7 jours sans contact');
+      } else if (b.getAttribute('data-sbx') === 'reset') {
         try { window.localStorage.removeItem(KEY); } catch (x) {}
         SEED = 42; DB = seed(); save(); window.PipelineV2.refresh(); labo('Labo remis à zéro');
       } else { window.close(); setTimeout(function () { location.href = 'sales-crm.html'; }, 150); }
