@@ -21,6 +21,10 @@
 //     parole, RDV posés, RDV tenus et leurs résultats, SMS / e-mails / WhatsApp
 //     envoyés, actions sur les fiches (lead_actions) et notes.
 //
+//   + Lead to speech (23/10/2026) : par personne et par jour, délai entre
+//     l'arrivée d'un lead et son 1er appel sortant, compté pour l'auteur de
+//     ce 1er appel (voir computeLeadSpeech). Aussi dans 'live' pour le jour.
+//
 // POST { action: 'search', q }   → fiches prospect (téléphone, e-mail, nom)
 // POST { action: 'lead', leadId } → toute l'histoire d'un prospect, toutes
 //     personnes confondues : appels, RDV (+ clic / présence Meet), actions,
@@ -47,6 +51,7 @@ const { admin, db } = require('./_firebaseAdmin');
 const { requireAdmin } = require('./_verifyFirebaseAuth');
 const parseBody = require('./_parseBody');
 const MT = require('./_meetTranscript');
+const Core = require('../funnel-core.js');
 
 const SALES_ROLES = { setter: 1, setter_ecrit: 1, closer: 1, closer_setter: 1, sales: 1 };
 const HIDDEN_ROLES = { coach: 1, csm: 1 };
@@ -437,9 +442,10 @@ async function handleLive(req, res) {
     db.collection('bookings').where('date', '==', today).get(),
     db.collection('user_activity').where('kind', '==', 'summary').get(),
   ]);
-  const [dayActSnap, dmSnap] = await Promise.all([
+  const [dayActSnap, dmSnap, ltsRes] = await Promise.all([
     db.collection('user_activity').where('date', '==', today).get().catch(function () { return null; }),
     db.collection('ig_dm_events').where('date', '==', today).select('direction', 'timestampMs').get().catch(function () { return null; }),
+    leadSpeechToday(R, dayStart, now).catch(function (e) { console.error('[team-pilotage] lead to speech (live)', e.message); return null; }),
   ]);
 
   // Ligne par membre sales (+ tout membre non coach / CSM qui apparaît).
@@ -631,14 +637,107 @@ async function handleLive(req, res) {
     }
   });
 
+  // Lead to speech du jour : 1ers appels passés aujourd'hui, par personne.
+  let ltsTeam = null;
+  if (ltsRes) {
+    const all = [], per = {};
+    ltsRes.items.forEach(function (it) {
+      all.push(it.delayMs);
+      const r = it.member ? row(it.member) : null;
+      if (r) (per[r.slug] = per[r.slug] || []).push(it.delayMs);
+    });
+    Object.keys(per).forEach(function (slug) { rows[slug].today.lts = ltsAgg(per[slug]); });
+    ltsTeam = ltsAgg(all);
+  }
+
   const meetConn = await MT.connectionStatus().catch(function () { return null; });
 
   res.status(200).json({
     ok: true, now: isoOf(now), today: today,
     members: Object.keys(rows).map(function (k) { return rows[k]; }),
-    calls: liveCalls, bookings: outB,
+    calls: liveCalls, bookings: outB, lts: ltsTeam,
     meet: { connected: !!(meetConn && meetConn.connected), email: meetConn ? meetConn.email : '', error: meetStatus },
   });
+}
+
+// ─── LEAD TO SPEECH (23/10/2026) ────────────────────────────────────────────
+// Délai entre l'arrivée d'un lead et son 1er appel sortant, compté pour la
+// personne qui a passé ce 1er appel — un lead = une personne. Mêmes règles
+// que le Time-to-contact du Funnel (funnel-core.js) :
+//   - arrivée = date effective (realEntryMs : la plus ancienne de
+//     dateWebinaire / importedCreatedAt / createdAt), nouveaux leads
+//     seulement (un ré-optin garde sa date d'origine, donc sort de la fenêtre) ;
+//   - 1er appel = 1er call_log sortant vers le numéro du lead (9 derniers
+//     chiffres) après l'arrivée, décroché ou non ;
+//   - temps brut, nuits et week-ends compris (ce que vit le prospect).
+// Un 1er appel compte dans la période où il a été passé, et seulement si le
+// lead est arrivé au plus 14 jours avant : au-delà, c'est de la relance de
+// base froide. Les appels sont lus depuis (début − 14 j) pour être sûr
+// qu'aucun appel antérieur n'existe.
+const LTS_LOOKBACK_MS = 14 * 86400000;
+const LTS_LEAD_FIELDS = ['nom', 'prenom', 'telephone', 'phone', 'dateWebinaire', 'importedCreatedAt', 'createdAt', '_merged'];
+const LTS_CALL_FIELDS = ['direction', 'toNumber', 'initiatedAt', 'userId', 'userName', 'ringoverUserName'];
+const LTS_LIVE_TTL_MS = 2 * 60 * 1000;
+let ltsLiveCache = null;
+
+async function computeLeadSpeech(R, fromMs, toMs_) {
+  const baseTs = admin.firestore.Timestamp.fromMillis(fromMs - LTS_LOOKBACK_MS);
+  // realEntry ≤ createdAt : tout lead arrivé après la base a un createdAt après elle.
+  const leadQ = db.collection('leads').where('createdAt', '>=', baseTs).limit(8000);
+  const callQ = db.collection('call_logs').where('initiatedAt', '>=', baseTs)
+    .where('initiatedAt', '<', admin.firestore.Timestamp.fromMillis(toMs_)).limit(20000);
+  const snaps = await Promise.all([
+    leadQ.select.apply(leadQ, LTS_LEAD_FIELDS).get(),
+    callQ.select.apply(callQ, LTS_CALL_FIELDS).get(),
+  ]);
+  const byP9 = {};
+  snaps[1].forEach(function (d) {
+    const c = d.data() || {};
+    if (c.direction !== 'outbound') return;
+    const p9 = Core.phone9(c.toNumber);
+    const ms = toMs(c.initiatedAt);
+    if (!p9 || !ms) return;
+    (byP9[p9] = byP9[p9] || []).push({ ms: ms, c: c });
+  });
+  Object.keys(byP9).forEach(function (k) { byP9[k].sort(function (a, b) { return a.ms - b.ms; }); });
+  const items = [];
+  snaps[0].forEach(function (d) {
+    const l = d.data() || {};
+    if (l._merged === true) return;
+    const entry = Core.realEntryMs(l);
+    if (entry == null || entry < fromMs - LTS_LOOKBACK_MS || entry >= toMs_) return;
+    const list = byP9[Core.phone9(l.telephone || l.phone)];
+    if (!list) return;
+    let first = null;
+    for (let i = 0; i < list.length; i++) { if (list[i].ms >= entry) { first = list[i]; break; } }
+    if (!first || first.ms < fromMs || first.ms - entry > LTS_LOOKBACK_MS) return;
+    items.push({
+      leadId: d.id,
+      leadName: [l.prenom, l.nom].filter(Boolean).join(' ') || '',
+      member: callMember(first.c, R),
+      entryMs: entry, callMs: first.ms, delayMs: first.ms - entry,
+      day: parisDayOfMs(first.ms),
+    });
+  });
+  return { items: items, truncated: snaps[0].size >= 8000 || snaps[1].size >= 20000 };
+}
+
+function ltsAgg(delays) {
+  const n = delays.length;
+  if (!n) return { n: 0, median: null, under5: 0, under60: 0 };
+  let u5 = 0, u60 = 0;
+  delays.forEach(function (ms) { if (ms <= 5 * 60000) u5++; if (ms <= 3600000) u60++; });
+  return { n: n, median: Core.median(delays), under5: u5, under60: u60 };
+}
+
+// Le direct se rafraîchit toutes les 20 s : le calcul (45 j d'appels + fiches)
+// n'est refait qu'au plus toutes les 2 min par instance.
+async function leadSpeechToday(R, dayStart, now) {
+  const today = parisDayOfMs(now);
+  if (ltsLiveCache && ltsLiveCache.day === today && now - ltsLiveCache.at < LTS_LIVE_TTL_MS) return ltsLiveCache.res;
+  const res = await computeLeadSpeech(R, dayStart, now + 60000);
+  ltsLiveCache = { day: today, at: now, res: res };
+  return res;
 }
 
 // ─── ACTIVITÉ PAR PERSONNE ET PAR JOUR ──────────────────────────────────────
@@ -647,6 +746,8 @@ const STAT_KEYS = [
   'rdvSet', 'rdvHeld', 'pending'].concat(OUTCOME_KEYS).concat([
   'sms', 'email', 'whatsapp', 'dmOut', 'dmIn', 'actStatus', 'actBooking', 'actAssign', 'notes',
   'activeMs', 'sessions', 'clicks', 'pages', 'rapDue', 'rapDone', 'rapLate', 'rapChecked',
+  // Lead to speech : ltsN s'additionne, ltsMed (médiane en ms) est posé à part.
+  'ltsN', 'ltsMed',
 ]);
 
 function emptyStats() {
@@ -718,9 +819,10 @@ async function handleActivity(req, res, body) {
     dmQ.select('direction', 'date').get(),
     uaQ.get(),
     loadRappelLeads(),
+    computeLeadSpeech(R, fromMs, toMs_),
   ]);
   const warnings = [];
-  const SOURCES = ['fiches experts', 'types de RDV', 'appels', 'RDV tenus', 'RDV posés', 'messages et notes', 'WhatsApp', 'actions sur les fiches', 'DM Instagram', 'temps de connexion', 'rappels'];
+  const SOURCES = ['fiches experts', 'types de RDV', 'appels', 'RDV tenus', 'RDV posés', 'messages et notes', 'WhatsApp', 'actions sur les fiches', 'DM Instagram', 'temps de connexion', 'rappels', 'lead to speech'];
   function val(i) {
     if (settled[i].status === 'fulfilled') return settled[i].value;
     console.error('[team-pilotage] activité —', SOURCES[i], settled[i].reason && settled[i].reason.message);
@@ -730,7 +832,7 @@ async function handleActivity(req, res, body) {
   const persons = val(0) || {};
   const typeMap = val(1) || {};
   const callSnap = val(2), heldSnap = val(3), setSnap = val(4), leadSnap = val(5), waSnap = val(6), actRes = val(7);
-  const dmSnap = val(8), uaSnap = val(9), rappelLeads = val(10);
+  const dmSnap = val(8), uaSnap = val(9), rappelLeads = val(10), ltsRes = val(11);
 
   const totals = {};     // slug → stats
   const byDay = {};      // slug → day → stats
@@ -851,6 +953,36 @@ async function handleActivity(req, res, body) {
     });
   }
 
+  // Lead to speech : un lead = l'auteur de son 1er appel, rangé au jour de
+  // cet appel. Détail renvoyé pour la liste cliquable de la page.
+  const ltsItems = [];
+  let ltsTeam = null;
+  if (ltsRes) {
+    const all = [], groups = {};   // slug | '_un' → { all: [], days: { day: [] } }
+    ltsRes.items.forEach(function (it) {
+      const m = it.member;
+      add(m, it.day, 'ltsN');
+      const key = (m && !m.departed && !m.hidden) ? m.slug : '_un';
+      const g = groups[key] = groups[key] || { all: [], days: {} };
+      g.all.push(it.delayMs);
+      (g.days[it.day] = g.days[it.day] || []).push(it.delayMs);
+      all.push(it.delayMs);
+      ltsItems.push({
+        slug: key, leadId: it.leadId, leadName: it.leadName, day: it.day,
+        entryAt: isoOf(it.entryMs), callAt: isoOf(it.callMs), delayMs: it.delayMs,
+      });
+    });
+    Object.keys(groups).forEach(function (key) {
+      const g = groups[key];
+      if (key === '_un') { unassigned.ltsMed = Core.median(g.all); return; }
+      totals[key].ltsMed = Core.median(g.all);
+      Object.keys(g.days).forEach(function (day) { byDay[key][day].ltsMed = Core.median(g.days[day]); });
+    });
+    ltsTeam = ltsAgg(all);
+    ltsItems.sort(function (a, b) { return a.callAt < b.callAt ? 1 : -1; });
+    if (ltsRes.truncated) warnings.push('lead to speech : période très chargée, une partie des fiches ou des appels n\'a pas été lue');
+  }
+
   const members = R.list.filter(function (m) {
     return !m.departed && !m.hidden && (m.sales || totals[m.slug]);
   }).map(function (m) {
@@ -865,6 +997,7 @@ async function handleActivity(req, res, body) {
     },
     warnings: warnings,
     members: members, unassigned: unassigned,
+    lts: { team: ltsTeam, items: ltsItems },
   });
 }
 

@@ -1592,6 +1592,17 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
       });
       h += '</div></div>';
     }
+    /* Lead to speech par personne (23/10/2026) — entrée du lead → 1er appel,
+       attribué à l'auteur de ce 1er appel ; un lead = une personne. Barre =
+       part des leads appelés en moins d'1 h. Même cohorte et mêmes filtres
+       que le Time-to-contact médian ci-dessus. */
+    if (k.ltsByUser && k.ltsByUser.length) {
+      h += '<div style="margin-top:14px"><div style="font-size:10.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.7px;margin-bottom:8px">⚡ Lead to speech par personne <span style="text-transform:none;font-weight:500;letter-spacing:0">— entrée du lead → 1er appel, compté pour celui qui l\'a passé · barre = part appelée en moins d\'1 h' + provTag + '</span></div><div class="fn-minibars">';
+      k.ltsByUser.forEach(function (u) {
+        h += '<div class="fn-minibar"' + (u.unassigned ? ' style="opacity:.6"' : '') + '><span class="mb-l" title="' + escAttr(u.name) + '">' + esc(u.name) + '</span><span class="mb-track"><span class="mb-fill" style="width:' + u.under60Pct.toFixed(1) + '%;background:#34d399"></span></span><span class="mb-v" style="width:300px;max-width:62%">médiane <strong>' + fmtDelay(u.median) + '</strong> · ' + fmtNum(u.n) + ' lead' + (u.n > 1 ? 's' : '') + ' · ' + fmtPct(u.under5Pct, 0) + ' &lt; 5 min · ' + fmtPct(u.under60Pct, 0) + ' &lt; 1 h</span></div>';
+      });
+      h += '</div></div>';
+    }
     h += '</div>';
     h += '<div class="fn-arrow">▼</div>';
 
@@ -1765,7 +1776,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
       rows += '<td class="num">' + frDate(l._entry) + '</td>';
       rows += '<td class="num">' + (l._nbCalls || 0) + '</td>';
       rows += '<td class="num">' + (l._nbSms || 0) + '</td>';
-      rows += '<td class="num">' + fmtDelay(l._ttc) + '</td>';
+      rows += '<td class="num">' + fmtDelay(l._ttc) + (l._ttc != null ? '<br><span style="color:var(--muted2);font-size:10px">' + esc(l._ttcBy ? l._ttcBy.name : 'non attribué') + '</span>' : '') + '</td>';
       if (bk) {
         rows += '<td><span class="fn-tbadge ' + (bk._class === 'self' ? 'self">🔗 Self' : 'setter">📞 Setter') + '</span></td>';
         var st = bk.status || 'confirmed';
@@ -1784,7 +1795,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
   function exportLeadsCsv() {
     var list = filteredLeads();
     var sep = ';';
-    var head = ['Nom', 'Email', 'Telephone', 'Tunnel', 'UTM', 'Score', 'Entree reelle', 'Re-optins', 'Appels', 'SMS', '1er contact (h)', 'RDV', 'Statut RDV', 'Date RDV', 'Time-to-book (h)'];
+    var head = ['Nom', 'Email', 'Telephone', 'Tunnel', 'UTM', 'Score', 'Entree reelle', 'Re-optins', 'Appels', 'SMS', '1er contact (h)', '1er appel par', 'RDV', 'Statut RDV', 'Date RDV', 'Time-to-book (h)'];
     var lines = [head.join(sep)];
     list.forEach(function (l) {
       var bk = leadRdvInfo(l);
@@ -1797,6 +1808,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
         cell(l._entry ? new Date(l._entry).toISOString() : ''),
         cell(l.engagementHistory ? l.engagementHistory.length : 0),
         cell(l._nbCalls || 0), cell(l._nbSms || 0), cell(hours(l._ttc)),
+        cell(l._ttc == null ? '' : (l._ttcBy ? l._ttcBy.name : 'non attribué')),
         cell(bk ? (bk._class === 'self' ? 'self' : 'setter') : ''),
         cell(bk ? (bk.status || 'confirmed') : ''), cell(bk ? bk.date : ''),
         cell(hours(l._ttb))

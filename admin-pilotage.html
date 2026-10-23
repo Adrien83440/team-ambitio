@@ -175,6 +175,19 @@ body:not(.light-theme) .pl-in[type=date]{color-scheme:dark}
 .pl-t td[data-j]:hover{text-decoration:underline;color:#4ade80}
 .pl-ph[data-j]{cursor:pointer}
 .pl-ph[data-j]:hover b{text-decoration:underline}
+/* ── Lead to speech (23/10/2026) ── */
+.pl-t td[data-lts]{cursor:pointer}
+.pl-t td[data-lts]:hover{text-decoration:underline;color:#4ade80}
+.pl-lts{margin-top:12px;background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:12px 14px}
+.pl-lts-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;font-size:13px}
+.pl-lts-h small{color:var(--muted);font-size:11.5px}
+.pl-lts-r{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr) 70px minmax(0,.9fr);gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--border);font-size:12.5px}
+.pl-lts-r.hd{border-top:none;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+.pl-lts-r .t{font-family:var(--font-m);color:var(--muted)}
+.pl-lts-r .d{font-family:var(--font-m);font-weight:800;text-align:right}
+.pl-lts-r .d.fast{color:#34d399}
+.pl-lts-r .d.slow{color:#fca5a5}
+@media (max-width:640px){.pl-lts-r{grid-template-columns:minmax(0,1fr) 64px}.pl-lts-r>.t,.pl-lts-r>.w{grid-column:1}.pl-lts-r>.d{grid-column:2;grid-row:1}.pl-lts-r.hd{display:none}}
 .pl-rem{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
 .pl-rem span{font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;background:rgba(148,163,184,.08);color:var(--muted);border:1px solid var(--border)}
 .pl-rem span.ok{color:#34d399;border-color:rgba(52,211,153,.3);background:rgba(52,211,153,.07)}
@@ -250,7 +263,8 @@ body:not(.light-theme) .pl-in[type=date]{color-scheme:dark}
     <section class="pl-kpis" id="actKpis"></section>
     <div class="pl-h2">Par personne <em>· clic sur une ligne pour le détail par jour</em></div>
     <div class="pl-tw" id="actTable"><div class="pl-empty">Chargement…</div></div>
-    <p class="pl-note">Appels : journal téléphonique (Ringover / dialer). Décroché = l'appel a été pris ; conversation = 1 min et plus. RDV posés : RDV de closing créés sur la période avec un setter identifié. RDV tenus : RDV de closing de la période par closeur, hors annulés et replanifiés. Messages : SMS et e-mails tracés sur les fiches, WhatsApp envoyés depuis la boîte partagée (les rappels automatiques sont « non attribués »), DM Instagram envoyés (attribués au setter écrit, comme dans Set NB). Connexion : temps d'onglet Team visible et nombre de sessions (nouvelle session après 30 min d'absence), relevés depuis le 16/10/2026. Actions : changements de statut, RDV posés et attributions dans Leads Live. Plage maximale : 31 jours.</p>
+    <div id="actLts"></div>
+    <p class="pl-note">Appels : journal téléphonique (Ringover / dialer). Décroché = l'appel a été pris ; conversation = 1 min et plus. RDV posés : RDV de closing créés sur la période avec un setter identifié. RDV tenus : RDV de closing de la période par closeur, hors annulés et replanifiés. Messages : SMS et e-mails tracés sur les fiches, WhatsApp envoyés depuis la boîte partagée (les rappels automatiques sont « non attribués »), DM Instagram envoyés (attribués au setter écrit, comme dans Set NB). Connexion : temps d'onglet Team visible et nombre de sessions (nouvelle session après 30 min d'absence), relevés depuis le 16/10/2026. Actions : changements de statut, RDV posés et attributions dans Leads Live. Lead to speech : délai entre l'arrivée d'un nouveau lead et son 1er appel sortant (décroché ou non, nuits et week-ends compris), compté pour celui qui a passé ce 1er appel et rangé au jour de l'appel ; leads arrivés au plus 14 jours avant (au-delà, relance de base froide). Clic sur la cellule pour la liste. Plage maximale : 31 jours.</p>
   </section>
 
   <!-- ═══ PROSPECT ═══ -->
@@ -315,6 +329,7 @@ var ACT = null;
 var actPeriod = 'today';
 var actOpen = {};
 var actLoading = false;
+var ltsSel = null;       // détail Lead to speech ouvert : 'slug|jour' (slug '*' = tous, '_un' = non attribué)
 var LEAD = null;
 var leadKinds = {};
 
@@ -387,6 +402,14 @@ function fmtTalk(sec) {
   if (!sec) return '0';
   if (h) return h + ' h ' + pad2(m);
   return m + ' min';
+}
+function fmtDelay(ms) {
+  if (ms == null || isNaN(ms) || ms < 0) return '—';
+  var min = Math.round(ms / 60000);
+  if (min < 60) return min + ' min';
+  var h = ms / 3600000;
+  if (h < 48) return (Math.round(h * 10) / 10).toLocaleString('fr-FR') + ' h';
+  return (Math.round(ms / 86400000 * 10) / 10).toLocaleString('fr-FR') + ' j';
 }
 function telFmt(n) {
   n = String(n || '');
@@ -528,7 +551,8 @@ function renderLive() {
   $('liveKpis').innerHTML =
     kpi('📞 En appel', nCall) + kpi('📹 En visio', nMeet) + kpi('🟢 Connectés', nOn) +
     kpi('📅 RDV aujourd\'hui', rdvs.length + (nLive ? ' · ' + nLive + ' en cours' : '')) +
-    kpi('☎️ Appels du jour', tCalls + ' · ' + tAns + ' décrochés');
+    kpi('☎️ Appels du jour', tCalls + ' · ' + tAns + ' décrochés') +
+    kpi('⚡ Lead to speech du jour', L.lts && L.lts.n ? fmtDelay(L.lts.median) + ' · ' + L.lts.n + ' lead' + (L.lts.n > 1 ? 's' : '') : '—');
   $('liveClock').textContent = '· ' + parisTime(L.now);
 
   if (!members.length) {
@@ -544,6 +568,7 @@ function renderLive() {
         '<span><b>' + t.answered + '</b> décroché' + (t.answered > 1 ? 's' : '') + '</span>' +
         '<span><b>' + fmtTalk(t.talkSec) + '</b> de parole</span>' +
         (t.lastCallAt ? '<span>dernier ' + esc(ago(t.lastCallAt)) + '</span>' : '') +
+        (t.lts && t.lts.n ? '<span title="Médiane du jour : arrivée du lead → 1er appel, sur les leads qu\'il ou elle a appelés en premier">⚡ <b>' + esc(fmtDelay(t.lts.median)) + '</b> lead to speech · ' + t.lts.n + ' lead' + (t.lts.n > 1 ? 's' : '') + ' · ' + t.lts.under5 + ' en &lt; 5 min</span>' : '') +
         (t.dmOut || t.dmIn || m.role === 'setter_ecrit' ? '<span><b>' + t.dmOut + '</b> DM envoyé' + (t.dmOut > 1 ? 's' : '') + ' · ' + t.dmIn + ' reçu' + (t.dmIn > 1 ? 's' : '') + (t.lastDmAt ? ' · dernier ' + esc(ago(t.lastDmAt)) : '') + '</span>' : '') +
         '<span>⏱ <b>' + fmtTalk(Math.round((t.activeMs || 0) / 1000)) + '</b> connecté' + (t.firstSeenAt ? ' · depuis ' + esc(parisTime(t.firstSeenAt)) : '') + (t.sessions > 1 ? ' · ' + t.sessions + ' sessions' : '') + (t.clicks ? ' · ' + t.clicks + ' clics' : '') + '</span>' +
         '</div>' +
@@ -634,6 +659,8 @@ function loadActivity() {
   $('actTable').innerHTML = '<div class="pl-empty">Chargement de l\'activité…</div>';
   $('actKpis').innerHTML = '';
   $('actBanner').innerHTML = '';
+  $('actLts').innerHTML = '';
+  ltsSel = null;
   api({ action: 'activity', from: r.from, to: r.to }).then(function (j) {
     ACT = j;
     renderActivity();
@@ -645,6 +672,7 @@ function loadActivity() {
 var COLS = [
   ['callsOut', 'Sortants', 'Appels'], ['callsIn', 'Entrants', 'Appels'], ['answered', 'Décrochés', 'Appels'],
   ['convos', '≥ 1 min', 'Appels'], ['talkSec', 'Parole', 'Appels'],
+  ['ltsN', 'Leads', 'Lead to speech'], ['ltsMed', 'Médiane', 'Lead to speech'],
   ['rdvSet', 'Posés', 'RDV'], ['rdvHeld', 'Tenus', 'RDV'], ['close', 'Close', 'RDV'], ['no_show', 'No-show', 'RDV'], ['pending', 'À statuer', 'RDV'],
   ['sms', 'SMS', 'Messages'], ['email', 'E-mails', 'Messages'], ['whatsapp', 'WhatsApp', 'Messages'], ['dmOut', 'DM Insta', 'Messages'],
   ['actStatus', 'Statuts', 'Fiches'], ['actBooking', 'RDV posés', 'Fiches'], ['notes', 'Notes', 'Fiches'],
@@ -658,8 +686,13 @@ var COL_CAT = { callsOut: 'call', callsIn: 'call', answered: 'call', convos: 'ca
   rapDue: 'rappel', rapDone: 'rappel', rapLate: 'rappel', rapChecked: 'rappel', activeMs: 'nav', sessions: 'nav', clicks: 'click' };
 function cell(k, v, slug, day) {
   v = Number(v) || 0;
-  var txt = k === 'talkSec' ? fmtTalk(v) : (k === 'activeMs' ? fmtTalk(Math.round(v / 1000)) : String(v));
-  var j = slug && day && v ? ' data-j="' + esc(slug + '|' + day + '|' + (COL_CAT[k] || '')) + '" title="Ouvrir le journal"' : '';
+  var txt = k === 'talkSec' ? fmtTalk(v) : (k === 'activeMs' ? fmtTalk(Math.round(v / 1000)) : (k === 'ltsMed' ? (v ? fmtDelay(v) : '—') : String(v)));
+  var j = '';
+  if (k === 'ltsN' || k === 'ltsMed') {
+    if (v) j = ' data-lts="' + esc((slug || '*') + '|' + (day || '')) + '" title="Voir les leads"';
+  } else if (slug && day && v) {
+    j = ' data-j="' + esc(slug + '|' + day + '|' + (COL_CAT[k] || '')) + '" title="Ouvrir le journal"';
+  }
   return '<td' + (v ? '' : ' class="z"') + j + '>' + esc(txt) + '</td>';
 }
 function sumStats(list) {
@@ -679,9 +712,12 @@ function renderActivity() {
     return (b.totals.callsOut + b.totals.rdvSet + b.totals.rdvHeld) - (a.totals.callsOut + a.totals.rdvSet + a.totals.rdvHeld) || String(a.name).localeCompare(String(b.name));
   });
   var tot = sumStats(members.map(function (m) { return m.totals; }).concat([A.unassigned || {}]));
+  var ltsT = A.lts && A.lts.team;
+  tot.ltsMed = ltsT && ltsT.median ? ltsT.median : 0;   // une médiane ne s'additionne pas
   $('actKpis').innerHTML =
     kpi('☎️ Appels', (tot.callsOut + tot.callsIn) + ' · ' + tot.answered + ' décrochés') +
     kpi('🗣️ Temps de parole', fmtTalk(tot.talkSec)) +
+    kpi('⚡ Lead to speech', ltsT && ltsT.n ? fmtDelay(ltsT.median) + ' · ' + ltsT.n + ' lead' + (ltsT.n > 1 ? 's' : '') : '—') +
     kpi('🗓️ RDV posés', tot.rdvSet) +
     kpi('📅 RDV tenus', tot.rdvHeld + ' · ' + tot.close + ' close') +
     kpi('✉️ Messages', tot.sms + tot.email + tot.whatsapp + tot.dmOut) +
@@ -715,11 +751,52 @@ function renderActivity() {
   var un = A.unassigned || {};
   var unAny = COLS.some(function (c) { return Number(un[c[0]]) > 0; });
   if (unAny) {
-    h += '<tr><td class="l"><span class="who" style="color:var(--muted)"><span class="car"></span><i style="background:rgba(148,163,184,.4)"></i>Non attribué <small>boîte partagée, envois auto, anciens membres</small></span></td>' + COLS.map(function (c) { return cell(c[0], un[c[0]]); }).join('') + '</tr>';
+    h += '<tr><td class="l"><span class="who" style="color:var(--muted)"><span class="car"></span><i style="background:rgba(148,163,184,.4)"></i>Non attribué <small>boîte partagée, envois auto, anciens membres</small></span></td>' + COLS.map(function (c) { return cell(c[0], un[c[0]], '_un'); }).join('') + '</tr>';
   }
   h += '<tr class="tot"><td class="l">Total</td>' + COLS.map(function (c) { return cell(c[0], tot[c[0]]); }).join('') + '</tr>';
   h += '</tbody></table>';
   $('actTable').innerHTML = members.length ? h : '<div class="pl-empty">Aucune activité sur la période.</div>';
+  renderLts();
+}
+
+/* Détail Lead to speech : un lead par ligne — arrivé, 1er appel, délai, par qui. */
+function ltsWhen(iso, refDay) {
+  if (!iso) return '—';
+  var d = parisDay(iso);
+  return (d !== refDay ? new Date(iso).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: '2-digit' }) + ' ' : '') + parisTime(iso);
+}
+function renderLts() {
+  var box = $('actLts');
+  if (!ltsSel || !ACT || !ACT.lts) { box.innerHTML = ''; return; }
+  var p = ltsSel.split('|'), slug = p[0], day = p[1] || '';
+  var names = { _un: 'Non attribué' };
+  (ACT.members || []).forEach(function (m) { names[m.slug] = m.name; });
+  var list = (ACT.lts.items || []).filter(function (it) {
+    return (slug === '*' || it.slug === slug) && (!day || it.day === day);
+  });
+  var delays = list.map(function (it) { return it.delayMs; }).sort(function (a, b) { return a - b; });
+  var med = null;
+  if (delays.length) { var mid = Math.floor(delays.length / 2); med = delays.length % 2 ? delays[mid] : (delays[mid - 1] + delays[mid]) / 2; }
+  var u5 = delays.filter(function (x) { return x <= 300000; }).length;
+  var u60 = delays.filter(function (x) { return x <= 3600000; }).length;
+  var h = '<div class="pl-lts"><div class="pl-lts-h"><b>⚡ Lead to speech — ' + esc(slug === '*' ? 'toute l\'équipe' : (names[slug] || slug)) + '</b>' +
+    '<small>' + esc(day ? fmtDayLabel(day) : (ACT.from === ACT.to ? fmtDayLabel(ACT.from) : fmtShortDay(ACT.from) + ' → ' + fmtShortDay(ACT.to))) + '</small>' +
+    '<small>· ' + list.length + ' lead' + (list.length > 1 ? 's' : '') + ' · médiane <b>' + esc(fmtDelay(med)) + '</b> · ' + u5 + ' en &lt; 5 min · ' + u60 + ' en &lt; 1 h</small>' +
+    '<span class="sp"></span><button class="pl-act pl-act-s" type="button" data-action="lts-close">Fermer</button></div>';
+  if (!list.length) {
+    h += '<div class="pl-empty">Aucun lead.</div>';
+  } else {
+    h += '<div class="pl-lts-r hd"><span>Lead</span><span>Arrivé</span><span>1er appel</span><span style="text-align:right">Délai</span><span>Par</span></div>';
+    list.forEach(function (it) {
+      var cls = it.delayMs <= 300000 ? ' fast' : (it.delayMs > 86400000 ? ' slow' : '');
+      h += '<div class="pl-lts-r"><span>' + leadBtn(it.leadId, it.leadName || 'Prospect') + '</span>' +
+        '<span class="t">arrivé ' + esc(ltsWhen(it.entryAt, it.day)) + '</span>' +
+        '<span class="t">appelé ' + esc(ltsWhen(it.callAt, it.day)) + '</span>' +
+        '<span class="d' + cls + '">' + esc(fmtDelay(it.delayMs)) + '</span>' +
+        '<span class="w">' + esc(names[it.slug] || it.slug) + '</span></div>';
+    });
+  }
+  box.innerHTML = h + '</div>';
 }
 
 /* ═══ PROSPECT ══════════════════════════════════════════════════════════ */
@@ -896,11 +973,18 @@ function renderJournal() {
 /* ── Délégation d'événements ─────────────────────────────────────────── */
 document.addEventListener('click', function (e) {
   var t = e.target;
-  var el = t.closest ? t.closest('[data-j],[data-jcat],[data-tab],[data-action],[data-period],[data-mem],[data-lead],[data-kind]') : null;
+  var el = t.closest ? t.closest('[data-j],[data-lts],[data-jcat],[data-tab],[data-action],[data-period],[data-mem],[data-lead],[data-kind]') : null;
   if (!el) return;
   if (el.hasAttribute('data-j')) {
     var pj = el.getAttribute('data-j').split('|');
     openJournal(pj[0], pj[1], pj[2] || '');
+    return;
+  }
+  if (el.hasAttribute('data-lts')) {
+    var lv = el.getAttribute('data-lts');
+    ltsSel = ltsSel === lv ? null : lv;
+    renderLts();
+    if (ltsSel && $('actLts').scrollIntoView) $('actLts').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     return;
   }
   if (el.hasAttribute('data-jcat')) {
@@ -942,6 +1026,9 @@ document.addEventListener('click', function (e) {
     else if (TAB === 'activity') loadActivity();
     else if (TAB === 'journal') loadJournal();
     else if (LEAD) openLead(LEAD.lead.id);
+  } else if (a === 'lts-close') {
+    ltsSel = null;
+    renderLts();
   } else if (a === 'act-apply') {
     loadActivity();
   } else if (a === 'jr-prev' || a === 'jr-next') {

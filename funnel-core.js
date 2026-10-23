@@ -1854,15 +1854,37 @@
        cohorte, cherché jusqu'au lookahead (fix censure 15/07 : avant, un
        lead appelé après la fin de fenêtre sortait de la médiane → chiffre
        structurellement flatteur, plafonné à la taille de la fenêtre). */
+    /* Lead to speech par personne (23/10/2026) — le 1er appel est attribué
+       à celui qui l'a passé : userId du call_log → roster (firebaseUid),
+       sinon prénom du userName (≈ 40 appels Ringover sur 300 sans userId).
+       Hors roster (membre parti compris) = « Non attribué ». */
+    var callerByUid = {}, callerByFirst = {};
+    function firstTok(s) {
+      var v = String(s || '');
+      try { v = v.normalize('NFD').replace(/[\u0300-\u036F]/g, ''); } catch (e) { /* vieux Safari */ }
+      return v.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').trim().split(' ')[0];
+    }
+    TEAM.forEach(function (m) {
+      if (!m) return;
+      var who = { key: m.slug || m.firebaseUid, name: m.shortName || m.displayName || m.fullName || m.slug };
+      if (m.firebaseUid) callerByUid[m.firebaseUid] = who;
+      var f = firstTok(m.shortName || m.displayName || m.fullName);
+      if (f && !callerByFirst[f]) callerByFirst[f] = who;
+    });
+    function callerOf(c) {
+      if (c.userId && callerByUid[c.userId]) return callerByUid[c.userId];
+      var f = firstTok(c.userName || c.ringoverUserName);
+      return (f && callerByFirst[f]) || null;
+    }
     var callsByP9 = {};
     DATA.calls.forEach(function (c) {
       if (c.direction !== 'outbound' || !c._p9 || c._ms == null) return;
       if (!callsByP9[c._p9]) callsByP9[c._p9] = [];
-      callsByP9[c._p9].push({ ms: c._ms, ans: isAnsweredCall(c) });
+      callsByP9[c._p9].push({ ms: c._ms, ans: isAnsweredCall(c), who: callerOf(c) });
     });
     var ttcArr = [], ttbArr = [], ttbSelfArr = [], ttbSetArr = [];
     cohort.forEach(function (l) {
-      l._nbCalls = 0; l._ttc = null;
+      l._nbCalls = 0; l._ttc = null; l._ttcBy = null;
       l._nbAnswered = 0;
       if (l._p9 && callsByP9[l._p9]) {
         var arr = callsByP9[l._p9];
@@ -1870,7 +1892,7 @@
         for (var i = 0; i < arr.length; i++) {
           if (arr[i].ans) l._nbAnswered++;
           if (l._entry != null && arr[i].ms >= l._entry) {
-            if (l._ttc == null || arr[i].ms - l._entry < l._ttc) l._ttc = arr[i].ms - l._entry;
+            if (l._ttc == null || arr[i].ms - l._entry < l._ttc) { l._ttc = arr[i].ms - l._entry; l._ttcBy = arr[i].who; }
           }
         }
       }
@@ -1890,6 +1912,26 @@
     });
     k.ttcMedian = median(ttcArr);
     k.ttcCount = ttcArr.length;
+    /* Lead to speech par personne : chaque lead appelé de la cohorte compte
+       UNE fois, pour l'auteur de son 1er appel. Tri du plus rapide au plus
+       lent (médiane), « Non attribué » en dernier. */
+    var ltsBy = {};
+    cohort.forEach(function (l) {
+      if (l._ttc == null) return;
+      var key = l._ttcBy ? l._ttcBy.key : '_none';
+      if (!ltsBy[key]) ltsBy[key] = { key: key, name: l._ttcBy ? l._ttcBy.name : 'Non attribué', unassigned: !l._ttcBy, delays: [] };
+      ltsBy[key].delays.push(l._ttc);
+    });
+    k.ltsByUser = Object.keys(ltsBy).map(function (key) {
+      var u = ltsBy[key], d = u.delays;
+      var u5 = 0, u60 = 0;
+      d.forEach(function (ms) { if (ms <= 5 * 60000) u5++; if (ms <= 3600000) u60++; });
+      return { key: u.key, name: u.name, unassigned: u.unassigned, n: d.length, median: median(d),
+        under5: u5, under60: u60, under5Pct: u5 / d.length * 100, under60Pct: u60 / d.length * 100 };
+    }).sort(function (a, b) {
+      if (a.unassigned !== b.unassigned) return a.unassigned ? 1 : -1;
+      return a.median - b.median || b.n - a.n;
+    });
     k.ttbMedian = median(ttbArr);
     k.ttbCount = ttbArr.length;
     k.ttbSelfMedian = median(ttbSelfArr); k.ttbSelfCount = ttbSelfArr.length;
