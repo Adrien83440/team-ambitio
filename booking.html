@@ -2219,6 +2219,49 @@ async function submitBooking() {
     }
   }
 
+  /* ── LISTE DE BLOCAGE (26/10/2026) ──────────────────────────────────────
+     Un e-mail ou un numéro blacklisté depuis Leads Live (api/lead-block.js)
+     ne doit plus pouvoir poser de RDV : un bot bloqué le 13/10 a repris 4 RDV
+     le 25/10, chacun dans l'agenda d'un closer. Vérifié AVANT les appels
+     d'attribution, qui créent ou mettent à jour la fiche lead.
+     Contact bloqué → rien n'est écrit, et la page affiche la confirmation
+     habituelle : le bot ne sait pas qu'il est bloqué. Pas de pixel ni de
+     message à la page hôte (pas de fausse conversion Meta).
+     Ignoré quand l'équipe pose le RDV elle-même (mode agent / setter).
+     Fail-open : une erreur réseau laisse passer. */
+  if (!_agentMode && !_setterMode) {
+    var _guardBlocked = false;
+    try {
+      var _bgCtl = (typeof AbortController === 'function') ? new AbortController() : null;
+      var _bgTimer = _bgCtl ? setTimeout(function() { _bgCtl.abort(); }, 6000) : null;
+      var _bgResp = await fetch('/api/booking-guard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: _bgCtl ? _bgCtl.signal : undefined,
+        body: JSON.stringify({
+          email: email,
+          telephone: formData.phone || '',
+          typeId: S.selType ? S.selType.id : '',
+          personId: S.selPerson ? S.selPerson.id : '',
+          date: S.selDate,
+          time: S.selTime
+        })
+      });
+      if (_bgTimer) clearTimeout(_bgTimer);
+      var _bgData = await _bgResp.json();
+      _guardBlocked = !!(_bgData && _bgData.allowed === false);
+    } catch (errBg) {
+      console.warn('[booking] vérification liste de blocage en échec, fail-open:', errBg);
+    }
+    if (_guardBlocked) {
+      S.confirmedBookingId = null;
+      S.confirmedBooking = null;
+      S.confirmedMeetLink = null;
+      showConfirmation(prenom, email, { silent: true });
+      return;
+    }
+  }
+
   var booking = {
     type: S.selType ? S.selType.id : '',
     typeLabel: S.selType ? S.selType.label : '',
@@ -2772,7 +2815,10 @@ function closeQuotaModal() {
   document.getElementById('quotaOverlay').classList.remove('show');
 }
 
-function showConfirmation(prenom, email) {
+/* opts.silent : confirmation affichée sans réservation réelle (contact
+   blacklisté, voir submitBooking) — aucun message à la page hôte. */
+function showConfirmation(prenom, email, opts) {
+  var _silent = !!(opts && opts.silent);
   var d = new Date(S.selDate + 'T12:00:00');
   var dateFr = JOURS_FR[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS_FR[d.getMonth()];
 
@@ -2797,7 +2843,7 @@ function showConfirmation(prenom, email) {
   renderConfirmSeries();
 
   // Embed mode: notify parent window
-  if (_embedMode && window.parent !== window) {
+  if (_embedMode && !_silent && window.parent !== window) {
     try {
       window.parent.postMessage({
         type: 'booking_confirmed',

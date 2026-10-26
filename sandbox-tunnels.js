@@ -138,6 +138,7 @@
   /* ═══ Faux serveur : tout envoi est simulé ici ═══════════════════════ */
   function reply(obj) { return Promise.resolve({ status: 200, text: JSON.stringify(obj), type: 'application/json' }); }
   var API_LABELS = {
+    '/api/booking-guard': 'Liste de blocage vérifiée (simulé)',
     '/api/booking-attribution': 'Provenance du RDV posée sur la fiche (simulé)',
     '/api/booking-setter-attribution': 'Setter attribué au RDV (simulé)',
     '/api/booking-check-coaching-quota': 'Quota coaching vérifié (simulé)',

@@ -6603,6 +6603,8 @@ document.addEventListener('click', function(e) {
     if (doBlock) {
       motif = window.prompt('🚫 Blacklister ' + quoi + ' ' + val + ' ?\n\n'
         + 'Plus aucune inscription avec cette valeur ne créera de fiche.\n'
+        + 'Ses RDV à venir sont annulés et retirés des agendas, sans prévenir\n'
+        + 'le contact, et la prise de RDV lui est refusée.\n'
         + 'L\'autre coordonnée de ce lead n\'est PAS touchée : si la personne\n'
         + 'revient avec une autre, on garde la fiche au cas où.\n\n'
         + 'Motif (facultatif) :', blkTarget === 'email' ? 'Email bidon' : 'Faux numéro');
@@ -6622,7 +6624,13 @@ document.addEventListener('click', function(e) {
     }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
         if (!res.ok || !res.j.ok) throw new Error(res.j && res.j.error || 'échec');
-        toast(doBlock ? '🚫 ' + quoi + ' blacklisté — refusé à l\'entrée' : '✅ ' + quoi + ' réautorisé');
+        var nRdv = (res.j.bookingsCancelled || []).filter(function (b) { return b && b.ok; }).length;
+        var nWarn = (res.j.warnings || []).length;
+        toast(doBlock
+          ? '🚫 ' + quoi + ' blacklisté — refusé à l\'entrée'
+            + (nRdv ? ' · ' + nRdv + ' RDV à venir annulé' + (nRdv > 1 ? 's' : '') : '')
+            + (nWarn ? ' · ⚠️ ' + res.j.warnings[0] : '')
+          : '✅ ' + quoi + ' réautorisé');
         /* Le listener leads reflète déjà le champ `blocked` ; on re-rend la
            fiche pour basculer le bouton sans attendre. */
         if (typeof renderFeed === 'function') renderFeed();

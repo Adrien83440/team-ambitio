@@ -56,6 +56,10 @@
     '.rvo-radio button{flex:1;background:var(--bg,#07080f);border:1px solid var(--border,rgba(148,163,214,.16));color:var(--muted,#8f97b2);border-radius:9px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}',
     '.rvo-radio button.sel{border-color:rgba(91,124,250,.6);color:var(--text,#fff);background:rgba(91,124,250,.12)}',
     '.rvo-actions{display:flex;justify-content:flex-end;gap:8px}',
+    /* RDV pas encore commencé : avertissement avant un résultat « tenu » (26/10/2026) */
+    '.rvo-fwarn{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.35);border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:12.5px;line-height:1.5;color:var(--text,#eef0f8)}',
+    '.rvo-fwarn b{color:#fbbf24}',
+    '.rvo-fwarn-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}',
     /* Replanifié : nouveau créneau OU RDV déjà reposé à rattacher (14/10/2026) */
     '.rvo-cand-list{display:flex;flex-direction:column;gap:6px;margin-top:10px;max-height:260px;overflow-y:auto}',
     '.rvo-cand{display:flex;align-items:center;gap:10px;text-align:left;background:var(--bg,#07080f);border:1px solid var(--border,rgba(148,163,214,.16));border-radius:10px;padding:9px 11px;cursor:pointer;font-family:inherit;color:var(--text,#eef0f8);width:100%}',
@@ -85,7 +89,7 @@
     'body.light-theme .rvo-f input,body.light-theme .rvo-f select,body.light-theme .rvo-f textarea{background:#f8fafc;color:#111827}'
   ].join('\n');
 
-  var state = { booking: null, lead: null, outcome: null, opts: {}, personsMap: null, saving: false, resched: null };
+  var state = { booking: null, lead: null, outcome: null, opts: {}, personsMap: null, saving: false, resched: null, futureAck: false };
 
   function esc(s) { if (s == null) return ''; return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function $(id) { return document.getElementById(id); }
@@ -230,6 +234,73 @@
     return Date.now() > d.getTime() + (b.duration || 30) * 60000;
   }
 
+  /* ── RDV PAS ENCORE COMMENCÉ (26/10/2026) ──
+     Incident du 25/10 : 4 RDV d'un bot statués « Disqua » / « Non close »
+     avant même leur heure. Ces résultats valent « RDV tenu » (status
+     completed) : l'événement Google reste dans l'agenda du closer, les
+     rappels SMS / e-mail partent, le RDV compte comme tenu dans les stats.
+     Seul « Annulé » libère l'agenda. Avertissement — pas de blocage : un
+     RDV avancé de façon informelle reste statuable. */
+  var FUTURE_WARN = { non_close: 1, offre: 1, disqualifie: 1, no_show: 1 };
+
+  /* Début du RDV en ms, b.date / b.time lus en heure de Paris quel que soit
+     le fuseau de l'appareil (setter à l'étranger). */
+  function bookingStartMs(b) {
+    if (!b || !b.date || !b.time) return NaN;
+    var p = String(b.date).split('-'), t = String(b.time).split(':');
+    var guess = Date.UTC(+p[0], +p[1] - 1, +p[2], +t[0], +t[1] || 0);
+    if (isNaN(guess)) return NaN;
+    var o = {};
+    new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date(guess)).forEach(function (x) { o[x.type] = x.value; });
+    var asParis = Date.UTC(+o.year, +o.month - 1, +o.day, o.hour === '24' ? 0 : +o.hour, +o.minute);
+    return guess - (asParis - guess);
+  }
+  function isFutureBooking(b) {
+    var ms = bookingStartMs(b);
+    return !isNaN(ms) && Date.now() < ms;
+  }
+
+  function showFutureWarn(k) {
+    var AF = window.AlteoreFlow;
+    var panel = $('rvoPanel');
+    var old = $('rvoFutureWarn');
+    if (old) old.parentNode.removeChild(old);
+    var lbl = AF.OUTCOMES[k] ? AF.OUTCOMES[k].label : k;
+    var box = document.createElement('div');
+    box.id = 'rvoFutureWarn';
+    box.className = 'rvo-fwarn';
+    box.innerHTML =
+      '⚠️ <b>Ce RDV n’a pas encore eu lieu.</b> « ' + esc(lbl) + ' » le compte comme tenu : il <b>restera dans l’agenda</b> du closer, '
+      + 'les rappels continueront de partir vers le prospect, et il comptera comme RDV tenu dans les stats. '
+      + 'Pour le retirer des agendas, il faut l’annuler.'
+      + '<div class="rvo-fwarn-acts">'
+      + '<button type="button" class="rvo-btn danger" data-fw="cancel">🔴 Annuler le RDV à la place</button>'
+      + '<button type="button" class="rvo-btn" data-fw="force">Enregistrer quand même</button>'
+      + '</div>';
+    box.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-fw]');
+      if (!btn) return;
+      if (btn.getAttribute('data-fw') === 'force') {
+        state.futureAck = true;
+        confirmOutcome();
+        return;
+      }
+      /* Bascule sur « Annulé » par l'équipe, en reprenant la note saisie
+         comme raison (obligatoire côté équipe). */
+      var noteEl = $('rvoNote');
+      var note = noteEl ? noteEl.value.trim() : '';
+      selectOutcome('annule');
+      var eq = document.querySelector('#rvoCancelBy button[data-v="equipe"]');
+      if (eq) eq.click();
+      var n2 = $('rvoNote');
+      if (n2 && note) n2.value = note;
+      if (n2) n2.focus();
+    });
+    panel.insertBefore(box, panel.firstChild);
+    panel.className = 'rvo-panel show';
+  }
+
   /* ── Ouverture ── */
   function open(booking, opts) {
     var AF = window.AlteoreFlow;
@@ -249,6 +320,7 @@
     state.lead = null;
     state.saving = false;
     state.resched = null;
+    state.futureAck = false;
 
     var sb = AF.isSB(booking, state.opts.typeMap);
     var dateFr = booking.date ? booking.date.split('-').reverse().join('/') : '';
@@ -338,6 +410,7 @@
   function selectOutcome(k) {
     var AF = window.AlteoreFlow;
     state.outcome = k;
+    state.futureAck = false;
     renderGrid();
     $('rvoDesc').textContent = AF.OUTCOMES[k].desc;
 
@@ -685,6 +758,7 @@
     if (!state.booking || !state.outcome || state.saving) return;
     var k = state.outcome;
     if (k === 'replanifie') { confirmLink(); return; }
+    if (FUTURE_WARN[k] && !state.futureAck && isFutureBooking(state.booking)) { showFutureWarn(k); return; }
     var opts = { typeMap: state.opts.typeMap, lead: state.lead };
     var noteEl = $('rvoNote');
     if (noteEl) opts.note = noteEl.value.trim() || null;
