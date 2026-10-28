@@ -144,11 +144,14 @@ async function _calHealthAlert(e) {
 // Met à jour les entrées de CET expert dans _config/calendar_health.
 // Lecture simple d'abord : la synchro tourne à chaque visite de la page de
 // réservation, on n'écrit (en transaction) que si l'état a changé.
-async function _calHealthUpdate(personId, personName, sources) {
+// bookable === false (aucune consultation attribuée, ex. la CSM) : rien à
+// alerter, un agenda illisible ne fausse aucun créneau — l'état reste visible
+// dans la fiche expert, et une entrée existante est effacée.
+async function _calHealthUpdate(personId, personName, sources, bookable) {
   var nowMs = Date.now();
   var prefix = personId + "__";
   var want = {};
-  Object.keys(sources).forEach(function(k) {
+  if (bookable !== false) Object.keys(sources).forEach(function(k) {
     var s = sources[k];
     if (s.status !== "revoked" && s.status !== "error") return;
     var t0 = new Date(s.firstFailedAt || "").getTime() || nowMs;
@@ -363,7 +366,7 @@ async function fetchAndStoreBusy(personId) {
   console.log("Synced " + allBusy.length + " busy slots from " + allCalsChecked.length + " calendar(s) for " + personId);
 
   try {
-    await _calHealthUpdate(personId, person.name || personId, sources);
+    await _calHealthUpdate(personId, person.name || personId, sources, (person.types || []).length > 0);
   } catch (e) {
     console.error("[calHealth] mise à jour impossible pour " + personId + ":", e.message);
   }
