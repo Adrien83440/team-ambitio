@@ -928,7 +928,8 @@ function initBooking() {
       var personTypes = S.types.filter(function(t) { return (S.lockPerson.types || []).indexOf(t.id) >= 0 && !t.attributedSetterSlug; });
       /* Consultation par défaut de l'expert (réglée dans Booking admin) : son
          lien tombe droit sur le calendrier, sans étape « quelle consultation ? ».
-         Le RDV reste un RDV typé normal — durée, buffers, Meet, notifications. */
+         Le RDV reste un RDV typé normal — durée, Meet, notifications (les
+         buffers de l'expert, s'il en a, priment sur ceux de la consultation). */
       var dflt = null;
       if (S.lockPerson.defaultTypeId) {
         dflt = personTypes.filter(function(t) { return t.id === S.lockPerson.defaultTypeId; })[0] || null;
@@ -1315,8 +1316,14 @@ function hasAvailableSlotsFor(_p, dateStr) {
    Google Calendar busy, preavis, fenetre max, max/jour). */
 function computeSlotsFor(person, dateStr) {
   var dur = S.selType ? S.selType.duration : 30;
-  var bufBefore = (S.selType && S.selType.rules && S.selType.rules.bufferBefore) || person.bufferBefore || 0;
-  var bufAfter = (S.selType && S.selType.rules && S.selType.rules.bufferAfter) || person.bufferAfter || 0;
+  /* Buffers : celui que l'expert a réglé sur SA fiche (Paramètres avancés)
+     prime sur celui de la consultation, côté par côté ; 0 / vide = on prend
+     la consultation. Cas Claire (28/10/2026) : 60 min après sur sa fiche,
+     écrasés par les 15 min de l'Audit. Même cascade dans
+     api/_recurrence-core.js (slotParamsOf). Le reste (préavis, intervalle,
+     max/jour) : la consultation prime toujours. */
+  var bufBefore = person.bufferBefore || (S.selType && S.selType.rules && S.selType.rules.bufferBefore) || 0;
+  var bufAfter = person.bufferAfter || (S.selType && S.selType.rules && S.selType.rules.bufferAfter) || 0;
   var minNotice = (S.selType && S.selType.rules && S.selType.rules.minNoticeHours) || person.minNoticeHours || 0;
   var interval = (S.selType && S.selType.rules && S.selType.rules.slotInterval) ? S.selType.rules.slotInterval : dur;
 

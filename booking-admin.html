@@ -2703,7 +2703,7 @@ h+='<div style="font-family:\'Bricolage Grotesque\',sans-serif;font-size:14px;fo
 if(!_ptl.length){
 h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:20px">Aucune consultation attribuée à cet expert. Attribuez-lui d\'abord une consultation pour qu\'il ait un lien.</div>';
 }else{
-h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:10px">Le client qui ouvre ce lien ne peut réserver qu\'avec cet expert. Choisissez une consultation par défaut : il arrivera <strong>directement sur le calendrier</strong>, sans avoir à choisir. Durée, buffers, Meet et notifications restent ceux de la consultation.</div>';
+h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:10px">Le client qui ouvre ce lien ne peut réserver qu\'avec cet expert. Choisissez une consultation par défaut : il arrivera <strong>directement sur le calendrier</strong>, sans avoir à choisir. Durée, Meet et notifications restent ceux de la consultation ; les buffers sont les vôtres si vous en avez réglé ci-dessous.</div>';
 h+='<div class="cd-field" style="margin-bottom:10px"><select class="bi" id="exDefaultType" style="width:100%" onchange="renderExLinkPreview()">';
 h+='<option value="">— Le client choisit sa consultation —</option>';
 _ptl.forEach(function(t){h+='<option value="'+escA(t.id)+'"'+(exPerson.defaultTypeId===t.id?' selected':'')+'>'+esc(t.label)+' · '+(t.duration>=60?(t.duration/60)+'h':t.duration+' min')+'</option>';});
@@ -2719,7 +2719,7 @@ h+='<div class="cd-field" style="margin-bottom:20px"><input class="bi" id="exMee
 
 // Individual limits
 h+='<div style="font-family:\'Bricolage Grotesque\',sans-serif;font-size:14px;font-weight:700;margin-bottom:10px">📊 Réglages individuels</div>';
-h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:12px">Laissez vide pour utiliser les valeurs globales.</div>';
+h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:12px">Buffers : les vôtres priment sur ceux de la consultation — laissez vide (ou 0) pour garder ceux de la consultation. Délai minimum et max / jour : la consultation prime.</div>';
 h+='<div class="ps-g" style="margin-bottom:16px">';
 h+='<div class="ps-i"><div class="ps-l">Buffer avant</div><div class="ps-r"><input type="number" class="bi" id="exBufBefore" min="0" value="'+(exPerson.bufferBefore||'')+'" placeholder="'+(S.defaultBufferBefore||0)+'"/><span class="ps-u">min</span></div></div>';
 h+='<div class="ps-i"><div class="ps-l">Buffer après</div><div class="ps-r"><input type="number" class="bi" id="exBufAfter" min="0" value="'+(exPerson.bufferAfter||'')+'" placeholder="'+(S.defaultBufferAfter||0)+'"/><span class="ps-u">min</span></div></div>';

@@ -1070,7 +1070,7 @@ const FICHES = [
       "2. **🏷 Consultations assignées** : clique pour ajouter / retirer une consultation de ta fiche.",
       "3. **🔗 Lien de réunion personnel** : ton lien Meet de secours (utilisé si ton Google Agenda n'est pas connecté).",
       "4. **📊 Réglages individuels** : Buffer avant / après (minutes entre 2 RDV), Délai minimum (heures avant un RDV), Max / jour.",
-      "Tout s'enregistre automatiquement. Les règles de la consultation passent avant les tiennes.",
+      "Tout s'enregistre automatiquement. Tes buffers passent avant ceux de la consultation (laisse vide ou 0 pour garder ceux de la consultation) ; pour le délai minimum et le max / jour, ce sont les règles de la consultation qui passent avant les tiennes.",
       "Créer ou modifier une consultation (durée, nom, lien court…) est réservé aux admins.",
     ]),
     guide: [G_BK_EXPERTS, G_BK_MYCARD, { page: 'booking-admin', sel: '[data-exs="advanced"]', text: "Clique sur « Paramètres avancés »." }],

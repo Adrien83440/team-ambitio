@@ -240,7 +240,9 @@ async function loadBookingContext(personId, typeId) {
 
 /**
  * Paramètres de découpe des créneaux, avec la même cascade que booking.html
- * (computeSlotsFor) : la consultation prime sur l'expert, 0 sinon.
+ * (computeSlotsFor) : la consultation prime sur l'expert, 0 sinon — SAUF les
+ * buffers, où le réglage de l'expert (sa fiche) prime, côté par côté, et la
+ * consultation ne sert que si l'expert n'a rien mis (cas Claire, 28/10/2026).
  *
  * NOTE — `maxNoticeDays` (« plage de dates dans le futur ») est volontairement
  * ignoré ici. Cette borne existe pour empêcher un prospect de réserver dans
@@ -253,8 +255,8 @@ function slotParamsOf(type, person) {
   return {
     duration,
     interval: rules.slotInterval || duration,
-    bufBefore: rules.bufferBefore || person.bufferBefore || 0,
-    bufAfter: rules.bufferAfter || person.bufferAfter || 0,
+    bufBefore: person.bufferBefore || rules.bufferBefore || 0,
+    bufAfter: person.bufferAfter || rules.bufferAfter || 0,
     minNoticeHours: rules.minNoticeHours || person.minNoticeHours || 0,
     maxPerDay: rules.maxPerDay || person.maxPerDay || 0,
   };
