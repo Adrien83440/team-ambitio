@@ -68,12 +68,17 @@ function _calIsRevoked(msg) {
   return /invalid_grant|token_missing/.test(String(msg || ""));
 }
 
+var _CAL_SPECIAL_RE = /#(holiday|weeknum|contacts)@group\.v\.calendar\.google\.com$/;
+
 // Répartit la réponse freeBusy : créneaux occupés des agendas lus, et les
 // agendas refusés un par un (notFound, accès retiré…) à part.
 function _calCollect(cals, res, prefix, names) {
   Object.keys(cals || {}).forEach(function(calId) {
     var c = cals[calId] || {};
     if (c.errors && c.errors.length) {
+      // Agendas spéciaux Google (jours fériés, numéros de semaine) : freeBusy
+      // les refuse toujours (notFound) et ils ne portent jamais de RDV.
+      if (_CAL_SPECIAL_RE.test(calId)) return;
       res.calErrors.push({
         id: calId,
         name: (names && names[calId]) || calId,
