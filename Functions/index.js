@@ -37,19 +37,182 @@ async function getAuthClientForPerson(personId) {
   return client;
 }
 
+/* ─── Santé des agendas d'expert (28/10/2026) ──────────────────────────────
+   Incident Thomas Pinet : Google a révoqué le 22/10 le jeton de son agenda
+   perso thomaspinet@ultra-mastermind.com (invalid_grant). fetchAndStoreBusy
+   sautait cette connexion sans bruit : ses RDV perso ont disparu des
+   créneaux occupés et la CSM a pu caler des clients par-dessus, alors qu'un
+   « Resynchroniser » ne pouvait rien y faire.
+
+   Désormais, pour chaque source (connexion principale "main", chaque agenda
+   perso "x_<id>") :
+    · son état est écrit dans calendar_busy/{pid}.sources
+      { email, kind, status: ok|partial|revoked|error, error, lastOkAt,
+        firstFailedAt, keptSlots, calErrors[] } — lu par booking-admin
+      (fiche expert, modale « Nouveau RDV ») ;
+    · une source en panne GARDE ses derniers créneaux occupés connus
+      (calendar_busy.busyBySource) au lieu de les effacer — imparfait (un RDV
+      ajouté depuis la panne reste invisible) mais bien moins dangereux ;
+    · un agenda que Google refuse individuellement (errors du freeBusy)
+      n'est plus compté dans calendarsChecked : il passe dans calErrors.
+   Une révocation, ou une autre panne de plus de 2 h, est inscrite dans
+   _config/calendar_health (encart admin d'alteore-mail-health.js) et
+   déclenche UN e-mail à l'admin par incident. Retour à la normale →
+   l'entrée est effacée. */
+const CAL_HEALTH_REF = db.collection("_config").doc("calendar_health");
+const CAL_ALERT_AFTER_MS = 2 * 60 * 60 * 1000;
+const CAL_ALERT_TO = "contact@adrienemily.com";
+const CAL_ALERT_FROM_ORDER = ["coaching", "contact", "strategie"];
+
+function _calIsRevoked(msg) {
+  return /invalid_grant|token_missing/.test(String(msg || ""));
+}
+
+// Répartit la réponse freeBusy : créneaux occupés des agendas lus, et les
+// agendas refusés un par un (notFound, accès retiré…) à part.
+function _calCollect(cals, res, prefix, names) {
+  Object.keys(cals || {}).forEach(function(calId) {
+    var c = cals[calId] || {};
+    if (c.errors && c.errors.length) {
+      res.calErrors.push({
+        id: calId,
+        name: (names && names[calId]) || calId,
+        reason: String((c.errors[0] || {}).reason || "error")
+      });
+      return;
+    }
+    res.busy = res.busy.concat(c.busy || []);
+    res.checked.push(prefix + calId);
+  });
+}
+
+function _calParisLabel(iso) {
+  var d = new Date(iso || "");
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "2-digit", month: "2-digit" }) +
+    " à " + d.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" });
+}
+
+function _calEsc(s) {
+  return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+async function _calHealthAlert(e) {
+  var since = _calParisLabel(e.since);
+  var where = e.sourceKey === "main"
+    ? "le Google Agenda principal (« Calendrier connecté »)"
+    : "l'agenda personnel " + e.email;
+  var howTo = e.sourceKey === "main"
+    ? "Agenda → Experts → " + e.personName + " → Paramètres du calendrier : reconnecter le Google Agenda principal, puis revérifier les calendriers cochés."
+    : e.personName + " se reconnecte avec le compte " + e.email + " : Agenda → Experts → " + e.personName +
+      " → Paramètres du calendrier → « 🔁 Reconnecter ». Le bouton « Resynchroniser » ne suffit pas.";
+  var link = "https://team.alteore.com/booking-admin.html?calExpert=" + encodeURIComponent(e.personId);
+  var html =
+    '<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#0f172a;line-height:1.55">' +
+    '<h2 style="color:#b91c1c;margin:0 0 14px;font-size:20px">📅 Agenda de ' + _calEsc(e.personName) + ' plus lu par Booking</h2>' +
+    '<p style="margin:0 0 12px">Google refuse l\'accès à ' + _calEsc(where) +
+    (since ? ' (dernier fonctionnement connu le ' + _calEsc(since) + ')' : '') + '.</p>' +
+    '<p style="margin:0 0 12px"><b>Conséquence :</b> les RDV notés dans cet agenda ne bloquent plus les créneaux de ' +
+    _calEsc(e.personName) + '. Les derniers créneaux occupés connus sont gardés, mais tout RDV ajouté depuis la panne est invisible : ' +
+    'un client ou la CSM peut réserver par-dessus.</p>' +
+    '<p style="margin:0 0 18px"><b>À faire :</b> ' + _calEsc(howTo) + '</p>' +
+    '<a href="' + link + '" style="display:inline-block;padding:12px 22px;border-radius:10px;background:#7c3aed;color:#fff;font-weight:700;text-decoration:none">Ouvrir la fiche de ' + _calEsc(e.personName) + '</a>' +
+    '<p style="margin:18px 0 0;font-size:12px;color:#64748b">Détail technique : ' + _calEsc(String(e.error || "").slice(0, 200)) + '</p>' +
+    '</div>';
+  var text =
+    "Agenda de " + e.personName + " plus lu par Booking : " + where +
+    (since ? " (dernier fonctionnement connu le " + since + ")" : "") + ".\n" +
+    "Les RDV notés dans cet agenda ne bloquent plus ses créneaux.\n" +
+    "À faire : " + howTo + "\n" + link;
+  for (var i = 0; i < CAL_ALERT_FROM_ORDER.length; i++) {
+    try {
+      var r = await _abSendEmail({
+        accountKey: CAL_ALERT_FROM_ORDER[i],
+        to: CAL_ALERT_TO,
+        subject: "📅 Agenda de " + e.personName + " plus lu — à reconnecter",
+        bodyHtml: html,
+        bodyText: text
+      });
+      if (r && r.ok) return true;
+    } catch (err) {
+      console.warn("[calHealth] alerte via " + CAL_ALERT_FROM_ORDER[i] + " impossible :", err.message);
+    }
+  }
+  return false;
+}
+
+// Met à jour les entrées de CET expert dans _config/calendar_health.
+// Lecture simple d'abord : la synchro tourne à chaque visite de la page de
+// réservation, on n'écrit (en transaction) que si l'état a changé.
+async function _calHealthUpdate(personId, personName, sources) {
+  var nowMs = Date.now();
+  var prefix = personId + "__";
+  var want = {};
+  Object.keys(sources).forEach(function(k) {
+    var s = sources[k];
+    if (s.status !== "revoked" && s.status !== "error") return;
+    var t0 = new Date(s.firstFailedAt || "").getTime() || nowMs;
+    if (s.status === "error" && nowMs - t0 < CAL_ALERT_AFTER_MS) return;
+    want[prefix + k] = s;
+  });
+  var snap = await CAL_HEALTH_REF.get();
+  var cur = (snap.exists && snap.data().connections) || {};
+  var changed = Object.keys(cur).some(function(k) { return k.indexOf(prefix) === 0 && !want[k]; }) ||
+    Object.keys(want).some(function(k) { return !cur[k] || cur[k].status !== want[k].status; });
+  if (!changed) return;
+  var toAlert = [];
+  await db.runTransaction(async function(tx) {
+    toAlert = [];
+    var s2 = await tx.get(CAL_HEALTH_REF);
+    var c2 = (s2.exists && s2.data().connections) || {};
+    var next = {};
+    Object.keys(c2).forEach(function(k) {
+      if (k.indexOf(prefix) !== 0 || want[k]) next[k] = c2[k];
+    });
+    Object.keys(want).forEach(function(k) {
+      var w = want[k];
+      var p = c2[k] || null;
+      var e = {
+        personId: personId,
+        personName: personName,
+        sourceKey: k.slice(prefix.length),
+        email: w.email || "",
+        status: w.status,
+        error: w.error || "",
+        since: w.lastOkAt || w.firstFailedAt || "",
+        firstFailedAt: w.firstFailedAt || ""
+      };
+      if (p && p.alertAt) {
+        e.alertAt = p.alertAt;
+      } else {
+        e.alertAt = new Date().toISOString();
+        toAlert.push(e);
+      }
+      next[k] = e;
+    });
+    tx.set(CAL_HEALTH_REF, { connections: next, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+  });
+  for (var i = 0; i < toAlert.length; i++) {
+    var sent = await _calHealthAlert(toAlert[i]);
+    console.log("[calHealth] " + toAlert[i].personId + " / " + toAlert[i].sourceKey + " en panne — alerte " + (sent ? "envoyée" : "NON envoyée"));
+  }
+}
+
 async function fetchAndStoreBusy(personId) {
   var now = new Date();
   var end = new Date();
   end.setDate(end.getDate() + 60);
-  var allBusy = [];
-  var allCalsChecked = [];
+  var results = [];
+
+  var personDoc = await db.collection("booking_config").doc(personId).get();
+  var person = personDoc.exists ? (personDoc.data() || {}) : {};
 
   // 1. Primary connection
   var client = await getAuthClientForPerson(personId);
   if (client) {
+    var mainRes = { key: "main", email: person.calendarEmail || "", ok: true, error: "", busy: [], checked: [], calErrors: [] };
     try {
-      var personDoc = await db.collection("booking_config").doc(personId).get();
-      var calList = (personDoc.exists && personDoc.data().calendarList) || [];
+      var calList = person.calendarList || [];
       var calendar = google.calendar({ version: "v3", auth: client });
 
       // Auto-refresh calendar list if empty or on each sync
@@ -82,73 +245,128 @@ async function fetchAndStoreBusy(personId) {
       // malgré l'interrupteur coupé (cas Claire / agenda d'Anthony).
       // "primary" ne sert plus que de repli quand la liste est inconnue.
       var calItems = [];
+      var calNames = {};
       calList.forEach(function(cal) {
+        if (cal.id) calNames[cal.id] = cal.name || cal.id;
         if (cal.checkConflicts !== false && cal.id && cal.id !== "primary") {
           calItems.push({ id: cal.id });
         }
       });
       if (!calList.length) calItems.push({ id: "primary" });
-      var resp = await calendar.freebusy.query({
-        requestBody: { timeMin: now.toISOString(), timeMax: end.toISOString(), timeZone: "Europe/Paris", items: calItems }
-      });
-      var cals = resp.data.calendars || {};
-      Object.keys(cals).forEach(function(calId) {
-        var slots = (cals[calId] && cals[calId].busy) || [];
-        allBusy = allBusy.concat(slots);
-        allCalsChecked.push(calId);
-      });
+      if (calItems.length) {
+        var resp = await calendar.freebusy.query({
+          requestBody: { timeMin: now.toISOString(), timeMax: end.toISOString(), timeZone: "Europe/Paris", items: calItems }
+        });
+        _calCollect(resp.data.calendars, mainRes, "", calNames);
+      }
     } catch (e) {
+      mainRes.ok = false;
+      mainRes.error = e.message || String(e);
       console.error("fetchAndStoreBusy primary error for " + personId + ":", e.message);
     }
+    results.push(mainRes);
   }
 
-  // 2. Extra connections (personal agendas)
-  try {
-    var personDoc2 = await db.collection("booking_config").doc(personId).get();
-    var extraConns = (personDoc2.exists && personDoc2.data().extraConnections) || [];
-    for (var ec of extraConns) {
-      var tokenDoc = await db.collection("calendar_extra_tokens").doc(personId + "__" + ec.id).get();
-      if (!tokenDoc.exists) continue;
-      try {
-        var conf = await getOAuthConfig();
-        var eClient = new google.auth.OAuth2(conf.client_id, conf.client_secret, conf.redirect_uri);
-        var eData = tokenDoc.data();
-        eClient.setCredentials({ access_token: eData.accessToken, refresh_token: eData.refreshToken });
-        eClient.on("tokens", async function(t) {
+  // 2. Extra connections (personal agendas) — une panne par connexion,
+  // jamais silencieuse (voir l'en-tête « Santé des agendas d'expert »).
+  var extraConns = person.extraConnections || [];
+  var conf = null;
+  for (var ec of extraConns) {
+    if (!ec || !ec.id) continue;
+    var res = { key: "x_" + ec.id, email: ec.email || "", ok: true, error: "", busy: [], checked: [], calErrors: [], lastRefreshAt: "" };
+    try {
+      var tokenRef = db.collection("calendar_extra_tokens").doc(personId + "__" + ec.id);
+      var tokenDoc = await tokenRef.get();
+      if (!tokenDoc.exists) throw new Error("token_missing");
+      var eData = tokenDoc.data();
+      // Dernier renouvellement réussi ≈ expiration du dernier jeton - 1 h :
+      // sert de « dernier fonctionnement connu » au premier constat de panne.
+      var expMs = eData.expiresAt && eData.expiresAt.toMillis ? eData.expiresAt.toMillis() : 0;
+      if (expMs) res.lastRefreshAt = new Date(expMs - 3600000).toISOString();
+      if (!eData.refreshToken) throw new Error("token_missing");
+      if (!conf) conf = await getOAuthConfig();
+      var eClient = new google.auth.OAuth2(conf.client_id, conf.client_secret, conf.redirect_uri);
+      eClient.setCredentials({ access_token: eData.accessToken, refresh_token: eData.refreshToken });
+      eClient.on("tokens", (function(ref) {
+        return async function(t) {
           var u = {};
           if (t.access_token) u.accessToken = t.access_token;
           if (t.expiry_date) u.expiresAt = new Date(t.expiry_date);
           if (t.refresh_token) u.refreshToken = t.refresh_token;
-          if (Object.keys(u).length) await db.collection("calendar_extra_tokens").doc(personId + "__" + ec.id).update(u);
-        });
-        var eCalItems = (ec.calendars || []).filter(function(c) { return c.checkConflicts !== false; }).map(function(c) { return { id: c.id }; });
-        if (!eCalItems.length) eCalItems = [{ id: "primary" }];
-        var eCal = google.calendar({ version: "v3", auth: eClient });
-        var eResp = await eCal.freebusy.query({
-          requestBody: { timeMin: now.toISOString(), timeMax: end.toISOString(), timeZone: "Europe/Paris", items: eCalItems }
-        });
-        var eCals = eResp.data.calendars || {};
-        Object.keys(eCals).forEach(function(calId) {
-          var slots = (eCals[calId] && eCals[calId].busy) || [];
-          allBusy = allBusy.concat(slots);
-          allCalsChecked.push(ec.email + ":" + calId);
-        });
-      } catch (e) {
-        console.error("fetchAndStoreBusy extra error for " + personId + " (" + ec.email + "):", e.message);
-      }
+          if (Object.keys(u).length) await ref.update(u);
+        };
+      })(tokenRef));
+      var eCalItems = (ec.calendars || []).filter(function(c) { return c.checkConflicts !== false; }).map(function(c) { return { id: c.id }; });
+      if (!eCalItems.length) eCalItems = [{ id: "primary" }];
+      var eNames = {};
+      (ec.calendars || []).forEach(function(c) { if (c && c.id) eNames[c.id] = c.name || c.id; });
+      var eCal = google.calendar({ version: "v3", auth: eClient });
+      var eResp = await eCal.freebusy.query({
+        requestBody: { timeMin: now.toISOString(), timeMax: end.toISOString(), timeZone: "Europe/Paris", items: eCalItems }
+      });
+      _calCollect(eResp.data.calendars, res, ec.email + ":", eNames);
+    } catch (e) {
+      res.ok = false;
+      res.error = e.message || String(e);
+      console.error("fetchAndStoreBusy extra error for " + personId + " (" + ec.email + "):", res.error);
     }
-  } catch (e) {
-    console.error("fetchAndStoreBusy extra connections error:", e.message);
+    results.push(res);
   }
+
+  // 3. Fusion avec l'état précédent : une source en panne garde ses derniers
+  // créneaux occupés connus (passés exclus) au lieu de disparaître.
+  var busyRef = db.collection("calendar_busy").doc(personId);
+  var prevSnap = await busyRef.get();
+  var prev = prevSnap.exists ? (prevSnap.data() || {}) : {};
+  var prevBySource = prev.busyBySource || {};
+  var prevSources = prev.sources || {};
+  var nowIso = now.toISOString();
+  var nowMs = now.getTime();
+  var allBusy = [];
+  var allCalsChecked = [];
+  var busyBySource = {};
+  var sources = {};
+  results.forEach(function(r) {
+    var ps = prevSources[r.key] || {};
+    var src = { email: r.email, kind: r.key === "main" ? "main" : "extra" };
+    var slots;
+    if (r.ok) {
+      slots = r.busy;
+      src.status = r.calErrors.length ? "partial" : "ok";
+      src.lastOkAt = nowIso;
+      if (r.calErrors.length) src.calErrors = r.calErrors;
+    } else {
+      slots = (prevBySource[r.key] || []).filter(function(b) { return new Date(b.end).getTime() > nowMs; });
+      var wasDown = ps.status === "revoked" || ps.status === "error";
+      src.status = _calIsRevoked(r.error) ? "revoked" : "error";
+      src.error = String(r.error || "").slice(0, 200);
+      src.firstFailedAt = (wasDown && ps.firstFailedAt) ? ps.firstFailedAt : nowIso;
+      var lastOk = ps.lastOkAt || r.lastRefreshAt || "";
+      if (lastOk) src.lastOkAt = lastOk;
+      src.keptSlots = slots.length;
+    }
+    busyBySource[r.key] = slots;
+    sources[r.key] = src;
+    allBusy = allBusy.concat(slots);
+    allCalsChecked = allCalsChecked.concat(r.checked);
+  });
 
   // Sort and store
   allBusy.sort(function(a, b) { return new Date(a.start) - new Date(b.start); });
-  await db.collection("calendar_busy").doc(personId).set({
+  await busyRef.set({
     busy: allBusy,
     calendarsChecked: allCalsChecked,
+    busyBySource: busyBySource,
+    sources: sources,
     updatedAt: admin.firestore.FieldValue.serverTimestamp()
   });
   console.log("Synced " + allBusy.length + " busy slots from " + allCalsChecked.length + " calendar(s) for " + personId);
+
+  try {
+    await _calHealthUpdate(personId, person.name || personId, sources);
+  } catch (e) {
+    console.error("[calHealth] mise à jour impossible pour " + personId + ":", e.message);
+  }
 }
 
 

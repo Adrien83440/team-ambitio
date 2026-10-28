@@ -97,6 +97,14 @@
 .cli-quota{margin:-2px 0 12px;padding:7px 12px;border-radius:8px;font-size:11.5px;font-weight:600;display:flex;align-items:center;gap:6px;line-height:1.4}
 .cli-quota.ok{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.18);color:#6ee7b7}
 .cli-quota.warn{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.22);color:#fcd34d}
+/* Santé des agendas Google d'un expert (28/10/2026) — fiche expert + modale « Nouveau RDV » */
+.cal-health{margin:8px 14px 12px;padding:9px 12px;border-radius:8px;font-size:12px;line-height:1.5;display:flex;align-items:center;gap:10px}
+.cal-health.bad{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.28);color:#fca5a5}
+.cal-health.warn{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.22);color:#fcd34d}
+.cal-health .cal-health-txt{flex:1}
+.cal-health .bb{flex-shrink:0;font-size:11px;padding:5px 12px}
+.m-cal-warn{margin:-2px 0 12px;padding:8px 12px;border-radius:8px;font-size:11.5px;font-weight:600;line-height:1.45;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.28);color:#fca5a5}
+.m-cal-warn.warn{background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.22);color:#fcd34d}
 /* Modal élargi quand l'iframe de réservation est affichée */
 .mo.mo-wide{max-width:920px;transition:max-width .2s ease}
 /* Fenêtres Partager / Dupliquer (20/10/2026) : sur la base .mo-bg/.mo, en
@@ -603,7 +611,7 @@ body.csm-mode #csG [data-action="delT"]{display:none !important}
 
 </div>
 </div>
-<div class="mo-bg" id="cMo"><div class="mo"><div class="mo-h"><div class="mo-t">Nouveau rendez-vous</div><button class="mo-x" id="moX">✕</button></div><div class="mo-b"><div class="mfr"><div class="mf"><label>Consultation *</label><select id="mT"></select></div><div class="mf"><label>Expert *</label><select id="mP"></select></div></div><div class="mfd">Client</div><div class="ent-tabs" id="mEntTabs" style="display:none"><div class="ent-tab on" data-ent="lead">👤 Lead</div><div class="ent-tab" data-ent="client">🎓 Client coaching</div></div><div class="lead-search-wrap" id="mLeadWrap"><span class="lead-search-icon">🔍</span><input class="lead-search-input" id="mLeadSearch" placeholder="Rechercher un lead (nom, email, tél)…" autocomplete="off"/><div class="lead-search-results" id="mLeadResults"></div></div><div id="mLeadSelected" style="display:none;margin-bottom:12px;padding:8px 12px;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.15);border-radius:8px;display:none;align-items:center;gap:10px;font-size:12px"><span style="color:#a78bfa;font-weight:700" id="mLeadSelName"></span><span style="color:rgba(255,255,255,.3)">·</span><span style="color:rgba(255,255,255,.4)" id="mLeadSelEmail"></span><span class="lead-sr-clear" id="mLeadClear">✕ Effacer</span></div><div class="lead-search-wrap" id="mClientWrap" style="display:none"><span class="lead-search-icon">🔍</span><input class="lead-search-input" id="mClientSearch" placeholder="Rechercher un client coaching (nom, email, tél)…" autocomplete="off"/><div class="lead-search-results" id="mClientResults"></div></div><div id="mClientSelected" style="display:none;margin-bottom:8px;padding:8px 12px;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.22);border-radius:8px;align-items:center;gap:8px;font-size:12px"><span style="flex-shrink:0">🎓</span><span style="color:#c4b5fd;font-weight:700" id="mClientSelName"></span><span style="color:rgba(255,255,255,.3)">·</span><span style="color:rgba(255,255,255,.4);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="mClientSelEmail"></span><span class="lead-sr-clear" id="mClientClear">✕ Effacer</span></div><div id="mClientQuota" class="cli-quota" style="display:none"></div><div id="mLeadOnly"><div class="mfr"><div class="mf"><label>Date *</label><input type="date" id="mD"/></div><div class="mf"><label>Heure *</label><input type="time" id="mH" value="09:00"/></div></div><div class="mfr"><div class="mf"><label>Prénom *</label><input id="mFn" placeholder="Prénom"/></div><div class="mf"><label>Nom *</label><input id="mLn" placeholder="Nom"/></div></div><div class="mf"><label>Email *</label><input type="email" id="mEm" placeholder="email@exemple.com"/></div><div class="mf"><label>Téléphone</label><input type="tel" id="mPh" placeholder="+33 6…"/></div><div class="mf"><label>Notes</label><textarea id="mNo" placeholder="Contexte…"></textarea></div><button class="mo-s" id="moSub">Créer le rendez-vous</button></div><div id="mClientAvail" style="display:none"><div class="mfd">Disponibilités du coach</div><div id="mAvailHint" style="font-size:12px;color:rgba(255,255,255,.45);background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.15);border-radius:8px;padding:10px 12px;margin-bottom:10px;line-height:1.45">Choisis la consultation, le coach et le client ci-dessus, puis affiche le planning réel du coach pour sélectionner un créneau libre.</div><button class="mo-s" id="mShowAvail" disabled>📅 Voir les disponibilités du coach</button><div id="mAvailFrame"></div></div></div></div></div>
+<div class="mo-bg" id="cMo"><div class="mo"><div class="mo-h"><div class="mo-t">Nouveau rendez-vous</div><button class="mo-x" id="moX">✕</button></div><div class="mo-b"><div class="mfr"><div class="mf"><label>Consultation *</label><select id="mT"></select></div><div class="mf"><label>Expert *</label><select id="mP"></select></div></div><div id="mCalWarn" class="m-cal-warn" style="display:none"></div><div class="mfd">Client</div><div class="ent-tabs" id="mEntTabs" style="display:none"><div class="ent-tab on" data-ent="lead">👤 Lead</div><div class="ent-tab" data-ent="client">🎓 Client coaching</div></div><div class="lead-search-wrap" id="mLeadWrap"><span class="lead-search-icon">🔍</span><input class="lead-search-input" id="mLeadSearch" placeholder="Rechercher un lead (nom, email, tél)…" autocomplete="off"/><div class="lead-search-results" id="mLeadResults"></div></div><div id="mLeadSelected" style="display:none;margin-bottom:12px;padding:8px 12px;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.15);border-radius:8px;display:none;align-items:center;gap:10px;font-size:12px"><span style="color:#a78bfa;font-weight:700" id="mLeadSelName"></span><span style="color:rgba(255,255,255,.3)">·</span><span style="color:rgba(255,255,255,.4)" id="mLeadSelEmail"></span><span class="lead-sr-clear" id="mLeadClear">✕ Effacer</span></div><div class="lead-search-wrap" id="mClientWrap" style="display:none"><span class="lead-search-icon">🔍</span><input class="lead-search-input" id="mClientSearch" placeholder="Rechercher un client coaching (nom, email, tél)…" autocomplete="off"/><div class="lead-search-results" id="mClientResults"></div></div><div id="mClientSelected" style="display:none;margin-bottom:8px;padding:8px 12px;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.22);border-radius:8px;align-items:center;gap:8px;font-size:12px"><span style="flex-shrink:0">🎓</span><span style="color:#c4b5fd;font-weight:700" id="mClientSelName"></span><span style="color:rgba(255,255,255,.3)">·</span><span style="color:rgba(255,255,255,.4);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="mClientSelEmail"></span><span class="lead-sr-clear" id="mClientClear">✕ Effacer</span></div><div id="mClientQuota" class="cli-quota" style="display:none"></div><div id="mLeadOnly"><div class="mfr"><div class="mf"><label>Date *</label><input type="date" id="mD"/></div><div class="mf"><label>Heure *</label><input type="time" id="mH" value="09:00"/></div></div><div class="mfr"><div class="mf"><label>Prénom *</label><input id="mFn" placeholder="Prénom"/></div><div class="mf"><label>Nom *</label><input id="mLn" placeholder="Nom"/></div></div><div class="mf"><label>Email *</label><input type="email" id="mEm" placeholder="email@exemple.com"/></div><div class="mf"><label>Téléphone</label><input type="tel" id="mPh" placeholder="+33 6…"/></div><div class="mf"><label>Notes</label><textarea id="mNo" placeholder="Contexte…"></textarea></div><button class="mo-s" id="moSub">Créer le rendez-vous</button></div><div id="mClientAvail" style="display:none"><div class="mfd">Disponibilités du coach</div><div id="mAvailHint" style="font-size:12px;color:rgba(255,255,255,.45);background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.15);border-radius:8px;padding:10px 12px;margin-bottom:10px;line-height:1.45">Choisis la consultation, le coach et le client ci-dessus, puis affiche le planning réel du coach pour sélectionner un créneau libre.</div><button class="mo-s" id="mShowAvail" disabled>📅 Voir les disponibilités du coach</button><div id="mAvailFrame"></div></div></div></div></div>
 <!-- RDV DETAIL PANEL -->
 <div class="rdv-panel-bg" id="rdvBg" onclick="closeRdvDetail()"></div>
 <div class="rdv-panel" id="rdvPanel"><div id="rdvContent"></div></div>
@@ -2271,6 +2279,42 @@ toast('❌ '+(e&&e.message?e.message:'Erreur réseau'));
 window.openRdvDetail=openRdvDetail;window.closeRdvDetail=closeRdvDetail;window.cancelRdv=cancelRdv;window.bkDeleteRdv=bkDeleteRdv;window.bkResendConfirmation=bkResendConfirmation;
 // ═══ EXPERT DETAIL VIEW ═══
 var exPerson=null,exSection='planning',cpSourceDay='';
+/* ── Santé des agendas Google d'un expert (28/10/2026) ──────────────────
+   Incident Thomas Pinet : son agenda perso ultra-mastermind n'était plus lu
+   depuis le 22/10 (accès révoqué par Google) et rien ne le montrait — la CSM
+   calait des clients sur des créneaux qu'il avait déjà pris.
+   fetchAndStoreBusy (Cloud Functions) écrit désormais l'état de chaque
+   connexion dans calendar_busy/{pid}.sources : clé "main" (Calendrier
+   connecté) ou "x_<id>" (agenda perso), status ok | partial | revoked |
+   error, lastOkAt, calErrors[]. Lecture publique (même règle que busy). */
+var _calSrc={},_calSrcAt={};
+function loadCalSources(pid,cb){
+if(!pid)return;
+db.collection('calendar_busy').doc(pid).get().then(function(d){
+_calSrc[pid]=(d.exists&&(d.data()||{}).sources)||{};_calSrcAt[pid]=Date.now();
+if(cb)cb(_calSrc[pid]);
+}).catch(function(e){console.warn('[booking-admin] état des agendas :',e&&e.message);});
+}
+function calSrcDown(s){return !!s&&(s.status==='revoked'||s.status==='error');}
+function calFmtDate(iso){var d=new Date(iso||'');if(isNaN(d.getTime()))return'';return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+' à '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
+function calSrcHtml(pid,key){
+var s=(_calSrc[pid]||{})[key];
+if(!s)return'';
+if(calSrcDown(s)){
+var since=calFmtDate(s.lastOkAt||s.firstFailedAt);
+var t=s.status==='revoked'?'Google a retiré l\'accès':'Lecture en échec';
+t+=since?(' — plus lu depuis le '+since):'';
+t+='. Les RDV notés dans cet agenda ne bloquent plus les créneaux';
+t+=(s.keptSlots?(' (les '+s.keptSlots+' derniers créneaux occupés connus restent bloqués)'):'')+'. « Resynchroniser » ne suffit pas : il faut se reconnecter.';
+var btn=key==='main'?'':'<button class="bb bb-g" data-action="calReconnect" data-pid="'+escA(pid)+'">🔁 Reconnecter</button>';
+return '<div class="cal-health bad"><span class="cal-health-txt">⚠️ '+esc(t)+'</span>'+btn+'</div>';
+}
+if(s.status==='partial'&&s.calErrors&&s.calErrors.length){
+var names=s.calErrors.map(function(c){return c.name||c.id;}).join(', ');
+return '<div class="cal-health warn"><span class="cal-health-txt">⚠️ Google refuse la lecture de : '+esc(names)+'. Ces calendriers ne bloquent pas les créneaux.</span></div>';
+}
+return'';
+}
 // Mini planning par expert (onglet "vue")
 var vuMode='month',vuYear=null,vuMonth=null,vuWeekStart=null;
 
@@ -2565,6 +2609,10 @@ setTimeout(function(){_vuRender();},0);
 }
 
 else if(exSection==='calendar'){
+if(!_calSrcAt[exPerson.id]||Date.now()-_calSrcAt[exPerson.id]>60000){
+var _csPid=exPerson.id;_calSrcAt[_csPid]=Date.now();
+loadCalSources(_csPid,function(){if(exPerson&&exPerson.id===_csPid&&exSection==='calendar')renderExSection();});
+}
 var isConnected=exPerson.calendarConnected===true;
 var calEmail=exPerson.calendarEmail||'';
 var calList=exPerson.calendarList||[];
@@ -2573,7 +2621,7 @@ h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:16px">C
 
 h+='<div style="font-family:\'Bricolage Grotesque\',sans-serif;font-size:14px;font-weight:700;margin-bottom:10px">Calendrier connecté</div>';
 if(isConnected){
-h+='<div class="cal-card" style="border-color:rgba(52,211,153,.2)"><div class="cal-card-head"><span class="cal-card-icon">✅</span><div><div class="cal-card-title">Google Agenda</div><div class="cal-card-sub">'+esc(calEmail)+'</div></div><button class="bb bb-r" style="margin-left:auto;font-size:11px" onclick="disconnectCalendar(\''+exPerson.id+'\')">Déconnecter</button></div></div>';
+h+='<div class="cal-card" style="border-color:rgba(52,211,153,.2)"><div class="cal-card-head"><span class="cal-card-icon">✅</span><div><div class="cal-card-title">Google Agenda</div><div class="cal-card-sub">'+esc(calEmail)+'</div></div><button class="bb bb-r" style="margin-left:auto;font-size:11px" onclick="disconnectCalendar(\''+exPerson.id+'\')">Déconnecter</button></div>'+calSrcHtml(exPerson.id,'main')+'</div>';
 
 // Calendar list with checkboxes
 h+='<div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 8px"><div style="font-family:\'Bricolage Grotesque\',sans-serif;font-size:14px;font-weight:700">Calendriers à vérifier pour les conflits</div><button class="bb" onclick="refreshCalendars(\''+exPerson.id+'\')" style="padding:4px 12px;font-size:11px">🔄 Rafraîchir</button></div>';
@@ -2617,6 +2665,7 @@ h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:12px">C
 var extraConns=exPerson.extraConnections||[];
 extraConns.forEach(function(conn,ci){
 h+='<div class="cal-card" style="border-color:rgba(245,158,11,.2);margin-bottom:12px"><div class="cal-card-head"><span class="cal-card-icon">📅</span><div><div class="cal-card-title">'+esc(conn.email)+'</div><div class="cal-card-sub">'+((conn.calendars||[]).length)+' calendrier(s)</div></div><button class="bb bb-r" style="margin-left:auto;font-size:11px" onclick="disconnectExtraCal(\''+exPerson.id+'\','+ci+')">Déconnecter</button></div>';
+h+=calSrcHtml(exPerson.id,'x_'+conn.id);
 // Show calendars with conflict toggles
 if(conn.calendars&&conn.calendars.length){
 h+='<div style="padding:0 14px 12px">';
@@ -4097,9 +4146,92 @@ function bkAdminCheckDupe(personId,date,time,email){
     return found;
   }).catch(function(e){console.warn('[booking-admin] check doublon:',e&&e.message);return false;});
 }
-document.getElementById('moSub').addEventListener('click',function(){var ti=document.getElementById('mT').value,pi=document.getElementById('mP').value,dt=document.getElementById('mD').value,tm=document.getElementById('mH').value,fn=document.getElementById('mFn').value.trim(),ln=document.getElementById('mLn').value.trim(),em=document.getElementById('mEm').value.trim();if(!ti||!pi||!dt||!tm||!fn||!ln||!em){alert('Remplissez tous les champs obligatoires.');return;}var tO=T.find(function(t){return t.id===ti;}),pO=P.find(function(p){return p.id===pi;});var bk={type:ti,typeLabel:tO?tO.label:'',personId:pi,personName:pO?pO.name:'',date:dt,time:tm,duration:tO?tO.duration:30,status:'confirmed',source:'admin_manual',prospect:{prenom:fn,nom:ln,email:em,telephone:document.getElementById('mPh').value.trim(),message:document.getElementById('mNo').value.trim()},createdAt:firebase.firestore.FieldValue.serverTimestamp()};if(tO&&tO.isCoaching===true)bk.isCoaching=true;if(_selectedLeadId)bk.leadId=_selectedLeadId;var btn=this;btn.disabled=true;btn.textContent='Création…';bkAdminCheckDupe(pi,dt,tm,em).then(function(dup){if(dup&&!confirm('⚠️ Un RDV confirmé existe déjà pour ce prospect le '+dt+' à '+tm+' chez cet expert.\n\nCréer quand même un second rendez-vous ?'))return null;return db.collection('bookings').add(bk);}).then(function(_r){if(!_r){btn.disabled=false;btn.textContent='Créer le rendez-vous';return;}if(_selectedLeadId){db.collection('leads').doc(_selectedLeadId).update({status:'rdv_pose',rdvDate:dt,rdvHeure:tm,assignedTo:pi,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).catch(function(){});}else{db.collection('leads').add({nom:fn+' '+ln,email:em,telephone:document.getElementById('mPh').value.trim(),type:'manual_booking',stage:'rdv_manual',status:'rdv_pose',assignedTo:pi,utm:'Admin - '+(tO?tO.label:''),rdvDate:dt,rdvHeure:tm,notesHistory:[{text:'RDV créé manuellement',date:new Date().toLocaleString('fr-FR')}],createdAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});}btn.disabled=false;btn.textContent='Créer le rendez-vous';document.getElementById('cMo').classList.remove('show');_selectedLeadId=null;loadB();toast('✅ RDV créé');}).catch(function(e){btn.disabled=false;btn.textContent='Créer le rendez-vous';alert('Erreur: '+e.message);});});
+/* Contrôle de disponibilité de l'onglet Lead (28/10/2026). Cet onglet pose
+   un RDV à une date et une heure libres, sans passer par le planning : la
+   CSM pouvait y caler un client sur un créneau déjà pris. On relit les RDV
+   Booking confirmés de l'expert et ses créneaux occupés Google
+   (calendar_busy), heure de Paris, et on demande confirmation s'il y a
+   chevauchement ou si un de ses agendas n'est plus lu. Une erreur de lecture
+   laisse passer (ne jamais bloquer une création légitime). */
+function bkParisDayMin(iso){
+var d=new Date(iso||'');if(isNaN(d.getTime()))return null;
+try{
+var o={};new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Paris',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(d).forEach(function(p){o[p.type]=p.value;});
+var hh=parseInt(o.hour,10)%24;
+return{date:o.year+'-'+o.month+'-'+o.day,min:hh*60+parseInt(o.minute,10)};
+}catch(e){return null;}
+}
+function bkMinToHm(m){m=Math.max(0,Math.min(1440,m));return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}
+function bkHmToMin(t){var p=String(t||'').split(':');return parseInt(p[0],10)*60+parseInt(p[1]||'0',10);}
+function bkAdminCheckConflict(personId,date,time,dur){
+if(!personId||!date||!time)return Promise.resolve(true);
+var s0=bkHmToMin(time),e0=s0+(dur||30);
+var pO=P.find(function(p){return p.id===personId;});var nm=pO?pO.name:'Cet expert';
+return Promise.all([
+db.collection('bookings').where('date','==',date).get().catch(function(){return null;}),
+db.collection('calendar_busy').doc(personId).get().catch(function(){return null;})
+]).then(function(r){
+var lines=[],ranges=[];
+if(r[0])r[0].forEach(function(d){
+var b=d.data()||{};
+if(b.status!=='confirmed'||b.personId!==personId||!b.time)return;
+var bs=bkHmToMin(b.time),be=bs+(b.duration||30);
+ranges.push(bs+'-'+be);
+if(bs<e0&&be>s0){var who=(((b.prospect||{}).prenom||'')+' '+((b.prospect||{}).nom||'')).trim();lines.push('• RDV Booking '+b.time+'–'+bkMinToHm(be)+(who?' — '+who:(b.typeLabel?' — '+b.typeLabel:'')));}
+});
+var cb=(r[1]&&r[1].exists)?(r[1].data()||{}):{};
+(cb.busy||[]).forEach(function(x){
+var a=bkParisDayMin(x.start),z=bkParisDayMin(x.end);
+if(!a||!z||a.date>date||z.date<date)return;
+var gs=a.date===date?a.min:0,ge=z.date===date?z.min:1440;
+if(!(gs<e0&&ge>s0))return;
+if(ranges.indexOf(gs+'-'+ge)>=0)return; // = l'événement Google d'un RDV Booking déjà listé
+lines.push('• Occupé dans son agenda Google '+bkMinToHm(gs)+'–'+bkMinToHm(ge));
+});
+var down=[],src=cb.sources||{};
+Object.keys(src).forEach(function(k){if(calSrcDown(src[k]))down.push(k==='main'?'Google Agenda principal':(src[k].email||'agenda perso'));});
+if(!lines.length&&!down.length)return true;
+var msg='';
+if(lines.length)msg+='⚠️ '+nm+' n\'est pas libre le '+date+' de '+time+' à '+bkMinToHm(e0)+' :\n'+lines.join('\n')+'\n\n';
+if(down.length)msg+='⚠️ Agenda plus lu par Booking : '+down.join(', ')+'. Les RDV notés là n\'apparaissent pas — vérifie directement avec '+nm+'.\n\n';
+return confirm(msg+'Créer quand même le rendez-vous ?');
+});
+}
+/* Avertissement sous « Expert » dans la modale : un agenda de l'expert
+   choisi n'est plus lu → ses créneaux affichés (iframe ou saisie libre)
+   peuvent être faux. */
+function updateCalWarn(){
+var box=document.getElementById('mCalWarn');if(!box)return;
+var pid=document.getElementById('mP').value;
+box.style.display='none';box.innerHTML='';
+if(!pid)return;
+loadCalSources(pid,function(src){
+if(document.getElementById('mP').value!==pid)return;
+var pO=P.find(function(p){return p.id===pid;});var nm=pO?pO.name:'cet expert';
+var down=[],part=[];
+Object.keys(src||{}).forEach(function(k){
+var s=src[k];var lbl=k==='main'?'Google Agenda principal':(s.email||'agenda perso');
+if(calSrcDown(s)){var since=calFmtDate(s.lastOkAt||s.firstFailedAt);down.push(lbl+(since?' (depuis le '+since+')':''));}
+else if(s.status==='partial'&&s.calErrors&&s.calErrors.length)part.push(s.calErrors.map(function(c){return c.name||c.id;}).join(', '));
+});
+if(down.length){
+box.className='m-cal-warn';
+box.innerHTML='⚠️ '+esc('Agenda de '+nm+' plus lu : '+down.join(', ')+'. Ses RDV notés dans cet agenda n\'apparaissent pas dans les créneaux — vérifie avec '+nm+' avant de caler.');
+box.style.display='';
+}else if(part.length){
+box.className='m-cal-warn warn';
+box.innerHTML='⚠️ '+esc('Calendrier(s) illisible(s) chez '+nm+' : '+part.join(', ')+'.');
+box.style.display='';
+}
+});
+}
+document.getElementById('mP').addEventListener('change',updateCalWarn);
+document.getElementById('mT').addEventListener('change',updateCalWarn);
+document.getElementById('newRdv').addEventListener('click',function(){setTimeout(updateCalWarn,0);});
+document.getElementById('moSub').addEventListener('click',function(){var ti=document.getElementById('mT').value,pi=document.getElementById('mP').value,dt=document.getElementById('mD').value,tm=document.getElementById('mH').value,fn=document.getElementById('mFn').value.trim(),ln=document.getElementById('mLn').value.trim(),em=document.getElementById('mEm').value.trim();if(!ti||!pi||!dt||!tm||!fn||!ln||!em){alert('Remplissez tous les champs obligatoires.');return;}var tO=T.find(function(t){return t.id===ti;}),pO=P.find(function(p){return p.id===pi;});var bk={type:ti,typeLabel:tO?tO.label:'',personId:pi,personName:pO?pO.name:'',date:dt,time:tm,duration:tO?tO.duration:30,status:'confirmed',source:'admin_manual',prospect:{prenom:fn,nom:ln,email:em,telephone:document.getElementById('mPh').value.trim(),message:document.getElementById('mNo').value.trim()},createdAt:firebase.firestore.FieldValue.serverTimestamp()};if(tO&&tO.isCoaching===true)bk.isCoaching=true;if(_selectedLeadId)bk.leadId=_selectedLeadId;var btn=this;btn.disabled=true;btn.textContent='Création…';bkAdminCheckConflict(pi,dt,tm,bk.duration).then(function(go){if(!go)return 'abort';return bkAdminCheckDupe(pi,dt,tm,em);}).then(function(dup){if(dup==='abort')return null;if(dup&&!confirm('⚠️ Un RDV confirmé existe déjà pour ce prospect le '+dt+' à '+tm+' chez cet expert.\n\nCréer quand même un second rendez-vous ?'))return null;return db.collection('bookings').add(bk);}).then(function(_r){if(!_r){btn.disabled=false;btn.textContent='Créer le rendez-vous';return;}if(_selectedLeadId){db.collection('leads').doc(_selectedLeadId).update({status:'rdv_pose',rdvDate:dt,rdvHeure:tm,assignedTo:pi,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).catch(function(){});}else{db.collection('leads').add({nom:fn+' '+ln,email:em,telephone:document.getElementById('mPh').value.trim(),type:'manual_booking',stage:'rdv_manual',status:'rdv_pose',assignedTo:pi,utm:'Admin - '+(tO?tO.label:''),rdvDate:dt,rdvHeure:tm,notesHistory:[{text:'RDV créé manuellement',date:new Date().toLocaleString('fr-FR')}],createdAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});}btn.disabled=false;btn.textContent='Créer le rendez-vous';document.getElementById('cMo').classList.remove('show');_selectedLeadId=null;loadB();toast('✅ RDV créé');}).catch(function(e){btn.disabled=false;btn.textContent='Créer le rendez-vous';alert('Erreur: '+e.message);});});
 document.addEventListener('click',function(e){var a=e.target.closest('[data-action]');if(!a)return;var ac=a.dataset.action;if(ac==='resendMail'){e.stopPropagation();bkResendConfirmation(a,a.dataset.bid);}else if(ac==='delT'){var _tDel=T[+a.dataset.idx];if(_tDel)deleteTypeById(_tDel.id);}else if(ac==='delTid'){deleteTypeById(a.dataset.tid);}else if(ac==='dupT'){e.stopPropagation();openDupTypeModal(a.dataset.tid);}
 else if(ac==='openCs'){openCsDetail(a.dataset.tid);}
+else if(ac==='calReconnect'){connectExtraCalendar(a.dataset.pid);}
 else if(ac==='assignEx'){var ap=P.find(function(x){return x.id===a.dataset.pid;});if(ap){ap.types=ap.types||[];if(ap.types.indexOf(cdType.id)<0)ap.types.push(cdType.id);CR.doc(ap.id).update({types:ap.types}).then(function(){renderCdSection();toast('✅ Expert assigné');});}}
 else if(ac==='unassignEx'){var up=P.find(function(x){return x.id===a.dataset.pid;});if(up){up.types=up.types||[];var ui=up.types.indexOf(cdType.id);if(ui>=0)up.types.splice(ui,1);CR.doc(up.id).update({types:up.types}).then(function(){renderCdSection();toast('✅ Expert retiré');});}}
 else if(ac==='togEx'){var c=document.querySelector('.ec[data-pid="'+a.dataset.pid+'"]');if(c)c.classList.toggle('open');}else if(ac==='togTy'){var pid=a.dataset.pid,tid=a.dataset.tid,p=P.find(function(x){return x.id===pid;});if(!p)return;p.types=p.types||[];var i=p.types.indexOf(tid);if(i>=0)p.types.splice(i,1);else p.types.push(tid);CR.doc(pid).update({types:p.types}).then(function(){renderAll();toast('✅');});}else if(ac==='savPS'){var pid2=a.dataset.pid,u={};document.querySelectorAll('[data-ps][data-pid="'+pid2+'"]').forEach(function(inp){var v=parseInt(inp.value);u[inp.dataset.ps]=isNaN(v)?0:v;});CR.doc(pid2).update(u).then(function(){var p2=P.find(function(x){return x.id===pid2;});if(p2)Object.assign(p2,u);toast('✅');});}else if(ac==='addSl'){var pid3=a.dataset.pid,dy=a.dataset.day,sE=document.querySelector('[data-start="'+pid3+'_'+dy+'"]'),eE=document.querySelector('[data-end="'+pid3+'_'+dy+'"]');if(!sE||!eE||!sE.value||!eE.value)return;var p3=P.find(function(x){return x.id===pid3;});if(!p3)return;p3.schedule=p3.schedule||{};p3.schedule[dy]=p3.schedule[dy]||[];p3.schedule[dy].push({start:sE.value,end:eE.value});CR.doc(pid3).update({schedule:p3.schedule}).then(function(){rEx();toast('✅');});}else if(ac==='delSl'){var pid4=a.dataset.pid,dy2=a.dataset.day,ix=+a.dataset.idx;var p4=P.find(function(x){return x.id===pid4;});if(!p4||!p4.schedule||!p4.schedule[dy2])return;p4.schedule[dy2].splice(ix,1);CR.doc(pid4).update({schedule:p4.schedule}).then(function(){rEx();toast('🗑');});}else if(ac==='addBl'){var pid5=a.dataset.pid,dE=document.querySelector('[data-bl="'+pid5+'"]');if(!dE||!dE.value)return;var p5=P.find(function(x){return x.id===pid5;});if(!p5)return;p5.blockedDates=p5.blockedDates||[];if(p5.blockedDates.indexOf(dE.value)<0)p5.blockedDates.push(dE.value);p5.blockedDates.sort();CR.doc(pid5).update({blockedDates:p5.blockedDates}).then(function(){rEx();toast('🚫');});}else if(ac==='delBl'){var pid6=a.dataset.pid,ix2=+a.dataset.idx;var p6=P.find(function(x){return x.id===pid6;});if(!p6)return;p6.blockedDates.splice(ix2,1);CR.doc(pid6).update({blockedDates:p6.blockedDates}).then(function(){rEx();toast('✅');});}else if(ac==='delP'){if(!confirm('Supprimer ?'))return;CR.doc(a.dataset.pid).delete().then(function(){loadAll();toast('🗑');});}else if(ac==='shT'){openShareModal(a.dataset.tid,'type');}else if(ac==='shEx'){navigator.clipboard.writeText(window.location.origin+'/booking.html?person='+a.dataset.pid).then(function(){toast('📋 Copié !');});}});
@@ -4112,6 +4244,10 @@ db.collection('bookings').doc(s.dataset.bid).update(_bkStatusStamps(s.value)).th
    (l'auth met 15-30 s a se restaurer sur certains postes → la modale
    « Nouveau rendez-vous » s'ouvrait vide). loadB detache son ancien
    listener : le re-passage apres resolution du role est sans doublon. */
+/* Lien direct vers la fiche calendrier d'un expert (encart admin et e-mail
+   « agenda plus lu », 28/10/2026) : réutilise l'ouverture post-connexion
+   OAuth de loadAll (_calConnectPid). */
+try{var _calExpertQ=new URLSearchParams(window.location.search).get('calExpert');if(_calExpertQ)sessionStorage.setItem('_calConnectPid',_calExpertQ);}catch(_e){}
 loadAll();
 firebase.auth().onAuthStateChanged(function(u){
   if(!u){loadAll();return;}
