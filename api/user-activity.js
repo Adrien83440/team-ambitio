@@ -79,6 +79,34 @@ const EVENT_KINDS = { page: 1, leave: 1, click: 1, change: 1 };
 const MAX_EVENTS_PER_CALL = 200;
 const PURGE_MAX_DOCS = 4000;
 
+// Helpers (supprimés par erreur le 16/10/2026 avec l'exclusion des
+// prestataires : beat, events et report répondaient 500 depuis).
+function todayIsoParis(d) {
+  // 'en-CA' → format YYYY-MM-DD
+  return (d || new Date()).toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
+}
+
+function tsToMillis(ts) {
+  if (!ts) return 0;
+  if (typeof ts.toMillis === 'function') return ts.toMillis();
+  if (ts instanceof Date) return ts.getTime();
+  if (typeof ts === 'number') return ts;
+  return 0;
+}
+
+function tsToIso(ts) {
+  const ms = tsToMillis(ts);
+  return ms ? new Date(ms).toISOString() : null;
+}
+
+function cleanPage(raw) {
+  return String(raw || '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 60) || null;
+}
+
+function cleanUserAgent(raw) {
+  return String(raw || '').replace(/[\r\n\t]/g, ' ').slice(0, 200) || null;
+}
+
 // ─── BEAT ───────────────────────────────────────────────────────────────────
 async function handleBeat(req, res) {
   const auth = await requireAuth(req, res);
@@ -275,7 +303,10 @@ async function handleEvents(req, res) {
     if (!e || !EVENT_KINDS[e.k]) return;
     let t = Number(e.t);
     // Tampon localStorage : un lot peut dater de la veille, jamais du futur.
-    if (!isFinite(t) || t > now + 60000 || t < now - 3 * 24 * 3600 * 1000) t = now;
+    // Plus de 3 jours : ignoré (et non redaté), sinon un tampon resté bloqué
+    // (panne du 16 au 29/10/2026) apparaîtrait comme de l'activité du jour.
+    if (isFinite(t) && t < now - 3 * 24 * 3600 * 1000) return;
+    if (!isFinite(t) || t > now + 60000) t = now;
     const ev = { k: e.k, t: Math.round(t) };
     const p = cleanPage(e.p); if (p) ev.p = p;
     const l = cleanStr(e.l, 80); if (l) ev.l = l;
