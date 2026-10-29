@@ -2379,16 +2379,57 @@
     return !!side;
   }
   var sideChecked = false;
+  /* Relevé de la décision (carte de diagnostic, compte d'Adrien seulement,
+     cf. showSideDiag) : sert à régler la colonne sur l'appareil réel. */
+  var sideDiag = null;
+  function fmtIns(i) { return 'h ' + i.t + ' · d ' + i.r + ' · b ' + i.b + ' · g ' + i.l; }
   function checkSideCol() {
-    if (IN_FRAME || !document.body || !isStandalone()) return;
+    if (IN_FRAME || !document.body) return;
     if (sideChecked) { if (hasCover()) applySideCol(); return; }
     sideChecked = true;
-    if (hasCover()) { applySideCol(); return; }
     var portrait = window.innerHeight > window.innerWidth;
     var screenW = portrait ? Math.min(screen.width, screen.height) : Math.max(screen.width, screen.height);
-    if (!portrait || screenW - window.innerWidth < 40) return;
+    sideDiag = {
+      standalone: isStandalone(), navStandalone: window.navigator.standalone, portrait: portrait,
+      screen: screen.width + '×' + screen.height, avail: screen.availWidth + '×' + screen.availHeight,
+      page: window.innerWidth + '×' + window.innerHeight, docW: document.documentElement.clientWidth,
+      dpr: window.devicePixelRatio, insBefore: fmtIns(insets()), coverBefore: hasCover(), decision: ''
+    };
+    if (!sideDiag.standalone) { sideDiag.decision = 'pas en application installée → rien'; return showSideDiag(); }
+    if (hasCover()) { sideDiag.decision = applySideCol() ? 'colonne activée (cover déjà là)' : 'cover déjà là, pas de colonne mesurée'; return showSideDiag(); }
+    if (!portrait || screenW - window.innerWidth < 40) { sideDiag.decision = 'écart écran − page < 40 px → rien'; return showSideDiag(); }
     setCover(true);
-    setTimeout(function () { if (!applySideCol()) setCover(false); }, 450);
+    setTimeout(function () {
+      sideDiag.pageAfter = window.innerWidth + '×' + window.innerHeight;
+      sideDiag.insAfter = fmtIns(insets());
+      if (applySideCol()) sideDiag.decision = 'colonne activée';
+      else { setCover(false); sideDiag.decision = 'cover essayé, iOS ne déclare pas de colonne → annulé'; }
+      showSideDiag();
+    }, 450);
+  }
+  function showSideDiag() {
+    var me = (window._currentUserEmail || localStorage.getItem('ambitio_email') || '').toLowerCase();
+    if (me !== 'contact@adrienemily.com' || mode() !== 'phone' || !MQ_TOUCH.matches) return;
+    if (localStorage.getItem('al_side_diag_off') === '1' || !sideDiag || document.getElementById('al-side-diag')) return;
+    var d = sideDiag, el = document.createElement('div');
+    el.id = 'al-side-diag';
+    el.style.cssText = 'position:fixed;left:8px;right:8px;top:8px;z-index:100001;background:rgba(10,10,24,.94);color:#e5e7eb;' +
+      'font:600 12px/1.45 ui-monospace,Menlo,monospace;padding:10px 12px;border-radius:12px;border:1px solid rgba(139,92,246,.6);box-shadow:0 8px 30px rgba(0,0,0,.5)';
+    var rows = [['application installée', d.standalone + ' (navigator.standalone ' + d.navStandalone + ')'], ['écran', d.screen + ' · dispo ' + d.avail],
+      ['page', d.page + ' · html ' + d.docW + ' · dpr ' + d.dpr], ['zones sûres', d.insBefore], ['cover au départ', d.coverBefore]];
+    if (d.pageAfter) { rows.push(['page après cover', d.pageAfter]); rows.push(['zones après cover', d.insAfter]); }
+    rows.push(['décision', d.decision]);
+    var h = '<div style="font-weight:800;color:#c4b5fd;margin-bottom:4px">📐 Diagnostic écran — capture et envoie à Claude</div>';
+    rows.forEach(function (r) { h += '<div><span style="color:#9ca3af">' + r[0] + ' :</span> ' + esc(String(r[1])) + '</div>'; });
+    h += '<div style="display:flex;gap:8px;margin-top:8px"><button type="button" data-d="hide" style="flex:1;min-height:36px;border-radius:9px;border:1px solid rgba(255,255,255,.2);background:transparent;color:#fff;font:700 12px system-ui">Masquer</button>' +
+      '<button type="button" data-d="off" style="flex:1;min-height:36px;border-radius:9px;border:0;background:#8b5cf6;color:#fff;font:700 12px system-ui">Ne plus afficher</button></div>';
+    el.innerHTML = h;
+    el.addEventListener('click', function (ev) {
+      var b = ev.target.closest ? ev.target.closest('[data-d]') : null; if (!b) return;
+      if (b.getAttribute('data-d') === 'off') localStorage.setItem('al_side_diag_off', '1');
+      el.remove();
+    });
+    document.body.appendChild(el);
   }
 
   var lastMode = null;
