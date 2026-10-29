@@ -35,6 +35,10 @@
 <script src="close-pilot.js" defer></script>
 <!-- Programme IA 10/2026 : dossier de préparation au closing (bouton 📋 Dossier IA des RDV) -->
 <script src="ai-prep-modal.js" defer></script>
+<!-- Étapes du Pipeline (29/10/2026) : une seule règle de classement partagée
+     avec le Pipeline ; mode actif seulement derrière l'interrupteur crm_v2. -->
+<script src="pipeline-etapes.js"></script>
+<script src="leads-live-etapes.js"></script>
 <!-- Nouvelle présentation (essai 16/10/2026) : inerte sans body.ll3, cf. leads-live-v3.js -->
 <link rel="stylesheet" href="leads-live-v3.css">
 <script>
@@ -1365,7 +1369,7 @@ body.ld-pilot-on .l2fam[data-fam="closing"] { display: none; }
       <span id="ldMemberPillsDynamic"></span>
     </div>
 
-    <div class="l2fs-l">Période</div>
+    <div class="l2fs-l" id="l2fsLPeriode">Période</div>
     <div class="ld-filters" id="ldPeriodFilters">
       <button class="ld-filter" data-period="today">📅 Aujourd'hui <span class="ld-period-count" data-period-count="today">0</span></button>
       <button class="ld-filter" data-period="days3">🗓 3 jours <span class="ld-period-count" data-period-count="days3">0</span></button>
@@ -1392,10 +1396,10 @@ body.ld-pilot-on .l2fam[data-fam="closing"] { display: none; }
       </div>
     </div>
 
-    <div class="l2fs-l">Tunnel</div>
+    <div class="l2fs-l" id="l2fsLTunnel">Tunnel</div>
     <div class="ld-filters" id="ldTypeFilters"></div>
 
-    <div class="l2fs-l">Statut</div>
+    <div class="l2fs-l" id="l2fsLStatut">Statut</div>
     <div class="ld-filters" id="ldFilters">
       <button class="ld-filter active" data-status="all">Tous</button>
       <button class="ld-filter" data-status="nouveau">🆕 Nouveau</button>
@@ -2584,10 +2588,13 @@ function formatSmartFr(ts) {
 function getFilteredLeads() {
   var list = getBaseLeads();
   var searching = !!filterSearch;
+  /* Mode étapes du Pipeline (leads-live-etapes.js) : la liste déroulante
+     d'étape remplace période, tunnel et statut. */
+  var etapesOn = !!(window.LLEtapes && window.LLEtapes.on());
 
   // Period filter — skipped en mode recherche (pour trouver n'importe quel
   // lead dans la fenêtre 30j)
-  if (!searching) {
+  if (!searching && !etapesOn) {
     if (filterPeriod === 'today') {
       var now = new Date();
       var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
@@ -2632,7 +2639,7 @@ function getFilteredLeads() {
   }
 
   // Type / statut : skipped en mode recherche
-  if (!searching) {
+  if (!searching && !etapesOn) {
     if (filterType !== 'all') {
       list = list.filter(function(l) { return (l.type || '') === filterType; });
     }
@@ -2640,6 +2647,8 @@ function getFilteredLeads() {
       list = list.filter(function(l) { return (l.status || 'nouveau') === filterStatus; });
     }
   }
+  // Étape du Pipeline : skipped en mode recherche, comme les autres filtres
+  if (!searching && etapesOn) list = window.LLEtapes.filter(list);
 
   // ── Search filter (nom / tel / email / secteur / utm / défi / dispo / timeline /
   //    stage / type / membre assigné / id). Multi-tokens : AND entre tokens,
@@ -2727,7 +2736,8 @@ function getBaseLeads() {
     // Masquage des clients coaching / clients : retirés du feed par défaut ET
     // des compteurs. Réapparaissent si on filtre explicitement sur le statut
     // « Client » ou via la recherche.
-    if (isCoachingOrClientLead(l) && filterStatus !== 'client' && !filterSearch) return false;
+    if (isCoachingOrClientLead(l) && filterStatus !== 'client' && !filterSearch &&
+        !(window.LLEtapes && window.LLEtapes.wantsClients())) return false;
     // Utilise la date effective (max createdAt/lastOptinAt/lastBookingAt)
     // pour ne PAS exclure les leads ressuscités via re-optin ou booking récent.
     var cd = _getLeadEffectiveDate(l);
@@ -3113,6 +3123,7 @@ function l2FiltersActiveCount() {
   var n = 0;
   var memberDefault = personalUser || 'all';
   if (filterMember !== memberDefault && filterMember !== 'all') n++;
+  if (window.LLEtapes && window.LLEtapes.on()) return n;   // seul « Qui s'en occupe » reste
   if (filterPeriod !== 'all') n++;
   if (filterType !== 'all') n++;
   if (filterStatus !== 'all') n++;
@@ -3133,7 +3144,9 @@ function l2RenderTriage(leads) {
     { v: 'nb',       l: 'No Booking',   n: String(c.nb), cls: ' nb' }
   ];
   var h = '';
-  for (var i = 0; i < defs.length; i++) {
+  if (window.LLEtapes && window.LLEtapes.on()) {
+    h = window.LLEtapes.selectHTML('');
+  } else for (var i = 0; i < defs.length; i++) {
     var d = defs[i];
     h += '<button type="button" class="l2tri' + (d.cls || '') + (l2View === d.v ? ' active' : '') + '" data-l2="view" data-view="' + d.v + '">' +
          '<div class="n">' + d.n + '</div><div class="l">' + d.l + '</div></button>';
@@ -3198,19 +3211,21 @@ function renderFeed() {
   rebuildTypeFilters();
   l2RenderTriage(leads);
   var feed = l2El('ldFeed');
+  /* Mode étapes : une seule vue, les arrivées jour par jour dans l'étape choisie */
+  var vue = (window.LLEtapes && window.LLEtapes.on()) ? 'arrivees' : l2View;
 
   // Découpage selon la vue active
   var sections = [];
-  if (l2View === 'atraiter') {
+  if (vue === 'atraiter') {
     sections = l2Groups(leads);
-  } else if (l2View === 'new') {
+  } else if (vue === 'new') {
     var ln = leads.filter(l2IsUntouched);
     sections = [{ t: '🆕 Jamais traités — aucune action', list: ln }];
-  } else if (l2View === 'sb' || l2View === 'nb') {
-    var want = l2View;
+  } else if (vue === 'sb' || vue === 'nb') {
+    var want = vue;
     var lsb = leads.filter(function (l) { return l2SbNb(l) === want; });
     sections = [{ t: want === 'sb' ? '📆 Self Booking — RDV pris par le lead' : '📞 No Booking — RDV posé par l\'équipe', list: lsb }];
-  } else if (l2View === 'fu') {
+  } else if (vue === 'fu') {
     var lf = leads.filter(l2HasPendingFu);
     lf.sort(function (a, b) { return (l2HasOverdueFu(b) ? 1 : 0) - (l2HasOverdueFu(a) ? 1 : 0); });
     sections = [{ t: '🔔 Follow-ups programmés', hot: true, list: lf }];
@@ -3232,8 +3247,8 @@ function renderFeed() {
   }
 
   if (total === 0) {
-    var msg = 'Aucun lead ' + (filterSearch ? 'ne correspond à « ' + escHtml(filterSearch) + ' »' : (filterStatus !== 'all' ? 'avec ce statut' : (l2View !== 'arrivees' ? 'dans cette vue' : '')));
-    if (!filterSearch && l2View !== 'arrivees' && leads.length > 0) msg += '<br/><span style="font-size:11px;color:var(--muted2)">Essaie la vue 📥 Arrivées, une autre période, ou ⛃ Filtres.</span>';
+    var msg = 'Aucun lead ' + (filterSearch ? 'ne correspond à « ' + escHtml(filterSearch) + ' »' : (window.LLEtapes && window.LLEtapes.etape() ? 'dans cette étape' : (filterStatus !== 'all' ? 'avec ce statut' : (vue !== 'arrivees' ? 'dans cette vue' : ''))));
+    if (!filterSearch && vue !== 'arrivees' && leads.length > 0) msg += '<br/><span style="font-size:11px;color:var(--muted2)">Essaie la vue 📥 Arrivées, une autre période, ou ⛃ Filtres.</span>';
     feed.innerHTML = '<div class="ld-empty">' + msg + '</div>';
   } else {
     feed.innerHTML = h;
@@ -4545,7 +4560,7 @@ var LD_WA_ICON = '<svg viewBox="0 0 24 24" width="11" height="11" fill="currentC
 
 function renderLeadTags(l, compact) {
   var typeObj = LEAD_TYPES[l.type] || { label: l.type || 'Lead', badgeClass: 'other' };
-  var statusObj = getStatusObj(l.status || 'nouveau');
+  var statusObj = (window.LLEtapes && window.LLEtapes.statusView(l)) || getStatusObj(l.status || 'nouveau');
   var setterObj = SETTERS[l.assignedTo] || null;
   /* SB/NB « idem au RDV » (Adrien 17/07) : la classification RÉELLE du RDV
      de référence prime TOUJOURS (même règle que la chip SB/NB du bloc
@@ -4881,7 +4896,7 @@ function l2AiRequest(id, force) {
 
 function renderCard(l) {
   var id = l.id;
-  var statusObj = getStatusObj(l.status || 'nouveau');
+  var statusObj = (window.LLEtapes && window.LLEtapes.statusView(l)) || getStatusObj(l.status || 'nouveau');
   var setterObj = SETTERS[l.assignedTo] || null;
   var effectiveD = _getLeadEffectiveDate(l);
   var ago = l2ArrivalLabel(effectiveD || l.createdAt) || timeAgo(effectiveD || l.createdAt);
@@ -4915,6 +4930,7 @@ function renderCard(l) {
   h += '<div class="l2qrow">';
   for (var qi = 0; qi < L2_QUICK.length; qi++) {
     var qs = getStatusObj(L2_QUICK[qi]);
+    if (window.LLEtapes && window.LLEtapes.hideStatus(qs.key)) continue;
     var qActive = (l.status || 'nouveau') === qs.key;
     h += '<button class="ld-status-btn' + (qActive ? ' active' : '') + '" style="' + (qActive ? 'color:' + qs.color + ';border-color:' + qs.color : '') + '" data-action="setStatus" data-id="' + id + '" data-status="' + qs.key + '">' + qs.icon + ' ' + qs.label + '</button>';
   }
@@ -5023,6 +5039,7 @@ function l2SegAction(l, id) {
     h += '<div class="l2fam" data-fam="' + fam.l.toLowerCase() + '"><div class="l2fam-l">' + fam.l + '</div><div class="l2fam-row">';
     for (var si = 0; si < fam.k.length; si++) {
       var s = getStatusObj(fam.k[si]);
+      if (window.LLEtapes && window.LLEtapes.hideStatus(s.key)) continue;
       var isActive = (l.status || 'nouveau') === s.key;
       h += '<button class="ld-status-btn' + (isActive ? ' active' : '') + '" style="' + (isActive ? 'color:' + s.color + ';border-color:' + s.color : '') + '" data-action="setStatus" data-id="' + id + '" data-status="' + s.key + '">' + s.icon + ' ' + s.label + '</button>';
     }
@@ -5990,6 +6007,106 @@ document.getElementById('l2PeriodBar').addEventListener('click', function (e) {
   renderFeed();
 });
 
+/* Écriture d'un statut Leads Live (+ synchro de l'étape du Pipeline).
+   Extrait du gestionnaire de clic le 29/10/2026 pour être réutilisé par
+   le dialogue « Et ensuite ? » (leads-live-etapes.js). statusBtn est
+   facultatif : sans bouton, pas de mise à jour visuelle immédiate. */
+function ldApplyStatus(leadId, newStatus, statusBtn) {
+  /* Mode étapes du Pipeline (leads-live-etapes.js) : « Messagerie » = NRP
+     suivant ; « Décroché » demande la suite juste après l'écriture. */
+  var etapesOn = !!(window.LLEtapes && window.LLEtapes.on());
+  var viaMessagerie = false, demanderSuite = false;
+  if (etapesOn && newStatus === 'messagerie') {
+    var mLead = null;
+    for (var mi = 0; mi < allLeads.length; mi++) { if (allLeads[mi].id === leadId) { mLead = allLeads[mi]; break; } }
+    newStatus = window.LLEtapes.nextNrp(mLead);
+    viaMessagerie = true;
+  }
+  if (etapesOn && newStatus === 'decroche') demanderSuite = true;
+  /* ── Refonte 14/07 : « Closing » n'écrit rien directement — il ouvre les
+     CARTES du close (contrat → PIF/MENS → SB/NB → encaissé → confirmer).
+     C'est le wizard qui pose stage/status/clientSince + commissions ; le
+     onSnapshot rafraîchit la carte tout seul. ── */
+  if (newStatus === 'client') {
+    if (!window.CloseWizard) {
+      /* Pas d'écriture directe en secours : status 'client' seul (sans
+         stage/clientSince/commissions) = client invisible du funnel. */
+      toast('❌ close-wizard.js manquant — recharge la page (Ctrl+Shift+R)');
+      return;
+    }
+    var wzLead = null;
+    for (var wi = 0; wi < allLeads.length; wi++) { if (allLeads[wi].id === leadId) { wzLead = allLeads[wi]; break; } }
+    window.CloseWizard.open({
+      leadId: leadId,
+      lead: wzLead,
+      bookings: _ldRdvCache[leadId] || null,
+      typeMap: (_ldTypeMap && Object.keys(_ldTypeMap).length) ? _ldTypeMap : null
+    });
+    return;
+  }
+  // Visual update (bouton absent quand l'appel vient du dialogue « Et ensuite ? »)
+  var card2 = statusBtn ? statusBtn.closest('.ld-card') : null;
+  var sObj = getStatusObj(newStatus);
+  if (card2) {
+    card2.querySelectorAll('.ld-status-btn').forEach(function(b) {
+      b.classList.remove('active');
+      b.style.color = '';
+      b.style.borderColor = '';
+    });
+    var hiBtn = viaMessagerie ? (card2.querySelector('.ld-status-btn[data-status="' + newStatus + '"]') || statusBtn) : statusBtn;
+    hiBtn.classList.add('active');
+    hiBtn.style.color = sObj.color;
+    hiBtn.style.borderColor = sObj.color;
+  }
+  // ── Journal d'actions setting (refonte 07/2026) ──
+  // Enregistré AVANT la mise à jour locale pour capturer l'ancien statut.
+  // CHAQUE clic de statut = une action comptée (validé Adrien : « remontée
+  // du nombre de NRP1, NRP2 etc de chaque action faite ») — y compris
+  // re-cliquer le MÊME statut (ex. 2ᵉ tentative NRP1 un autre jour).
+  // Anti double-clic : 5 s par lead+statut. Fire-and-forget : ne bloque
+  // jamais l'UI.
+  var prevLeadObj = allLeads.find(function (l) { return l.id === leadId; });
+  window.__ldActDebounce = window.__ldActDebounce || {};
+  var _actKey = leadId + '|' + newStatus;
+  var _actNow = Date.now();
+  if (window.AlteoreFlow && prevLeadObj &&
+      (!window.__ldActDebounce[_actKey] || _actNow - window.__ldActDebounce[_actKey] > 5000)) {
+    window.__ldActDebounce[_actKey] = _actNow;
+    window.AlteoreFlow.recordLeadAction(leadId, prevLeadObj, newStatus, {
+      prevStatus: prevLeadObj.status || null,
+      origin: 'leads_live'
+    });
+  }
+  // Update local state
+  for (var i = 0; i < allLeads.length; i++) {
+    if (allLeads[i].id === leadId) { allLeads[i].status = newStatus; break; }
+  }
+  // Auto-save status + sync pipeline stage
+  var STATUS_TO_STAGE = {
+    nouveau:'lead', appele:'lead', decroche:'lead', messagerie:'lead',
+    nrp1:'nrp1', nrp2:'nrp2', nrp3:'nrp3', all_nrp:'all_nrp',
+    faux_numero:'faux_numero',
+    follow_up_pm:'follow_up_pm', set:'set', rdv_self_booking:'rdv_self_booking',
+    rdv_pose:'rdv_confirmes',
+    pas_interesse:'disqualification', disqualifie:'disqualification',
+    poubelle:'poubelle'
+  };
+  var syncStage = STATUS_TO_STAGE[newStatus];
+  var updates = { status: newStatus, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+  if (syncStage) {
+    updates.stage = syncStage;
+    for (var j = 0; j < allLeads.length; j++) {
+      if (allLeads[j].id === leadId) { allLeads[j].stage = syncStage; break; }
+    }
+  }
+  db.collection('leads').doc(leadId).update(updates).then(function() {
+    toast((viaMessagerie ? '📩 Messagerie → ' + sObj.label : '✅ Statut → ' + sObj.label) + (syncStage ? ' (pipeline mis à jour)' : ''));
+  }).catch(function(err) {
+    toast('❌ ' + err.message);
+  });
+  if (demanderSuite) window.LLEtapes.askNext(leadId);
+}
+
 /* ═══ FEED EVENTS ═══ */
 document.addEventListener('click', function(e) {
   /* Confirmation de présence : bouton / pastille d'un RDV (fiche, Mes RDV). */
@@ -6256,86 +6373,7 @@ document.addEventListener('click', function(e) {
   // Status button
   var statusBtn = e.target.closest('[data-action="setStatus"]');
   if (statusBtn) {
-    var leadId = statusBtn.dataset.id;
-    var newStatus = statusBtn.dataset.status;
-    /* ── Refonte 14/07 : « Closing » n'écrit rien directement — il ouvre les
-       CARTES du close (contrat → PIF/MENS → SB/NB → encaissé → confirmer).
-       C'est le wizard qui pose stage/status/clientSince + commissions ; le
-       onSnapshot rafraîchit la carte tout seul. ── */
-    if (newStatus === 'client') {
-      if (!window.CloseWizard) {
-        /* Pas d'écriture directe en secours : status 'client' seul (sans
-           stage/clientSince/commissions) = client invisible du funnel. */
-        toast('❌ close-wizard.js manquant — recharge la page (Ctrl+Shift+R)');
-        return;
-      }
-      var wzLead = null;
-      for (var wi = 0; wi < allLeads.length; wi++) { if (allLeads[wi].id === leadId) { wzLead = allLeads[wi]; break; } }
-      window.CloseWizard.open({
-        leadId: leadId,
-        lead: wzLead,
-        bookings: _ldRdvCache[leadId] || null,
-        typeMap: (_ldTypeMap && Object.keys(_ldTypeMap).length) ? _ldTypeMap : null
-      });
-      return;
-    }
-    // Visual update
-    var card2 = statusBtn.closest('.ld-card');
-    card2.querySelectorAll('.ld-status-btn').forEach(function(b) {
-      b.classList.remove('active');
-      b.style.color = '';
-      b.style.borderColor = '';
-    });
-    statusBtn.classList.add('active');
-    var sObj = getStatusObj(newStatus);
-    statusBtn.style.color = sObj.color;
-    statusBtn.style.borderColor = sObj.color;
-    // ── Journal d'actions setting (refonte 07/2026) ──
-    // Enregistré AVANT la mise à jour locale pour capturer l'ancien statut.
-    // CHAQUE clic de statut = une action comptée (validé Adrien : « remontée
-    // du nombre de NRP1, NRP2 etc de chaque action faite ») — y compris
-    // re-cliquer le MÊME statut (ex. 2ᵉ tentative NRP1 un autre jour).
-    // Anti double-clic : 5 s par lead+statut. Fire-and-forget : ne bloque
-    // jamais l'UI.
-    var prevLeadObj = allLeads.find(function (l) { return l.id === leadId; });
-    window.__ldActDebounce = window.__ldActDebounce || {};
-    var _actKey = leadId + '|' + newStatus;
-    var _actNow = Date.now();
-    if (window.AlteoreFlow && prevLeadObj &&
-        (!window.__ldActDebounce[_actKey] || _actNow - window.__ldActDebounce[_actKey] > 5000)) {
-      window.__ldActDebounce[_actKey] = _actNow;
-      window.AlteoreFlow.recordLeadAction(leadId, prevLeadObj, newStatus, {
-        prevStatus: prevLeadObj.status || null,
-        origin: 'leads_live'
-      });
-    }
-    // Update local state
-    for (var i = 0; i < allLeads.length; i++) {
-      if (allLeads[i].id === leadId) { allLeads[i].status = newStatus; break; }
-    }
-    // Auto-save status + sync pipeline stage
-    var STATUS_TO_STAGE = {
-      nouveau:'lead', appele:'lead', decroche:'lead', messagerie:'lead',
-      nrp1:'nrp1', nrp2:'nrp2', nrp3:'nrp3', all_nrp:'all_nrp',
-      faux_numero:'faux_numero',
-      follow_up_pm:'follow_up_pm', set:'set', rdv_self_booking:'rdv_self_booking',
-      rdv_pose:'rdv_confirmes',
-      pas_interesse:'disqualification', disqualifie:'disqualification',
-      poubelle:'poubelle'
-    };
-    var syncStage = STATUS_TO_STAGE[newStatus];
-    var updates = { status: newStatus, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
-    if (syncStage) {
-      updates.stage = syncStage;
-      for (var j = 0; j < allLeads.length; j++) {
-        if (allLeads[j].id === leadId) { allLeads[j].stage = syncStage; break; }
-      }
-    }
-    db.collection('leads').doc(leadId).update(updates).then(function() {
-      toast('✅ Statut → ' + sObj.label + (syncStage ? ' (pipeline mis à jour)' : ''));
-    }).catch(function(err) {
-      toast('❌ ' + err.message);
-    });
+    ldApplyStatus(statusBtn.dataset.id, statusBtn.dataset.status, statusBtn);
     return;
   }
 
@@ -6459,11 +6497,17 @@ document.addEventListener('click', function(e) {
     if (afLead) {
       if (!afLead.followUps) afLead.followUps = [];
       afLead.followUps.push(fuObj);
-      // Save to Firestore
-      db.collection('leads').doc(afId).update({
+      var afUpd = {
         followUps: afLead.followUps,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }).then(function() {
+      };
+      /* Mode étapes : un lead à joindre qu'on doit rappeler passe en FU (comme le Pipeline) */
+      if (window.LLEtapes && window.LLEtapes.on() && ['lead', 'nrp1', 'nrp2', 'nrp3', 'all_nrp'].indexOf(afLead.stage || 'lead') > -1) {
+        afUpd.stage = 'follow_up_pm'; afUpd.status = 'follow_up_pm';
+        afLead.stage = 'follow_up_pm'; afLead.status = 'follow_up_pm';
+      }
+      // Save to Firestore
+      db.collection('leads').doc(afId).update(afUpd).then(function() {
         toast('🔔 Follow-up programmé');
         // Request notification permission if not already granted
         if ('Notification' in window && Notification.permission === 'default') {

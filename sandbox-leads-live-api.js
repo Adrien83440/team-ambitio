@@ -224,7 +224,7 @@
         var bt = e.target.closest('button'); if (!bt) return;
         if (bt.classList.contains('sbx-x')) { ov.parentNode.removeChild(ov); return; }
         var id = 'bk' + Date.now();
-        db().collection('bookings').doc(id).set({ leadId: l.id, date: bt.getAttribute('data-d'), time: bt.getAttribute('data-h'), duration: 60, status: 'confirmed', source: 'setter', bookedBySlug: MOI.slug, personName: MOI.nom, personId: MOI.slug, typeName: 'Appel stratégique Élite', prospect: { email: l.email || '', telephone: l.telephone || '' }, meetLink: 'https://meet.google.com/test-test-test', createdAt: ts(Date.now()) })
+        db().collection('bookings').doc(id).set({ leadId: l.id, date: bt.getAttribute('data-d'), time: bt.getAttribute('data-h'), duration: 60, status: 'confirmed', source: 'setter_booking', bookedBySlug: MOI.slug, personName: MOI.nom, personId: MOI.slug, typeName: 'Appel stratégique Élite', prospect: { email: l.email || '', telephone: l.telephone || '' }, meetLink: 'https://meet.google.com/test-test-test', createdAt: ts(Date.now()) })
           .then(function () { return db().collection('leads').doc(l.id).update({ status: 'rdv_pose', stage: 'set', notesHistory: window.firebase.firestore.FieldValue.arrayUnion({ text: '📅 RDV posé — ' + bt.textContent + ' avec ' + MOI.nom, date: new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }), authorName: MOI.nom }) }); })
           .then(function () { toastSbx('✅ RDV confirmé — ' + bt.textContent); });
         ov.parentNode.removeChild(ov);
@@ -241,13 +241,17 @@
       if (/^(sales-|booking|payments|login|index|admin-)/.test(h) || /meet\.google\.com/.test(h)) { e.preventDefault(); toastSbx('Ce lien ouvrirait le vrai logiciel : désactivé dans le labo'); }
     }, true);
 
-    /* Bandeau « test » + remise à zéro */
+    /* Bandeau « test » + remise à zéro. Le Labo Pipeline (même base, même
+       fichier) a son propre bandeau : rien ici. */
+    if (document.getElementById('pv2root')) return;
     var bd = document.createElement('div');
     bd.className = 'sbx-band';
-    bd.innerHTML = '<span>🧪 Labo · faux leads · rien n’est envoyé</span><button type="button" data-sbx="reset">Réinitialiser</button><button type="button" data-sbx="close">Fermer</button>';
+    bd.innerHTML = '<span>🧪 Labo · mêmes faux leads que le Labo Pipeline · rien n’est envoyé</span><button type="button" data-sbx="pipe" title="Ouvrir le Labo Pipeline dans un autre onglet">Labo Pipeline ↗</button><button type="button" data-sbx="reset" title="Remet les deux Labos à zéro">Réinitialiser</button><button type="button" data-sbx="close">Fermer</button>';
     bd.addEventListener('click', function (e) {
       var b = e.target.closest('[data-sbx]'); if (!b) return;
-      if (b.getAttribute('data-sbx') === 'reset') window.__SBX.reset();
+      var k = b.getAttribute('data-sbx');
+      if (k === 'pipe') window.open('sandbox-pipeline.html', 'sbx_pipeline');
+      else if (k === 'reset') { if (window.confirm('Remettre les deux Labos (Leads Live et Pipeline) à zéro ?')) window.__SBX.reset(); }
       else { window.close(); setTimeout(function () { location.href = 'sales-leads.html'; }, 150); }
     });
     document.body.appendChild(bd);

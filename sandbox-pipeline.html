@@ -5,11 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <meta name="robots" content="noindex,nofollow"/>
 <title>🧪 Labo Pipeline — test sans envoi</title>
-<!-- Labo Pipeline (21/10/2026) : le NOUVEAU Pipeline (pipeline-v2.js) sur de
-     faux leads, pour le faire tester à l'équipe avant de le brancher sur les
-     vraies données. Aucun Firebase sur cette page, aucun appel réseau : les
-     données viennent de sandbox-pipeline-data.js et restent dans ce
-     navigateur (clé « sbxpl: »). Ouvert depuis Outils → 🧪 (nav.js). -->
+<!-- Labo Pipeline : le NOUVEAU Pipeline (pipeline-v2.js) sur de faux leads.
+     Depuis le 29/10/2026, il tourne sur la fausse base PARTAGÉE avec le Labo
+     Leads Live (sandbox-leads-live-db.js, faux Firebase, rien ne part) via
+     l'hôte Firebase réel (pipeline-v2-host.js) : déplacer une carte ici la
+     range au bon endroit dans le Labo Leads Live, et inversement.
+     Ouvert depuis Outils → 🧪 (nav.js). -->
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="pipeline-v2.css"/>
 <style>
@@ -18,11 +19,18 @@ html,body{margin:0;background:#eceff8}
 .sbxpl-band span{overflow:hidden;text-overflow:ellipsis}
 .sbxpl-band button{border:0;border-radius:999px;padding:6px 12px;background:rgba(255,255,255,.14);color:#fff;font:inherit;cursor:pointer}
 .sbxpl-band button:hover{background:rgba(255,255,255,.24)}
+.sbxpl-wait{font:600 15px/1.4 "Plus Jakarta Sans",system-ui,sans-serif;color:#5b6276;text-align:center;padding:80px 20px}
 </style>
 </head>
 <body>
-<div id="pv2root" class="pv2"></div>
-<script src="pipeline-v2.js"></script>
+<div id="pv2root" class="pv2"><div class="sbxpl-wait">Chargement du Labo…</div></div>
 <script src="sandbox-pipeline-data.js"></script>
+<script src="sandbox-leads-live-db.js"></script>
+<script src="sandbox-leads-live-api.js"></script>
+<script src="alteore-flow.js"></script>
+<script src="pipeline-etapes.js"></script>
+<script src="pipeline-v2.js"></script>
+<script src="pipeline-v2-host.js"></script>
+<script src="sandbox-pipeline-labo.js"></script>
 </body>
 </html>

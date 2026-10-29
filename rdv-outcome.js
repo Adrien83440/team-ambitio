@@ -209,7 +209,7 @@
     if (!AF || !AF.cancellationInfo || !b || b.rescheduled === true) return '';
     var i = AF.cancellationInfo(b);
     if (!i || !i.origin) return '';
-    return i.origin === 'equipe' ? ' · équipe' : i.origin === 'prospect' ? ' · prospect' : ' · système';
+    return i.kind === 'non_honore' ? ' · non honoré équipe' : i.origin === 'equipe' ? ' · équipe' : i.origin === 'prospect' ? ' · prospect' : ' · système';
   }
 
   function chip(b) {
@@ -563,7 +563,8 @@
         '<div class="rvo-frow single"><div class="rvo-f"><label>Annulé par</label>' +
           '<div class="rvo-radio" id="rvoCancelBy">' +
             '<button type="button" data-v="prospect"' + (b.cancelledOrigin === 'prospect' ? ' class="sel"' : '') + '>👤 Le prospect</button>' +
-            '<button type="button" data-v="equipe"' + (b.cancelledOrigin === 'equipe' ? ' class="sel"' : '') + '>👥 L’équipe</button>' +
+            '<button type="button" data-v="equipe"' + (b.cancelledOrigin === 'equipe' && !(b.cancellation && b.cancellation.kind === 'non_honore') ? ' class="sel"' : '') + '>👥 L’équipe</button>' +
+            '<button type="button" data-v="non_honore"' + (b.cancellation && b.cancellation.kind === 'non_honore' ? ' class="sel"' : '') + ' title="Personne de l’équipe ne s’est présenté au RDV">🚫 Non honoré (équipe absente)</button>' +
           '</div><div style="font-size:11px;color:var(--muted,#8f97b2);margin-top:4px">Choix obligatoire — aucune présélection : l’origine est une donnée métier.</div></div></div>' +
         '<div class="rvo-frow single"><div class="rvo-f"><label>Raison <span style="font-weight:500;color:var(--muted,#8f97b2)">(obligatoire si l’équipe annule)</span></label><textarea id="rvoNote" placeholder="ex : plus disponible, a demandé à être rappelé…">' + esc(k === b.outcome ? (b.outcomeNote || '') : '') + '</textarea></div></div>' +
         '<div style="font-size:11.5px;color:var(--muted,#8f97b2)">ℹ️ Le lead retombe automatiquement dans le périmètre Setting (à récupérer → taux de récupération).</div>';
@@ -778,7 +779,9 @@
       var selBtn = document.querySelector('#rvoCancelBy button.sel');
       if (!selBtn) { toastMsg('⚠️ Indique qui a annulé : le prospect ou l’équipe.'); return; }
       opts.cancelledBy = selBtn.getAttribute('data-v');
-      if (opts.cancelledBy === 'equipe' && !opts.note) { toastMsg('⚠️ La raison est obligatoire quand l’équipe annule.'); return; }
+      /* « Non honoré » : annulation côté équipe, marquée comme telle (29/10/2026) */
+      if (opts.cancelledBy === 'non_honore') { opts.cancelledBy = 'equipe'; opts.cancelKind = 'non_honore'; }
+      if (opts.cancelledBy === 'equipe' && !opts.note) { toastMsg('⚠️ La raison est obligatoire quand l’équipe annule ou n’honore pas le RDV.'); return; }
       opts.via = 'outcome_modal';
     }
 

@@ -37,7 +37,10 @@
   })();
   /* Désormais cloisonnées : sans effet sur le vrai logiciel. */
   try { localStorage.setItem('ll3_choix_v2', '1'); localStorage.setItem('ambitio_role', ROLE); localStorage.setItem('ambitio_name', MOI); } catch (e) {}
-  var KEY = 'llsbx_db_v6';
+  /* v7 (29/10/2026) : base PARTAGÉE avec le Labo Pipeline (sandbox-pipeline.html),
+     qui charge aussi ce fichier ; elle reçoit les faux leads du Pipeline
+     (sandbox-pipeline-data.js) et suit les écritures de l'autre onglet. */
+  var KEY = 'llsbx_db_v7';
   var NOW = Date.now(), MIN = 60000, H = 3600000, D = 86400000;
 
   /* ── Horodatages et valeurs spéciales ── */
@@ -249,7 +252,9 @@
       adrien:   { slug: 'adrien', shortName: 'Adrien', displayName: 'Adrien', color: '#ef4444', initials: 'A', role: 'admin', active: true, inLeadsModule: true, firebaseUid: 'u-adrien', order: 1 },
       moi:      { slug: 'moi', shortName: MOI, displayName: MOI, color: '#3d5af1', initials: MOI.charAt(0), role: ROLE === 'admin' ? 'admin' : 'closer_setter', active: true, inLeadsModule: true, firebaseUid: 'u-moi', order: 0 },
       vincent:  { slug: 'vincent', shortName: 'Vincent', displayName: 'Vincent', color: '#fb923c', initials: 'V', role: 'admin', active: true, inLeadsModule: true, firebaseUid: 'u-vincent', order: 2 },
-      elodie:   { slug: 'elodie', shortName: 'Élodie', displayName: 'Élodie', color: '#f472b6', initials: 'É', role: 'closer_setter', active: true, inLeadsModule: true, eligibleForLeads: true, firebaseUid: 'u-elodie', order: 3 },
+      elodie:   { slug: 'elodie', shortName: 'Élodie', displayName: 'Élodie', color: '#f472b6', initials: 'É', role: 'closer_setter', active: false, inLeadsModule: false, firebaseUid: 'u-elodie', order: 9 },
+      anthony:  { slug: 'anthony', shortName: 'Anthony', displayName: 'Anthony', color: '#e0567a', initials: 'A', role: 'closer_setter', active: true, inLeadsModule: true, eligibleForLeads: true, firebaseUid: 'u-anthony', order: 3 },
+      claire:   { slug: 'claire', shortName: 'Claire', displayName: 'Claire', color: '#d97706', initials: 'C', role: 'closer_setter', active: true, inLeadsModule: true, eligibleForLeads: true, firebaseUid: 'u-claire', order: 4 },
       steven:   { slug: 'steven', shortName: 'Steven', displayName: 'Steven', color: '#38bdf8', initials: 'S', role: 'setter_ecrit', active: true, inLeadsModule: true, firebaseUid: 'u-steven', order: 4 },
       valentin: { slug: 'valentin', shortName: 'Valentin', displayName: 'Valentin', color: '#a3e635', initials: 'V', role: 'setter', active: true, inLeadsModule: true, firebaseUid: 'u-valentin', order: 5 },
       marine:   { slug: 'marine', shortName: 'Marine', displayName: 'Marine', color: '#2dd4bf', initials: 'M', role: 'csm', active: true, firebaseUid: 'u-marine', order: 6 },
@@ -259,6 +264,7 @@
     put('users', 'u-moi', { role: ROLE, email: 'testeur@alteore.test', firstname: MOI });
     put('_config', 'sales_close_pilot', { enabled: true });  /* comme en production */
     put('_config', 'leads_live_v3', { enabled: true });
+    put('_config', 'crm_v2', { enabled: true });  /* Leads Live filtré par les étapes du Pipeline */
 
     var T0 = new Date(); T0.setHours(9, 0, 0, 0); var t9 = T0.getTime();
     function lead(id, o) { o.createdAt = ts(o._c); delete o._c; put('leads', id, o); }
@@ -311,10 +317,10 @@
     lead('l8', { nom: 'Marc Dubois', telephone: '+33619847203', email: 'marc@dubois-menuiserie.fr', type: 'vsl_elite', status: 'rdv_pose', stage: 'set', assignedTo: 'moi', setterSlug: 'elodie', setterName: 'Élodie', setterRole: 'closer_setter', setterAt: ts(NOW - 47 * H), _c: NOW - 52 * H, secteur: 'Menuiserie', ca: '75 000 €/mois', defi: 'Passer de 6 à 12 salariés', leadScore: 5,
       communications: [{ type: 'call', direction: 'outbound', ownerName: 'Élodie', date: iso(NOW - 47 * H), duration: 664 }] });
     var rdv8 = rond(NOW + D);
-    put('bookings', 'b2', { leadId: 'l8', date: ymd(rdv8), time: hhmm(rdv8), duration: 60, status: 'confirmed', source: 'setter', bookedBySlug: 'elodie', personName: MOI, personId: 'moi', expertSlug: 'moi', type: 'strat', typeName: 'Appel stratégique Élite', prospect: { email: 'marc@dubois-menuiserie.fr', telephone: '+33619847203' }, presenceConfirmed: { channel: 'call', byName: 'Élodie', at: ts(NOW - 5 * H) }, meetLink: 'https://meet.google.com/xyz-abcd-efg', createdAt: ts(NOW - 47 * H) });
+    put('bookings', 'b2', { leadId: 'l8', date: ymd(rdv8), time: hhmm(rdv8), duration: 60, status: 'confirmed', source: 'setter_booking', bookedBySlug: 'elodie', personName: MOI, personId: 'moi', expertSlug: 'moi', type: 'strat', typeName: 'Appel stratégique Élite', prospect: { email: 'marc@dubois-menuiserie.fr', telephone: '+33619847203' }, presenceConfirmed: { channel: 'call', byName: 'Élodie', at: ts(NOW - 5 * H) }, meetLink: 'https://meet.google.com/xyz-abcd-efg', createdAt: ts(NOW - 47 * H) });
 
     lead('l9', { nom: 'Céline Moreau', telephone: '+33627598146', email: 'celine@moreau-immo.fr', type: 'vsl_elite', status: 'client', stage: 'closed_won_setting', isClient: true, clientSince: ts(NOW - 3 * D), assignedTo: 'moi', _c: NOW - 9 * D, secteur: 'Agence immobilière', ca: '48 000 €/mois', coachAssigne: { slug: 'edouard', nom: 'Edouard' }, leadScore: 5 });
-    put('bookings', 'b3', { leadId: 'l9', date: ymd(NOW - 3 * D), time: '15:00', duration: 60, status: 'completed', outcome: 'close', source: 'setter', personName: 'Vincent', typeName: 'Appel stratégique Élite', createdAt: ts(NOW - 8 * D) });
+    put('bookings', 'b3', { leadId: 'l9', date: ymd(NOW - 3 * D), time: '15:00', duration: 60, status: 'completed', outcome: 'close', source: 'setter_booking', personName: 'Vincent', typeName: 'Appel stratégique Élite', createdAt: ts(NOW - 8 * D) });
 
     lead('l10', { nom: 'Pierre Garnier', telephone: '+33693401725', email: 'pierre.garnier@orange.fr', type: 'business', status: 'pas_interesse', stage: 'disqualification', assignedTo: 'valentin', _c: NOW - 4 * D, secteur: 'Plomberie', ca: '7 000 €/mois',
       communications: [{ type: 'call', direction: 'outbound', ownerName: 'Valentin', date: iso(NOW - 4 * D + H), duration: 100 }] });
@@ -323,8 +329,47 @@
       communications: [{ type: 'call', direction: 'outbound', ownerName: MOI, date: iso(NOW - 3 * D + 2 * H), duration: 240 }], notesHistory: [{ text: 'Intéressé mais veut d’abord voir son comptable.', date: frDate(NOW - 3 * D + 2 * H), authorName: MOI }] });
     lead('l13', { nom: 'Yann Le Goff', telephone: '+33745126681', email: 'yann@legoff-transport.bzh', type: 'business', status: 'set', stage: 'set', assignedTo: 'steven', setterSlug: 'steven', setterName: 'Steven', setterRole: 'setter_ecrit', _c: NOW - 4 * D, secteur: 'Transport', ca: '51 000 €/mois' });
     var rdv13 = rond(NOW + 3 * D);
-    put('bookings', 'b4', { leadId: 'l13', date: ymd(rdv13), time: hhmm(rdv13), duration: 45, status: 'confirmed', source: 'setter', bookedBySlug: 'steven', personName: 'Vincent', personId: 'vincent', typeName: 'Appel découverte', prospect: { email: 'yann@legoff-transport.bzh', telephone: '+33745126681' }, createdAt: ts(NOW - 4 * D) });
+    put('bookings', 'b4', { leadId: 'l13', date: ymd(rdv13), time: hhmm(rdv13), duration: 45, status: 'confirmed', source: 'setter_booking', bookedBySlug: 'steven', personName: 'Vincent', personId: 'vincent', typeName: 'Appel découverte', prospect: { email: 'yann@legoff-transport.bzh', telephone: '+33745126681' }, createdAt: ts(NOW - 4 * D) });
     lead('l14', { nom: 'Léa Bertin', email: 'lea.bertin@studio-lea.fr', type: 'vsl_elite', status: 'nouveau', stage: 'lead', assignedTo: 'moi', _c: NOW - 70 * MIN, secteur: 'Studio de yoga', ca: '12 000 €/mois', defi: 'Remplir mes cours du soir' });
+    versePipeline(db, put);
     return db;
   }
+
+  /* Faux leads du Labo Pipeline (sandbox-pipeline-data.js), au même format
+     que ceux d'ici : dates des champs « horodatage » converties. */
+  function versePipeline(db, put) {
+    if (typeof window.SBX_PIPELINE_SEED !== 'function') return;
+    var r = window.SBX_PIPELINE_SEED();
+    function t(v) { if (!v) return v; var ms = typeof v === 'string' ? Date.parse(v) : v; return isNaN(ms) ? v : ts(ms); }
+    r.leads.forEach(function (l) {
+      var o = JSON.parse(JSON.stringify(l));
+      delete o.id; delete o._v;
+      ['createdAt', 'clientSince', 'assignedAt', 'lastOptinAt', 'updatedAt'].forEach(function (k) { if (o[k]) o[k] = t(o[k]); });
+      if (!o.status || o.status === 'nouveau') o.status = ({ lead: 'nouveau', nrp1: 'nrp1', nrp2: 'nrp2', nrp3: 'nrp3', all_nrp: 'all_nrp', faux_numero: 'faux_numero', poubelle: 'poubelle', disqualification: 'disqualifie', disqualifie_closing: 'disqualifie', follow_up_pm: 'follow_up_pm', set: 'set', rdv_confirmes: 'rdv_pose', rdv_self_booking: 'rdv_self_booking', closed_lost: 'pas_interesse' })[o.stage] || 'follow_up_pm';
+      if (!o.phoneNormalized && o.telephone) o.phoneNormalized = String(o.telephone).replace(/\D/g, '').slice(-9);
+      put('leads', l.id, o);
+      (r.bookings[l.id] || []).forEach(function (b) {
+        var x = JSON.parse(JSON.stringify(b)), parts = String(l.nom || '').split(' ');
+        delete x.id;
+        x.leadId = l.id;
+        if (x.createdAt) x.createdAt = t(x.createdAt);
+        if (x.presenceConfirmed && x.presenceConfirmed.at) x.presenceConfirmed.at = t(x.presenceConfirmed.at);
+        if (!x.prospect) x.prospect = { prenom: parts[0] || '', nom: parts.slice(1).join(' '), email: l.email || '', telephone: l.telephone || '' };
+        if (!x.typeName) x.typeName = x.typeLabel || 'Appel stratégique';
+        put('bookings', b.id, x);
+      });
+    });
+  }
+
+  /* L'autre Labo (onglet voisin) a écrit : on recharge la base et on prévient
+     tous les écouteurs, comme le ferait Firestore. */
+  window.addEventListener('storage', function (e) {
+    if (!e || e.key !== PFX + KEY || !e.newValue) return;
+    try {
+      var nv = dec(e.newValue);
+      if (!nv || !nv.leads) return;
+      DB = nv;
+      setTimeout(function () { listeners.slice().forEach(function (l) { try { l.fn(); } catch (x) { console.error(x); } }); }, 15);
+    } catch (x) {}
+  });
 })();

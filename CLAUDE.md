@@ -289,6 +289,17 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
 - **AlteoForms** : `alteoforms.html` (builder), `alteoforms-render.html` (rendu public),
   collection `alteo_forms`
 - **Coaching** : `coaching*.html` — SDK modulaire, style ES6
+- **Étapes du Pipeline (29/10/2026)** : `pipeline-etapes.js` est la SEULE règle de
+  classement (colonnes Lead · NRP 1-3 · All NRP · Faux numéro/Poubelle · Disqualification ·
+  FU · SET NB · Self booking · No show/Annulé/Closed Lost · Closing, et leurs sous-filtres).
+  Elle sert au nouveau Pipeline (`pipeline-v2.js` + hôte Firebase `pipeline-v2-host.js`) et à
+  la liste déroulante unique de Leads Live (`leads-live-etapes.js`, derrière `?v2=1` /
+  `_config/crm_v2`). `stage` est la source de vérité ; `status` reste écrit en parallèle
+  (`STATUS_OF`). NB/SB des annulations et Closed Lost = déduit du RDV. « Non honoré
+  équipe » = `bookings.cancellation.kind: 'non_honore'` (origine équipe, stage
+  `rdv_annules_equipe`). Les Labos Pipeline et Leads Live partagent la même fausse base
+  (`sandbox-leads-live-db.js`, faux leads de `sandbox-pipeline-data.js`) ; après toute
+  modification de `sales-leads.html` : `node scripts/build-sandbox-leads-live.js`.
 
 Spécification de référence du flux commercial : `REFONTE-SPEC.md`.
 

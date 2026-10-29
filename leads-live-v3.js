@@ -208,6 +208,11 @@
      1ʳᵉ fois »…) ne correspondaient plus à la formation : plus aucun renommage. */
   var MOTS = {};
   var NRP_SUIVANT = { nrp1: 'nrp2', nrp2: 'nrp3', nrp3: 'all_nrp', all_nrp: 'all_nrp' };
+  /* Mode étapes du Pipeline : le NRP suivant se lit sur l'étape, pas sur le statut */
+  function nrpSuivant(l) {
+    if (window.LLEtapes && window.LLEtapes.on()) return window.LLEtapes.nextNrp(l);
+    return NRP_SUIVANT[(l && l.status) || 'nouveau'] || 'nrp1';
+  }
   function patcherStatuts() {
     for (var i = 0; i < STATUSES.length; i++) {
       var s = STATUSES[i];
@@ -334,7 +339,7 @@
 
   /* ═══ Une phrase pour dire où en est le lead ═════════════════════════ */
   function situation(l) {
-    var st = l.status || 'nouveau', so = getStatusObj(st);
+    var st = l.status || 'nouveau', so = (window.LLEtapes && window.LLEtapes.statusView(l)) || getStatusObj(st);
     var late = fuProchain(l, true), b = rdvAVenir(l)[0], fut = fuProchain(l, false), la = l2LastActivity(l);
     if (late && !terminal(l)) return { dot: 'late', ligne: 'Rappel prévu ' + quand(new Date(late)) + ' · en retard', titre: so.label, detail: 'Rappel prévu ' + quand(new Date(late)) + ', en retard', retard: true };
     if (b && !b.presenceConfirmed) return { dot: 'warn', ligne: 'RDV ' + ldPresRdvLabel(b) + ' · présence à confirmer', titre: 'RDV ' + ldPresRdvLabel(b), detail: 'Présence pas encore confirmée' + (b.personName ? ' · avec ' + b.personName : ''), rdvId: b.id, pres: false };
@@ -400,6 +405,10 @@
     var nomMoi = majuscule(String((so && so.name) || (u && u.name) || '').split(/\s+/)[0]);
     var aujourd = majuscule(new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }));
     var fc = l2FiltersActiveCount();
+    /* Mode étapes du Pipeline (leads-live-etapes.js) : une liste déroulante
+       remplace les onglets, la file montre « Tous » dans l'étape choisie. */
+    var etapes = !!(window.LLEtapes && window.LLEtapes.on());
+    var vue = etapes ? 'tous' : liste;
 
     var h = '<div class="ll5nav">';
     h += '<button type="button" class="ll5me" data-ll5="menu" aria-label="Menu : notifications, liens, réglages">' + escHtml((nomMoi || '?').charAt(0).toUpperCase()) + '</button>';
@@ -423,15 +432,18 @@
     }
 
     if (!filterSearch) {
-      h += '<div class="ll5tabs" role="group" aria-label="Mes listes" id="l2Triage">';
-      ['faire', 'rappel', 'rdv', 'tous'].forEach(function (k) {
-        h += '<button type="button" data-ll5="list" data-v="' + k + '" aria-pressed="' + (liste === k) + '">' + LISTS[k].t + '<span class="n">' + c[k] + '</span></button>';
-      });
-      h += '</div>';
+      if (etapes) h += '<div id="l2Triage">' + window.LLEtapes.selectHTML('ll5etape') + '</div>';
+      else {
+        h += '<div class="ll5tabs" role="group" aria-label="Mes listes" id="l2Triage">';
+        ['faire', 'rappel', 'rdv', 'tous'].forEach(function (k) {
+          h += '<button type="button" data-ll5="list" data-v="' + k + '" aria-pressed="' + (liste === k) + '">' + LISTS[k].t + '<span class="n">' + c[k] + '</span></button>';
+        });
+        h += '</div>';
+      }
       h += '<div class="ll5pills">';
       h += '<button type="button" class="ll5pill' + (fc ? ' on' : '') + '" id="l2FiltersBtn" data-ll5="filters">' + ic('filter') + 'Filtres' + (fc ? ' · ' + fc : '') + '</button>';
-      if (liste === 'tous') h += '<button type="button" class="ll5pill" id="l2SortBtn" data-l2="sort">' + ic('sort') + (l2Sort === 'proba' ? 'Plus de chances de RDV' : 'Plus récents') + '</button>';
-      if (liste === 'rdv') {
+      if (vue === 'tous') h += '<button type="button" class="ll5pill" id="l2SortBtn" data-l2="sort">' + ic('sort') + (l2Sort === 'proba' ? 'Plus de chances de RDV' : 'Plus récents') + '</button>';
+      if (vue === 'rdv') {
         [['all', 'Tous'], ['sb', 'Pris par le prospect'], ['nb', 'Posés par l’équipe']].forEach(function (x) {
           h += '<button type="button" class="ll5pill' + (rdvSorte === x[0] ? ' on' : '') + '" data-ll5="rdvkind" data-v="' + x[0] + '">' + x[1] + '</button>';
         });
@@ -442,9 +454,9 @@
 
     var sections;
     if (filterSearch) sections = [{ t: leads.length + ' résultat' + (leads.length > 1 ? 's' : ''), list: leads }];
-    else if (liste === 'faire') sections = groupesFaire(leads);
-    else if (liste === 'rappel') sections = groupesRappel(leads);
-    else if (liste === 'rdv') sections = groupesRdv(leads);
+    else if (vue === 'faire') sections = groupesFaire(leads);
+    else if (vue === 'rappel') sections = groupesRappel(leads);
+    else if (vue === 'rdv') sections = groupesRdv(leads);
     else sections = l2Sort === 'proba' ? [{ t: 'Par chance de RDV', list: leads }] : l2ArriveesSections(leads).map(function (s) { return { t: s.t.replace(/^📥\s*/, ''), list: s.list }; });
 
     var total = 0;
@@ -455,7 +467,7 @@
       for (var i = 0; i < sec.list.length; i++) h += renderCard(sec.list[i]);
       h += '</div>';
     });
-    if (!total) h += '<div class="ll5empty">' + (filterSearch ? 'Aucun lead ne correspond à « ' + escHtml(filterSearch) + ' ».' : (liste === 'faire' ? 'Rien d’urgent pour l’instant 👍' : 'Rien dans cette liste pour l’instant.')) + '</div>';
+    if (!total) h += '<div class="ll5empty">' + (filterSearch ? 'Aucun lead ne correspond à « ' + escHtml(filterSearch) + ' ».' : (vue === 'faire' ? 'Rien d’urgent pour l’instant 👍' : (etapes && window.LLEtapes.etape() ? 'Aucun lead dans cette étape.' : 'Rien dans cette liste pour l’instant.'))) + '</div>';
 
     var focus = document.activeElement && document.activeElement.id === 'll5Q';
     var caret = focus ? document.activeElement.selectionStart : 0;
@@ -1157,6 +1169,7 @@
       h += '<div class="l2fam" data-fam="' + fam.l.toLowerCase() + '"><div class="ll5gt">' + fam.l + '</div><div class="ll5group">';
       for (var si = 0; si < fam.k.length; si++) {
         var s = getStatusObj(fam.k[si]);
+        if (window.LLEtapes && window.LLEtapes.hideStatus(s.key)) continue;
         var act = (l.status || 'nouveau') === s.key;
         h += '<button class="ll5line' + (act ? ' active' : '') + '" data-action="setStatus" data-id="' + id + '" data-status="' + s.key + '"><span class="ll5tx"><b>' + escHtml(s.label) + '</b>' +
           (s.oldLabel && s.oldLabel !== s.label ? '<span>avant : ' + escHtml(s.oldLabel) + '</span>' : '') + '</span>' + (act ? '<span class="ll5reco">Actuel</span>' : '') + '</button>';
@@ -1182,7 +1195,7 @@
 
   /* Résultat d'un appel (2 questions) */
   function ecranResultat(l, id) {
-    var st = l.status || 'nouveau', suiv = NRP_SUIVANT[st] || 'nrp1';
+    var suiv = nrpSuivant(l);
     return '<h1 class="ll5h1">Comment ça s’est passé ?</h1><p class="ll5sub">Question 1 sur 2</p><div class="ll5group ll5mt">' +
       choixR('check', 'go', 'Il a répondu', '', 'data-ll5="r1" data-v="yes" data-id="' + id + '"') +
       choixR('phone', 'grey', 'Pas de réponse', 'Ce sera « ' + getStatusObj(suiv).label + ' »', 'data-ll5="r1" data-v="no" data-id="' + id + '"') +
@@ -1214,7 +1227,7 @@
     h += choixR('x', 'grey', 'Disqualifié', 'Hors cible', 'data-ll5="r2" data-v="dq" data-id="' + id + '"');
     h += choixR('trophy', '', 'Il a signé', 'Les étapes du close s’ouvrent', 'data-ll5="r2" data-v="win" data-id="' + id + '"');
     h += '</div><div class="ll5gt">Il n’a pas décroché</div><div class="ll5group">';
-    var suiv = NRP_SUIVANT[l.status || 'nouveau'] || 'nrp1';
+    var suiv = nrpSuivant(l);
     h += choixR('phone', 'grey', 'Pas de réponse', 'Ce sera « ' + getStatusObj(suiv).label + ' »', 'data-ll5="r1" data-v="no" data-id="' + id + '"');
     h += choixR('msg', 'grey', 'Messagerie', '', 'data-ll5="r1" data-v="vm" data-id="' + id + '"');
     h += choixR('x', 'grey', 'Faux numéro', '', 'data-ll5="r1" data-v="bad" data-id="' + id + '"');
@@ -1390,7 +1403,7 @@
     if (!l) return;
     var st = l.status || 'nouveau';
     if (v === 'yes') { aller('result2'); return; }
-    if (v === 'no') { var n = NRP_SUIVANT[st] || 'nrp1'; poserStatut(id, n); infoRappel = getStatusObj(n).label; pile = ['lead', 'fuask']; anime = true; l2RenderSheet(id, false); return; }
+    if (v === 'no') { var n = nrpSuivant(l); poserStatut(id, n); infoRappel = getStatusObj(n).label; pile = ['lead', 'fuask']; anime = true; l2RenderSheet(id, false); return; }
     if (v === 'vm') { poserStatut(id, 'messagerie'); infoRappel = 'Messagerie'; pile = ['lead', 'fuask']; anime = true; l2RenderSheet(id, false); return; }
     if (v === 'bad') { poserStatut(id, 'faux_numero'); accueilLead(); }
   }

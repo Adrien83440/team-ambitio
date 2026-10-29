@@ -21,6 +21,9 @@
      createLead({nom, telephone, email}, cb) · callDetail(lead, comm, cb)
      openClose(lead) · openBooking(lead) · call(lead) · listen(lead, comm)
      objectionsOf(booking) (facultatif)
+     setOutcome(lead, booking, outcome, {origin, kind, note}, cb)
+       résultat d'un RDV (annulé / non honoré / no show / offre / non closé)
+     openLeadsLive(lead) : ouvre la même fiche dans Leads Live
 
    Données lues sur le lead : champs réels de `leads` (stage, telephone,
    communications[], notesHistory[], timeline_history[], followUps[], quiz,
@@ -29,35 +32,24 @@
    presenceConfirmed, replay, aiPrep). Rien n'est inventé à l'affichage :
    les phrases « où il en est » sont déduites de ces champs.
 
-   Les 21 étapes du CRM restent les valeurs de `stage` ; l'affichage les
-   range en 6 familles (FAMS).
-   ES5 strict, aucune dépendance.
+   Colonnes (29/10/2026) : une par étape, définies dans pipeline-etapes.js,
+   le MÊME classement que la liste déroulante de Leads Live.
+   ES5 strict. Dépend de pipeline-etapes.js (à charger avant).
    ═══════════════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
 
-  /* ═══ 1. Modèle ═══ */
-  var FAMS = [
-    /* Noms des colonnes = vocabulaire des SOP (retour Vincent du 22/10/2026) */
-    { id: 'joindre',  t: 'Nouveau / NRP',                 s: 'Pas encore eu au téléphone',   st: ['lead', 'nrp1', 'nrp2', 'nrp3', 'all_nrp'] },
-    { id: 'relance',  t: 'Follow Up',                     s: 'Rappel convenu',               st: ['follow_up_pm', 'follow_up_closing'] },
-    { id: 'rdv',      t: 'SET / RDV posé',                s: 'RDV à venir',                  st: ['set', 'rdv_self_booking', 'rdv_confirmes', 'partenariats'] },
-    { id: 'sansuite', t: 'No show / Annulé / Closed Lost', s: 'RDV passé sans signature',    st: ['rdv_annules_prospect', 'rdv_annules_equipe', 'no_show_self', 'no_show_setting', 'closed_lost'] },
-    { id: 'client',   t: 'Closing',                       s: '',                             st: ['closed_won_setting', 'closed_won_self'] },
-    { id: 'ecarte',   t: 'Disqualifié / Poubelle',        s: '',                             st: ['faux_numero', 'poubelle', 'disqualification', 'disqualifie_closing'] }
-  ];
-  var STAGE_LABEL = {
-    lead: 'Nouveau', nrp1: 'NRP 1', nrp2: 'NRP 2', nrp3: 'NRP 3', all_nrp: 'All NRP',
-    follow_up_pm: 'Follow Up PM', follow_up_closing: 'Follow-Up closing',
-    set: 'SET', rdv_self_booking: 'RDV Self Booking', rdv_confirmes: 'RDV posé', partenariats: 'Partenariats',
-    rdv_annules_prospect: 'RDV annulé (prospect)', rdv_annules_equipe: 'RDV annulé (équipe)',
-    no_show_self: 'No show (self booking)', no_show_setting: 'No show (setting)', closed_lost: 'Closed Lost',
-    closed_won_setting: 'Closing (setting)', closed_won_self: 'Closing (self booking)',
-    faux_numero: 'Faux numéro', poubelle: 'Poubelle', disqualification: 'Disqualifié', disqualifie_closing: 'Disqualifié (closing)'
-  };
-  var FAM_OF = {};
-  FAMS.forEach(function (f) { f.st.forEach(function (s) { FAM_OF[s] = f.id; }); });
-  var NRP_NEXT = { lead: 'nrp1', nrp1: 'nrp2', nrp2: 'nrp3', nrp3: 'all_nrp' };
+  /* ═══ 1. Modèle ═══
+     Colonnes, sous-filtres et classement : pipeline-etapes.js (partagé avec
+     Leads Live). Refonte du 29/10/2026 : une colonne par étape, dans l'ordre
+     des SOP. d.fam reste un regroupement interne (phrases « où il en est »,
+     paniers de la vue Rappels). */
+  var E = window.PipelineEtapes;
+  var COLS = E.COLS;
+  var STAGE_LABEL = E.STAGE_LABEL;
+  var FAM_OF_COL = { lead: 'joindre', nrp1: 'joindre', nrp2: 'joindre', nrp3: 'joindre', all_nrp: 'joindre', fu: 'relance', set: 'rdv', sb: 'rdv', perdu: 'sansuite', closing: 'client', poubelle: 'ecarte', disqua: 'ecarte' };
+  var NRP_STAGES = { lead: 1, nrp1: 1, nrp2: 1, nrp3: 1, all_nrp: 1 };
+  var LOST_STAGES = { rdv_annules_prospect: 1, rdv_annules_equipe: 1, no_show_self: 1, no_show_setting: 1, follow_up_closing: 1, closed_lost: 1 };
   var OUTCOME = { close: 'Closé', non_close: 'Non closé', offre: 'Offre envoyée', disqualifie: 'Disqualifié', no_show: 'Absence', annule: 'Annulé', replanifie: 'Replanifié' };
   var MOIS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
   var MOISL = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
@@ -65,9 +57,9 @@
   var DAY = 864e5;
 
   var BASKETS = [
-    { id: 'sansuite', ic: 'check', t: 'No show / Closed Lost', s: 'Ont eu un RDV, n\'ont pas signé' },
-    { id: 'joindre',  ic: 'off',   t: 'Nouveaux / NRP',        s: 'Pas encore eus au téléphone' },
-    { id: 'relance',  ic: 'redo',  t: 'Follow Up',             s: 'Rappel convenu avec eux' }
+    { id: 'sansuite', ic: 'check', t: 'No show / Annulé / Closed Lost', s: 'Ont eu un RDV, n\'ont pas signé', cols: ['perdu'] },
+    { id: 'joindre',  ic: 'off',   t: 'Lead / NRP',                     s: 'Pas encore eus au téléphone', cols: ['lead', 'nrp1', 'nrp2', 'nrp3', 'all_nrp'] },
+    { id: 'relance',  ic: 'redo',  t: 'FU',                             s: 'Rappel convenu avec eux', cols: ['fu'] }
   ];
 
   var IC = {
@@ -87,6 +79,7 @@
     expand: '<path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/>',
     note: '<path d="M4 20h4L19 9l-4-4L4 16z"/>', flag: '<path d="M5 21V4h11l-2 4 2 4H5"/>',
     file: '<path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/>', up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+    bolt: '<path d="M13 3 4 14h7l-1 7 9-11h-7z"/>',
     fold: '<path d="M14 6l-6 6 6 6"/>', unfold: '<path d="M10 6l6 6-6 6"/>', step: '<path d="M4 12h12M12 6l6 6-6 6"/>'
   };
   function ic(n) { return '<svg class="pv2i" viewBox="0 0 24 24" aria-hidden="true">' + (IC[n] || '') + '</svg>'; }
@@ -150,10 +143,6 @@
   var BOOK = {};          // leadId → bookings
   var CACHE = {};         // leadId → dérivé
 
-  function famOf(l) {
-    if (l.isClient && !FAM_OF[l.stage]) return 'client';
-    return FAM_OF[l.stage || 'lead'] || 'joindre';
-  }
   function realDate(l) {
     var c = [toMs(l.dateWebinaire), toMs(l.importedCreatedAt), toMs(l.createdAt)].filter(function (x) { return x; });
     return c.length ? Math.min.apply(null, c) : null;
@@ -177,6 +166,7 @@
     var st = bookingStart(b), now = Date.now();
     if (isCancelled(b)) {
       var o = b.cancellation && b.cancellation.origin;
+      if (b.cancellation && b.cancellation.kind === 'non_honore') return { label: 'Non honoré par l\'équipe', tone: 'late', key: 'annule' };
       return { label: o === 'prospect' ? 'Annulé par le prospect' : o === 'equipe' ? 'Annulé par l\'équipe' : 'Annulé', tone: 'warn', key: 'annule' };
     }
     if (b.outcome) return { label: OUTCOME[b.outcome] || b.outcome, tone: b.outcome === 'close' ? 'go' : b.outcome === 'offre' ? 'go' : b.outcome === 'replanifie' ? 'grey' : 'late', key: b.outcome };
@@ -234,7 +224,13 @@
     var key = l.id + ':' + (l._v || 0);
     if (CACHE[l.id] && CACHE[l.id].key === key) return CACHE[l.id];
     var d = { key: key, now: Date.now() };
-    d.fam = famOf(l); d.stage = l.stage || 'lead'; d.stageLabel = STAGE_LABEL[d.stage] || d.stage;
+    d.cl = E.classify(l, BOOK[l.id] || []); d.col = d.cl.col; d.key = d.cl.key;
+    d.fam = FAM_OF_COL[d.col] || 'joindre'; d.stage = d.cl.stage;
+    /* Pastille : le sous-filtre pour les colonnes regroupées ; l'étape sinon,
+       ou le nom de la colonne quand le lead y est rangé par son RDV (lead
+       auto-réservé, lead repris après un no show…) */
+    d.stageLabel = d.col === 'perdu' || d.col === 'poubelle' || d.col === 'disqua' || d.col === 'closing' ? E.label(d.key) :
+      E.COL_OF_STAGE[d.stage] === d.col ? (STAGE_LABEL[d.stage] || d.stage) : colDef(d.col).t;
     d.real = realDate(l); d.arrDays = daysSince(d.real);
     d.last = lastContact(l); d.days = daysSince(d.last);
     var cs = commsOf(l), calls = 0, ans = 0, lastAns = null, lastCall = null, msgs = 0;
@@ -305,10 +301,30 @@
     }
     if (!tone) tone = d.days == null ? 'late' : d.days > 30 ? 'late' : d.days > 7 ? 'warn' : 'go';
     d.tone = tone; d.ctone = ct;
+    d.lost = d.col === 'perdu' ? lostInfo(d) : null;
     d.blob = (l.nom + ' ' + (l.email || '') + ' ' + String(l.telephone || '').replace(/\D/g, '') + ' ' + (l.secteur || '') + ' ' + d.pb.text + ' ' + (l.tags || []).join(' ') + ' ' +
       (l.notesHistory || []).map(function (n) { return n.text; }).join(' ')).toLowerCase();
     CACHE[l.id] = d;
     return d;
+  }
+
+  /* Dernière colonne : tout ce qu'il faut savoir sur le RDV raté, sans ouvrir la fiche */
+  var ROLE = { admin: 'admin', closer: 'closer', setter: 'setter', closer_setter: 'setter-closer', setter_ecrit: 'setter', sales: 'sales', csm: 'CSM', coach: 'coach' };
+  function lostInfo(d) {
+    var b = d.cl.booking, out = [];
+    if (b) { var st = bookingStart(b); if (st) out.push('RDV du ' + fdate(st) + ' à ' + fhour(st) + (b.personName ? ' avec ' + b.personName : '') + (d.cl.sb === true ? ' · SB' : d.cl.sb === false ? ' · NB' : '')); }
+    if (d.cl.sub === 'fu_closing' && d.upcoming && d.upcoming !== b) out.push('Prochain RDV ' + frel(bookingStart(d.upcoming)));
+    if (b && isCancelled(b)) {
+      var c = b.cancellation || {}, who = c.byName || b.cancelledByName || (b.outcome === 'annule' ? b.outcomeByName : '') || '';
+      var at = toMs(c.at) || toMs(b.cancelledAt) || (b.outcome === 'annule' ? toMs(b.outcomeAt) : null);
+      out.push(bookingResult(b).label + (who ? (c.origin === 'prospect' ? ' · noté par ' : ' · par ') + who + (c.byRole && ROLE[c.byRole] ? ' (' + ROLE[c.byRole] + ')' : '') : '') + (at ? ', le ' + fdate(at) + ' à ' + fhour(at) : ''));
+      var why = c.reason || (b.outcome === 'annule' ? b.outcomeNote : '');
+      out.push(why ? 'Motif : « ' + cut(why, 140) + ' »' : 'Motif non renseigné');
+    } else if (b && (b.outcome || b.status === 'no_show')) {
+      out.push(bookingResult(b).label + (b.outcomeByName ? ' · noté par ' + b.outcomeByName : '') + (toMs(b.outcomeAt) ? ', le ' + fdate(toMs(b.outcomeAt)) : ''));
+      if (b.outcomeNote) out.push('« ' + cut(b.outcomeNote, 140) + ' »');
+    } else if (!b) out.push('RDV introuvable (plus ancien que les données chargées)');
+    return out;
   }
 
   /* Fil complet : tous les échanges et événements, du plus récent au plus ancien */
@@ -345,12 +361,12 @@
   var S = {
     view: 'pipe', q: '', per: 'tout', who: null, sort: 'arr',
     f: { src: '', pb: '', par: '', last: '' },
-    fold: { client: true, ecarte: true }, lim: {},
+    fold: { poubelle: true, disqua: true, closing: true }, lim: {},
     drawer: null, full: null, ft: 'fil', fevf: 'tout', cmp: 'note', tr: {},
-    stages: [], rap: [{ s: 'home' }], mine: false, sess: null, sheet: null, drag: null, dark: false, okOther: {}
+    keys: [], rap: [{ s: 'home' }], mine: false, sess: null, sheet: null, drag: null, dark: false, okOther: {}
   };
   function lead(id) { var a = H.leads(); for (var i = 0; i < a.length; i++) if (a[i].id === id) return a[i]; return null; }
-  function fam(id) { for (var i = 0; i < FAMS.length; i++) if (FAMS[i].id === id) return FAMS[i]; return null; }
+  function colDef(id) { return E.colOf(id); }
 
   function okPeriod(d) {
     if (S.per === 'tout' || !d.real) return S.per === 'tout';
@@ -362,26 +378,32 @@
     if (S.per === 'an1') return new Date(r).getFullYear() === now.getFullYear() - 1;
     return true;
   }
-  /* Statut précis (22/10/2026) : NRP 1, SET, No show (setting)… — plusieurs à la fois */
-  function stageOk(d, famId) {
-    var sel = S.stages;
-    if (famId) sel = sel.filter(function (x) { return FAM_OF[x] === famId; });
-    return !sel.length || sel.indexOf(d.stage) > -1;
+  /* Statut précis : colonnes et sous-filtres (« NRP 1 », « No show · SB »…), plusieurs à la fois.
+     Clé = 'colonne' ou 'colonne:sous-filtre' (même clé que la liste déroulante de Leads Live). */
+  function keyOk(d, colId) {
+    var sel = S.keys;
+    if (colId) sel = sel.filter(function (k) { return k.split(':')[0] === colId; });
+    if (!sel.length) return true;
+    for (var i = 0; i < sel.length; i++) if (sel[i] === d.col || sel[i] === d.key) return true;
+    return false;
   }
-  function stagesLabel() {
-    if (!S.stages.length) return 'Statut';
-    var n = S.stages.map(function (x) { return STAGE_LABEL[x]; });
+  function keysLabel() {
+    if (!S.keys.length) return 'Étape';
+    var n = S.keys.map(function (k) { return E.label(k); });
     return n.length <= 2 ? n.join(', ') : n.slice(0, 2).join(', ') + ' +' + (n.length - 2);
   }
-  function subChips(stages, counts) {
-    var list = stages.filter(function (x) { return counts[x] || S.stages.indexOf(x) > -1; });
-    if (list.length < 2 && !list.some(function (x) { return S.stages.indexOf(x) > -1; })) return '';
-    return '<div class="pv2-subs">' + list.map(function (x) {
-      return '<button class="pv2-sub" data-a="stg" data-v="' + x + '" aria-pressed="' + (S.stages.indexOf(x) > -1) + '">' + esc(STAGE_LABEL[x]) + ' <span>' + (counts[x] || 0) + '</span></button>'; }).join('') + '</div>';
+  function chips(keys, counts) {
+    var list = keys.filter(function (k) { return counts[k] || S.keys.indexOf(k) > -1; });
+    if (list.length < 2 && !list.some(function (k) { return S.keys.indexOf(k) > -1; })) return '';
+    return '<div class="pv2-subs">' + list.map(function (k) {
+      var c = colDef(k.split(':')[0]), sub = k.split(':')[1], t = c.t;
+      if (sub) (c.subs || []).forEach(function (x) { if (x.id === sub) t = x.t; });
+      return '<button class="pv2-sub" data-a="stg" data-v="' + esc(k) + '" aria-pressed="' + (S.keys.indexOf(k) > -1) + '">' + esc(t) + ' <span>' + (counts[k] || 0) + '</span></button>'; }).join('') + '</div>';
   }
-  function countStages(rows) { var c = {}; rows.forEach(function (l) { var k = derive(l).stage; c[k] = (c[k] || 0) + 1; }); return c; }
+  function subKeys(c) { return (c.subs || []).map(function (x) { return c.id + ':' + x.id; }); }
+  function countKeys(rows) { var c = {}; rows.forEach(function (l) { var d = derive(l); c[d.col] = (c[d.col] || 0) + 1; if (d.key !== d.col) c[d.key] = (c[d.key] || 0) + 1; }); return c; }
   function okFilters(l, d, sansMembre, sansStatut) {
-    if (!sansStatut && !stageOk(d)) return false;
+    if (!sansStatut && !keyOk(d)) return false;
     if (!sansMembre && S.who && (l.assignedTo || '') !== (S.who === '_none' ? '' : S.who)) return false;
     if (S.f.src && d.src.short !== S.f.src) return false;
     if (S.f.pb && d.pb.pilier !== S.f.pb) return false;
@@ -453,32 +475,38 @@
   }
 
   function viewPipe() {
-    var rows = sortLeads(filtered()), stc = countStages(filtered(true)), total = H.leads().length, h = header();
+    var rows = sortLeads(filtered()), stc = countKeys(filtered(true)), total = H.leads().length, h = header();
     h += '<div class="pv2-tools"><label class="pv2-search">' + ic('search') + '<input id="pv2q" value="' + esc(S.q) + '" placeholder="Nom, téléphone, e-mail, mot d\'une note" autocomplete="off">' + (S.q ? '<button class="pv2-clr" data-a="clearq" aria-label="Effacer">' + ic('x') + '</button>' : '') + '</label>';
     h += '<div class="pv2-pills" role="group" aria-label="Arrivés">' + [['tout', 'Arrivés : tout'], ['mois', 'Ce mois-ci'], ['3m', '3 mois'], ['6m', '6 mois'], ['an', 'Cette année'], ['an1', 'L\'an dernier']].map(function (p) {
       return '<button class="pv2-pill" data-a="per" data-v="' + p[0] + '" aria-pressed="' + (S.per === p[0]) + '">' + p[1] + '</button>'; }).join('') + '</div>';
     h += whoSelect();
-    h += '<button class="pv2-pill" data-a="stages" aria-pressed="' + (S.stages.length > 0) + '">' + esc(stagesLabel()) + ' ▾</button>';
+    h += '<button class="pv2-pill" data-a="stages" aria-pressed="' + (S.keys.length > 0) + '">' + esc(keysLabel()) + ' ▾</button>';
     var fc = activeFilterCount();
     h += '<button class="pv2-pill" data-a="filters" aria-pressed="' + (fc > 0) + '">Plus de filtres' + (fc ? '<span class="pv2-n">' + fc + '</span>' : '') + '</button></div>';
-    var restricted = S.q || S.per !== 'tout' || S.who || fc || S.stages.length, bulk = bulkCandidates(rows);
+    var restricted = S.q || S.per !== 'tout' || S.who || fc || S.keys.length, bulk = bulkCandidates(rows);
     h += '<div class="pv2-result"><span><b>' + rows.length + '</b> lead' + (rows.length > 1 ? 's' : '') + (restricted ? ' sur ' + total + ' · <button data-a="reset">Tout effacer</button>' : '') + (S.q ? ' · la recherche ignore les filtres' : '') + '</span>' +
       (bulk.ok.length ? '<button class="pv2-take" data-a="bulktake">Prendre ces ' + plural(bulk.ok.length, 'lead') + '</button>' : '') + '<span class="pv2-sp"></span>' +
       '<label>Trier : <select class="pv2-sort" id="pv2sort">' + [['arr', 'arrivée récente d\'abord'], ['oubli', 'oubliés depuis longtemps d\'abord'], ['chaud', 'les plus chauds d\'abord'], ['nom', 'par nom']].map(function (o) {
       return '<option value="' + o[0] + '"' + (S.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label></div>';
     h += '<div class="pv2-boardwrap"><div class="pv2-board">';
-    FAMS.forEach(function (f) {
-      var cs = rows.filter(function (l) { return derive(l).fam === f.id; });
-      if (S.fold[f.id]) { h += '<button class="pv2-colx" data-a="unfold" data-v="' + f.id + '" data-col="' + f.id + '" title="Déplier">' + ic('unfold') + '<span class="pv2-v">' + f.t + '</span><span class="pv2-c">' + cs.length + '</span></button>'; return; }
+    /* Une colonne par étape (29/10/2026). Avec une recherche ou une étape choisie,
+       les colonnes vides s'effacent pour ne pas noyer les résultats. */
+    var serre = !!(S.q || S.keys.length);
+    COLS.forEach(function (f) {
+      var cs = rows.filter(function (l) { return derive(l).col === f.id; });
+      if (f.id === 'lead') cs.sort(function (x, y) { return (derive(y).real || 0) - (derive(x).real || 0); });
+      if (serre && !cs.length) return;
+      var folded = S.fold[f.id] && !serre;
+      if (folded) { h += '<button class="pv2-colx" data-a="unfold" data-v="' + f.id + '" data-col="' + f.id + '" title="Déplier">' + ic('unfold') + '<span class="pv2-v">' + esc(f.t) + '</span><span class="pv2-c">' + cs.length + '</span></button>'; return; }
       var lim = S.lim[f.id] || 25;
-      h += '<section class="pv2-col" data-col="' + f.id + '"><div class="pv2-ch"><span class="pv2-t">' + f.t + '</span><span class="pv2-c">' + cs.length + '</span>' +
-        (f.id === 'client' || f.id === 'ecarte' ? '<button class="pv2-fold" data-a="fold" data-v="' + f.id + '" title="Replier" aria-label="Replier">' + ic('fold') + '</button>' : '') + '</div>' +
-        (f.s ? '<div class="pv2-chs">' + f.s + '</div>' : '') + (S.q ? '' : subChips(f.st, stc)) + '<div class="pv2-cards">';
+      h += '<section class="pv2-col' + (f.id === 'perdu' ? ' pv2-col-perdu' : '') + '" data-col="' + f.id + '"><div class="pv2-ch"><span class="pv2-t">' + esc(f.t) + '</span><span class="pv2-c">' + cs.length + '</span>' +
+        '<button class="pv2-fold" data-a="fold" data-v="' + f.id + '" title="Replier" aria-label="Replier">' + ic('fold') + '</button></div>' +
+        (f.s ? '<div class="pv2-chs">' + esc(f.s) + '</div>' : '') + (S.q ? '' : chips(subKeys(f), stc)) + '<div class="pv2-cards">';
       h += cs.length ? cs.slice(0, lim).map(card).join('') : '<div class="pv2-empty">Aucun lead</div>';
       if (cs.length > lim) h += '<button class="pv2-more" data-a="more" data-v="' + f.id + '">Voir les ' + (cs.length - lim) + ' autres</button>';
       h += '</div></section>';
     });
-    h += '</div></div><div class="pv2-legend"><span><i class="pv2-dot pv2-d-go"></i>Contact récent ou action prévue</span><span><i class="pv2-dot pv2-d-warn"></i>À reprendre</span><span><i class="pv2-dot pv2-d-late"></i>Oublié ou en retard</span><span>Glisse une carte vers une autre colonne pour changer d\'étape</span></div>';
+    h += '</div></div><div class="pv2-legend"><span><i class="pv2-dot pv2-d-go"></i>Contact récent ou action prévue</span><span><i class="pv2-dot pv2-d-warn"></i>À reprendre</span><span><i class="pv2-dot pv2-d-late"></i>Oublié ou en retard</span><span>Glisse une carte vers une autre colonne pour changer d\'étape · les mêmes étapes servent de filtre dans Leads Live</span></div>';
     return h;
   }
   /* Menu « Suivi par » avec le nombre de leads de chacun (période et filtres appliqués) */
@@ -510,7 +538,7 @@
   function card(l) {
     var d = derive(l);
     return '<button class="pv2-card" draggable="true" data-a="open" data-v="' + esc(l.id) + '" data-id="' + esc(l.id) + '"><div class="pv2-k1"><i class="pv2-dot pv2-d-' + d.tone + '"></i><span class="pv2-nm">' + esc(l.nom || 'Sans nom') + '</span></div>' +
-      '<div class="pv2-k2">' + esc(d.ligne) + '</div><div class="pv2-k3"><span class="pv2-etp">' + esc(d.stageLabel) + '</span><span class="pv2-src">' + esc(d.src.short) + ' · ' + fdate(d.real) + '</span>' + ownTag(l) + '</div></button>';
+      (d.lost ? '<div class="pv2-k2l">' + d.lost.map(function (x) { return '<div>' + esc(x) + '</div>'; }).join('') + '</div>' : '<div class="pv2-k2">' + esc(d.ligne) + '</div>') + '<div class="pv2-k3"><span class="pv2-etp">' + esc(d.stageLabel) + '</span><span class="pv2-src">' + esc(d.src.short) + ' · ' + fdate(d.real) + '</span>' + ownTag(l) + '</div></button>';
   }
 
   /* Fiche courte : tiroir du pipeline, écran de la vue Rappels, carte de séance */
@@ -528,7 +556,7 @@
     var rb = d.upcoming || d.lastPast;
     h += '<div class="pv2-gt">Ce qu\'il faut savoir</div><div class="pv2-group">' +
       kv('Son problème', d.pb.text ? '<span class="pv2-q">« ' + esc(cut(d.pb.text, 220)) + ' »</span>' : 'Non renseigné') +
-      (rb ? kv('Son rendez-vous', esc(fdate(bookingStart(rb)) + ' avec ' + (rb.personName || '—') + ' · ' + bookingResult(rb).label.toLowerCase() + (rb.outcomeNote ? ' · « ' + cut(rb.outcomeNote, 120) + ' »' : ''))) : '') +
+      (d.lost ? kv('Son rendez-vous', d.lost.map(esc).join('<br>')) : rb ? kv('Son rendez-vous', esc(fdate(bookingStart(rb)) + ' avec ' + (rb.personName || '—') + ' · ' + bookingResult(rb).label.toLowerCase() + (rb.outcomeNote ? ' · « ' + cut(rb.outcomeNote, 120) + ' »' : ''))) : '') +
       kv('Arrivé par', esc(d.src.label + ' · ' + fdate(d.real))) +
       kv('Dernier échange', esc(lastExchange(l))) + '</div>';
     var nNotes = (l.notesHistory || []).length, f = feed(l).length;
@@ -536,10 +564,15 @@
       sub('hist', 'Historique', plural(f, 'événement') + ' · appels, messages, RDV, notes') +
       (l.quiz || (l.formAnswers && l.formAnswers.length) ? sub('pb', 'Problématique et quiz', l.quiz ? 'Quiz ' + (l.quiz.score_global != null ? l.quiz.score_global + '/100' : '') + (l.quiz.reponses ? ' · ' + plural(l.quiz.reponses.length, 'réponse') : '') : plural(l.formAnswers.length, 'réponse au formulaire', 'réponses au formulaire')) : '') +
       sub('notes', 'Notes de l\'équipe', nNotes ? plural(nNotes, 'note') : 'Aucune note') +
-      sub('etape', 'Étape', fam(d.fam).t + ' · ' + d.stageLabel) +
+      sub('etape', 'Étape', colDef(d.col).t + (d.stageLabel !== colDef(d.col).t ? ' · ' + d.stageLabel : '')) +
       sub('infos', 'Infos', 'Coordonnées, suivi, tags') +
-      '<button class="pv2-row" data-a="full" data-v="' + esc(l.id) + '"><span class="pv2-tile">' + ic('expand') + '</span><div class="pv2-tx"><div class="pv2-tt">Fiche complète</div><div class="pv2-st">Tout le dossier sur une page</div></div><span class="pv2-chev">' + ic('chev') + '</span></button></div>';
+      '<button class="pv2-row" data-a="full" data-v="' + esc(l.id) + '"><span class="pv2-tile">' + ic('expand') + '</span><div class="pv2-tx"><div class="pv2-tt">Fiche complète</div><div class="pv2-st">Tout le dossier sur une page</div></div><span class="pv2-chev">' + ic('chev') + '</span></button>' +
+      llRow(l) + '</div>';
     return h;
+  }
+  /* Même fiche, ouverte dans Leads Live (nouvel onglet) */
+  function llRow(l) {
+    return '<button class="pv2-row" data-a="ll" data-v="' + esc(l.id) + '"><span class="pv2-tile">' + ic('bolt') + '</span><div class="pv2-tx"><div class="pv2-tt">Ouvrir dans Leads Live</div><div class="pv2-st">La même fiche, côté setters</div></div><span class="pv2-chev">' + ic('chev') + '</span></button>';
   }
   function lastExchange(l) {
     var it = feed(l).filter(function (x) { return x.k === 'phone' || x.k === 'sms' || x.k === 'wa' || x.k === 'mail'; })[0];
@@ -566,10 +599,7 @@
       return h;
     }
     if (s === 'etape') {
-      return '<h2 class="pv2-name">Étape</h2>' + top + FAMS.map(function (f) {
-        return '<div class="pv2-gt">' + f.t + '</div><div class="pv2-group">' + f.st.map(function (x) {
-          return '<button class="pv2-row" data-a="setstage" data-v="' + x + '" aria-current="' + (d.stage === x) + '"><div class="pv2-tx">' + esc(STAGE_LABEL[x]) + '</div>' + (d.stage === x ? '<span class="pv2-check">✓</span>' : '') + '</button>'; }).join('') + '</div>';
-      }).join('');
+      return '<h2 class="pv2-name">Étape</h2>' + top + stageRows(d.stage, false);
     }
     h = '<h2 class="pv2-name">Infos</h2>' + top + '<div class="pv2-group" style="margin-top:16px">' +
       kv('Téléphone', '<span style="user-select:all">' + esc(l.telephone || '—') + '</span>') + kv('E-mail', '<span style="user-select:all">' + esc(l.email || '—') + '</span>') +
@@ -634,7 +664,7 @@
       if (l._merged) return false;
       var d = derive(l);
       if (d.fam !== id) return false;
-      if (!sansStatut && !stageOk(d, id)) return false;
+      if (!sansStatut && !keyOk(d)) return false;
       if (S.mine && l.assignedTo !== H.me.slug) return false;
       return okPeriod(d);
     }).sort(function (a, b) { var da = derive(a).days, db = derive(b).days; return (db == null ? 1e9 : db) - (da == null ? 1e9 : da); });
@@ -648,7 +678,7 @@
       h += '<div class="pv2-gt">Ou</div><div class="pv2-group"><button class="pv2-row" data-a="view" data-v="pipe"><span class="pv2-tile">' + ic('search') + '</span><div class="pv2-tx"><div class="pv2-tt">Voir tout le pipeline</div><div class="pv2-st">Tous les leads, par étape</div></div><span class="pv2-chev">' + ic('chev') + '</span></button></div>';
     } else if (c.s === 'list') {
       var b = basketById(c.bk), grp = basketGroups(c.bk), g = grp.g, ord = grp.ord, rows = grp.flat;
-      h += '<div class="pv2-bar"><button class="pv2-back" data-a="rback">' + ic('back') + 'Rappels</button></div><h2 class="pv2-name">' + b.t + '</h2><p class="pv2-lead">' + b.s + '. Rangés par mois d\'arrivée, les plus oubliés en tête de chaque mois.</p>' + rapPills() + subChips(fam(c.bk).st, countStages(basketLeads(c.bk, true)));
+      h += '<div class="pv2-bar"><button class="pv2-back" data-a="rback">' + ic('back') + 'Rappels</button></div><h2 class="pv2-name">' + b.t + '</h2><p class="pv2-lead">' + b.s + '. Rangés par mois d\'arrivée, les plus oubliés en tête de chaque mois.</p>' + rapPills() + chips(basketKeys(b), countKeys(basketLeads(c.bk, true)));
       h += '<div style="margin-top:14px"><button class="pv2-big pv2-blue" data-a="sess" data-v="' + c.bk + '"' + (rows.length ? '' : ' disabled') + '>' + ic('play') + 'Les rappeler un par un (' + rows.length + ')</button></div>';
       if (!rows.length) h += '<p class="pv2-muted" style="margin-top:18px">Personne dans ce panier avec ces réglages.</p>';
       ord.forEach(function (m) {
@@ -687,16 +717,18 @@
       [['tout', 'Arrivés : tout'], ['3m', '3 mois'], ['6m', '6 mois'], ['an', 'Cette année'], ['an1', 'L\'an dernier']].map(function (p) {
         return '<button class="pv2-pill" data-a="per" data-v="' + p[0] + '" aria-pressed="' + (S.per === p[0]) + '">' + p[1] + '</button>'; }).join('') + '</div>';
   }
+  function basketKeys(b) { var k = []; b.cols.forEach(function (c) { var sk = subKeys(colDef(c)); k = k.concat(sk.length ? sk : [c]); }); return k; }
   function basketById(id) { for (var i = 0; i < BASKETS.length; i++) if (BASKETS[i].id === id) return BASKETS[i]; return BASKETS[0]; }
 
   /* Fiche complète */
   function fullView(l) {
     var d = derive(l), fi = -1;
-    for (var i = 0; i < FAMS.length; i++) if (FAMS[i].id === d.fam) fi = i;
+    for (var i = 0; i < COLS.length; i++) if (COLS[i].id === d.col) fi = i;
     var h = '<div class="pv2-full"><div class="pv2-bar"><button class="pv2-back" data-a="fclose">' + ic('back') + 'Retour</button></div><div class="pv2-fgrid"><aside class="pv2-fleft">';
     h += '<div class="pv2-idt"><div class="pv2-av">' + esc(ini(l.nom)) + '</div><div style="min-width:0"><h2 class="pv2-name" style="font-size:25px">' + esc(l.nom) + '</h2><div class="pv2-who">' + esc([l.secteur, l.ca].filter(Boolean).join(' · ') || 'Secteur non renseigné') + '</div><span class="pv2-badge">' + (d.fam === 'client' ? 'Closing' : d.fam === 'ecarte' ? 'Disqualifié' : 'Lead') + '</span></div></div>' + ownerHTML(l);
-    h += '<div class="pv2-steps" title="Étape">' + FAMS.map(function (f, i) { return '<i class="' + (i === fi ? 'pv2-on' : (i < fi && fi < 4 ? 'pv2-past' : '')) + '"></i>'; }).join('') + '</div>' +
-      '<div class="pv2-stepl"><b>' + fam(d.fam).t + '</b> · ' + esc(d.stageLabel) + ' · <button class="pv2-lk" style="padding:0" data-a="fstage">changer</button></div>';
+    h += '<div class="pv2-steps" title="Étape">' + COLS.map(function (f, i) { return '<i class="' + (i === fi ? 'pv2-on' : (i < fi && d.fam !== 'ecarte' ? 'pv2-past' : '')) + '"></i>'; }).join('') + '</div>' +
+      '<div class="pv2-stepl"><b>' + esc(colDef(d.col).t) + '</b>' + (d.stageLabel !== colDef(d.col).t ? ' · ' + esc(d.stageLabel) : '') + ' · <button class="pv2-lk" style="padding:0" data-a="fstage">changer</button></div>';
+    if (d.lost) h += '<div class="pv2-pane pv2-lostp">' + d.lost.map(function (x) { return '<div>' + esc(x) + '</div>'; }).join('') + '</div>';
     h += '<div class="pv2-status">' + esc(d.situ) + '<small class="pv2-' + d.ctone + '">→ ' + esc(d.conseil) + '</small></div>';
     h += '<button class="pv2-big" data-a="call" data-v="' + esc(l.id) + '"' + (l.telephone ? '' : ' disabled') + '>' + ic('phone') + 'Appeler ' + esc(String(l.nom || '').split(' ')[0]) + '</button>';
     var stop = l.smsOptedOut || l.smsOptOut;
@@ -704,7 +736,7 @@
     h += '<div class="pv2-gt">Contact</div><div class="pv2-group">' + kv('Téléphone', '<span style="user-select:all">' + esc(l.telephone || '—') + '</span>') + kv('E-mail', '<span style="user-select:all">' + esc(l.email || '—') + '</span>') + kv('Instagram', l.instagramUsername ? '@' + esc(l.instagramUsername) : '—') + '</div>';
     h += '<div class="pv2-gt">Qui s\'en occupe</div><div class="pv2-group">' + kv('Setter d\'origine', esc(l.setterName || (l.setterSlug ? memberName(l.setterSlug) : '—')) + (l.setterSlug ? ' · ne change jamais' : '')) + kv('Closer', esc(l.closeur || (d.bookings.length ? d.bookings[d.bookings.length - 1].personName : '') || '—')) + '</div>';
     h += '<div class="pv2-gt">Tags</div>' + tagsHTML(l);
-    h += '<div class="pv2-group" style="margin-top:18px"><button class="pv2-row" data-a="bump"><span class="pv2-tile">' + ic('up') + '</span><div class="pv2-tx"><div class="pv2-tt">Remonter dans Leads Live</div><div class="pv2-st">Le remet en tête de liste des setters</div></div></button></div>';
+    h += '<div class="pv2-group" style="margin-top:18px">' + llRow(l) + '<button class="pv2-row" data-a="bump"><span class="pv2-tile">' + ic('up') + '</span><div class="pv2-tx"><div class="pv2-tt">Remonter dans Leads Live</div><div class="pv2-st">Le remet en tête de liste des setters</div></div></button></div>';
     h += '</aside><main style="min-width:0">';
     var tabs = [['fil', 'Fil complet'], ['pb', 'Problématique'], ['rdv', 'Rendez-vous (' + d.bookings.length + ')'], ['ia', 'Résumé IA'], ['contrat', 'Contrat et paiements'], ['rappels', 'Rappels et tâches'], ['fichiers', 'Fichiers'], ['champs', 'Tous les champs']];
     h += '<div class="pv2-tabs" role="tablist">' + tabs.map(function (t) { return '<button data-a="ft" data-v="' + t[0] + '" aria-pressed="' + (S.ft === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>';
@@ -795,17 +827,20 @@
         selF('last', 'Dernier contact', [['', 'Peu importe'], ['7', 'Il y a plus de 7 jours'], ['30', 'Il y a plus de 30 jours'], ['90', 'Il y a plus de 3 mois']]) +
         '<button class="pv2-big pv2-blue" data-a="applyf">Voir les leads</button>';
     } else if (sh.k === 'move') {
-      /* sh.to : famille visée (glisser-déposer) ; absent = toutes les étapes (bouton « changer ») */
-      var cur = l.stage || 'lead', fl = sh.to ? [fam(sh.to)] : FAMS;
-      h += '<h2>' + esc(l.nom) + (sh.to ? ' → ' + fam(sh.to).t : '') + '</h2><p>' + (sh.to ? 'Quelle étape précise ?' : 'Choisir la nouvelle étape') + '</p>' + fl.map(function (f) {
-        return (sh.to ? '' : '<div class="pv2-gt">' + f.t + '</div>') + '<div class="pv2-group">' + f.st.map(function (x) {
-          return '<button class="pv2-row" data-a="setstage" data-v="' + x + '"><div class="pv2-tx">' + esc(STAGE_LABEL[x]) + '</div>' + (x === cur ? '<span class="pv2-check">✓</span>' : '<span class="pv2-chev">' + ic('chev') + '</span>') + '</button>'; }).join('') + '</div>';
-      }).join('');
+      /* sh.to : colonne visée (glisser-déposer) ; absent = toutes les étapes (bouton « changer ») */
+      h += '<h2>' + esc(l.nom) + (sh.to ? ' → ' + esc(colDef(sh.to).t) : '') + '</h2><p>' + (sh.to ? 'Quelle étape précise ?' : 'Choisir la nouvelle étape') + '</p>' + stageRows(l.stage || 'lead', true, sh.to);
+    } else if (sh.k === 'lost') {
+      /* Dernière colonne : on enregistre le résultat du RDV, avec qui et pourquoi */
+      var dl = derive(l), tb = lostTarget(dl);
+      h += '<h2>' + esc(l.nom) + ' → No show / Annulé / Closed Lost</h2><p>' + (tb ? 'RDV du ' + esc(fdateL(bookingStart(tb)) + ' à ' + fhour(bookingStart(tb)) + (tb.personName ? ' avec ' + tb.personName : '')) + ' · ' + (E.sbOf(tb) ? 'SB (pris par le prospect)' : 'NB (posé par l\'équipe)') : 'Aucun RDV retrouvé : seule l\'étape changera, le motif part en note.') + '</p><div class="pv2-group">' + LOST.map(function (x) {
+        return '<button class="pv2-row" data-a="lostpick" data-v="' + x.id + '"' + (sh.pick === x.id ? ' aria-current="true"' : '') + '><div class="pv2-tx"><div class="pv2-tt">' + x.t + '</div><div class="pv2-st">' + x.s + '</div></div>' + (sh.pick === x.id ? '<span class="pv2-check">✓</span>' : '') + '</button>'; }).join('') + '</div>' +
+        '<label for="pv2lostwhy">Motif' + (sh.pick && lostDef(sh.pick).why ? ' (obligatoire)' : ' (facultatif)') + '</label><textarea id="pv2lostwhy" placeholder="Ex. : closer malade, RDV à replanifier">' + esc(sh.why || '') + '</textarea>' +
+        '<button class="pv2-big pv2-blue" data-a="lostsave"' + (sh.pick ? '' : ' disabled') + '>Enregistrer</button>';
     } else if (sh.k === 'result') {
       h += '<h2>Comment s\'est passé l\'appel ?</h2><p>' + esc(l.nom) + '</p><div class="pv2-group">' + [['answered', 'Décroché'], ['noanswer', 'NRP (pas de réponse)'], ['voicemail', 'Messagerie'], ['wrong', 'Faux numéro']].map(function (x) {
         return '<button class="pv2-row" data-a="res" data-v="' + x[0] + '"><div class="pv2-tx"><div class="pv2-tt">' + x[1] + '</div></div><span class="pv2-chev">' + ic('chev') + '</span></button>'; }).join('') + '</div><button class="pv2-soft" style="width:100%;margin-top:12px" data-a="sclose">Je n\'ai pas appelé</button>';
     } else if (sh.k === 'result2') {
-      h += '<h2>Et ensuite ?</h2><p>' + esc(l.nom) + ' a décroché.</p><div class="pv2-group">' + [['rdv', 'SET : un RDV est posé'], ['fu', 'Follow Up : à rappeler'], ['nope', 'Pas intéressé'], ['none', 'Rien de plus']].map(function (x) {
+      h += '<h2>Et ensuite ?</h2><p>' + esc(l.nom) + ' a décroché.</p><div class="pv2-group">' + [['rdv', 'SET : un RDV est posé'], ['fu', 'FU : à rappeler'], ['nope', 'Disqualifié'], ['trash', 'Poubelle']].map(function (x) {
         return '<button class="pv2-row" data-a="res2" data-v="' + x[0] + '"><div class="pv2-tx"><div class="pv2-tt">' + x[1] + '</div></div><span class="pv2-chev">' + ic('chev') + '</span></button>'; }).join('') + '</div>';
     } else if (sh.k === 'fu') {
       h += '<h2>Programmer un rappel</h2><p>' + esc(l.nom) + '</p><div class="pv2-group">' + [['d1', 'Demain à 10 h'], ['d3', 'Dans 3 jours à 10 h'], ['w1', 'Dans une semaine à 10 h'], ['m1', 'Dans un mois à 10 h']].map(function (x) {
@@ -818,12 +853,11 @@
     } else if (sh.k === 'tag') {
       h += '<h2>Ajouter un tag</h2><p>' + esc(l.nom) + '</p><input id="pv2tag" placeholder="Ex. : Associé, Budget OK"><button class="pv2-big pv2-blue" data-a="tagsave">Ajouter</button>';
     } else if (sh.k === 'stages') {
-      var cs = countStages(filtered(true));
-      h += '<h2>Statut précis</h2><p>Coche un ou plusieurs statuts. Les chiffres tiennent compte des autres filtres.</p>' + FAMS.map(function (f) {
-        return '<div class="pv2-gt">' + f.t + '</div><div class="pv2-group">' + f.st.map(function (x) {
-          var on = S.stages.indexOf(x) > -1;
-          return '<button class="pv2-row" data-a="stg" data-v="' + x + '" aria-pressed="' + on + '"><div class="pv2-tx"><div class="pv2-tt" style="font-size:15.5px">' + esc(STAGE_LABEL[x]) + '</div></div><span class="pv2-cnt">' + (cs[x] || 0) + '</span><span class="pv2-box' + (on ? ' pv2-on' : '') + '">' + (on ? '✓' : '') + '</span></button>'; }).join('') + '</div>';
-      }).join('') + '<button class="pv2-big pv2-blue" data-a="sclose">Voir les leads</button>' + (S.stages.length ? '<button class="pv2-soft" style="width:100%;margin-top:10px" data-a="stgclear">Tous les statuts</button>' : '');
+      var cs = countKeys(filtered(true));
+      h += '<h2>Étape</h2><p>Coche une ou plusieurs étapes. Les chiffres tiennent compte des autres filtres. C\'est la même liste que dans Leads Live.</p><div class="pv2-group">' + E.options().map(function (o) {
+        var on = S.keys.indexOf(o.key) > -1;
+        return '<button class="pv2-row' + (o.sub ? ' pv2-row-sub' : '') + '" data-a="stg" data-v="' + esc(o.key) + '" aria-pressed="' + on + '"><div class="pv2-tx"><div class="pv2-tt" style="font-size:' + (o.sub ? '14.5' : '15.5') + 'px">' + esc(o.label) + '</div></div><span class="pv2-cnt">' + (cs[o.key] || 0) + '</span><span class="pv2-box' + (on ? ' pv2-on' : '') + '">' + (on ? '✓' : '') + '</span></button>'; }).join('') + '</div>' +
+        '<button class="pv2-big pv2-blue" data-a="sclose">Voir les leads</button>' + (S.keys.length ? '<button class="pv2-soft" style="width:100%;margin-top:10px" data-a="stgclear">Toutes les étapes</button>' : '');
     } else if (sh.k === 'ask') {
       var dd = derive(l), ok = canTake(l), quand = dd.days == null ? 'jamais contacté' : dd.days === 0 ? 'contacté aujourd\'hui' : 'contacté il y a ' + plural(dd.days, 'jour');
       h += '<h2>Ce lead est suivi par ' + esc(dd.who) + '</h2><p>' + esc(l.nom) + ' · ' + quand + '. ' + (ok ? 'Tu veux le prendre ?' : 'Seul un admin peut le réattribuer avant ' + TAKE_DAYS + ' jours sans contact.') + '</p>' +
@@ -837,11 +871,46 @@
         (sh.kept ? ' ' + plural(sh.kept, 'lead contacté', 'leads contactés') + ' il y a moins de ' + TAKE_DAYS + ' jours ' + (sh.kept > 1 ? 'restent' : 'reste') + ' à ' + esc(memberName(S.who)) + '.' : '') + '</p>' +
         '<button class="pv2-big pv2-blue" data-a="bulkyes">Oui, je les prends</button><button class="pv2-soft" style="width:100%;margin-top:10px" data-a="sclose">Annuler</button>';
     } else if (sh.k === 'new') {
-      h += '<h2>Nouveau lead</h2><p>Il arrive dans « Nouveau / NRP ».</p><label for="pv2nn">Nom et prénom</label><input id="pv2nn"><label for="pv2nt">Téléphone</label><input id="pv2nt" inputmode="tel"><label for="pv2ne">E-mail</label><input id="pv2ne" inputmode="email"><button class="pv2-big pv2-blue" data-a="newsave">Créer le lead</button>';
+      h += '<h2>Nouveau lead</h2><p>Il arrive dans la colonne « Lead ».</p><label for="pv2nn">Nom et prénom</label><input id="pv2nn"><label for="pv2nt">Téléphone</label><input id="pv2nt" inputmode="tel"><label for="pv2ne">E-mail</label><input id="pv2ne" inputmode="email"><button class="pv2-big pv2-blue" data-a="newsave">Créer le lead</button>';
     }
     return h + '</div>';
   }
   function selF(k, lb, opts) { return '<label for="pv2f-' + k + '">' + lb + '</label><select id="pv2f-' + k + '">' + opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (S.f[k] === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select>'; }
+
+  /* Liste des étapes à choisir. La colonne Self booking n'en fait pas partie :
+     seul le prospect y entre, en réservant lui-même. La dernière colonne passe
+     par la fenêtre « RDV raté » (qui, quand, pourquoi). */
+  function stageRows(cur, chev, only) {
+    return COLS.filter(function (f) { return only ? f.id === only : f.id !== 'sb'; }).map(function (f) {
+      var rows = f.id === 'perdu'
+        ? '<button class="pv2-row" data-a="lost"><div class="pv2-tx"><div class="pv2-tt">' + esc(f.t) + '…</div><div class="pv2-st">Annulé, non honoré, no show, FU closing, Closed Lost</div></div>' + (LOST_STAGES[cur] ? '<span class="pv2-check">✓</span>' : '<span class="pv2-chev">' + ic('chev') + '</span>') + '</button>'
+        : f.st.map(function (x) {
+          return '<button class="pv2-row" data-a="setstage" data-v="' + x + '" aria-current="' + (x === cur) + '"><div class="pv2-tx">' + esc(STAGE_LABEL[x]) + '</div>' + (x === cur ? '<span class="pv2-check">✓</span>' : chev ? '<span class="pv2-chev">' + ic('chev') + '</span>' : '') + '</button>'; }).join('');
+      return (only ? '' : '<div class="pv2-gt">' + esc(f.t) + '</div>') + '<div class="pv2-group">' + rows + '</div>';
+    }).join('');
+  }
+  /* Résultats possibles d'un RDV raté (dernière colonne) */
+  var LOST = [
+    { id: 'annule_prospect', t: 'Annulé par le prospect', s: 'Il a annulé ou demandé à décaler', outcome: 'annule', origin: 'prospect' },
+    { id: 'annule_equipe', t: 'Annulé par l\'équipe', s: 'On a annulé de notre côté', outcome: 'annule', origin: 'equipe', why: true },
+    { id: 'non_honore', t: 'Non honoré par l\'équipe', s: 'Personne de chez nous ne s\'est présenté', outcome: 'annule', origin: 'equipe', kind: 'non_honore', why: true },
+    { id: 'no_show', t: 'No show', s: 'Le prospect n\'est pas venu', outcome: 'no_show' },
+    { id: 'fu_closing', t: 'FU closing', s: 'RDV tenu, pas signé, on le relance (offre, 2ᵉ RDV)', outcome: 'offre' },
+    { id: 'closed_lost', t: 'Closed Lost', s: 'RDV tenu, il a dit non', outcome: 'non_close' }
+  ];
+  function lostDef(id) { for (var i = 0; i < LOST.length; i++) if (LOST[i].id === id) return LOST[i]; return LOST[0]; }
+  /* RDV visé : celui à venir, sinon le dernier sans résultat, sinon le dernier passé */
+  function lostTarget(d) {
+    if (d.upcoming) return d.upcoming;
+    var bs = d.bookings.filter(function (b) { return b.outcome !== 'replanifie'; });
+    for (var i = bs.length - 1; i >= 0; i--) if (!bs[i].outcome && !isCancelled(bs[i]) && bs[i].status !== 'no_show') return bs[i];
+    return d.lastPast;
+  }
+  /* Sans RDV retrouvé : l'étape équivalente, le motif part en note */
+  function lostStage(x, l) {
+    var sb = (l.type === 'self_booking');
+    return { annule_prospect: 'rdv_annules_prospect', annule_equipe: 'rdv_annules_equipe', non_honore: 'rdv_annules_equipe', no_show: sb ? 'no_show_self' : 'no_show_setting', fu_closing: 'follow_up_closing', closed_lost: 'closed_lost' }[x.id];
+  }
 
   /* ═══ 6. Rendu global ═══ */
   function render(keepScroll) {
@@ -878,13 +947,14 @@
     else if (!S.full && S.view === 'rap' && S.rap.length > 1 && S.rap[S.rap.length - 1].s === 'etape') S.rap.pop();
   }
   function moveTo(l, stage) {
-    if (FAM_OF[stage] === 'client') { S.sheet = null; render(); H.openClose(l); return; }
+    if (E.COL_OF_STAGE[stage] === 'closing') { S.sheet = null; render(); H.openClose(l); return; }
+    if (LOST_STAGES[stage]) { S.sheet = { k: 'lost', id: l.id }; render(true); return; }
     S.sheet = null; popAfterWrite();
     H.setStage(l, stage, done(l.nom + ' → ' + STAGE_LABEL[stage]));
   }
-  function savePrefs() { try { H.pref('state', JSON.stringify({ view: S.view, per: S.per, sort: S.sort, fold: S.fold, mine: S.mine, dark: S.dark })); } catch (e) {} }
+  function savePrefs() { try { H.pref('state2', JSON.stringify({ view: S.view, per: S.per, sort: S.sort, fold: S.fold, mine: S.mine, dark: S.dark })); } catch (e) {} }
   function loadPrefs() {
-    try { var p = JSON.parse(H.pref('state') || 'null'); if (p) { S.view = p.view || S.view; S.per = p.per || S.per; S.sort = p.sort || S.sort; S.fold = p.fold || S.fold; S.mine = !!p.mine; S.dark = !!p.dark; } } catch (e) {}
+    try { var p = JSON.parse(H.pref('state2') || 'null'); if (p) { S.view = p.view || S.view; S.per = p.per || S.per; S.sort = p.sort || S.sort; S.fold = p.fold || S.fold; S.mine = !!p.mine; S.dark = !!p.dark; } } catch (e) {}
   }
   function applyTheme() { ROOT.className = 'pv2' + (S.dark ? ' pv2-dark' : ''); document.documentElement.style.background = S.dark ? '#07080f' : '#eceff8'; }
   function fuDate(q) {
@@ -916,7 +986,7 @@
       case 'per': S.per = v; savePrefs(); render(); break;
       case 'mine': S.mine = !S.mine; savePrefs(); render(); break;
       case 'clearq': S.q = ''; render(); break;
-      case 'reset': S.q = ''; S.per = 'tout'; S.who = null; S.stages = []; S.f = { src: '', pb: '', par: '', last: '' }; savePrefs(); render(); break;
+      case 'reset': S.q = ''; S.per = 'tout'; S.who = null; S.keys = []; S.f = { src: '', pb: '', par: '', last: '' }; savePrefs(); render(); break;
       case 'filters': S.sheet = { k: 'filters' }; render(); break;
       case 'applyf': ['src', 'pb', 'par', 'last'].forEach(function (k) { S.f[k] = val('pv2f-' + k); }); S.sheet = null; render(); break;
       case 'fold': S.fold[v] = true; savePrefs(); render(); break;
@@ -949,8 +1019,8 @@
         S.sheet = null;
         H.logCall(l, { answered: false, result: res }, function (err) {
           if (err) return done()(err);
-          var nx = v === 'wrong' ? 'faux_numero' : NRP_NEXT[l.stage || 'lead'];
-          if (nx) H.setStage(l, nx, done('Appel noté : ' + res + ' · ' + STAGE_LABEL[nx])); else done('Appel noté : ' + res)();
+          var cst = l.stage || 'lead', nx = v === 'wrong' ? 'faux_numero' : (NRP_STAGES[cst] ? E.NEXT_NRP[cst] : null);
+          if (nx && nx !== cst) H.setStage(l, nx, done('Appel noté : ' + res + ' · ' + STAGE_LABEL[nx])); else done('Appel noté : ' + res)();
         });
         break;
       case 'res2':
@@ -958,6 +1028,7 @@
         if (v === 'rdv') { S.sheet = null; render(true); H.openBooking(l); }
         else if (v === 'fu') { S.sheet = { k: 'fu', id: l.id, q: 'd3' }; render(true); }
         else if (v === 'nope') { S.sheet = null; H.setStage(l, 'disqualification', done(l.nom + ' → Disqualifié')); }
+        else if (v === 'trash') { S.sheet = null; H.setStage(l, 'poubelle', done(l.nom + ' → Poubelle')); }
         else { S.sheet = null; render(true); }
         break;
       case 'msg': l = lead(curLeadId()); S.sheet = { k: 'msg', id: l.id, ch: v }; render(true); setTimeout(function () { var m = document.getElementById('pv2msg'); if (m) m.focus(); }, 30); break;
@@ -967,8 +1038,13 @@
       case 'fusave':
         l = lead(S.sheet.id); var dt = val('pv2fudt'), when = dt ? new Date(dt) : fuDate(S.sheet.q || 'd1');
         if (isNaN(when.getTime())) { toast('Date invalide'); break; }
-        var note = val('pv2funote'); S.sheet = null;
-        H.addFollowUp(l, { dateTime: localIso(when), note: note }, done('Rappel prévu ' + frel(when.getTime())));
+        var note = val('pv2funote'), toFu = S.sheet.toFu; S.sheet = null;
+        H.addFollowUp(l, { dateTime: localIso(when), note: note }, function (err) {
+          if (err) { done()(err); return; }
+          /* Glissé dans la colonne FU depuis une étape hors Lead / NRP : l'hôte ne bouge que les Lead / NRP */
+          if (toFu && (l.stage || 'lead') !== 'follow_up_pm') H.setStage(l, 'follow_up_pm', done(l.nom + ' → FU · rappel ' + frel(when.getTime())));
+          else done('Rappel prévu ' + frel(when.getTime()))();
+        });
         break;
       case 'rdv': l = lead(curLeadId()); H.openBooking(l); break;
       case 'addnote': l = lead(curLeadId()); var nt = val('pv2note'); if (!nt) { toast('La note est vide'); break; } H.addNote(l, nt, done('Note ajoutée')); break;
@@ -988,8 +1064,18 @@
         S.sheet = null; H.createLead({ nom: nn, telephone: val('pv2nt'), email: val('pv2ne') }, done('Lead créé'));
         break;
       case 'sclose': S.sheet = null; render(true); break;
-      case 'stg': var ix = S.stages.indexOf(v); if (ix > -1) S.stages.splice(ix, 1); else S.stages.push(v); render(true); break;
-      case 'stgclear': S.stages = []; render(true); break;
+      case 'stg': var ix = S.keys.indexOf(v); if (ix > -1) S.keys.splice(ix, 1); else S.keys.push(v); render(true); break;
+      case 'stgclear': S.keys = []; render(true); break;
+      case 'll': l = lead(v || curLeadId()); if (l) H.openLeadsLive(l); break;
+      case 'lost': l = lead(curLeadId()); S.sheet = { k: 'lost', id: l.id }; render(true); break;
+      case 'lostpick': S.sheet.pick = v; S.sheet.why = val('pv2lostwhy'); render(true); break;
+      case 'lostsave':
+        p = S.sheet; l = lead(p.id); var lx = lostDef(p.pick), why = val('pv2lostwhy'), tb = lostTarget(derive(l));
+        if (lx.why && !why) { toast('Le motif est obligatoire quand l\'équipe est en cause'); break; }
+        S.sheet = null; popAfterWrite();
+        if (tb) H.setOutcome(l, tb, lx.outcome, { origin: lx.origin || null, kind: lx.kind || null, note: why }, done(l.nom + ' → ' + lx.t));
+        else H.setStage(l, lostStage(lx, l), function (err) { if (err || !why) { done(l.nom + ' → ' + lx.t)(err); return; } H.addNote(l, lx.t + ' : ' + why, done(l.nom + ' → ' + lx.t)); });
+        break;
       case 'stages': S.sheet = { k: 'stages' }; render(true); break;
       case 'take': l = lead(curLeadId()); H.setAssigned(l, H.me.slug, done('Tu suis maintenant ' + l.nom)); break;
       case 'assignto': S.sheet = { k: 'assign', id: curLeadId() }; render(true); break;
@@ -1037,9 +1123,13 @@
   function onDrop(e) {
     var col = e.target.closest && e.target.closest('[data-col]'); if (!col || !S.drag) return;
     e.preventDefault(); var to = col.getAttribute('data-col'), l = lead(S.drag); S.drag = null; clearOver();
-    if (!l || derive(l).fam === to) { render(); return; }
-    if (to === 'client') { render(); H.openClose(l); return; }
-    var f = fam(to);
+    if (!l || derive(l).col === to) { render(); return; }
+    if (to === 'closing') { render(); H.openClose(l); return; }
+    if (to === 'sb') { render(); toast('Seul le prospect entre en Self booking, en réservant lui-même'); return; }
+    if (to === 'set') { render(); H.openBooking(l); return; }
+    if (to === 'perdu') { S.sheet = { k: 'lost', id: l.id }; render(); return; }
+    if (to === 'fu') { S.sheet = { k: 'fu', id: l.id, q: 'd1', toFu: true }; render(); return; }
+    var f = colDef(to);
     if (f.st.length === 1) { moveTo(l, f.st[0]); return; }
     S.sheet = { k: 'move', id: l.id, to: to }; render();
   }
@@ -1067,7 +1157,7 @@
   window.PipelineV2 = {
     start: start, refresh: refresh,
     canTake: function (l) { return canTake(l); }, toast: function (m) { if (TOAST) toast(m); },
-    FAMS: FAMS, STAGE_LABEL: STAGE_LABEL,
+    COLS: COLS, STAGE_LABEL: STAGE_LABEL,
     /* exposés pour les tests */
     _derive: derive, _feed: feed, _toMs: toMs
   };

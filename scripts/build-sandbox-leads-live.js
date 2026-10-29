@@ -31,7 +31,9 @@ function construire() {
     trouves++;
     if (!premier) return '';
     premier = false;
-    return '<script src="sandbox-leads-live-db.js"></script>\n<script src="sandbox-leads-live-api.js"></script>\n';
+    /* sandbox-pipeline-data.js d'abord : ses faux leads sont versés dans la
+       base partagée avec le Labo Pipeline (29/10/2026). */
+    return '<script src="sandbox-pipeline-data.js"></script>\n<script src="sandbox-leads-live-db.js"></script>\n<script src="sandbox-leads-live-api.js"></script>\n';
   });
   if (!trouves) throw new Error('Scripts Firebase introuvables dans sales-leads.html');
   if (/gstatic\.com\/firebasejs/.test(html)) throw new Error('Un script Firebase réel subsiste');

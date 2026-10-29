@@ -196,12 +196,17 @@
   function cancellationBlock(o) {
     o = o || {};
     var m = o.member || me() || {};
-    return {
+    var blk = {
       origin: CANCEL_ORIGINS[o.origin] ? o.origin : null,
       by: m.uid || null, byName: m.name || null, byRole: m.role || null,
       via: o.via || null, reason: o.reason || null,
       at: new Date().toISOString()
     };
+    /* 29/10/2026 : « RDV non honoré par l'équipe » (personne de chez nous au
+       RDV) = annulation côté équipe + ce marqueur. Le stage reste
+       rdv_annules_equipe ; le Pipeline et Leads Live en font un sous-filtre. */
+    if (o.kind === 'non_honore' && blk.origin === 'equipe') blk.kind = 'non_honore';
+    return blk;
   }
   /* Lecture normalisée : bloc récent, sinon champs historiques. Pour un RDV
      statué « annule » par la modale, l'auteur et l'heure sont ceux du
@@ -221,6 +226,7 @@
       byRole: (c && c.byRole) || null,
       via: (c && c.via) || b.cancelledReason || null,
       reason: (c && c.reason) || (viaOutcome ? b.outcomeNote : null) || null,
+      kind: (c && c.kind) || null,
       at: at
     };
   }
@@ -228,7 +234,8 @@
     var i = cancellationInfo(b);
     if (!i) return '';
     var parts = [];
-    if (i.origin === 'equipe') parts.push('Annulé par l’équipe');
+    if (i.kind === 'non_honore') parts.push('RDV non honoré par l’équipe');
+    else if (i.origin === 'equipe') parts.push('Annulé par l’équipe');
     else if (i.origin === 'prospect') parts.push('Annulé par le prospect');
     else if (i.origin === 'systeme') parts.push('Annulé · ' + (CANCEL_VIA_LABELS[i.via] || 'système'));
     else parts.push('Annulé · origine non renseignée');
@@ -638,7 +645,7 @@
       if (opts.rescheduledToId) patch.rescheduledToId = opts.rescheduledToId;
     }
     if (outcome === 'annule' && opts.cancelledBy) patch.cancelledOrigin = opts.cancelledBy; // 'prospect' | 'equipe'
-    if (outcome === 'annule') patch.cancellation = cancellationBlock({ origin: opts.cancelledBy, via: opts.via || 'outcome_modal', reason: opts.note || null, member: m });
+    if (outcome === 'annule') patch.cancellation = cancellationBlock({ origin: opts.cancelledBy, kind: opts.cancelKind || null, via: opts.via || 'outcome_modal', reason: opts.note || null, member: m });
     if (outcome === 'replanifie') patch.cancellation = cancellationBlock({ origin: 'systeme', via: 'reschedule', reason: opts.note || null, member: m });
     if (outcome === 'close' && opts.closeData) {
       var cd = opts.closeData;
@@ -715,7 +722,7 @@
     var tlColor = o.color;
     var tlLabel = o.label;
     if (outcome === 'annule') {
-      tlLabel = opts.cancelledBy === 'equipe' ? 'Annulé par l’équipe' : opts.cancelledBy === 'prospect' ? 'Annulé par le prospect' : 'Annulé';
+      tlLabel = opts.cancelKind === 'non_honore' && opts.cancelledBy === 'equipe' ? 'Non honoré par l’équipe' : opts.cancelledBy === 'equipe' ? 'Annulé par l’équipe' : opts.cancelledBy === 'prospect' ? 'Annulé par le prospect' : 'Annulé';
       tlLabel += ' · ' + (m.name || '?') + (m.role ? ' (' + roleLabelAny(m.role) + ')' : '');
     }
     var tlText = o.icon + ' RDV ' + when + ' → ' + tlLabel + (sb ? ' (Self Booking)' : ' (Setting NB)') + (opts.note ? ' — ' + opts.note : '');

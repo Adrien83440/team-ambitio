@@ -1,47 +1,18 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   sandbox-pipeline-data.js — LABO PIPELINE : faux leads + faux hôte
+   sandbox-pipeline-data.js — LABOS : faux leads du Pipeline (format réel)
    ─────────────────────────────────────────────────────────────────────────
-   Chargé UNIQUEMENT par sandbox-pipeline.html. Fournit à pipeline-v2.js
-   l'« hôte » qu'il attend, sur une base en mémoire :
-     - aucun Firebase, aucun appel réseau, aucun lien vers le vrai logiciel ;
-     - des leads fictifs AU FORMAT RÉEL de la collection `leads` et des
-       `bookings` (mêmes noms de champs), datés par rapport à aujourd'hui ;
-     - tout ce que le testeur fait (étapes, notes, rappels, messages…) est
-       gardé dans ce navigateur (clé « sbxpl:db_v1 ») et effacé par
-       « Réinitialiser ».
+   Depuis le 29/10/2026, ce fichier ne fait plus qu'une chose : fournir des
+   leads et des RDV fictifs AU FORMAT RÉEL des collections `leads` et
+   `bookings`, datés par rapport à aujourd'hui, via
+       window.SBX_PIPELINE_SEED() → { leads: [...], bookings: { leadId: [...] } }
+   Ils sont versés dans la fausse base PARTAGÉE des deux Labos
+   (sandbox-leads-live-db.js) : le Labo Pipeline et le Labo Leads Live
+   voient les mêmes leads, et ce qui bouge d'un côté bouge de l'autre.
+   Chargé AVANT sandbox-leads-live-db.js. Aucun réseau, aucun Firebase.
    ES5 strict.
    ═══════════════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
-  var KEY = 'sbxpl:db_v2', PREF = 'sbxpl:pref:';
-
-  /* ── Le testeur : prénom du compte Alteore ouvert sur ce navigateur (lecture seule) ── */
-  /* Équipe commerciale actuelle (en vrai : _meta/team_members, sales + admins
-     actifs). Élodie est partie le 10/10/2026 : elle reste connue pour
-     l'historique (notes, setter d'origine) mais n'apparaît plus dans les menus. */
-  var TEAM = [
-    { slug: 'anthony', name: 'Anthony', color: '#e0567a' },
-    { slug: 'claire', name: 'Claire', color: '#d97706' },
-    { slug: 'steven', name: 'Steven', color: '#3b82f6' },
-    { slug: 'valentin', name: 'Valentin', color: '#0d9488' },
-    { slug: 'vincent', name: 'Vincent', color: '#7c3aed' },
-    { slug: 'elodie', name: 'Élodie', color: '#9096ad', pipeline: false }
-  ];
-  var ME = { slug: 'vincent', name: 'Vincent', role: 'admin' };
-  try {
-    var brut = String(window.localStorage.getItem('ambitio_name') || '').replace(/[._-]+/g, ' ').trim().split(/\s+/)[0] || '';
-    if (brut && !/@/.test(brut) && brut.length > 1) {
-      var prenom = brut.charAt(0).toUpperCase() + brut.slice(1).toLowerCase(), norm = prenom.normalize ? prenom.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase() : prenom.toLowerCase();
-      ME = { slug: norm, name: prenom, role: 'admin' };
-      for (var i = 0; i < TEAM.length; i++) if (TEAM[i].slug === norm) ME = { slug: TEAM[i].slug, name: TEAM[i].name, role: 'admin' };
-    }
-  } catch (e) {}
-  /* Rôle : celui du compte ouvert, ou celui choisi avec le bouton du bandeau */
-  try {
-    var forced = window.localStorage.getItem('sbxpl:pref:role');
-    ME.role = forced || (window.localStorage.getItem('ambitio_role') === 'admin' ? 'admin' : 'sales');
-  } catch (e) {}
-
   /* ── Dates relatives à aujourd'hui ── */
   function at(days, h, m) { var d = new Date(); d.setDate(d.getDate() - days); d.setHours(h == null ? 10 : h, m || 0, 0, 0); return d; }
   function iso(days, h, m) { return at(days, h, m).toISOString(); }
@@ -205,6 +176,36 @@
     add({ id: 'sbx_antho3', nom: 'Kevin Marchetti', email: 'k.marchetti@exemple.fr', secteur: 'Pizzeria', ca: '32 k€/mois', createdAt: iso(5, 20), type: 'vsl_elite', source: 'webhook', stage: 'nrp1', assignedTo: 'anthony',
       defi: 'Je travaille 7 jours sur 7.', communications: [call(4, 11, 0, 'Anthony', 0)] });
 
+    /* ── Cas de la dernière colonne et des nouvelles règles (29/10/2026) ── */
+    add({ id: 'sbx_c_annsb', nom: 'Aurélien Masson', email: 'a.masson@exemple.fr', secteur: 'Couvreur', ca: '45 k€/mois', createdAt: iso(12, 21), type: 'self_booking', source: 'booking_direct', stage: 'rdv_annules_prospect', assignedTo: 'claire',
+      defi: 'Je n\'arrive pas à recruter.', communications: [call(3, 10, 0, 'Claire', 0)] },
+      [bk('bk_c_annsb', 4, '10:00', 'Vincent', { createdAt: iso(12, 21), source: 'self_booking', status: 'cancelled', cancellation: { origin: 'prospect', byName: 'Claire', byRole: 'closer_setter', reason: 'A écrit par SMS : chantier urgent, veut décaler à la semaine prochaine', at: iso(5, 18, 40), via: 'outcome_modal' } })]);
+    add({ id: 'sbx_c_anneq', nom: 'Delphine Carré', email: 'd.carre@exemple.fr', secteur: 'Crèche privée', ca: '70 k€/mois', createdAt: iso(9, 14), type: 'vsl_elite', source: 'webhook', stage: 'rdv_annules_equipe', assignedTo: 'steven', setterSlug: 'steven', setterName: 'Steven',
+      communications: [call(8, 11, 0, 'Steven', 420)] },
+      [bk('bk_c_anneq', 2, '16:00', 'Vincent', { createdAt: iso(8, 11, 10), bookedByName: 'Steven', bookedBySlug: 'steven', source: 'setter_booking', status: 'cancelled', cancellation: { origin: 'equipe', byName: 'Vincent', byRole: 'admin', reason: 'Closer en déplacement, à replanifier jeudi', at: iso(3, 9, 15), via: 'outcome_modal' } })]);
+    add({ id: 'sbx_c_nonhon', nom: 'Grégoire Lenoir', email: 'g.lenoir@exemple.fr', secteur: 'Agence de sécurité', ca: '95 k€/mois', createdAt: iso(6, 9), type: 'quiz_funnel', landingFirst: { page: 'quiz_elite' }, source: 'webhook', stage: 'rdv_annules_equipe', assignedTo: 'anthony', setterSlug: 'anthony', setterName: 'Anthony',
+      communications: [call(5, 10, 0, 'Anthony', 380), msg('sms', 1, 14, 20, 'inbound', 'Je vous ai attendu 20 minutes sur le Meet…', '')] },
+      [bk('bk_c_nonhon', 1, '14:00', 'Vincent', { createdAt: iso(5, 10, 10), bookedByName: 'Anthony', bookedBySlug: 'anthony', source: 'setter_booking', status: 'cancelled', cancellation: { origin: 'equipe', kind: 'non_honore', byName: 'Anthony', byRole: 'closer_setter', reason: 'Le closer n\'a pas rejoint le Meet (agenda mal synchronisé)', at: iso(1, 14, 30), via: 'outcome_modal' } })]);
+    add({ id: 'sbx_c_nssb', nom: 'Fatou Diallo', email: 'f.diallo@exemple.fr', secteur: 'Traiteur', ca: '28 k€/mois', createdAt: iso(10, 22), type: 'self_booking', source: 'booking_direct', stage: 'no_show_self', assignedTo: 'valentin' },
+      [bk('bk_c_nssb', 3, '11:30', 'Vincent', { createdAt: iso(10, 22), source: 'self_booking', status: 'no_show', outcome: 'no_show', outcomeByName: 'Vincent', outcomeAt: iso(3, 11, 50), outcomeNote: 'Pas connecté, téléphone sur messagerie.' })]);
+    add({ id: 'sbx_c_fuclo', nom: 'Bertrand Hamel', email: 'b.hamel@exemple.fr', secteur: 'Imprimerie', ca: '110 k€/mois', createdAt: iso(20, 8), type: 'vsl_elite', source: 'webhook', stage: 'follow_up_closing', assignedTo: 'anthony', setterSlug: 'anthony', setterName: 'Anthony',
+      communications: [call(18, 10, 0, 'Anthony', 520)] },
+      [bk('bk_c_fuclo1', 6, '15:00', 'Vincent', { createdAt: iso(18, 10, 20), bookedByName: 'Anthony', source: 'setter_booking', status: 'completed', outcome: 'offre', outcomeByName: 'Vincent', outcomeAt: iso(6, 16, 5), outcomeNote: 'Offre Élite envoyée, veut en parler à son associé. 2ᵉ RDV posé avec les deux.' }),
+       bk('bk_c_fuclo2', -3, '17:00', 'Vincent', { createdAt: iso(6, 16, 10), bookedByName: 'Vincent', source: 'setter_booking' })]);
+    add({ id: 'sbx_c_clsb', nom: 'Hélène Weber', email: 'h.weber@exemple.fr', secteur: 'Cabinet dentaire', ca: '85 k€/mois', createdAt: iso(16, 20), type: 'self_booking', source: 'booking_direct', stage: 'closed_lost', assignedTo: 'claire' },
+      [bk('bk_c_clsb', 7, '09:30', 'Vincent', { createdAt: iso(16, 20), source: 'self_booking', status: 'completed', outcome: 'non_close', outcomeByName: 'Vincent', outcomeAt: iso(7, 10, 30), outcomeNote: 'Ne veut pas s\'engager 12 mois.' })]);
+    add({ id: 'sbx_c_sbnew', nom: 'Samuel Ortega', email: 's.ortega@exemple.fr', secteur: 'Food truck', ca: '20 k€/mois', createdAt: iso(1, 23), type: 'vsl_elite', source: 'webhook', stage: 'lead', assignedTo: 'valentin', defi: 'Je veux ouvrir un restaurant.' },
+      [bk('bk_c_sbnew', -2, '10:30', 'Vincent', { createdAt: iso(0, 7, 40), source: 'self_booking' })]);
+    add({ id: 'sbx_c_rebook', nom: 'Chloé Marin', email: 'c.marin@exemple.fr', secteur: 'Agence de mariage', ca: '33 k€/mois', createdAt: iso(14, 18), type: 'quiz_funnel', landingFirst: { page: 'quiz_elite' }, source: 'webhook', stage: 'no_show_setting', assignedTo: 'steven', setterSlug: 'steven', setterName: 'Steven',
+      communications: [call(13, 10, 0, 'Steven', 300), call(2, 11, 0, 'Steven', 140)] },
+      [bk('bk_c_rebook1', 5, '14:00', 'Vincent', { createdAt: iso(13, 10, 10), bookedByName: 'Steven', source: 'setter_booking', status: 'no_show', outcome: 'no_show', outcomeByName: 'Vincent', outcomeAt: iso(5, 14, 20) }),
+       bk('bk_c_rebook2', -1, '18:00', 'Vincent', { createdAt: iso(2, 11, 5), bookedByName: 'Steven', source: 'setter_booking', presenceConfirmed: { at: iso(0, 9, 10), channel: 'SMS', byName: 'Steven' } })]);
+    add({ id: 'sbx_c_disclo', nom: 'Jacques Morin', email: 'j.morin@exemple.fr', secteur: 'Tabac-presse', ca: '9 k€/mois', createdAt: iso(11, 12), type: 'vsl_elite', source: 'webhook', stage: 'disqualifie_closing', assignedTo: 'anthony' },
+      [bk('bk_c_disclo', 4, '15:30', 'Vincent', { createdAt: iso(10, 9), bookedByName: 'Anthony', source: 'setter_booking', status: 'completed', outcome: 'disqualifie', outcomeByName: 'Vincent', outcomeNote: 'Part à la retraite dans 6 mois.' })]);
+    add({ id: 'sbx_c_nonsaisi', nom: 'Rémi Collet', email: 'r.collet@exemple.fr', secteur: 'Location de matériel', ca: '58 k€/mois', createdAt: iso(8, 15), type: 'vsl_elite', source: 'webhook', stage: 'set', assignedTo: 'claire', setterSlug: 'claire', setterName: 'Claire',
+      communications: [call(7, 10, 0, 'Claire', 260)] },
+      [bk('bk_c_nonsaisi', 1, '11:00', 'Vincent', { createdAt: iso(7, 10, 8), bookedByName: 'Claire', source: 'setter_booking' })]);
+
     /* ── Leads générés : de la matière pour remplir les colonnes ── */
     var PRE = ['Camille', 'Laurent', 'Émilie', 'Jérôme', 'Aurélie', 'Nicolas', 'Céline', 'Franck', 'Sabrina', 'David', 'Marion', 'Sébastien', 'Audrey', 'Christophe', 'Laetitia', 'Mathieu', 'Virginie', 'Stéphane', 'Caroline', 'Julien', 'Sandra', 'Yannick', 'Karine', 'Rachid', 'Elsa', 'Bruno', 'Inès', 'Pascal', 'Manon', 'Cédric'];
     var NOM = ['Faure', 'Roussel', 'Blanchard', 'Gauthier', 'Perrot', 'Renaud', 'Colin', 'Vidal', 'Caron', 'Picard', 'Arnaud', 'Lemaire', 'Dupuis', 'Brun', 'Barbier', 'Fontaine', 'Meunier', 'Bertrand', 'Marchand', 'Leclerc', 'Robin', 'Moulin', 'Lucas', 'Henry', 'Rivière', 'Noël', 'Royer', 'Benoît', 'Masson', 'Hubert'];
@@ -224,7 +225,7 @@
     var NRPN = { lead: 0, nrp1: 1, nrp2: 2, nrp3: 3, all_nrp: 5 };
     PLAN.forEach(function (stage, i) {
       var pre = PRE[i % PRE.length], nm = NOM[(i * 7) % NOM.length], sl = SALES[i % SALES.length], who = NAMEOF[sl];
-      var arr = 3 + Math.floor(rnd() * 330), pil = PIL[Math.floor(rnd() * 4)], pbt = PB[pil][Math.floor(rnd() * 2)];
+      var arr = i % 3 === 2 ? 35 + Math.floor(rnd() * 300) : 1 + Math.floor(rnd() * 27), pil = PIL[Math.floor(rnd() * 4)], pbt = PB[pil][Math.floor(rnd() * 2)];
       var tp = ['quiz_funnel', 'vsl_elite', 'webinaire', 'alteoform', 'quiz_funnel', 'vsl_elite'][i % 6];
       var mail = (pre + '.' + nm).toLowerCase(); if (mail.normalize) mail = mail.normalize('NFD').replace(/[̀-ͯ]/g, '');
       var o = { id: 'sbx_g' + i, nom: pre + ' ' + nm, email: mail + '@exemple.fr', secteur: SECT[i % SECT.length], ca: CA[Math.floor(rnd() * CA.length)],
@@ -268,115 +269,5 @@
   var SEED = 42;
   function rnd() { SEED |= 0; SEED = SEED + 0x6D2B79F5 | 0; var t = Math.imul(SEED ^ SEED >>> 15, 1 | SEED); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }
 
-  /* ── Base ── */
-  var DB = null;
-  function load() {
-    try { var raw = window.localStorage.getItem(KEY); if (raw) { DB = JSON.parse(raw); if (DB && DB.leads && DB.bookings) return; } } catch (e) {}
-    SEED = 42; DB = seed(); save();
-  }
-  function save() { try { window.localStorage.setItem(KEY, JSON.stringify(DB)); } catch (e) {} }
-  function bump(l) { l._v = (l._v || 0) + 1; l.updatedAt = new Date().toISOString(); save(); }
-  function later(cb, v) { setTimeout(function () { cb(null, v); }, 120); }
-  function labo(msg) { if (window.PipelineV2) window.PipelineV2.toast('🧪 ' + msg); }
-  var S2S = { lead: 'nouveau', nrp1: 'nrp1', nrp2: 'nrp2', nrp3: 'nrp3', all_nrp: 'all_nrp', faux_numero: 'faux_numero', poubelle: 'poubelle', disqualification: 'disqualifie', follow_up_pm: 'follow_up_pm', set: 'set', rdv_self_booking: 'rdv_self_booking', rdv_confirmes: 'rdv_pose', rdv_annules_prospect: 'pas_interesse', rdv_annules_equipe: 'pas_interesse', no_show_self: 'pas_interesse', no_show_setting: 'pas_interesse', partenariats: 'rdv_pose', closed_lost: 'pas_interesse', follow_up_closing: 'appele', disqualifie_closing: 'disqualifie' };
-  var TRANSCRIPTS = {
-    cl_morel_1: { summary: 'Premier échange après le quiz. Douleur : la délégation. RDV posé avec Vincent.', speeches: [
-      { me: true, text: 'Bonjour Sandrine, c\'est Élodie d\'Alteore, vous avez fait notre quiz hier soir…' },
-      { me: false, text: 'Oui ! Franchement le résultat sur la délégation m\'a parlé.' },
-      { me: true, text: 'Qu\'est-ce qui se passe aujourd\'hui quand vous confiez un dossier à un agent ?' },
-      { me: false, text: 'Je repasse derrière. Toujours. Du coup je ne gagne aucun temps.' },
-      { me: true, text: 'Je vous propose d\'en parler 45 minutes avec Vincent, mercredi 14 h, ça vous va ?' },
-      { me: false, text: 'Parfait, c\'est noté.' }] }
-  };
-
-  load();
-
-  var HOST = {
-    me: ME, team: TEAM,
-    leads: function () { return DB.leads; },
-    bookings: function () { return DB.bookings; },
-    pref: function (k, v) { try { if (arguments.length > 1) window.localStorage.setItem(PREF + k, v); else return window.localStorage.getItem(PREF + k); } catch (e) { return null; } },
-    setStage: function (l, stage, cb) {
-      var old = l.stage || 'lead', lab = window.PipelineV2.STAGE_LABEL;
-      l.stage = stage; l.status = S2S[stage] || l.status;
-      l.timeline_history = (l.timeline_history || []).concat([{ text: 'Étape : ' + (lab[old] || old) + ' → ' + (lab[stage] || stage) + ' (' + ME.name + ')', date: frNow() }]);
-      bump(l); later(cb);
-    },
-    addNote: function (l, text, cb) { l.notesHistory = (l.notesHistory || []).concat([{ text: text, date: frNow(), authorName: ME.name, authorSlug: ME.slug }]); bump(l); later(cb); },
-    logCall: function (l, r, cb) {
-      var c = { type: 'call', direction: 'outbound', duration: r.answered ? (r.duration || 120) : 0, answered: !!r.answered, date: new Date().toISOString(), ownerName: ME.name, source: 'labo' };
-      if (!r.answered) c.result = r.result || 'pas de réponse';
-      l.communications = (l.communications || []).concat([c]); l.lastContactAt = c.date; bump(l); later(cb);
-    },
-    sendMessage: function (l, ch, text, cb) {
-      var c = { type: ch, direction: 'outbound', content: text, date: new Date().toISOString(), ownerName: ME.name };
-      if (ch === 'email') c.subject = 'Suite à notre échange';
-      l.communications = (l.communications || []).concat([c]); l.lastContactAt = c.date; bump(l); later(cb);
-    },
-    addFollowUp: function (l, fu, cb) {
-      l.followUps = (l.followUps || []).concat([{ id: 'fu_' + Date.now(), dateTime: fu.dateTime, note: fu.note, done: false, createdBy: ME.name, createdAt: new Date().toISOString() }]);
-      /* Comme dans Leads Live : un lead joint qu'on doit rappeler passe en Follow Up */
-      if (['lead', 'nrp1', 'nrp2', 'nrp3', 'all_nrp'].indexOf(l.stage || 'lead') > -1) { l.stage = 'follow_up_pm'; l.status = 'follow_up_pm'; }
-      bump(l); later(cb);
-    },
-    update: function (l, f, v, cb) { l[f] = v; bump(l); later(cb); },
-    setAssigned: function (l, slug, cb) {
-      var nom = function (x) { for (var i = 0; i < TEAM.length; i++) if (TEAM[i].slug === x) return TEAM[i].name; return x === ME.slug ? ME.name : (x || 'personne'); };
-      var avant = l.assignedTo || '';
-      l.assignedTo = slug; l.assignedAt = new Date().toISOString(); l.assignedVia = 'pipeline';
-      l.timeline_history = (l.timeline_history || []).concat([{ text: (slug === ME.slug ? 'Repris par ' + ME.name : 'Attribué à ' + nom(slug) + ' par ' + ME.name) + ' (suivi avant par ' + nom(avant) + ')', date: frNow() }]);
-      bump(l); later(cb);
-    },
-    addTag: function (l, t, cb) { if ((l.tags || []).indexOf(t) < 0) l.tags = (l.tags || []).concat([t]); bump(l); later(cb); },
-    bump: function (l, cb) {
-      l.lastOptinAt = new Date().toISOString(); l.lastOptinSource = 'Remonté à la main par ' + ME.name;
-      l.timeline_history = (l.timeline_history || []).concat([{ text: 'Remonté dans Leads Live (' + ME.name + ')', date: frNow() }]);
-      bump(l); later(cb);
-    },
-    generateAi: function (l, cb) {
-      var d = window.PipelineV2._derive(l);
-      l.aiLead = { niveau: d.fam === 'sansuite' || d.fam === 'relance' ? 'tiède' : d.fam === 'rdv' ? 'chaud' : 'froid', proba: d.fam === 'rdv' ? 70 : d.fam === 'sansuite' ? 45 : 25,
-        brief: [d.situ, d.pb.text ? 'Son problème : ' + d.pb.text : 'Aucun problème exprimé : à découvrir au prochain appel.'],
-        angle: d.pb.text ? 'Repartir de son problème : « ' + d.pb.text + ' »' : 'Faire parler le prospect de son quotidien de dirigeant.',
-        ouverture: 'Bonjour ' + String(l.nom || '').split(' ')[0] + ', je reviens vers vous suite à notre dernier échange.', generatedAt: new Date().toISOString() };
-      bump(l); setTimeout(function () { cb(null); }, 900);
-    },
-    createLead: function (o, cb) {
-      DB.leads.unshift({ id: 'sbx_n' + Date.now(), nom: o.nom, telephone: o.telephone, email: o.email, createdAt: new Date().toISOString(), type: '', source: 'manual', stage: 'lead', status: 'nouveau',
-        assignedTo: ME.slug, communications: [], notesHistory: [], timeline_history: [], followUps: [], tags: [], _v: 0 });
-      save(); later(cb);
-    },
-    callDetail: function (l, c, cb) {
-      setTimeout(function () {
-        cb(null, TRANSCRIPTS[c && c.callLogId] || { summary: 'Appel de ' + Math.round((c && c.duration || 0) / 60) + ' min.', speeches: [{ me: true, text: 'Bonjour, c\'est ' + (c && c.ownerName || 'l\'équipe') + ' d\'Alteore.' }, { me: false, text: 'Oui bonjour.' }] });
-      }, 400);
-    },
-    objectionsOf: function (b) { return b._objections || []; },
-    call: function (l) { labo('Le Dialer appellerait ' + (l.telephone || 'ce lead')); },
-    listen: function () { labo('Écoute de l\'enregistrement : désactivée dans le labo'); },
-    openClose: function (l) { labo('Le parcours de close s\'ouvrirait ici pour ' + l.nom + ' (testable dans le Bac à sable closer)'); },
-    openBooking: function (l) { labo('La prise de RDV s\'ouvrirait ici pour ' + l.nom); }
-  };
-
-  /* ── Bandeau Labo + démarrage ── */
-  function pret() {
-    window.PipelineV2.start(document.getElementById('pv2root'), HOST);
-    var bd = document.createElement('div');
-    bd.className = 'sbxpl-band';
-    var roleLabel = function () { return ME.role === 'admin' ? 'Vu en admin' : 'Vu en sales'; };
-    bd.innerHTML = '<span>🧪 Labo Pipeline · faux leads · rien n\'est envoyé</span><button type="button" data-sbx="role" title="Voir le Pipeline comme un admin ou comme un sales">' + roleLabel() + '</button><button type="button" data-sbx="reset">Réinitialiser</button><button type="button" data-sbx="close">Fermer</button>';
-    bd.addEventListener('click', function (e) {
-      var b = e.target.closest('[data-sbx]'); if (!b) return;
-      if (b.getAttribute('data-sbx') === 'role') {
-        ME.role = ME.role === 'admin' ? 'sales' : 'admin';
-        try { window.localStorage.setItem('sbxpl:pref:role', ME.role); } catch (x) {}
-        b.textContent = roleLabel(); window.PipelineV2.refresh(); labo(ME.role === 'admin' ? 'Tu vois le Pipeline comme un admin' : 'Tu vois le Pipeline comme un sales : reprise possible après 7 jours sans contact');
-      } else if (b.getAttribute('data-sbx') === 'reset') {
-        try { window.localStorage.removeItem(KEY); } catch (x) {}
-        SEED = 42; DB = seed(); save(); window.PipelineV2.refresh(); labo('Labo remis à zéro');
-      } else { window.close(); setTimeout(function () { location.href = 'sales-crm.html'; }, 150); }
-    });
-    document.body.appendChild(bd);
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', pret); else pret();
+  window.SBX_PIPELINE_SEED = function () { SEED = 42; return seed(); };
 })();
