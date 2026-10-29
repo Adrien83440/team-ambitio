@@ -2395,21 +2395,48 @@
       page: window.innerWidth + '×' + window.innerHeight, docW: document.documentElement.clientWidth,
       dpr: window.devicePixelRatio, insBefore: fmtIns(insets()), coverBefore: hasCover(), decision: ''
     };
-    if (!sideDiag.standalone) { sideDiag.decision = 'pas en application installée → rien'; return showSideDiag(); }
+    if (!sideDiag.standalone) {
+      sideDiag.decision = useRail() ? 'Safari : sa colonne est à lui → rangée d’icônes à droite dans la page' : 'Safari, pas de colonne → rien';
+      return showSideDiag();
+    }
     if (hasCover()) { sideDiag.decision = applySideCol() ? 'colonne activée (cover déjà là)' : 'cover déjà là, pas de colonne mesurée'; return showSideDiag(); }
     if (!portrait || screenW - window.innerWidth < 40) { sideDiag.decision = 'écart écran − page < 40 px → rien'; return showSideDiag(); }
+    // Sans confirmation d'iOS, on retombera sur la rangée d'icônes dans la page.
     setCover(true);
     setTimeout(function () {
       sideDiag.pageAfter = window.innerWidth + '×' + window.innerHeight;
       sideDiag.insAfter = fmtIns(insets());
       if (applySideCol()) sideDiag.decision = 'colonne activée';
-      else { setCover(false); sideDiag.decision = 'cover essayé, iOS ne déclare pas de colonne → annulé'; }
+      else { setCover(false); sideDiag.decision = 'cover essayé, iOS ne déclare pas de colonne → ' + (useRail() ? 'rangée d’icônes dans la page' : 'rien'); }
       showSideDiag();
     }, 450);
   }
+  function getRoleSafe() { return window._currentRole || localStorage.getItem('ambitio_role') || ''; }
+  /* Rangée d'icônes dans la page, à droite (html.al-side-col.al-side-rail) :
+     quand la colonne du côté n'est pas utilisable — Safari y met ses propres
+     boutons. Même disposition que la colonne système, dans une bande de
+     52 px de la page. Uniquement en portrait, format téléphone, et quand la
+     page est nettement plus étroite que l'écran (écran de façade du Fold) :
+     un iPhone classique dans Safari n'est pas concerné. */
+  function useRail() {
+    var portrait = window.innerHeight > window.innerWidth;
+    var screenW = portrait ? Math.min(screen.width, screen.height) : Math.max(screen.width, screen.height);
+    var ok = !IN_FRAME && portrait && mode() === 'phone' && screenW - window.innerWidth >= 40 && !hasCover();
+    de.classList.toggle('al-side-rail', ok);
+    if (ok) {
+      de.classList.add('al-side-col');
+      de.style.setProperty('--al-col-w', '52px');
+      de.style.setProperty('--al-col-top', '10px');
+    } else if (!de.classList.contains('al-side-col') || !hasCover()) {
+      de.classList.remove('al-side-col');
+      de.style.removeProperty('--al-col-w'); de.style.removeProperty('--al-col-top');
+    }
+    if (grouped()) layoutFabs();
+    return ok;
+  }
   function showSideDiag() {
-    var me = (window._currentUserEmail || localStorage.getItem('ambitio_email') || '').toLowerCase();
-    if (me !== 'contact@adrienemily.com' || mode() !== 'phone' || !MQ_TOUCH.matches) return;
+    // Admins, en application installée seulement (dans Safari la réponse est connue).
+    if (getRoleSafe() !== 'admin' || !isStandalone() || mode() !== 'phone' || !MQ_TOUCH.matches) return;
     if (localStorage.getItem('al_side_diag_off') === '1' || !sideDiag || document.getElementById('al-side-diag')) return;
     var d = sideDiag, el = document.createElement('div');
     el.id = 'al-side-diag';
@@ -2446,7 +2473,7 @@
   applyMode();
   onMq(MQ_PHONE, applyMode); onMq(MQ_COMPACT, applyMode);
   var rz = null;
-  window.addEventListener('resize', function () { if (rz) cancelAnimationFrame(rz); rz = requestAnimationFrame(function () { applyMode(); if (sideChecked && hasCover()) applySideCol(); }); });
+  window.addEventListener('resize', function () { if (rz) cancelAnimationFrame(rz); rz = requestAnimationFrame(function () { applyMode(); if (sideChecked && hasCover()) applySideCol(); else if (sideChecked && de.classList.contains('al-side-rail')) useRail(); }); });
   window.addEventListener('orientationchange', function () { setTimeout(function () { applyMode(); checkSideCol(); }, 250); });
   try { if (navigator.devicePosture && navigator.devicePosture.addEventListener) navigator.devicePosture.addEventListener('change', applyMode); } catch (e) {}
 
