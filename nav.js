@@ -2128,16 +2128,23 @@
     var open = de.classList.contains('al-fabs-open'), h = '';
     // Base = haut réel du bouton « + » (il peut être remonté par page au-dessus
     // d'une zone de saisie fixée en bas : --al-fab-lift dans mobile.css).
-    var base = 14 + 50;
-    if (launcher && launcher.offsetWidth) base = Math.round(window.innerHeight - launcher.getBoundingClientRect().top);
+    // Base = haut réel du bouton « + », axe = son centre : il peut être remonté
+    // par page (--al-fab-lift) ou rangé dans la colonne système (al-side-col).
+    var base = 14 + 50, axis = null, lbRight = null;
+    if (launcher && launcher.offsetWidth) {
+      var lr = launcher.getBoundingClientRect();
+      base = Math.round(window.innerHeight - lr.top);
+      axis = Math.round(window.innerWidth - (lr.left + lr.width / 2));
+      lbRight = Math.round(window.innerWidth - lr.left + 12);
+    }
     list.forEach(function (x, i) {
       var w = x.el.offsetWidth || 50;
       var b = base + 14 + i * 60 + Math.round((50 - (x.el.offsetHeight || 50)) / 2);
       x.el.style.setProperty('top', 'auto', 'important');
       x.el.style.setProperty('left', 'auto', 'important');
       x.el.style.setProperty('bottom', b + 'px', 'important');
-      x.el.style.setProperty('right', 'calc(' + Math.round(14 + (50 - w) / 2) + 'px + var(--al-safe-r, 0px))', 'important');
-      if (open) h += '<span class="al-fab-lb" style="bottom:' + (base + 14 + i * 60 + 13) + 'px">' + x.f.label + '</span>';
+      x.el.style.setProperty('right', axis !== null ? Math.round(axis - w / 2) + 'px' : 'calc(' + Math.round(14 + (50 - w) / 2) + 'px + var(--al-safe-r, 0px))', 'important');
+      if (open) h += '<span class="al-fab-lb" style="bottom:' + (base + 14 + i * 60 + 13) + 'px' + (lbRight !== null ? ';right:' + lbRight + 'px' : '') + '">' + x.f.label + '</span>';
     });
     if (labels) labels.innerHTML = h;
   }
@@ -2325,7 +2332,65 @@
   var wrapTimer = null;
   function scheduleWrap() { if (wrapTimer || mode() === 'desk') return; wrapTimer = setTimeout(function () { wrapTimer = null; wrapTables(); }, 400); }
 
-  /* ── Application du mode ─────────────────────────────────────────── */
+  /* ── Colonne système sur le côté (écran de façade de l'iPhone Fold) ──
+     En application installée (écran d'accueil), iOS réserve sur cet écran
+     une colonne à droite pour l'heure et le réseau, et laisse la page à côté.
+     Comme les applis natives, on y range les boutons du haut : la page
+     demande alors tout l'écran (viewport-fit=cover), mesure la colonne
+     (env(safe-area-inset-right)) et y place ☰, la barre de Leads Live et le
+     bouton des outils (html.al-side-col, --al-col-w, cf. mobile.css).
+     Garde-fous : uniquement en application installée, en portrait, quand la
+     page est nettement plus étroite que l'écran, et si iOS confirme une
+     colonne d'un seul côté ; sinon on revient à l'affichage d'origine.
+     Safari (navigateur) : cette colonne lui appartient, rien ne change. */
+  function isStandalone() {
+    return window.navigator.standalone === true || mq('(display-mode: standalone)').matches;
+  }
+  var probe = null;
+  function insets() {
+    if (!document.body) return { t: 0, r: 0, b: 0, l: 0 };
+    if (!probe) {
+      probe = document.createElement('div');
+      probe.setAttribute('aria-hidden', 'true');
+      probe.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;' +
+        'padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
+      document.body.appendChild(probe);
+    }
+    var cs = getComputedStyle(probe);
+    return { t: parseFloat(cs.paddingTop) || 0, r: parseFloat(cs.paddingRight) || 0, b: parseFloat(cs.paddingBottom) || 0, l: parseFloat(cs.paddingLeft) || 0 };
+  }
+  function viewportMeta() { return document.querySelector('meta[name="viewport"]'); }
+  function hasCover() { var m = viewportMeta(); return !!(m && /viewport-fit\s*=\s*cover/.test(m.getAttribute('content') || '')); }
+  var coverAdded = false;
+  function setCover(on) {
+    var m = viewportMeta(); if (!m) return;
+    var c = (m.getAttribute('content') || '').replace(/\s*,?\s*viewport-fit\s*=\s*[a-z]+/g, '');
+    m.setAttribute('content', on ? c + ',viewport-fit=cover' : c);
+    coverAdded = !!on;
+  }
+  function applySideCol() {
+    var ins = insets(), portrait = window.innerHeight > window.innerWidth;
+    var side = '';
+    if (portrait && ins.r >= 40 && ins.l < 20) side = 'r';
+    de.classList.toggle('al-side-col', side === 'r');
+    if (side) de.style.setProperty('--al-col-w', Math.round(ins.r) + 'px');
+    else de.style.removeProperty('--al-col-w');
+    if (grouped()) layoutFabs();
+    return !!side;
+  }
+  var sideChecked = false;
+  function checkSideCol() {
+    if (IN_FRAME || !document.body || !isStandalone()) return;
+    if (sideChecked) { if (hasCover()) applySideCol(); return; }
+    sideChecked = true;
+    if (hasCover()) { applySideCol(); return; }
+    var portrait = window.innerHeight > window.innerWidth;
+    var screenW = portrait ? Math.min(screen.width, screen.height) : Math.max(screen.width, screen.height);
+    if (!portrait || screenW - window.innerWidth < 40) return;
+    setCover(true);
+    setTimeout(function () { if (!applySideCol()) setCover(false); }, 450);
+  }
+
   var lastMode = null;
   function applyMode() {
     var m = mode();
@@ -2340,14 +2405,15 @@
   applyMode();
   onMq(MQ_PHONE, applyMode); onMq(MQ_COMPACT, applyMode);
   var rz = null;
-  window.addEventListener('resize', function () { if (rz) cancelAnimationFrame(rz); rz = requestAnimationFrame(applyMode); });
-  window.addEventListener('orientationchange', function () { setTimeout(applyMode, 250); });
+  window.addEventListener('resize', function () { if (rz) cancelAnimationFrame(rz); rz = requestAnimationFrame(function () { applyMode(); if (sideChecked && hasCover()) applySideCol(); }); });
+  window.addEventListener('orientationchange', function () { setTimeout(function () { applyMode(); checkSideCol(); }, 250); });
   try { if (navigator.devicePosture && navigator.devicePosture.addEventListener) navigator.devicePosture.addEventListener('change', applyMode); } catch (e) {}
 
   function onReady() {
     buildLauncher();
     syncSidebar();
     applyMode();
+    checkSideCol();
     if (window.MutationObserver) new MutationObserver(scheduleWrap).observe(document.body, { childList: true, subtree: true });
     document.addEventListener('click', function (ev) {
       var t = ev.target && ev.target.closest ? ev.target.closest('#navPosedToggle') : null;

@@ -4,6 +4,9 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <meta name="robots" content="noindex"/>
+<!-- Installable (Partager → Sur l'écran d'accueil) pour relever l'écran en mode application. -->
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-title" content="Diag écran"/>
 <title>Alteore — Diagnostic écran</title>
 <!--
   Page de diagnostic sans aucune donnée ni Firebase : affiche ce que Safari
@@ -81,6 +84,8 @@ button.ghost{background:transparent}
         ['pointer: coarse', yn(mm('(pointer: coarse)'))],
         ['maxTouchPoints', navigator.maxTouchPoints],
         ['100dvh supporté', yn(window.CSS && CSS.supports && CSS.supports('height', '100dvh'))],
+        ['Application installée (standalone)', yn(window.navigator.standalone === true || mm('(display-mode: standalone)'))],
+        ['Écart écran − page (largeur)', (window.innerHeight > window.innerWidth ? Math.min(screen.width, screen.height) : Math.max(screen.width, screen.height)) - window.innerWidth + ' px'],
         ['Mode Alteore', window.innerWidth <= 768 ? 'phone (tiroir ☰)' : (window.innerWidth < 1100 ? 'compact (barre d\'icônes)' : 'bureau')]
       ]],
       ['Navigateur', [['userAgent', navigator.userAgent]]]

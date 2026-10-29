@@ -26,7 +26,7 @@
    composants ajoutés ici sont dans theme-light.css §Mobile.
    ══════════════════════════════════════════════════════════════════════ */
 
-:root { --al-vh: 100vh; --al-safe-b: env(safe-area-inset-bottom, 0px); --al-safe-r: env(safe-area-inset-right, 0px); }
+:root { --al-col-top: 170px; --al-vh: 100vh; --al-safe-b: env(safe-area-inset-bottom, 0px); --al-safe-r: env(safe-area-inset-right, 0px); }
 @supports (height: 100dvh) { :root { --al-vh: 100dvh; } }
 
 /* Safari iOS grossit le texte en paysage sans ça. */
@@ -323,3 +323,35 @@ html.al-fabs-grouped body[data-al-page="sales-leads"] #al-fab-labels .al-fab-lb,
 html.al-fabs-grouped body[data-al-page="sandbox-leads-live"] #al-fab-labels .al-fab-lb { z-index: 216; }
 html.al-fabs-grouped.al-fabs-open body[data-al-page="sales-leads"] #al-fab-scrim,
 html.al-fabs-grouped.al-fabs-open body[data-al-page="sandbox-leads-live"] #al-fab-scrim { z-index: 214; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   7. Colonne système sur le côté (écran de façade de l'iPhone Fold, en
+      application installée) — html.al-side-col, posé par nav.js quand iOS
+      confirme une colonne à droite (--al-col-w = sa largeur). Comme les
+      applis natives, les boutons du haut y descendent, sous l'heure
+      (--al-col-top) ; la page garde toute la hauteur.
+   ══════════════════════════════════════════════════════════════════════ */
+html.al-side-col body { padding-right: var(--al-col-w) !important; }
+html.al-side-col.al-mode-phone body.has-sidebar:not(.ae-embed) { padding-top: env(safe-area-inset-top, 0px); }
+html.al-side-col.al-mode-phone body.has-sidebar .topbar { padding-left: 14px; }
+html.al-side-col .nav-mobile-toggle {
+  left: auto !important; right: calc((var(--al-col-w) - 38px) / 2) !important; top: var(--al-col-top) !important;
+}
+html.al-side-col.al-fabs-grouped #al-fab-launcher { right: calc((var(--al-col-w) - 50px) / 2); }
+/* Les volets fixés bord à bord s'arrêtent avant la colonne. */
+html.al-side-col #al-posed-panel { right: var(--al-col-w); }
+
+/* Leads Live : sa barre du haut (avatar, thème, agenda, recherche, +)
+   devient une colonne d'icônes sous le ☰ ; la page gagne ses 60 px. */
+html.al-side-col body.ll5 .ll5nav {
+  position: fixed; top: calc(var(--al-col-top) + 50px); right: 0; left: auto; z-index: 30;
+  width: var(--al-col-w); min-height: 0; margin: 0; padding: 0 !important;
+  flex-direction: column; align-items: center; gap: 8px;
+  background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+html.al-side-col body.ll5 .ll5grow { display: none; }
+html.al-side-col body.ll5:not(.has-sidebar) .ll5nav { top: var(--al-col-top); }
+html.al-side-col.al-mode-phone body.ll5 .l2sheet,
+html.al-side-col.al-mode-phone body.ll5 .l2ag,
+html.al-side-col.al-mode-phone body.ll5 .l2fs,
+html.al-side-col.al-mode-phone body.ll5 .ldpres { right: var(--al-col-w); }
