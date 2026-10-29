@@ -40,7 +40,7 @@
   /* v7 (29/10/2026) : base PARTAGÉE avec le Labo Pipeline (sandbox-pipeline.html),
      qui charge aussi ce fichier ; elle reçoit les faux leads du Pipeline
      (sandbox-pipeline-data.js) et suit les écritures de l'autre onglet. */
-  var KEY = 'llsbx_db_v7';
+  var KEY = 'llsbx_db_v8';   /* v8 (30/10/2026) : anciens leads ajoutés */
   var NOW = Date.now(), MIN = 60000, H = 3600000, D = 86400000;
 
   /* ── Horodatages et valeurs spéciales ── */
@@ -344,7 +344,7 @@
     r.leads.forEach(function (l) {
       var o = JSON.parse(JSON.stringify(l));
       delete o.id; delete o._v;
-      ['createdAt', 'clientSince', 'assignedAt', 'lastOptinAt', 'updatedAt'].forEach(function (k) { if (o[k]) o[k] = t(o[k]); });
+      ['createdAt', 'clientSince', 'assignedAt', 'lastOptinAt', 'updatedAt', 'importedCreatedAt'].forEach(function (k) { if (o[k]) o[k] = t(o[k]); });
       if (!o.status || o.status === 'nouveau') o.status = ({ lead: 'nouveau', nrp1: 'nrp1', nrp2: 'nrp2', nrp3: 'nrp3', all_nrp: 'all_nrp', faux_numero: 'faux_numero', poubelle: 'poubelle', disqualification: 'disqualifie', disqualifie_closing: 'disqualifie', follow_up_pm: 'follow_up_pm', set: 'set', rdv_confirmes: 'rdv_pose', rdv_self_booking: 'rdv_self_booking', closed_lost: 'pas_interesse' })[o.stage] || 'follow_up_pm';
       if (!o.phoneNormalized && o.telephone) o.phoneNormalized = String(o.telephone).replace(/\D/g, '').slice(-9);
       put('leads', l.id, o);

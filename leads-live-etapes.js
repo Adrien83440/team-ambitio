@@ -167,18 +167,19 @@
 
   /* ── Statuts ── */
   function nextNrp(l) {
-    var st = (l && l.stage) || 'lead', nx = PE() && PE().NEXT_NRP[st];
+    /* Fiche encore « lead » déjà appelée : d'après le nombre d'essais (pipeline-etapes.js) */
+    var nx = (l && PE()) ? PE().nrpApresAppel(l) : null;
     return nx || 'nrp1';
   }
   function hideStatus(k) { return on && k === 'appele'; }
   /* Pastille / ligne de carte : en mode étapes, on affiche l'ÉTAPE (même mot
      que la colonne du Pipeline) au lieu de l'ancien statut. Même forme que
      getStatusObj : { key, label, icon, color, bg }. null hors mode. */
-  var COUL = { lead: '#34d399', nrp1: '#f59e0b', nrp2: '#e67e22', nrp3: '#ef4444', all_nrp: '#6b7280', poubelle: '#64748b', disqua: '#6b7280', fu: '#60a5fa', set: '#a78bfa', sb: '#fbbf24', perdu: '#ef4444', closing: '#fbbf24' };
+  var COUL = { ancien: '#9096ad', lead: '#34d399', nrp1: '#f59e0b', nrp2: '#e67e22', nrp3: '#ef4444', all_nrp: '#6b7280', poubelle: '#64748b', disqua: '#6b7280', fu: '#60a5fa', set: '#a78bfa', sb: '#fbbf24', perdu: '#ef4444', closing: '#fbbf24' };
   function statusView(l) {
     if (!on || !l || !PE()) return null;
     var r = classify(l), c = COUL[r.col] || '#6b7280';
-    var lab = (r.col === 'perdu' || r.col === 'poubelle' || r.col === 'disqua' || r.col === 'closing') ? PE().label(r.key) : PE().colOf(r.col).t;
+    var lab = (r.col === 'perdu' || r.col === 'poubelle' || r.col === 'disqua' || r.col === 'closing' || r.col === 'ancien') ? PE().label(r.key) : PE().colOf(r.col).t;
     return { key: r.key, label: lab, icon: '', color: c, bg: c + '22' };
   }
 

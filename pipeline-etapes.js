@@ -14,6 +14,9 @@
      Disqualification · FU · SET NB · Self booking ·
      No show / Annulé / Closed Lost · Closing
    Une colonne peut avoir des sous-filtres (« Annulé prospect · SB »…).
+   Lead = AUCUNE action (30/10/2026) : une fiche restée à l'étape « lead »
+   en base mais déjà travaillée est rangée d'après ses traces (rappel
+   programmé ou décroché → FU ; appels sans réponse → NRP n ; voir traces()).
    Clé de filtre : 'colonne' ou 'colonne:sous-filtre'.
 
    NB / SB des annulations et Closed Lost : déduit du RDV concerné (qui l'a
@@ -61,7 +64,12 @@
   var NEXT_NRP = { lead: 'nrp1', nrp1: 'nrp2', nrp2: 'nrp3', nrp3: 'all_nrp', all_nrp: 'all_nrp' };
 
   var COLS = [
-    { id: 'lead',     t: 'Lead',                  s: 'Nouveaux, du plus récent au plus ancien', st: ['lead'] },
+    { id: 'lead',     t: 'Lead',                  s: 'Arrivés depuis moins de 6 mois, aucune action', st: ['lead'] },
+    /* Anciens leads (30/10/2026) : étape « lead », AUCUNE action, arrivés il y a
+       plus de 6 mois (imports webinaires / Bigin…). Colonne déduite, aucune
+       étape propre en base : on les traite quand on veut, on n'y range rien. */
+    { id: 'ancien',   t: 'Anciens leads',         s: 'Plus de 6 mois, jamais traités', st: [], fold: true,
+      subs: [{ id: 'webinaire', t: 'Webinaire' }, { id: 'vsl', t: 'VSL Élite' }, { id: 'rdv', t: 'Prise de RDV' }, { id: 'autre', t: 'Autre origine' }] },
     { id: 'nrp1',     t: 'NRP 1',                 s: '', st: ['nrp1'] },
     { id: 'nrp2',     t: 'NRP 2',                 s: '', st: ['nrp2'] },
     { id: 'nrp3',     t: 'NRP 3',                 s: '', st: ['nrp3'] },
@@ -115,6 +123,72 @@
       .sort(function (a, b) { return bookingStart(a) - bookingStart(b); });
   }
   function lastWhere(bs, fn) { for (var i = bs.length - 1; i >= 0; i--) if (fn(bs[i])) return bs[i]; return null; }
+
+  /* ── Ce qui s'est passé sur une fiche encore à l'étape « Lead » ──
+     fu       : un rappel programmé, pas encore fait
+     decroche : un appel décroché (≥ 30 s ou marqué répondu), ou statut Décroché
+     essais   : appels sortants sans réponse (statut Appelé / Messagerie = 1 au moins)
+     message  : SMS, WhatsApp ou e-mail envoyé à la main */
+  function traces(l) {
+    var t = { fu: false, decroche: false, essais: 0, message: false };
+    (l.followUps || []).forEach(function (f) { if (f && !f.done) t.fu = true; });
+    (l.communications || []).forEach(function (c) {
+      if (!c || c.direction === 'inbound' || c.direction === 'in') return;
+      if (c.type === 'call') {
+        if (c.answered === true || (+c.duration || 0) >= 30) t.decroche = true; else t.essais++;
+      } else if ((c.type === 'sms' || c.type === 'whatsapp' || c.type === 'email') && !c.auto) t.message = true;
+    });
+    if (l.status === 'decroche') t.decroche = true;
+    if ((l.status === 'appele' || l.status === 'messagerie') && !t.essais) t.essais = 1;
+    return t;
+  }
+
+  /* Date réelle d'arrivée = la plus ancienne de dateWebinaire / importedCreatedAt / createdAt */
+  var AGE_ANCIEN = 183 * 864e5;
+  function msOf(v) {
+    if (v == null || v === '') return null;
+    if (typeof v === 'number') return v < 1e11 ? v * 1000 : v;
+    if (v instanceof Date) return v.getTime();
+    if (typeof v.toDate === 'function') { try { return v.toDate().getTime(); } catch (e) { return null; } }
+    if (typeof v.seconds === 'number') return v.seconds * 1000;
+    var t = Date.parse(v); return isNaN(t) ? null : t;
+  }
+  function realMs(l) {
+    var c = [msOf(l.dateWebinaire), msOf(l.importedCreatedAt), msOf(l.createdAt)].filter(function (x) { return x; });
+    return c.length ? Math.min.apply(null, c) : null;
+  }
+  /* Ancien = arrivé il y a plus de 6 mois ET pas revenu depuis (nouvel opt-in ou
+     RDV pris dans les 6 mois → c'est une nouvelle arrivée, il reste en Lead). */
+  function estAncien(l) {
+    var r = realMs(l), now = Date.now();
+    if (!r || now - r <= AGE_ANCIEN) return false;
+    var retour = Math.max(msOf(l.lastOptinAt) || 0, msOf(l.lastBookingAt) || 0);
+    return !(retour && now - retour <= AGE_ANCIEN);
+  }
+  function origineAncienne(l) {
+    var ty = String(l.type || '').toLowerCase();
+    if (ty === 'self_booking') return 'rdv';
+    if (/webin/.test(ty) || l.source === 'webinar_import') return 'webinaire';
+    if (/vsl/.test(ty)) return 'vsl';
+    return 'autre';
+  }
+
+  /* NRP après un appel sans réponse. Étape NRP explicite → la suivante. Fiche
+     encore « lead » → d'après le nombre d'essais, en comptant l'appel qu'on
+     vient de passer UNE fois : s'il est déjà enregistré (Ringover, < 5 min),
+     il est dans le compte ; sinon on l'ajoute. */
+  function nrpApresAppel(l) {
+    var st = (l && l.stage) || 'lead';
+    if (st !== 'lead') return NEXT_NRP[st] || 'nrp1';
+    var t = traces(l), recent = false, now = Date.now();
+    (l.communications || []).forEach(function (c) {
+      if (!c || c.type !== 'call' || c.direction === 'inbound' || c.direction === 'in') return;
+      var ms = Date.parse(c.date || c.createdAt || '');
+      if (ms && now - ms < 5 * 60000 && !(c.answered === true || (+c.duration || 0) >= 30)) recent = true;
+    });
+    var n = t.essais + (recent ? 0 : 1);
+    return n >= 4 ? 'all_nrp' : 'nrp' + Math.max(1, n);
+  }
 
   /* ── Où va ce lead ? ── */
   function classify(l, bookings, opts) {
@@ -172,8 +246,19 @@
       r.col = 'perdu'; r.booking = bl; r.sb = sbFallback(bl); r.sub = r.sb ? 'closed_lost_sb' : 'closed_lost_nb';
     } else if (stage === 'follow_up_pm') {
       r.col = 'fu';
+    } else if (stage === 'lead') {
+      /* « Lead » = arrivé, AUCUNE action (Adrien, 30/10/2026). Les appels du
+         Dialer et les rappels ne changent pas l'étape en base : on lit donc ce
+         qui s'est vraiment passé sur la fiche. */
+      var t = traces(l);
+      if (t.fu || t.decroche) r.col = 'fu';
+      else if (t.essais) r.col = t.essais >= 4 ? 'all_nrp' : 'nrp' + t.essais;
+      else if (t.message) r.col = 'nrp1';
+      else if (estAncien(l)) { r.col = 'ancien'; r.sub = origineAncienne(l); }
+      else r.col = 'lead';
+      r.deduit = r.col !== 'lead';
     } else {
-      r.col = stage; /* lead, nrp1, nrp2, nrp3, all_nrp */
+      r.col = stage; /* nrp1, nrp2, nrp3, all_nrp */
     }
     r.key = r.sub ? r.col + ':' + r.sub : r.col;
     return r;
@@ -219,6 +304,6 @@
   window.PipelineEtapes = {
     COLS: COLS, STAGE_LABEL: STAGE_LABEL, STATUS_OF: STATUS_OF, NEXT_NRP: NEXT_NRP, COL_OF_STAGE: COL_OF_STAGE,
     classify: classify, match: match, count: count, label: label, colOf: colOf, options: options,
-    sbOf: sbOf, bookingStart: bookingStart, isCancelled: isCancelled
+    sbOf: sbOf, bookingStart: bookingStart, isCancelled: isCancelled, traces: traces, nrpApresAppel: nrpApresAppel, realMs: realMs, AGE_ANCIEN: AGE_ANCIEN
   };
 })();

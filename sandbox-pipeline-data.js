@@ -206,6 +206,15 @@
       communications: [call(7, 10, 0, 'Claire', 260)] },
       [bk('bk_c_nonsaisi', 1, '11:00', 'Vincent', { createdAt: iso(7, 10, 8), bookedByName: 'Claire', source: 'setter_booking' })]);
 
+    /* ── Anciens leads (30/10/2026) : plus de 6 mois, aucune action ── */
+    add({ id: 'sbx_old_webi', nom: 'Martine Leroy', email: 'm.leroy@exemple.fr', createdAt: iso(300, 21), dateWebinaire: iso(301, 20), type: 'webinar', source: 'webinar_import', stage: 'lead', assignedTo: '',
+      webinarTags: ['Webinaire Dimanche', 'Inscrite'], present: 'non', utm: 'Webinaire Dimanche' });
+    add({ id: 'sbx_old_vsl', nom: 'Didier Fabre', email: 'd.fabre@exemple.fr', secteur: 'Menuiserie', createdAt: iso(410, 10), importedCreatedAt: iso(410, 10), type: 'vsl_elite', source: 'bigin_import', stage: 'lead', assignedTo: '',
+      utm: 'VSL', tags: ['AncienLeadWebi'], description: 'NRP1 12/12 12H00 NRP2 12/12 12H01 — rappeler en janvier' });
+    add({ id: 'sbx_old_rdv', nom: 'Corinne Vasseur', email: 'c.vasseur@exemple.fr', createdAt: iso(250, 9), importedCreatedAt: iso(250, 9), type: 'self_booking', source: 'bigin_import', stage: 'lead', assignedTo: '', utm: 'Zoho Bookings' });
+    add({ id: 'sbx_old_back', nom: 'Gilles Moreau', email: 'g.moreau@exemple.fr', createdAt: iso(500, 18), importedCreatedAt: iso(500, 18), type: 'webinar', source: 'webinar_import', stage: 'lead', assignedTo: 'valentin',
+      lastOptinAt: iso(4, 21), lastOptinSource: 'Quiz Élite', webinarTags: ['Webinaire Mardi'] });
+
     /* ── Leads générés : de la matière pour remplir les colonnes ── */
     var PRE = ['Camille', 'Laurent', 'Émilie', 'Jérôme', 'Aurélie', 'Nicolas', 'Céline', 'Franck', 'Sabrina', 'David', 'Marion', 'Sébastien', 'Audrey', 'Christophe', 'Laetitia', 'Mathieu', 'Virginie', 'Stéphane', 'Caroline', 'Julien', 'Sandra', 'Yannick', 'Karine', 'Rachid', 'Elsa', 'Bruno', 'Inès', 'Pascal', 'Manon', 'Cédric'];
     var NOM = ['Faure', 'Roussel', 'Blanchard', 'Gauthier', 'Perrot', 'Renaud', 'Colin', 'Vidal', 'Caron', 'Picard', 'Arnaud', 'Lemaire', 'Dupuis', 'Brun', 'Barbier', 'Fontaine', 'Meunier', 'Bertrand', 'Marchand', 'Leclerc', 'Robin', 'Moulin', 'Lucas', 'Henry', 'Rivière', 'Noël', 'Royer', 'Benoît', 'Masson', 'Hubert'];

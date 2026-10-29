@@ -50,7 +50,7 @@
   var E = window.PipelineEtapes;
   var COLS = E.COLS;
   var STAGE_LABEL = E.STAGE_LABEL;
-  var FAM_OF_COL = { lead: 'joindre', nrp1: 'joindre', nrp2: 'joindre', nrp3: 'joindre', all_nrp: 'joindre', fu: 'relance', set: 'rdv', sb: 'rdv', perdu: 'sansuite', closing: 'client', poubelle: 'ecarte', disqua: 'ecarte' };
+  var FAM_OF_COL = { ancien: 'ancien', lead: 'joindre', nrp1: 'joindre', nrp2: 'joindre', nrp3: 'joindre', all_nrp: 'joindre', fu: 'relance', set: 'rdv', sb: 'rdv', perdu: 'sansuite', closing: 'client', poubelle: 'ecarte', disqua: 'ecarte' };
   var NRP_STAGES = { lead: 1, nrp1: 1, nrp2: 1, nrp3: 1, all_nrp: 1 };
   var LOST_STAGES = { rdv_annules_prospect: 1, rdv_annules_equipe: 1, no_show_self: 1, no_show_setting: 1, follow_up_closing: 1, closed_lost: 1 };
   var OUTCOME = { close: 'Closé', non_close: 'Non closé', offre: 'Offre envoyée', disqualifie: 'Disqualifié', no_show: 'Absence', annule: 'Annulé', replanifie: 'Replanifié' };
@@ -62,7 +62,8 @@
   var BASKETS = [
     { id: 'sansuite', ic: 'check', t: 'No show / Annulé / Closed Lost', s: 'Ont eu un RDV, n\'ont pas signé', cols: ['perdu'] },
     { id: 'joindre',  ic: 'off',   t: 'Lead / NRP',                     s: 'Pas encore eus au téléphone', cols: ['lead', 'nrp1', 'nrp2', 'nrp3', 'all_nrp'] },
-    { id: 'relance',  ic: 'redo',  t: 'FU',                             s: 'Rappel convenu avec eux', cols: ['fu'] }
+    { id: 'relance',  ic: 'redo',  t: 'FU',                             s: 'Rappel convenu avec eux', cols: ['fu'] },
+    { id: 'ancien',   ic: 'flag',  t: 'Anciens leads',                  s: 'Plus de 6 mois, jamais traités', cols: ['ancien'] }
   ];
 
   var IC = {
@@ -232,7 +233,7 @@
     /* Pastille : le sous-filtre pour les colonnes regroupées ; l'étape sinon,
        ou le nom de la colonne quand le lead y est rangé par son RDV (lead
        auto-réservé, lead repris après un no show…) */
-    d.stageLabel = d.col === 'perdu' || d.col === 'poubelle' || d.col === 'disqua' || d.col === 'closing' ? E.label(d.key) :
+    d.stageLabel = d.col === 'perdu' || d.col === 'poubelle' || d.col === 'disqua' || d.col === 'closing' || d.col === 'ancien' ? E.label(d.key) :
       E.COL_OF_STAGE[d.stage] === d.col ? (STAGE_LABEL[d.stage] || d.stage) : colDef(d.col).t;
     d.real = realDate(l); d.arrDays = daysSince(d.real);
     d.last = lastContact(l); d.days = daysSince(d.last);
@@ -288,6 +289,10 @@
       else if (r.key === 'annule') d.conseil = 'Rappeler : l\'annulation date de ' + plural(daysSince(bs0), 'jour');
       else if (r.key === 'nonsaisi') d.conseil = 'Saisir le résultat du RDV';
       else d.conseil = (l.aiLead && l.aiLead.angle) || 'Le rappeler pour reprendre la discussion';
+    } else if (d.col === 'ancien') {
+      d.ligne = 'Arrivé le ' + fdate(d.real) + ' · jamais traité';
+      d.situ = 'Arrivé le ' + fdate(d.real) + ' par ' + d.src.label + '. Personne ne l\'a jamais appelé ni relancé.';
+      d.conseil = 'Premier appel : repartir de son inscription d\'origine'; tone = 'grey'; ct = 'go';
     } else if (!calls && !msgs) {
       d.ligne = (d.arrDays === 0 ? 'Arrivé aujourd\'hui' : 'Arrivé il y a ' + plural(d.arrDays || 0, 'jour')) + ', jamais appelé';
       d.situ = 'Arrivé le ' + fdate(d.real) + ' par ' + d.src.label + '. Personne ne l\'a encore appelé.';
@@ -304,7 +309,7 @@
     }
     if (!tone) tone = d.days == null ? 'late' : d.days > 30 ? 'late' : d.days > 7 ? 'warn' : 'go';
     d.tone = tone; d.ctone = ct;
-    d.lost = d.col === 'perdu' ? lostInfo(d) : null;
+    d.lost = d.col === 'perdu' ? lostInfo(d) : d.col === 'ancien' ? ancienInfo(l, d) : null;
     d.blob = (l.nom + ' ' + (l.email || '') + ' ' + String(l.telephone || '').replace(/\D/g, '') + ' ' + (l.secteur || '') + ' ' + d.pb.text + ' ' + (l.tags || []).join(' ') + ' ' +
       (l.notesHistory || []).map(function (n) { return n.text; }).join(' ')).toLowerCase();
     CACHE[l.id] = d;
@@ -327,6 +332,21 @@
       out.push(bookingResult(b).label + (b.outcomeByName ? ' · noté par ' + b.outcomeByName : '') + (toMs(b.outcomeAt) ? ', le ' + fdate(toMs(b.outcomeAt)) : ''));
       if (b.outcomeNote) out.push('« ' + cut(b.outcomeNote, 140) + ' »');
     } else if (!b) out.push('RDV introuvable (plus ancien que les données chargées)');
+    return out;
+  }
+
+  /* Anciens leads : l'étiquette d'origine et tout ce qu'on sait de leur passage */
+  function ancienInfo(l, d) {
+    var out = [d.src.label + ' · arrivé le ' + fdate(d.real)];
+    var bits = [];
+    if (l.utm && !/^\d{6,}$/.test(String(l.utm))) bits.push('Provenance : ' + l.utm);
+    if (l.dateWebinaire) bits.push('Webinaire du ' + fdate(toMs(l.dateWebinaire)) + (l.present === 'oui' || l.present === true ? ' · présent' : l.present === 'non' || l.present === false ? ' · absent' : ''));
+    if (bits.length) out.push(bits.join(' · '));
+    var tags = [].concat(l.tags || [], Array.isArray(l.webinarTags) ? l.webinarTags : []).filter(function (t) { return t && typeof t === 'string'; });
+    if (tags.length) out.push('Étiquettes : ' + tags.slice(0, 4).join(', ') + (tags.length > 4 ? '…' : ''));
+    var desc = String(l.description || '').trim();
+    if (desc && desc.charAt(0) !== '{') out.push('« ' + cut(desc, 140) + ' »');
+    if (l.lastOptinAt) out.push('Revenu le ' + fdate(toMs(l.lastOptinAt)) + (l.lastOptinSource ? ' · ' + l.lastOptinSource : ''));
     return out;
   }
 
@@ -364,7 +384,7 @@
   var S = {
     view: 'pipe', q: '', per: 'tout', who: null, sort: 'arr',
     f: { src: '', pb: '', par: '', last: '' },
-    fold: { poubelle: true, disqua: true, closing: true }, lim: {},
+    fold: { ancien: true, poubelle: true, disqua: true, closing: true }, lim: {},
     drawer: null, full: null, ft: 'fil', fevf: 'tout', cmp: 'note', tr: {},
     keys: [], rap: [{ s: 'home' }], mine: false, sess: null, sheet: null, drag: null, dark: false, okOther: {}
   };
@@ -559,7 +579,7 @@
     var rb = d.upcoming || d.lastPast;
     h += '<div class="pv2-gt">Ce qu\'il faut savoir</div><div class="pv2-group">' +
       kv('Son problème', d.pb.text ? '<span class="pv2-q">« ' + esc(cut(d.pb.text, 220)) + ' »</span>' : 'Non renseigné') +
-      (d.lost ? kv('Son rendez-vous', d.lost.map(esc).join('<br>')) : rb ? kv('Son rendez-vous', esc(fdate(bookingStart(rb)) + ' avec ' + (rb.personName || '—') + ' · ' + bookingResult(rb).label.toLowerCase() + (rb.outcomeNote ? ' · « ' + cut(rb.outcomeNote, 120) + ' »' : ''))) : '') +
+      (d.lost ? kv(d.col === 'ancien' ? 'Ce qu\'on sait de lui' : 'Son rendez-vous', d.lost.map(esc).join('<br>')) : rb ? kv('Son rendez-vous', esc(fdate(bookingStart(rb)) + ' avec ' + (rb.personName || '—') + ' · ' + bookingResult(rb).label.toLowerCase() + (rb.outcomeNote ? ' · « ' + cut(rb.outcomeNote, 120) + ' »' : ''))) : '') +
       kv('Arrivé par', esc(d.src.label + ' · ' + fdate(d.real))) +
       kv('Dernier échange', esc(lastExchange(l))) + '</div>';
     var nNotes = (l.notesHistory || []).length, f = feed(l).length;
@@ -884,7 +904,7 @@
      seul le prospect y entre, en réservant lui-même. La dernière colonne passe
      par la fenêtre « RDV raté » (qui, quand, pourquoi). */
   function stageRows(cur, chev, only) {
-    return COLS.filter(function (f) { return only ? f.id === only : f.id !== 'sb'; }).map(function (f) {
+    return COLS.filter(function (f) { return only ? f.id === only : (f.id !== 'sb' && f.st.length); }).map(function (f) {
       var rows = f.id === 'perdu'
         ? '<button class="pv2-row" data-a="lost"><div class="pv2-tx"><div class="pv2-tt">' + esc(f.t) + '…</div><div class="pv2-st">Annulé, non honoré, no show, FU closing, Closed Lost</div></div>' + (LOST_STAGES[cur] ? '<span class="pv2-check">✓</span>' : '<span class="pv2-chev">' + ic('chev') + '</span>') + '</button>'
         : f.st.map(function (x) {
@@ -955,9 +975,9 @@
     S.sheet = null; popAfterWrite();
     H.setStage(l, stage, done(l.nom + ' → ' + STAGE_LABEL[stage]));
   }
-  function savePrefs() { try { H.pref('state2', JSON.stringify({ view: S.view, per: S.per, sort: S.sort, fold: S.fold, mine: S.mine, dark: S.dark })); } catch (e) {} }
+  function savePrefs() { try { H.pref('state3', JSON.stringify({ view: S.view, per: S.per, sort: S.sort, fold: S.fold, mine: S.mine, dark: S.dark })); } catch (e) {} }
   function loadPrefs() {
-    try { var p = JSON.parse(H.pref('state2') || 'null'); if (p) { S.view = p.view || S.view; S.per = p.per || S.per; S.sort = p.sort || S.sort; S.fold = p.fold || S.fold; S.mine = !!p.mine; S.dark = !!p.dark; } } catch (e) {}
+    try { var p = JSON.parse(H.pref('state3') || 'null'); if (p) { S.view = p.view || S.view; S.per = p.per || S.per; S.sort = p.sort || S.sort; S.fold = p.fold || S.fold; S.mine = !!p.mine; S.dark = !!p.dark; } } catch (e) {}
   }
   function applyTheme() { ROOT.className = 'pv2' + (S.dark ? ' pv2-dark' : ''); document.documentElement.style.background = S.dark ? '#07080f' : '#eceff8'; }
   function fuDate(q) {
@@ -1019,10 +1039,11 @@
         l = lead(S.sheet.id);
         if (v === 'answered') { S.sheet = { k: 'result2', id: l.id }; H.logCall(l, { answered: true, duration: 180 }, done()); break; }
         var res = v === 'voicemail' ? 'messagerie' : v === 'wrong' ? 'faux numéro' : 'pas de réponse';
+        var nrpCible = E.nrpApresAppel(l);   /* calculé AVANT de noter l'appel : il n'est compté qu'une fois */
         S.sheet = null;
         H.logCall(l, { answered: false, result: res }, function (err) {
           if (err) return done()(err);
-          var cst = l.stage || 'lead', nx = v === 'wrong' ? 'faux_numero' : (NRP_STAGES[cst] ? E.NEXT_NRP[cst] : null);
+          var cst = l.stage || 'lead', nx = v === 'wrong' ? 'faux_numero' : (NRP_STAGES[cst] ? nrpCible : null);
           if (nx && nx !== cst) H.setStage(l, nx, done('Appel noté : ' + res + ' · ' + STAGE_LABEL[nx])); else done('Appel noté : ' + res)();
         });
         break;
@@ -1137,6 +1158,7 @@
     if (to === 'perdu') { S.sheet = { k: 'lost', id: l.id }; render(); return; }
     if (to === 'fu') { S.sheet = { k: 'fu', id: l.id, q: 'd1', toFu: true }; render(); return; }
     var f = colDef(to);
+    if (!f.st.length) { render(); toast('Cette colonne se remplit seule : leads de plus de 6 mois jamais traités'); return; }
     if (f.st.length === 1) { moveTo(l, f.st[0]); return; }
     S.sheet = { k: 'move', id: l.id, to: to }; render();
   }
