@@ -27,6 +27,7 @@
                      (Labo). false : les appels réels viennent de Ringover.
      o.ui            { call, listen, openClose, openBooking, callDetail,
                        generateAi, sendMessage, toast } (facultatifs)
+     o.messagesInLeadsLive true : SMS / WhatsApp / e-mail s'écrivent dans Leads Live
      o.onReady(host) appelé au premier chargement complet
    ES5 strict.
    ═══════════════════════════════════════════════════════════════════════ */
@@ -105,7 +106,7 @@
     }, function (e) { if (window.console) console.warn('[pipeline] bookings', e && e.message); gotB = true; maybeReady(); });
 
     var host = {
-      me: me, team: o.team,
+      me: me, team: o.team, messagesInLeadsLive: !!o.messagesInLeadsLive,
       leads: function () { return LEADS; },
       bookings: function () { return BOOK; },
       pref: function (k, v) {

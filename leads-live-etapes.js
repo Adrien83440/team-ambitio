@@ -17,11 +17,11 @@
      - programmer un rappel sur un lead Lead / NRP le passe en FU.
    Hors mode, rien ne change.
 
-   Interrupteur (comme leads-live-v3.js) :
-     ?v2=1 / ?v2=0 (mémorisé, localStorage crm_v2_force)
-     _config/crm_v2 { enabled: true } → toute l'équipe,
-                    { testeurs: ['slug', …] } → ces membres-là.
-   Pas d'activation automatique pour les admins.
+   Interrupteur : ACTIF POUR TOUT LE MONDE depuis le 29/10/2026 (demande
+   d'Adrien). Repli : ?v2=0 sur un appareil (mémorisé dans localStorage
+   crm_v2_force, ?v2=1 pour revenir) ; coupure générale pour les admins :
+   _config/crm_v2 { enabled: false } (doc lisible des seuls admins — pour
+   toute l'équipe, revenir en arrière par le code).
 
    Crochets posés dans sales-leads.html (tous tolèrent l'absence de ce
    fichier) : getBaseLeads, getFilteredLeads, l2FiltersActiveCount,
@@ -61,7 +61,8 @@
     if (on || !PE()) return;
     var f = forcage();
     if (f === '0') return;
-    if (f === '1' || eligibleCfg()) activer();
+    if (cfg && cfg.enabled === false && f !== '1') return;
+    activer();
   }
   function lireCfg() {
     try {
@@ -73,7 +74,7 @@
           /* myIdentitySlug arrive avec le roster : on réessaie un peu plus tard */
           setTimeout(peutActiver, 2500);
           setTimeout(peutActiver, 8000);
-        }).catch(function () { cfg = {}; });
+        }).catch(function () { cfg = {}; peutActiver(); });   /* sales : doc illisible → actif */
       });
     } catch (e) { /* Firebase indisponible : mode historique */ }
   }

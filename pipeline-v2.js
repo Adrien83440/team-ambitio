@@ -24,6 +24,9 @@
      setOutcome(lead, booking, outcome, {origin, kind, note}, cb)
        résultat d'un RDV (annulé / non honoré / no show / offre / non closé)
      openLeadsLive(lead) : ouvre la même fiche dans Leads Live
+     messagesInLeadsLive (facultatif, true en production) : SMS, WhatsApp et
+       e-mail s'écrivent dans Leads Live (modèles WhatsApp, fenêtre 24 h,
+       numéro d'envoi) — le Pipeline y ouvre la fiche au lieu d'envoyer
 
    Données lues sur le lead : champs réels de `leads` (stage, telephone,
    communications[], notesHistory[], timeline_history[], followUps[], quiz,
@@ -1031,7 +1034,9 @@
         else if (v === 'trash') { S.sheet = null; H.setStage(l, 'poubelle', done(l.nom + ' → Poubelle')); }
         else { S.sheet = null; render(true); }
         break;
-      case 'msg': l = lead(curLeadId()); S.sheet = { k: 'msg', id: l.id, ch: v }; render(true); setTimeout(function () { var m = document.getElementById('pv2msg'); if (m) m.focus(); }, 30); break;
+      case 'msg': l = lead(curLeadId());
+        if (H.messagesInLeadsLive) { H.openLeadsLive(l); toast('Le message s\'écrit dans Leads Live : la fiche s\'ouvre dans un nouvel onglet'); break; }
+        S.sheet = { k: 'msg', id: l.id, ch: v }; render(true); setTimeout(function () { var m = document.getElementById('pv2msg'); if (m) m.focus(); }, 30); break;
       case 'msgsend': l = lead(S.sheet.id); var tx = val('pv2msg'); if (!tx) { toast('Le message est vide'); break; } var ch = S.sheet.ch; S.sheet = null; H.sendMessage(l, ch, tx, done('Message envoyé')); break;
       case 'fu': l = lead(curLeadId()); S.sheet = { k: 'fu', id: l.id, q: 'd1' }; render(true); break;
       case 'fuq': S.sheet.q = v; S.sheet.dt = ''; S.sheet.note = val('pv2funote'); render(true); break;
@@ -1050,7 +1055,9 @@
       case 'addnote': l = lead(curLeadId()); var nt = val('pv2note'); if (!nt) { toast('La note est vide'); break; } H.addNote(l, nt, done('Note ajoutée')); break;
       case 'cmpsend':
         l = lead(curLeadId()); var ct = val('pv2cmp'); if (!ct) { toast('Le message est vide'); break; }
-        if (S.cmp === 'note') H.addNote(l, ct, done('Note ajoutée')); else H.sendMessage(l, S.cmp, ct, done('Message envoyé'));
+        if (S.cmp === 'note') H.addNote(l, ct, done('Note ajoutée'));
+        else if (H.messagesInLeadsLive) { H.openLeadsLive(l); toast('Le message s\'écrit dans Leads Live : la fiche s\'ouvre dans un nouvel onglet'); }
+        else H.sendMessage(l, S.cmp, ct, done('Message envoyé'));
         break;
       case 'setstage': l = lead(curLeadId()); moveTo(l, v); break;
       case 'tag': l = lead(curLeadId()); S.sheet = { k: 'tag', id: l.id }; render(true); setTimeout(function () { var x = document.getElementById('pv2tag'); if (x) x.focus(); }, 30); break;
