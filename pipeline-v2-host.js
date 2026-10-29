@@ -20,7 +20,14 @@
      o.FV            firebase.firestore.FieldValue
      o.me            { slug, name, role, uid }
      o.team          [{ slug, name, color, pipeline }]
-     o.leadsQuery    requête des leads (ex. orderBy createdAt desc, limit)
+     o.leadsQuery    requête des leads, en direct (Labo : petite base)
+       — OU, en production (30/10/2026, 8 500 fiches = 17 Mo, trop lourd en
+       une requête : Firestore renvoyait d'abord un cache VIDE → « 0 partout ») :
+     o.leadsLive     [requêtes] en direct, légères (leads récents, fiches
+                     modifiées pendant la session) : affichage immédiat
+     o.leadsPage(n, dernierDoc) → requête d'une page de l'historique, lue une
+                     fois en arrière-plan (la page n'écrase jamais une fiche
+                     reçue en direct)
      o.bookingsQuery requête des RDV
      o.leadsLiveUrl  page Leads Live ('sales-leads.html' ou le Labo)
      o.logCalls      true : un appel noté à la main crée une communication
@@ -75,25 +82,90 @@
       if (!AF || !AF.recordLeadAction || !action) return;
       try { AF.recordLeadAction(l.id, l, action, { prevStatus: l.status || null, origin: 'pipeline' }); } catch (e) {}
     }
-    function changed() { if (ready && window.PipelineV2) window.PipelineV2.refresh(); }
+    /* Rafraîchissement regroupé : plusieurs listeners et pages peuvent arriver en rafale */
+    var refreshT = null;
+    function changed() {
+      if (!ready || !window.PipelineV2) return;
+      clearTimeout(refreshT);
+      refreshT = setTimeout(function () { window.PipelineV2.refresh(); }, 120);
+    }
     function maybeReady() {
       if (ready || !gotL || !gotB) return;
       ready = true;
       if (o.onReady) o.onReady(host);
     }
+    /* Un premier instantané VIDE venu du cache (serveur pas encore joint) n'est
+       pas une réponse : on attend le serveur au lieu d'afficher « 0 lead ». */
+    function cacheVide(snap) { return !!(snap && snap.metadata && snap.metadata.fromCache && snap.empty); }
 
-    o.leadsQuery.onSnapshot(function (snap) {
-      var a = [];
-      snap.forEach(function (doc) {
-        var d = doc.data() || {};
-        if (d._merged === true || d.source === 'migration_suivi_client') return;
-        d.id = doc.id; d._v = 0;
-        a.push(d);
+    var MAP = {}, LIVE = {}, histo = { on: false, n: 0, fini: true, erreur: null };
+    function garde(d) { return !(d._merged === true || d.source === 'migration_suivi_client'); }
+    function rebuild() { var a = []; for (var k in MAP) if (Object.prototype.hasOwnProperty.call(MAP, k)) a.push(MAP[k]); LEADS = a; }
+
+    if (o.leadsQuery) {
+      o.leadsQuery.onSnapshot(function (snap) {
+        if (cacheVide(snap)) return;
+        var a = [];
+        snap.forEach(function (doc) {
+          var d = doc.data() || {};
+          if (!garde(d)) return;
+          d.id = doc.id; d._v = 0;
+          a.push(d);
+        });
+        LEADS = a; gotL = true; maybeReady(); changed();
+      }, function (e) { if (window.console) console.warn('[pipeline] leads', e && e.message); gotL = true; maybeReady(); });
+    } else {
+      var restants = (o.leadsLive || []).length;
+      (o.leadsLive || []).forEach(function (q) {
+        var premier = true;
+        q.onSnapshot(function (snap) {
+          if (premier && cacheVide(snap)) return;
+          var ch = snap.docChanges ? snap.docChanges() : [];
+          ch.forEach(function (c) {
+            if (c.type === 'removed') return;   /* sorti de la fenêtre, pas supprimé */
+            var d = c.doc.data() || {};
+            if (!garde(d)) { delete MAP[c.doc.id]; return; }
+            d.id = c.doc.id; d._v = 0; MAP[c.doc.id] = d; LIVE[c.doc.id] = 1;
+          });
+          rebuild();
+          if (premier) { premier = false; restants--; if (restants <= 0) { gotL = true; maybeReady(); } }
+          changed();
+        }, function (e) {
+          if (window.console) console.warn('[pipeline] leads (direct)', e && e.message);
+          if (premier) { premier = false; restants--; if (restants <= 0) { gotL = true; maybeReady(); } }
+        });
       });
-      LEADS = a; gotL = true; maybeReady(); changed();
-    }, function (e) { if (window.console) console.warn('[pipeline] leads', e && e.message); gotL = true; maybeReady(); });
+      if (o.leadsPage) historique();
+    }
+    /* Historique : pages lues l'une après l'autre, en arrière-plan */
+    function historique() {
+      histo = { on: true, n: 0, fini: false, erreur: null };
+      var page = 0;
+      function suivante(dernier) {
+        o.leadsPage(page, dernier).get().then(function (snap) {
+          page++;
+          snap.forEach(function (doc) {
+            histo.n++;
+            if (LIVE[doc.id]) return;
+            var d = doc.data() || {};
+            if (!garde(d)) return;
+            d.id = doc.id; d._v = 0; MAP[doc.id] = d;
+          });
+          rebuild(); changed();
+          var docs = snap.docs || [];
+          if (docs.length && docs.length >= (o.pageSize || 1000) && page < 40) setTimeout(function () { suivante(docs[docs.length - 1]); }, 30);
+          else { histo.fini = true; changed(); }
+        }, function (e) {
+          histo.erreur = (e && e.message) || 'erreur'; histo.fini = true;
+          if (window.console) console.warn('[pipeline] historique', histo.erreur);
+          changed();
+        });
+      }
+      suivante(null);
+    }
 
     o.bookingsQuery.onSnapshot(function (snap) {
+      if (!gotB && cacheVide(snap)) return;
       var m = {}, AF = window.AlteoreFlow;
       snap.forEach(function (doc) {
         var b = doc.data() || {};
@@ -108,6 +180,12 @@
     var host = {
       me: me, team: o.team, messagesInLeadsLive: !!o.messagesInLeadsLive,
       leads: function () { return LEADS; },
+      /* Texte d'avancement du chargement de l'historique ('' quand c'est fini) */
+      loadingText: function () {
+        if (!histo.on) return '';
+        if (histo.erreur) return 'Historique incomplet : ' + histo.erreur + ' (recharge la page)';
+        return histo.fini ? '' : 'Chargement de l\'historique… ' + histo.n + ' leads lus';
+      },
       bookings: function () { return BOOK; },
       pref: function (k, v) {
         try { if (arguments.length > 1) window.localStorage.setItem('pv2:' + k, v); else return window.localStorage.getItem('pv2:' + k); } catch (e) { return null; }

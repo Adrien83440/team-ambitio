@@ -54,6 +54,10 @@
   var root = document.createElement('div');
   root.id = 'pv2root'; root.className = 'pv2';
   root.innerHTML = '<div class="pv2-wait">Chargement du Pipeline…</div>';
+  setTimeout(function () {
+    var w = root.querySelector('.pv2-wait');
+    if (w) w.textContent = 'Connexion lente : le Pipeline attend encore les données du serveur…';
+  }, 15000);
   document.body.appendChild(root);
 
   var db = firebase.firestore(), FV = firebase.firestore.FieldValue;
@@ -89,9 +93,21 @@
       name: (moi && (moi.shortName || moi.displayName || moi.name)) || u.displayName || (u.email || '').split('@')[0],
       uid: u.uid, role: ud.role === 'admin' ? 'admin' : 'sales'
     };
+    var limite60 = firebase.firestore.Timestamp.fromDate(new Date(Date.now() - 60 * 864e5));
     host = window.PipelineV2Host.create({
       db: db, FV: FV, me: me, team: team,
-      leadsQuery: db.collection('leads').orderBy('createdAt', 'desc').limit(15000),
+      /* 30/10/2026 : plus de requête unique sur les 8 500 fiches (17 Mo) —
+         d'abord les récents et ce qui bouge pendant la session, en direct,
+         puis l'historique par pages de 1 000 en arrière-plan. */
+      leadsLive: [
+        db.collection('leads').where('createdAt', '>=', limite60),
+        db.collection('leads').where('updatedAt', '>=', firebase.firestore.Timestamp.fromDate(new Date(Date.now() - 15 * 60000)))
+      ],
+      leadsPage: function (n, dernier) {
+        var q = db.collection('leads').where('createdAt', '<', limite60).orderBy('createdAt', 'desc').limit(1000);
+        return dernier ? q.startAfter(dernier) : q;
+      },
+      pageSize: 1000,
       bookingsQuery: db.collection('bookings'),
       leadsLiveUrl: 'sales-leads.html',
       logCalls: false,

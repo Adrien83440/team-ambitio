@@ -487,7 +487,7 @@
     var fc = activeFilterCount();
     h += '<button class="pv2-pill" data-a="filters" aria-pressed="' + (fc > 0) + '">Plus de filtres' + (fc ? '<span class="pv2-n">' + fc + '</span>' : '') + '</button></div>';
     var restricted = S.q || S.per !== 'tout' || S.who || fc || S.keys.length, bulk = bulkCandidates(rows);
-    h += '<div class="pv2-result"><span><b>' + rows.length + '</b> lead' + (rows.length > 1 ? 's' : '') + (restricted ? ' sur ' + total + ' · <button data-a="reset">Tout effacer</button>' : '') + (S.q ? ' · la recherche ignore les filtres' : '') + '</span>' +
+    h += '<div class="pv2-result"><span><b>' + rows.length + '</b> lead' + (rows.length > 1 ? 's' : '') + (restricted ? ' sur ' + total + ' · <button data-a="reset">Tout effacer</button>' : '') + (S.q ? ' · la recherche ignore les filtres' : '') + (H.loadingText && H.loadingText() ? ' · <span class="pv2-loadtx">' + esc(H.loadingText()) + '</span>' : '') + '</span>' +
       (bulk.ok.length ? '<button class="pv2-take" data-a="bulktake">Prendre ces ' + plural(bulk.ok.length, 'lead') + '</button>' : '') + '<span class="pv2-sp"></span>' +
       '<label>Trier : <select class="pv2-sort" id="pv2sort">' + [['arr', 'arrivée récente d\'abord'], ['oubli', 'oubliés depuis longtemps d\'abord'], ['chaud', 'les plus chauds d\'abord'], ['nom', 'par nom']].map(function (o) {
       return '<option value="' + o[0] + '"' + (S.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label></div>';
