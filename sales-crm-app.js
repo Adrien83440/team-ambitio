@@ -2515,6 +2515,50 @@ function openFieldEditModal(field,fieldIdx){
 /* ═══ FIRESTORE ═══ */
 var leadsUnsub=null,leadsQueryFrom=null;
 var LEADS_QUERY_LIMIT=5000;
+
+/* ═══ RENDU SUR MISE À JOUR LIVE (29/10/2026) ═══
+   Chaque écriture sur l'un des ~5 000 leads chargés (dialer, Ringover, Make…)
+   relançait buildBoard + renderAll : tableau détruit et reconstruit en
+   boucle, cartes qui « s'effacent » sous la souris, « Voir plus » et
+   défilement remis à zéro, page qui rame (constat chez Vincent).
+   Après le premier chargement : rendu regroupé (au plus un toutes les
+   LIVE_RENDER_MS), sans reconstruire les colonnes, défilement conservé, et
+   différé tant que l'utilisateur glisse une carte, saisit dans la vue
+   feuille / liste, a un menu de tri ouvert, ou que l'onglet est caché. */
+var LIVE_RENDER_MS=2500,liveRenderTimer=null,liveRenderPending=false,liveRenderLastAt=0;
+function liveRenderBusy(){
+  if(draggedLeadId)return true;
+  if(document.hidden)return true;
+  if(document.querySelector('.col-sort-dd.open'))return true;
+  var ae=document.activeElement;
+  if(ae&&ae!==document.body&&(ae.tagName==='INPUT'||ae.tagName==='SELECT'||ae.tagName==='TEXTAREA'||ae.isContentEditable)&&ae.closest('#viewList,#viewSheet,#crmBoard'))return true;
+  return false;
+}
+function scheduleLiveRender(){
+  liveRenderPending=true;
+  if(liveRenderTimer)return;
+  var wait=Math.max(0,LIVE_RENDER_MS-(Date.now()-liveRenderLastAt));
+  liveRenderTimer=setTimeout(runLiveRender,wait);
+}
+function runLiveRender(){
+  liveRenderTimer=null;
+  if(!liveRenderPending)return;
+  if(liveRenderBusy()){liveRenderTimer=setTimeout(runLiveRender,1000);return;}
+  liveRenderPending=false;
+  liveRenderLastAt=Date.now();
+  var keep=[];
+  document.querySelectorAll('#crmBoard,#crmBoard [data-drop],#viewList .list-table-wrap,#viewSheet .sheet-table-wrap').forEach(function(el){
+    if(el.scrollTop||el.scrollLeft)keep.push({el:el,sel:el.id?'#'+el.id:(el.dataset.drop?'[data-drop="'+el.dataset.drop+'"]':null),t:el.scrollTop,l:el.scrollLeft});
+  });
+  var wy=window.pageYOffset;
+  collectTags();renderSetterDD();renderAll();renderActiveChips();
+  keep.forEach(function(k){
+    var el=k.el.isConnected?k.el:(k.sel?document.querySelector(k.sel):null);
+    if(el){el.scrollTop=k.t;el.scrollLeft=k.l;}
+  });
+  if(window.pageYOffset!==wy)window.scrollTo(window.pageXOffset,wy);
+}
+document.addEventListener('visibilitychange',function(){if(!document.hidden&&liveRenderPending&&!liveRenderTimer)liveRenderTimer=setTimeout(runLiveRender,300);});
 /* La requête doit-elle être relancée ? Seule la borne BASSE la pilote. */
 function needsRequery(){var from=periodBounds().from;return (from?from.getTime():0)!==leadsQueryFrom;}
 function startLeadsListener(){
@@ -2546,6 +2590,9 @@ function startLeadsListener(){
     });
     var banner=document.getElementById('crmLimitBanner');
     if(banner){var hit=snap.size>=LEADS_QUERY_LIMIT;banner.style.display=hit?'':'none';if(hit)banner.textContent='⚠ Plafond de '+LEADS_QUERY_LIMIT+' leads atteint pour cette période : les plus anciens ne sont pas chargés. Réduis la période pour les voir.';}
+    if(crmDataLoaded){scheduleLiveRender();return;}
+    if(liveRenderTimer){clearTimeout(liveRenderTimer);liveRenderTimer=null;}
+    liveRenderPending=false;liveRenderLastAt=Date.now();
     crmDataLoaded=true;colCardLimits={};buildBoard();collectTags();renderSetterDD();renderAll();renderSavedViews();renderActiveChips();
   },function(err){
     console.error('[crm] onSnapshot error:',err);
