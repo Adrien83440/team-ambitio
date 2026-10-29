@@ -939,7 +939,7 @@
          La hauteur suit la fenêtre : sur un écran court, le formulaire reste
          entièrement atteignable. */
       '.cp-body{max-height:none}',
-      '.cp-main,.cp-aside{min-height:0;max-height:min(68vh,calc(100vh - 230px));overflow-y:auto;overscroll-behavior:contain}',
+      '.cp-main,.cp-aside{min-height:0;max-height:min(68vh,calc(var(--al-vh,100vh) - 230px));overflow-y:auto;overscroll-behavior:contain}',
 
       /* ── Brouillon : bandeau de reprise + témoin discret ── */
       '.cp-draft-bar{font-size:11.5px;line-height:1.5;background:#fdf6e6;border:1px solid #f0dfae;color:#8a6412;border-radius:9px;padding:9px 11px;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}',

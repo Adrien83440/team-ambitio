@@ -24,7 +24,7 @@
 
   var CSS = ''
     + '.cdx-overlay{position:fixed;inset:0;background:rgba(10,8,24,0.62);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px;overflow:auto}'
-    + '.cdx-modal{background:#14162a;border:1px solid rgba(255,255,255,0.10);border-radius:16px;max-width:520px;width:100%;padding:22px 22px 18px;color:rgba(255,255,255,0.92);font-family:inherit;font-size:13px;line-height:1.55;box-shadow:0 18px 60px rgba(0,0,0,0.5);max-height:calc(100vh - 40px);overflow:auto}'
+    + '.cdx-modal{background:#14162a;border:1px solid rgba(255,255,255,0.10);border-radius:16px;max-width:520px;width:100%;padding:22px 22px 18px;color:rgba(255,255,255,0.92);font-family:inherit;font-size:13px;line-height:1.55;box-shadow:0 18px 60px rgba(0,0,0,0.5);max-height:calc(var(--al-vh,100vh) - 40px);overflow:auto}'
     + '.cdx-title{font-size:17px;font-weight:800;display:flex;align-items:center;gap:8px;margin-bottom:2px}'
     + '.cdx-sub{font-size:12px;color:rgba(255,255,255,0.55);margin-bottom:14px}'
     + '.cdx-sec{margin-top:12px;padding:11px 13px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:11px}'

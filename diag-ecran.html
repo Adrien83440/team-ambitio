@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="robots" content="noindex"/>
+<title>Alteore — Diagnostic écran</title>
+<!--
+  Page de diagnostic sans aucune donnée ni Firebase : affiche ce que Safari
+  expose de l'écran (taille, orientation, pliure, zones sûres, tactile).
+  Sert à régler mobile.css / le « Mode posé » (module AlMobile) sur l’iPhone Fold :
+  l'ouvrir déplié, plié, puis à moitié plié, et copier le relevé.
+-->
+<style>
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.45 -apple-system,system-ui,sans-serif;background:#0b0b18;color:#e5e7eb;
+  padding:calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left))}
+h1{font-size:19px;margin:0 0 4px}
+p.sub{margin:0 0 16px;color:#9ca3af;font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.card{background:#14142a;border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:12px 14px}
+.card h2{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#a78bfa;margin:0 0 8px}
+.row{display:flex;justify-content:space-between;gap:12px;padding:3px 0;border-bottom:1px dashed rgba(255,255,255,.06);font-size:13px}
+.row:last-child{border-bottom:0}
+.row b{font-weight:600;color:#fff;text-align:right;word-break:break-all}
+.yes{color:#34d399!important}.no{color:#6b7280!important}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
+button{min-height:44px;padding:0 16px;border-radius:12px;border:1px solid rgba(255,255,255,.15);background:#8b5cf6;color:#fff;font:700 14px/1 inherit;cursor:pointer}
+button.ghost{background:transparent}
+#log{white-space:pre-wrap;font:12px/1.4 ui-monospace,Menlo,monospace;background:#05050c;border-radius:10px;padding:10px;max-height:220px;overflow:auto;color:#9ca3af}
+#seg{position:fixed;inset:0;pointer-events:none;z-index:5}
+#seg div{position:absolute;border:2px dashed rgba(52,211,153,.6);border-radius:6px}
+#probe{position:fixed;left:0;top:0;width:0;height:0;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);visibility:hidden}
+</style>
+</head>
+<body>
+<h1>📐 Diagnostic écran</h1>
+<p class="sub">Ouvre cette page déplié, plié, puis à moitié plié : les valeurs se mettent à jour en direct. « Copier le relevé » garde chaque position.</p>
+<div class="grid" id="grid"></div>
+<div class="acts">
+  <button type="button" id="snap">📋 Copier le relevé</button>
+  <button type="button" class="ghost" id="clear">Vider</button>
+</div>
+<div id="log"></div>
+<div id="seg"></div>
+<div id="probe"></div>
+<script>
+(function () {
+  var snaps = [];
+  function mm(q) { try { return window.matchMedia(q).matches; } catch (e) { return null; } }
+  function yn(v) { return v === null || v === undefined ? '—' : (v ? 'oui' : 'non'); }
+  function px(v) { return Math.round(v * 10) / 10 + ' px'; }
+  function data() {
+    var vv = window.visualViewport, so = screen.orientation, pr = getComputedStyle(document.getElementById('probe'));
+    var segs = null;
+    try { segs = window.viewport && window.viewport.segments ? Array.prototype.map.call(window.viewport.segments, function (s) { return Math.round(s.x) + ',' + Math.round(s.y) + ' ' + Math.round(s.width) + '×' + Math.round(s.height); }).join(' | ') : null; } catch (e) { segs = 'erreur'; }
+    var posture = null;
+    try { posture = navigator.devicePosture ? navigator.devicePosture.type : null; } catch (e) {}
+    var vSeg = null, hSeg = null;
+    for (var n = 1; n <= 3; n++) { if (mm('(vertical-viewport-segments: ' + n + ')')) vSeg = n; if (mm('(horizontal-viewport-segments: ' + n + ')')) hSeg = n; }
+    return [
+      ['Fenêtre', [
+        ['innerWidth × innerHeight', window.innerWidth + ' × ' + window.innerHeight],
+        ['visualViewport', vv ? px(vv.width) + ' × ' + px(vv.height) + ' (zoom ' + Math.round(vv.scale * 100) / 100 + ')' : '—'],
+        ['screen', screen.width + ' × ' + screen.height],
+        ['devicePixelRatio', window.devicePixelRatio],
+        ['Orientation', (so ? so.type + ' ' + so.angle + '°' : (window.orientation !== undefined ? window.orientation + '°' : '—'))]
+      ]],
+      ['Pliure', [
+        ['viewport.segments', segs || 'non exposé'],
+        ['vertical-viewport-segments', vSeg || 'non'],
+        ['horizontal-viewport-segments', hSeg || 'non'],
+        ['devicePosture', posture || 'non exposé'],
+        ['(device-posture: folded)', yn(mm('(device-posture: folded)'))]
+      ]],
+      ['Zones sûres (safe-area)', [
+        ['haut', pr.paddingTop], ['droite', pr.paddingRight], ['bas', pr.paddingBottom], ['gauche', pr.paddingLeft]
+      ]],
+      ['Saisie', [
+        ['hover: none', yn(mm('(hover: none)'))],
+        ['pointer: coarse', yn(mm('(pointer: coarse)'))],
+        ['maxTouchPoints', navigator.maxTouchPoints],
+        ['100dvh supporté', yn(window.CSS && CSS.supports && CSS.supports('height', '100dvh'))],
+        ['Mode Alteore', window.innerWidth <= 768 ? 'phone (tiroir ☰)' : (window.innerWidth < 1100 ? 'compact (barre d\'icônes)' : 'bureau')]
+      ]],
+      ['Navigateur', [['userAgent', navigator.userAgent]]]
+    ];
+  }
+  function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
+  function render() {
+    var h = '';
+    data().forEach(function (c) {
+      h += '<div class="card"><h2>' + esc(c[0]) + '</h2>';
+      c[1].forEach(function (r) {
+        var v = String(r[1]); var cls = v === 'oui' ? 'yes' : (v === 'non' || v === 'non exposé' ? 'no' : '');
+        h += '<div class="row"><span>' + esc(r[0]) + '</span><b class="' + cls + '">' + esc(v) + '</b></div>';
+      });
+      h += '</div>';
+    });
+    document.getElementById('grid').innerHTML = h;
+    var sg = '';
+    try {
+      if (window.viewport && window.viewport.segments && window.viewport.segments.length > 1) {
+        Array.prototype.forEach.call(window.viewport.segments, function (s) {
+          sg += '<div style="left:' + s.x + 'px;top:' + s.y + 'px;width:' + s.width + 'px;height:' + s.height + 'px"></div>';
+        });
+      }
+    } catch (e) {}
+    document.getElementById('seg').innerHTML = sg;
+  }
+  function text() {
+    return data().map(function (c) { return '[' + c[0] + ']\n' + c[1].map(function (r) { return '  ' + r[0] + ' : ' + r[1]; }).join('\n'); }).join('\n');
+  }
+  document.getElementById('snap').addEventListener('click', function () {
+    var label = prompt('Position de l\'écran (ex. déplié paysage, plié, à moitié plié) :', '') || ('relevé ' + (snaps.length + 1));
+    snaps.push('=== ' + label + ' — ' + new Date().toLocaleTimeString('fr-FR') + ' ===\n' + text());
+    var all = snaps.join('\n\n');
+    document.getElementById('log').textContent = all;
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(all).then(function () { document.getElementById('snap').textContent = '✅ Copié (' + snaps.length + ')'; }, function () {});
+  });
+  document.getElementById('clear').addEventListener('click', function () { snaps = []; document.getElementById('log').textContent = ''; document.getElementById('snap').textContent = '📋 Copier le relevé'; });
+  window.addEventListener('resize', render);
+  window.addEventListener('orientationchange', function () { setTimeout(render, 300); });
+  try { if (navigator.devicePosture) navigator.devicePosture.addEventListener('change', render); } catch (e) {}
+  setInterval(render, 1000);
+  render();
+})();
+</script>
+</body>
+</html>

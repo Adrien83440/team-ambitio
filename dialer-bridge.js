@@ -473,7 +473,7 @@
       @media (max-width: 480px) {
         #${WIDGET_ID} {
           width: calc(100vw - 16px) !important;
-          height: calc(100vh - 16px) !important;
+          height: calc(var(--al-vh,100vh) - 16px) !important;
           left: 8px !important; top: 8px !important;
           right: auto !important; bottom: auto !important;
         }

@@ -338,7 +338,7 @@
     .nav-overlay.show { display:block; }
 
     #ambitio-sidebar {
-      position:fixed; top:0; left:0; height:100vh; width:var(--nav-w);
+      position:fixed; top:0; left:0; height:var(--al-vh,100vh); width:var(--nav-w);
       z-index:999; display:flex; flex-direction:column; overflow:hidden;
       transition:width 0.3s cubic-bezier(.4,0,.2,1);
       font-family:'Plus Jakarta Sans',sans-serif;
@@ -854,6 +854,9 @@
           <div class="nav-theme-switch"></div>
           <span class="nav-theme-label">${isLight ? '☀️ Clair' : '🌙 Sombre'}</span>
         </div>
+        <div class="nav-posed-toggle" id="navPosedToggle" title="Mode posé : écran à moitié plié, la page en haut et les commandes en bas" data-label="Mode posé">
+          <span>📖</span><span class="lb">Mode posé</span>
+        </div>
         <div class="nav-profile-btn" id="navProfileBtn">
           <div class="nav-avatar">${user.initials}</div>
           <div class="nav-profile-info">
@@ -879,11 +882,17 @@
     document.body.appendChild(overlay);
 
     mobileToggle.addEventListener('click', () => { sidebar.classList.toggle('mobile-open'); overlay.classList.toggle('show'); });
-    overlay.addEventListener('click', () => { sidebar.classList.remove('mobile-open'); overlay.classList.remove('show'); });
+    overlay.addEventListener('click', () => {
+      sidebar.classList.remove('mobile-open'); overlay.classList.remove('show');
+      if (window.AlMobile) window.AlMobile.closeRail();
+    });
 
     const collapseBtn = document.getElementById('navCollapseBtn');
     if (isCollapsed) collapseBtn.innerHTML = '▶';
     collapseBtn.addEventListener('click', () => {
+      // iPhone / petit écran : barre d'icônes dépliée par-dessus ou tiroir
+      // refermé, sans toucher à la préférence bureau (voir AlMobile).
+      if (window.AlMobile && window.AlMobile.handleCollapse()) return;
       const c = sidebar.classList.toggle('collapsed');
       document.body.classList.toggle('sidebar-collapsed', c);
       collapseBtn.innerHTML = c ? '▶' : '◀';
@@ -891,6 +900,7 @@
     });
 
     document.getElementById('navProfileBtn').addEventListener('click', openProfileModal);
+    if (window.AlMobile) window.AlMobile.onSidebar();
 
     // Toggle sections repliables — état mémorisé par section (localStorage).
     // NB : la section de la page active est ré-ouverte de force au prochain
@@ -1993,3 +2003,372 @@
   }
 })();
 
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MOBILE / IPHONE FOLD — couche responsive commune (29/10/2026)
+   ───────────────────────────────────────────────────────────────────────
+   Pose sur <html> le mode d'affichage (al-mode-desk / compact / phone, cf.
+   mobile.css), charge mobile.css, range les boutons flottants sous un seul
+   bouton sur petit écran et gère le « Mode posé » (écran à moitié plié :
+   la page en haut, un panneau de commandes en bas).
+     - viewport : ajoute maximum-scale=1 → Safari iOS ne zoome plus tout
+       seul quand on touche un champ (< 16 px) ; le pincement reste possible.
+     - compact (769–1099 px) : sidebar en barre d'icônes, le bouton ▶ la
+       déplie PAR-DESSUS le contenu, sans mémoriser (nav_collapsed reste
+       la préférence du bureau).
+     - phone (≤ 768 px) : tiroir ☰, toujours avec les libellés.
+     - Mode posé : automatique si Safari expose la pliure (Viewport
+       Segments), sinon bouton « 📖 Mode posé » du pied de sidebar
+       (écrans tactiles, écran déplié). Préférence : localStorage
+       al_posture = 'on' ; le quitter coupe aussi l'auto pour la session.
+   Exposé : window.AlMobile (utilisé par buildSidebar). ES5.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function () {
+  if (window.AlMobile) return;
+  var de = document.documentElement;
+  var IN_FRAME = false;
+  try { IN_FRAME = window.self !== window.top; } catch (e) { IN_FRAME = true; }
+
+  (function fixViewport() {
+    var m = document.querySelector('meta[name="viewport"]');
+    if (!m) {
+      m = document.createElement('meta'); m.setAttribute('name', 'viewport');
+      m.setAttribute('content', 'width=device-width,initial-scale=1');
+      document.head.appendChild(m);
+    }
+    var c = m.getAttribute('content') || '';
+    if (!/maximum-scale/.test(c) && !/user-scalable\s*=\s*no/.test(c)) m.setAttribute('content', c + ',maximum-scale=1');
+  })();
+
+  (function injectSheet() {
+    var link = document.querySelector('link[href="mobile.css"]');
+    if (!link) {
+      link = document.createElement('link'); link.rel = 'stylesheet'; link.href = 'mobile.css';
+      document.head.appendChild(link);
+    }
+    // Comme theme-light.css : en fin de <body> pour passer après le CSS de la page.
+    function moveToEnd() { document.body.appendChild(link); }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', moveToEnd);
+    else moveToEnd();
+  })();
+
+  function mq(q) { return window.matchMedia ? window.matchMedia(q) : { matches: false }; }
+  function onMq(m, fn) { if (!m) return; if (m.addEventListener) m.addEventListener('change', fn); else if (m.addListener) m.addListener(fn); }
+  var MQ_PHONE = mq('(max-width: 768px)');
+  var MQ_COMPACT = mq('(min-width: 769px) and (max-width: 1099px)');
+  var MQ_TOUCH = mq('(hover: none) and (pointer: coarse)');
+  function mode() { return MQ_PHONE.matches ? 'phone' : (MQ_COMPACT.matches ? 'compact' : 'desk'); }
+
+  /* ── Sidebar ─────────────────────────────────────────────────────── */
+  function sidebarEls() {
+    return { sb: document.getElementById('ambitio-sidebar'), ov: document.querySelector('.nav-overlay'), btn: document.getElementById('navCollapseBtn') };
+  }
+  function syncSidebar() {
+    var e = sidebarEls(), m = mode();
+    if (!e.sb || !document.body) return;
+    e.sb.classList.remove('mobile-open');
+    if (e.ov) e.ov.classList.remove('show');
+    if (m === 'desk') {
+      var c = localStorage.getItem('nav_collapsed') === '1';
+      e.sb.classList.toggle('collapsed', c);
+      document.body.classList.toggle('sidebar-collapsed', c);
+      if (e.btn) { e.btn.innerHTML = c ? '▶' : '◀'; e.btn.title = 'Réduire'; }
+    } else if (m === 'compact') {
+      e.sb.classList.add('collapsed');
+      document.body.classList.add('sidebar-collapsed');
+      if (e.btn) { e.btn.innerHTML = '▶'; e.btn.title = 'Déplier le menu'; }
+    } else {
+      e.sb.classList.remove('collapsed');
+      document.body.classList.remove('sidebar-collapsed');
+      if (e.btn) { e.btn.innerHTML = '✕'; e.btn.title = 'Fermer le menu'; }
+    }
+  }
+  // Clic sur ◀/▶ : renvoie true si le mode mobile l'a pris en charge.
+  function handleCollapse() {
+    var e = sidebarEls(), m = mode();
+    if (m === 'desk' || !e.sb) return false;
+    if (m === 'compact') {
+      var opening = e.sb.classList.contains('collapsed');
+      e.sb.classList.toggle('collapsed', !opening);
+      if (e.ov) e.ov.classList.toggle('show', opening);
+      if (e.btn) e.btn.innerHTML = opening ? '◀' : '▶';
+    } else {
+      e.sb.classList.remove('mobile-open');
+      if (e.ov) e.ov.classList.remove('show');
+    }
+    return true;
+  }
+  function closeRail() {
+    var e = sidebarEls();
+    if (mode() === 'compact' && e.sb) { e.sb.classList.add('collapsed'); if (e.btn) e.btn.innerHTML = '▶'; }
+  }
+
+  /* ── Boutons flottants regroupés ─────────────────────────────────── */
+  var FABS = [
+    { s: '#ambitio-inbox-fab', label: 'Messages', ic: '🔔', isNew: function (el) { var b = el.querySelector('.iw-fab-badge'); return !!(b && !b.classList.contains('hidden')); } },
+    { s: '#alteoInfosBell', label: 'Infos équipe', ic: '📣', isNew: function (el) { return el.classList.contains('has-new'); } },
+    { s: '.aio-fab', label: 'Assistant IA', ic: '🔮' },
+    { s: '.aidw-fab', label: 'Aide', ic: '❓' }
+  ];
+  var FAB_SEL = FABS.map(function (f) { return f.s; }).join(',');
+  var launcher = null, labels = null, fabCount = -1;
+  function presentFabs() {
+    var out = [];
+    FABS.forEach(function (f) { var el = document.querySelector(f.s); if (el && el.isConnected) out.push({ f: f, el: el }); });
+    return out;
+  }
+  function grouped() { return de.classList.contains('al-fabs-grouped'); }
+  function layoutFabs() {
+    var list = presentFabs();
+    if (!grouped()) {
+      list.forEach(function (x) { ['bottom', 'right', 'top', 'left'].forEach(function (p) { x.el.style.removeProperty(p); }); });
+      if (labels) labels.innerHTML = '';
+      return;
+    }
+    var open = de.classList.contains('al-fabs-open'), h = '';
+    // Base = haut réel du bouton « + » (il peut être remonté par page au-dessus
+    // d'une zone de saisie fixée en bas : --al-fab-lift dans mobile.css).
+    var base = 14 + 50;
+    if (launcher && launcher.offsetWidth) base = Math.round(window.innerHeight - launcher.getBoundingClientRect().top);
+    list.forEach(function (x, i) {
+      var w = x.el.offsetWidth || 50;
+      var b = base + 14 + i * 60 + Math.round((50 - (x.el.offsetHeight || 50)) / 2);
+      x.el.style.setProperty('top', 'auto', 'important');
+      x.el.style.setProperty('left', 'auto', 'important');
+      x.el.style.setProperty('bottom', b + 'px', 'important');
+      x.el.style.setProperty('right', 'calc(' + Math.round(14 + (50 - w) / 2) + 'px + var(--al-safe-r, 0px))', 'important');
+      if (open) h += '<span class="al-fab-lb" style="bottom:' + (base + 14 + i * 60 + 13) + 'px">' + x.f.label + '</span>';
+    });
+    if (labels) labels.innerHTML = h;
+  }
+  function setFabsOpen(open) {
+    de.classList.toggle('al-fabs-open', !!open);
+    if (launcher) launcher.setAttribute('aria-expanded', open ? 'true' : 'false');
+    layoutFabs();
+  }
+  function refreshFabs() {
+    if (!launcher) return;
+    var list = presentFabs(), anyNew = false;
+    list.forEach(function (x) { if (x.f.isNew && x.f.isNew(x.el)) anyNew = true; });
+    launcher.classList.toggle('empty', !list.length);
+    launcher.classList.toggle('has-new', anyNew);
+    // Les widgets (aide, IA, messages…) arrivent après coup : on recale le
+    // groupe et le panneau du mode posé quand leur nombre change.
+    if (list.length !== fabCount) {
+      fabCount = list.length;
+      if (grouped()) layoutFabs();
+      if (de.classList.contains('al-posed')) buildPanel();
+    }
+    refreshPanelBadges();
+  }
+  function buildLauncher() {
+    if (launcher || IN_FRAME || !document.body) return;
+    var scrim = document.createElement('div'); scrim.id = 'al-fab-scrim';
+    labels = document.createElement('div'); labels.id = 'al-fab-labels';
+    launcher = document.createElement('button');
+    launcher.id = 'al-fab-launcher'; launcher.type = 'button'; launcher.className = 'empty';
+    launcher.setAttribute('aria-label', 'Outils : messages, infos, IA, aide');
+    launcher.setAttribute('aria-expanded', 'false');
+    launcher.innerHTML = '<span class="al-fab-ic">+</span><span class="al-fab-dot"></span>';
+    document.body.appendChild(scrim); document.body.appendChild(labels); document.body.appendChild(launcher);
+    launcher.addEventListener('click', function () { setFabsOpen(!de.classList.contains('al-fabs-open')); });
+    scrim.addEventListener('click', function () { setFabsOpen(false); });
+    // Un bouton choisi → on replie le groupe (son panneau s'ouvre normalement).
+    document.addEventListener('click', function (ev) {
+      if (!grouped() || !de.classList.contains('al-fabs-open')) return;
+      var t = ev.target && ev.target.closest ? ev.target.closest(FAB_SEL) : null;
+      if (t) setTimeout(function () { setFabsOpen(false); }, 0);
+    }, true);
+    setInterval(refreshFabs, 1500);
+    refreshFabs();
+  }
+
+  /* ── Mode posé ───────────────────────────────────────────────────── */
+  var POSE_KEY = 'al_posture', POSE_OFF = 'al_posture_off';
+  function segments() {
+    try {
+      var vs = window.viewport && window.viewport.segments;
+      if (vs && vs.length === 2 && Math.abs(vs[0].x - vs[1].x) < 2 && vs[1].y > vs[0].y) {
+        return { top: Math.round(vs[0].height), gap: Math.max(0, Math.round(vs[1].y - (vs[0].y + vs[0].height))) };
+      }
+    } catch (e) {}
+    if (mq('(vertical-viewport-segments: 2)').matches) return { top: 0, gap: 0 };
+    return null;
+  }
+  // Écran déplié uniquement : plié (≈ 390 px de petit côté), le mode posé n'a pas de sens.
+  function canPose() { return !IN_FRAME && Math.min(window.innerWidth, window.innerHeight) >= 560; }
+  function posedWanted() {
+    if (!canPose()) return false;
+    var off = false; try { off = sessionStorage.getItem(POSE_OFF) === '1'; } catch (e) {}
+    if (localStorage.getItem(POSE_KEY) === 'on') return true;
+    return !off && !!segments();
+  }
+  var panel = null;
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function buildPanel() {
+    var sb = document.getElementById('ambitio-sidebar');
+    if (!document.body) return;
+    if (!panel) {
+      panel = document.createElement('div'); panel.id = 'al-posed-panel';
+      document.body.appendChild(panel);
+      panel.addEventListener('click', function (ev) {
+        var a = ev.target.closest ? ev.target.closest('[data-alp]') : null;
+        if (!a) return;
+        var act = a.getAttribute('data-alp');
+        if (act === 'quit') { setPosed(false); return; }
+        var target = document.querySelector(a.getAttribute('data-sel'));
+        if (target) target.click();
+        if (act === 'theme') setTimeout(buildPanel, 30);
+      });
+    }
+    var here = (window.location.pathname.split('/').pop() || 'index.html');
+    var h = '<div class="alp-bar"><span class="alp-title">📖 Mode posé</span>';
+    presentFabs().forEach(function (x) {
+      h += '<button type="button" class="alp-act" data-alp="fab" data-sel="' + esc(x.f.s) + '" data-fab="' + esc(x.f.s) + '">' + x.f.ic + ' ' + esc(x.f.label) + '</button>';
+    });
+    if (document.getElementById('navThemeToggle')) h += '<button type="button" class="alp-act" data-alp="theme" data-sel="#navThemeToggle">' + (document.body.classList.contains('light-theme') ? '🌙 Sombre' : '☀️ Clair') + '</button>';
+    if (document.getElementById('navProfileBtn')) h += '<button type="button" class="alp-act" data-alp="profile" data-sel="#navProfileBtn">⚙ Profil</button>';
+    h += '<button type="button" class="alp-act quit" data-alp="quit">✕ Quitter</button></div><div class="alp-grid">';
+    var seen = {};
+    function linkHtml(a) {
+      var href = a.getAttribute('href') || '#';
+      if (seen[href]) return ''; seen[href] = 1;
+      var ic = a.querySelector('.nav-item-icon'), lb = a.querySelector('.nav-item-label');
+      var on = href.split('#')[0] === here;
+      return '<a class="alp-link' + (on ? ' on' : '') + '" href="' + esc(href) + '"' + (a.getAttribute('target') ? ' target="_blank" rel="noopener"' : '') + '>' +
+        '<span class="ic">' + (ic ? ic.innerHTML : '•') + '</span><span class="lb">' + esc(lb ? lb.textContent : a.textContent) + '</span></a>';
+    }
+    if (sb) {
+      var groups = sb.querySelectorAll('.nav-sec-group');
+      if (groups.length) {
+        Array.prototype.forEach.call(groups, function (g) {
+          var name = g.querySelector('.nav-sec-label');
+          var links = g.querySelectorAll('a.nav-item');
+          if (!links.length) return;
+          h += '<div class="alp-sec">' + esc(name ? name.textContent : '') + '</div>';
+          Array.prototype.forEach.call(links, function (a) { h += linkHtml(a); });
+        });
+      } else {
+        Array.prototype.forEach.call(sb.querySelectorAll('a.nav-item'), function (a) { h += linkHtml(a); });
+      }
+    }
+    h += '</div>';
+    panel.innerHTML = h;
+    refreshPanelBadges();
+  }
+  function refreshPanelBadges() {
+    if (!panel || !de.classList.contains('al-posed')) return;
+    FABS.forEach(function (f) {
+      var b = panel.querySelector('[data-fab="' + f.s + '"]'), el = document.querySelector(f.s);
+      if (b) b.classList.toggle('has-new', !!(el && f.isNew && f.isNew(el)));
+    });
+  }
+  var posedH = 0;
+  function applyPosed() {
+    var on = posedWanted() && !!document.body, was = de.classList.contains('al-posed');
+    de.classList.toggle('al-posed', on);
+    var btn = document.getElementById('navPosedToggle');
+    if (btn) btn.classList.toggle('on', on);
+    if (!on) { posedH = 0; if (panel) panel.innerHTML = ''; return; }
+    // Safari émet un resize à chaque apparition de sa barre d'outils : on ne
+    // recalcule la séparation que sur un vrai changement (pliure, rotation).
+    var H = window.innerHeight, seg = segments();
+    if (!was || seg || Math.abs(H - posedH) > 120) {
+      posedH = H;
+      var top = seg && seg.top ? seg.top : Math.round(H / 2), gap = seg ? seg.gap : 0;
+      de.style.setProperty('--al-top-h', top + 'px');
+      de.style.setProperty('--al-bot-h', Math.max(160, H - top - gap) + 'px');
+    }
+    if (!was) { setFabsOpen(false); buildPanel(); }
+  }
+  function setPosed(on) {
+    if (on) { localStorage.setItem(POSE_KEY, 'on'); try { sessionStorage.removeItem(POSE_OFF); } catch (e) {} }
+    else { localStorage.removeItem(POSE_KEY); try { sessionStorage.setItem(POSE_OFF, '1'); } catch (e) {} }
+    applyPosed();
+  }
+
+  /* ── Tableaux larges : enveloppe défilante ────────────────────────── */
+  // Hors bureau, un <table> plus large que son conteneur est enveloppé
+  // dans un .al-scroll-x : il défile dans son cadre au lieu de pousser
+  // toute la page. Déjà dans une zone qui défile : rien ; dans un cadre en
+  // overflow hidden : ce cadre passe en défilement horizontal.
+  // Premier ancêtre qui gère le débordement horizontal : { e, scroll }.
+  function overflowAncestor(el) {
+    for (var e = el.parentElement; e && e !== document.body; e = e.parentElement) {
+      var ox = getComputedStyle(e).overflowX;
+      if (ox === 'auto' || ox === 'scroll') return { e: e, scroll: true };
+      if (ox === 'hidden' || ox === 'clip') return { e: e, scroll: false };
+    }
+    return null;
+  }
+  function wrapTables() {
+    if (mode() === 'desk' || !document.body) return;
+    var vw = window.innerWidth;
+    Array.prototype.forEach.call(document.body.querySelectorAll('table'), function (t) {
+      if (t.__alChecked === t.offsetWidth) return;
+      t.__alChecked = t.offsetWidth;
+      var p = t.parentElement;
+      if (!p || p.classList.contains('al-scroll-x') || t.closest('#ambitio-sidebar')) return;
+      var r = t.getBoundingClientRect();
+      if (r.width === 0 || (r.right <= vw + 1 && t.offsetWidth <= p.clientWidth + 1)) return;
+      var anc = overflowAncestor(t);
+      if (anc) {
+        // Cadre masqué (souvent pour les coins arrondis) : le tableau y était
+        // coupé sans pouvoir défiler — il devient défilant.
+        if (!anc.scroll && t.offsetWidth > anc.e.clientWidth + 1) anc.e.style.overflowX = 'auto';
+        return;
+      }
+      var w = document.createElement('div'); w.className = 'al-scroll-x';
+      p.insertBefore(w, t); w.appendChild(t);
+    });
+  }
+  var wrapTimer = null;
+  function scheduleWrap() { if (wrapTimer || mode() === 'desk') return; wrapTimer = setTimeout(function () { wrapTimer = null; wrapTables(); }, 400); }
+
+  /* ── Application du mode ─────────────────────────────────────────── */
+  var lastMode = null;
+  function applyMode() {
+    var m = mode();
+    de.classList.remove('al-mode-desk', 'al-mode-compact', 'al-mode-phone');
+    de.classList.add('al-mode-' + m);
+    de.classList.toggle('al-fabs-grouped', m !== 'desk' && !IN_FRAME);
+    de.classList.toggle('al-touch', !!MQ_TOUCH.matches);
+    de.classList.toggle('al-can-pose', canPose());
+    if (m !== lastMode) { lastMode = m; syncSidebar(); if (m === 'desk') de.classList.remove('al-fabs-open'); layoutFabs(); scheduleWrap(); }
+    applyPosed();
+  }
+  applyMode();
+  onMq(MQ_PHONE, applyMode); onMq(MQ_COMPACT, applyMode);
+  var rz = null;
+  window.addEventListener('resize', function () { if (rz) cancelAnimationFrame(rz); rz = requestAnimationFrame(applyMode); });
+  window.addEventListener('orientationchange', function () { setTimeout(applyMode, 250); });
+  try { if (navigator.devicePosture && navigator.devicePosture.addEventListener) navigator.devicePosture.addEventListener('change', applyMode); } catch (e) {}
+
+  function onReady() {
+    buildLauncher();
+    syncSidebar();
+    applyMode();
+    if (window.MutationObserver) new MutationObserver(scheduleWrap).observe(document.body, { childList: true, subtree: true });
+    document.addEventListener('click', function (ev) {
+      var t = ev.target && ev.target.closest ? ev.target.closest('#navPosedToggle') : null;
+      if (t) setPosed(!de.classList.contains('al-posed'));
+    });
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Escape') return;
+      if (de.classList.contains('al-fabs-open')) setFabsOpen(false);
+      var e = sidebarEls();
+      if (mode() === 'compact' && e.sb && !e.sb.classList.contains('collapsed')) { closeRail(); if (e.ov) e.ov.classList.remove('show'); }
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', onReady);
+  else onReady();
+
+  window.AlMobile = {
+    mode: mode,
+    handleCollapse: handleCollapse,
+    closeRail: closeRail,
+    // Appelé à chaque (re)construction de la sidebar.
+    onSidebar: function () { syncSidebar(); if (de.classList.contains('al-posed')) buildPanel(); },
+    setPosed: setPosed
+  };
+})();

@@ -325,7 +325,7 @@
       border:1px solid var(--hair);
       border-radius:18px;overflow:hidden;
       display:flex;flex-direction:column;
-      max-height:calc(100vh - 340px);
+      max-height:calc(var(--al-vh,100vh) - 340px);
       min-height:200px;
       min-width: 0; /* Permet à grid d'imposer la largeur */
     }
@@ -570,7 +570,7 @@
     }
     .detail-overlay.show{display:flex}
     .detail-panel{
-      width:720px;max-width:100vw;height:100vh;
+      width:720px;max-width:100vw;height:var(--al-vh,100vh);
       background:var(--bg-warm);
       overflow-y:auto;
       box-shadow:-12px 0 60px rgba(11,13,23,.18);
@@ -5209,7 +5209,7 @@ async function preview72hFile(clientId, fileDocId) {
       if (data.type && data.type.indexOf('image') >= 0) {
         w.document.write('<img src="' + data.base64 + '" style="max-width:100%"/>');
       } else if (data.type === 'application/pdf') {
-        w.document.write('<iframe src="' + data.base64 + '" style="width:100%;height:100vh;border:none"></iframe>');
+        w.document.write('<iframe src="' + data.base64 + '" style="width:100%;height:var(--al-vh,100vh);border:none"></iframe>');
       } else {
         // Téléchargement direct pour les autres types
         w.close();

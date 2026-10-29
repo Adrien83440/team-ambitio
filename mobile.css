@@ -1,0 +1,278 @@
+/* ══════════════════════════════════════════════════════════════════════
+   mobile.css — couche responsive commune (iPhone Fold et petits écrans)
+   ──────────────────────────────────────────────────────────────────────
+   Chargée par nav.js sur toutes les pages internes, après le CSS de la
+   page (même déplacement en fin de <body> que theme-light.css).
+
+   Modes posés par nav.js sur <html> :
+     al-mode-desk     ≥ 1100 px — bureau, rien ne change ;
+     al-mode-compact  769–1099 px — iPhone déplié en paysage : sidebar en
+                      barre d'icônes (68 px), dépliée par-dessus le contenu ;
+     al-mode-phone    ≤ 768 px — déplié en portrait, plié : sidebar en
+                      tiroir derrière ☰.
+   Classes complémentaires :
+     al-fabs-grouped  (compact + phone) les boutons flottants (aide, IA,
+                      notifications, annonces) sont rangés sous un seul
+                      bouton ; al-fabs-open quand il est déplié ;
+     al-posed         « Mode posé » (écran à moitié plié) : la page dans la
+                      moitié haute, le panneau de commandes en bas.
+
+   --al-vh remplace 100vh dans les pages : 100dvh (hauteur réellement
+   visible sur iPhone, barres Safari comprises), et la moitié haute de
+   l'écran en mode posé. Repli 100vh si la variable n'existe pas.
+
+   Règles par page : scopées par body[data-al-page="…"] (posé par nav.js),
+   en fin de fichier. Layout uniquement — les couleurs du thème clair des
+   composants ajoutés ici sont dans theme-light.css §Mobile.
+   ══════════════════════════════════════════════════════════════════════ */
+
+:root { --al-vh: 100vh; --al-safe-b: env(safe-area-inset-bottom, 0px); --al-safe-r: env(safe-area-inset-right, 0px); }
+@supports (height: 100dvh) { :root { --al-vh: 100dvh; } }
+
+/* Safari iOS grossit le texte en paysage sans ça. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+/* ── 1. Écrans tactiles : cibles et défilement ─────────────────────── */
+@media (hover: none) and (pointer: coarse) {
+  body { -webkit-tap-highlight-color: rgba(139, 92, 246, .15); }
+  /* Défilement à inertie dans les zones scrollables internes (anciens iOS). */
+  .nav-items, [style*="overflow-y:auto"], [style*="overflow:auto"] { -webkit-overflow-scrolling: touch; }
+  /* Infobulles de la barre d'icônes : inutiles au doigt, elles restent collées. */
+  #ambitio-sidebar.collapsed .nav-item:hover::after,
+  #ambitio-sidebar.collapsed .nav-ps-slim:hover::after { display: none; }
+}
+
+/* ── 2. Sidebar : barre d'icônes (compact) et tiroir (phone) ────────── */
+#ambitio-sidebar { height: var(--al-vh); }
+
+html.al-mode-compact body.has-sidebar:not(.ae-embed) { padding-left: var(--nav-w-collapsed) !important; }
+html.al-mode-compact #ambitio-sidebar { box-shadow: none; transition: width .25s cubic-bezier(.4,0,.2,1), box-shadow .25s; }
+html.al-mode-compact #ambitio-sidebar:not(.collapsed) { box-shadow: 12px 0 40px rgba(0,0,0,.45); }
+html.al-mode-compact .nav-mobile-toggle { display: none !important; }
+/* al-rail-head — barre d'icônes : logo au-dessus du bouton ▶ (68 px ne
+   suffisent pas pour les deux côte à côte), pied resserré. */
+html.al-mode-compact #ambitio-sidebar.collapsed .nav-header { flex-direction: column; gap: 8px; padding: 14px 10px 12px; }
+html.al-mode-compact #ambitio-sidebar.collapsed .nav-brand { display: none; }
+html.al-mode-compact #ambitio-sidebar.collapsed .nav-footer { padding: 8px 6px; }
+html.al-mode-compact #ambitio-sidebar.collapsed .nav-theme-toggle,
+html.al-mode-compact #ambitio-sidebar.collapsed .nav-posed-toggle { margin: 0 0 6px; padding: 8px 6px; justify-content: center; }
+html.al-mode-compact #ambitio-sidebar.collapsed .nav-ps-slim { margin-left: 0; margin-right: 0; }
+html.al-mode-compact #ambitio-sidebar.collapsed .nav-theme-label { display: none; }
+html.al-mode-compact #ambitio-sidebar.collapsed .nav-profile-btn { padding: 8px 0; }
+html.al-mode-compact #ambitio-sidebar.collapsed .nav-items { padding: 4px 6px; }
+
+html.al-mode-phone body.has-sidebar:not(.ae-embed) { padding-left: 0 !important; }
+html.al-mode-phone #ambitio-sidebar { width: min(300px, 86vw); transform: translateX(-105%); transition: transform .28s cubic-bezier(.4,0,.2,1); box-shadow: none; }
+html.al-mode-phone #ambitio-sidebar.mobile-open { transform: translateX(0); box-shadow: 12px 0 40px rgba(0,0,0,.45); }
+html.al-mode-phone .nav-mobile-toggle {
+  display: flex !important; top: 10px; left: 10px; width: 38px; height: 38px; border-radius: 11px;
+  font-size: 17px; z-index: 997;
+}
+/* Le bouton ☰ occupe le coin haut gauche : on décale le contenu de la page
+   sous lui (une bande de 56 px) plutôt que de le laisser masquer un titre. */
+html.al-mode-phone body.has-sidebar:not(.ae-embed) { padding-top: 56px; }
+/* Pages qui réservent déjà la place du ☰ dans leur propre barre. */
+html.al-mode-phone body.has-sidebar.ll5 { padding-top: 0; }
+/* Barre .topbar collante (sales.css, pages coaching) : pas de bande, la
+   place du ☰ est prise dans la barre elle-même — sinon, une fois la page
+   défilée, le ☰ recouvrirait le début de la barre. */
+html.al-mode-phone body.has-sidebar:not(.ae-embed):has(.topbar) { padding-top: 0; }
+html.al-mode-phone body.has-sidebar .topbar {
+  padding-left: 58px; padding-right: 12px; padding-top: 9px; padding-bottom: 9px;
+  height: auto; min-height: 56px; flex-wrap: wrap; row-gap: 8px;
+}
+html.al-mode-phone body.has-sidebar .topbar .tb-right,
+html.al-mode-phone body.has-sidebar .topbar .topbar-right { flex-wrap: wrap; justify-content: flex-end; row-gap: 6px; max-width: 100%; }
+html.al-mode-phone body.has-sidebar .topbar .tb-sep,
+html.al-mode-phone body.has-sidebar .topbar .tb-page { display: none; }
+/* En-têtes de page (sales.css) : titre et actions passent l'un sous l'autre. */
+html.al-mode-phone .page-header-row { flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+html.al-mode-phone .page-header-row > div { flex-wrap: wrap; max-width: 100%; }
+html.al-mode-phone .nav-items { -webkit-overflow-scrolling: touch; }
+html.al-mode-phone .nav-item { padding: 11px 10px; }
+html.al-mode-phone .nav-children .nav-item { padding: 9px 10px; }
+
+/* Paysage plié (≈ 390 px de haut) : on resserre l'en-tête et le pied de la
+   sidebar pour laisser de la place à la liste. */
+@media (max-height: 520px) {
+  /* Toute la sidebar défile (liste + pied) au lieu d'écraser la liste. */
+  #ambitio-sidebar { overflow-y: auto !important; -webkit-overflow-scrolling: touch; }
+  #ambitio-sidebar .nav-items { flex: none !important; overflow: visible !important; }
+  .nav-header { padding: 12px 14px 10px !important; }
+  .nav-footer { padding: 8px 10px !important; }
+  .nav-legal { display: none !important; }
+  .nav-theme-toggle { margin-bottom: 4px !important; }
+}
+
+/* ── 3. Boutons flottants regroupés ──────────────────────────────────── */
+#al-fab-launcher { display: none; }
+html.al-fabs-grouped #al-fab-launcher {
+  display: flex; position: fixed; z-index: 99997;
+  right: calc(14px + var(--al-safe-r)); bottom: calc(14px + var(--al-fab-lift, 0px) + var(--al-safe-b));
+  width: 50px; height: 50px; border-radius: 50%; border: 1px solid rgba(255,255,255,.16);
+  align-items: center; justify-content: center; cursor: pointer; padding: 0;
+  background: linear-gradient(135deg, #6d28d9, #8b5cf6); color: #fff; font: 700 24px/1 system-ui, sans-serif;
+  box-shadow: 0 8px 24px rgba(0,0,0,.45); transition: transform .2s ease;
+}
+html.al-fabs-grouped #al-fab-launcher.empty,
+html body.ae-embed #al-fab-launcher { display: none; }
+html.al-fabs-grouped #al-fab-launcher .al-fab-ic { transition: transform .2s ease; display: block; }
+html.al-fabs-grouped.al-fabs-open #al-fab-launcher .al-fab-ic { transform: rotate(45deg); }
+html.al-fabs-grouped #al-fab-launcher .al-fab-dot {
+  position: absolute; top: 1px; right: 1px; width: 13px; height: 13px; border-radius: 50%;
+  background: #ef4444; border: 2px solid #14142a; display: none;
+}
+html.al-fabs-grouped #al-fab-launcher.has-new .al-fab-dot { display: block; }
+
+html.al-fabs-grouped .aidw-fab,
+html.al-fabs-grouped .aio-fab,
+html.al-fabs-grouped #ambitio-inbox-fab,
+html.al-fabs-grouped #alteoInfosBell {
+  opacity: 0 !important; pointer-events: none !important; visibility: hidden;
+  transform: translateY(14px) scale(.7) !important;
+  transition: opacity .18s ease, transform .18s ease, visibility 0s linear .18s !important;
+  animation: none !important;
+}
+html.al-fabs-grouped.al-fabs-open .aidw-fab,
+html.al-fabs-grouped.al-fabs-open .aio-fab,
+html.al-fabs-grouped.al-fabs-open #ambitio-inbox-fab,
+html.al-fabs-grouped.al-fabs-open #alteoInfosBell {
+  opacity: 1 !important; pointer-events: auto !important; visibility: visible;
+  transform: none !important; transition: opacity .18s ease, transform .18s ease !important;
+}
+/* Libellé à gauche de chaque bouton déplié (posés par nav.js). */
+#al-fab-labels { display: none; }
+html.al-fabs-grouped.al-fabs-open #al-fab-labels { display: block; }
+#al-fab-labels .al-fab-lb {
+  position: fixed; z-index: 99997; right: calc(14px + 50px + 12px + var(--al-safe-r));
+  white-space: nowrap; font: 700 12px/1 system-ui, sans-serif; color: #fff;
+  padding: 7px 10px; border-radius: 8px; background: rgba(15, 15, 30, .9); box-shadow: 0 4px 14px rgba(0,0,0,.35);
+  pointer-events: none;
+}
+#al-fab-scrim { display: none; }
+html.al-fabs-grouped.al-fabs-open #al-fab-scrim { display: block; position: fixed; inset: 0; z-index: 2500; background: rgba(0,0,0,.25); }
+
+/* Panneaux ouverts par ces boutons : jamais plus larges que l'écran. */
+html.al-fabs-grouped .aidw { right: 10px !important; left: auto; width: min(410px, calc(100vw - 20px)) !important; bottom: calc(76px + var(--al-safe-b)) !important; height: min(620px, calc(var(--al-vh) - 100px)) !important; }
+html.al-fabs-grouped #alteoInfosPanel { right: 10px !important; max-width: calc(100vw - 20px) !important; }
+html.al-fabs-grouped #alteoMh { right: 10px; left: 10px; width: auto; bottom: calc(76px + var(--al-safe-b)); }
+html.al-mode-phone .aifu { left: 10px; right: 10px; width: auto; bottom: calc(76px + var(--al-safe-b)); }
+html.al-mode-phone #ambitio-inbox-panel { left: 0 !important; right: 0 !important; width: 100vw !important; max-width: 100vw !important; }
+
+/* Widget Dialer (420×640 au bureau, déplaçable) : tient dans l'écran ; en
+   tiroir (phone) il prend tout l'écran. Sa bulle « appel en cours » passe
+   en bas à gauche pour ne pas tomber sous le bouton des outils. */
+html.al-fabs-grouped #dbr-floating-widget { max-width: calc(100vw - 16px); max-height: calc(var(--al-vh) - 16px); }
+html.al-mode-phone #dbr-floating-widget {
+  left: 6px !important; right: 6px !important; top: 6px !important; bottom: auto !important;
+  width: auto !important; height: calc(var(--al-vh) - 12px) !important;
+}
+html.al-fabs-grouped #dbr-floating-bubble {
+  left: calc(14px + env(safe-area-inset-left, 0px)) !important; right: auto !important;
+  top: auto !important; bottom: calc(14px + var(--al-safe-b)) !important;
+}
+html.al-posed #dbr-floating-bubble { bottom: calc(var(--al-bot-h) + 10px) !important; }
+html.al-posed #dbr-floating-widget { top: 6px !important; bottom: auto !important; max-height: calc(var(--al-top-h) - 12px); }
+
+/* ── 4. Garde-fous génériques petits écrans ─────────────────────────── */
+html.al-mode-phone img, html.al-mode-phone video,
+html.al-mode-compact img, html.al-mode-compact video { max-width: 100%; }
+/* Une page ne doit jamais défiler latéralement en entier : les débordements
+   restants sont traités page par page plus bas. */
+html.al-mode-phone, html.al-mode-phone body,
+html.al-mode-compact, html.al-mode-compact body { overflow-x: clip; }
+/* Les tableaux larges défilent dans leur cadre (enveloppe posée par nav.js). */
+.al-scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+
+/* ── 5. Mode posé (écran à moitié plié) ─────────────────────────────── */
+#al-posed-panel { display: none; }
+html.al-posed { --al-vh: var(--al-top-h, 50vh); }
+html.al-posed body, html.al-posed body.has-sidebar:not(.ae-embed) { padding-left: 0 !important; padding-top: 0 !important; padding-bottom: calc(var(--al-bot-h, 50vh) + 10px) !important; }
+html.al-posed #ambitio-sidebar,
+html.al-posed .nav-mobile-toggle,
+html.al-posed .nav-overlay,
+html.al-posed #al-fab-launcher,
+html.al-posed #al-fab-scrim { display: none !important; }
+html.al-posed .aidw-fab, html.al-posed .aio-fab, html.al-posed #ambitio-inbox-fab, html.al-posed #alteoInfosBell { display: none !important; }
+html.al-posed .aidw { bottom: calc(var(--al-bot-h) + 8px) !important; height: calc(var(--al-top-h) - 16px) !important; }
+html.al-posed #al-posed-panel {
+  display: flex; flex-direction: column; position: fixed; left: 0; right: 0; bottom: 0;
+  height: var(--al-bot-h, 50vh); z-index: 996; overflow: hidden;
+  background: linear-gradient(180deg, #12122a, #0b0b18); border-top: 1px solid rgba(255,255,255,.12);
+  box-shadow: 0 -10px 30px rgba(0,0,0,.45); font-family: 'Plus Jakarta Sans', system-ui, sans-serif; color: #e5e7eb;
+  padding-bottom: var(--al-safe-b);
+}
+#al-posed-panel .alp-bar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.08); flex-shrink: 0; overflow-x: auto; scrollbar-width: none; }
+#al-posed-panel .alp-bar::-webkit-scrollbar { display: none; }
+#al-posed-panel .alp-title { font-size: 12px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; color: rgba(255,255,255,.5); white-space: nowrap; margin-right: auto; }
+#al-posed-panel .alp-act {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; min-height: 40px; padding: 0 12px; border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.06); color: inherit; font: 700 13px/1 inherit; cursor: pointer; position: relative;
+}
+#al-posed-panel .alp-act.has-new::after { content: ''; position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; border-radius: 50%; background: #ef4444; }
+#al-posed-panel .alp-act.quit { border-color: rgba(239,68,68,.35); color: #fca5a5; }
+#al-posed-panel .alp-grid {
+  flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 10px 12px 14px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; align-content: start;
+}
+#al-posed-panel .alp-sec { grid-column: 1 / -1; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px; color: rgba(255,255,255,.4); margin: 6px 2px 0; }
+#al-posed-panel .alp-link {
+  display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 8px 10px; border-radius: 12px; text-decoration: none;
+  color: rgba(255,255,255,.82); background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); font-size: 12.5px; font-weight: 600;
+}
+#al-posed-panel .alp-link.on { background: rgba(139,92,246,.22); border-color: rgba(139,92,246,.5); color: #fff; }
+#al-posed-panel .alp-link .ic { font-size: 18px; flex-shrink: 0; }
+#al-posed-panel .alp-link .lb { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.2; }
+
+/* Bouton « Mode posé » dans le pied de la sidebar (écrans tactiles seulement). */
+.nav-posed-toggle { display: none; }
+@media (hover: none) and (pointer: coarse) {
+  html.al-can-pose .nav-posed-toggle {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin: 0 10px 6px; border-radius: 10px; cursor: pointer;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); font-size: 11px; font-weight: 600; color: rgba(255,255,255,.6);
+  }
+  #ambitio-sidebar.collapsed .nav-posed-toggle { justify-content: center; padding: 8px; }
+  .nav-posed-toggle.on { border-color: rgba(139,92,246,.5); color: #c4b5fd; }
+  #ambitio-sidebar.collapsed .nav-posed-toggle .lb { display: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   6. Règles par page
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* admin-numbers : .an-main garde une marge de 260 px EN PLUS du décalage de
+   la sidebar (double décalage, visible aussi au bureau). */
+html.al-mode-compact body[data-al-page="admin-numbers"] .an-main,
+html.al-mode-phone body[data-al-page="admin-numbers"] .an-main,
+html.al-posed body[data-al-page="admin-numbers"] .an-main { margin-left: 0; }
+html.al-mode-compact body[data-al-page="admin-numbers"] .an-main { padding: 24px; }
+
+/* ── Plié portrait (≤ 480 px) : débordements relevés par l'audit ────── */
+@media (max-width: 480px) {
+  body[data-al-page="coaching-analyse"] .cnav-inner { overflow-x: auto; scrollbar-width: none; }
+  body[data-al-page="coaching-analyse"] .cnav { padding: 0 12px; }
+  body[data-al-page="coaching-analyse"] #page-content > div[style*="repeat(3,1fr)"] { grid-template-columns: 1fr !important; }
+  body[data-al-page="csm-diagnostic"] .diag-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body[data-al-page="sales-funnel"] .fn-tabs { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  body[data-al-page="sales-funnel"] .fn-tabs .fn-tab { white-space: nowrap; }
+  body[data-al-page="sales-saisie"] #closing-weeks { grid-template-columns: 1fr !important; }
+  body[data-al-page="sales-signatures"] .sig-tabs { flex-wrap: wrap; }
+  body[data-al-page="sales-suivi-client"] .toolbar .filter-select { max-width: 100%; min-width: 0; flex: 1 1 140px; }
+}
+
+/* Zone de saisie fixée en bas de l'écran : le bouton « + » passe au-dessus. */
+html.al-fabs-grouped body[data-al-page="coaching-communication"],
+html.al-fabs-grouped body[data-al-page="training-closer"],
+html.al-fabs-grouped body[data-al-page="whatsapp"] { --al-fab-lift: 64px; }
+
+/* booking-admin — fiche expert / consultation (.cd) : sa colonne de
+   navigation de 260 px laissait ~330 px au contenu sur l'iPhone déplié.
+   Jusqu'à 1099 px elle devient une rangée d'onglets, comme sous 768 px. */
+html.al-mode-compact body[data-al-page="booking-admin"] .cd.on { flex-direction: column; }
+html.al-mode-compact body[data-al-page="booking-admin"] .cd-left { width: 100%; border-right: 0; border-bottom: 1px solid rgba(127,127,127,.18); display: flex; overflow-x: auto; padding-right: 0; position: static; }
+html.al-mode-compact body[data-al-page="booking-admin"] .cd-nav-item { border-left: 0; border-bottom: 3px solid transparent; white-space: nowrap; padding: 10px 14px; }
+html.al-mode-compact body[data-al-page="booking-admin"] .cd-nav-item.on { border-bottom-color: #8b5cf6; border-left: 0; }
+html.al-mode-compact body[data-al-page="booking-admin"] .cd-right { padding: 16px 0; }
+
+/* Mode posé : pas de ☰ (la navigation est dans le panneau du bas). */
+html.al-posed body.has-sidebar .topbar { padding-left: 14px; }

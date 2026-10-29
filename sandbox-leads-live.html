@@ -90,7 +90,7 @@
 }
 
 html, body {
-  min-height: 100vh; min-height: 100dvh;
+  min-height: var(--al-vh,100vh); min-height: var(--al-vh,100dvh);
   background: var(--bg);
   color: var(--text);
   font-family: var(--fb);
@@ -221,7 +221,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .ld-feed { padding: 10px 12px calc(120px + var(--sab)); max-width: 680px; margin: 0 auto; }
 @media (min-width: 980px) {
   .l2cols { display: grid; grid-template-columns: minmax(380px, 460px) 1fr; align-items: start; }
-  .ld-feed { max-width: none; margin: 0; min-height: calc(100vh - var(--l2-hd)); border-right: 1px solid var(--border-soft); padding-bottom: 40px; }
+  .ld-feed { max-width: none; margin: 0; min-height: calc(var(--al-vh,100vh) - var(--l2-hd)); border-right: 1px solid var(--border-soft); padding-bottom: 40px; }
 }
 .ld-empty { text-align: center; padding: 56px 20px; color: var(--muted); font-size: 13px; }
 
@@ -413,7 +413,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   /* Sans lead sélectionné, la colonne n'a plus de contenu pour se déployer :
      on lui rend la hauteur d'un écran, sinon le message d'invite se tasserait
      en haut d'une colonne vide. */
-  .l2ph { display: flex; min-height: calc(100vh - var(--l2-hd)); min-height: calc(100dvh - var(--l2-hd)); }
+  .l2ph { display: flex; min-height: calc(var(--al-vh,100vh) - var(--l2-hd)); min-height: calc(var(--al-vh,100dvh) - var(--l2-hd)); }
   .l2sheet.has-lead .l2ph { display: none; }
 }
 
@@ -585,7 +585,7 @@ body.ld-pilot-on .l2fam[data-fam="closing"] { display: none; }
 .ld-frame-head button { background: none; border: none; color: var(--muted); font-size: 17px; cursor: pointer; padding: 2px 9px; border-radius: 7px; }
 .ld-frame-head button:hover { color: var(--text); background: rgba(148,163,214,0.1); }
 .ld-frame iframe { flex: 1; border: none; width: 100%; background: var(--bg, #07080f); }
-@media (max-width: 760px) { .ld-frame { width: 100vw; height: 100vh; border-radius: 0; } #ldFrameBg { padding: 0; } }
+@media (max-width: 760px) { .ld-frame { width: 100vw; height: var(--al-vh,100vh); border-radius: 0; } #ldFrameBg { padding: 0; } }
 
 /* Bouton Meet — vert visio, distinct des actions de statut. */
 .ld-rdvx-btn.meet { background: rgba(52,211,153,0.12); border-color: rgba(52,211,153,0.42); color: #6ee7b7; text-decoration: none; display: inline-flex; align-items: center; }
@@ -641,7 +641,7 @@ body.ld-pilot-on .l2fam[data-fam="closing"] { display: none; }
 @media (min-width: 980px) {
   .ldpres {
     left: 50%; right: auto; bottom: auto; top: 50%; transform: translate(-50%, -50%);
-    width: 540px; max-height: calc(100dvh - 80px); border-radius: 18px; border-bottom: 1px solid var(--border2);
+    width: 540px; max-height: calc(var(--al-vh,100dvh) - 80px); border-radius: 18px; border-bottom: 1px solid var(--border2);
     box-shadow: 0 18px 60px rgba(0,0,0,0.55);
   }
   .ldpres .l2grab { display: none; }
@@ -1021,7 +1021,7 @@ body.ld-pilot-on .l2fam[data-fam="closing"] { display: none; }
 @media (min-width: 980px) {
   .l2ag {
     left: auto; bottom: auto; top: 64px; right: max(16px, calc((100vw - 1440px) / 2 + 14px));
-    width: 440px; max-height: calc(100dvh - 90px); border-radius: 18px; border-bottom: 1px solid var(--border2);
+    width: 440px; max-height: calc(var(--al-vh,100dvh) - 90px); border-radius: 18px; border-bottom: 1px solid var(--border2);
     transform: translateY(-8px); opacity: 0;
     transition: transform .18s ease, opacity .18s ease, visibility 0s linear .18s;
     box-shadow: 0 18px 60px rgba(0,0,0,0.55);
@@ -3156,7 +3156,7 @@ function l2RenderTriage(leads) {
 /* Hauteur réelle du header sticky → alignement du panneau desktop.
 
    Ce n'est PAS un réglage cosmétique : le panneau vaut
-   `height: calc(100dvh - var(--l2-hd))`. Si la variable est plus petite que la
+   `height: calc(var(--al-vh,100dvh) - var(--l2-hd))`. Si la variable est plus petite que la
    hauteur réelle du header, le bas du panneau descend sous la fenêtre et cette
    portion devient inatteignable — le fil se coupe et le composeur disparaît.
 

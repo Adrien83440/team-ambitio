@@ -125,7 +125,7 @@
     + '.ap-summary-cell{border:1px solid #e4e6f7;background:#fff;border-radius:10px;padding:8px 11px}'
     + '.ap-summary-cell .kl{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:#6b7194}'
     + '.ap-summary-cell .kv{font-size:13px;font-weight:700;margin-top:2px;line-height:1.35}'
-    + '@media (max-width:720px){.ap-overlay{padding:0}.ap-panel{border-radius:0;height:100vh;max-height:none;max-width:none}.ap-devoir-row{grid-template-columns:1fr}.ap-node{min-width:120px}.ap-body{padding:14px 12px 24px}}';
+    + '@media (max-width:720px){.ap-overlay{padding:0}.ap-panel{border-radius:0;height:var(--al-vh,100vh);max-height:none;max-width:none}.ap-devoir-row{grid-template-columns:1fr}.ap-node{min-width:120px}.ap-body{padding:14px 12px 24px}}';
 
   function injectCss() {
     if (document.getElementById('ap-css')) return;

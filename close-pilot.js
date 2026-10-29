@@ -277,7 +277,7 @@
       + '#cpNotice .t{font-size:16px;font-weight:900;margin:8px 0 4px}'
       + '#cpNotice .d{font-size:12.5px;color:#a7b0c4;line-height:1.5;margin-bottom:14px}'
       + '#cpNotice .cp-btn{width:100%;justify-content:center}'
-      + '@media(max-width:560px){.cp-opts{grid-template-columns:1fr}.cp-mo{max-height:100vh;border-radius:0}#cpBg{padding:0}}';
+      + '@media(max-width:560px){.cp-opts{grid-template-columns:1fr}.cp-mo{max-height:var(--al-vh,100vh);border-radius:0}#cpBg{padding:0}}';
     var st = document.createElement('style'); st.id = 'cpStyles'; st.textContent = css; document.head.appendChild(st);
   }
 
