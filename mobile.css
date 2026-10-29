@@ -49,6 +49,11 @@ html.al-mode-compact body.has-sidebar:not(.ae-embed) { padding-left: var(--nav-w
 html.al-mode-compact #ambitio-sidebar { box-shadow: none; transition: width .25s cubic-bezier(.4,0,.2,1), box-shadow .25s; }
 html.al-mode-compact #ambitio-sidebar:not(.collapsed) { box-shadow: 12px 0 40px rgba(0,0,0,.45); }
 html.al-mode-compact .nav-mobile-toggle { display: none !important; }
+/* al-rail-z — repliée, la barre d'icônes passe SOUS les volets et modales
+   des pages (souvent fixés à left:0, z-index 200–330 dans Leads Live) : à
+   z-index 999 elle leur coupait le bord gauche. Le contenu de la page
+   commence après elle, rien d'autre ne la recouvre. Dépliée : 999. */
+html.al-mode-compact #ambitio-sidebar.collapsed { z-index: 40; }
 /* al-rail-head — barre d'icônes : logo au-dessus du bouton ▶ (68 px ne
    suffisent pas pour les deux côte à côte), pied resserré. */
 html.al-mode-compact #ambitio-sidebar.collapsed .nav-header { flex-direction: column; gap: 8px; padding: 14px 10px 12px; }
@@ -107,7 +112,8 @@ html.al-mode-phone .nav-children .nav-item { padding: 9px 10px; }
 /* ── 3. Boutons flottants regroupés ──────────────────────────────────── */
 #al-fab-launcher { display: none; }
 html.al-fabs-grouped #al-fab-launcher {
-  display: flex; position: fixed; z-index: 99997;
+  /* z-index 190 : sous les volets / modales des pages (≥ 200), au-dessus du contenu. */
+  display: flex; position: fixed; z-index: 190;
   right: calc(14px + var(--al-safe-r)); bottom: calc(14px + var(--al-fab-lift, 0px) + var(--al-safe-b));
   width: 50px; height: 50px; border-radius: 50%; border: 1px solid rgba(255,255,255,.16);
   align-items: center; justify-content: center; cursor: pointer; padding: 0;
@@ -144,13 +150,13 @@ html.al-fabs-grouped.al-fabs-open #alteoInfosBell {
 #al-fab-labels { display: none; }
 html.al-fabs-grouped.al-fabs-open #al-fab-labels { display: block; }
 #al-fab-labels .al-fab-lb {
-  position: fixed; z-index: 99997; right: calc(14px + 50px + 12px + var(--al-safe-r));
+  position: fixed; z-index: 191; right: calc(14px + 50px + 12px + var(--al-safe-r));
   white-space: nowrap; font: 700 12px/1 system-ui, sans-serif; color: #fff;
   padding: 7px 10px; border-radius: 8px; background: rgba(15, 15, 30, .9); box-shadow: 0 4px 14px rgba(0,0,0,.35);
   pointer-events: none;
 }
 #al-fab-scrim { display: none; }
-html.al-fabs-grouped.al-fabs-open #al-fab-scrim { display: block; position: fixed; inset: 0; z-index: 2500; background: rgba(0,0,0,.25); }
+html.al-fabs-grouped.al-fabs-open #al-fab-scrim { display: block; position: fixed; inset: 0; z-index: 189; background: rgba(0,0,0,.25); }
 
 /* Panneaux ouverts par ces boutons : jamais plus larges que l'écran. */
 html.al-fabs-grouped .aidw { right: 10px !important; left: auto; width: min(410px, calc(100vw - 20px)) !important; bottom: calc(76px + var(--al-safe-b)) !important; height: min(620px, calc(var(--al-vh) - 100px)) !important; }
@@ -276,3 +282,44 @@ html.al-mode-compact body[data-al-page="booking-admin"] .cd-right { padding: 16p
 
 /* Mode posé : pas de ☰ (la navigation est dans le panneau du bas). */
 html.al-posed body.has-sidebar .topbar { padding-left: 14px; }
+
+/* Leads Live (et son Labo) en compact (769–1099 px, iPhone déplié) : sous
+   980 px la page passe en mode « appli » et ses volets montent du bas sur
+   toute la largeur. Sur l'écran déplié, on reprend leur version bureau :
+   des cartes (RDV de l'équipe en haut à droite, Présence et Filtres au centre). */
+html.al-mode-compact body[data-al-page="sales-leads"] .l2ag,
+html.al-mode-compact body[data-al-page="sandbox-leads-live"] .l2ag {
+  left: auto; bottom: auto; top: 64px; right: 16px;
+  width: min(440px, calc(100vw - var(--nav-w-collapsed) - 32px)); max-height: calc(var(--al-vh, 100dvh) - 90px);
+  border-radius: 18px; border-bottom: 1px solid var(--border2);
+  transform: translateY(-8px); opacity: 0;
+  transition: transform .18s ease, opacity .18s ease, visibility 0s linear .18s;
+  box-shadow: 0 18px 60px rgba(0,0,0,0.55);
+}
+html.al-mode-compact body[data-al-page="sales-leads"] .l2ag.on,
+html.al-mode-compact body[data-al-page="sandbox-leads-live"] .l2ag.on { transform: translateY(0); opacity: 1; transition: transform .18s ease, opacity .18s ease; }
+html.al-mode-compact body[data-al-page="sales-leads"] .ldpres,
+html.al-mode-compact body[data-al-page="sandbox-leads-live"] .ldpres {
+  left: 50%; right: auto; bottom: auto; top: 50%; transform: translate(-50%, -50%);
+  width: min(540px, calc(100vw - 32px)); max-height: calc(var(--al-vh, 100dvh) - 60px);
+  border-radius: 18px; border-bottom: 1px solid var(--border2); box-shadow: 0 18px 60px rgba(0,0,0,0.55);
+}
+html.al-mode-compact body[data-al-page="sales-leads"] .l2fs,
+html.al-mode-compact body[data-al-page="sandbox-leads-live"] .l2fs {
+  left: 0; right: 0; width: min(480px, calc(100vw - 32px)); margin: 0 auto; bottom: 24px;
+  max-height: calc(var(--al-vh, 100dvh) - 48px); border-radius: 18px; border-bottom: 1px solid var(--border2);
+}
+html.al-mode-compact body[data-al-page="sales-leads"] .l2ag .l2grab,
+html.al-mode-compact body[data-al-page="sales-leads"] .ldpres .l2grab,
+html.al-mode-compact body[data-al-page="sandbox-leads-live"] .l2ag .l2grab,
+html.al-mode-compact body[data-al-page="sandbox-leads-live"] .ldpres .l2grab { display: none; }
+
+/* Leads Live : sous 980 px la fiche lead est un panneau fixe à z-index 210
+   (affiché en permanence en deux colonnes) — le bouton « + » passe juste
+   au-dessus, toujours sous les volets (≥ 300). */
+html.al-fabs-grouped body[data-al-page="sales-leads"] #al-fab-launcher,
+html.al-fabs-grouped body[data-al-page="sandbox-leads-live"] #al-fab-launcher { z-index: 215; }
+html.al-fabs-grouped body[data-al-page="sales-leads"] #al-fab-labels .al-fab-lb,
+html.al-fabs-grouped body[data-al-page="sandbox-leads-live"] #al-fab-labels .al-fab-lb { z-index: 216; }
+html.al-fabs-grouped.al-fabs-open body[data-al-page="sales-leads"] #al-fab-scrim,
+html.al-fabs-grouped.al-fabs-open body[data-al-page="sandbox-leads-live"] #al-fab-scrim { z-index: 214; }
