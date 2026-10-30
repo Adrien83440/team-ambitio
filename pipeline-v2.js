@@ -384,7 +384,7 @@
   var S = {
     view: 'pipe', q: '', per: 'tout', who: null, sort: 'arr',
     f: { src: '', pb: '', par: '', last: '' },
-    fold: { ancien: true, poubelle: true, disqua: true, closing: true }, lim: {},
+    fold: { ancien: true, poubelle: true, disqua: true, closing: true }, lim: {}, csub: {},
     drawer: null, full: null, ft: 'fil', fevf: 'tout', cmp: 'note', tr: {},
     keys: [], rap: [{ s: 'home' }], mine: false, sess: null, sheet: null, drag: null, dark: false, okOther: {}
   };
@@ -415,13 +415,16 @@
     var n = S.keys.map(function (k) { return E.label(k); });
     return n.length <= 2 ? n.join(', ') : n.slice(0, 2).join(', ') + ' +' + (n.length - 2);
   }
-  function chips(keys, counts) {
-    var list = keys.filter(function (k) { return counts[k] || S.keys.indexOf(k) > -1; });
-    if (list.length < 2 && !list.some(function (k) { return S.keys.indexOf(k) > -1; })) return '';
+  /* act/sel : les puces d'une colonne du Pipeline filtrent CETTE colonne seulement
+     (S.csub, 30/10/2026) ; ailleurs (Rappels) elles restent le filtre global S.keys. */
+  function chips(keys, counts, act, sel) {
+    act = act || 'stg'; sel = sel || S.keys;
+    var list = keys.filter(function (k) { return counts[k] || sel.indexOf(k) > -1; });
+    if (list.length < 2 && !list.some(function (k) { return sel.indexOf(k) > -1; })) return '';
     return '<div class="pv2-subs">' + list.map(function (k) {
       var c = colDef(k.split(':')[0]), sub = k.split(':')[1], t = c.t;
       if (sub) (c.subs || []).forEach(function (x) { if (x.id === sub) t = x.t; });
-      return '<button class="pv2-sub" data-a="stg" data-v="' + esc(k) + '" aria-pressed="' + (S.keys.indexOf(k) > -1) + '">' + esc(t) + ' <span>' + (counts[k] || 0) + '</span></button>'; }).join('') + '</div>';
+      return '<button class="pv2-sub" data-a="' + act + '" data-v="' + esc(k) + '" aria-pressed="' + (sel.indexOf(k) > -1) + '">' + esc(t) + ' <span>' + (counts[k] || 0) + '</span></button>'; }).join('') + '</div>';
   }
   function subKeys(c) { return (c.subs || []).map(function (x) { return c.id + ':' + x.id; }); }
   function countKeys(rows) { var c = {}; rows.forEach(function (l) { var d = derive(l); c[d.col] = (c[d.col] || 0) + 1; if (d.key !== d.col) c[d.key] = (c[d.key] || 0) + 1; }); return c; }
@@ -516,15 +519,16 @@
        les colonnes vides s'effacent pour ne pas noyer les résultats. */
     var serre = !!(S.q || S.keys.length);
     COLS.forEach(function (f) {
-      var cs = rows.filter(function (l) { return derive(l).col === f.id; });
+      var cs = rows.filter(function (l) { return derive(l).col === f.id; }), csel = S.csub[f.id] || [], nCol = cs.length;
+      if (csel.length) cs = cs.filter(function (l) { return csel.indexOf(derive(l).key) > -1; });
       if (f.id === 'lead') cs.sort(function (x, y) { return (derive(y).real || 0) - (derive(x).real || 0); });
       if (serre && !cs.length) return;
       var folded = S.fold[f.id] && !serre;
       if (folded) { h += '<button class="pv2-colx" data-a="unfold" data-v="' + f.id + '" data-col="' + f.id + '" title="Déplier">' + ic('unfold') + '<span class="pv2-v">' + esc(f.t) + '</span><span class="pv2-c">' + cs.length + '</span></button>'; return; }
       var lim = S.lim[f.id] || 25;
-      h += '<section class="pv2-col' + (f.id === 'perdu' ? ' pv2-col-perdu' : '') + '" data-col="' + f.id + '"><div class="pv2-ch"><span class="pv2-t">' + esc(f.t) + '</span><span class="pv2-c">' + cs.length + '</span>' +
+      h += '<section class="pv2-col' + (f.id === 'perdu' ? ' pv2-col-perdu' : '') + '" data-col="' + f.id + '"><div class="pv2-ch"><span class="pv2-t">' + esc(f.t) + '</span><span class="pv2-c">' + (csel.length ? cs.length + ' / ' + nCol : cs.length) + '</span>' +
         '<button class="pv2-fold" data-a="fold" data-v="' + f.id + '" title="Replier" aria-label="Replier">' + ic('fold') + '</button></div>' +
-        (f.s ? '<div class="pv2-chs">' + esc(f.s) + '</div>' : '') + (S.q ? '' : chips(subKeys(f), stc)) + '<div class="pv2-cards">';
+        (f.s ? '<div class="pv2-chs">' + esc(f.s) + '</div>' : '') + (S.q ? '' : chips(subKeys(f), stc, 'csub', csel)) + '<div class="pv2-cards">';
       h += cs.length ? cs.slice(0, lim).map(card).join('') : '<div class="pv2-empty">Aucun lead</div>';
       if (cs.length > lim) h += '<button class="pv2-more" data-a="more" data-v="' + f.id + '">Voir les ' + (cs.length - lim) + ' autres</button>';
       h += '</div></section>';
@@ -1017,7 +1021,7 @@
       case 'per': S.per = v; savePrefs(); render(); break;
       case 'mine': S.mine = !S.mine; savePrefs(); render(); break;
       case 'clearq': S.q = ''; render(); break;
-      case 'reset': S.q = ''; S.per = 'tout'; S.who = null; S.keys = []; S.f = { src: '', pb: '', par: '', last: '' }; savePrefs(); render(); break;
+      case 'reset': S.q = ''; S.per = 'tout'; S.who = null; S.keys = []; S.csub = {}; S.f = { src: '', pb: '', par: '', last: '' }; savePrefs(); render(); break;
       case 'filters': S.sheet = { k: 'filters' }; render(); break;
       case 'applyf': ['src', 'pb', 'par', 'last'].forEach(function (k) { S.f[k] = val('pv2f-' + k); }); S.sheet = null; render(); break;
       case 'fold': S.fold[v] = true; savePrefs(); render(); break;
@@ -1102,6 +1106,7 @@
       case 'sclose': S.sheet = null; render(true); break;
       case 'stg': var ix = S.keys.indexOf(v); if (ix > -1) S.keys.splice(ix, 1); else S.keys.push(v); render(true); break;
       case 'stgclear': S.keys = []; render(true); break;
+      case 'csub': var cc = v.split(':')[0], cl = S.csub[cc] || (S.csub[cc] = []), cx = cl.indexOf(v); if (cx > -1) cl.splice(cx, 1); else cl.push(v); render(true); break;
       case 'll': l = lead(v || curLeadId()); if (l) H.openLeadsLive(l); break;
       case 'lost': l = lead(curLeadId()); S.sheet = { k: 'lost', id: l.id }; render(true); break;
       case 'lostpick': S.sheet.pick = v; S.sheet.why = val('pv2lostwhy'); render(true); break;
