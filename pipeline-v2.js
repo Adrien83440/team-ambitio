@@ -938,14 +938,22 @@
   /* ═══ 6. Rendu global ═══ */
   function render(keepScroll) {
     var bw = APP.querySelector('.pv2-boardwrap'), sx = bw ? bw.scrollLeft : 0, dr = document.getElementById('pv2drawer'), dy = dr ? dr.scrollTop : 0;
+    var sy = {}; Array.prototype.forEach.call(APP.querySelectorAll('.pv2-col[data-col]>.pv2-cards'), function (c) { if (c.scrollTop) sy[c.parentNode.getAttribute('data-col')] = c.scrollTop; });
     var foc = document.activeElement && document.activeElement.id === 'pv2q' ? document.activeElement.selectionStart : null;
     var h = '<div class="pv2-page">' + (S.full && lead(S.full) ? fullView(lead(S.full)) : S.view === 'pipe' ? viewPipe() : viewRap()) + '</div>';
     if (!S.full && S.view === 'pipe' && S.drawer) h += drawerHTML();
     if (S.sheet) h += sheetHTML();
     APP.innerHTML = h;
-    var nb = APP.querySelector('.pv2-boardwrap'); if (nb) nb.scrollLeft = sx;
+    var nb = APP.querySelector('.pv2-boardwrap'); if (nb) { boardTop(); nb.scrollLeft = sx; }
+    Object.keys(sy).forEach(function (k) { var c = APP.querySelector('.pv2-col[data-col="' + k + '"]>.pv2-cards'); if (c) c.scrollTop = sy[k]; });
     var nd = document.getElementById('pv2drawer'); if (nd && keepScroll) nd.scrollTop = dy;
     if (foc != null) { var q = document.getElementById('pv2q'); if (q) { q.focus(); try { q.setSelectionRange(foc, foc); } catch (e) {} } }
+  }
+  /* Hauteur des colonnes = ce qui reste de l'écran sous l'en-tête (30/10/2026) */
+  function boardTop() {
+    var nb = APP && APP.querySelector('.pv2-boardwrap'); if (!nb) return;
+    var top = Math.round(nb.getBoundingClientRect().top + (window.pageYOffset || 0));
+    if (top > 0) ROOT.style.setProperty('--pv2-btop', top + 'px');
   }
   function toast(msg) {
     TOAST.textContent = msg; TOAST.className = 'pv2-toast pv2-on';
@@ -1178,6 +1186,7 @@
     ROOT.addEventListener('dragover', onDragOver);
     ROOT.addEventListener('drop', onDrop);
     document.addEventListener('keydown', onKey);
+    window.addEventListener('resize', boardTop);
     render();
   }
   /* L'hôte prévient quand les données changent hors du module (ex. réinitialisation). */

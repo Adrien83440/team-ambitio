@@ -35,8 +35,10 @@
 
   /* ── Page : l'ancien Pipeline n'est pas chargé, on masque sa coquille ── */
   document.body.classList.add('pv2-prod');
+  document.documentElement.classList.add('pv2-prod');   /* sales-crm.css bloque le défilement de html */
   var st = document.createElement('style');
   st.textContent =
+    'html.pv2-prod{overflow-y:auto!important;height:auto!important}' +
     'body.pv2-prod{display:block!important;height:auto!important;min-height:100vh;overflow:auto!important}' +
     'body.pv2-prod .crm-header,body.pv2-prod .fb-backdrop,body.pv2-prod .filter-bar,body.pv2-prod .crm-result-bar,body.pv2-prod .crm-limit-banner,' +
     'body.pv2-prod .crm-stage-strip,body.pv2-prod .crm-views-container,body.pv2-prod .bulk-bar,body.pv2-prod .crm-modal-bg,body.pv2-prod .qv-overlay,' +

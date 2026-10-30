@@ -80,9 +80,13 @@
 .pv2-result button{border:0;background:none;color:var(--p-acc);font-weight:700;font-size:13.5px;padding:2px 4px}
 
 /* ── Kanban ── */
-.pv2-boardwrap{overflow-x:auto;margin:0 calc(-1 * max(20px,env(safe-area-inset-left,0px)));padding:0 max(20px,env(safe-area-inset-left,0px)) 14px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+.pv2-boardwrap{overflow-x:auto;margin:0 calc(-1 * max(20px,env(safe-area-inset-left,0px)));padding:0 max(20px,env(safe-area-inset-left,0px)) 14px;scroll-padding-inline:max(20px,env(safe-area-inset-left,0px));-webkit-overflow-scrolling:touch}
 .pv2-board{display:flex;gap:14px;align-items:flex-start;min-height:60vh}
-.pv2-col{flex:none;width:272px;background:var(--p-col);border:1px solid var(--p-border);border-radius:22px;padding:12px 10px 10px;scroll-snap-align:start}
+.pv2-col{flex:none;width:272px;background:var(--p-col);border:1px solid var(--p-border);border-radius:22px;padding:12px 10px 10px;scroll-snap-align:start;
+  display:flex;flex-direction:column;max-height:max(360px,calc(var(--al-vh,100vh) - var(--pv2-btop,220px) - 30px))}
+/* Chaque colonne défile seule (30/10/2026) : en-tête et sous-filtres restent visibles */
+.pv2-col>*{flex:none}
+.pv2-col>.pv2-cards{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:2px 3px 6px;margin:0 -3px}
 .pv2-col.pv2-over,.pv2-colx.pv2-over{background:var(--p-soft);outline:2px dashed var(--p-acc);outline-offset:-2px}
 .pv2-ch{display:flex;align-items:center;gap:8px;padding:2px 6px 10px}
 .pv2-ch .pv2-t{font-weight:800;font-size:15px}
@@ -103,7 +107,7 @@
 .pv2-k3 .pv2-etp{font-weight:700;color:var(--p-muted);background:var(--p-soft);padding:2px 7px;border-radius:7px;white-space:nowrap}
 .pv2-k3 .pv2-src{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pv2-k3 .pv2-mini{width:22px;height:22px;font-size:9.5px;border:0}
-.pv2-colx{flex:none;width:58px;border-radius:22px;background:var(--p-col);border:1px solid var(--p-border);padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:10px;color:var(--p-muted)}
+.pv2-colx{flex:none;width:58px;scroll-snap-align:start;border-radius:22px;background:var(--p-col);border:1px solid var(--p-border);padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:10px;color:var(--p-muted)}
 .pv2-colx .pv2-v{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:800;font-size:14px;color:var(--p-text)}
 .pv2-colx .pv2-c{font-size:13px;font-weight:700;color:var(--p-faint)}
 .pv2-more{width:100%;border:1px dashed var(--p-line);background:none;border-radius:14px;padding:10px;font-size:13px;font-weight:700;color:var(--p-acc)}
@@ -248,6 +252,7 @@ button.pv2-row:hover{background:var(--p-soft)}
   .pv2-mode button{padding:6px 11px}
   .pv2-head .pv2-ib,.pv2-add{width:38px;height:38px;padding:0;justify-content:center}
   .pv2-col{width:86vw}
+  .pv2-boardwrap{scroll-snap-type:x proximity}
   .pv2-search{flex:1 1 100%}
   .pv2-add span{display:none}
   .pv2-legend{display:none}
