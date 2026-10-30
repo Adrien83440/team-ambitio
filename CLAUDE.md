@@ -322,6 +322,13 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
 - **AlteoForms** : `alteoforms.html` (builder), `alteoforms-render.html` (rendu public),
   collection `alteo_forms`
 - **Coaching** : `coaching*.html` — SDK modulaire, style ES6
+- **Scoring sociétés (30/10/2026)** : `admin-scoring.html` (admin : solvabilité, tout le
+  catalogue Societe.com en boutons, documents officiels), `alteore-scoring.js` (bouton sur
+  la fiche en phase de closing, pop-ups), `api/scoring.js`, client `api/_societeCom.js`
+  (jeton `SOCIETE_API_TOKEN`, Vercel). Les closers n'ont que la solvabilité, sur demande
+  validée par un admin. Le feu est NOTRE règle (`api/_scoringVerdict.js`) : le score
+  Societe.com n'y entre pas, échelle non documentée. Données hors règles Firestore
+  (`scoring_*`, Admin SDK seul) ; ce qui a été payé est gardé (étude 30 jours).
 - **Étapes du Pipeline (29/10/2026)** : `pipeline-etapes.js` est la SEULE règle de
   classement (colonnes Lead · NRP 1-3 · All NRP · Faux numéro/Poubelle · Disqualification ·
   FU · SET NB · Self booking · No show/Annulé/Closed Lost · Closing, et leurs sous-filtres).

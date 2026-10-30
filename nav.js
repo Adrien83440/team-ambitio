@@ -190,6 +190,9 @@
     // Réglages IA (programme IA 10/2026) : budget mensuel, interrupteur,
     // modèle par tâche, « cerveau Alteore ». Données via api/ai-admin.js.
     { id: 'admin-ia',          icon: '🤖', label: 'Réglages IA',       href: 'admin-ia.html',          section: 'Administration', perm: '_admin' },
+    // Scoring sociétés (30/10/2026) : solvabilité, données et documents via
+    // l'API Societe.com. Données via api/scoring.js.
+    { id: 'admin-scoring',     icon: '🔎', label: 'Scoring sociétés',  href: 'admin-scoring.html',     section: 'Administration', perm: '_admin' },
     { id: 'nav-donnees', icon: '🗂️', label: 'Données', section: 'Administration', children: [
       { id: 'admin-persons',     icon: '👤', label: 'Persons',           href: 'admin-persons.html',     perm: '_admin' },
       { id: 'admin-numbers',     icon: '📞', label: 'Numéros',           href: 'admin-numbers.html',     perm: '_admin' },
@@ -274,7 +277,7 @@
     'alteoforms.html', 'booking-admin.html', 'clients-dedup.html',
     'csm-diagnostic.html', 'csm-import.html', 'formations.html',
     'formations-admin.html', 'payments.html',
-    'admin-pilotage.html',
+    'admin-pilotage.html', 'admin-scoring.html',
     'sales-appels.html', 'sales-clients.html', 'sales-closing.html', 'sales-commissions.html',
     'sales-contact.html', 'sales-crm.html', 'sales-dashboard.html',
     'sales-dialer.html', 'sales-eod.html', 'sales-equipe.html',
@@ -1631,6 +1634,15 @@
       dm.defer = true;
       dm.setAttribute('data-demarrages-widget', '1');
       document.head.appendChild(dm);
+    }
+    // + SOLVABILITÉ (30/10/2026) : alteore-scoring.js, pop-ups de demande
+    // (admin) et de réponse (closer), panneau de la fiche.
+    if (!window.ScoringWidget && !document.querySelector('script[data-scoring-widget],script[src="alteore-scoring.js"]')) {
+      var sw = document.createElement('script');
+      sw.src = 'alteore-scoring.js';
+      sw.defer = true;
+      sw.setAttribute('data-scoring-widget', '1');
+      document.head.appendChild(sw);
     }
   }
 

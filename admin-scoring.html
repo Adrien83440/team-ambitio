@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scoring sociétés · Alteore</title>
+<link rel="stylesheet" href="sales.css">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}</script>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   admin-scoring.html — Scoring des sociétés (30/10/2026, admin)
+   Relié à l'API Societe.com. Trois onglets :
+     • Société  : cherche une société ; solvabilité en un clic, tout le
+                  catalogue de l'API en boutons, documents officiels ;
+     • Demandes : les demandes des closers, à valider ou refuser ;
+     • Journal  : qui a dépensé quoi.
+   Données : api/scoring.js. Le feu vient d'api/_scoringVerdict.js. Tout ce
+   qui a été payé est gardé : le rouvrir ne coûte rien.
+   ═══════════════════════════════════════════════════════════════════════ */
+.sc{padding:20px 26px 80px;max-width:1200px;margin:0 auto}
+.sc .sp{flex:1}
+.sc-top{display:flex;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.sc-ic{width:44px;height:44px;border-radius:13px;background:linear-gradient(135deg,#6d5efc,#22c55e);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.sc-top h1{font-family:var(--font-d);font-size:21px;font-weight:800;letter-spacing:-.4px;line-height:1.2}
+.sc-top small{display:block;font-size:12px;color:var(--muted);margin-top:3px}
+.sc-solde{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:9px 14px;text-align:right;margin-right:36px}
+.sc-solde span{display:block;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+.sc-solde b{font-family:var(--font-d);font-size:20px;font-weight:800}
+.sc-solde.bas{border-color:rgba(239,68,68,.55)}
+.sc-tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.sc-tab{padding:8px 16px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.sc-tab:hover{color:var(--text)}
+.sc-tab.on{color:var(--text);border-color:rgba(109,94,252,.6);background:rgba(109,94,252,.12)}
+.sc-tab em{font-style:normal;display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:#ef4444;color:#fff;font-size:11px;margin-left:4px}
+.sc-pane{display:none}
+.sc-pane.on{display:block}
+.sc-banner{padding:10px 14px;border-radius:10px;font-size:12.5px;line-height:1.55;margin-bottom:12px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25);color:#fcd34d}
+.sc-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:14px}
+.sc-card h2{font-size:14px;font-weight:800;margin:0 0 3px}
+.sc-card>small{display:block;font-size:12px;color:var(--muted);margin-bottom:10px}
+.sc-rang{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sc-in{flex:1;min-width:200px;padding:9px 11px;background:var(--bg3);border:1.5px solid var(--border);border-radius:9px;color:var(--text);font-family:inherit;font-size:13px;outline:0;box-sizing:border-box}
+.sc-in:focus{border-color:#6d5efc}
+.sc-act{padding:9px 14px;border:1px solid var(--border2);border-radius:9px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;background:var(--bg3);color:var(--text);line-height:1.3;white-space:nowrap}
+.sc-act:hover{border-color:#6d5efc}
+.sc-act:disabled{opacity:.5;cursor:default}
+.sc-act.pri{background:#6d5efc;border-color:#6d5efc;color:#fff}
+.sc-act.ok{background:#16a34a;border-color:#16a34a;color:#fff}
+.sc-act.ko{background:rgba(239,68,68,.14);border-color:rgba(239,68,68,.5)}
+.sc-act.mini{padding:5px 9px;font-size:11.5px}
+.sc-hits{margin-top:10px}
+.sc-hit{display:block;width:100%;text-align:left;padding:9px 11px;margin-bottom:6px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-family:inherit;font-size:13px;cursor:pointer}
+.sc-hit:hover{border-color:#6d5efc}
+.sc-hit small{display:block;color:var(--muted);font-size:11.5px;margin-top:1px}
+.sc-grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;margin-bottom:12px}
+.sc-choix{text-align:left;padding:9px 11px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg3);color:var(--text);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.sc-choix small{display:block;color:var(--muted);font-size:11px;font-weight:600;margin-top:2px}
+.sc-choix:hover{border-color:#6d5efc}
+.sc-choix.on{border-color:#6d5efc;background:rgba(109,94,252,.16)}
+.sc-doc{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.sc-doc:last-child{border-bottom:none}
+.sc-doc div{flex:1;min-width:0}
+.sc-doc small{display:block;color:var(--muted);font-size:11.5px}
+.sc-h3{font-size:11.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:14px 0 4px}
+.sc-res{margin-top:12px}
+.sc-res-h{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.sc-res-h b{font-size:13.5px}
+.sc-res-h small{color:var(--muted);font-size:11.5px}
+.sc-kv{display:grid;grid-template-columns:minmax(150px,240px) minmax(0,1fr);gap:3px 12px;font-size:12.5px}
+.sc-kv span{color:var(--muted)}
+.sc-kv b{font-weight:600;word-break:break-word}
+.sc-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.sc-scroll{overflow-x:auto}
+.sc-table th{text-align:left;color:var(--muted);font-size:11px;font-weight:700;padding:5px 8px;border-bottom:1px solid var(--border2);white-space:nowrap}
+.sc-table td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+.sc-table td.n{text-align:right;white-space:nowrap}
+.sc-vide{text-align:center;padding:26px 16px;color:var(--muted);font-size:13px;line-height:1.7;background:var(--bg2);border:1px dashed var(--border2);border-radius:12px}
+.sc-dem{border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:var(--bg2);font-size:13px;line-height:1.5}
+.sc-dem.vise{border-color:#6d5efc}
+.sc-dem small{display:block;color:var(--muted);font-size:11.5px}
+.sc-locked{text-align:center;padding:90px 20px;color:var(--muted)}
+.sc-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a1a28;border:1px solid var(--border2);color:var(--text);font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none;max-width:90vw}
+.sc-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (max-width:640px){
+  .sc{padding:14px 12px 70px}
+  .sc-solde{margin-right:0}
+  .sc-kv{grid-template-columns:minmax(0,1fr)}
+  .sc-kv b{margin-bottom:6px}
+  .sc-doc{flex-wrap:wrap}
+}
+</style>
+</head>
+<body>
+<div id="nav-container"></div>
+
+<main class="sc" id="mainView" style="display:none">
+  <header class="sc-top">
+    <div class="sc-ic">🔎</div>
+    <div>
+      <h1>Scoring sociétés</h1>
+      <small>Solvabilité, données et documents officiels, via Societe.com</small>
+    </div>
+    <div class="sp"></div>
+    <div class="sc-solde" id="scSolde"><span>Crédits restants</span><b>—</b></div>
+  </header>
+
+  <div class="sc-banner" id="scBanner" style="display:none"></div>
+
+  <nav class="sc-tabs">
+    <button class="sc-tab on" type="button" data-tab="societe">🏢 Société</button>
+    <button class="sc-tab" type="button" data-tab="demandes">📥 Demandes<em id="scBadge" style="display:none"></em></button>
+    <button class="sc-tab" type="button" data-tab="journal">🧾 Journal</button>
+  </nav>
+
+  <section class="sc-pane on" id="paneSociete">
+    <div class="sc-card">
+      <h2>Trouver une société</h2>
+      <small>Par son nom, son SIREN ou son SIRET. La recherche est gratuite.</small>
+      <div class="sc-rang">
+        <input class="sc-in" id="scQ" placeholder="Nom, SIREN ou SIRET">
+        <button class="sc-act pri" type="button" data-action="chercher">Chercher</button>
+      </div>
+      <div class="sc-hits" id="scHits"></div>
+    </div>
+    <div id="scFiche"></div>
+  </section>
+
+  <section class="sc-pane" id="paneDemandes"><div id="scDemandes"></div></section>
+  <section class="sc-pane" id="paneJournal"><div id="scJournal"></div></section>
+</main>
+
+<div class="sc-locked" id="lockedView" style="display:none"><div style="font-size:48px;margin-bottom:12px">🔒</div><div>Module réservé aux administrateurs.</div></div>
+<div class="sc-toast" id="scToast"></div>
+
+<script src="nav.js"></script>
+<script src="alteore-scoring.js"></script>
+<script>
+(function () {
+'use strict';
+
+var API = '/api/scoring';
+var SEUIL_BAS = 100;
+var S = { etat: null, soc: null, docs: null, hits: null, choix: {}, resultats: {}, occupe: false, vise: '', refus: {} };
+
+var LABELS = {
+  siren: 'SIREN', siretsiege: 'SIRET du siège', numtva: 'TVA intracommunautaire', deno: 'Dénomination', status: 'Statut',
+  pcollencours: 'Procédure collective en cours', immatinsee: 'Immatriculation INSEE', immatrcs: 'Immatriculation RCS', immatrne: 'Immatriculation RNE',
+  immatbodacc: 'Présente au BODACC', datecreainsee: 'Création (INSEE)', dateferminsee: 'Fermeture (INSEE)', catjurlibinsee: 'Forme juridique',
+  dernieremaj: 'Dernière mise à jour', urlfiche: 'Fiche Societe.com', tel: 'Téléphone', email: 'E-mail', siteweb: 'Site web', fax: 'Fax',
+  raisonsociale: 'Raison sociale', ville: 'Ville', codepostal: 'Code postal', voieadr: 'Adresse', pays: 'Pays', actif: 'Actif', diffusible: 'Diffusible',
+  financier: 'Score financier', periode: 'Année', general: 'Score général', territorial: 'Score territorial', social: 'Score social', fiscal: 'Score fiscal'
+};
+
+function $(id) { return document.getElementById(id); }
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function toast(msg) {
+  var t = $('scToast');
+  t.textContent = msg;
+  t.className = 'sc-toast show';
+  clearTimeout(t._tm);
+  t._tm = setTimeout(function () { t.className = 'sc-toast'; }, 4200);
+}
+function appel(query, corps) {
+  return firebase.auth().currentUser.getIdToken().then(function (t) {
+    var o = { headers: { 'Authorization': 'Bearer ' + t } };
+    if (corps) { o.method = 'POST'; o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(corps); }
+    return fetch(API + (query || ''), o);
+  }).then(function (r) { return r.json().catch(function () { return { ok: false, error: 'server_error' }; }); });
+}
+function erreurTexte(j) { return (j && j.detail) || 'Une erreur est survenue (' + ((j && j.error) || 'réseau') + ').'; }
+function credits(n) { return String(n).replace('.', ',') + ' crédit' + (Number(n) > 1 ? 's' : ''); }
+function euros(n) {
+  var v = Number(n);
+  if (n === '' || n === null || n === undefined || !isFinite(v)) return '—';
+  return String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' €';
+}
+function dateAAAAMMJJ(s) { s = String(s || ''); return s.length === 8 ? s.slice(6, 8) + '/' + s.slice(4, 6) + '/' + s.slice(0, 4) : s; }
+function jourHeure(iso) {
+  var d = new Date(iso);
+  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+}
+function element(id) {
+  return ((S.etat && S.etat.catalogue) || []).filter(function (x) { return x.id === id; })[0] || null;
+}
+
+/* ── Solde et onglets ─────────────────────────────────────────────── */
+function peindreSolde(solde) {
+  var el = $('scSolde');
+  if (solde === null || solde === undefined) { el.querySelector('b').textContent = '—'; return; }
+  el.querySelector('b').textContent = String(solde).replace('.', ',');
+  el.className = 'sc-solde' + (solde < SEUIL_BAS ? ' bas' : '');
+  var b = $('scBanner');
+  if (solde < SEUIL_BAS) {
+    b.style.display = '';
+    b.textContent = 'Il reste moins de ' + SEUIL_BAS + ' crédits, soit environ ' + Math.floor(solde / 4.7) + ' études de solvabilité. Une fois à zéro, le module s\'arrête.';
+  } else if (S.etat && S.etat.configure) {
+    b.style.display = 'none';
+  }
+}
+
+function setTab(t) {
+  var lignes = document.querySelectorAll('.sc-tab');
+  for (var i = 0; i < lignes.length; i++) lignes[i].classList.toggle('on', lignes[i].getAttribute('data-tab') === t);
+  $('paneSociete').classList.toggle('on', t === 'societe');
+  $('paneDemandes').classList.toggle('on', t === 'demandes');
+  $('paneJournal').classList.toggle('on', t === 'journal');
+}
+
+function chargerEtat() {
+  return appel('?action=etat').then(function (j) {
+    if (!j.ok) { toast(erreurTexte(j)); return; }
+    S.etat = j;
+    if (!j.configure) {
+      $('scBanner').style.display = '';
+      $('scBanner').textContent = 'La clé Societe.com n\'est pas configurée (variable SOCIETE_API_TOKEN sur Vercel).';
+    }
+    peindreSolde(j.solde);
+    peindreDemandes();
+    peindreJournal();
+    if (S.soc) peindreFiche();
+  });
+}
+
+/* ── Recherche ────────────────────────────────────────────────────── */
+function chercher() {
+  var q = $('scQ').value;
+  if (String(q).trim().length < 3) { toast('Saisis au moins 3 caractères.'); return; }
+  appel('', { action: 'recherche', q: q }).then(function (j) {
+    if (!j.ok) { toast(erreurTexte(j)); return; }
+    S.hits = j.results || [];
+    var h = S.hits.length ? '' : '<div class="sc-vide">Aucune société trouvée.</div>';
+    S.hits.forEach(function (r) {
+      h += '<button class="sc-hit" type="button" data-action="ouvrir" data-siren="' + esc(r.siren) + '"><b>' + esc(r.name || r.siren) + '</b>'
+        + '<small>SIREN ' + esc(r.siren) + ' · ' + esc((r.address && r.address.city) || '') + ' · ' + esc(r.legalFormLabel || '') + (r.closed ? ' · cessée' : '') + '</small></button>';
+    });
+    $('scHits').innerHTML = h;
+  });
+}
+
+function ouvrirSociete(siren) {
+  S.soc = null; S.docs = null; S.choix = {}; S.resultats = {};
+  $('scHits').innerHTML = '';
+  setTab('societe');
+  $('scFiche').innerHTML = '<div class="sc-vide">Chargement…</div>';
+  appel('?action=societe&siren=' + encodeURIComponent(siren)).then(function (j) {
+    if (!j.ok) { $('scFiche').innerHTML = '<div class="sc-vide">' + esc(erreurTexte(j)) + '</div>'; return; }
+    S.soc = j;
+    S.resultats = j.donnees || {};
+    peindreFiche();
+    return appel('', { action: 'documents', siren: siren }).then(function (d) {
+      S.docs = d.ok ? (d.documents || []) : { erreur: erreurTexte(d) };
+      peindreFiche();
+    });
+  });
+}
+
+/* ── La fiche société ─────────────────────────────────────────────── */
+function peindreFiche() {
+  var s = S.soc;
+  if (!s) { $('scFiche').innerHTML = ''; return; }
+  var a = s.annuaire || {};
+  var h = '<div class="sc-card"><h2>' + esc(s.nom) + '</h2><small>SIREN ' + esc(s.siren)
+    + (a.legalFormLabel ? ' · ' + esc(a.legalFormLabel) : '')
+    + (a.address && a.address.city ? ' · ' + esc(a.address.city) : '')
+    + (a.nafLabel ? ' · ' + esc(a.nafLabel) : '') + '</small>';
+
+  /* Solvabilité */
+  if (s.solvabilite) {
+    h += window.ScoringWidget.resultatHTML(s.solvabilite)
+      + '<div class="sc-rang" style="margin-top:10px"><button class="sc-act mini" type="button" data-action="solvabilite" data-force="1"' + (S.occupe ? ' disabled' : '') + '>↻ Refaire l\'étude · ' + credits(4.7) + '</button></div>';
+  } else {
+    h += '<button class="sc-act pri" type="button" data-action="solvabilite"' + (S.occupe ? ' disabled' : '') + '>🛡️ Étude de solvabilité · environ ' + credits(4.7) + '</button>';
+  }
+  h += '</div>';
+
+  /* Catalogue */
+  h += '<div class="sc-card"><h2>Données disponibles</h2><small>Clique sur ce que tu veux, le total s\'affiche avant de lancer. Une donnée déjà chargée reste gratuite.</small><div class="sc-grille">';
+  var total = 0, nb = 0;
+  ((S.etat && S.etat.catalogue) || []).forEach(function (c) {
+    var deja = S.resultats[c.id] && S.resultats[c.id].ok;
+    var on = !!S.choix[c.id];
+    if (on) { nb++; if (!deja) total += c.cout; }
+    var prix = deja ? 'déjà chargé · gratuit' : (c.restreint ? 'accès sur demande' : credits(c.cout));
+    h += '<button class="sc-choix' + (on ? ' on' : '') + '" type="button" data-action="choix" data-id="' + esc(c.id) + '">' + esc(c.ic) + ' ' + esc(c.label) + '<small>' + esc(prix) + '</small></button>';
+  });
+  h += '</div><div class="sc-rang"><button class="sc-act pri" type="button" data-action="charger"' + (!nb || S.occupe ? ' disabled' : '') + '>'
+    + (S.occupe ? 'Patiente…' : (nb ? 'Afficher la sélection · ' + credits(Math.round(total * 10) / 10) : 'Choisis au moins un bouton')) + '</button></div>';
+
+  Object.keys(S.resultats).forEach(function (id) { h += blocResultat(id, S.resultats[id]); });
+  h += '</div>';
+
+  /* Documents */
+  h += '<div class="sc-card"><h2>Documents officiels</h2><small>Actes, annonces et bilans déposés. La liste est gratuite ; chaque document coûte ' + credits((S.etat && S.etat.coutDocument) || 5) + ', une seule fois.</small>' + blocDocuments() + '</div>';
+  $('scFiche').innerHTML = h;
+}
+
+function blocDocuments() {
+  if (!S.docs) return '<div class="sc-vide">Chargement de la liste…</div>';
+  if (S.docs.erreur) return '<div class="sc-vide">' + esc(S.docs.erreur) + '</div>';
+  if (!S.docs.length) return '<div class="sc-vide">Aucun document officiel pour cette société.</div>';
+  var achetes = (S.soc && S.soc.documents) || {};
+  var h = '', groupe = '';
+  S.docs.forEach(function (d, i) {
+    if (d.categorieLabel !== groupe) { groupe = d.categorieLabel; h += '<div class="sc-h3">' + esc(groupe) + '</div>'; }
+    var a = achetes[d.key];
+    h += '<div class="sc-doc"><div>' + esc(d.libelle || d.titre) + '<small>' + esc(d.titre) + '</small></div>'
+      + '<button class="sc-act mini' + (a ? '' : ' pri') + '" type="button" data-action="document" data-i="' + i + '"' + (S.occupe ? ' disabled' : '') + '>' + (a ? '⬇ Ouvrir · déjà acheté' : '⬇ Télécharger · ' + credits((S.etat && S.etat.coutDocument) || 5)) + '</button></div>';
+  });
+  return h;
+}
+
+/* ── Une donnée affichée ──────────────────────────────────────────── */
+function blocResultat(id, r) {
+  var c = element(id) || { label: id.indexOf('mandats:') === 0 ? 'Mandats du dirigeant' : id, ic: '👤', cout: 0 };
+  var h = '<div class="sc-res"><div class="sc-res-h"><b>' + esc(c.ic) + ' ' + esc(c.label) + '</b>';
+  if (r.at) h += '<small>' + esc(jourHeure(r.at)) + (r.par ? ' · ' + esc(r.par) : '') + '</small>';
+  h += '<span class="sp" style="flex:1"></span>';
+  if (r.ok && !r.vide) h += '<button class="sc-act mini" type="button" data-action="csv" data-id="' + esc(id) + '">⬇ CSV</button>'
+    + (element(id) ? '<button class="sc-act mini" type="button" data-action="actualiser" data-id="' + esc(id) + '">↻ ' + credits(c.cout) + '</button>' : '');
+  h += '</div>';
+  if (!r.ok) h += '<div class="sc-vide">' + esc(r.detail || 'Erreur.') + (r.error === 'acces_refuse' ? ' Cet accès s\'active en écrivant à api-pro-support@societe.com.' : '') + '</div>';
+  else if (r.vide) h += '<div class="sc-vide">Societe.com n\'a rien pour cette société. Aucun crédit consommé.</div>';
+  else h += rendu(id, r.data);
+  return h + '</div>';
+}
+
+function kv(o) {
+  var h = '<div class="sc-kv">', n = 0;
+  (function parcours(x) {
+    Object.keys(x || {}).forEach(function (k) {
+      var v = x[k];
+      if (v && typeof v === 'object' && !Array.isArray(v)) { parcours(v); return; }
+      if (v === '' || v === null || v === undefined || Array.isArray(v)) return;
+      n++;
+      var aff = v === true ? 'Oui' : (v === false ? 'Non' : (/^(date|dernieremaj)/.test(k) ? dateAAAAMMJJ(v) : v));
+      h += '<span>' + esc(LABELS[k] || k) + '</span><b>' + esc(aff) + '</b>';
+    });
+  })(o);
+  return n ? h + '</div>' : '<div class="sc-vide">Rien à afficher.</div>';
+}
+
+function tableau(titres, lignes) {
+  var h = '<div class="sc-scroll"><table class="sc-table"><thead><tr>';
+  titres.forEach(function (t) { h += '<th>' + esc(t) + '</th>'; });
+  h += '</tr></thead><tbody>';
+  lignes.forEach(function (l) {
+    h += '<tr>';
+    l.forEach(function (c) { h += '<td' + (c && c.n ? ' class="n"' : '') + '>' + (c && c.html !== undefined ? c.html : esc(c && c.n ? c.v : c)) + '</td>'; });
+    h += '</tr>';
+  });
+  return h + '</tbody></table></div>';
+}
+
+function rendu(id, d) {
+  d = d || {};
+  if (id === 'bilans') {
+    var b = (d.bilans || []).slice().sort(function (x, y) { return String(y.datebilan).localeCompare(String(x.datebilan)); });
+    if (!b.length) return '<div class="sc-vide">Aucun bilan publié.</div>';
+    return tableau(['Année', 'CA', 'Résultat net', 'EBE', 'Capitaux propres', 'Dettes', 'Effectif'], b.map(function (x) {
+      return [x.anneebilan, { n: 1, v: euros(x.rescatotal) }, { n: 1, v: euros(x.resresnet) }, { n: 1, v: euros(x.resebe) }, { n: 1, v: euros(x.passifcapprop) }, { n: 1, v: euros(x.passifdette) }, { n: 1, v: x.reseff || '—' }];
+    }));
+  }
+  if (id === 'procedurescollectives') {
+    var p = d.procedures || [];
+    if (!p.length) return '<div class="sc-vide">Aucune procédure collective.</div>';
+    return tableau(['Type', 'Début', 'Fin', 'Mandataire'], p.map(function (x) {
+      return [x.typeproc, dateAAAAMMJJ(x.dateproc), dateAAAAMMJJ(x.datefinproc) || 'En cours', [x.adminnom1, x.admintype1].filter(Boolean).join(', ')];
+    }));
+  }
+  if (id === 'dirigeants') {
+    var l = d.dirigeants || [];
+    if (!l.length) return '<div class="sc-vide">Aucun dirigeant publié.</div>';
+    return tableau(['Nom', 'Fonction', 'Depuis', 'Fin', 'Mandats'], l.map(function (x) {
+      var nom = x.type === 'PM' ? x.denopm : [x.prenompp, x.nompp].filter(Boolean).join(' ');
+      var did = x.id_dir_pp || '';
+      return [nom, x.titre, dateAAAAMMJJ(x.datedebut), dateAAAAMMJJ(x.datefin),
+        { html: did ? '<button class="sc-act mini" type="button" data-action="mandats" data-dir="' + esc(did) + '" data-nom="' + esc(nom) + '">' + credits((S.etat && S.etat.coutMandats) || 2) + '</button>' : '' }];
+    }));
+  }
+  if (id === 'etablissements') {
+    var e = d.etablissements || [];
+    if (!e.length) return '<div class="sc-vide">Aucun établissement.</div>';
+    return tableau(['SIRET', 'Type', 'Adresse', 'État', 'Fermeture'], e.map(function (x) {
+      return [x.siret, x.typeetab, [x.voieadr, x.codepostal, x.ville].filter(Boolean).join(' '), x.estactive ? 'Ouvert' : 'Fermé', dateAAAAMMJJ(x.datefermeture)];
+    }));
+  }
+  if (id === 'evenements') {
+    var v = (d.evenements || []).slice().sort(function (x, y) { return String(y.dateevenement).localeCompare(String(x.dateevenement)); });
+    if (!v.length) return '<div class="sc-vide">Aucun événement.</div>';
+    return tableau(['Date', 'Événement'], v.map(function (x) { return [dateAAAAMMJJ(x.dateevenement), x.labelevenement]; }));
+  }
+  return kv(d);
+}
+
+/* Export : une ligne « champ ; valeur » par information, ouvrable dans Excel. */
+function exporterCsv(id) {
+  var r = S.resultats[id];
+  if (!r || !r.data) return;
+  var lignes = [];
+  (function parcours(x, prefixe) {
+    Object.keys(x || {}).forEach(function (k) {
+      var v = x[k], c = prefixe ? prefixe + '.' + k : k;
+      if (v && typeof v === 'object') parcours(v, c);
+      else lignes.push('"' + c.replace(/"/g, '""') + '";"' + String(v == null ? '' : v).replace(/"/g, '""') + '"');
+    });
+  })(r.data, '');
+  var blob = new Blob(['﻿' + 'champ;valeur\n' + lignes.join('\n')], { type: 'text/csv;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = S.soc.siren + '-' + id + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+/* ── Actions payantes ─────────────────────────────────────────────── */
+function lancerSolvabilite(force) {
+  S.occupe = true; peindreFiche();
+  appel('', { action: 'solvabilite', siren: S.soc.siren, nom: S.soc.nom, force: force }).then(function (j) {
+    S.occupe = false;
+    if (!j.ok) { toast(erreurTexte(j)); peindreFiche(); return; }
+    S.soc.solvabilite = j.etude;
+    if (j.solde !== undefined) peindreSolde(j.solde);
+    peindreFiche();
+    chargerEtat();
+  });
+}
+
+function charger(ids, force) {
+  S.occupe = true; peindreFiche();
+  appel('', { action: 'charger', siren: S.soc.siren, nom: S.soc.nom, items: ids, force: force }).then(function (j) {
+    S.occupe = false;
+    if (!j.ok) { toast(erreurTexte(j)); peindreFiche(); return; }
+    Object.keys(j.resultats || {}).forEach(function (id) { S.resultats[id] = j.resultats[id]; });
+    S.choix = {};
+    if (j.solde !== undefined) peindreSolde(j.solde);
+    peindreFiche();
+    chargerEtat();
+  });
+}
+
+function ouvrirDocument(i) {
+  var d = S.docs[i];
+  /* Ouverte avant l'appel : après, le navigateur la bloquerait. */
+  var w = window.open('', '_blank');
+  S.occupe = true; peindreFiche();
+  appel('', { action: 'telecharger', siren: S.soc.siren, nom: S.soc.nom, doc: d }).then(function (j) {
+    S.occupe = false;
+    if (!j.ok) { if (w) w.close(); toast(erreurTexte(j)); peindreFiche(); return; }
+    if (w) w.location.href = j.url; else window.location.href = j.url;
+    S.soc.documents = S.soc.documents || {};
+    S.soc.documents[j.cle] = { at: new Date().toISOString() };
+    if (j.solde !== undefined) peindreSolde(j.solde);
+    peindreFiche();
+    chargerEtat();
+  });
+}
+
+function voirMandats(dirid, nom) {
+  S.occupe = true; peindreFiche();
+  appel('', { action: 'mandats', dirid: dirid, dirNom: nom, siren: S.soc.siren, nom: S.soc.nom }).then(function (j) {
+    S.occupe = false;
+    if (!j.ok) { toast(erreurTexte(j)); peindreFiche(); return; }
+    S.resultats['mandats:' + dirid] = { ok: true, vide: j.vide, data: j.data, at: new Date().toISOString() };
+    if (j.solde !== undefined) peindreSolde(j.solde);
+    peindreFiche();
+    chargerEtat();
+  });
+}
+
+/* ── Demandes ─────────────────────────────────────────────────────── */
+function peindreDemandes() {
+  var liste = (S.etat && S.etat.demandes) || [];
+  var attente = liste.filter(function (d) { return d.statut === 'attente'; });
+  var badge = $('scBadge');
+  badge.style.display = attente.length ? '' : 'none';
+  badge.textContent = attente.length;
+  if (!liste.length) { $('scDemandes').innerHTML = '<div class="sc-vide">Aucune demande pour l\'instant.</div>'; return; }
+  var h = '';
+  liste.forEach(function (d) {
+    h += '<div class="sc-dem' + (d.id === S.vise ? ' vise' : '') + '"><b>' + esc(d.nom) + '</b> · SIREN ' + esc(d.siren)
+      + '<small>' + esc(jourHeure(d.demandeAt)) + ' · ' + (d.origine === 'admin' ? 'Lancée par ' : 'Demandée par ') + esc(d.demandeurNom) + (d.leadNom ? ', pour ' + esc(d.leadNom) : '') + '</small>';
+    if (d.note) h += '<div>« ' + esc(d.note) + ' »</div>';
+    if (d.erreur) h += '<div style="color:#ef4444">Dernier essai : ' + esc(d.erreur) + '</div>';
+    if (d.statut === 'attente') {
+      if (S.refus[d.id]) {
+        h += '<div class="sc-rang" style="margin-top:8px"><input class="sc-in" data-motif="' + esc(d.id) + '" placeholder="Motif du refus (facultatif)"><button class="sc-act ko" type="button" data-action="refuser" data-id="' + esc(d.id) + '">Confirmer le refus</button></div>';
+      } else {
+        h += '<div class="sc-rang" style="margin-top:8px"><button class="sc-act ok" type="button" data-action="valider" data-id="' + esc(d.id) + '">✅ Valider</button><button class="sc-act ko" type="button" data-action="demande-refus" data-id="' + esc(d.id) + '">❌ Refuser</button></div>';
+      }
+    } else if (d.statut === 'refusee') {
+      h += '<div style="margin-top:4px">❌ Refusée par ' + esc(d.decideurNom) + (d.motif ? ' : ' + esc(d.motif) : '') + '</div>';
+    } else if (d.statut === 'en_cours') {
+      h += '<div style="margin-top:4px">⏳ Étude en cours…</div>';
+    } else if (d.resultat) {
+      h += '<div style="margin-top:8px">' + window.ScoringWidget.resultatHTML(d.resultat) + '</div>';
+    }
+    h += '</div>';
+  });
+  $('scDemandes').innerHTML = h;
+}
+
+function decider(id, accord) {
+  var champ = document.querySelector('[data-motif="' + id + '"]');
+  appel('', { action: 'decider', id: id, accord: accord, motif: champ ? champ.value : '' }).then(function (j) {
+    if (!j.ok) toast(erreurTexte(j)); else toast(accord ? 'Étude faite, le closer a la réponse.' : 'Refus envoyé au closer.');
+    delete S.refus[id];
+    chargerEtat();
+    window.ScoringWidget.verifier();
+  });
+}
+
+/* ── Journal ──────────────────────────────────────────────────────── */
+function peindreJournal() {
+  var l = (S.etat && S.etat.journal) || [];
+  if (!l.length) { $('scJournal').innerHTML = '<div class="sc-vide">Rien pour l\'instant.</div>'; return; }
+  var TYPES = { solvabilite: 'Solvabilité', donnee: 'Donnée', document: 'Document', mandats: 'Mandats', refus: 'Refus' };
+  $('scJournal').innerHTML = '<div class="sc-card">' + tableau(['Quand', 'Qui', 'Quoi', 'Société', 'Crédits'], l.map(function (x) {
+    return [jourHeure(x.at), x.par, (TYPES[x.type] || x.type) + (x.item ? ' · ' + x.item : ''),
+      { html: x.siren ? '<button class="sc-hit" style="margin:0;padding:3px 7px" type="button" data-action="ouvrir" data-siren="' + esc(x.siren) + '">' + esc(x.nom || x.siren) + '</button>' : '' },
+      { n: 1, v: String(x.credits || 0).replace('.', ',') }];
+  })) + '</div>';
+}
+
+/* ── Clics ────────────────────────────────────────────────────────── */
+document.addEventListener('click', function (e) {
+  var t = e.target && e.target.closest ? e.target.closest('[data-tab],[data-action]') : null;
+  if (!t) return;
+  if (t.hasAttribute('data-tab')) { setTab(t.getAttribute('data-tab')); return; }
+  var a = t.getAttribute('data-action'), id = t.getAttribute('data-id');
+  if (a === 'chercher') { chercher(); return; }
+  if (a === 'ouvrir') { ouvrirSociete(t.getAttribute('data-siren')); return; }
+  if (a === 'solvabilite') { lancerSolvabilite(t.getAttribute('data-force') === '1'); return; }
+  if (a === 'choix') { S.choix[id] = !S.choix[id]; if (!S.choix[id]) delete S.choix[id]; peindreFiche(); return; }
+  if (a === 'charger') { charger(Object.keys(S.choix), false); return; }
+  if (a === 'actualiser') { charger([id], true); return; }
+  if (a === 'csv') { exporterCsv(id); return; }
+  if (a === 'document') { ouvrirDocument(Number(t.getAttribute('data-i'))); return; }
+  if (a === 'mandats') { voirMandats(t.getAttribute('data-dir'), t.getAttribute('data-nom')); return; }
+  if (a === 'valider') { decider(id, true); return; }
+  if (a === 'demande-refus') { S.refus[id] = true; peindreDemandes(); return; }
+  if (a === 'refuser') { decider(id, false); return; }
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Enter' && e.target && e.target.id === 'scQ') chercher();
+});
+document.addEventListener('scoring-change', function () { if (S.etat) chargerEtat(); });
+
+firebase.auth().onAuthStateChanged(function (user) {
+  if (!user) { window.location.href = 'login.html'; return; }
+  if ((localStorage.getItem('ambitio_role') || '') !== 'admin') {
+    $('lockedView').style.display = '';
+    return;
+  }
+  $('mainView').style.display = '';
+  window.ScoringWidget.styles();
+  var m = /[?&]demande=([A-Za-z0-9_-]+)/.exec(window.location.search);
+  chargerEtat().then(function () {
+    if (m) { S.vise = m[1]; setTab('demandes'); peindreDemandes(); }
+  });
+});
+
+})();
+</script>
+</body>
+</html>

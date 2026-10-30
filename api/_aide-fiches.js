@@ -678,6 +678,23 @@ const FICHES = [
 
   // ════════════════════ Closing : pilote, contrat, paiement ════════════════════
   {
+    id: 'closing-solvabilite', cat: 'Closing : pilote, contrat, paiement',
+    title: 'Demander une étude de solvabilité sur une société',
+    tags: 'solvabilité, scoring, société, siret, procédure collective, liquidation, redressement, doute client, societe.com',
+    pages: ['sales-leads'],
+    body: L([
+      "Un doute sur la société du client ? Sur la fiche, en phase de closing :",
+      "1. Clique sur **🔎 Demander une étude de solvabilité**.",
+      "2. Cherche la société par son nom ou son SIRET, puis choisis-la. Si le client a déjà signé, elle est pré-remplie.",
+      "3. Ajoute ton doute en une phrase si tu veux, puis clique sur **Envoyer la demande**.",
+      "4. Un admin valide ou refuse. La réponse arrive en pop-up et s'affiche sur la fiche.",
+      "Le feu : 🔴 risque élevé, 🟠 à surveiller, 🟢 pas de signal d'alerte, ⚪ données insuffisantes.",
+      "- ⚪ est fréquent sur les petites sociétés et les sociétés récentes : elles ne publient pas toujours leurs comptes. Ce n'est ni bon ni mauvais signe.",
+      "- C'est une indication sur les données publiques, pas une garantie de paiement. La vente reste possible.",
+    ]),
+    guide: [],
+  },
+  {
     id: 'closing-pilote-lancer', cat: 'Closing : pilote, contrat, paiement',
     title: 'Comment lancer le pilote de closing ?',
     tags: 'pilote de closing, ok pour le closing, cartes, onboarding client, close',
@@ -1785,6 +1802,21 @@ const FICHES = [
       "4. Quand la personne a choisi son mot de passe : pop-up « 🔓 X a créé son accès » → ouvre sa fiche → **🔓 Activer l'accès**.",
       "5. Pense à : accès Paiements / Signatures / Formations, ligne Ringover (Admin → 📞 Numéros), liaison de sa fiche Booking.",
       "Invitation en attente : « 📧 Renvoyer l'invitation » (révoque l'ancien lien).",
+    ]),
+    guide: [],
+  },
+  {
+    id: 'admin-scoring', cat: 'Admin', adminOnly: true,
+    title: 'Scoring sociétés : solvabilité, données et documents',
+    tags: 'scoring, solvabilité, societe.com, crédits, kbis, statuts, bilans, documents officiels, demande closer, valider',
+    pages: ['admin-scoring'],
+    body: L([
+      "Menu **Administration → Scoring sociétés**. Cherche une société, puis :",
+      "- **🛡️ Étude de solvabilité** : le feu en un clic, environ 4,7 crédits, gratuit pendant 30 jours pour la même société.",
+      "- **Données disponibles** : clique sur les boutons voulus, le total s'affiche avant de lancer.",
+      "- **Documents officiels** : la liste est gratuite, chaque document coûte 5 crédits une seule fois, puis se rouvre gratuitement.",
+      "Les demandes des closers arrivent par e-mail et en pop-up, et dans l'onglet **Demandes**. Le premier admin qui répond décide.",
+      "L'onglet **Journal** montre qui a dépensé quoi. Le solde est en haut à droite ; à zéro, le module s'arrête jusqu'à la recharge du compte Societe.com.",
     ]),
     guide: [],
   },

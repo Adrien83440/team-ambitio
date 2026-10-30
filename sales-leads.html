@@ -34,6 +34,7 @@
 <script src="close-wizard.js" defer></script>
 <script src="demarrage-core.js" defer></script>
 <script src="demarrage-widget.js" defer></script>
+<script src="alteore-scoring.js" defer></script>
 <script src="close-pilot.js" defer></script>
 <!-- Programme IA 10/2026 : dossier de préparation au closing (bouton 📋 Dossier IA des RDV) -->
 <script src="ai-prep-modal.js" defer></script>
@@ -3645,6 +3646,25 @@ function _ldClosePilotHost() {
   });
 }
 
+/* Solvabilité (alteore-scoring.js) : en phase de closing, c'est-à-dire dès qu'un
+   RDV commercial existe ou que le pilote est lancé. Le bloc suit le bandeau de
+   close ; c'est le serveur qui décide si cette personne y a droit. */
+function _ldPaintScoring(leadId, l, host) {
+  if (!window.ScoringWidget || !host.parentNode) return;
+  var enClosing = !!(ldCloseSteps(l) || (l.closePilot && l.closePilot.startedAt));
+  var slot = host.nextElementSibling;
+  var pose = !!(slot && slot.hasAttribute('data-scoring'));
+  if (!enClosing) { if (pose) slot.parentNode.removeChild(slot); return; }
+  if (pose && slot.getAttribute('data-lead-id') === leadId) return;
+  if (pose) slot.parentNode.removeChild(slot);
+  slot = document.createElement('div');
+  slot.setAttribute('data-scoring', '1');
+  slot.setAttribute('data-lead-id', leadId);
+  slot.setAttribute('data-lead-nom', l.nom || '');
+  host.parentNode.insertBefore(slot, host.nextSibling);
+  window.ScoringWidget.paint(slot);
+}
+
 function paintCloseRail(leadId) {
   var host = document.querySelector('[data-close-rail="' + leadId + '"]');
   if (!host) {
@@ -3657,6 +3677,7 @@ function paintCloseRail(leadId) {
     ? (allLeads.find(function (x) { return x.id === leadId; }) || null) : null;
   if (!l) { host.innerHTML = ''; return; }
   _ldLoadClosePilotCfg();
+  _ldPaintScoring(leadId, l, host);
   if (_ldClosePilotOn()) {
     _ldClosePilotHost();
     /* Sur TOUTES les fiches (09/10/2026) : le bouton remplace le statut

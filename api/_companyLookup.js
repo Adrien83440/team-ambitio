@@ -175,6 +175,11 @@ function normalize(entry) {
     dirigeants: normalizeDirigeants(entry.dirigeants),
     active: etat !== 'C',
     closed: etat === 'C',
+    /* Détail lu par le feu de solvabilité (api/_scoringVerdict.js) : `etat` part
+       du siège, donc une entreprise au siège fermé (« F ») n'est pas « closed ». */
+    etatEntreprise: String(entry.etat_administratif || '').toUpperCase(),
+    siegeEtat: String(siege.etat_administratif || '').toUpperCase(),
+    etablissementsOuverts: typeof entry.nombre_etablissements_ouverts === 'number' ? entry.nombre_etablissements_ouverts : null,
   };
 }
 
