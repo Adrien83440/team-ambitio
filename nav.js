@@ -2368,12 +2368,18 @@
     m.setAttribute('content', on ? c + ',viewport-fit=cover' : c);
     coverAdded = !!on;
   }
+  /* Largeur de la colonne quand iOS étend la page sans la déclarer en zone
+     sûre (relevé du 30/10 : comme Instagram, la page peut dessiner sous
+     l'heure, seule l'heure est protégée) — mesurée par l'élargissement de la
+     page après viewport-fit=cover. 0 = colonne déclarée par les zones sûres. */
+  var colByWidth = 0;
   function applySideCol() {
     var ins = insets(), portrait = window.innerHeight > window.innerWidth;
-    var side = '';
-    if (portrait && ins.r >= 40 && ins.l < 20) side = 'r';
+    var side = '', w = 0;
+    if (portrait && ins.r >= 40 && ins.l < 20) { side = 'r'; w = ins.r; }
+    else if (portrait && colByWidth && ins.l < 20) { side = 'r'; w = Math.max(colByWidth, ins.r); }
     de.classList.toggle('al-side-col', side === 'r');
-    if (side) de.style.setProperty('--al-col-w', Math.round(ins.r) + 'px');
+    if (side) de.style.setProperty('--al-col-w', Math.round(w) + 'px');
     else de.style.removeProperty('--al-col-w');
     if (grouped()) layoutFabs();
     return !!side;
@@ -2402,12 +2408,16 @@
     if (hasCover()) { sideDiag.decision = applySideCol() ? 'colonne activée (cover déjà là)' : 'cover déjà là, pas de colonne mesurée'; return showSideDiag(); }
     if (!portrait || screenW - window.innerWidth < 40) { sideDiag.decision = 'écart écran − page < 40 px → rien'; return showSideDiag(); }
     // Sans confirmation d'iOS, on retombera sur la rangée d'icônes dans la page.
+    var wBefore = window.innerWidth;
     setCover(true);
     setTimeout(function () {
-      sideDiag.pageAfter = window.innerWidth + '×' + window.innerHeight;
+      var wAfter = window.innerWidth, grown = wAfter - wBefore;
+      sideDiag.pageAfter = wAfter + '×' + window.innerHeight + ' (+' + grown + ' px)';
       sideDiag.insAfter = fmtIns(insets());
-      if (applySideCol()) sideDiag.decision = 'colonne activée';
-      else { setCover(false); sideDiag.decision = 'cover essayé, iOS ne déclare pas de colonne → ' + (useRail() ? 'rangée d’icônes dans la page' : 'rien'); }
+      // Page élargie d'au moins 40 px sans dépasser l'écran : la colonne est à nous.
+      if (grown >= 40 && wAfter <= screenW + 2) colByWidth = grown;
+      if (applySideCol()) sideDiag.decision = colByWidth ? 'colonne activée (page élargie de ' + grown + ' px)' : 'colonne activée (zones sûres)';
+      else { colByWidth = 0; setCover(false); sideDiag.decision = 'cover essayé, ni zone sûre ni page élargie → ' + (useRail() ? 'rangée d’icônes dans la page' : 'rien'); }
       showSideDiag();
     }, 450);
   }
@@ -2437,7 +2447,7 @@
   function showSideDiag() {
     // Admins, en application installée seulement (dans Safari la réponse est connue).
     if (getRoleSafe() !== 'admin' || !isStandalone() || mode() !== 'phone' || !MQ_TOUCH.matches) return;
-    if (localStorage.getItem('al_side_diag_off') === '1' || !sideDiag || document.getElementById('al-side-diag')) return;
+    if (localStorage.getItem('al_side_diag_off2') === '1' || !sideDiag || document.getElementById('al-side-diag')) return;
     var d = sideDiag, el = document.createElement('div');
     el.id = 'al-side-diag';
     el.style.cssText = 'position:fixed;left:8px;right:8px;top:8px;z-index:100001;background:rgba(10,10,24,.94);color:#e5e7eb;' +
@@ -2453,7 +2463,7 @@
     el.innerHTML = h;
     el.addEventListener('click', function (ev) {
       var b = ev.target.closest ? ev.target.closest('[data-d]') : null; if (!b) return;
-      if (b.getAttribute('data-d') === 'off') localStorage.setItem('al_side_diag_off', '1');
+      if (b.getAttribute('data-d') === 'off') localStorage.setItem('al_side_diag_off2', '1');
       el.remove();
     });
     document.body.appendChild(el);
