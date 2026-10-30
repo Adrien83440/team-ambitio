@@ -12,6 +12,7 @@
 //     est fermé d'emblée ;
 //   · date posée après : le pont manage-access (action « demarrage ») le ferme.
 // Le jour J, le même pont lève l'attente et recale le contrat Academy.
+// L'ouverture au paiement (pour tous les nouveaux clients) : ./_accesPaiement.js.
 // ============================================================================
 
 const { admin, db } = require('./_firebaseAdmin');
@@ -19,6 +20,8 @@ const Core = require('../demarrage-core.js');
 const BP = require('../bp-credits.js');
 const { notifierCoach } = require('./_coachNotify');
 const { sendEmailFromAccount } = require('./_gmailSend');
+const Acces = require('./_accesPaiement');
+const { contratsDu, paiementsDu, pontAcademy } = Acces;
 
 const ACADEMY_URL = (process.env.ACADEMY_BRIDGE_URL || 'https://academy.adrienemily.com').replace(/\/$/, '');
 const ADMIN_EMAIL = 'contact@adrienemily.com';
@@ -68,27 +71,6 @@ async function trouverLead(o) {
     return repli;
   }
   return null;
-}
-
-async function contratsDu(leadId, L) {
-  const col = db.collection('signature_requests');
-  const vus = {}, out = [];
-  function add(snap) { snap.forEach(function (d) { if (!vus[d.id]) { vus[d.id] = 1; out.push(Object.assign({ _id: d.id }, d.data() || {})); } }); }
-  add(await col.where('leadId', '==', leadId).get());
-  const email = lower(L.email);
-  if (email) add(await col.where('clientEmail', '==', email).get());
-  return out;
-}
-
-async function paiementsDu(leadId, L) {
-  const col = db.collection('payments');
-  const vus = {}, out = [];
-  function add(snap) { snap.forEach(function (d) { if (!vus[d.id]) { vus[d.id] = 1; out.push(Object.assign({ id: d.id }, d.data() || {})); } }); }
-  add(await col.where('leadId', '==', leadId).get());
-  if (L.personId) add(await col.where('personId', '==', L.personId).get());
-  const email = lower(L.email);
-  if (email) add(await col.where('leadEmail', '==', email).get());
-  return out;
 }
 
 async function ficheDu(leadId, L) {
@@ -147,40 +129,6 @@ function avecHistorique(dd, prev, action, par) {
   return dd;
 }
 
-/* Le pont Academy, sur toutes les adresses possibles du client : le compte
-   vit sous l'e-mail du SIGNATAIRE, qui peut différer de celui du lead. */
-function emailsAcademy(L, contrats, fiche) {
-  const vus = {}, out = [];
-  function add(e) { e = lower(e); if (e && !vus[e]) { vus[e] = 1; out.push(e); } }
-  contrats.filter(function (c) { return c.status === 'signed'; }).forEach(function (c) {
-    add(Array.isArray(c.signers) && c.signers[0] && c.signers[0].email);
-    add(c.clientEmail);
-  });
-  add(L.email);
-  if (fiche) add(fiche.data.email);
-  return out;
-}
-
-async function pontAcademy(emails, payload) {
-  const key = process.env.ACADEMY_BRIDGE_KEY || '';
-  if (!key) return { ok: false, error: 'bridge_not_configured' };
-  let trouve = false;
-  for (let i = 0; i < emails.length; i++) {
-    let j = null;
-    try {
-      const r = await fetch(ACADEMY_URL + '/api/bridge/manage-access', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-bridge-key': key },
-        body: JSON.stringify(Object.assign({ action: 'demarrage', email: emails[i] }, payload)),
-      });
-      j = await r.json().catch(function () { return null; });
-    } catch (e) { j = null; }
-    if (!j || j.ok !== true) return { ok: false, error: (j && j.error) || 'academy_unreachable' };
-    if (j.found) trouve = true;
-  }
-  return { ok: true, trouve: trouve };
-}
-
 /* Pose ou change la date. Contrat déjà signé : l'Academy est ouverte, on la
    ferme D'ABORD — si le pont échoue, rien n'est enregistré et on le dit. */
 async function poser(lead, date, par) {
@@ -190,7 +138,7 @@ async function poser(lead, date, par) {
   const c = await conditionsDu(lead.id, L);
   if (c.conditions.signe) {
     const fiche = await ficheDu(lead.id, L);
-    const p = await pontAcademy(emailsAcademy(L, c.contrats, fiche), { date: date });
+    const p = await pontAcademy(Acces.emailsAcademy(L, c.contrats, fiche && fiche.data.email), { action: 'demarrage', date: date });
     if (!p.ok) return { ok: false, status: 502, error: p.error };
   }
   const memeDate = !!(prev && prev.statut === 'attente' && prev.date === date);
@@ -241,8 +189,14 @@ async function demarrer(lead, o) {
   if (!c.conditions.ok && !o.force) return { ok: false, status: 409, error: 'conditions', manque: c.conditions.manque };
   const jour = Core.aujourdhui();
   const fiche = await ficheDu(lead.id, L);
-  const p = await pontAcademy(emailsAcademy(L, c.contrats, fiche), { date: null, demarreLe: jour });
+  const p = await pontAcademy(Acces.emailsAcademy(L, c.contrats, fiche && fiche.data.email), { action: 'demarrage', date: null, demarreLe: jour });
   if (!p.ok) return { ok: false, status: 502, error: p.error };
+  /* Démarrer lève aussi le verrou « paiement » : sinon un démarrage forcé par
+     un admin resterait fermé. */
+  if (L.accesPaiement && L.accesPaiement.statut === 'verrouille') {
+    const ouvert = await Acces.ouvrir(lead, par, o.force === true);
+    if (!ouvert.ok) return { ok: false, status: 502, error: ouvert.error };
+  }
   const dd = avecHistorique({ statut: 'demarre', date: prev.date, demarreLe: jour, rappels: prev.rappels || {} }, prev, o.force ? 'demarre_force' : (o.auto ? 'demarre_auto' : 'demarre'), par);
   await db.collection('leads').doc(lead.id).update({ demarrageDiffere: dd });
   await recopier(lead.id, L, dd);
@@ -342,6 +296,7 @@ async function passage(o) {
       console.error('[demarrage] passage', lead.id, e && e.stack ? e.stack : e);
     }
   }
+  bilan.acces = await Acces.passageAcces(envoyerRappel);
   return bilan;
 }
 
@@ -357,6 +312,13 @@ async function liste() {
     out.push({ leadId: d.id, clientId: L.coachingClientId || '', nom: nomDe(L), date: dd.date, jours: Core.joursEntre(today, dd.date), conditions: c.conditions, bloque: !!(dd.rappels && dd.rappels.bloque) });
   }
   out.sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+  /* Signés mais pas payés depuis 3 jours : même encart. */
+  const ferme = await db.collection('leads').where('accesPaiement.statut', '==', 'verrouille').get();
+  ferme.forEach(function (d) {
+    const L = d.data() || {}, ap = L.accesPaiement || {};
+    if (L._merged === true || Date.now() - Number(ap.depuis || 0) < 3 * 86400000) return;
+    out.push({ leadId: d.id, clientId: L.coachingClientId || '', nom: nomDe(L), date: '', jours: 0, verrou: true, conditions: { ok: false, manque: [] }, bloque: true });
+  });
   return out;
 }
 
@@ -370,4 +332,4 @@ async function attenteDuClient(clientId, c) {
   return Core.enAttente(dd) ? dd.date : '';
 }
 
-module.exports = { trouverLead, conditionsDu, poser, retirer, demarrer, passage, liste, attenteDuClient, nomDe };
+module.exports = { trouverLead, conditionsDu, poser, retirer, demarrer, passage, liste, attenteDuClient, nomDe, verrouillerAcces: Acces.verrouiller, ouvrirAcces: Acces.ouvrir };

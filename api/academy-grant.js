@@ -46,6 +46,7 @@
 const { admin, db } = require('./_firebaseAdmin');
 const parseBody = require('./_parseBody');
 const Demarrage = require('../demarrage-core.js');
+const { paiementsDu } = require('./_accesPaiement');
 
 const ACADEMY_URL = (process.env.ACADEMY_BRIDGE_URL || 'https://academy.adrienemily.com').replace(/\/$/, '');
 
@@ -64,25 +65,38 @@ function frToIso(s) {
   return m ? m[3] + '-' + m[2] + '-' + m[1] : '';
 }
 
-/* Démarrage différé (30/10/2026) : le closer a posé une date AVANT la
-   signature. L'accès est créé, mais l'espace reste fermé jusqu'à cette date. */
-async function demarrageAttendu(r, email) {
+/* Le lead du contrat : la date de démarrage différé et le paiement se lisent
+   dessus. Sans lead, ni l'un ni l'autre ne s'applique. */
+async function leadDuContrat(r, email) {
   try {
-    let L = null;
     if (r.leadId) {
       const s = await db.collection('leads').doc(r.leadId).get();
-      if (s.exists) L = s.data() || {};
+      if (s.exists) return { id: s.id, data: s.data() || {} };
     }
-    if (!L && email) {
+    if (email) {
       const q = await db.collection('leads').where('email', '==', email).limit(5).get();
       const hit = q.docs.find(function (d) { return (d.data() || {})._merged !== true; });
-      if (hit) L = hit.data() || {};
+      if (hit) return { id: hit.id, data: hit.data() || {} };
     }
-    const dd = L && L.demarrageDiffere;
-    return Demarrage.enAttente(dd) ? dd.date : '';
+  } catch (e) { console.warn('[academy-grant] lead illisible :', e && e.message); }
+  return null;
+}
+
+/* L'Academy s'ouvre au paiement (décision Adrien 30/10/2026) : contrat récent
+   et prélèvement pas encore parti → l'espace reste fermé. Un vieux contrat
+   rattrapé depuis Signatures n'est pas concerné : sinon un client payé hors
+   GoCardless se retrouverait enfermé dehors. */
+const CONTRAT_RECENT_JOURS = 30;
+async function paiementManquant(lead, r) {
+  if (!lead) return false;
+  const signe = Demarrage.msDe(r.signedAt) || Date.now();
+  if (Date.now() - signe > CONTRAT_RECENT_JOURS * 86400000) return false;
+  try {
+    const paiements = await paiementsDu(lead.id, lead.data);
+    return !paiements.some(function (p) { return Demarrage.paiementOk(p); });
   } catch (e) {
-    console.warn('[academy-grant] démarrage différé illisible :', e && e.message);
-    return '';
+    console.warn('[academy-grant] paiements illisibles :', e && e.message);
+    return false;
   }
 }
 
@@ -160,7 +174,9 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const attendu = await demarrageAttendu(r, clientEmail);
+    const lead = await leadDuContrat(r, clientEmail);
+    const attendu = lead && Demarrage.enAttente(lead.data.demarrageDiffere) ? lead.data.demarrageDiffere.date : '';
+    const verrou = await paiementManquant(lead, r);
 
     let j = null;
     try {
@@ -170,7 +186,7 @@ module.exports = async (req, res) => {
         /* demarrageLe (14/10/2026) : date de démarrage posée à la signature
            (signature si renonciation au délai de rétractation, sinon J+15) —
            l'Academy y fait partir les 180 jours du Business nouveau format. */
-        body: JSON.stringify({ email: clientEmail, name: clientName, contractName: templateName, signedAt: signedAtIso, demarrageLe: attendu || frToIso(r.demarragePossibleLe) || undefined, demarrageAttendu: attendu || undefined, courseId: templateCourseId || undefined }),
+        body: JSON.stringify({ email: clientEmail, name: clientName, contractName: templateName, signedAt: signedAtIso, demarrageLe: attendu || frToIso(r.demarragePossibleLe) || undefined, demarrageAttendu: attendu || undefined, paiementAttendu: verrou || undefined, courseId: templateCourseId || undefined }),
       });
       j = await fRes.json().catch(() => null);
     } catch (e) {
@@ -185,8 +201,17 @@ module.exports = async (req, res) => {
     // ── 3. Le tampon sur la demande + l'événement pipeline ──────────────────
     if (j.matched) {
       await stamp(ref, { status: 'ok', courseId: j.courseId, courseName: j.courseName, created: !!j.created, alreadyHadAccess: !!j.alreadyHadAccess, demarrageAttendu: attendu || null });
-      /* Pas d'événement « accès ouvert » tant que le client attend sa date. */
-      if (!attendu) try {
+      /* Fermé en attendant le paiement : noté sur le lead, le prélèvement
+         (ou le cron) rouvrira. Avant de répondre : Vercel coupe ensuite. */
+      if (j.verrouille && lead) {
+        try {
+          await db.collection('leads').doc(lead.id).update({
+            accesPaiement: { statut: 'verrouille', depuis: Date.now(), ouvertLe: null, manuel: false, par: 'signature', rappel: null, historique: [{ at: Date.now(), par: 'signature', action: 'verrouille' }] },
+          });
+        } catch (e) { console.error('[academy-grant] verrou non noté', lead.id, e && e.message); }
+      }
+      /* Pas d'événement « accès ouvert » tant que le client attend. */
+      if (!attendu && !j.verrouille) try {
         await db.collection('webhook_inbox').add({
           action: 'academy_access_granted',
           signatureRequestId: requestId,

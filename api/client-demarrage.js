@@ -7,6 +7,8 @@
 // POST { action:'poser', leadId…, date:'AAAA-MM-JJ' }
 // POST { action:'retirer', leadId… }
 // POST { action:'demarrer', leadId…, force? }
+// POST { action:'verrouiller', leadId… }           → Academy fermée jusqu'au paiement
+// POST { action:'ouvrir', leadId… }                → rouverte sans paiement (admin)
 //
 // DROITS (décision Adrien 30/10/2026) : le closer pose la date pendant le
 // closing ; ensuite seuls admin et CSM la changent ou démarrent le client.
@@ -25,7 +27,7 @@ const ROLES_LECTURE = ['admin', 'csm', 'coach', 'sales'];
 function droits(auth, L) {
   const equipe = auth.role === 'admin' || auth.role === 'csm';
   const closerAuClosing = auth.role === 'sales' && !(L.closePilot && L.closePilot.doneAt);
-  return { poser: equipe || closerAuClosing, demarrer: equipe, forcer: auth.role === 'admin' };
+  return { poser: equipe || closerAuClosing, demarrer: equipe, verrouiller: equipe, forcer: auth.role === 'admin' };
 }
 
 function cible(o) {
@@ -62,7 +64,7 @@ module.exports = async function (req, res) {
       const dd = lead.data.demarrageDiffere || null;
       res.status(200).json({
         ok: true, leadId: lead.id, nom: D.nomDe(lead.data), estClient: lead.data.isClient === true,
-        demarrage: dd, conditions: c.conditions, droits: droits(auth, lead.data), today: Core.aujourdhui(),
+        demarrage: dd, accesPaiement: lead.data.accesPaiement || null, conditions: c.conditions, droits: droits(auth, lead.data), today: Core.aujourdhui(),
       });
       return;
     }
@@ -83,6 +85,12 @@ module.exports = async function (req, res) {
     } else if (action === 'demarrer') {
       if (!dr.demarrer) { res.status(403).json({ ok: false, error: 'forbidden' }); return; }
       r = await D.demarrer(lead, { par: par, force: body.force === true && dr.forcer });
+    } else if (action === 'verrouiller') {
+      if (!dr.verrouiller) { res.status(403).json({ ok: false, error: 'forbidden' }); return; }
+      r = await D.verrouillerAcces(lead, par);
+    } else if (action === 'ouvrir') {
+      if (!dr.forcer) { res.status(403).json({ ok: false, error: 'forbidden' }); return; }
+      r = await D.ouvrirAcces(lead, par, true);
     } else {
       res.status(400).json({ ok: false, error: 'action_inconnue' });
       return;

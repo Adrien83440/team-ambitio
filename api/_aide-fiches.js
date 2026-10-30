@@ -1868,6 +1868,7 @@ const FICHES = [
       + '**Jusqu\'à la date :** Academy fermée, séances impossibles à réserver, pas d\'alerte « aucune séance » côté CSM. Le coach est prévenu 7 jours avant.\n\n'
       + '**Le jour J :** l\'accès s\'ouvre tout seul le matin. S\'il manque le contrat ou le paiement, rien ne s\'ouvre et Adrien et Marine reçoivent une alerte.\n\n'
       + '**Le client veut commencer plus tôt ou changer sa date :** après le closing, seuls les admins et la CSM peuvent le faire, depuis sa fiche Persons, Coaching ou le cockpit CSM (**Démarrer maintenant** ou **Changer la date**).\n\n'
+      + '**Dans tous les cas, démarrage différé ou non :** l\'Academy d\'un nouveau client s\'ouvre au déclenchement du prélèvement, plus à la signature. Si le premier prélèvement est rejeté, elle se referme toute seule.\n\n'
       + '- Rien ne change pour le close, les commissions et le funnel : la vente compte le jour du closing.\n'
       + '- Les 6 mois partent de la date de démarrage : le client garde son programme entier.',
     guide: [],

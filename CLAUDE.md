@@ -274,6 +274,15 @@ bougent pas. Règles : `demarrage-core.js` (partagé navigateur ↔ serveur) ;
   Encart de rappel : `alteore-demarrages.js`, injecté par nav.js.
 - Clause de contrat : `scripts/contrats-clause-demarrage.js` (à blanc par défaut).
 
+**Ouverture au paiement (tous les nouveaux clients, 30/10/2026)** : l'Academy ne
+s'ouvre plus à la signature mais au prélèvement déclenché (`api/_accesPaiement.js`,
+état `leads/{id}.accesPaiement`, côté Academy `users/{email}.paiementAttendu`).
+`gocardless-payment` ouvre aussitôt, le cron rattrape le reste et referme si le
+PREMIER prélèvement est rejeté (lu dans `lastPaymentFailure`, écrit par la Cloud
+Function). Non concernés : client qui a déjà une formation ouverte, contrat de plus
+de 30 jours rattrapé depuis Signatures. `paiementOk` tolère 10 jours : GoCardless
+repousse le premier prélèvement d'un nouveau mandat (préavis SEPA).
+
 ## `nav.js` — trois variables globales
 
 Ce ne sont **pas** des fonctions :

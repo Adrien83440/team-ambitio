@@ -33,6 +33,10 @@
     if (masque(cle)) return;
     var h = '<div style="font-size:14px;font-weight:800;margin-bottom:8px">⏳ ' + (items.length > 1 ? items.length + ' démarrages à préparer' : 'Démarrage à préparer') + '</div>';
     items.forEach(function (x) {
+      if (x.verrou) {
+        h += '<div style="font-size:12px;line-height:1.45;padding:7px 9px;border-radius:9px;border:1px solid rgba(128,128,128,.25);margin-bottom:6px"><b>' + esc(x.nom) + '</b> · 🔒 signé, pas encore payé</div>';
+        return;
+      }
       var quand = x.jours > 0 ? 'dans ' + x.jours + ' j' : 'à ouvrir';
       var pb = x.conditions && x.conditions.manque && x.conditions.manque.length ? ' · ⛔ ' + x.conditions.manque.join(', ') : '';
       h += '<div style="font-size:12px;line-height:1.45;padding:7px 9px;border-radius:9px;border:1px solid rgba(128,128,128,.25);margin-bottom:6px"><b>' + esc(x.nom) + '</b> · ' + esc(fr(x.date)) + ' · ' + esc(quand) + esc(pb) + '</div>';

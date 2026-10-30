@@ -3,7 +3,7 @@
    NE PAS ÉDITER : relancer `node scripts/build-sandbox-server.js`.
    Le vrai code serveur (api/*) empaqueté pour le bac à sable closer,
    branché sur la fausse base et des services simulés. Rien ne sort.
-   Modules : ./api/sign-session.js, ./api/_parseBody.js, ./api/_sign-core.js, ./api/_companyLookup.js, ./api/_sign-pdf.js, ./api/_contract-render.js, ./api/_sign-brand.js, ./api/_closeSms.js, ./api/_twilioClient.js, ./api/signature-otp.js, ./api/signature-send-link.js, ./api/_verifyFirebaseAuth.js, ./api/signature-completed.js, ./api/gocardless-billing-request.js, ./api/gocardless-finalize.js, ./api/gocardless-payment.js, ./api/payments-send-mandate-sms.js, ./api/payments-send-mandate-email.js
+   Modules : ./api/sign-session.js, ./api/_parseBody.js, ./api/_sign-core.js, ./api/_companyLookup.js, ./api/_sign-pdf.js, ./api/_contract-render.js, ./api/_sign-brand.js, ./api/_closeSms.js, ./api/_twilioClient.js, ./api/signature-otp.js, ./api/signature-send-link.js, ./api/_verifyFirebaseAuth.js, ./api/signature-completed.js, ./api/gocardless-billing-request.js, ./api/gocardless-finalize.js, ./api/gocardless-payment.js, ./api/_accesPaiement.js, ./demarrage-core.js, ./api/payments-send-mandate-sms.js, ./api/payments-send-mandate-email.js
    ═══════════════════════════════════════════════════════════════════════ */
 (function () {
 /* ═══════════════════════════════════════════════════════════════════════
@@ -4798,7 +4798,7 @@ module.exports = async (req, res) => {
 }};
 
 /* ── ./api/gocardless-payment.js ── */
-__defs["./api/gocardless-payment.js"] = { map: {"./_verifyFirebaseAuth":"./api/_verifyFirebaseAuth.js","./_parseBody":"./api/_parseBody.js","./_closeSms":"./api/_closeSms.js"}, shims: {"./_firebaseAdmin": function () { return __shim['./_firebaseAdmin']; }}, fn: function (module, exports, require) {
+__defs["./api/gocardless-payment.js"] = { map: {"./_verifyFirebaseAuth":"./api/_verifyFirebaseAuth.js","./_parseBody":"./api/_parseBody.js","./_closeSms":"./api/_closeSms.js","./_accesPaiement":"./api/_accesPaiement.js"}, shims: {"./_firebaseAdmin": function () { return __shim['./_firebaseAdmin']; }}, fn: function (module, exports, require) {
 // ==========================================================================
 // api/gocardless-payment.js
 // --------------------------------------------------------------------------
@@ -4815,6 +4815,7 @@ const { db, admin } = require('./_firebaseAdmin');
 const { requirePaymentsTrigger } = require('./_verifyFirebaseAuth');
 const parseBody = require('./_parseBody');
 const { notifyCloseSms } = require('./_closeSms');
+const { ouvrirSiPaye } = require('./_accesPaiement');
 
 const GC_BASE = process.env.GOCARDLESS_ENVIRONMENT === 'sandbox'
   ? 'https://api-sandbox.gocardless.com'
@@ -4928,6 +4929,8 @@ module.exports = async (req, res) => {
     /* Signé + prélèvement parti = close : SMS « Nouvelle vente » (21/10/2026).
        Avant res.json — Vercel coupe la fonction dès la réponse. Ne lève jamais. */
     await notifyCloseSms(pay.leadId, 'paiement');
+    /* L'Academy s'ouvre au paiement (30/10/2026). Ne lève jamais. */
+    await ouvrirSiPaye(pay.leadId, 'paiement');
     res.json({ gcId, gcType });
 
   } catch (e) {
@@ -4935,6 +4938,303 @@ module.exports = async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 };
+
+}};
+
+/* ── ./api/_accesPaiement.js ── */
+__defs["./api/_accesPaiement.js"] = { map: {"../demarrage-core.js":"./demarrage-core.js"}, shims: {"./_firebaseAdmin": function () { return __shim['./_firebaseAdmin']; }}, fn: function (module, exports, require) {
+// ============================================================================
+// api/_accesPaiement.js — L'ACADEMY S'OUVRE AU PAIEMENT (30/10/2026, exclu du routing)
+// ----------------------------------------------------------------------------
+// Décision Adrien : un nouveau client signe, mais son espace Academy reste
+// fermé jusqu'au paiement validé — « validé » = prélèvement déclenché
+// (demarrage-core.js, paiementOk). Le closer le déclenche pendant l'appel :
+// l'accès s'ouvre aussitôt (api/gocardless-payment.js → ouvrirSiPaye). Le cron
+// horaire rattrape les autres chemins.
+//
+// PREMIER PRÉLÈVEMENT REJETÉ : l'espace se referme. Les rejets arrivent par la
+// Cloud Function onWebhookInbox (lastPaymentFailure) : c'est le cron qui les lit,
+// aucun déploiement de functions n'est nécessaire. Les prélèvements suivants
+// restent de simples alertes, comme avant.
+//
+// État sur leads/{id}.accesPaiement :
+//   { statut:'verrouille'|'ouvert', depuis, ouvertLe, manuel, par, rappel, historique }
+// Côté Academy : users/{email}.paiementAttendu (bridge/manage-access, action
+// « paiement »), indépendant de la date du démarrage différé.
+//
+// Chargé par api/gocardless-payment.js, donc aussi par le bac à sable : aucune
+// dépendance à l'e-mail ou à WhatsApp ici, et ouvrirSiPaye ne lève jamais.
+// ============================================================================
+
+const { db } = require('./_firebaseAdmin');
+const Core = require('../demarrage-core.js');
+
+const ACADEMY_URL = (process.env.ACADEMY_BRIDGE_URL || 'https://academy.adrienemily.com').replace(/\/$/, '');
+const FENETRE_REJET_JOURS = 45;
+
+function lower(s) { return String(s || '').trim().toLowerCase(); }
+
+async function contratsDu(leadId, L) {
+  const col = db.collection('signature_requests');
+  const vus = {}, out = [];
+  function add(snap) { snap.forEach(function (d) { if (!vus[d.id]) { vus[d.id] = 1; out.push(Object.assign({ _id: d.id }, d.data() || {})); } }); }
+  add(await col.where('leadId', '==', leadId).get());
+  const email = lower(L.email);
+  if (email) add(await col.where('clientEmail', '==', email).get());
+  return out;
+}
+
+async function paiementsDu(leadId, L) {
+  const col = db.collection('payments');
+  const vus = {}, out = [];
+  function add(snap) { snap.forEach(function (d) { if (!vus[d.id]) { vus[d.id] = 1; out.push(Object.assign({ id: d.id }, d.data() || {})); } }); }
+  add(await col.where('leadId', '==', leadId).get());
+  if (L.personId) add(await col.where('personId', '==', L.personId).get());
+  const email = lower(L.email);
+  if (email) add(await col.where('leadEmail', '==', email).get());
+  return out;
+}
+
+/* Le compte vit sous l'e-mail du SIGNATAIRE, qui peut différer de celui du lead. */
+function emailsAcademy(L, contrats, ficheEmail) {
+  const vus = {}, out = [];
+  function add(e) { e = lower(e); if (e && !vus[e]) { vus[e] = 1; out.push(e); } }
+  contrats.filter(function (c) { return c.status === 'signed'; }).forEach(function (c) {
+    add(Array.isArray(c.signers) && c.signers[0] && c.signers[0].email);
+    add(c.clientEmail);
+  });
+  add(L.email);
+  add(ficheEmail);
+  return out;
+}
+
+async function pontAcademy(emails, payload) {
+  const key = process.env.ACADEMY_BRIDGE_KEY || '';
+  if (!key) return { ok: false, error: 'bridge_not_configured' };
+  let trouve = false;
+  for (let i = 0; i < emails.length; i++) {
+    let j = null;
+    try {
+      const r = await fetch(ACADEMY_URL + '/api/bridge/manage-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-bridge-key': key },
+        body: JSON.stringify(Object.assign({ email: emails[i] }, payload)),
+      });
+      j = await r.json().catch(function () { return null; });
+    } catch (e) { j = null; }
+    if (!j || j.ok !== true) return { ok: false, error: (j && j.error) || 'academy_unreachable' };
+    if (j.found) trouve = true;
+  }
+  return { ok: true, trouve: trouve };
+}
+
+function avecHistorique(ap, prev, action, par) {
+  const h = ((prev && prev.historique) || []).slice(-20);
+  h.push({ at: Date.now(), par: par, action: action });
+  ap.historique = h;
+  return ap;
+}
+
+/* Ferme l'espace en attendant le paiement. Academy d'abord : si le pont
+   échoue, rien n'est enregistré et on le dit. */
+async function verrouiller(lead, par) {
+  const L = lead.data;
+  const contrats = await contratsDu(lead.id, L);
+  const p = await pontAcademy(emailsAcademy(L, contrats), { action: 'paiement', attendu: true });
+  if (!p.ok) return { ok: false, status: 502, error: p.error };
+  const ap = avecHistorique({ statut: 'verrouille', depuis: Date.now(), ouvertLe: null, manuel: false, par: par, rappel: null }, L.accesPaiement, 'verrouille', par);
+  await db.collection('leads').doc(lead.id).update({ accesPaiement: ap });
+  return { ok: true, accesPaiement: ap, academy: p.trouve ? 'fermee' : 'pas_de_compte' };
+}
+
+/* Rouvre l'espace. `manuel` : décision d'un admin (virement hors GoCardless…) :
+   le cron ne le refermera pas sur un rejet. */
+async function ouvrir(lead, par, manuel) {
+  const L = lead.data;
+  const contrats = await contratsDu(lead.id, L);
+  const p = await pontAcademy(emailsAcademy(L, contrats), { action: 'paiement', attendu: false });
+  if (!p.ok) return { ok: false, status: 502, error: p.error };
+  const ap = avecHistorique({ statut: 'ouvert', depuis: (L.accesPaiement && L.accesPaiement.depuis) || null, ouvertLe: Date.now(), manuel: !!manuel, par: par, rappel: null }, L.accesPaiement, manuel ? 'ouvert_manuel' : 'ouvert', par);
+  await db.collection('leads').doc(lead.id).update({ accesPaiement: ap });
+  return { ok: true, accesPaiement: ap };
+}
+
+/* Appelé au déclenchement du prélèvement et à chaque passage du cron. Ne lève
+   jamais : un paiement ne doit pas échouer parce que l'Academy ne répond pas,
+   le cron retentera. */
+async function ouvrirSiPaye(leadId, par) {
+  try {
+    if (!leadId) return { ok: false, raison: 'pas_de_lead' };
+    const s = await db.collection('leads').doc(leadId).get();
+    if (!s.exists) return { ok: false, raison: 'lead_introuvable' };
+    const L = s.data() || {};
+    if (!L.accesPaiement || L.accesPaiement.statut !== 'verrouille') return { ok: false, raison: 'pas_verrouille' };
+    const paiements = await paiementsDu(leadId, L);
+    if (Core.premierRejet(paiements) || !paiements.some(function (p) { return Core.paiementOk(p); })) return { ok: false, raison: 'pas_paye' };
+    return await ouvrir({ id: leadId, data: L }, par, false);
+  } catch (e) {
+    console.warn('[acces-paiement] ouverture', leadId, e && e.message);
+    return { ok: false, raison: 'erreur' };
+  }
+}
+
+/* Le passage du cron : ouvre ce qui est payé, referme ce qui vient d'être
+   rejeté, signale ce qui attend depuis 3 jours. `alerter(sujet, lignes)` vient
+   de api/_demarrage.js. */
+async function passageAcces(alerter) {
+  const bilan = { ouverts: 0, refermes: 0, signales: 0 };
+  const ferme = await db.collection('leads').where('accesPaiement.statut', '==', 'verrouille').get();
+  for (const d of ferme.docs) {
+    const L = d.data() || {}, ap = L.accesPaiement || {};
+    if (L._merged === true) continue;
+    const r = await ouvrirSiPaye(d.id, 'cron-acces');
+    if (r.ok) { bilan.ouverts++; continue; }
+    if (r.raison === 'pas_paye' && !ap.rappel && Date.now() - Number(ap.depuis || 0) > 3 * 86400000) {
+      await alerter('🔒 ' + (L.nom || L.email || 'Client') + ' : signé, pas encore payé', [
+        '<b>' + (L.nom || L.email || 'Client') + '</b> a signé mais aucun prélèvement n\'est parti : son accès Academy reste fermé.',
+        'Il s\'ouvrira tout seul dès que le prélèvement sera déclenché.',
+      ]);
+      await d.ref.update({ 'accesPaiement.rappel': Date.now() });
+      bilan.signales++;
+    }
+  }
+  const ouverts = await db.collection('leads').where('accesPaiement.statut', '==', 'ouvert').get();
+  for (const d of ouverts.docs) {
+    const L = d.data() || {}, ap = L.accesPaiement || {};
+    if (L._merged === true || ap.manuel || Date.now() - Number(ap.ouvertLe || 0) > FENETRE_REJET_JOURS * 86400000) continue;
+    try {
+      const paiements = await paiementsDu(d.id, L);
+      if (!Core.premierRejet(paiements)) continue;
+      const r = await verrouiller({ id: d.id, data: L }, 'cron-acces');
+      if (!r.ok) { console.warn('[acces-paiement] refermeture', d.id, r.error); continue; }
+      await alerter('⛔ Premier prélèvement rejeté : ' + (L.nom || L.email || 'client'), [
+        '<b>' + (L.nom || L.email || 'Client') + '</b> : le premier prélèvement a été rejeté, son accès Academy vient d\'être refermé.',
+        'Il se rouvrira dès qu\'un nouveau prélèvement sera déclenché.',
+      ]);
+      bilan.refermes++;
+    } catch (e) { console.warn('[acces-paiement] rejet', d.id, e && e.message); }
+  }
+  return bilan;
+}
+
+module.exports = { contratsDu, paiementsDu, emailsAcademy, pontAcademy, verrouiller, ouvrir, ouvrirSiPaye, passageAcces };
+
+}};
+
+/* ── ./demarrage-core.js ── */
+__defs["./demarrage-core.js"] = { map: {}, shims: {}, fn: function (module, exports, require) {
+// ============================================================================
+// demarrage-core.js — DÉMARRAGE DIFFÉRÉ D'UN CLIENT (30/10/2026)
+// ----------------------------------------------------------------------------
+// Le client signe et paie aujourd'hui, mais ne commence que plus tard (« je
+// n'attaque qu'en janvier »). Partagé navigateur ↔ serveur, comme bp-credits.js.
+//
+// LA RÈGLE D'ADRIEN : on peut décaler le DÉMARRAGE, jamais le PAIEMENT. Date
+// de close, commissions, prélèvements et factures ne bougent pas. Le contrat
+// doit être signé et le premier prélèvement déclenché (ou le paiement intégral
+// fait) : « payé » se lit ici, à un seul endroit (paiementOk).
+//
+// Forme de leads/{id}.demarrageDiffere (source de vérité) :
+//   { statut:'attente'|'demarre'|'annule', date:'AAAA-MM-JJ' (date prévue),
+//     demarreLe:'AAAA-MM-JJ' (jour réel), historique:[{at,par,action,date}],
+//     rappels:{ j7, bloque } }
+// Copie résumée sur clients/{id} et persons/{id} (resume) : coaching.html
+// réécrit la fiche entière depuis une copie locale, la copie peut donc être en
+// retard. Tout ce qui décide côté serveur repasse par le lead.
+//
+// AUCUNE dépendance : ni Firebase, ni DOM. ES5 strict.
+// ============================================================================
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.DemarrageCore = factory();
+}(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  var RAPPEL_JOURS = 7;      // premier rappel et prévenance du coach
+  var MAX_JOURS = 366;       // au-delà, c'est une faute de frappe
+  /* GoCardless repousse le premier prélèvement d'un NOUVEAU mandat au préavis
+     SEPA (api/gocardless-payment.js réécrit startDate) : quelques jours ne
+     sont pas un décalage de paiement. Au-delà, si. */
+  var TOLERANCE_SEPA_JOURS = 10;
+
+  function isDate(s) { return /^\d{4}-\d{2}-\d{2}$/.test(String(s || '')); }
+  function aujourdhui(d) {
+    return new Intl.DateTimeFormat('fr-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d || new Date());
+  }
+  function joursEntre(a, b) { // b - a, en jours calendaires
+    if (!isDate(a) || !isDate(b)) return null;
+    var pa = a.split('-'), pb = b.split('-');
+    return Math.round((Date.UTC(+pb[0], +pb[1] - 1, +pb[2]) - Date.UTC(+pa[0], +pa[1] - 1, +pa[2])) / 86400000);
+  }
+  function fr(ymd) { return isDate(ymd) ? ymd.split('-').reverse().join('/') : ''; }
+
+  function enAttente(dd) { return !!(dd && dd.statut === 'attente' && isDate(dd.date)); }
+  /* Le jour qui compte pour les jalons, la fin de programme et la santé. */
+  function debut(dd) {
+    if (!dd) return '';
+    if (dd.statut === 'attente') return isDate(dd.date) ? dd.date : '';
+    if (dd.statut === 'demarre') return isDate(dd.demarreLe) ? dd.demarreLe : (isDate(dd.date) ? dd.date : '');
+    return '';
+  }
+  function dateValable(date, today) {
+    var j = joursEntre(today || aujourdhui(), date);
+    return j !== null && j > 0 && j <= MAX_JOURS;
+  }
+  function resume(dd) {
+    if (!dd) return null;
+    return { statut: dd.statut || '', date: dd.date || '', demarreLe: dd.demarreLe || '' };
+  }
+  function badge(dd) { return enAttente(dd) ? '⏳ Démarre le ' + fr(dd.date) : ''; }
+
+  function prelevementDecale(p, today) {
+    var d = String((p && p.startDate) || '').slice(0, 10);
+    var j = isDate(d) ? joursEntre(today || aujourdhui(), d) : null;
+    return j !== null && j > TOLERANCE_SEPA_JOURS;
+  }
+  /* « Payé » (décision Adrien 30/10/2026) : premier prélèvement déclenché ou
+     paiement intégral fait. Un mandat seul ne suffit pas, et un prélèvement
+     programmé plus tard non plus : le paiement ne se décale jamais. */
+  function paiementOk(p, today) {
+    if (!p || (p.status !== 'active' && p.status !== 'completed')) return false;
+    return !prelevementDecale(p, today);
+  }
+  function msDe(v) {
+    if (!v) return 0;
+    if (typeof v === 'number') return v;
+    if (v.toMillis) return v.toMillis();
+    if (v._seconds) return v._seconds * 1000;
+    var t = Date.parse(v);
+    return isNaN(t) ? 0 : t;
+  }
+  /* Le PREMIER prélèvement a-t-il été rejeté ? On regarde le dernier paiement
+     réellement parti chez GoCardless : un paiement refait après un rejet
+     efface le rejet. Dès qu'un prélèvement est encaissé, ce n'est plus le
+     premier : on ne referme plus rien. */
+  function premierRejet(paiements) {
+    var liste = paiements || [];
+    if (liste.some(function (p) { return p && (Number(p.paidCount) > 0 || Number(p.paidAmount) > 0); })) return false;
+    var partis = liste.filter(function (p) { return p && (p.gcPaymentId || p.gcSubscriptionId); })
+      .sort(function (a, b) { return msDe(b.createdAt) - msDe(a.createdAt); });
+    var d = partis[0];
+    if (!d) return false;
+    return !!d.lastPaymentFailure || d.status === 'failed' || d.status === 'mandate_failed' || d.status === 'cancelled';
+  }
+  function conditions(contrats, paiements, today) {
+    var signe = (contrats || []).some(function (c) { return c && c.status === 'signed'; });
+    var paye = (paiements || []).some(function (p) { return paiementOk(p, today); });
+    var manque = [];
+    if (!signe) manque.push('Contrat non signé');
+    if (!paye) manque.push('Paiement non déclenché');
+    return { signe: signe, paye: paye, ok: signe && paye, manque: manque };
+  }
+
+  return {
+    RAPPEL_JOURS: RAPPEL_JOURS, MAX_JOURS: MAX_JOURS,
+    isDate: isDate, aujourdhui: aujourdhui, joursEntre: joursEntre, fr: fr,
+    enAttente: enAttente, debut: debut, dateValable: dateValable, resume: resume, badge: badge,
+    paiementOk: paiementOk, prelevementDecale: prelevementDecale, premierRejet: premierRejet, conditions: conditions
+  };
+}));
 
 }};
 

@@ -9,7 +9,9 @@
 
    Tout passe par /api/client-demarrage ; les droits viennent du serveur (le
    panneau n'affiche que les boutons autorisés). Un coach n'a que la lecture,
-   et rien ne s'affiche pour un client sans démarrage différé.
+   et rien ne s'affiche pour un client sans démarrage différé ni verrou.
+
+   Porte aussi le verrou « accès fermé jusqu'au paiement » (api/_accesPaiement.js).
 
    Aucune dépendance à un SDK Firebase : compat, modulaire et v8 coexistent
    selon les pages. Nécessite demarrage-core.js. ES5 strict.
@@ -79,10 +81,17 @@
   function dessiner(el, st) {
     var C = Core(), dd = st.demarrage || null, dr = st.droits || {}, c = st.conditions || {};
     var attente = C.enAttente(dd), demarre = !!(dd && dd.statut === 'demarre');
-    if (!st.leadId || (!attente && !demarre && !dr.poser)) { el.innerHTML = ''; el.style.display = 'none'; return; }
+    var ap = st.accesPaiement || null, ferme = !!(ap && ap.statut === 'verrouille');
+    if (!st.leadId || (!attente && !demarre && !dr.poser && !ferme && !dr.verrouiller)) { el.innerHTML = ''; el.style.display = 'none'; return; }
     el.style.display = '';
     var cadre = 'margin-top:10px;padding:10px 12px;border-radius:10px;border:1px solid rgba(217,119,6,.4);background:rgba(217,119,6,.08);font-size:12.5px;line-height:1.5;color:inherit;text-align:left';
     var h = '';
+    if (ferme) {
+      h += '<div style="font-weight:800">🔒 Accès Academy fermé : paiement attendu</div>'
+        + '<div style="opacity:.8;margin-top:2px">Il s\'ouvre tout seul dès que le prélèvement est déclenché.</div>';
+      if (dr.forcer) h += '<div style="margin-top:6px">' + bouton('ouvrir', 'Ouvrir sans paiement') + '</div>';
+      h += '<div style="border-top:1px solid rgba(217,119,6,.3);margin:8px 0"></div>';
+    }
     if (attente) {
       var j = C.joursEntre(st.today, dd.date);
       h += '<div style="font-weight:800">⏳ Démarre le ' + esc(C.fr(dd.date)) + (j > 0 ? ' <span style="font-weight:500;opacity:.75">· dans ' + j + ' j</span>' : '') + '</div>';
@@ -95,12 +104,14 @@
       h += '</div>';
     } else if (demarre) {
       h += '<div style="font-weight:800">✅ Démarrage différé : a démarré le ' + esc(C.fr(dd.demarreLe || dd.date)) + '</div>';
-    } else {
+    } else if (dr.poser) {
       h += '<details><summary style="cursor:pointer;font-weight:700">⏳ Le client démarre plus tard</summary>'
         + '<div style="margin-top:6px;opacity:.8">Accès, RDV et séances restent fermés jusqu\'à cette date. Le paiement ne se décale jamais : contrat signé et premier prélèvement déclenché.</div>'
         + '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px">' + champDate(st, '') + bouton('poser', 'Enregistrer la date', true) + '</div></details>';
     }
-    var hist = (dd && dd.historique) || [];
+    if (!ferme && dr.verrouiller && !c.paye && !demarre) h += '<div style="margin-top:8px">' + bouton('verrouiller', '🔒 Fermer l\'accès jusqu\'au paiement') + '</div>';
+    if (!h) { el.innerHTML = ''; el.style.display = 'none'; return; }
+    var hist = ((dd && dd.historique) || []).concat((ap && ap.historique) || []);
     if (hist.length) {
       h += '<details style="margin-top:6px;opacity:.75"><summary style="cursor:pointer;font-size:11.5px">Historique</summary>';
       hist.slice().reverse().forEach(function (x) {
@@ -137,6 +148,10 @@
       if (!window.confirm('Fermer l\'accès de ce client jusqu\'au ' + Core().fr(corps.date) + ' ?\n\nLe paiement, lui, ne se décale pas.')) return;
     } else if (act === 'retirer') {
       if (!window.confirm('Retirer le démarrage différé ?')) return;
+    } else if (act === 'verrouiller') {
+      if (!window.confirm('Fermer l\'accès Academy de ce client ?\n\nIl se rouvrira tout seul dès que le prélèvement sera déclenché.')) return;
+    } else if (act === 'ouvrir') {
+      if (!window.confirm('Ouvrir l\'accès Academy sans paiement GoCardless ?\n\nCe sera tracé dans l\'historique.')) return;
     } else if (act === 'demarrer') {
       var cond = st.conditions || {};
       if (!cond.ok) {

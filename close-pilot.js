@@ -504,10 +504,10 @@
   var PAY_LBL = { draft: '📝 Paiement créé — génère le lien mandat et envoie-le au client', pending_mandate: '⏳ Lien mandat envoyé — le client saisit son IBAN', mandate_active: '✅ Mandat actif — déclenche le prélèvement', active: '💸 Prélèvement déclenché', completed: '🎉 Paiement terminé', failed: '❌ Échec du prélèvement', mandate_failed: '❌ Mandat refusé' };
   function cardPaiement(leadId, l, cp, d) {
     var p = lastPay(leadId), sig = lastSig(leadId), h = '<div class="cp-h">💳 Le paiement</div>', dd = differe(leadId);
-    h += '<div class="cp-sub">Mandat GoCardless dans la foulée de la signature : le premier prélèvement part le jour même.</div>';
+    h += '<div class="cp-sub">Mandat GoCardless dans la foulée de la signature : le premier prélèvement part le jour même. L\'accès Academy du client s\'ouvre dès qu\'il est déclenché.</div>';
     if (!sig || sig.status !== 'signed') h += '<div class="cp-box y">🔒 Le contrat n\'est pas encore signé : le paiement ne peut pas être créé avant.</div>';
     if (dd) h += '<div class="cp-box y">⏳ Démarrage le ' + esc(DC().fr(dd.date)) + ', mais le paiement ne se décale pas : le premier prélèvement se déclenche aujourd\'hui.</div>';
-    if (dd && p && p.startDate && String(p.startDate).slice(0, 10) > DC().aujourdhui()) h += '<div class="cp-box r">⛔ Ce paiement est programmé pour plus tard : interdit en démarrage différé. Le premier prélèvement doit partir aujourd\'hui.</div>';
+    if (dd && p && DC().prelevementDecale(p)) h += '<div class="cp-box r">⛔ Ce paiement est programmé pour plus tard : interdit en démarrage différé. Le premier prélèvement doit partir aujourd\'hui.</div>';
     if (!p) {
       if (d) h += '<div class="cp-box">Se pré-remplit avec <b>' + euro(d.ttc) + ' TTC</b>' + (d.n > 1 ? ' en <b>' + d.n + ' × ' + euro(d.mensTTC) + '</b>' : ' en une fois') + '. Vérifie et crée.</div>';
       h += '<div style="margin-top:14px"><button class="cp-btn pri big" data-cp="mod" data-m="pay"' + (sig && sig.status === 'signed' ? '' : ' disabled') + '>💳 Créer le paiement</button></div>';
