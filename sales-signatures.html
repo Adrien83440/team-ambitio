@@ -1226,7 +1226,7 @@ function _openSendModalGen(box,vars){
    ?leadId=…&sn=&se=&sp= (signataire) &formule=pif|mensualise &nmens=N.
    Ne remplit que des champs vides : le closer vérifie et corrige. */
 var _presetSend=(function(){var q=new URLSearchParams(window.location.search);
-  return {sn:q.get('sn')||'',se:q.get('se')||'',sp:q.get('sp')||'',formule:q.get('formule')||'',nmens:q.get('nmens')||''};})();
+  return {sn:q.get('sn')||'',se:q.get('se')||'',sp:q.get('sp')||'',formule:q.get('formule')||'',nmens:q.get('nmens')||'',date_demarrage:q.get('date_demarrage')||''};})();
 function _foldTxt(s){return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();}
 function _formuleOf(txt){txt=_foldTxt(txt);if(/integral|une fois|comptant/.test(txt))return 'pif';if(/echelonn|mensualis|plusieurs fois/.test(txt))return 'mensualise';return '';}
 function _applyPresetSend(){
@@ -1238,6 +1238,8 @@ function _applyPresetSend(){
       if(_formuleOf(inp.value+' '+lab)===P.formule)inp.checked=true;
     });
   }
+  /* Démarrage différé : la date convenue, si le modèle prévoit la clause. */
+  if(P.date_demarrage){var _ddEl=document.querySelector('#sendPrefill [data-prefill="date_demarrage"]');if(_ddEl&&!_ddEl.value)_ddEl.value=P.date_demarrage;}
   if(P.nmens){
     [].slice.call(document.querySelectorAll('#sendPrefill [data-prefill]')).forEach(function(inp){
       var lab=(inp.getAttribute('data-label')||'')+' '+inp.getAttribute('data-prefill')+' '+((inp.previousElementSibling&&inp.previousElementSibling.textContent)||'');

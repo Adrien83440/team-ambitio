@@ -12,6 +12,11 @@
 //              OU signal négatif repéré par l'IA dans les derniers échanges
 //   🟢 vert   : le reste
 //
+// Démarrage différé (30/10/2026, ../demarrage-core.js) : un client qui attend
+// sa date n'a pas de séance à faire, les règles de séances sont neutralisées.
+// Les impayés, eux, continuent d'alerter. Le temps du programme part du jour
+// de démarrage réel.
+//
 // Le signal IA (Haiku) n'est recalculé que si les dernières séances / notes
 // CSM ont changé (clé). Résultats stockés dans client_ai/{clientId} — JAMAIS
 // sur clients/{id} : coaching.html réécrit la fiche entière à chaque
@@ -24,6 +29,7 @@
 
 const { db } = require('./_firebaseAdmin');
 const BP = require('../bp-credits.js');
+const Demarrage = require('../demarrage-core.js');
 const { callClaude, cap, tsToMs, getAiConfig } = require('./_ai');
 
 const DEFAULT_RULES = { redDays: 21, orangeDays: 14, missedStreak: 2, homeworkMissed: 2, newClientGraceDays: 10 };
@@ -76,7 +82,7 @@ async function loadHealthContext() {
   const ctx = {
     today: today,
     rules: Object.assign({}, DEFAULT_RULES, cfg.riskRules || {}),
-    clients: [], payByPerson: {}, payByLead: {}, payByEmail: {}, leadIdsByEmail: {},
+    clients: [], payByPerson: {}, payByLead: {}, payByEmail: {}, leadIdsByEmail: {}, ddByLead: {}, ddByClient: {},
     icByEmail: {}, icByPerson: {}, bkByClient: {}, bkByEmail: {}, ai: {},
   };
   clientsSnap.forEach(function (d) { ctx.clients.push(Object.assign({ id: d.id }, d.data() || {})); });
@@ -90,7 +96,15 @@ async function loadHealthContext() {
     if (ic.archived) return;
     push(ctx.icByEmail, lower(ic.email), ic); push(ctx.icByPerson, ic.personId, ic);
   });
-  leadsSnap.forEach(function (d) { const l = d.data() || {}; if (l._merged) return; push(ctx.leadIdsByEmail, lower(l.email), d.id); });
+  leadsSnap.forEach(function (d) {
+    const l = d.data() || {};
+    if (l._merged) return;
+    push(ctx.leadIdsByEmail, lower(l.email), d.id);
+    if (l.demarrageDiffere) {
+      ctx.ddByLead[d.id] = l.demarrageDiffere;
+      if (l.coachingClientId) ctx.ddByClient[l.coachingClientId] = l.demarrageDiffere;
+    }
+  });
   bkSnap.forEach(function (d) {
     const b = Object.assign({ id: d.id }, d.data() || {});
     if (!(b.isCoaching === true || b.clientId)) return;
@@ -99,6 +113,11 @@ async function loadHealthContext() {
   });
   aiSnap.forEach(function (d) { ctx.ai[d.id] = d.data() || {}; });
   return ctx;
+}
+
+/* Le lead fait foi ; la copie de la fiche ne sert que s'il est introuvable. */
+function demarrageDe(c, ctx) {
+  return ctx.ddByLead[c._leadId] || ctx.ddByClient[c.id] || c.demarrageDiffere || null;
 }
 
 function uniqById(arr) {
@@ -210,7 +229,8 @@ function coreFacts(c, ctx) {
     .sort(function (a, b) { return String(a.date) < String(b.date) ? -1 : 1; });
   const last = done.length ? done[done.length - 1] : null;
   const prog = parseProgramme(c.programme);
-  const start = c.dateEntree || (done[0] && done[0].date) || null;
+  const dd = demarrageDe(c, ctx);
+  const start = Demarrage.debut(dd) || c.dateEntree || (done[0] && done[0].date) || null;
   const end = start && prog.mois ? addMonths(start, prog.mois) : null;
   return {
     sessionsDone: done.length,
@@ -218,6 +238,7 @@ function coreFacts(c, ctx) {
     lastSession: last ? last.date : null,
     daysSinceLastSession: last ? daysBetween(last.date, today) : null,
     daysSinceStart: start ? daysBetween(start, today) : null,
+    attenteDemarrage: Demarrage.enAttente(dd) ? dd.date : null,
     contractEnd: end,
     daysToEnd: end ? daysBetween(today, end) : null,
     lastFollowupAt: tsToMs(c.lastCsmFollowupAt) || null,
@@ -234,13 +255,14 @@ function ruleLevel(f, rules, aiSignal) {
   (f.paymentIssues || []).forEach(function (x) { red.push('💸 ' + x); });
   const ds = f.daysSinceLastSession;
   const noSessionYet = ds == null;
-  const ref = noSessionYet ? (f.daysSinceStart != null ? f.daysSinceStart - rules.newClientGraceDays : null) : ds;
+  const attente = !!f.attenteDemarrage;
+  const ref = attente ? null : (noSessionYet ? (f.daysSinceStart != null ? f.daysSinceStart - rules.newClientGraceDays : null) : ds);
   if (ref != null && ref > rules.redDays) red.push(noSessionYet ? '📅 aucune séance depuis l\'entrée (' + f.daysSinceStart + ' j)' : '📅 aucune séance depuis ' + ds + ' j');
   else if (ref != null && ref > rules.orangeDays) orange.push(noSessionYet ? '📅 pas encore de séance (' + f.daysSinceStart + ' j)' : '📅 aucune séance depuis ' + ds + ' j');
   if (f.missedStreak >= rules.missedStreak) red.push('🚫 ' + f.missedStreak + ' séances annulées / manquées d\'affilée');
   if (f.academy && f.academy.devoirsNonFaits >= rules.homeworkMissed) orange.push('📝 ' + f.academy.devoirsNonFaits + ' devoirs non faits');
   if (f.academy && f.academy.seancesNonHonorees >= rules.missedStreak) red.push('🚫 ' + f.academy.seancesNonHonorees + ' séances non honorées (Academy)');
-  (f.bp && f.bp.alertes || []).forEach(function (a) {
+  (!attente && f.bp && f.bp.alertes || []).forEach(function (a) {
     if (a.code === 'seance1_j7') red.push('🔥 ' + a.texte);
     else if (a.code === 'deux_non_tenus' || a.code === 'retard') orange.push('🔥 ' + a.texte);
   });
@@ -345,7 +367,7 @@ async function evaluateClient(c, ctx, opts) {
     risk: {
       level: lv.level,
       reasons: lv.reasons,
-      reason: lv.reasons.length ? lv.reasons[0].replace(/^\S+\s/, '') : ((signal && signal.raison) || 'Rien à signaler'),
+      reason: lv.reasons.length ? lv.reasons[0].replace(/^\S+\s/, '') : (f.attenteDemarrage ? 'Démarre le ' + Demarrage.fr(f.attenteDemarrage) : ((signal && signal.raison) || 'Rien à signaler')),
       facts: f,
       computedAt: Date.now(),
     },
@@ -392,5 +414,5 @@ module.exports = {
   DEFAULT_RULES: DEFAULT_RULES, LEVEL_RANK: LEVEL_RANK,
   loadHealthContext: loadHealthContext, evaluateClient: evaluateClient, saveEvaluation: saveEvaluation, resolveAlerts: resolveAlerts,
   isActiveClient: isActiveClient, paymentsOf: paymentsOf, invoiceClientsOf: invoiceClientsOf, bookingsOf: bookingsOf,
-  allSessions: allSessions, parseProgramme: parseProgramme, addMonths: addMonths, daysBetween: daysBetween, lower: lower,
+  demarrageDe: demarrageDe, allSessions: allSessions, parseProgramme: parseProgramme, addMonths: addMonths, daysBetween: daysBetween, lower: lower,
 };

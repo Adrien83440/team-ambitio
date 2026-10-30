@@ -11,6 +11,8 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <script src="nav.js"></script>
 <script src="funnel-core.js"></script>
+<script src="demarrage-core.js"></script>
+<script src="demarrage-widget.js"></script>
 <style>
 /* ═══ Reset & base ═══ */
 *{margin:0;padding:0;box-sizing:border-box}
@@ -907,6 +909,8 @@ function renderDetail(){
       + '<div class="ap-grid-line"><span class="lbl">date entrée :</span> '+esc(coaching.dateEntree||'—')+'</div>'
       + '<a href="coaching.html#'+attr(coaching._id)+'" class="ap-grid-link">Voir le suivi <i class="ti ti-external-link"></i></a>';
   }
+  /* Démarrage différé : date, conditions, déblocage (demarrage-widget.js). */
+  if(p.isClient) html += '<div data-demarrage data-person-id="'+attr(p._id)+'"></div>';
   html += '</div>';
 
   /* Invoice client */

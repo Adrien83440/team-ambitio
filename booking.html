@@ -632,6 +632,9 @@ var _formEmail = params.get('email') || '';
 var _formTel = params.get('tel') || '';
 var _formLeadId = params.get('leadId') || '';
 var _fromForm = params.get('fromForm') || '';
+/* Démarrage différé (30/10/2026) : le pilote de closing limite l'agenda à la
+   date de démarrage du client. Le serveur le revérifie (booking-check-coaching-quota). */
+var _apartirDu = /^\d{4}-\d{2}-\d{2}$/.test(params.get('apartirDu') || '') ? params.get('apartirDu') : '';
 var _embedMode = params.has('embed');
 
 // Embed mode: hide brand, compact layout
@@ -1040,7 +1043,13 @@ function rrPickOwner(cands) {
 /* ═══════════════════════════════════════════════════
    STEP 3 — CALENDAR + TIME SLOTS
    ═══════════════════════════════════════════════════ */
+var _apartirDuVu = false;
 function renderCalendar() {
+  if (_apartirDu && !_apartirDuVu) {
+    _apartirDuVu = true;
+    S.calYear = Number(_apartirDu.slice(0, 4));
+    S.calMonth = Number(_apartirDu.slice(5, 7)) - 1;
+  }
   fetchFreeBusy(); // Fetch Google Calendar busy times in background
   var el = document.getElementById('calendarWrap');
   var first = new Date(S.calYear, S.calMonth, 1);
@@ -1061,7 +1070,7 @@ function renderCalendar() {
   for (var day = 1; day <= lastDay; day++) {
     var dateObj = new Date(S.calYear, S.calMonth, day);
     var ds = fmtDate(dateObj);
-    var isPast = ds < todayDs;
+    var isPast = ds < todayDs || (_apartirDu && ds < _apartirDu);
     var isToday = ds === todayDs;
     var isAvail = !isPast && hasAvailableSlots(ds);
     var isSel = S.selDate === ds;
@@ -2489,7 +2498,7 @@ async function submitBooking() {
       var resp = await fetch('/api/booking-check-coaching-quota', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email, monthYear: monthYear, typeId: booking.type || '', typeLabel: booking.typeLabel || (S.selType ? S.selType.label : '') })
+        body: JSON.stringify({ email: email, monthYear: monthYear, date: S.selDate, typeId: booking.type || '', typeLabel: booking.typeLabel || (S.selType ? S.selType.label : '') })
       });
       var quotaData = await resp.json();
       if (quotaData && quotaData.allowed === false) {
@@ -2497,7 +2506,7 @@ async function submitBooking() {
            consommées ou accompagnement terminé → blocage total ; créneau
            fixe → le client ne réserve pas lui-même, mais la CSM ou le coach
            (mode agent) replace un report. */
-        if (quotaData.reason === 'bp_complet') { showQuotaModal(quotaData); return; }
+        if (quotaData.reason === 'bp_complet' || quotaData.reason === 'demarrage_differe') { showQuotaModal(quotaData); return; }
         if (quotaData.reason === 'bp_creneau_fixe') {
           if (_agentMode) { booking.bpReplacement = true; }
           else { showQuotaModal(quotaData); return; }
@@ -2754,6 +2763,16 @@ function showQuotaModal(quotaData) {
   // compteur — le client est un ancien client, le quota n'a plus de sens.
   var titleEl = document.getElementById('quotaTitle');
   var statEl = document.getElementById('quotaStatBlock');
+  if (quotaData && quotaData.reason === 'demarrage_differe') {
+    if (titleEl) titleEl.textContent = 'Votre accompagnement n\'a pas encore démarré';
+    if (statEl) statEl.style.display = 'none';
+    var ddFr = String(quotaData.demarrageLe || '').split('-').reverse().join('/');
+    document.getElementById('quotaText').innerHTML = _agentMode
+      ? 'Ce client démarre le ' + ddFr + ' : aucune séance avant cette date. Pour avancer son démarrage, utilisez « Démarrer maintenant » sur sa fiche.'
+      : 'Votre accompagnement démarre le ' + ddFr + ' : choisissez un créneau à partir de cette date. Pour commencer plus tôt, contactez l\'équipe.';
+    document.getElementById('quotaOverlay').classList.add('show');
+    return;
+  }
   if (quotaData && (quotaData.reason === 'bp_complet' || quotaData.reason === 'bp_creneau_fixe')) {
     if (statEl) statEl.style.display = 'none';
     var bpText;

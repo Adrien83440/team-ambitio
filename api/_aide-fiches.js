@@ -1856,6 +1856,23 @@ const FICHES = [
     guide: [],
   },
   {
+    id: 'closing-demarrage-differe', cat: 'Closing : pilote, contrat, paiement',
+    title: 'Le client signe maintenant mais démarre plus tard',
+    tags: ['démarrage', 'différé', 'janvier', 'report', 'stand-by', 'plus tard', 'décalage'],
+    pages: ['sales-leads', 'admin-persons', 'csm-cockpit', 'coaching'],
+    body: 'Le client peut décaler son démarrage, **jamais son paiement** : le contrat est signé et le premier prélèvement part le jour du closing.\n\n'
+      + '1. Dans le pilote de closing, carte **Le deal**, coche **Le client démarre plus tard** et choisis la date, **avant d\'envoyer le contrat** : l\'Academy s\'ouvre à la signature.\n'
+      + '2. Fais signer et déclenche le paiement comme d\'habitude.\n'
+      + '3. Cale le RDV à partir de la date de démarrage : l\'agenda est limité automatiquement.\n'
+      + '4. Le groupe WhatsApp attend les 7 jours avant le démarrage : un rappel part à ce moment-là.\n\n'
+      + '**Jusqu\'à la date :** Academy fermée, séances impossibles à réserver, pas d\'alerte « aucune séance » côté CSM. Le coach est prévenu 7 jours avant.\n\n'
+      + '**Le jour J :** l\'accès s\'ouvre tout seul le matin. S\'il manque le contrat ou le paiement, rien ne s\'ouvre et Adrien et Marine reçoivent une alerte.\n\n'
+      + '**Le client veut commencer plus tôt ou changer sa date :** après le closing, seuls les admins et la CSM peuvent le faire, depuis sa fiche Persons, Coaching ou le cockpit CSM (**Démarrer maintenant** ou **Changer la date**).\n\n'
+      + '- Rien ne change pour le close, les commissions et le funnel : la vente compte le jour du closing.\n'
+      + '- Les 6 mois partent de la date de démarrage : le client garde son programme entier.',
+    guide: [],
+  },
+  {
     id: 'depannage-compte-non-relie', cat: 'Dépannage',
     title: '« Votre compte n\'est pas relié à un membre de l\'équipe »',
     tags: 'compte non relié, membre équipe, roster, pas relié',

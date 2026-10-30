@@ -48,6 +48,7 @@ const { requireAuth } = require('./_verifyFirebaseAuth');
 const parseBody = require('./_parseBody');
 
 const BP = require('../bp-credits.js');
+const Demarrage = require('../demarrage-core.js');
 
 const ROLES = ['admin', 'sales'];
 
@@ -267,7 +268,9 @@ module.exports = async function (req, res) {
        délai de rétractation, sinon J+15 — demarragePossibleLe, posé par
        sign-session. À défaut : date de signature, puis date d'entrée. */
     const demarrage = (function (s) { const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(s || '').trim()); return m ? m[3] + '-' + m[2] + '-' + m[1] : ''; })(contrat && contrat.demarragePossibleLe);
-    const j0 = PG.v2 ? (demarrage || (contrat && ms(contrat.signedAt) ? dayParis(new Date(ms(contrat.signedAt))) : dateEntree)) : null;
+    /* Démarrage différé (30/10/2026) : la date convenue l'emporte. */
+    const differe = Demarrage.enAttente(L.demarrageDiffere) ? L.demarrageDiffere : null;
+    const j0 = PG.v2 ? ((differe && differe.date) || demarrage || (contrat && ms(contrat.signedAt) ? dayParis(new Date(ms(contrat.signedAt))) : dateEntree)) : null;
 
     if (dryRun) {
       res.status(200).json({
@@ -329,6 +332,7 @@ module.exports = async function (req, res) {
         if (vide(PD.clientType)) upd.clientType = 'company';
       }
       if (nom && nom !== PD.nom && meilleurNom(PD.nom, contrat) === nom) upd.nom = nom;
+      if (differe) upd.demarrageDiffere = Demarrage.resume(differe);
       await db.collection('persons').doc(P.id).update(upd);
       await rattacherPaiements();
     }
@@ -341,6 +345,10 @@ module.exports = async function (req, res) {
       if (P && !existante.data.personId) fix.personId = P.id;
       if (coach && !existante.data.coach) fix.coach = coach;
       if (activite && vide(existante.data.activite)) fix.activite = activite;
+      if (differe) {
+        fix.demarrageDiffere = Demarrage.resume(differe);
+        if (BP.isBusinessV2(existante.data.programme)) { fix.j0 = differe.date; fix.finAccompagnement = BP.addDays(differe.date, BP.DUREE_JOURS); }
+      }
       if (Object.keys(fix).length) await db.collection('clients').doc(existante.id).update(fix);
       await majPersons(existante.id, existante.data.statut);
       res.status(200).json({ ok: true, created: false, linked: true, clientId: existante.id, programme: existante.data.programme || null, label: PG.label });
@@ -392,6 +400,7 @@ module.exports = async function (req, res) {
         _updatedAt: Date.now(),
       };
       if (coach) fiche.coach = coach;
+      if (differe) fiche.demarrageDiffere = Demarrage.resume(differe);
       if (PG.v2) {
         fiche.j0 = j0;
         fiche.finAccompagnement = BP.addDays(j0, BP.DUREE_JOURS);

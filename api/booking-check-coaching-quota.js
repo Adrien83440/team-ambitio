@@ -13,7 +13,8 @@
 // Body (JSON) :
 //   {
 //     email     : "client@exemple.com",   // requis, case-insensitive
-//     monthYear : "2026-05"               // requis, format YYYY-MM
+//     monthYear : "2026-05",              // requis, format YYYY-MM
+//     date      : "2026-05-14"              // jour visé (démarrage différé)
 //   }
 //
 // Réponse 200 — client trouvé, quota OK :
@@ -117,6 +118,7 @@
 // ============================================================================
 
 const { db } = require('./_firebaseAdmin');
+const Demarrage = require('./_demarrage');
 const parseBody = require('./_parseBody');
 const { effectiveMonthlyQuota, monthlyQuotaFromProgramme } = require('./_coaching-quota');
 const BP = require('../bp-credits.js');
@@ -353,6 +355,15 @@ module.exports = async (req, res) => {
     // son quota. Le frontend affiche un message dédié (reason
     // 'client_inactive') — y compris en mode agent CSM : il faut réactiver
     // la fiche (CSM / Admin Personnes) avant de pouvoir reprendre un RDV.
+    /* Démarrage différé (30/10/2026) : aucune séance avant la date convenue,
+       ni en réservation libre ni en mode agent. Déverrouillage : « Démarrer
+       maintenant » sur la fiche. */
+    const attendu = await Demarrage.attenteDuClient(matchedId, clientData);
+    if (attendu && String(body.date || (monthYear + '-01')) < attendu) {
+      res.status(200).json({ ok: true, allowed: false, clientFound: true, reason: 'demarrage_differe', demarrageLe: attendu, used: 0, quota: 0, programme: clientData.programme || null });
+      return;
+    }
+
     if (clientData.ancienClient === true || clientData.statut === 'inactif') {
       res.status(200).json({
         ok: true,

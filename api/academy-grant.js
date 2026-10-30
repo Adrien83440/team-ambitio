@@ -45,6 +45,7 @@
 
 const { admin, db } = require('./_firebaseAdmin');
 const parseBody = require('./_parseBody');
+const Demarrage = require('../demarrage-core.js');
 
 const ACADEMY_URL = (process.env.ACADEMY_BRIDGE_URL || 'https://academy.adrienemily.com').replace(/\/$/, '');
 
@@ -61,6 +62,28 @@ function tokenMatches(reqData, token) {
 function frToIso(s) {
   const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(s || '').trim());
   return m ? m[3] + '-' + m[2] + '-' + m[1] : '';
+}
+
+/* Démarrage différé (30/10/2026) : le closer a posé une date AVANT la
+   signature. L'accès est créé, mais l'espace reste fermé jusqu'à cette date. */
+async function demarrageAttendu(r, email) {
+  try {
+    let L = null;
+    if (r.leadId) {
+      const s = await db.collection('leads').doc(r.leadId).get();
+      if (s.exists) L = s.data() || {};
+    }
+    if (!L && email) {
+      const q = await db.collection('leads').where('email', '==', email).limit(5).get();
+      const hit = q.docs.find(function (d) { return (d.data() || {})._merged !== true; });
+      if (hit) L = hit.data() || {};
+    }
+    const dd = L && L.demarrageDiffere;
+    return Demarrage.enAttente(dd) ? dd.date : '';
+  } catch (e) {
+    console.warn('[academy-grant] démarrage différé illisible :', e && e.message);
+    return '';
+  }
 }
 
 module.exports = async (req, res) => {
@@ -137,6 +160,8 @@ module.exports = async (req, res) => {
       return;
     }
 
+    const attendu = await demarrageAttendu(r, clientEmail);
+
     let j = null;
     try {
       const fRes = await fetch(ACADEMY_URL + '/api/bridge/grant-access', {
@@ -145,7 +170,7 @@ module.exports = async (req, res) => {
         /* demarrageLe (14/10/2026) : date de démarrage posée à la signature
            (signature si renonciation au délai de rétractation, sinon J+15) —
            l'Academy y fait partir les 180 jours du Business nouveau format. */
-        body: JSON.stringify({ email: clientEmail, name: clientName, contractName: templateName, signedAt: signedAtIso, demarrageLe: frToIso(r.demarragePossibleLe) || undefined, courseId: templateCourseId || undefined }),
+        body: JSON.stringify({ email: clientEmail, name: clientName, contractName: templateName, signedAt: signedAtIso, demarrageLe: attendu || frToIso(r.demarragePossibleLe) || undefined, demarrageAttendu: attendu || undefined, courseId: templateCourseId || undefined }),
       });
       j = await fRes.json().catch(() => null);
     } catch (e) {
@@ -159,8 +184,9 @@ module.exports = async (req, res) => {
 
     // ── 3. Le tampon sur la demande + l'événement pipeline ──────────────────
     if (j.matched) {
-      await stamp(ref, { status: 'ok', courseId: j.courseId, courseName: j.courseName, created: !!j.created, alreadyHadAccess: !!j.alreadyHadAccess });
-      try {
+      await stamp(ref, { status: 'ok', courseId: j.courseId, courseName: j.courseName, created: !!j.created, alreadyHadAccess: !!j.alreadyHadAccess, demarrageAttendu: attendu || null });
+      /* Pas d'événement « accès ouvert » tant que le client attend sa date. */
+      if (!attendu) try {
         await db.collection('webhook_inbox').add({
           action: 'academy_access_granted',
           signatureRequestId: requestId,

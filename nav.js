@@ -1623,6 +1623,15 @@
       mh.setAttribute('data-mail-health-widget', '1');
       document.head.appendChild(mh);
     }
+    // + DÉMARRAGES DIFFÉRÉS (30/10/2026) : alteore-demarrages.js, encart admin
+    // et CSM pour les clients qui démarrent dans moins de 7 jours ou bloqués.
+    if (!document.querySelector('script[data-demarrages-widget]')) {
+      var dm = document.createElement('script');
+      dm.src = 'alteore-demarrages.js';
+      dm.defer = true;
+      dm.setAttribute('data-demarrages-widget', '1');
+      document.head.appendChild(dm);
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────

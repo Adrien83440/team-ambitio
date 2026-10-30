@@ -36,6 +36,8 @@
      save(leadId, patch) → Promise (fusion dans leads/{id}.closePilot)
      recordClose(leadId, answers) → Promise (CloseWizard.commit en prod)
      bookingLink(typeId, lead) → URL  ·  toast(msg)  ·  moduleOpen() → bool
+     demarrage(leadId, date|null) → Promise (facultatif, démarrage différé :
+     pose ou retire la date, renvoie leads/{id}.demarrageDiffere)
    ES5 strict (convention du repo).
    ═══════════════════════════════════════════════════════════════════════ */
 (function () {
@@ -61,7 +63,7 @@
   var COACH_TELS = { 'edouard': '06 08 95 18 50', 'thomas': '06 15 29 66 82', 'flore': '07 56 82 60 05', 'vincent': '07 51 36 47 77' };
 
   var H = null;            // l'hôte
-  var ui = { leadId: null, step: null, busy: false, local: {} };
+  var ui = { leadId: null, step: null, busy: false, local: {}, dd: {}, ddOuvert: {} };
 
   /* ═══ Outils ═══════════════════════════════════════════════════════ */
   function esc(s) { return s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -94,6 +96,24 @@
     }
     try { navigator.clipboard.writeText(txt).then(function () {}, fallback); } catch (e) { fallback(); }
     H.toast('📋 Copié !');
+  }
+
+  /* ═══ Démarrage différé (30/10/2026, demarrage-core.js) ════════════
+     Le client signe et paie maintenant, mais démarre plus tard : la date
+     se pose dès le deal, AVANT le contrat, parce que l'Academy s'ouvre à
+     la signature. Le paiement ne se décale jamais. */
+  function DC() { return window.DemarrageCore || null; }
+  function ddBrut(leadId) { return ui.dd[leadId] !== undefined ? ui.dd[leadId] : ((H.lead(leadId) || {}).demarrageDiffere || null); }
+  function differe(leadId) { var dd = ddBrut(leadId), C = DC(); return C && C.enAttente(dd) ? dd : null; }
+  function payOk(leadId, p) { var C = DC(); return C ? C.paiementOk(p) : !!(p && (p.status === 'active' || p.status === 'completed')); }
+  function poserDemarrage(leadId, date) {
+    if (ui.ddBusy || !H.demarrage) return;
+    ui.ddBusy = true;
+    Promise.resolve(H.demarrage(leadId, date)).then(function (dd) {
+      ui.dd[leadId] = dd || null; ui.ddBusy = false;
+      H.toast(date ? '⏳ Démarrage fixé au ' + DC().fr(date) : 'Démarrage différé retiré');
+      render();
+    }).catch(function (e) { ui.ddBusy = false; H.toast('❌ ' + ((e && e.message) || 'Enregistrement impossible')); render(); });
   }
 
   /* ═══ État du pilote d'un lead ═════════════════════════════════════ */
@@ -183,18 +203,19 @@
     var l = H.lead(leadId) || {}, cp = cpOf(leadId), d = deal(cp);
     var elite = !d || d.offre === 'Elite';
     var sig = lastSig(leadId), pay = lastPay(leadId);
-    var paid = pay && (pay.status === 'active' || pay.status === 'completed');
+    var dd = differe(leadId);
+    var paid = pay && (pay.status === 'active' || pay.status === 'completed') && (!dd || payOk(leadId, pay));
     var closed = closeRecorded(leadId, l, cp);
     var coach = (cp.coach && cp.coach.nom) || (l.coachAssigne && l.coachAssigne.nom) || '';
     var wa = cp.wa || {};
     var list = [
       { k: 'deal', ic: '🤝', l: 'Le deal', done: !!(d && d.booking && (d.paiement === 'pif' || d.n)) },
       { k: 'contrat', ic: '📝', l: 'Contrat', done: !!(sig && sig.status === 'signed') },
-      { k: 'paiement', ic: '💳', l: 'Paiement', done: !!(paid || (pay && cp.payLater)) },
+      { k: 'paiement', ic: '💳', l: 'Paiement', done: !!(paid || (pay && cp.payLater && !dd)) },
       { k: 'close', ic: '🏆', l: 'Close', done: closed && (!elite || !!coach) },
       { k: 'rdv', ic: '📅', l: 'RDV 72 h', done: !!(rdvBooking(leadId, d ? d.offre : 'Elite') || cp.rdvClient) }
     ];
-    if (elite) list.push({ k: 'wa', ic: '💬', l: 'WhatsApp', done: !!(wa.groupe && wa.bienvenue && wa.liens && wa.espace) });
+    if (elite) list.push({ k: 'wa', ic: '💬', l: 'WhatsApp', done: !!(dd || (wa.groupe && wa.bienvenue && wa.liens && wa.espace)) });
     list.push({ k: 'check', ic: '✅', l: 'Checklist', done: !!cp.doneAt });
     list.push({ k: 'bravo', ic: '🎉', l: 'Bravo', done: !!cp.doneAt });
     return list;
@@ -285,9 +306,11 @@
   function stripHTML(leadId) {
     var l = H.lead(leadId) || {}, cp = cpOf(leadId);
     var list = steps(leadId), done = list.filter(function (s) { return s.done; }).length;
+    var already = l.isClient === true || String(l.stage || '').indexOf('closed_won') === 0;
+    /* Client signé : panneau du démarrage différé (demarrage-widget.js). */
+    var panneauDem = already || cp.doneAt ? '<div data-demarrage data-lead-id="' + esc(leadId) + '"></div>' : '';
     if (!cp.startedAt) {
-      var already = l.isClient === true || String(l.stage || '').indexOf('closed_won') === 0;
-      return '<div class="cp-strip"><button class="cp-go" data-cp="start" data-cp-lead="' + esc(leadId) + '">' + (already ? '🏆 Onboarding du client — c\'est parti' : '🏆 OK pour le closing, c\'est parti')
+      return panneauDem + '<div class="cp-strip"><button class="cp-go" data-cp="start" data-cp-lead="' + esc(leadId) + '">' + (already ? '🏆 Onboarding du client — c\'est parti' : '🏆 OK pour le closing, c\'est parti')
         + '<small>' + (already ? 'Paiement, RDV 72 h, WhatsApp, checklist' : 'Le client a dit oui ? Les cartes te guident jusqu\'à l\'annonce.') + '</small></button></div>';
     }
     var next = firstTodo(list), cur = null;
@@ -300,7 +323,7 @@
     h += '</div><div class="cp-row"><div class="t">' + (cp.doneAt ? '🎉 Closing bouclé' : '🏆 Closing en cours · ' + done + '/' + list.length)
       + '<small>' + (cp.doneAt ? 'Validé le ' + frDate(cp.doneAt) + (cp.byName ? ' par ' + esc(cp.byName) : '') : 'Prochaine étape : ' + esc(cur ? cur.ic + ' ' + cur.l : '')) + '</small></div>'
       + '<button class="cp-btn ' + (cp.doneAt ? '' : 'ok big') + '" data-cp="open" data-cp-lead="' + esc(leadId) + '">' + (cp.doneAt ? 'Revoir' : '▶ Reprendre') + '</button></div></div>';
-    return h;
+    return panneauDem + h;
   }
 
   /* ═══ « Tu peux fermer cette fenêtre » (Adrien 09/10/2026) ═════════
@@ -364,7 +387,7 @@
   }
   function openModal(leadId, step) {
     ensureDom();
-    if (ui.leadId !== leadId) { ui.coachSlug = null; ui.coachNom = null; ui.auto_contrat = false; ui.auto_paiement = false; }
+    if (ui.leadId !== leadId) { ui.coachSlug = null; ui.coachNom = null; ui.auto_contrat = false; ui.auto_paiement = false; delete ui.dd[leadId]; }
     ui.leadId = leadId;
     ui.step = step || firstTodo(steps(leadId));
     document.getElementById('cpBg').classList.add('show');
@@ -430,11 +453,25 @@
         + opt('booking', 'sb', c.booking, '🔗 Self Booking', 'Il a pris son RDV seul' + (sug === true ? ' · 💡 détecté' : ''))
         + opt('booking', 'nb', c.booking, '📞 No Booking', 'Travaillé par le setting' + (sug === false ? ' · 💡 détecté' : '') + (H.setterName(l) ? ' (' + esc(H.setterName(l)) + ')' : '')) + '</div>';
     }
+    if (d && d.booking && (d.paiement === 'pif' || d.n) && H.demarrage && DC()) h += blocDemarrage(ui.leadId);
     if (d && (d.paiement === 'pif' || d.n)) {
       h += '<div class="cp-lb">Encaissé à la signature (HT)</div><input class="cp-in" type="number" min="0" step="50" data-cp-in="encaisse" value="' + esc(c.encaisse != null && c.encaisse !== '' ? c.encaisse : d.encaisse) + '">';
       h += '<div class="cp-box g">Contrat : <b>' + euro(d.ht) + ' HT</b> (' + euro(d.ttc) + ' TTC)'
         + (d.paiement === 'pif' ? ' · prélevé en une fois : <b>' + euro(d.ttc) + ' TTC</b>' : ' · GoCardless : <b>' + d.n + ' × ' + euro(d.mensTTC) + ' TTC</b>')
         + '<br>Encaissé déclaré : <b>' + euro(d.encaisse) + ' HT</b> — ce montant est en HT, GoCardless est en TTC.</div>';
+    }
+    return h;
+  }
+  function blocDemarrage(leadId) {
+    var C = DC(), dd = differe(leadId), brut = ddBrut(leadId), ouvert = !!dd || ui.ddOuvert[leadId], h = '<div class="cp-lb">Démarrage</div>';
+    if (brut && brut.statut === 'demarre') return h + '<div class="cp-box g">✅ A démarré le ' + esc(C.fr(brut.demarreLe || brut.date)) + '.</div>';
+    h += '<label class="cp-chk' + (ouvert ? ' on' : '') + '"><input type="checkbox" data-cp-dem="1"' + (ouvert ? ' checked' : '') + '><span><b>Le client démarre plus tard</b> — le contrat et le paiement restent pour aujourd\'hui</span></label>';
+    if (ouvert) {
+      var demain = new Date(); demain.setDate(demain.getDate() + 1);
+      h += '<input class="cp-in" type="date" data-cp-dem-date min="' + esc(C.aujourdhui(demain)) + '" value="' + esc(dd ? dd.date : '') + '" style="margin-top:8px">';
+      h += dd
+        ? '<div class="cp-box y">⏳ <b>Démarrage le ' + esc(C.fr(dd.date)) + '.</b> Academy, RDV et séances restent fermés jusque-là, puis s\'ouvrent tout seuls. Le paiement ne se décale pas : premier prélèvement aujourd\'hui.</div>'
+        : '<div class="cp-box y">Choisis la date avant d\'envoyer le contrat : l\'Academy s\'ouvre à la signature.</div>';
     }
     return h;
   }
@@ -466,9 +503,11 @@
 
   var PAY_LBL = { draft: '📝 Paiement créé — génère le lien mandat et envoie-le au client', pending_mandate: '⏳ Lien mandat envoyé — le client saisit son IBAN', mandate_active: '✅ Mandat actif — déclenche le prélèvement', active: '💸 Prélèvement déclenché', completed: '🎉 Paiement terminé', failed: '❌ Échec du prélèvement', mandate_failed: '❌ Mandat refusé' };
   function cardPaiement(leadId, l, cp, d) {
-    var p = lastPay(leadId), sig = lastSig(leadId), h = '<div class="cp-h">💳 Le paiement</div>';
+    var p = lastPay(leadId), sig = lastSig(leadId), h = '<div class="cp-h">💳 Le paiement</div>', dd = differe(leadId);
     h += '<div class="cp-sub">Mandat GoCardless dans la foulée de la signature : le premier prélèvement part le jour même.</div>';
     if (!sig || sig.status !== 'signed') h += '<div class="cp-box y">🔒 Le contrat n\'est pas encore signé : le paiement ne peut pas être créé avant.</div>';
+    if (dd) h += '<div class="cp-box y">⏳ Démarrage le ' + esc(DC().fr(dd.date)) + ', mais le paiement ne se décale pas : le premier prélèvement se déclenche aujourd\'hui.</div>';
+    if (dd && p && p.startDate && String(p.startDate).slice(0, 10) > DC().aujourdhui()) h += '<div class="cp-box r">⛔ Ce paiement est programmé pour plus tard : interdit en démarrage différé. Le premier prélèvement doit partir aujourd\'hui.</div>';
     if (!p) {
       if (d) h += '<div class="cp-box">Se pré-remplit avec <b>' + euro(d.ttc) + ' TTC</b>' + (d.n > 1 ? ' en <b>' + d.n + ' × ' + euro(d.mensTTC) + '</b>' : ' en une fois') + '. Vérifie et crée.</div>';
       h += '<div style="margin-top:14px"><button class="cp-btn pri big" data-cp="mod" data-m="pay"' + (sig && sig.status === 'signed' ? '' : ' disabled') + '>💳 Créer le paiement</button></div>';
@@ -479,22 +518,22 @@
     if (d && Math.abs(Number(p.totalAmount) - d.ttc) > 0.01) h += '<div class="cp-box r">⚠️ Montant ' + euro(p.totalAmount) + ' — le deal prévoit <b>' + euro(d.ttc) + ' TTC</b>.</div>';
     if (d && d.n > 1 && Number(p.installmentsCount) !== d.n) h += '<div class="cp-box r">⚠️ ' + p.installmentsCount + ' mensualités — le deal prévoit <b>' + d.n + '</b>.</div>';
     h += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="cp-btn pri" data-cp="mod" data-m="pay">💳 Ouvrir les paiements</button>';
-    if (!ok) h += '<button class="cp-btn" data-cp="payLater">' + (cp.payLater ? '✓ Le client finira plus tard' : 'Le client finira son IBAN plus tard →') + '</button>';
+    if (!ok && !dd) h += '<button class="cp-btn" data-cp="payLater">' + (cp.payLater ? '✓ Le client finira plus tard' : 'Le client finira son IBAN plus tard →') + '</button>';
     h += '</div>';
-    if (cp.payLater && !ok) h += '<div class="cp-box y">Noté : le mandat reste à finaliser. Ce point restera en orange dans la checklist — relance le client.</div>';
+    if (cp.payLater && !ok && !dd) h += '<div class="cp-box y">Noté : le mandat reste à finaliser. Ce point restera en orange dans la checklist — relance le client.</div>';
     return h;
   }
 
   function cardClose(leadId, l, cp, d) {
     var elite = !d || d.offre === 'Elite', h = '<div class="cp-h">🏆 ' + (elite ? 'Le close et le coach référent' : 'Le close') + '</div>';
-    var closed = closeRecorded(leadId, l, cp);
+    var closed = closeRecorded(leadId, l, cp), dd = differe(leadId);
     var coach = (cp.coach && cp.coach.nom) || (l.coachAssigne && l.coachAssigne.nom) || '';
     if (closed && (!elite || coach)) {
       h += '<div class="cp-box g">✅ <b>Close enregistré</b>' + (cp.closeAt ? ' le ' + frDate(cp.closeAt) : '') + ' — fiche passée en Closing, commissions créées.'
-        + (elite ? '<br>🎓 Coach référent : <b>' + esc(coach) + '</b> — prévenu sur WhatsApp.' : '') + '</div>';
+        + (elite ? '<br>🎓 Coach référent : <b>' + esc(coach) + '</b> — ' + (dd ? 'il sera prévenu sur WhatsApp 7 jours avant le démarrage.' : 'prévenu sur WhatsApp.') : '') + '</div>';
       return h;
     }
-    h += '<div class="cp-sub">Enregistre la vente : la fiche passe en Closing et les commissions se créent' + (elite ? ', puis le coach est prévenu sur WhatsApp.' : '.') + '</div>';
+    h += '<div class="cp-sub">Enregistre la vente : la fiche passe en Closing et les commissions se créent' + (elite ? (dd ? '. Le coach sera prévenu 7 jours avant le démarrage.' : ', puis le coach est prévenu sur WhatsApp.') : '.') + '</div>';
     if (d) h += '<div class="cp-box">' + esc(d.code) + ' — ' + esc(d.label) + ' · ' + (d.paiement === 'pif' ? 'en une fois' : d.n + ' fois') + ' · ' + (d.booking === 'sb' ? 'Self Booking' : 'No Booking') + ' · encaissé ' + euro(d.encaisse) + ' HT</div>';
     if (elite) {
       var cs = H.coaches() || [], sel = (cp.coach && cp.coach.slug) || ui.coachSlug || '';
@@ -510,7 +549,8 @@
 
   function cardRdv(leadId, l, cp, d) {
     var offre = d ? d.offre : 'Elite', t = rdvType(offre), b = rdvBooking(leadId, offre), lab = rdvLabel(offre);
-    var h = '<div class="cp-h">📅 ' + lab + '</div>';
+    var h = '<div class="cp-h">📅 ' + lab + '</div>', dd = differe(leadId);
+    if (dd) h += '<div class="cp-box y">⏳ Démarrage le ' + esc(DC().fr(dd.date)) + ' : cale ce RDV à partir de cette date, pas avant. L\'agenda est déjà limité.</div>';
     h += '<div class="cp-sub">' + (offre === 'Elite' ? 'Dans les 72 h, au plus tard avant J7. Tu ouvres l\'agenda et vous choisissez la date ensemble, pendant l\'appel. Un client qui raccroche sans date, c\'est un démarrage qui glisse d\'une semaine.' : (bpV2() ? 'Le RDV audit business se fait avec un coach, dans les 72 h : calez-le avant de raccrocher, ensemble. Marine attribue ensuite le coach référent et le créneau fixe des 10 séances.' : 'Le RDV Urgent 72h se cale avant de raccrocher, ensemble.')) + '</div>';
     if (b) {
       h += '<div class="cp-box g">✅ <b>Calé le ' + esc((b.date || '').split('-').reverse().join('/')) + ' à ' + esc(b.time || '') + '</b>' + (b.personName ? ' avec ' + esc(b.personName) : '') + '</div>';
@@ -520,7 +560,7 @@
     h += '<div style="margin-top:6px"><button class="cp-btn pri big" data-cp="mod" data-m="book">📅 Caler le RDV avec le client</button></div>';
     h += '<label class="cp-chk' + (cp.rdvClient ? ' on' : '') + '" style="margin-top:14px"><input type="checkbox" data-cp-chk="rdvClient"' + (cp.rdvClient ? ' checked' : '') + '><span><b>Pas de créneau qui lui convient maintenant</b> — le client choisira lui-même. Envoie-lui le lien ci-dessous.</span></label>';
     if (cp.rdvClient) {
-      var link = H.bookingLink(t, l);
+      var link = H.bookingLink(t, l) + (dd ? '&apartirDu=' + encodeURIComponent(dd.date) : '');
       h += '<div class="cp-msg">' + esc(link) + '</div><div style="margin-top:6px"><button class="cp-btn" data-cp="copy" data-txt="' + esc(link) + '">📋 Copier le lien</button></div>';
       h += '<div class="cp-box y">À relancer : sans date, la checklist le signalera.</div>';
     }
@@ -541,7 +581,8 @@
   }
   function cardWa(leadId, l, cp) {
     var wa = cp.wa || {}, M = waMessages(leadId, l, cp), coachSlug = fold((cp.coach && cp.coach.slug) || (l.coachAssigne && l.coachAssigne.slug) || M.coach);
-    var h = '<div class="cp-h">💬 Le groupe WhatsApp</div><div class="cp-sub">Juste après la signature — jamais avant. Ce groupe devient le canal principal du client pendant six mois.</div>';
+    var h = '<div class="cp-h">💬 Le groupe WhatsApp</div><div class="cp-sub">Juste après la signature — jamais avant. Ce groupe devient le canal principal du client pendant six mois.</div>', dd = differe(leadId);
+    if (dd) h += '<div class="cp-box y">⏳ <b>À ne pas faire maintenant.</b> Démarrage le ' + esc(DC().fr(dd.date)) + ' : le groupe se crée dans les 7 jours avant, un rappel partira. Tu peux passer à la suite.</div>';
     h += '<div class="cp-lb">1 · Crée le groupe « Elite Phénix — ' + esc(prenomOf(l.nom)) + ' »</div><table class="cp-tbl">'
       + '<tr><td>👤 ' + esc(l.nom || 'Client') + ' <small style="color:#8d93a8">client</small></td><td>' + esc(telFr(l.telephone)) + '</td></tr>'
       + '<tr><td>🎓 ' + esc(M.coach) + ' <small style="color:#8d93a8">coach référent</small></td><td>' + esc(COACH_TELS[coachSlug] || COACH_TELS[fold(prenomOf(M.coach))] || '—') + '</td></tr>';
@@ -560,19 +601,21 @@
   function checklist(leadId, l, cp, d) {
     var sig = lastSig(leadId), p = lastPay(leadId), elite = !d || d.offre === 'Elite';
     var coach = (cp.coach && cp.coach.nom) || (l.coachAssigne && l.coachAssigne.nom) || '';
-    var b = rdvBooking(leadId, d ? d.offre : 'Elite'), wa = cp.wa || {}, out = [];
+    var b = rdvBooking(leadId, d ? d.offre : 'Elite'), wa = cp.wa || {}, out = [], dd = differe(leadId), payLater = cp.payLater && !dd;
     function it(ok, label, detail, soft) { out.push({ ok: ok ? 'ok' : (soft ? 'wa' : 'ko'), label: label, detail: detail || '' }); }
     it(!!d, 'Deal renseigné', d ? d.code + ' — ' + d.label + ' · ' + (d.paiement === 'pif' ? 'en une fois' : d.n + ' fois') : '');
     it(sig && sig.status === 'signed', 'Contrat signé', sig ? '« ' + (sig.templateName || '') + ' »' : 'pas encore envoyé');
     it(!!p, 'Paiement GoCardless créé', p ? euro(p.totalAmount) + ' TTC' : '');
     var mand = p && /mandate_active|active|completed/.test(p.status || '');
-    it(mand, 'Mandat SEPA actif', mand ? '' : (cp.payLater ? 'le client finit son IBAN plus tard — à relancer' : ''), cp.payLater);
-    var trig = p && (p.status === 'active' || p.status === 'completed');
-    it(trig, 'Premier prélèvement déclenché', '', cp.payLater);
+    it(mand, 'Mandat SEPA actif', mand ? '' : (payLater ? 'le client finit son IBAN plus tard — à relancer' : ''), payLater);
+    var trig = p && (p.status === 'active' || p.status === 'completed') && (!dd || payOk(leadId, p));
+    it(trig, 'Premier prélèvement déclenché', dd && !trig ? 'obligatoire aujourd\'hui, même avec un démarrage différé' : '', payLater);
+    if (dd) out.push({ ok: 'wa', label: 'Démarrage différé au ' + DC().fr(dd.date), detail: 'accès et séances fermés jusque-là, ouverture automatique' });
     it(closeRecorded(leadId, l, cp), 'Close enregistré (fiche + commissions)', '');
-    if (elite) it(!!coach, 'Coach référent attribué et prévenu', coach);
+    if (elite) it(!!coach, dd ? 'Coach référent attribué' : 'Coach référent attribué et prévenu', coach + (dd && coach ? ' — prévenu à J-7' : ''));
     it(!!b, rdvLabel(d ? d.offre : 'Elite') + ' calé', b ? (b.date || '').split('-').reverse().join('/') + ' à ' + (b.time || '') : (cp.rdvClient ? 'le client choisit lui-même — à relancer' : ''), !b && cp.rdvClient);
-    if (elite) {
+    if (elite && dd) out.push({ ok: 'wa', label: 'Groupe WhatsApp', detail: 'à créer dans les 7 jours avant le démarrage — rappel prévu' });
+    else if (elite) {
       it(!!wa.groupe, 'Groupe WhatsApp créé', '');
       it(!!wa.bienvenue, 'Message de bienvenue posté', '');
       it(!!wa.liens, 'Liens épinglés', '');
@@ -605,6 +648,7 @@
       + 'Contrat (signé et rétractation ok) : ' + (sig && sig.status === 'signed' ? 'Oui' : 'Non') + '\n'
       + 'Origine du Lead: ' + (H.origin(l) || '—') + '\n\n'
       + 'Setting SB/NB : ' + (d && d.booking === 'sb' ? 'SB' : 'NB' + (setter ? ' ' + setter : '')) + '\n'
+      + (differe(leadId) ? 'Démarrage différé : ' + DC().fr(differe(leadId).date) + '\n' : '')
       + 'Moyen de paiement : prélèvement\n'
       + 'CA Contracté : ' + (d ? Math.round(d.ttc) : '') + ' TTC\n'
       + 'Total collecté aujourd\'hui : ' + (d ? Math.round(d.encaisse) : '') + ' HT';
@@ -634,10 +678,11 @@
   /* ═══ Actions ══════════════════════════════════════════════════════ */
   function moduleParams(kind, leadId) {
     var l = H.lead(leadId) || {}, cp = cpOf(leadId), d = deal(cp);
-    if (kind === 'sig') return { sn: l.nom || '', se: l.email || '', sp: l.telephone || '', formule: d ? d.paiement : '', nmens: d && d.n > 1 ? d.n : '' };
+    var dd = differe(leadId);
+    if (kind === 'sig') return { sn: l.nom || '', se: l.email || '', sp: l.telephone || '', formule: d ? d.paiement : '', nmens: d && d.n > 1 ? d.n : '', date_demarrage: dd ? dd.date : '' };
     if (kind === 'pay') return d ? { montant: d.ttc, ptype: d.paiement === 'pif' ? 'full' : 'installments', nmens: d.n > 1 ? d.n : '', maxmens: d.offre === 'Business' && bpV2() ? pricing().Business.mensualise.maxX : '', desc: 'Programme ' + d.label } : {};
     var parts = String(l.nom || '').trim().split(/\s+/);
-    return { type: rdvType(d ? d.offre : 'Elite'), prenom: parts[0] || '', nom: parts.slice(1).join(' '), email: l.email || '', tel: l.telephone || '' };
+    return { type: rdvType(d ? d.offre : 'Elite'), prenom: parts[0] || '', nom: parts.slice(1).join(' '), email: l.email || '', tel: l.telephone || '', apartirDu: dd ? dd.date : '' };
   }
   function onClick(e) {
     var t = e.target.closest ? e.target.closest('[data-cp],[data-cp-chk]') : null;
@@ -681,6 +726,15 @@
       ui.local[ui.leadId] = ui.local[ui.leadId] || {};
       clearTimeout(ui.encT); var leadId = ui.leadId;
       ui.encT = setTimeout(function () { save(leadId, { choix: { encaisse: isNaN(v) ? '' : v } }); render(); }, 600);
+      return;
+    }
+    if (e.type === 'change' && t.getAttribute && t.getAttribute('data-cp-dem')) {
+      ui.ddOuvert[ui.leadId] = !!t.checked;
+      if (!t.checked && differe(ui.leadId)) poserDemarrage(ui.leadId, null); else render();
+      return;
+    }
+    if (e.type === 'change' && t.hasAttribute && t.hasAttribute('data-cp-dem-date')) {
+      if (t.value && DC().dateValable(t.value)) poserDemarrage(ui.leadId, t.value);
       return;
     }
     if (e.type === 'change' && t.getAttribute && t.getAttribute('data-cp-chk')) {

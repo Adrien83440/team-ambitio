@@ -30,6 +30,8 @@
 <script src="rdv-history.js" defer></script>
 <script src="whatsapp-lead.js" defer></script>
 <script src="close-wizard.js" defer></script>
+<script src="demarrage-core.js" defer></script>
+<script src="demarrage-widget.js" defer></script>
 <script src="close-pilot.js" defer></script>
 <!-- Programme IA 10/2026 : dossier de préparation au closing (bouton 📋 Dossier IA des RDV) -->
 <script src="ai-prep-modal.js" defer></script>
@@ -3616,6 +3618,15 @@ function _ldClosePilotHost() {
     closeModule: function () { ldCloseModule(); },
     moduleOpen: function () { return !!document.querySelector('#ldFrameBg.show'); },
     save: function (leadId, patch) { return db.collection('leads').doc(leadId).set({ closePilot: patch }, { merge: true }); },
+    demarrage: function (leadId, date) {
+      var msgs = { contrat_signe: 'Contrat signé : seuls les admins et la CSM peuvent changer le démarrage.', forbidden: 'Closing terminé : seuls les admins et la CSM peuvent changer le démarrage.', date_invalide: 'Choisis une date à venir (moins d\'un an).', academy_unreachable: 'Academy injoignable : rien n\'a été enregistré, réessaie.' };
+      return firebase.auth().currentUser.getIdToken().then(function (t) {
+        return fetch('/api/client-demarrage', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + t }, body: JSON.stringify(date ? { action: 'poser', leadId: leadId, date: date } : { action: 'retirer', leadId: leadId }) });
+      }).then(function (r) { return r.json(); }).then(function (j) {
+        if (!j || j.ok !== true) throw new Error(msgs[j && j.error] || 'Enregistrement impossible');
+        return j.demarrage;
+      });
+    },
     recordClose: function (leadId, answers, opts) {
       if (!window.CloseWizard || !window.CloseWizard.commit) return Promise.reject(new Error('close-wizard.js manquant — recharge la page'));
       if (opts && opts.coachOnly) { window.CloseWizard.notifyCoach(leadId, answers); return Promise.resolve(); }
@@ -4633,6 +4644,7 @@ function renderLeadTags(l, compact) {
      (Élite/Business…) → badge doré Self Booking, idem à la chip du RDV. */
   if (sbSituation && l.type !== 'self_booking') h += '<span class="ld-badge self">Self Booking</span>';
   h += '<span class="ld-badge-status" style="background:' + statusObj.bg + ';color:' + statusObj.color + '"><span class="sd" style="background:' + statusObj.color + '"></span>' + statusObj.label + '</span>';
+  if (window.DemarrageCore && DemarrageCore.enAttente(l.demarrageDiffere)) h += '<span class="ld-badge self" title="Démarrage différé : accès et séances fermés jusqu\'à cette date">' + DemarrageCore.badge(l.demarrageDiffere) + '</span>';
   /* Score qualité (1-5) — badge doré compact, visible en liste et en fiche */
   if (l.leadScore >= 1 && l.leadScore <= 5) {
     h += '<span class="ld-badge-score" title="Qualité du lead : ' + l.leadScore + '/5">★ ' + l.leadScore + '</span>';
