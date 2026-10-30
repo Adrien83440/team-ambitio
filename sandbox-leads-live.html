@@ -9229,7 +9229,7 @@ var FU_ALERTS_KEY = 'ambitio_fu_alerts';
 var FU_SEEN_KEY = 'ambitio_fu_seen';
 var FU_SEEN_TTL_MS = 60 * 24 * 3600 * 1000;
 var FU_LATE_SILENT_MS = 10 * 60 * 1000;
-var FU_ALERTS_VER = 'v3 30/10';
+var FU_ALERTS_VER = 'v4 30/10';
 var _fuCheckInterval = null;
 var _fuRealRole = null;      // null tant que users/{uid} n'est pas lu
 var _fuRoleLoading = false;
@@ -9370,6 +9370,7 @@ function fuLoadRole() {
     if (!snap.exists) return;
     _fuRealRole = snap.data().role || '';
     fuRenderAlertsBtn();
+    fuCloseStale();
     checkFollowUpReminders();
   }).catch(function () { _fuRoleLoading = false; });
 }
@@ -9377,6 +9378,24 @@ firebase.auth().onAuthStateChanged(function (u) {
   _fuRealRole = null;
   if (u) fuLoadRole();
 });
+
+/* Alertes coupées : ferme les rappels FU encore affichés (créés par l'ancien
+   code avec requireInteraction, ils restaient sur l'écran verrouillé et
+   semblaient « revenir »). Seulement ce que le navigateur expose. */
+function fuCloseStale() {
+  if (fuAlertsOn() || !('serviceWorker' in navigator)) return;
+  try {
+    navigator.serviceWorker.getRegistrations().then(function (regs) {
+      regs.forEach(function (r) {
+        if (!r.getNotifications) return;
+        r.getNotifications().then(function (list) {
+          list.forEach(function (n) { if (n.tag && n.tag.indexOf('fu-') === 0) n.close(); });
+        }).catch(function () {});
+      });
+    }).catch(function () {});
+  } catch (e) {}
+}
+document.addEventListener('visibilitychange', function () { if (!document.hidden) fuCloseStale(); });
 
 // Check every 30 seconds
 _fuCheckInterval = setInterval(checkFollowUpReminders, 30000);
