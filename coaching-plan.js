@@ -20,8 +20,9 @@
         par champ, y compris le décalage en jours de chaque étape et l'ajout
         de semaines) ou en langage naturel (revise : on décrit le changement,
         le serveur renvoie le plan corrigé sans toucher au reste).
-     4. EXPORT PDF — mise en page vectorielle (jsPDF), texte sélectionnable,
-        aux couleurs bleues de la maison. Pas de capture d'écran : un
+     4. EXPORT PDF — le document remis au dirigeant : tout le contenu de
+        l'écran, mise en page vectorielle (jsPDF), texte sélectionnable,
+        polices embarquées (Inter, Fraunces). Pas de capture d'écran : un
         screenshot en PDF est flou et pèse dix fois plus.
 
    API :
@@ -29,11 +30,11 @@
      CoachingPlan.openEditor(client, { onSave })   → édition manuelle
      CoachingPlan.revise(clientId, plan, instr)    → retouche IA (Promise)
      CoachingPlan.render(plan, clientId, opts)     → HTML du plan
-     CoachingPlan.exportPdf(plan, client)          → télécharge le PDF
+     CoachingPlan.exportPdf(plan, client)          → télécharge le PDF (Promise)
      CoachingPlan.emptyPlan() / normalize(plan)    → structure du plan
      CoachingPlan.voiceSupported() / stopVoice()   → dictée
 
-   Dépend de : jsPDF (UMD, chargé par coaching.html) pour l'export seul.
+   Dépend de : jsPDF (UMD, chargé par coaching.html) et /fonts pour l'export seul.
    Le reste fonctionne sans aucune dépendance externe — la dictée utilise
    la reconnaissance vocale native du navigateur (absente de Firefox).
    ═══════════════════════════════════════════════════════════════════════ */
@@ -281,6 +282,16 @@
   }
   function val(v) { var s = String(v == null ? '' : v).trim(); return s || TODO; }
   function isTodo(v) { return !String(v == null ? '' : v).trim(); }
+
+  /* La note du référentiel cite les jalons A1 et A2 de l'ancienne trame. Dans un
+     plan en milestones ces clés n'existent pas : le dirigeant lisait une
+     consigne sur des étapes absentes de son plan. On cite ses deux premières
+     étapes, dans l'ordre choisi par le coach. */
+  function noteOrganisme(p, org) {
+    if (org !== ORGANISMES.delivrabilite || estLegacy(p)) return org.note;
+    var l = etapes(p);
+    return 'Les étapes ' + l[0].k + ' et ' + l[1].k + ' sont critiques — ne pas avancer sans les avoir validées.';
+  }
 
   /* ═════════════════════════════════════════════════════════════════════
      MODE VOCAL — dictée dans n'importe quel champ
@@ -1258,7 +1269,7 @@
           + (rang >= 0 ? '<span class="r">' + (rang + 1) + '</span>' : '') + ORGANISMES[k].label + '</button>';
       });
       h += '</div><div class="hint">Clique dans l\'ordre où on les traite. L\'acquisition ne s\'ouvre qu\'une fois que la machine tient sans lui — c\'est une règle du programme, pas une préférence.'
-        + (ordre.length ? '<br>' + esc(ORGANISMES[ordre[0]].note) : '') + '</div></div>';
+        + (ordre.length ? '<br>' + esc(noteOrganisme(p, ORGANISMES[ordre[0]])) : '') + '</div></div>';
 
       var liste = etapes(p);
       var perso = (p.ordreEtapes || []).length > 0;
@@ -1565,7 +1576,7 @@
       h += '<div class="cpv-rule">Ordre retenu pour vous : <b>'
         + ordre.map(function (k) { return esc(ORGANISMES[k] ? ORGANISMES[k].label : k); }).join(' → ')
         + '</b>'
-        + (org ? '<br>' + esc(org.note) : '')
+        + (org ? '<br>' + esc(noteOrganisme(p, org)) : '')
         + '<br><span style="opacity:.75">L\'acquisition ne s\'ouvre qu\'une fois que la machine tient sans elle — c\'est une règle du programme.</span>'
         + '</div>';
     }
@@ -2432,179 +2443,783 @@
   }
 
   /* ═════════════════════════════════════════════════════════════════════
-     EXPORT PDF — vectoriel, texte sélectionnable
+     EXPORT PDF — le document remis au dirigeant
+     ─────────────────────────────────────────────────────────────────────
+     Même contenu que l'écran (render), mêmes blocs, même ordre : un plan
+     validé en fiche se retrouve entier sur le papier.
+
+     RIEN NE PEUT SE SUPERPOSER, PAR CONSTRUCTION. L'ancienne version posait
+     le texte en estimant sa hauteur à vue, puis cherchait à rattraper : les
+     filets traversaient les lignes et les longs paragraphes passaient sous
+     le pied de page. Ici, trois règles :
+       · tout texte est mesuré avec SA police avant d'être posé (lignes()) ;
+       · tout bloc annonce sa hauteur et réclame sa place (assure()) avant de
+         dessiner quoi que ce soit ;
+       · un paragraphe trop long pour la page se coupe entre deux lignes
+         (flux()), et un titre ne reste jamais seul en bas de page (les
+         titres attendent le bloc qui les suit, voir enAttente).
+
+     VRAIE POLICE EMBARQUÉE. Les polices standard du PDF ne connaissent ni
+     « → » ni « ≈ » : le titre « Point A → Point B » sortait en « A !' B ».
+     Inter et Fraunces (celles de la fiche coaching) vivent dans /fonts et ne
+     sont chargées qu'à l'export. Si le réseau les refuse, le PDF sort quand
+     même en Helvetica : un export ne doit jamais échouer pour une police.
+
+     Vectoriel, texte sélectionnable, jamais de capture d'écran.
      ═══════════════════════════════════════════════════════════════════ */
   function hex(h) {
     var s = h.replace('#', '');
     return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
   }
 
+  var PDF_POLICES = [
+    { fichier: 'Inter-Regular.ttf', famille: 'Inter', style: 'normal' },
+    { fichier: 'Inter-SemiBold.ttf', famille: 'InterSB', style: 'normal' },
+    { fichier: 'Inter-Bold.ttf', famille: 'Inter', style: 'bold' },
+    { fichier: 'Fraunces-SemiBold.ttf', famille: 'Fraunces', style: 'normal' }
+  ];
+  /* Base64 gardé en mémoire : le deuxième export de la session part aussitôt. */
+  var pdfPolicesB64 = null;
+
+  function bufferVersB64(buf) {
+    var o = new Uint8Array(buf), s = '', pas = 0x8000;
+    for (var i = 0; i < o.length; i += pas) {
+      s += String.fromCharCode.apply(null, o.subarray(i, i + pas));
+    }
+    return btoa(s);
+  }
+
+  function chargerPolicesPdf() {
+    if (pdfPolicesB64) return Promise.resolve(pdfPolicesB64);
+    return Promise.all(PDF_POLICES.map(function (f) {
+      return fetch('/fonts/' + f.fichier).then(function (r) {
+        if (!r.ok) throw new Error('police_' + r.status);
+        return r.arrayBuffer();
+      }).then(bufferVersB64);
+    })).then(function (l) { pdfPolicesB64 = l; return l; });
+  }
+
   function exportPdf(plan, client) {
     var J = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
-    if (!J) { alert('Export PDF indisponible — la librairie jsPDF n\'est pas chargée.'); return; }
+    if (!J) { alert('Export PDF indisponible — la librairie jsPDF n\'est pas chargée.'); return Promise.resolve(); }
+    return chargerPolicesPdf()
+      .catch(function () { return null; })   // repli Helvetica, voir plus haut
+      .then(function (b64) { composerPdf(J, plan, client, b64); });
+  }
+
+  function composerPdf(J, plan, client, polices) {
     var p = plan || emptyPlan();
-    var doc = new J({ unit: 'mm', format: 'a4' });
-    var W_ = 210, M = 16, w = W_ - M * 2;
+    var doc = new J({ unit: 'mm', format: 'a4', compress: true });
+    var LARG = 210, MARGE = 18, w = LARG - MARGE * 2;
+    var HAUT = 16, BAS = 281;            // zone utile ; le pied de page vit dessous
+    var PT = 0.3528;                     // 1 pt en mm
     var y = 0;
 
-    function color(c) { var r = hex(c); doc.setTextColor(r[0], r[1], r[2]); }
-    function fill(c) { var r = hex(c); doc.setFillColor(r[0], r[1], r[2]); }
-    function draw(c) { var r = hex(c); doc.setDrawColor(r[0], r[1], r[2]); }
-    /* Saut de page quand il ne reste plus la place voulue. */
-    function need(mm) { if (y + mm > 281) { doc.addPage(); y = M; } }
-    function text(s, x, size, style, col, maxw) {
-      doc.setFont('helvetica', style || 'normal');
-      doc.setFontSize(size);
-      color(col || C.ink);
-      var lines = doc.splitTextToSize(String(s == null ? '' : s), maxw || w);
-      doc.text(lines, x, y);
-      y += lines.length * (size * 0.42) + 1.2;
-      return lines.length;
+    /* ── Palette du document ─ celle de la fiche, plus quelques teintes
+       dérivées : un PDF ne connaît pas la transparence des variables CSS. */
+    var V = {
+      nuit: '#0c1a52', main: C.main, dark: C.dark, light: C.light, ghost: C.ghost,
+      encre: '#1b2133', gris: '#5f6779', pale: '#8b93a7', line: '#e2e5f2', fond: '#f7f8fd',
+      orange: '#b76e00', orangeFond: '#fff6e8', orangeBord: '#f5b64d',
+      vert: '#0c8a61', vertFond: '#ecf9f3'
+    };
+
+    /* ── Polices ─ quatre graisses, mêmes noms que l'on soit en Inter ou en
+       repli Helvetica ; le reste du code ne connaît que ces clés. */
+    var aPolices = !!polices;
+    if (aPolices) {
+      PDF_POLICES.forEach(function (f, i) {
+        doc.addFileToVFS(f.fichier, polices[i]);
+        doc.addFont(f.fichier, f.famille, f.style, 'Identity-H');
+      });
     }
-    function bloc(n, titre) {
-      need(20);
-      y += 4;
-      fill(C.main); doc.roundedRect(M, y - 4.6, 6.6, 6.6, 1.4, 1.4, 'F');
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); color('#ffffff');
-      doc.text(String(n), M + 3.3, y, { align: 'center' });
-      doc.setFontSize(12); color(C.dark);
-      doc.text(titre, M + 10, y);
-      y += 3;
-      draw(C.line); doc.setLineWidth(0.3); doc.line(M, y, M + w, y);
-      y += 6;
+    var POLICE = aPolices
+      ? { r: ['Inter', 'normal'], m: ['InterSB', 'normal'], b: ['Inter', 'bold'], t: ['Fraunces', 'normal'] }
+      : { r: ['helvetica', 'normal'], m: ['helvetica', 'bold'], b: ['helvetica', 'bold'], t: ['times', 'bold'] };
+
+    function police(cle, taille) { doc.setFont(POLICE[cle][0], POLICE[cle][1]); doc.setFontSize(taille); }
+    function coul(c) { var r = hex(c); doc.setTextColor(r[0], r[1], r[2]); }
+    function aplat(c) { var r = hex(c); doc.setFillColor(r[0], r[1], r[2]); }
+    function trait(c) { var r = hex(c); doc.setDrawColor(r[0], r[1], r[2]); }
+
+    /* Ce que le PDF ne sait pas dessiner disparaît proprement : émojis et
+       caractères invisibles collés depuis un téléphone. */
+    function propre(s) {
+      var t = String(s == null ? '' : s)
+        .replace(/\r\n?/g, '\n')
+        .replace(/[\uD800-\uDFFF\uFE0F\u200D\u200B]/g, '')
+        .replace(/[\u202F\u2009]/g, '\u00A0')
+        .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
+        /* Un nombre ne se coupe pas en fin de ligne (« 145 / 860 € »), et une
+           ponctuation française ne commence jamais une ligne. */
+        .replace(/(\d) (?=\d{3}(?!\d))/g, '$1\u00A0')
+        .replace(/(\d) (?=[%€])/g, '$1\u00A0')
+        .replace(/ (?=[:;?!»])/g, '\u00A0')
+        .replace(/« /g, '«\u00A0')
+        .replace(/'/g, '\u2019');
+      if (!aPolices) t = t.replace(/→/g, '>').replace(/≈/g, '~');
+      return t;
     }
 
-    /* ── En-tête ── */
-    fill(C.main); doc.rect(0, 0, W_, 34, 'F');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(17); color('#ffffff');
-    doc.text('Plan d\'action — Elite Phénix', M, 15);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5);
+    /* Une ligne de la mesure = une ligne du dessin : même police, même corps. */
+    function lignes(s, cle, taille, largeur) {
+      police(cle, taille);
+      return doc.splitTextToSize(propre(s), largeur);
+    }
+    /* Hauteur de ligne : pas fixe, pour que la mesure ne mente jamais. */
+    function ligneH(taille, serre) { return taille * PT * (serre || 1.46); }
+
+    /* Pose des lignes à partir du HAUT de la boîte. Le corps est centré sur la
+       hauteur de ligne ; le code d'appel ne manipule jamais de ligne de base. */
+    function poser(ls, x, haut, cle, taille, col, lh) {
+      police(cle, taille); coul(col);
+      var pas = lh || ligneH(taille);
+      var base = haut + (pas + taille * PT * 0.7) / 2;
+      ls.forEach(function (l, i) { doc.text(l, x, base + i * pas); });
+      return ls.length * pas;
+    }
+    /* Petites capitales espacées, pour les libellés. */
+    function libelle(s, x, haut, col, taille, droite) {
+      var t = propre(s).toUpperCase(), corps = taille || 6.8;
+      police('b', corps); coul(col || V.pale);
+      var esp = 0.18;
+      var larg = doc.getTextWidth(t) + esp * (t.length - 1);
+      doc.text(t, droite ? x - larg : x, haut + corps * PT * 0.82, { charSpace: esp });
+      return larg;
+    }
+    var LIB_H = 3.4;
+
+    /* ── La mise en page ───────────────────────────────────────────────── */
+    var enAttente = [];    // titres qui attendent le bloc qu'ils annoncent
+
+    function nouvellePage() { doc.addPage(); y = HAUT; }
+
+    /* Réclame `h` mm d'un seul tenant, titres en attente compris. Un bloc plus
+       haut qu'une page entière part quand même en haut de page : c'est flux()
+       qui le coupe. */
+    function assure(h) {
+      var t = enAttente.reduce(function (s, a) { return s + a.h; }, 0);
+      if (y + t + h > BAS && y > HAUT + 0.1) nouvellePage();
+      var liste = enAttente; enAttente = [];
+      liste.forEach(function (a) { a.dessin(); });
+    }
+
+    function section(titre) {
+      numero++;
+      var n = numero;
+      enAttente.push({
+        h: 16,
+        dessin: function () {
+          if (y > HAUT + 0.1) y += 5;
+          aplat(V.main); doc.roundedRect(MARGE, y, 7.4, 7.4, 1.8, 1.8, 'F');
+          police('b', 9.2); coul('#ffffff');
+          doc.text(String(n), MARGE + 3.7, y + 5.1, { align: 'center' });
+          police('t', 15); coul(V.dark);
+          /* Fraunces n'a pas de flèche : elle est dessinée. */
+          var morceaux = propre(titre).split(aPolices ? '→' : '>');
+          var x = MARGE + 10.4;
+          morceaux.forEach(function (m, i) {
+            if (i) { fleche(x + 1.4, y + 3.9, 7, V.main); x += 9.8; }
+            var t = m.replace(/^\s+|\s+$/g, '');
+            doc.text(t, x, y + 5.6);
+            x += doc.getTextWidth(t);
+          });
+          y += 11.4;
+        }
+      });
+    }
+    var numero = 0;
+
+    function sousTitre(t, avant) {
+      enAttente.push({
+        h: LIB_H + 1.8 + (avant || 0),
+        dessin: function () {
+          if (avant && y > HAUT + 0.1) y += avant;
+          libelle(t, MARGE, y, V.gris, 7);
+          y += LIB_H + 1.8;
+        }
+      });
+    }
+
+    /* Paragraphe pleine largeur, coupé entre deux lignes si besoin. On garde
+       au moins deux lignes de chaque côté de la coupure. */
+    function flux(s, cle, taille, col, x, largeur) {
+      var ls = lignes(s, cle, taille, largeur), pas = ligneH(taille, 1.52);
+      var i = 0;
+      assure(Math.min(ls.length, 2) * pas);
+      while (i < ls.length) {
+        var tient = Math.floor((BAS - y) / pas);
+        var reste = ls.length - i;
+        if (tient < reste && reste - tient < 2) tient = reste - 2;
+        if (tient < 1) { nouvellePage(); continue; }
+        var part = ls.slice(i, i + tient);
+        poser(part, x, y, cle, taille, col, pas);
+        y += part.length * pas;
+        i += part.length;
+        if (i < ls.length) nouvellePage();
+      }
+    }
+
+    function fleche(x, ym, long, col) {
+      trait(col); aplat(col); doc.setLineWidth(0.5); doc.setLineCap('round');
+      doc.line(x, ym, x + long - 1.5, ym);
+      doc.triangle(x + long, ym, x + long - 2.3, ym - 1.45, x + long - 2.3, ym + 1.45, 'F');
+      doc.setLineCap('butt');
+    }
+
+    /* Carte à liseré gauche : une languette de couleur, puis la carte
+       par-dessus, décalée. La languette est étroite exprès : à pleine largeur,
+       sa couleur transparaissait en filet autour de toute la carte. */
+    function carteLiseree(x, haut, larg, h, fond, lis) {
+      aplat(lis); doc.roundedRect(x, haut, 6, h, 1.8, 1.8, 'F');
+      aplat(fond); doc.roundedRect(x + 1, haut, larg - 1, h, 1.8, 1.8, 'F');
+    }
+
+    /* Cartes { titre, detail } en grille de `cols` colonnes. Chaque rangée
+       prend la hauteur de sa plus haute carte, et ne se coupe jamais. */
+    function grilleCartes(items, cols, fond, lis, colT) {
+      var gout = 3.2, pad = 3.4, lt = ligneH(8.6, 1.32), ld = ligneH(8, 1.42);
+      for (var i = 0; i < items.length; i += cols) {
+        var rang = items.slice(i, i + cols);
+        /* Une carte seule en fin de grille occupe toute la rangée, plutôt que
+           de laisser un trou à sa droite. */
+        var l = (w - gout * (rang.length - 1)) / rang.length;
+        var mes = rang.map(function (x) {
+          var t = lignes(x.titre, 'm', 8.6, l - pad * 2 - 1);
+          var d = x.detail ? lignes(x.detail, 'r', 8, l - pad * 2 - 1) : [];
+          return { t: t, d: d, h: pad * 2 + t.length * lt + (d.length ? 1 + d.length * ld : 0) };
+        });
+        var h = Math.max.apply(null, mes.map(function (m) { return m.h; }));
+        assure(h);
+        mes.forEach(function (m, k) {
+          var x = MARGE + k * (l + gout);
+          carteLiseree(x, y, l, h, fond, lis);
+          var yy = y + pad;
+          yy += poser(m.t, x + 1 + pad, yy, 'm', 8.6, colT, lt);
+          if (m.d.length) poser(m.d, x + 1 + pad, yy + 1, 'r', 8, V.gris, ld);
+        });
+        y += h + (i + cols < items.length ? gout : 0);
+      }
+    }
+
+    /* Pastille de statut, à droite. Renvoie sa largeur pour que le titre ne
+       vienne jamais dessous. */
+    function pastilleLarg(t) {
+      police('b', 6.8);
+      return doc.getTextWidth(t) + 5;
+    }
+    function pastille(t, xDroite, haut, col, fond) {
+      var l = pastilleLarg(t);
+      aplat(fond); doc.roundedRect(xDroite - l, haut, l, 5, 2.5, 2.5, 'F');
+      police('b', 6.8); coul(col);
+      doc.text(t, xDroite - l / 2, haut + 3.45, { align: 'center' });
+      return l;
+    }
+    function couleursStatut(k) {
+      if (k === 'ok') return { col: V.vert, fond: V.vertFond };
+      if (k === 'wip') return { col: V.main, fond: V.ghost };
+      if (k === 'ko') return { col: '#c02626', fond: '#fdecec' };
+      return { col: V.gris, fond: '#eff1f6' };
+    }
+
+    /* ── EN-TÊTE ─ pleine largeur, sa hauteur suit la phrase de synthèse. */
     var nom = (client && (client.nom || client.name || client.prenom)) || '';
-    doc.text(nom + (p.coach ? '   ·   Coach : ' + p.coach : ''), M, 22.5);
-    doc.setFontSize(8.5); doc.setTextColor(210, 222, 255);
+    var entreprise = (client && client.entreprise) || '';
     var LISTE_PDF = etapes(p);
     var jFin = jOf(p, LISTE_PDF[LISTE_PDF.length - 1]);
-    doc.text('Démarrage ' + frDate(p.startDate) + '   ·   Horizon J+' + jFin + ' : ' + frDate(jalonDate(p, jFin)), M, 28.5);
-    y = 46;
+    var aujourdhui = frDate(toYMD(new Date()));
 
-    /* ── 1. Point A → B ── */
-    bloc(1, 'Point A → Point B');
-    text('POINT A — AUJOURD\'HUI', M, 8, 'bold', C.muted);
-    text(val(p.pointA), M, 10.5, 'normal', isTodo(p.pointA) ? C.muted : C.ink);
-    y += 2.5;
-    text('POINT B — À J180', M, 8, 'bold', C.muted);
-    text(val(p.pointB), M, 10.5, 'normal', isTodo(p.pointB) ? C.muted : C.ink);
+    (function enTete() {
+      var identite = nom + (entreprise ? (nom ? '  ·  ' : '') + entreprise : '');
+      var lId = identite ? lignes(identite, 'm', 13, w) : [];
+      var lhId = ligneH(13, 1.3);
+      var synth = !isTodo(p.synthese);
+      var lSyn = synth ? lignes(p.synthese, 'r', 10.4, w - 12) : [];
+      var lhSyn = ligneH(10.4, 1.5);
+      var padS = 4.8;
+      var hSyn = synth ? padS * 2 + LIB_H + 1.6 + lSyn.length * lhSyn : 0;
+      var hTexte = 15 + 6 + 12 + lId.length * lhId + 6 + 10.6;
+      var H = hTexte + (synth ? 7 + hSyn : 0) + 8;
 
-    /* Les deux repères longs, discrets, juste après le point B. */
-    if (!isTodo(p.horizon12) || !isTodo(p.horizon36)) {
-      y += 2;
-      if (!isTodo(p.horizon12)) {
-        text('DANS 12 MOIS', M, 7.4, 'bold', C.light);
-        text(p.horizon12, M, 9, 'italic', C.muted);
-      }
-      if (!isTodo(p.horizon36)) {
-        text('DANS 3 ANS', M, 7.4, 'bold', C.light);
-        text(p.horizon36, M, 9, 'italic', C.muted);
-      }
-    }
+      aplat(V.nuit); doc.rect(0, 0, LARG, H, 'F');
+      /* Deux grands disques à fond perdu : du relief, sans dégradé. Le rayon
+         suit la hauteur du bandeau, sinon ils déborderaient sur la page. */
+      aplat('#13267a'); doc.circle(LARG + 8, 8, Math.min(58, H - 12), 'F');
+      aplat('#1a3296'); doc.circle(LARG + 2, -12, Math.min(40, H - 12), 'F');
 
-    /* ── 2. Verrou ── */
-    bloc(2, 'Verrou principal');
-    text('VERROU IDENTIFIÉ', M, 8, 'bold', C.muted);
-    text(val(p.verrou), M, 10.5, 'normal', isTodo(p.verrou) ? C.muted : C.ink);
-    if (!isTodo(p.verrouPlan)) {
-      y += 2.5;
-      text('CE QU\'ON FAIT POUR LE LEVER', M, 8, 'bold', C.muted);
-      text(p.verrouPlan, M, 10, 'normal', C.ink);
-    }
-    y += 2.5;
-    var ordrePdf = (p.organismes && p.organismes.length) ? p.organismes : (p.organisme ? [p.organisme] : []);
-    var org = ORGANISMES[ordrePdf[0]];
-    text('ORDRE DE TRAITEMENT', M, 8, 'bold', C.muted);
-    text(ordrePdf.length
-      ? ordrePdf.map(function (k, i) { return (i + 1) + '. ' + (ORGANISMES[k] ? ORGANISMES[k].label : k); }).join('   ')
-      : TODO, M, 12, 'bold', ordrePdf.length ? C.main : C.muted);
-    y += 1.5;
-    if (org) text(org.note, M, 9, 'italic', C.muted);
+      var yy = 15;
+      libelle('Elite Phénix  ·  Parcours 6 mois', MARGE, yy, '#9fb6ff', 7.2);
+      yy += 6;
+      poser([propre('Plan d\'action')], MARGE, yy, 't', 29, '#ffffff', 12);
+      yy += 12;
+      if (lId.length) { poser(lId, MARGE, yy, 'm', 13, '#dbe3ff', lhId); yy += lId.length * lhId; }
+      yy += 6;
 
-    /* ── 3. Jalons ── */
-    bloc(3, estLegacy(p) ? 'Les 6 jalons datés' : 'Les 5 milestones');
-    var cols = [16, 26, 62, 52, 22];
-    var xs = [M]; cols.forEach(function (c, i) { xs.push(xs[i] + c); });
-    fill(C.ghost); doc.rect(M, y - 4, w, 7, 'F');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(7.6); color(C.dark);
-    [estLegacy(p) ? 'JALON' : 'ÉTAPE', 'REPÈRE', 'CHANTIER', 'VICTOIRE VÉRIFIABLE', 'STATUT'].forEach(function (t, i) { doc.text(t, xs[i] + 1.5, y); });
-    y += 5.5;
-    LISTE_PDF.forEach(function (j) {
-      need(13);
-      var st = STATUTS[p.jalonStatus && p.jalonStatus[j.k]] || STATUTS.todo;
-      var jj = jOf(p, j);
-      doc.setFontSize(8.6);
-      /* Titre et preuve du dossier, pas ceux du programme : le PDF doit dire
-         exactement ce que le mentor a validé à l'écran. */
-      /* Le renforcement apparaît AUSSI dans le PDF : c'est le document que le
-         coach remet au dirigeant. L'avoir à l'écran et pas sur le papier, c'est
-         reproduire l'incohérence qu'on vient de corriger. */
-      var renfPdf = (p.renforces || []).indexOf(j.k) >= 0;
-      var oL = doc.splitTextToSize(jalonTitre(p, j) + (renfPdf ? ' · renforcé' : ''), cols[2] - 3);
-      var pL = doc.splitTextToSize(jalonPreuve(p, j), cols[3] - 3);
-      var rows = Math.max(oL.length, pL.length);
-      doc.setFont('helvetica', 'bold'); color(C.main); doc.text(j.k, xs[0] + 1.5, y);
-      doc.setFont('helvetica', 'normal'); color(C.ink);
-      doc.text(frDate(jalonDate(p, jj)), xs[1] + 1.5, y);
-      doc.setFontSize(6.8); color(C.muted); doc.text('J+' + jj, xs[1] + 1.5, y + 3.4);
-      doc.setFontSize(8.6); color(C.ink); doc.text(oL, xs[2] + 1.5, y);
-      color(C.muted); doc.text(pL, xs[3] + 1.5, y);
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(7.6); color(st.col);
-      doc.text(st.lbl, xs[4] + 1.5, y);
-      y += Math.max(rows * 3.7, 5.6) + 2.6;
-      draw(C.line); doc.setLineWidth(0.15); doc.line(M, y - 1.4, M + w, y - 1.4);
-    });
-    y += 1.5;
-    text(estLegacy(p)
-      ? 'Un jalon manqué → analyse de cause avant de continuer. Jamais un simple report.'
-      : 'Les échéances sont des moyennes constatées. Ce qui compte n\'est pas la date, c\'est qu\'un milestone soit validé avant d\'ouvrir le suivant.',
-      M, 8.4, 'italic', C.muted);
-
-    /* ── 4. Actions ── */
-    bloc(4, 'Actions de la semaine');
-    (p.semaines || []).forEach(function (s, si) {
-      need(20);
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); color(C.dark);
-      doc.text('Semaine ' + (s.n || si + 1) + '  ·  du ' + frDate(s.from) + ' au ' + frDate(s.to), M, y);
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.6); color(C.muted);
-      doc.text(s.coach || p.coach || '', M + w, y, { align: 'right' });
-      y += 6;
-      (s.actions || []).forEach(function (a) {
-        need(13);
-        var st = STATUTS[a.st] || STATUTS.todo;
-        draw(st.col); doc.setLineWidth(0.9); doc.line(M, y - 3.2, M, y + 4.4);
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(9.6); color(C.ink);
-        var l = doc.splitTextToSize(a.txt || '', w - 6);
-        doc.text(l, M + 4, y);
-        y += l.length * 4 + 0.6;
-        doc.setFontSize(8); color(C.muted);
-        doc.text((a.who || TODO) + '  ·  échéance ' + frDate(a.due) + '  ·  ' + st.lbl, M + 4, y);
-        y += 6.5;
+      /* Coach · démarrage · horizon : trois repères alignés. */
+      var repere = [
+        ['Coach référent', p.coach || TODO],
+        ['Démarrage', frDate(p.startDate)],
+        ['Horizon J+' + jFin, frDate(jalonDate(p, jFin))]
+      ];
+      var lc = 46;
+      repere.forEach(function (r, i) {
+        var x = MARGE + i * lc;
+        libelle(r[0], x, yy, '#9fb6ff', 6.2);
+        poser(lignes(r[1], 'm', 9.6, lc - 3).slice(0, 1), x, yy + 4.4, 'm', 9.6, '#ffffff', 5);
       });
-      if (s.focus) {
-        need(10);
-        fill(C.ghost); doc.roundedRect(M, y - 3.6, w, 8, 1.4, 1.4, 'F');
-        doc.setFont('helvetica', 'italic'); doc.setFontSize(8.8); color(C.dark);
-        doc.text(doc.splitTextToSize('Point de focus : ' + s.focus, w - 6), M + 3, y + 1);
-        y += 11;
+      yy += 10.6;
+
+      if (synth) {
+        yy += 7;
+        aplat('#16276f'); doc.roundedRect(MARGE, yy, w, hSyn, 2.4, 2.4, 'F');
+        libelle('Ce qu\'on vise en 6 mois', MARGE + 6, yy + padS, '#9fb6ff', 6.6);
+        poser(lSyn, MARGE + 6, yy + padS + LIB_H + 1.6, 'r', 10.4, '#ffffff', lhSyn);
       }
+      y = H + 8;
+    })();
+
+    /* ── Repères du dossier ─ 4 tuiles par rangée. */
+    if ((p.chiffres || []).length) {
+      var nbC = p.chiffres.length;
+      var parRang = (nbC === 3 || nbC === 5 || nbC === 6) ? 3 : 4;
+      if (nbC < 3) parRang = nbC;
+      var gC = 2.6, lC = (w - gC * (parRang - 1)) / parRang;
+      for (var iC = 0; iC < nbC; iC += parRang) {
+        var rg = p.chiffres.slice(iC, iC + parRang).map(function (c) {
+          return { l: lignes(String(c.label || '').toUpperCase(), 'b', 6.4, lC - 6), v: lignes(c.valeur, 'b', 10, lC - 6) };
+        });
+        var lhL = ligneH(6.4, 1.3), lhV = ligneH(10, 1.26);
+        var maxL = Math.max.apply(null, rg.map(function (c) { return c.l.length; }));
+        var maxV = Math.max.apply(null, rg.map(function (c) { return c.v.length; }));
+        var hT = 3.2 + maxL * lhL + 1.2 + maxV * lhV + 3.4;
+        assure(hT);
+        rg.forEach(function (c, k) {
+          var x = MARGE + k * (lC + gC);
+          aplat(V.ghost); doc.roundedRect(x, y, lC, hT, 1.8, 1.8, 'F');
+          poser(c.l, x + 3, y + 3.2, 'b', 6.4, V.gris, lhL);
+          poser(c.v, x + 3, y + 3.2 + maxL * lhL + 1.2, 'b', 10, V.dark, lhV);
+        });
+        y += hT + (iC + parRang < nbC ? gC : 0);
+      }
+      y += 3;
+    }
+
+    /* ── Ce que vous nous avez dit ─ */
+    if ((p.ditClient || []).length) {
+      section('Ce que vous nous avez dit');
+      grilleCartes(p.ditClient, 2, V.fond, V.light, V.dark);
+    }
+
+    /* ── Point A → Point B ─ deux colonnes ; si le texte dépasse une page
+       entière, elles s'empilent et le paragraphe se coupe normalement. */
+    section('Point A → Point B');
+    (function ab() {
+      var flecheL = 9, lCol = (w - flecheL) / 2, pad = 4.4;
+      var lhT = ligneH(8.8, 1.5);
+      var tA = lignes(val(p.pointA), 'r', 8.8, lCol - pad * 2);
+      var tB = lignes(val(p.pointB), 'r', 8.8, lCol - pad * 2);
+      var h = pad * 2 + LIB_H + 2 + Math.max(tA.length, tB.length) * lhT;
+      var tete = enAttente.reduce(function (s, a) { return s + a.h; }, 0);
+      if (h + tete > BAS - HAUT) {
+        sousTitre('Point A — aujourd\'hui');
+        flux(val(p.pointA), 'r', 9.2, isTodo(p.pointA) ? V.pale : V.encre, MARGE, w);
+        sousTitre('Point B — à 6 mois', 4);
+        flux(val(p.pointB), 'r', 9.2, isTodo(p.pointB) ? V.pale : V.encre, MARGE, w);
+        return;
+      }
+      assure(h);
+      aplat(V.fond); trait(V.line); doc.setLineWidth(0.25);
+      doc.roundedRect(MARGE, y, lCol, h, 2.2, 2.2, 'FD');
+      aplat(V.ghost); trait(V.main); doc.setLineWidth(0.45);
+      doc.roundedRect(MARGE + lCol + flecheL, y, lCol, h, 2.2, 2.2, 'FD');
+      aplat(V.main); doc.circle(LARG / 2, y + h / 2, 3.6, 'F');
+      fleche(LARG / 2 - 2, y + h / 2, 4.2, '#ffffff');
+      libelle('Point A — aujourd\'hui', MARGE + pad, y + pad, V.gris, 7);
+      poser(tA, MARGE + pad, y + pad + LIB_H + 2, 'r', 8.8, isTodo(p.pointA) ? V.pale : V.encre, lhT);
+      libelle('Point B — à 6 mois', MARGE + lCol + flecheL + pad, y + pad, V.main, 7);
+      poser(tB, MARGE + lCol + flecheL + pad, y + pad + LIB_H + 2, 'r', 8.8, isTodo(p.pointB) ? V.pale : V.encre, lhT);
+      y += h;
+    })();
+
+    /* Objectifs : puces dessinées, chaque objectif reste entier. */
+    function puces(items, taille, col, retrait) {
+      var x = MARGE + (retrait || 0), l = w - (retrait || 0) - 5;
+      var lh = ligneH(taille, 1.46);
+      items.forEach(function (o, i) {
+        var ls = lignes(o, 'r', taille, l);
+        assure(ls.length * lh + 1.2);
+        aplat(col); doc.circle(x + 1.1, y + lh / 2, 0.75, 'F');
+        poser(ls, x + 5, y, 'r', taille, V.encre, lh);
+        y += ls.length * lh + (i < items.length - 1 ? 1.2 : 0);
+      });
+    }
+    if ((p.objectifs || []).length) {
+      sousTitre('Objectifs', 5);
+      puces(p.objectifs, 9, V.main);
+    }
+
+    /* Les deux repères longs : discrets, côte à côte. */
+    if (!isTodo(p.horizon12) || !isTodo(p.horizon36)) {
+      var hzs = [];
+      if (!isTodo(p.horizon12)) hzs.push({ k: 'Dans 12 mois', v: p.horizon12 });
+      if (!isTodo(p.horizon36)) hzs.push({ k: 'Dans 3 ans', v: p.horizon36 });
+      var gH = 3.2, lH = (w - gH * (hzs.length - 1)) / hzs.length;
+      var lhH = ligneH(8.2, 1.42);
+      hzs.forEach(function (z) { z.l = lignes(z.v, 'r', 8.2, lH - 7); });
+      var nH = Math.max.apply(null, hzs.map(function (z) { return z.l.length; }));
+      var hH = 3.2 + LIB_H + 1.4 + nH * lhH + 3.2;
+      y += 5;
+      assure(hH);
+      hzs.forEach(function (z, i) {
+        var x = MARGE + i * (lH + gH);
+        trait(V.line); doc.setLineWidth(0.25); doc.roundedRect(x, y, lH, hH, 1.8, 1.8, 'S');
+        libelle(z.k, x + 3.5, y + 3.2, V.light, 6.6);
+        poser(z.l, x + 3.5, y + 3.2 + LIB_H + 1.4, 'r', 8.2, V.gris, lhH);
+      });
+      y += hH;
+    }
+
+    /* ── Diagnostic ─ */
+    section('Diagnostic');
+    var ordreOrg = (p.organismes && p.organismes.length) ? p.organismes : (p.organisme ? [p.organisme] : []);
+    var orgTete = ORGANISMES[ordreOrg[0]];
+    (function verrou() {
+      var pad = 5, lhV = ligneH(11, 1.4);
+      var ls = lignes(val(p.verrou), 'm', 11, w - pad * 2);
+      var h = pad * 2 + LIB_H + 1.6 + ls.length * lhV;
+      assure(h);
+      aplat(V.dark); doc.roundedRect(MARGE, y, w, h, 2.2, 2.2, 'F');
+      libelle('Verrou principal', MARGE + pad, y + pad, '#9fb6ff', 6.8);
+      poser(ls, MARGE + pad, y + pad + LIB_H + 1.6, 'm', 11, isTodo(p.verrou) ? '#c7d3ff' : '#ffffff', lhV);
+      y += h;
+    })();
+    if (!isTodo(p.verrouPlan)) {
+      sousTitre('Ce qu\'on fait pour le lever', 5);
+      flux(p.verrouPlan, 'r', 9.2, V.encre, MARGE, w);
+    }
+
+    /* Ordre de traitement : pastilles numérotées, reliées par des flèches. */
+    sousTitre('Ordre de traitement', 5);
+    (function ordre() {
+      var conn = ordreOrg.filter(function (k) { return ORGANISMES[k]; });
+      if (!conn.length) { flux(TODO, 'r', 9.2, V.pale, MARGE, w); return; }
+      assure(8);
+      var x = MARGE;
+      conn.forEach(function (k, i) {
+        var t = ORGANISMES[k].label;
+        police('b', 8);
+        var l = doc.getTextWidth(t) + 13;
+        var col = ['#1a3dce', '#4f7ef8', '#8b9bd6'][i] || '#8b9bd6';
+        aplat(col); doc.roundedRect(x, y, l, 7.4, 3.7, 3.7, 'F');
+        aplat('#ffffff'); doc.circle(x + 4.1, y + 3.7, 2.3, 'F');
+        police('b', 7.6); coul(col);
+        doc.text(String(i + 1), x + 4.1, y + 4.9, { align: 'center' });
+        police('b', 8); coul('#ffffff');
+        doc.text(t, x + 8.2, y + 4.9);
+        x += l;
+        if (i < conn.length - 1) { fleche(x + 2.2, y + 3.7, 6, V.pale); x += 10.4; }
+      });
+      y += 7.4;
+    })();
+
+    if ((p.problemes || []).length) {
+      sousTitre('Ce qui bloque aujourd\'hui', 5);
+      grilleCartes(p.problemes, 2, V.ghost, V.main, V.dark);
+    }
+
+    if (ordreOrg.length) {
+      y += 4;
+      (function regle() {
+        var pad = 3.6, lh = ligneH(8, 1.46);
+        var texte = (orgTete ? noteOrganisme(p, orgTete) + '\n' : '')
+          + 'L\'acquisition ne s\'ouvre qu\'une fois que la machine tient sans elle — c\'est une règle du programme.';
+        var ls = lignes(texte, 'r', 8, w - pad * 2);
+        var h = pad * 2 + ls.length * lh;
+        assure(h);
+        aplat(V.fond); doc.roundedRect(MARGE, y, w, h, 1.8, 1.8, 'F');
+        poser(ls, MARGE + pad, y + pad, 'r', 8, V.gris, lh);
+        y += h;
+      })();
+    }
+
+    /* ── Feuille de route ─ la route, puis une carte par étape. */
+    section('Votre feuille de route');
+    (function route() {
+      var n = LISTE_PDF.length, faits = 0;
+      LISTE_PDF.forEach(function (j) { if ((p.jalonStatus || {})[j.k] === 'ok') faits++; });
+      var pct = Math.round(faits / n * 100);
+      var lc = w / n;
+      var lhR = ligneH(7.2, 1.3);
+      var txt = LISTE_PDF.map(function (j) {
+        return lignes(jalonTitre(p, j), 'm', 7.2, lc - 3.2).slice(0, 5);
+      });
+      var nl = Math.max.apply(null, txt.map(function (t) { return t.length; }));
+      var hLegende = 23.4 + 6.6;             // de la route au premier titre
+      var hRoute = 7 + hLegende + nl * lhR;
+      assure(hRoute);
+
+      /* Avancement, en une ligne. */
+      libelle('Avancement', MARGE, y + 0.7, V.gris, 6.6);
+      var droite = faits + ' / ' + n + ' étapes · ' + pct + ' %';
+      police('b', 7.6); coul(V.dark);
+      doc.text(droite, MARGE + w, y + 3, { align: 'right' });
+      var xB = MARGE + 25, lB = w - 25 - doc.getTextWidth(droite) - 4;
+      aplat('#e8ebf6'); doc.roundedRect(xB, y + 0.9, lB, 2.2, 1.1, 1.1, 'F');
+      if (pct > 0) { aplat(V.vert); doc.roundedRect(xB, y + 0.9, Math.max(lB * pct / 100, 2.2), 2.2, 1.1, 1.1, 'F'); }
+      y += 7;
+
+      /* La route ondule d'une étape à l'autre : bitume, ligne médiane, plots. */
+      var yBas = y + 13, yHaut = y + 6;
+      var pts = LISTE_PDF.map(function (j, i) {
+        return { x: MARGE + lc * (i + 0.5), y: i % 2 ? yHaut : yBas };
+      });
+      var ops = [], xc = pts[0].x, yc = pts[0].y;
+      pts.forEach(function (pt, i) {
+        if (!i) return;
+        var dx = pt.x - xc, dy = pt.y - yc;
+        ops.push([dx * 0.5, 0, dx * 0.5, dy, dx, dy]);
+        xc = pt.x; yc = pt.y;
+      });
+      doc.setLineCap('round');
+      trait('#dfe4f7'); doc.setLineWidth(5.4);
+      doc.lines(ops, pts[0].x, pts[0].y, [1, 1], 'S', false);
+      trait('#ffffff'); doc.setLineWidth(0.5); doc.setLineDashPattern([1.8, 2.2], 0);
+      doc.lines(ops, pts[0].x, pts[0].y, [1, 1], 'S', false);
+      doc.setLineDashPattern([], 0); doc.setLineCap('butt');
+
+      pts.forEach(function (pt, i) {
+        var j = LISTE_PDF[i];
+        var cle = p.jalonStatus && p.jalonStatus[j.k];
+        var fait = cle === 'ok';
+        var renf = (p.renforces || []).indexOf(j.k) >= 0;
+        var cc = fait ? V.vert : (cle === 'ko' ? '#c02626' : V.main);
+        if (renf) { trait(cc); doc.setLineWidth(0.2); doc.circle(pt.x, pt.y, 5.8, 'S'); }
+        aplat(fait ? cc : '#ffffff'); trait(cc); doc.setLineWidth(renf ? 0.8 : 0.5);
+        doc.circle(pt.x, pt.y, 4.5, 'FD');
+        police('b', 7.8); coul(fait ? '#ffffff' : V.dark);
+        doc.text(j.k, pt.x, pt.y + 1, { align: 'center' });
+
+        var jj = jOf(p, j), yt = y + 23.4;
+        police('b', 7); coul(V.main);
+        doc.text(frDate(jalonDate(p, jj)), pt.x, yt + 2.4, { align: 'center' });
+        police('r', 6.2); coul(V.pale);
+        doc.text('J+' + jj + (renf ? ' · renforcé' : ''), pt.x, yt + 5.2, { align: 'center' });
+        police('m', 7.2); coul(V.dark);
+        txt[i].forEach(function (l, k) {
+          doc.text(l, pt.x, yt + 9.2 + k * lhR, { align: 'center' });
+        });
+      });
+      y += hLegende + nl * lhR;
+    })();
+
+    /* Une carte par étape. Elle ne se coupe jamais : mieux vaut un blanc en
+       bas de page qu'une étape sur deux feuilles. Livrable et preuve vont
+       côte à côte : c'est ce qui permet à trois étapes de tenir sur une page. */
+    y += 3;
+    LISTE_PDF.forEach(function (j, idx) {
+      var c = (p.jalons || {})[j.k] || {};
+      var cle = (p.jalonStatus && p.jalonStatus[j.k]) || 'todo';
+      var st = STATUTS[cle] || STATUTS.todo;
+      var cs = couleursStatut(STATUTS[cle] ? cle : 'todo');
+      var jj = jOf(p, j);
+      var renf = (p.renforces || []).indexOf(j.k) >= 0;
+      var pad = 3.6, xI = MARGE + 1 + pad, lI = w - 1 - pad * 2;
+      var xTitre = xI + 12;
+
+      var lPill = pastilleLarg(st.lbl) + (renf ? pastilleLarg('renforcé') + 1.6 : 0);
+      var lT = lignes(jalonTitre(p, j), 'm', 10.2, lI - 12 - lPill - 3);
+      var lhT = ligneH(10.2, 1.3);
+      var focus = c.focus || j.objectif || '';
+      var lF = focus ? lignes(focus, 'r', 8.8, lI) : [];
+      var lhF = ligneH(8.8, 1.46);
+      var acts = (c.actions || []).map(function (a) { return lignes(a, 'r', 8.6, lI - 4.4); });
+      var lhA = ligneH(8.6, 1.42);
+      var nA = acts.reduce(function (s, a) { return s + a.length; }, 0);
+
+      var gTuile = 2.6, lTuile = j.livrable ? (lI - gTuile) / 2 : lI, padT = 2.6;
+      var lhP = ligneH(7.6, 1.42);
+      var lL = j.livrable ? lignes(j.livrable, 'r', 7.6, lTuile - padT * 2) : [];
+      var lP = lignes(jalonPreuve(p, j), 'r', 7.6, lTuile - padT * 2);
+      var hTuile = padT * 2 + LIB_H + 0.8 + Math.max(lL.length, lP.length) * lhP;
+
+      var hTete = Math.max(lT.length * lhT + 4, 8.2);
+      var h = pad + hTete
+        + (lF.length ? 1.6 + lF.length * lhF : 0)
+        + (acts.length ? 1.6 + nA * lhA + (acts.length - 1) * 0.7 : 0)
+        + 2.8 + hTuile + pad;
+
+      assure(h);
+      var liser = cle === 'ok' ? V.vert : (cle === 'ko' ? '#c02626' : V.main);
+      carteLiseree(MARGE, y, w, h, cle === 'ok' ? '#f4fbf7' : '#ffffff', liser);
+      trait(V.line); doc.setLineWidth(0.25);
+      doc.roundedRect(MARGE, y, w, h, 1.8, 1.8, 'S');
+
+      var yy = y + pad;
+      /* Badge de l'étape. */
+      aplat(cle === 'ok' ? V.vert : V.ghost);
+      doc.roundedRect(xI, yy, 9.6, 7.4, 1.6, 1.6, 'F');
+      police('b', 8); coul(cle === 'ok' ? '#ffffff' : V.main);
+      doc.text(j.k, xI + 4.8, yy + 5, { align: 'center' });
+      poser(lT, xTitre, yy - 0.3, 'm', 10.2, V.dark, lhT);
+      var xd = MARGE + w - pad;
+      xd -= pastille(st.lbl, xd, yy, cs.col, cs.fond) + 1.6;
+      if (renf) pastille('renforcé', xd, yy, V.main, V.ghost);
+      var meta = (j.periode ? j.periode + ' · ' : '') + 'repère ' + frDate(jalonDate(p, jj)) + ' · J+' + jj;
+      poser([propre(meta)], xTitre, yy - 0.3 + lT.length * lhT, 'r', 7.2, V.pale, 3.8);
+      yy += hTete;
+
+      if (lF.length) { yy += 1.6; yy += poser(lF, xI, yy, 'r', 8.8, V.encre, lhF); }
+      if (acts.length) {
+        yy += 1.6;
+        acts.forEach(function (ls, i) {
+          aplat(V.main); doc.circle(xI + 1, yy + lhA / 2, 0.65, 'F');
+          yy += poser(ls, xI + 4.4, yy, 'r', 8.6, V.encre, lhA);
+          if (i < acts.length - 1) yy += 0.7;
+        });
+      }
+      yy += 2.8;
+      var xTuile = xI;
+      if (lL.length) {
+        aplat(V.ghost); doc.roundedRect(xTuile, yy, lTuile, hTuile, 1.4, 1.4, 'F');
+        libelle('Livrable', xTuile + padT, yy + padT, V.main, 6.2);
+        poser(lL, xTuile + padT, yy + padT + LIB_H + 0.8, 'r', 7.6, V.dark, lhP);
+        xTuile += lTuile + gTuile;
+      }
+      aplat(V.fond); doc.roundedRect(xTuile, yy, lTuile, hTuile, 1.4, 1.4, 'F');
+      libelle('Preuve attendue', xTuile + padT, yy + padT, V.gris, 6.2);
+      poser(lP, xTuile + padT, yy + padT + LIB_H + 0.8, 'r', 7.6, V.gris, lhP);
+
+      y += h + (idx < LISTE_PDF.length - 1 ? 3.2 : 0);
     });
 
-    /* ── Pied de page sur chaque page ── */
-    var n = doc.getNumberOfPages();
-    for (var i = 1; i <= n; i++) {
-      doc.setPage(i);
-      draw(C.line); doc.setLineWidth(0.2); doc.line(M, 287, M + w, 287);
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.4); color(C.muted);
-      doc.text('AmbitioCorp — Elite Phénix' + (nom ? '  ·  ' + nom : ''), M, 291.5);
-      doc.text(i + ' / ' + n, M + w, 291.5, { align: 'right' });
+    (function reglePas() {
+      var pad = 3.6, lh = ligneH(8, 1.46);
+      var ls = lignes('Les échéances sont des moyennes constatées. Ce qui compte n\'est pas la date, c\'est qu\'un milestone soit validé avant d\'ouvrir le suivant.\nUne étape manquée → on cherche la cause avant d\'avancer. Jamais un simple report.', 'r', 8, w - pad * 2);
+      var h = pad * 2 + ls.length * lh;
+      y += 4;
+      assure(h);
+      aplat(V.fond); doc.roundedRect(MARGE, y, w, h, 1.8, 1.8, 'F');
+      poser(ls, MARGE + pad, y + pad, 'r', 8, V.gris, lh);
+      y += h;
+    })();
+
+    /* ── Actions de la semaine ─ le bloc n'existe que s'il porte quelque chose. */
+    if ((p.semaines || []).length) {
+      section('Actions de la semaine');
+      p.semaines.forEach(function (s, si) {
+        var acts = s.actions || [], tot = acts.length;
+        var faites = acts.filter(function (a) { return a && a.st === 'ok'; }).length;
+        var lhA = ligneH(8.8, 1.42);
+        var mes = acts.map(function (a) {
+          return { a: a, l: lignes(val(a.txt), 'r', 8.8, w - 12) };
+        });
+        /* En-tête de semaine + première action, jamais séparés. */
+        function hAct(m) { return m.l.length * lhA + 0.8 + 3.8 + 2.6; }
+        assure(9 + (mes.length ? hAct(mes[0]) : 0));
+        aplat(V.ghost); doc.roundedRect(MARGE, y, w, 7.6, 1.6, 1.6, 'F');
+        police('b', 9); coul(V.dark);
+        var tSem = 'Semaine ' + (s.n || si + 1);
+        doc.text(tSem, MARGE + 3.4, y + 5);
+        var xS = MARGE + 3.4 + doc.getTextWidth(tSem) + 3;
+        police('r', 8); coul(V.gris);
+        doc.text('du ' + frDate(s.from) + ' au ' + frDate(s.to), xS, y + 5);
+        police('m', 8); coul(V.main);
+        doc.text(propre((s.coach || p.coach || TODO) + (tot ? '  ·  ' + faites + '/' + tot + ' faites' : '')), MARGE + w - 3.4, y + 5, { align: 'right' });
+        y += 9.6;
+        mes.forEach(function (m) {
+          var a = m.a, cle = STATUTS[a.st] ? a.st : 'todo', cs = couleursStatut(cle);
+          assure(hAct(m));
+          /* Case dessinée : les émojis de l'écran n'existent pas en PDF. */
+          trait(cs.col); doc.setLineWidth(0.4);
+          if (cle === 'ok') { aplat(cs.col); doc.roundedRect(MARGE + 1, y + 0.5, 3.4, 3.4, 0.8, 0.8, 'F'); }
+          else doc.roundedRect(MARGE + 1, y + 0.5, 3.4, 3.4, 0.8, 0.8, 'S');
+          if (cle === 'ok') {
+            trait('#ffffff'); doc.setLineWidth(0.5); doc.setLineCap('round');
+            doc.line(MARGE + 1.8, y + 2.2, MARGE + 2.5, y + 3); doc.line(MARGE + 2.5, y + 3, MARGE + 3.7, y + 1.4);
+            doc.setLineCap('butt');
+          }
+          if (cle === 'wip') { aplat(cs.col); doc.circle(MARGE + 2.7, y + 2.2, 0.8, 'F'); }
+          var yy = y;
+          yy += poser(m.l, MARGE + 7, yy, 'r', 8.8, V.encre, lhA);
+          poser([propre((a.who || TODO) + '  ·  échéance ' + frDate(a.due) + '  ·  ' + STATUTS[cle].lbl)], MARGE + 7, yy + 0.8, 'r', 7.2, V.pale, 3.8);
+          y += hAct(m);
+        });
+        if (s.focus) {
+          var ls = lignes('Point de focus : ' + s.focus, 'm', 8.2, w - 7);
+          var lh = ligneH(8.2, 1.42), h = 2.8 * 2 + ls.length * lh;
+          assure(h);
+          aplat(V.ghost); doc.roundedRect(MARGE, y, w, h, 1.6, 1.6, 'F');
+          poser(ls, MARGE + 3.5, y + 2.8, 'm', 8.2, V.dark, lh);
+          y += h;
+        }
+        if (si < p.semaines.length - 1) y += 5;
+      });
     }
+
+    /* ── Indicateurs ─ l'en-tête se répète si le tableau change de page. */
+    if ((p.kpis || []).length) {
+      section('Indicateurs de pilotage');
+      (function kpis() {
+        var cols = [
+          { t: 'Catégorie', l: 25 }, { t: 'Indicateur', l: 61 }, { t: 'Suivi', l: 18 },
+          { t: 'Aujourd\'hui', l: 35 }, { t: 'Objectif', l: 35 }
+        ];
+        var xs = [MARGE];
+        cols.forEach(function (c, i) { xs.push(xs[i] + c.l); });
+        var padX = 2.2, padY = 2.2, lh = ligneH(8, 1.36);
+        function entete() {
+          aplat(V.dark); doc.roundedRect(MARGE, y, w, 6.6, 1.4, 1.4, 'F');
+          cols.forEach(function (c, i) { libelle(c.t, xs[i] + padX, y + 2.2, '#ffffff', 6.2); });
+          y += 6.6;
+        }
+        var premier = true;
+        p.kpis.forEach(function (k, ri) {
+          var cel = [
+            lignes(k.cat, 'b', 7, cols[0].l - padX * 2),
+            lignes(k.nom, 'm', 8, cols[1].l - padX * 2),
+            lignes(k.freq, 'r', 7.6, cols[2].l - padX * 2),
+            lignes(k.actuel, 'r', 8, cols[3].l - padX * 2),
+            lignes(k.cible, 'b', 8, cols[4].l - padX * 2)
+          ];
+          var n = Math.max.apply(null, cel.map(function (c) { return c.length; }));
+          var h = padY * 2 + n * lh;
+          var avant = doc.getNumberOfPages();
+          assure(h + (premier ? 6.6 : 0));
+          if (premier || doc.getNumberOfPages() !== avant) { entete(); premier = false; }
+          if (ri % 2) { aplat(V.fond); doc.rect(MARGE, y, w, h, 'F'); }
+          poser(cel[0], xs[0] + padX, y + padY, 'b', 7, V.main, lh);
+          poser(cel[1], xs[1] + padX, y + padY, 'm', 8, V.dark, lh);
+          poser(cel[2], xs[2] + padX, y + padY, 'r', 7.6, V.gris, lh);
+          poser(cel[3], xs[3] + padX, y + padY, 'r', 8, V.encre, lh);
+          poser(cel[4], xs[4] + padX, y + padY, 'b', 8, V.vert, lh);
+          y += h;
+          trait(V.line); doc.setLineWidth(0.15); doc.line(MARGE, y, MARGE + w, y);
+        });
+      })();
+    }
+
+    /* ── Vigilance ─ */
+    if ((p.risques || []).length) {
+      section('Points de vigilance');
+      grilleCartes(p.risques, 2, V.orangeFond, V.orangeBord, '#8a5a08');
+    }
+
+    /* ── Pied de page ─ posé en dernier : il faut connaître le total. */
+    var nbPages = doc.getNumberOfPages();
+    for (var i = 1; i <= nbPages; i++) {
+      doc.setPage(i);
+      trait(V.line); doc.setLineWidth(0.2); doc.line(MARGE, 285.6, MARGE + w, 285.6);
+      police('r', 7); coul(V.pale);
+      doc.text(propre('AmbitioCorp — Elite Phénix' + (nom ? '  ·  ' + nom : '')), MARGE, 289.6);
+      doc.text('Version du ' + aujourdhui + '  ·  ' + i + ' / ' + nbPages, MARGE + w, 289.6, { align: 'right' });
+    }
+
+    doc.setProperties({
+      title: 'Plan d\'action' + (nom ? ' — ' + propre(nom) : ''),
+      subject: 'Elite Phénix — parcours 6 mois',
+      author: 'AmbitioCorp', creator: 'Alteore'
+    });
+    if (doc.setLanguage) doc.setLanguage('fr-FR');
 
     var slug = String(nom || 'client').normalize('NFD').replace(/[̀-ͯ]/g, '')
       .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase();

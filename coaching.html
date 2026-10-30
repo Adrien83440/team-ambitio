@@ -3880,11 +3880,12 @@ async function deletePlanV2(clientId){
   }catch(e){ showToast('Erreur: '+e.message,'error'); }
 }
 
-function exportPlanPdf(clientId){
+async function exportPlanPdf(clientId){
   const c = _clients.find(x=>x._id===clientId);
   if(!c || !c.planV2) return;
   if(!window.CoachingPlan){ showToast('Module plan non chargé','error'); return; }
-  try{ window.CoachingPlan.exportPdf(c.planV2, c); }
+  /* Asynchrone : les polices du PDF ne sont chargées qu'à l'export. */
+  try{ await window.CoachingPlan.exportPdf(c.planV2, c); }
   catch(e){ showToast('Export PDF impossible : '+e.message,'error'); }
 }
 
