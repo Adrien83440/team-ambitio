@@ -9207,10 +9207,17 @@ async function deleteFollowUpCalendarEvent(removedFu, lead) {
       remise à zéro à chaque ouverture et TOUS les FU en retard re-sonnaient.
       Au tout premier passage sur un appareil, les FU déjà en retard sont
       marqués vus sans bruit (pas de rafale au déploiement).
+      En plus (30/10, rafale constatée sur iPhone) : un FU échu depuis plus
+      de FU_LATE_SILENT_MS n'est JAMAIS alerté, seulement compté sur la
+      cloche. On ne sonne qu'à l'échéance, app ouverte — jamais au
+      chargement, quel que soit l'ordre d'arrivée des leads (file principale
+      puis « résurrections » chargées après coup).
    2. Alertes (notif système + son + toast) réglables dans le menu ⋯ :
       FU_ALERTS_KEY = '1' / '0' ; absent → coupées pour les admins (ils voient
       tous les leads), actives pour les autres. Le rôle est relu dans
       users/{uid} : en mode app (?app=1) ambitio_role est forcé à 'sales'.
+      Lecture impossible (Safari au réveil) : rôle inconnu, aucune alerte,
+      nouvel essai au passage suivant — jamais de repli sur ambitio_role.
       Coupées, les FU restent marqués vus : les rallumer ne déclenche pas de
       rafale.
    3. Sans bruit, les FU en retard sont indiqués sur la cloche 🔔 de l'Inbox
@@ -9221,8 +9228,10 @@ async function deleteFollowUpCalendarEvent(removedFu, lead) {
 var FU_ALERTS_KEY = 'ambitio_fu_alerts';
 var FU_SEEN_KEY = 'ambitio_fu_seen';
 var FU_SEEN_TTL_MS = 60 * 24 * 3600 * 1000;
+var FU_LATE_SILENT_MS = 10 * 60 * 1000;
 var _fuCheckInterval = null;
 var _fuRealRole = null;      // null tant que users/{uid} n'est pas lu
+var _fuRoleLoading = false;
 
 function fuLsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 function fuLsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
@@ -9231,6 +9240,7 @@ function fuAlertsOn() {
   var v = fuLsGet(FU_ALERTS_KEY);
   if (v === '1') return true;
   if (v === '0') return false;
+  if (_fuRealRole === null) return false;     // rôle pas encore lu
   return _fuRealRole !== 'admin';
 }
 
@@ -9263,7 +9273,7 @@ function fuPublishOverdue(list) {
 
 function checkFollowUpReminders() {
   if (!window.allLeads || allLeads.length === 0) return;
-  if (_fuRealRole === null) return;            // rôle inconnu : on attend
+  if (_fuRealRole === null) { fuLoadRole(); return; }   // rôle inconnu : on attend
   var now = Date.now();
   var hasOverdue = false;
   var alertsOn = fuAlertsOn();
@@ -9291,6 +9301,7 @@ function checkFollowUpReminders() {
       seen[fuKey] = now;
       seenChanged = true;
       if (firstRun) continue;                  // 1er passage : FU déjà en retard, sans bruit
+      if (diff < -FU_LATE_SILENT_MS) continue; // échu depuis longtemps : cloche seulement
       hasOverdue = true;
       if (!alertsOn) continue;
       // Toast
@@ -9344,16 +9355,21 @@ document.addEventListener('fu-open-lead', function (e) {
 });
 
 // Rôle réel (users/{uid}) — avant lui, aucune alerte ne part
-firebase.auth().onAuthStateChanged(function (u) {
-  if (!u) { _fuRealRole = null; return; }
+function fuLoadRole() {
+  var u = firebase.auth().currentUser;
+  if (!u || _fuRoleLoading) return;
+  _fuRoleLoading = true;
   firebase.firestore().collection('users').doc(u.uid).get().then(function (snap) {
-    _fuRealRole = (snap.exists && snap.data().role) || '';
-  }).catch(function () {
-    _fuRealRole = window._currentRole || fuLsGet('ambitio_role') || '';
-  }).then(function () {
+    _fuRoleLoading = false;
+    if (!snap.exists) return;
+    _fuRealRole = snap.data().role || '';
     fuRenderAlertsBtn();
     checkFollowUpReminders();
-  });
+  }).catch(function () { _fuRoleLoading = false; });
+}
+firebase.auth().onAuthStateChanged(function (u) {
+  _fuRealRole = null;
+  if (u) fuLoadRole();
 });
 
 // Check every 30 seconds
