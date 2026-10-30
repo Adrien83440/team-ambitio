@@ -19,7 +19,7 @@
 //                 porte déjà la clause est ignoré.
 // ============================================================================
 'use strict';
-const { runQuery, patchDoc } = require('./_firestore-rest.js');
+const { runQuery, patchDoc, createDoc } = require('./_firestore-rest.js');
 
 const APPLY = process.argv.includes('--apply');
 const CIBLES = /^(EP6|BP12|Business Phénix 6 mois)/;
@@ -42,12 +42,23 @@ const CLAUSE = 'if:date_demarrage:p:**Démarrage convenu.** Par accord des parti
     console.log('  après    : ' + String(sec.blocks[pos - 1] || '').slice(0, 110) + '…');
     n++;
     if (!APPLY) continue;
+    /* Comme l'Atelier (api/contract-studio.js) : nouvelle version + copie dans
+       versions/, pour pouvoir revenir en arrière. Écriture ciblée : le reste du
+       modèle n'est pas réencodé. Un contrat déjà envoyé garde sa copie figée
+       (webSnapshot), il n'est pas concerné. */
     web.variables = (web.variables || []).concat([VARIABLE]);
     sec.blocks.splice(pos, 0, CLAUSE);
     web.version = (web.version || 1) + 1;
     web.savedAt = new Date().toISOString();
     web.savedBy = 'scripts/contrats-clause-demarrage.js';
-    await patchDoc('signature_templates/' + r.id, { web: web }, ['web']);
+    await patchDoc('signature_templates/' + r.id, {
+      web: { variables: web.variables, sections: web.sections, version: web.version, savedAt: web.savedAt, savedBy: web.savedBy },
+      updatedAt: new Date(),
+    }, ['web.variables', 'web.sections', 'web.version', 'web.savedAt', 'web.savedBy', 'updatedAt']);
+    await createDoc('signature_templates/' + r.id + '/versions/' + String(web.version).padStart(4, '0'), {
+      version: web.version, name: nom, web: web, note: 'Clause optionnelle « Démarrage convenu » (démarrage différé)',
+      by: web.savedBy, at: new Date(), atIso: web.savedAt,
+    });
   }
   console.log('\nClause : ' + CLAUSE.replace(/^if:date_demarrage:p:/, ''));
   console.log('\n' + n + ' modèle(s) ' + (APPLY ? 'mis à jour.' : 'concerné(s). Rien n\'a été écrit — relancer avec --apply après validation.'));
