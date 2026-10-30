@@ -1015,6 +1015,30 @@ body.ld-pilot-on .l2fam[data-fam="closing"] { display: none; }
 .l2agopen.live .n { background: var(--green); color: #052e1f; }
 @media (max-width: 400px) { .l2agopen .t { display: none; } }
 
+/* Leads entrants (admins) : pastille d'en-tête ; le pop-up reprend le volet de Mes RDV. */
+.lden-chip {
+  height: 26px; padding: 0 9px; border-radius: 8px; border: 1px solid var(--border);
+  background: transparent; color: var(--muted); font-family: var(--fm); font-size: 11px; font-weight: 700;
+  cursor: pointer; flex: none; white-space: nowrap; transition: all .15s;
+}
+.lden-chip b { color: var(--text); }
+.lden-chip:hover { border-color: var(--border2); color: var(--text); }
+.lden-chip[hidden] { display: none; }
+.l2ag-body.lden-body { padding: 14px 16px calc(16px + var(--sab)); }
+.lden-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.lden-tile { padding: 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg3); }
+.lden-tile b { display: block; font-family: var(--fh); font-size: 26px; line-height: 1.1; color: var(--text); }
+.lden-tile span { font-size: 12px; color: var(--muted); }
+.lden-body .l2ag-sec { margin: 16px 0 8px; }
+.lden-range { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.lden-range input {
+  flex: 1; min-width: 0; height: 36px; padding: 0 8px; border-radius: 9px; border: 1px solid var(--border);
+  background: var(--bg3); color: var(--text); font-family: var(--fb); font-size: 13px; color-scheme: dark;
+}
+.lden-res { min-height: 34px; margin-top: 12px; font-size: 13px; color: var(--muted); }
+.lden-res b { font-family: var(--fh); font-size: 24px; color: var(--text); }
+.lden-note { margin: 10px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--muted2); }
+
 .l2ag-backdrop { display: none; position: fixed; inset: 0; z-index: 300; background: rgba(3,4,10,0.6); }
 .l2ag-backdrop.on { display: block; }
 .l2ag {
@@ -1276,6 +1300,7 @@ body.ld-pilot-on .l2fam[data-fam="closing"] { display: none; }
       <span class="ld-live-dot"></span>
       <span class="ld-live-label">Live</span>
       <span id="ldPersonalBadge" style="display:none"></span>
+      <button class="lden-chip" type="button" data-lden="open" title="Leads entrants : aujourd'hui, hier, date à date" hidden></button>
       <span class="ld-count" id="ldCount">— leads</span>
       <button class="l2agopen" id="l2AgBtn" type="button" title="Mes rendez-vous du jour" aria-label="Mes rendez-vous du jour"><span class="i">📅</span><span class="t">Mes RDV</span><span class="n" id="l2AgCount"></span></button>
       <button class="l2more" id="l2MoreBtn" type="button" title="Menu" aria-label="Menu">⋯</button>
@@ -1328,6 +1353,32 @@ body.ld-pilot-on .l2fam[data-fam="closing"] { display: none; }
     <div id="shareLinksList"></div>
   </div>
 </div>
+
+<!-- ── LEADS ENTRANTS (admins) ── -->
+<div class="l2ag-backdrop" id="ldEnBackdrop" data-lden="close"></div>
+<section class="l2ag lden" id="ldEn" aria-label="Leads entrants" role="dialog">
+  <div class="l2grab" data-lden="close"></div>
+  <div class="l2ag-head">
+    <div class="l2ag-top">
+      <span class="t">📥 Leads entrants</span>
+      <button class="l2ag-x" type="button" data-lden="close" aria-label="Fermer">✕</button>
+    </div>
+  </div>
+  <div class="l2ag-body lden-body">
+    <div class="lden-tiles">
+      <div class="lden-tile"><b id="ldEnToday">—</b><span>Aujourd'hui</span></div>
+      <div class="lden-tile"><b id="ldEnHier">—</b><span>Hier</span></div>
+    </div>
+    <div class="l2ag-sec">De date à date</div>
+    <div class="lden-range">
+      <input type="date" id="ldEnFrom" aria-label="Du"/>
+      <span>→</span>
+      <input type="date" id="ldEnTo" aria-label="Au"/>
+    </div>
+    <div class="lden-res" id="ldEnRes"></div>
+    <p class="lden-note">Seules les nouvelles fiches comptent, au jour de leur arrivée : un RDV ou une nouvelle inscription d'un lead déjà connu n'ajoute rien.</p>
+  </div>
+</section>
 
 <!-- ── MES RDV DU JOUR (pop-up : feuille du bas sur mobile, panneau sur ordinateur) ── -->
 <div class="l2ag-backdrop" id="l2agBackdrop"></div>
@@ -7765,9 +7816,128 @@ function startCoachingBookingsListening() {
     });
 }
 
+/* ═══ LEADS ENTRANTS (admins, 30/10/2026) ═══
+   Combien de leads sont vraiment arrivés : une fiche compte une fois, le jour
+   de sa date réelle d'entrée (_realEntryDate), en jour de Paris. Un re-optin
+   ou un RDV posé plus tard sur une fiche existante ne change pas cette date,
+   donc n'ajoute rien. Même sélection que FunnelCore.loadLeads (date réelle,
+   _merged exclus, borne createdAt + 45 j pour les imports tardifs).
+   Aujourd'hui / hier : lus dans allLeads, en direct. Date à date : requête
+   ponctuelle, seulement à l'ouverture du pop-up ou au changement de dates. */
+var LD_EN_MAX_DAYS = 366;
+var LD_EN_LIMIT = 6000;
+var _ldEn = { open: false, from: '', to: '', seq: 0, bound: false };
+
+function ldEnIsAdmin() { return window._currentRole === 'admin'; }
+function ldEnDayStart(key) { return ldAgStartMs({ date: key, time: '00:00' }); }
+function ldEnCounts() {
+  var today = ldAgDayKey(Date.now());
+  var t0 = ldEnDayStart(ldAgShiftDay(today, -1)), t1 = ldEnDayStart(today), t2 = ldEnDayStart(ldAgShiftDay(today, 1));
+  var c = { today: 0, hier: 0 };
+  allLeads.forEach(function (l) {
+    if (l._merged === true) return;
+    var d = _realEntryDate(l);
+    if (!d) return;
+    var m = d.getTime();
+    if (m >= t1 && m < t2) c.today++;
+    else if (m >= t0 && m < t1) c.hier++;
+  });
+  return c;
+}
+function ldEnChipLabel(c) { return '📥 <b>' + c.today + '</b> auj. · ' + c.hier + ' hier'; }
+function ldEnChipHTML() {
+  if (!ldEnIsAdmin()) return '';
+  return '<button type="button" class="lden-chip" data-lden="open" title="Leads entrants : aujourd\'hui, hier, date à date">' + ldEnChipLabel(ldEnCounts()) + '</button>';
+}
+function ldEnRender() {
+  var admin = ldEnIsAdmin(), c = admin ? ldEnCounts() : null;
+  var chips = document.querySelectorAll('.lden-chip');
+  for (var i = 0; i < chips.length; i++) {
+    chips[i].hidden = !admin;
+    if (admin) chips[i].innerHTML = ldEnChipLabel(c);
+  }
+  if (admin && _ldEn.open) {
+    document.getElementById('ldEnToday').textContent = c.today;
+    document.getElementById('ldEnHier').textContent = c.hier;
+  }
+}
+function ldEnLoad() {
+  var res = document.getElementById('ldEnRes');
+  var seq = ++_ldEn.seq, from = _ldEn.from, to = _ldEn.to;
+  if (!from || !to) { res.textContent = 'Choisis les deux dates.'; return; }
+  if (from > to) { res.textContent = 'La date de début est après la date de fin.'; return; }
+  var start = ldEnDayStart(from), end = ldEnDayStart(ldAgShiftDay(to, 1));
+  var jours = Math.round((end - start) / 86400000);
+  if (jours > LD_EN_MAX_DAYS) { res.textContent = 'Un an maximum.'; return; }
+  res.textContent = 'Calcul…';
+  var cap = Math.min(end + 45 * 86400000, Date.now() + 60000);
+  db.collection('leads')
+    .where('createdAt', '>=', firebase.firestore.Timestamp.fromDate(new Date(start)))
+    .where('createdAt', '<=', firebase.firestore.Timestamp.fromDate(new Date(cap)))
+    .limit(LD_EN_LIMIT)
+    .get().then(function (snap) {
+      if (seq !== _ldEn.seq) return;
+      var n = 0;
+      snap.forEach(function (doc) {
+        var d = doc.data();
+        if (d._merged === true) return;
+        var re = _realEntryDate(d);
+        if (!re) return;
+        var m = re.getTime();
+        if (m >= start && m < end) n++;
+      });
+      var h = (snap.size >= LD_EN_LIMIT ? 'Au moins ' : '') + '<b>' + n + '</b> lead' + (n > 1 ? 's' : '');
+      if (jours > 1) h += ' · ' + (n / jours).toFixed(1).replace('.', ',') + ' par jour';
+      res.innerHTML = h;
+    }).catch(function (err) {
+      if (seq !== _ldEn.seq) return;
+      console.warn('[leads-entrants]', err.message);
+      res.textContent = 'Lecture impossible, réessaie.';
+    });
+}
+function ldEnOpen() {
+  if (!ldEnIsAdmin()) return;
+  var today = ldAgDayKey(Date.now());
+  if (!_ldEn.from) { _ldEn.from = today.slice(0, 8) + '01'; _ldEn.to = today; }
+  var f = document.getElementById('ldEnFrom'), t = document.getElementById('ldEnTo');
+  f.value = _ldEn.from; t.value = _ldEn.to;
+  f.max = today; t.max = today;
+  _ldEn.open = true;
+  document.getElementById('ldEn').classList.add('on');
+  document.getElementById('ldEnBackdrop').classList.add('on');
+  if (l2IsMobile()) document.body.classList.add('l2-lock');
+  ldEnRender();
+  ldEnLoad();
+}
+function ldEnClose() {
+  if (!_ldEn.open) return;
+  _ldEn.open = false;
+  _ldEn.seq++;
+  document.getElementById('ldEn').classList.remove('on');
+  document.getElementById('ldEnBackdrop').classList.remove('on');
+  var fs = document.getElementById('l2fs');
+  if (!(openCardId && l2IsMobile()) && !(fs && fs.classList.contains('on'))) document.body.classList.remove('l2-lock');
+}
+function ldEnBind() {
+  if (_ldEn.bound) return;
+  _ldEn.bound = true;
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest ? e.target.closest('[data-lden]') : null;
+    if (!t) return;
+    if (t.getAttribute('data-lden') !== 'open') ldEnClose();
+    else if (_ldEn.open) ldEnClose();
+    else ldEnOpen();
+  });
+  document.getElementById('ldEnFrom').addEventListener('change', function () { _ldEn.from = this.value; ldEnLoad(); });
+  document.getElementById('ldEnTo').addEventListener('change', function () { _ldEn.to = this.value; ldEnLoad(); });
+  /* Page laissée ouverte : la pastille passe au nouveau jour à minuit. */
+  setInterval(ldEnRender, 60000);
+}
+
 function startListening() {
   // Cleanup si re-appel (défensif)
   if (_leadsListenerUnsub) { _leadsListenerUnsub(); _leadsListenerUnsub = null; }
+  ldEnBind();
   // Fenêtre glissante 30 jours : on charge tous les leads créés depuis 30 jours
   // au lieu d'une limite fixe à 500 (qui devenait insuffisante avec >500 leads/semaine
   // et faisait disparaître des leads récents de la vue Lead Live).
@@ -7834,6 +8004,8 @@ function startListening() {
       if (preservedResurrects.length > 0) {
         allLeads = preservedResurrects.concat(allLeads);
       }
+
+      ldEnRender();
 
       // Don't re-render while user is editing — only update data + counts
       if (isEditingLead && newLeads.length === 0) {

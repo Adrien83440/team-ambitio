@@ -428,6 +428,7 @@
     } else {
       h += '<h1 class="ll5h1">' + (nomMoi ? 'Bonjour ' + escHtml(nomMoi) : 'Bonjour') + '</h1>';
       h += '<p class="ll5sub">' + escHtml(aujourd) + ' · ' + (c.faire ? c.faire + ' chose' + (c.faire > 1 ? 's' : '') + ' à faire' : 'rien d’urgent') + '</p>';
+      if (typeof ldEnChipHTML === 'function') h += ldEnChipHTML();
       h += heros(leads);
     }
 
