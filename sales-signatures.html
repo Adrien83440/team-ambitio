@@ -111,6 +111,20 @@ body{background:var(--bg);color:var(--fg);font-family:var(--fm);min-height:var(-
 .tl-row .t{color:var(--muted);font-variant-numeric:tabular-nums;}
 .tl-row .d{color:var(--muted);font-size:11px;margin-top:2px;}
 .tl-row.key .l{color:#34d399;font-weight:800;}
+/* Récap des choix (formule de paiement, cases, mentions) sans ouvrir le PDF */
+.rc-pill{display:inline-block;font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;color:#0ea5e9;background:rgba(14,165,233,.12);margin-top:4px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle;}
+.rc-sec{margin-bottom:16px;}
+.rc-h{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+.rc-row{display:grid;grid-template-columns:22px 1fr;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:9px;margin-bottom:5px;font-size:12.5px;line-height:1.45;}
+.rc-row.off{opacity:.55;}
+.rc-row .ic{font-weight:800;text-align:center;}
+.rc-row.on .ic{color:#34d399;}
+.rc-row .lb{color:var(--muted);font-size:11px;font-weight:700;}
+.rc-row .vl{font-weight:700;}
+.rc-pay{padding:12px 14px;border-radius:12px;border:1px solid rgba(14,165,233,.35);background:rgba(14,165,233,.08);margin-bottom:16px;}
+.rc-pay .big{font-family:var(--fh);font-size:16px;font-weight:800;color:#0ea5e9;}
+.rc-pay .sub{font-size:12px;color:var(--muted);margin-top:3px;}
+.rc-note{font-size:11px;color:var(--muted);line-height:1.5;}
 .req-status{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;}
 .req-status.pending{background:rgba(245,158,11,.1);color:#f59e0b;}
 .req-status.opened{background:rgba(96,165,250,.1);color:#60a5fa;}
@@ -328,6 +342,15 @@ try {
   <div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:94%;max-width:620px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.5);max-height:90vh;display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><div style="font-size:20px">👁</div><div style="font-family:var(--fh);font-size:15px;font-weight:800;flex:1" id="suiviTitle">Suivi</div><button data-suivi-close="1" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button></div>
     <div id="suiviBody" style="overflow:auto"></div>
+  </div>
+</div>
+<!-- ═══ RÉCAP DES CHOIX ════════════════════════════════════════════════
+     Formule de paiement, conditions, cases cochées : lu sur la demande
+     (prefill + fieldValues), sans télécharger le PDF. -->
+<div id="recapModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2147483000;backdrop-filter:blur(4px);align-items:center;justify-content:center">
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:94%;max-width:560px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.5);max-height:90vh;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><div style="font-size:20px">🧾</div><div style="font-family:var(--fh);font-size:15px;font-weight:800;flex:1" id="recapTitle">Récap</div><button data-recap-close="1" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button></div>
+    <div id="recapBody" style="overflow:auto"></div>
   </div>
 </div>
 <!-- ═══ ENVOI DE SECOURS ═══════════════════════════════════════════════
@@ -1521,11 +1544,12 @@ function renderRequests(){
     }
     h+='<tr>';
     h+='<td style="font-weight:600">'+clientDisplay+'<div style="font-size:11px;color:var(--muted)">'+emailDisplay+'</div></td>';
-    h+='<td>'+esc(r.templateName||'—')+_adhocBadge(r)+'</td>';
+    h+='<td>'+esc(r.templateName||'—')+_adhocBadge(r)+_recapPill(r)+'</td>';
     h+='<td style="font-size:12px">'+dt+'</td>';
     h+='<td style="min-width:230px">'+_progressCell(r,st,stLabels,stDots)+'</td>';
     h+='<td style="white-space:nowrap">';
     h+='<button class="sig-btn sig-btn-o" style="font-size:11px;padding:4px 10px" data-suivi="'+esc(r.id)+'">👁 Suivi</button> ';
+    h+='<button class="sig-btn sig-btn-o" style="font-size:11px;padding:4px 10px" data-recap="'+esc(r.id)+'" title="Formule de paiement et conditions envoyées">🧾 Récap</button> ';
     h+='<button class="sig-btn sig-btn-p" style="font-size:11px;padding:4px 10px" onclick="resendRequest(\''+r.id+'\')">🔄 Renvoyer</button> ';
     h+='<button class="sig-btn sig-btn-o" style="font-size:11px;padding:4px 10px" onclick="navigator.clipboard.writeText(\''+esc(r.signUrl||'')+'\');toast(\'📋 Lien copié !\')">🔗</button>';
     h+=' <button class="sig-btn sig-btn-r" style="font-size:11px;padding:4px 10px" onclick="deleteRequest(\''+r.id+'\',\''+esc(r.clientName)+'\')">🗑</button>';
@@ -1600,6 +1624,152 @@ function closeSuivi(){document.getElementById('suiviModal').style.display='none'
 document.addEventListener('click',function(e){
   var b=e.target.closest?e.target.closest('[data-suivi]'):null;if(b){openSuivi(b.getAttribute('data-suivi'));return;}
   if(e.target.closest&&e.target.closest('[data-suivi-close]'))closeSuivi();
+});
+
+/* ═══ RÉCAP DES CHOIX ═══
+   Ce qui a été coché et rempli, lu sur la demande sans ouvrir le PDF :
+   · r.prefill      — conditions posées par le conseiller à l'envoi
+                      (formule de paiement, mensualités, montants…) ;
+   · r.fieldValues  — posé à la signature finale par api/sign-session.js :
+                      cases et textes du signataire 1 ;
+   · libellés       — r.webSnapshot (variables / clientChecks de l'atelier,
+                      fieldHints) ou r.fields (modèles PDF), figés à l'envoi.
+   Même lecture que formSpec / genSpec côté serveur. Le PDF signé fait foi. */
+function _rcMoney(v){
+  var n=Number(String(v).replace(/\s/g,'').replace(',','.'));
+  if(!isFinite(n))return String(v);
+  var p=n.toFixed(n%1===0?0:2).split('.');
+  return p[0].replace(/\B(?=(\d{3})+(?!\d))/g,' ')+(p[1]?','+p[1]:'')+' €';
+}
+function _rcVar(def,raw){
+  if(raw===undefined||raw===null||raw==='')return '';
+  if(raw===true)return 'Oui';if(raw===false)return 'Non';
+  if(def.type==='money')return _rcMoney(raw);
+  if(def.type==='date'){var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(raw));return m?m[3]+'/'+m[2]+'/'+m[1]:String(raw);}
+  if(def.type==='choice'){var o=(def.options||[]).find(function(x){return x.value===raw;});return o?o.label:String(raw);}
+  return String(raw);
+}
+function _recapOf(r){
+  var pf=r.prefill||{},fv=r.fieldValues||{},web=r.webSnapshot||{};
+  var out={conds:[],checks:[],texts:[],pay:null};
+  if(web.generated){
+    (web.variables||[]).forEach(function(v){
+      if(v.filledBy==='client'){
+        var cv=_rcVar(v,fv[v.key]);if(cv)out.texts.push({label:v.label||v.key,value:cv});
+        return;
+      }
+      var pv=_rcVar(v,pf[v.key]);if(pv)out.conds.push({label:v.label||v.key,value:pv,type:v.type||''});
+    });
+    (web.clientChecks||[]).forEach(function(c){out.checks.push({label:c.label||'Case à cocher',on:fv[c.id]===true,kind:c.kind||''});});
+  }else{
+    var hints=web.fieldHints||{},seen={},groups={};
+    (r.fields||[]).forEach(function(f){
+      if(!f||seen[f.id]||(f.fieldType!=='case_cocher'&&f.fieldType!=='texte_libre'))return;
+      seen[f.id]=1;
+      var h=hints[f.id]||{};
+      var equipe=f.filledBy==='equipe'||h.filledBy==='equipe';
+      if(f.fieldType==='texte_libre'){
+        var tl=h.label||(f.label&&f.label!=='Texte libre'?f.label:'Texte libre');
+        var tv=pf[f.id]||(f.signerRole===2?'':fv[f.id]);
+        if(tv)(equipe||pf[f.id]?out.conds:out.texts).push({label:tl,value:String(tv)});
+        return;
+      }
+      var cl=h.label||(f.label&&f.label!=='Case à cocher'?f.label:'Case à cocher');
+      if(equipe){
+        var g=h.group||f.group||'';
+        if(g){
+          if(!groups[g]){groups[g]={label:g.charAt(0).toUpperCase()+g.slice(1),value:'',group:true,_v:[]};out.conds.push(groups[g]);}
+          if(pf[f.id]===true)groups[g]._v.push(cl);
+        }else if(pf[f.id]===true)out.conds.push({label:'Option retenue',value:cl});
+        return;
+      }
+      /* fieldValues ne porte que les cases du signataire 1. */
+      if(f.signerRole===2)return;
+      out.checks.push({label:cl,on:fv[f.id]===true,kind:h.kind||(/renonce/i.test(cl)&&/r[ée]tractation/i.test(cl)?'renonciation':'')});
+    });
+    Object.keys(groups).forEach(function(k){groups[k].value=groups[k]._v.join(' + ')||'— aucune option cochée';});
+  }
+  /* Formule de paiement : choix dont le libellé parle de paiement, sinon
+     premier choix reconnu par _formuleOf (même détection que le pilote). */
+  var pay={label:'',formule:'',nb:'',mensuel:'',total:''};
+  out.conds.forEach(function(c){
+    var lf=_foldTxt(c.label),fm=_formuleOf(c.value+' '+c.label);
+    if(!pay.label&&(c.group||c.type==='choice'||c.label==='Option retenue')&&(/paiement|formule|reglement|modalit/.test(lf)||_formuleOf(c.value))){pay.label=c.value;pay.formule=fm;}
+    if(/mensualit|echeance/.test(lf)){
+      var n=String(c.value).trim();
+      if(c.type!=='money'&&/^\d{1,2}$/.test(n))pay.nb=n;else pay.mensuel=c.value;
+    }else if(/montant|prix|total|tarif/.test(lf)&&!pay.total)pay.total=c.value;
+  });
+  if(pay.label||pay.nb)out.pay=pay;
+  return out;
+}
+function _recapPill(r){
+  var p=_recapOf(r).pay;if(!p)return '';
+  var t=p.formule==='pif'?'Comptant':(p.formule==='mensualise'?'Échelonné':(p.label||'Échelonné'));
+  if(p.nb)t+=' · '+p.nb+' mens.';
+  return '<br/><span class="rc-pill" title="'+esc((p.label||'')+(p.nb?' — '+p.nb+' mensualités':'')).replace(/"/g,'&quot;')+'">💳 '+esc(t)+'</span>';
+}
+function _rcRow(ic,cls,label,value){
+  return '<div class="rc-row '+cls+'"><div class="ic">'+ic+'</div><div>'+(value!==undefined?'<div class="lb">'+esc(label)+'</div><div class="vl">'+esc(value)+'</div>':esc(label))+'</div></div>';
+}
+function openRecap(id){
+  var r=REQ.find(function(x){return x.id===id;});if(!r)return;
+  var rc=_recapOf(r);
+  var signed=r.status==='signed'||!!r.cancelledAfterSigning;
+  var annule=r.status==='cancelled';
+  document.getElementById('recapTitle').textContent=(r.clientName||'')+' · '+(r.templateName||'Contrat');
+  var h='';
+  var sAt=r.signedAt&&r.signedAt.seconds?new Date(r.signedAt.seconds*1000).toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+  if(annule)h+='<div class="rc-note" style="color:#ef4444;font-weight:700;margin-bottom:12px">✕ Contrat annulé après signature — ne vaut plus « signé ».</div>';
+  else if(signed)h+='<div class="rc-note" style="color:#34d399;font-weight:700;margin-bottom:12px">✅ Signé'+(sAt?' le '+esc(sAt):'')+'</div>';
+  else h+='<div class="rc-note" style="color:#f59e0b;font-weight:700;margin-bottom:12px">⏳ Pas encore signé — conditions telles qu\'envoyées au client.</div>';
+  if(rc.pay){
+    var p=rc.pay;
+    var big=p.label||(p.formule==='pif'?'Paiement comptant':'Paiement échelonné');
+    var sub=[];
+    if(p.nb)sub.push(p.nb+' mensualité'+(p.nb==='1'?'':'s'));
+    if(p.mensuel)sub.push(p.mensuel+(/mensualit/i.test(p.mensuel)?'':' / mensualité'));
+    if(p.total)sub.push('Total : '+p.total);
+    h+='<div class="rc-pay"><div class="rc-h" style="color:#0ea5e9;margin-bottom:4px">💳 Formule de paiement</div><div class="big">'+esc(big)+'</div>'+(sub.length?'<div class="sub">'+esc(sub.join(' · '))+'</div>':'')+'</div>';
+  }
+  if(rc.conds.length){
+    h+='<div class="rc-sec"><div class="rc-h">Conditions fixées à l\'envoi</div>';
+    rc.conds.forEach(function(c){h+=_rcRow('✓','on',c.label,c.value);});
+    h+='</div>';
+  }
+  if(rc.checks.length){
+    h+='<div class="rc-sec"><div class="rc-h">Cases du client</div>';
+    rc.checks.forEach(function(c){
+      if(!signed)h+=_rcRow('…','off',c.label);
+      else h+=_rcRow(c.on?'✓':'✕',c.on?'on':'off',c.label);
+    });
+    if(signed&&r.renonciationRetractation===true)h+='<div class="rc-note">→ Démarrage immédiat demandé (renonciation au délai de rétractation).</div>';
+    else if(signed&&r.renonciationRetractation===false)h+='<div class="rc-note">→ Pas de renonciation : démarrage possible à partir du '+esc(r.demarragePossibleLe||'—')+'.</div>';
+    else if(!signed)h+='<div class="rc-note">Le client cochera ces cases au moment de signer.</div>';
+    h+='</div>';
+  }
+  if(rc.texts.length){
+    h+='<div class="rc-sec"><div class="rc-h">Saisi par le client</div>';
+    rc.texts.forEach(function(t){h+=_rcRow('✎','',t.label,t.value);});
+    h+='</div>';
+  }
+  if(signed&&(r.company||r.representative)){
+    var co=r.company||{},rp=r.representative||{};
+    h+='<div class="rc-sec"><div class="rc-h">Signataire</div>';
+    if(co.name)h+=_rcRow('🏢','',co.legalFormLabel?'Société ('+co.legalFormLabel+')':'Société',co.name+(co.siret?' — SIRET '+co.siret:''));
+    if(rp.firstName||rp.lastName)h+=_rcRow('👤','','Représentant',((rp.firstName||'')+' '+(rp.lastName||'')).trim()+(rp.qualite?' — '+rp.qualite:''));
+    h+='</div>';
+  }
+  if(!rc.pay&&!rc.conds.length&&!rc.checks.length&&!rc.texts.length)h+='<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">Aucune condition ni case à cocher sur ce contrat.</div>';
+  h+='<div class="rc-note" style="margin-top:6px">Lu sur la demande de signature. En cas de doute, le PDF signé fait foi.</div>';
+  document.getElementById('recapBody').innerHTML=h;
+  document.getElementById('recapModal').style.display='flex';
+}
+function closeRecap(){document.getElementById('recapModal').style.display='none';}
+document.addEventListener('click',function(e){
+  if(!e.target.closest)return;
+  var b=e.target.closest('[data-recap]');if(b){openRecap(b.getAttribute('data-recap'));return;}
+  if(e.target.closest('[data-recap-close]')||e.target.id==='recapModal')closeRecap();
 });
 
 /* ═══ ESPACE ADMIN ═══ */
@@ -1679,9 +1849,10 @@ function renderCompleted(){
     h+='<tr>';
     var annule=r.status==='cancelled';
     h+='<td style="font-weight:600'+(annule?';opacity:.6':'')+'">'+esc(r.clientName)+(annule?_annuleBadge(r):_autoBadge(r)+_copieBadge(r))+'<div style="font-size:11px;color:var(--muted)">'+esc(r.clientEmail)+'</div></td>';
-    h+='<td'+(annule?' style="text-decoration:line-through;opacity:.6"':'')+'>'+esc(r.templateName||'—')+_adhocBadge(r)+(annule?'':_academyPill(r))+'</td>';
+    h+='<td'+(annule?' style="text-decoration:line-through;opacity:.6"':'')+'>'+esc(r.templateName||'—')+_adhocBadge(r)+(annule?'':_academyPill(r))+_recapPill(r)+'</td>';
     h+='<td style="font-size:12px">'+dt+'</td>';
     h+='<td style="white-space:nowrap">';
+    h+='<button class="sig-btn sig-btn-o" style="font-size:11px;padding:4px 10px" data-recap="'+esc(r.id)+'" title="Ce qui a été coché, sans ouvrir le PDF">🧾 Récap</button> ';
     h+='<button class="sig-btn sig-btn-g" style="font-size:11px;padding:4px 10px" onclick="downloadSignedPdf(\''+r.id+'\')">📥 PDF</button> ';
     h+='<a href="sign-certificate.html?id='+r.id+'" target="_blank" class="sig-btn sig-btn-p" style="font-size:11px;padding:4px 10px;text-decoration:none">📜 Certificat</a>'+(annule?'':_copieBtn(r)+_academyBtn(r))+_annulerBtn(r);
     h+='</td></tr>';
