@@ -225,9 +225,14 @@
   }
 
   function derive(l) {
-    var key = l.id + ':' + (l._v || 0);
-    if (CACHE[l.id] && CACHE[l.id].key === key) return CACHE[l.id];
-    var d = { key: key, now: Date.now() };
+    /* Cache par lead (30/10/2026) : valable tant que l'objet lead et ses RDV sont
+       les mêmes (l'hôte remplace l'objet d'un lead modifié) et pendant 5 min
+       (« il y a 3 jours », RDV passé ou à venir). Avant, la clé était écrasée par
+       d.key juste en dessous : AUCUN appel ne touchait le cache, chaque rendu
+       recalculait 8 000 leads des centaines de milliers de fois. */
+    var now0 = Date.now(), c0 = CACHE[l.id], bk0 = BOOK[l.id] || null;
+    if (c0 && c0._l === l && c0._b === bk0 && now0 < c0.exp) return c0;
+    var d = { _l: l, _b: bk0, now: now0 };
     d.cl = E.classify(l, BOOK[l.id] || []); d.col = d.cl.col; d.key = d.cl.key;
     d.fam = FAM_OF_COL[d.col] || 'joindre'; d.stage = d.cl.stage;
     /* Pastille : le sous-filtre pour les colonnes regroupées ; l'étape sinon,
@@ -312,6 +317,11 @@
     d.lost = d.col === 'perdu' ? lostInfo(d) : d.col === 'ancien' ? ancienInfo(l, d) : null;
     d.blob = (l.nom + ' ' + (l.email || '') + ' ' + String(l.telephone || '').replace(/\D/g, '') + ' ' + (l.secteur || '') + ' ' + d.pb.text + ' ' + (l.tags || []).join(' ') + ' ' +
       (l.notesHistory || []).map(function (n) { return n.text; }).join(' ')).toLowerCase();
+    /* Le dérivé change avec l'heure : à minuit (« il y a N jours »), au début du
+       prochain RDV, à l'heure du rappel prévu. On le recalcule à ce moment-là. */
+    var mn = new Date(now0); mn.setHours(24, 0, 0, 0); d.exp = mn.getTime();
+    if (d.upcoming) { var us0 = bookingStart(d.upcoming); if (us0 && us0 < d.exp) d.exp = us0; }
+    if (d.fu && !d.fu.overdue && d.fu.ms < d.exp) d.exp = d.fu.ms;
     CACHE[l.id] = d;
     return d;
   }
@@ -940,14 +950,30 @@
   }
 
   /* ═══ 6. Rendu global ═══ */
-  function render(keepScroll) {
+  /* Rendu (30/10/2026) : le tableau n'est reconstruit que s'il a changé. Ouvrir
+     une fiche ou un panneau ne touche plus aux colonnes (défilement en cours,
+     position, élan de la souris conservés) ; une mise à jour en direct qui ne
+     change rien à l'écran non plus. fromData : appelé par refresh(). */
+  var LASTPAGE = '', LASTOV = '';
+  function render(keepScroll, fromData) {
+    var full = !!(S.full && lead(S.full));
+    var page = '<div class="pv2-page">' + (full ? fullView(lead(S.full)) : S.view === 'pipe' ? viewPipe() : viewRap()) + '</div>', ov = '';
+    if (!S.full && S.view === 'pipe' && S.drawer) ov += drawerHTML();
+    if (S.sheet) ov += sheetHTML();
+    var pg = APP.firstChild;
+    if (!full && pg && pg.className === 'pv2-page' && page === LASTPAGE) {
+      if (fromData && ov === LASTOV) return;
+      var od = document.getElementById('pv2drawer'), ody = od ? od.scrollTop : 0;
+      while (pg.nextSibling) APP.removeChild(pg.nextSibling);
+      if (ov) pg.insertAdjacentHTML('afterend', ov);
+      LASTOV = ov;
+      var nd0 = document.getElementById('pv2drawer'); if (nd0 && keepScroll) nd0.scrollTop = ody;
+      return;
+    }
     var bw = APP.querySelector('.pv2-boardwrap'), sx = bw ? bw.scrollLeft : 0, dr = document.getElementById('pv2drawer'), dy = dr ? dr.scrollTop : 0;
     var sy = {}; Array.prototype.forEach.call(APP.querySelectorAll('.pv2-col[data-col]>.pv2-cards'), function (c) { if (c.scrollTop) sy[c.parentNode.getAttribute('data-col')] = c.scrollTop; });
     var foc = document.activeElement && document.activeElement.id === 'pv2q' ? document.activeElement.selectionStart : null;
-    var h = '<div class="pv2-page">' + (S.full && lead(S.full) ? fullView(lead(S.full)) : S.view === 'pipe' ? viewPipe() : viewRap()) + '</div>';
-    if (!S.full && S.view === 'pipe' && S.drawer) h += drawerHTML();
-    if (S.sheet) h += sheetHTML();
-    APP.innerHTML = h;
+    APP.innerHTML = page + ov; LASTPAGE = page; LASTOV = ov;
     var nb = APP.querySelector('.pv2-boardwrap'); if (nb) { boardTop(); nb.scrollLeft = sx; }
     Object.keys(sy).forEach(function (k) { var c = APP.querySelector('.pv2-col[data-col="' + k + '"]>.pv2-cards'); if (c) c.scrollTop = sy[k]; });
     var nd = document.getElementById('pv2drawer'); if (nd && keepScroll) nd.scrollTop = dy;
@@ -1192,10 +1218,24 @@
     ROOT.addEventListener('drop', onDrop);
     document.addEventListener('keydown', onKey);
     window.addEventListener('resize', boardTop);
+    try { document.addEventListener('scroll', onScroll, { capture: true, passive: true }); } catch (e) { document.addEventListener('scroll', onScroll, true); }
     render();
   }
   /* L'hôte prévient quand les données changent hors du module (ex. réinitialisation). */
-  function refresh() { BOOK = H.bookings() || {}; CACHE = {}; render(true); }
+  function refresh() {
+    /* RDV inchangés : on garde l'ancien tableau pour que le cache du lead reste valable */
+    var nb = H.bookings() || {};
+    if (nb !== BOOK) for (var k in nb) {
+      if (BOOK[k] && BOOK[k] !== nb[k] && BOOK[k].length === nb[k].length) { try { if (JSON.stringify(BOOK[k]) === JSON.stringify(nb[k])) nb[k] = BOOK[k]; } catch (e) {} }
+    }
+    BOOK = nb;
+    /* Pendant un défilement ou un glisser-déposer, on attend la fin du geste :
+       remplacer les colonnes en plein mouvement casse l'élan de la souris. */
+    if (S.drag || Date.now() - LASTSCROLL < 700) { clearTimeout(refresh.t); refresh.t = setTimeout(refresh, 700); return; }
+    render(true, true);
+  }
+  var LASTSCROLL = 0;
+  function onScroll() { LASTSCROLL = Date.now(); }
 
   window.PipelineV2 = {
     start: start, refresh: refresh,
