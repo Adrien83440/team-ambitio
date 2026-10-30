@@ -365,7 +365,8 @@
       '" data-lead-id="' + l.id + '" data-phone="' + escAttr(tel) + '" data-name="' + escAttr(l.nom || '') + '">';
     h += '<div class="ld-card-head ll5row" data-action="toggle" data-id="' + l.id + '" role="button" tabindex="0">';
     h += '<span class="ll5av">' + escHtml(initiales(l)) + '<i class="ll5dot ' + s.dot + '"></i></span>';
-    h += '<span class="ll5tx"><b>' + escHtml(l.nom || '—') + '</b><span class="' + cls + '">' + escHtml(s.ligne) + '</span></span>';
+    var dem = window.DemarrageCore ? DemarrageCore.badge(l.demarrageDiffere) : '';
+    h += '<span class="ll5tx"><b>' + escHtml(l.nom || '—') + '</b><span class="' + cls + '">' + escHtml(dem || s.ligne) + '</span></span>';
     h += '<span class="ll5chev">' + ic('chev') + '</span>';
     h += '</div></div>';
     return h;

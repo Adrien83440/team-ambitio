@@ -5277,7 +5277,8 @@ const FAKE = {
      sans effet dans le bac à sable (le RDV est écrit dans la fausse base). */
   '/api/booking-setter-attribution': function () { return [200, { ok: true, sandbox: true }]; },
   '/api/booking-attribution': function () { return [200, { ok: true, sandbox: true }]; },
-  '/api/booking-check-coaching-quota': function () { return [200, { allowed: true }]; }
+  '/api/booking-check-coaching-quota': function () { return [200, { allowed: true }]; },
+  '/api/client-demarrage': function () { return [200, { ok: true, leadId: null }]; }
 };
 
 async function __handle(path, init) {

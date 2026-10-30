@@ -51,6 +51,8 @@ function row(c, ctx, ev) {
     active: H.isActiveClient(c),
     clientStatus: c.clientStatus || (H.isActiveClient(c) ? 'active' : 'completed'),
     dateEntree: c.dateEntree || null,
+    demarrage: H.demarrageDe(c, ctx),
+    attenteDemarrage: f.attenteDemarrage || null,
     contractEnd: f.contractEnd || null,
     daysToEnd: f.daysToEnd != null ? f.daysToEnd : null,
     sessionsDone: f.sessionsDone || 0,

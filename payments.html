@@ -452,6 +452,7 @@ async function prefillFromLead(leadId) {
     document.getElementById('pmLeadEmail').value = l.email || '';
     document.getElementById('pmLeadPhone').value = l.telephone || '';
     document.getElementById('payModal').dataset.leadId = leadId;
+    document.getElementById('payModal').dataset.demarrageDiffere = (l.demarrageDiffere && l.demarrageDiffere.statut === 'attente') ? l.demarrageDiffere.date : '';
     /* Pilote de closing (close-pilot.js, Leads Live) : montant TTC, type et
        mensualités retenus avec le client — &montant=&ptype=&nmens=&desc=.
        Le closer vérifie avant de créer. */
@@ -753,6 +754,14 @@ async function createPayment() {
   let leadId = document.getElementById('payModal').dataset.leadId || null;
 
   if (!name || !email || !total) { toast('❌ Nom, email et montant requis', false); return; }
+
+  /* Démarrage différé (30/10/2026) : le démarrage se décale, jamais le
+     paiement — règle d'Adrien. Le serveur le contrôle aussi au démarrage. */
+  const parisAuj = new Intl.DateTimeFormat('fr-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  if (document.getElementById('payModal').dataset.demarrageDiffere && startDate > parisAuj) {
+    toast('❌ Ce client a un démarrage différé : le premier prélèvement part aujourd\'hui, jamais plus tard', false);
+    return;
+  }
 
   /* Paiement CONDITIONNÉ à la signature du contrat (décision Adrien
      08/10/2026) : pas de prélèvement sans contrat signé. On cherche une

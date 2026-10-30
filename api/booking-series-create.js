@@ -65,6 +65,7 @@
 // ============================================================================
 
 const { db, admin } = require('./_firebaseAdmin');
+const Demarrage = require('./_demarrage');
 const { google } = require('googleapis');
 const parseBody = require('./_parseBody');
 const { sendEmailFromAccount } = require('./_gmailSend');
@@ -315,6 +316,9 @@ module.exports = async (req, res) => {
     if (!client) { json(res, 403, { error: 'client_not_found' }); return; }
     const c = client.data;
     if (c.ancienClient === true || c.statut === 'inactif') { json(res, 403, { error: 'client_inactive' }); return; }
+    /* Démarrage différé : aucune séance avant la date convenue. */
+    const attendu = await Demarrage.attenteDuClient(client.id, c);
+    if (attendu && wanted.some((o) => o && String(o.date) < attendu)) { json(res, 409, { error: 'demarrage_differe', demarrageLe: attendu }); return; }
 
     const programme = c.programme || '';
     /* Elite NEW (hebdomadaire) ou Business nouveau format (toutes les deux

@@ -1490,6 +1490,8 @@
 
 <!-- Business Phénix nouveau format : compteur de séances partagé (14/10/2026) -->
 <script src="bp-credits.js"></script>
+<script src="demarrage-core.js"></script>
+<script src="demarrage-widget.js"></script>
 <!-- Firebase -->
 <script type="module">
   import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -2116,7 +2118,7 @@ function renderCard(c){
   return `<div class="client-card ${cardCls}" onclick="openDetail('${c._id}')">
     <div class="cc-top">
       <div>
-        <div class="cc-name">${escHtml(c.nom || '—')}${pcPendingBadge(c)}</div>
+        <div class="cc-name">${escHtml(c.nom || '—')}${pcPendingBadge(c)}${window.DemarrageCore&&DemarrageCore.enAttente(c.demarrageDiffere)?` <span style="font-size:10.5px;font-weight:700;color:#b45309;white-space:nowrap">${DemarrageCore.badge(c.demarrageDiffere)}</span>`:''}</div>
         ${c.activite ? `<div class="cc-activite">${escHtml(c.activite)}</div>` : ''}
       </div>
       ${coachPill}
@@ -2980,6 +2982,7 @@ function openDetail(id){
         <div class="dp-info"><div class="dp-info-label">Email</div><div class="dp-info-val">${c.email||'—'}</div></div>
         <div class="dp-info"><div class="dp-info-label">Téléphone</div><div class="dp-info-val">${c.telephone||c.tel||'—'}</div></div>
       </div>
+      <div data-demarrage data-client-id="${id}"></div>
       ${c.clientNotes?`<div style="margin:14px 0 0;padding:12px 14px;background:var(--amber-soft-2);border-radius:12px;border-left:3px solid var(--amber-2);font-size:12px;line-height:1.7;color:var(--ink-soft);white-space:pre-wrap"><span style="font-size:10px;font-weight:600;color:var(--amber-2);text-transform:uppercase;letter-spacing:.7px;display:block;margin-bottom:5px">📌 Notes</span>${escHtml(c.clientNotes)}</div>`:''}
     </div>
 

@@ -846,6 +846,11 @@
         renderSheet();
         return Promise.resolve();
       },
+      demarrage: function (leadId, date) {
+        var dd = date ? { statut: 'attente', date: date, demarreLe: '', rappels: {} } : { statut: 'annule', date: '', demarreLe: '', rappels: {} };
+        X.update(function (s) { var l = X.leadById(s, leadId); if (l) l.demarrageDiffere = dd; });
+        return Promise.resolve(dd);
+      },
       recordClose: function (leadId, a) { return pilotRecordClose(leadId, a); },
       bookingLink: function (typeId, l) {
         var parts = String(l.nom || '').trim().split(/\s+/);

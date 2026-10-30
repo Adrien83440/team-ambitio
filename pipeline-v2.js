@@ -574,8 +574,10 @@
   }
   function card(l) {
     var d = derive(l);
+    /* Démarrage différé (30/10/2026) : une ligne de plus sur la carte. */
+    var dem = l.demarrageDiffere && l.demarrageDiffere.statut === 'attente' ? '<div class="pv2-k2" style="color:#d97706;font-weight:700">⏳ Démarre le ' + esc(String(l.demarrageDiffere.date).split('-').reverse().join('/')) + '</div>' : '';
     return '<button class="pv2-card" draggable="true" data-a="open" data-v="' + esc(l.id) + '" data-id="' + esc(l.id) + '"><div class="pv2-k1"><i class="pv2-dot pv2-d-' + d.tone + '"></i><span class="pv2-nm">' + esc(l.nom || 'Sans nom') + '</span></div>' +
-      (d.lost ? '<div class="pv2-k2l">' + d.lost.map(function (x) { return '<div>' + esc(x) + '</div>'; }).join('') + '</div>' : '<div class="pv2-k2">' + esc(d.ligne) + '</div>') + '<div class="pv2-k3"><span class="pv2-etp">' + esc(d.stageLabel) + '</span><span class="pv2-src">' + esc(d.src.short) + ' · ' + fdate(d.real) + '</span>' + ownTag(l) + '</div></button>';
+      (d.lost ? '<div class="pv2-k2l">' + d.lost.map(function (x) { return '<div>' + esc(x) + '</div>'; }).join('') + '</div>' : '<div class="pv2-k2">' + esc(d.ligne) + '</div>') + dem + '<div class="pv2-k3"><span class="pv2-etp">' + esc(d.stageLabel) + '</span><span class="pv2-src">' + esc(d.src.short) + ' · ' + fdate(d.real) + '</span>' + ownTag(l) + '</div></button>';
   }
 
   /* Fiche courte : tiroir du pipeline, écran de la vue Rappels, carte de séance */

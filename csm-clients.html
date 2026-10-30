@@ -698,6 +698,8 @@ body {
 
 <script src="nav.js"></script>
 <script src="bp-credits.js"></script>
+<script src="demarrage-core.js"></script>
+<script src="demarrage-widget.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════════════════════
    csm-dashboard.html — Customer Success Manager
@@ -863,6 +865,13 @@ function computeLevel(c){
         hasCoachingPartial = true;
       }
     }
+  }
+
+  // Démarrage différé : pas de séance à faire avant la date, seuls les
+  // incidents de paiement comptent.
+  if(window.DemarrageCore && DemarrageCore.enAttente(c.demarrageDiffere)){
+    hasCoaching2MonthsMissed = false;
+    hasCoaching1MonthMissed = false;
   }
 
   // Statuts critiques business
@@ -1256,6 +1265,8 @@ function buildAllClients(){
 
       // Marqueurs CSM (depuis clients/, source primaire)
       clientStatus: status,
+      // Démarrage différé (30/10/2026) : copie du lead, voir demarrage-core.js
+      demarrageDiffere: (lead && lead.demarrageDiffere) || co.demarrageDiffere || null,
       // Fin d'accompagnement (07/2026) : posé par /api/client-deactivate
       ancienClient: co.ancienClient === true,
       deactivatedAt: co.deactivatedAt || null,
@@ -2142,6 +2153,7 @@ function renderClientCard(c){
     + '<div class="csm2-name">' + nameTxt + '</div>'
     + (commerceTxt ? '<div class="csm2-sub">' + commerceTxt + '</div>' : '')
     + '<div class="csm2-badges">' + lvlBadge + statusBadge
+    + (window.DemarrageCore && DemarrageCore.enAttente(c.demarrageDiffere) ? '<span class="csm-badge cs-paused">' + esc(DemarrageCore.badge(c.demarrageDiffere)) + '</span>' : '')
     + (!c._hasLead ? '<span class="csm-badge csm-badge-no-lead" title="Ce client coaching n\'a pas de lead CRM lié — paiements non visibles">📚 Pas de lead CRM</span>' : '')
     + '</div>'
     + (c.email ? '<div data-academy-panel data-em="' + esc(c.email) + '" style="display:none"></div>' : '')

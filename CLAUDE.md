@@ -250,6 +250,30 @@ un nouvel appel `fetch` vers un service externe est refusé à l'exécution tant
 qu'il n'est pas simulé dans `shim-services.js`. C'est voulu : rien de réel ne
 doit pouvoir partir du bac à sable.
 
+## Démarrage différé (30/10/2026)
+
+Le client signe et paie aujourd'hui, mais démarre plus tard. **Le démarrage se
+décale, jamais le paiement** : close, commissions, prélèvements et factures ne
+bougent pas. Règles : `demarrage-core.js` (partagé navigateur ↔ serveur) ;
+écritures : `api/_demarrage.js` ; page + cron horaire : `api/client-demarrage.js`.
+
+- **Source de vérité : `leads/{id}.demarrageDiffere`** (`statut` attente / demarre
+  / annule, `date`, `demarreLe`, `historique`, `rappels`). `clients/{id}` et
+  `persons/{id}` n'en ont qu'une copie résumée : `coaching.html` réécrit la fiche
+  entière, tout ce qui décide côté serveur repasse donc par le lead
+  (`attenteDuClient`, `_clientHealth.demarrageDe`), et le cron repose la copie.
+- **« Payé »** = premier prélèvement déclenché ou paiement intégral fait, à la
+  date du jour : `paiementOk`, un seul endroit.
+- **Academy** : champ `users/{email}.demarrageAttendu`, écrit par `bridge/grant-access`
+  (date connue à la signature) ou `bridge/manage-access` action `demarrage` (après
+  coup). Il ne s'efface jamais seul : le jour J, Team vérifie les conditions avant
+  de le retirer. Déployer l'Academy AVANT Team si le pont change.
+- **Droits** : le closer pose la date tant que le pilote n'est pas validé ; ensuite
+  admin et CSM uniquement ; seul un admin passe outre les conditions (`force`, tracé).
+- Panneau partagé : `<div data-demarrage data-client-id="…">` + `demarrage-widget.js`.
+  Encart de rappel : `alteore-demarrages.js`, injecté par nav.js.
+- Clause de contrat : `scripts/contrats-clause-demarrage.js` (à blanc par défaut).
+
 ## `nav.js` — trois variables globales
 
 Ce ne sont **pas** des fonctions :

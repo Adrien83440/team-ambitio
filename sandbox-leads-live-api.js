@@ -33,6 +33,12 @@
         return addComm(b.leadId, { type: 'sms', direction: 'outbound', content: b.message, source: 'ringover-sms', date: new Date().toISOString(), createdAt: new Date().toISOString(), ownerUid: MOI.uid, ownerName: MOI.nom, ownerSlug: MOI.slug });
       }).then(function () { return rep({ ok: true, messageId: 'sbx', to: l && l.telephone }); });
     }
+    if (/client-demarrage/.test(path)) {
+      var fiche = lead(b.leadId) || {};
+      var dd = b.action === 'poser' ? { statut: 'attente', date: b.date, demarreLe: '', rappels: {} } : { statut: 'annule', date: '', demarreLe: '', rappels: {} };
+      if (!b.action) return rep({ ok: true, leadId: null });
+      return db().collection('leads').doc(b.leadId).update({ demarrageDiffere: dd }).then(function () { return rep({ ok: true, demarrage: dd, conditions: { signe: false, paye: false, ok: false, manque: [] }, nom: fiche.nom }); });
+    }
     if (/whatsapp-templates/.test(path)) return rep({ ok: true, modeles: MODELES });
     if (/whatsapp-send/.test(path)) {
       var num = String(b.numero || ''), now = Date.now();
