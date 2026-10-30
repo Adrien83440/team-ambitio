@@ -2,8 +2,8 @@
 // api/_societeCom.js — CLIENT DE L'API SOCIETE.COM (30/10/2026, exclu du routing)
 // ----------------------------------------------------------------------------
 // Doc : https://api.societe.com/apisite/documentations/v1/documentation-api.html
-// Jeton : variable d'environnement SOCIETE_API_TOKEN (Vercel). Les crédits sont
-// attachés au jeton : le changer ne fait rien perdre.
+// Jeton : variable d'environnement SOCIETE_API_TOKEN (Vercel). Societe.com attribue
+// les crédits au jeton : vérifier le solde après tout changement de clé.
 //
 // Ce que la doc ne dit pas, mesuré le 30/10/2026 sur de vraies réponses :
 //   · /infoclient et la LISTE des documents officiels ne coûtent aucun crédit ;
