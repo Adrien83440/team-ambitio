@@ -9231,6 +9231,7 @@ var FU_ALERTS_KEY = 'ambitio_fu_alerts';
 var FU_SEEN_KEY = 'ambitio_fu_seen';
 var FU_SEEN_TTL_MS = 60 * 24 * 3600 * 1000;
 var FU_LATE_SILENT_MS = 10 * 60 * 1000;
+var FU_ALERTS_VER = 'v3 30/10';
 var _fuCheckInterval = null;
 var _fuRealRole = null;      // null tant que users/{uid} n'est pas lu
 var _fuRoleLoading = false;
@@ -9261,7 +9262,12 @@ function fuRenderAlertsBtn() {
   var b = document.getElementById('fuAlertsBtn');
   if (!b) return;
   var on = fuAlertsOn();
-  b.innerHTML = (on ? '🔔' : '🔕') + ' <span>Alertes follow-up : ' + (on ? 'oui' : 'non') + '</span>';
+  /* Témoin (30/10) : version du code + compte + rôle lus par CETTE page, pour
+     savoir d'un coup d'œil si l'appareil exécute bien la dernière version. */
+  var u = null; try { u = firebase.auth().currentUser; } catch (e) {}
+  b.innerHTML = (on ? '🔔' : '🔕') + ' <span>Alertes follow-up : ' + (on ? 'oui' : 'non') +
+    '<br/><small style="opacity:.55;font-size:10px">' + FU_ALERTS_VER + ' · ' +
+    ((u && u.email) || 'non connecté') + ' · rôle ' + (_fuRealRole === null ? '?' : (_fuRealRole || 'aucun')) + '</small></span>';
   b.title = on
     ? 'Notification, son et message à l\'échéance de chaque follow-up'
     : 'Silencieux : les follow-ups en retard sont seulement comptés sur la cloche 🔔';
