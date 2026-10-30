@@ -32,6 +32,7 @@
 const { db, admin } = require('./_firebaseAdmin');
 const { requireValidSignature } = require('./_twilioSignature');
 const { phoneNormalized, telVariants } = require('./_leadLookup');
+const { estBloque, tracerEntrantBloque } = require('./_blockedContacts');
 const twilio = require('twilio');
 const MessagingResponse = twilio.twiml.MessagingResponse;
 
@@ -283,6 +284,15 @@ module.exports = async (req, res) => {
         res,
         'Vous avez été désabonné. Vous ne recevrez plus de SMS de notre part.'
       );
+    }
+
+    // Contact blacklisté : trace seulement, ni fiche ni notification.
+    if (await estBloque({ phone: fromNumber })) {
+      await tracerEntrantBloque({
+        type: 'sms', fromNumber: fromNumber, toNumber: toNumber || null, preview: smsContent.substring(0, 200),
+        source: 'twilio', providerMessageSid: messageSid, createdAt: new Date(),
+      });
+      return respondEmpty(res);
     }
 
     const found = await findBestLeadByPhone(fromNumber);

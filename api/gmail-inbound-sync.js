@@ -46,6 +46,7 @@ const parseBody = require('./_parseBody');
 const { db, admin } = require('./_firebaseAdmin');
 const { loadOauthConfig, loadAccountTokens, refreshAccessToken } = require('./_gmailSend');
 const { findLeadDoc } = require('./_leadLookup');
+const { estBloque } = require('./_blockedContacts');
 
 const CFG_DOC = 'gmail_inbound';
 const DEFAULT_ACCOUNT = 'strategie';
@@ -334,6 +335,7 @@ async function run(opts) {
       };
 
       let reason = isOurs(from.email, accountEmail) ? 'nos_adresses' : robotReason(h, msg.labelIds, from, subject, parts);
+      if (!reason && await estBloque({ email: from.email })) reason = 'blacklist';
       let text = '';
       if (!reason) {
         text = stripQuote(parts.plain || htmlToText(parts.html));

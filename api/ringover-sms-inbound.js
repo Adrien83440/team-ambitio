@@ -2,6 +2,7 @@
 const { db, admin } = require('./_firebaseAdmin');
 const { ringoverFetch } = require('./_ringoverClient');
 const { phoneNormalized, telVariants } = require('./_leadLookup');
+const { estBloque, tracerEntrantBloque } = require('./_blockedContacts');
 
 const OPT_OUT = new Set(['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit']);
 
@@ -157,6 +158,17 @@ module.exports = async (req, res) => {
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }).catch(() => {});
       }
+      res.status(200).end();
+      return;
+    }
+
+    // Contact blacklisté : trace seulement, ni fiche ni notification.
+    if (await estBloque({ phone: fromNumber })) {
+      console.log('[sms-inbound] contact bloqué, ignoré :', fromNumber);
+      await tracerEntrantBloque({
+        type: 'sms', fromNumber, toNumber: toNumber || null, preview: text.substring(0, 200),
+        source: 'ringover', providerMessageId: String(msgId || ''), createdAt: new Date(),
+      });
       res.status(200).end();
       return;
     }

@@ -234,6 +234,118 @@ async function cancelUpcomingBookings(lead, leadId, auth, reason) {
   return { bookings: done, warnings };
 }
 
+/* Écrit le blocage (ou le déblocage) d'UNE valeur d'une fiche : blacklist,
+   marquage de la fiche, RDV à venir, audit. Partagé avec api/inbox-spam.js. */
+async function appliquerBlocage({ lead, leadId, t, action, reason, auth }) {
+  const target = t.type;
+  const batch = db.batch();
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const ref = db.collection('blocked_contacts').doc(t.key);
+
+  if (action === 'block') {
+    batch.set(ref, {
+      type: t.type,
+      value: t.value,
+      reason: reason || null,
+      leadId,
+      leadName: lead.nom || null,
+      by: auth.uid || null,
+      byEmail: auth.email || null,
+      at: now,
+    });
+  } else {
+    batch.delete(ref);
+  }
+
+  /* Marquage de la fiche — un drapeau PAR VALEUR, jamais de suppression :
+     l'historique reste, et on sait exactement laquelle des deux coordonnées
+     est refusée à l'entrée. */
+  const DEL = admin.firestore.FieldValue.delete();
+  const flag = target === 'email' ? 'blockedEmail' : 'blockedPhone';
+  const otherFlag = target === 'email' ? 'blockedPhone' : 'blockedEmail';
+  const otherStillBlocked = lead[otherFlag] === true;
+  const leadPatch = {
+    updatedAt: now,
+    timeline_history: admin.firestore.FieldValue.arrayUnion({
+      text: (action === 'block' ? '🚫 Blacklist ' : '✅ Blacklist levée ')
+          + (target === 'email' ? 'email ' + t.value : 'numéro ' + t.value)
+          + (reason ? ' — ' + reason : '')
+          + (auth.email ? ' (par ' + auth.email + ')' : ''),
+      date: new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }),
+      color: action === 'block' ? '#ef4444' : '#34d399',
+    }),
+  };
+  leadPatch[flag] = action === 'block' ? true : DEL;
+  /* `blocked` = au moins une coordonnée blacklistée (sert à l'affichage). */
+  leadPatch.blocked = action === 'block' ? true : otherStillBlocked;
+  if (action === 'block') {
+    leadPatch.blockedAt = now;
+    leadPatch.blockedBy = auth.email || auth.uid || null;
+    leadPatch.blockedReason = reason || null;
+    /* Sort la fiche des files de travail. Débloquer ne devine PAS un
+       statut : c'est à l'équipe de la requalifier. */
+    leadPatch.status = 'poubelle';
+    leadPatch.stage = 'poubelle';
+  } else if (!otherStillBlocked) {
+    leadPatch.blockedAt = DEL;
+    leadPatch.blockedBy = DEL;
+    leadPatch.blockedReason = DEL;
+  }
+  batch.update(db.collection('leads').doc(leadId), leadPatch);
+
+  await batch.commit();
+
+  /* RDV à venir du contact — après le blocage, qui reste acquis même si
+     l'annulation échoue (l'erreur est rendue dans warnings). */
+  let cancelled = { bookings: [], warnings: [] };
+  if (action === 'block') {
+    try {
+      cancelled = await cancelUpcomingBookings(lead, leadId, auth, reason);
+    } catch (e) {
+      console.error('[lead-block] annulation RDV:', e && e.message);
+      cancelled.warnings.push('Annulation des RDV à venir en échec : ' + ((e && e.message) || e));
+    }
+    const nOk = cancelled.bookings.filter(function (b) { return b.ok; }).length;
+    if (nOk) {
+      try {
+        await db.collection('leads').doc(leadId).update({
+          timeline_history: admin.firestore.FieldValue.arrayUnion({
+            text: '🔴 ' + nOk + ' RDV à venir annulé' + (nOk > 1 ? 's' : '') + ' (contact blacklisté) : '
+                + cancelled.bookings.filter(function (b) { return b.ok; }).map(function (b) {
+                  return (b.date || '').split('-').reverse().join('/') + ' ' + (b.time || '');
+                }).join(', '),
+            date: new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }),
+            color: '#ef4444',
+          }),
+        });
+      } catch (e) {
+        console.warn('[lead-block] timeline RDV annulés:', e && e.message);
+      }
+    }
+  }
+
+  /* Trace d'audit — best-effort, ne doit jamais faire échouer l'action. */
+  try {
+    await db.collection('audit_log').add({
+      type: 'lead_block',
+      action,
+      target,
+      leadId,
+      key: t.key,
+      value: t.value,
+      reason: reason || null,
+      actorUid: auth.uid || null,
+      actorEmail: auth.email || null,
+      bookingsCancelled: cancelled.bookings.map(function (b) { return { id: b.id, ok: b.ok, calendar: b.calendar }; }),
+      at: now,
+    });
+  } catch (e) {
+    console.warn('[lead-block] audit_log:', e && e.message);
+  }
+
+  return cancelled;
+}
+
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
 
@@ -271,114 +383,12 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const batch = db.batch();
-    const now = admin.firestore.FieldValue.serverTimestamp();
-    const ref = db.collection('blocked_contacts').doc(t.key);
-
-    if (action === 'block') {
-      batch.set(ref, {
-        type: t.type,
-        value: t.value,
-        reason: reason || null,
-        leadId,
-        leadName: lead.nom || null,
-        by: auth.uid || null,
-        byEmail: auth.email || null,
-        at: now,
-      });
-    } else {
-      batch.delete(ref);
-    }
-
-    /* Marquage de la fiche — un drapeau PAR VALEUR, jamais de suppression :
-       l'historique reste, et on sait exactement laquelle des deux coordonnées
-       est refusée à l'entrée. */
-    const DEL = admin.firestore.FieldValue.delete();
-    const flag = target === 'email' ? 'blockedEmail' : 'blockedPhone';
-    const otherFlag = target === 'email' ? 'blockedPhone' : 'blockedEmail';
-    const otherStillBlocked = lead[otherFlag] === true;
-    const leadPatch = {
-      updatedAt: now,
-      timeline_history: admin.firestore.FieldValue.arrayUnion({
-        text: (action === 'block' ? '🚫 Blacklist ' : '✅ Blacklist levée ')
-            + (target === 'email' ? 'email ' + t.value : 'numéro ' + t.value)
-            + (reason ? ' — ' + reason : '')
-            + (auth.email ? ' (par ' + auth.email + ')' : ''),
-        date: new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }),
-        color: action === 'block' ? '#ef4444' : '#34d399',
-      }),
-    };
-    leadPatch[flag] = action === 'block' ? true : DEL;
-    /* `blocked` = au moins une coordonnée blacklistée (sert à l'affichage). */
-    leadPatch.blocked = action === 'block' ? true : otherStillBlocked;
-    if (action === 'block') {
-      leadPatch.blockedAt = now;
-      leadPatch.blockedBy = auth.email || auth.uid || null;
-      leadPatch.blockedReason = reason || null;
-      /* Sort la fiche des files de travail. Débloquer ne devine PAS un
-         statut : c'est à l'équipe de la requalifier. */
-      leadPatch.status = 'poubelle';
-      leadPatch.stage = 'poubelle';
-    } else if (!otherStillBlocked) {
-      leadPatch.blockedAt = DEL;
-      leadPatch.blockedBy = DEL;
-      leadPatch.blockedReason = DEL;
-    }
-    batch.update(db.collection('leads').doc(leadId), leadPatch);
-
-    await batch.commit();
-
-    /* RDV à venir du contact — après le blocage, qui reste acquis même si
-       l'annulation échoue (l'erreur est rendue dans warnings). */
-    let cancelled = { bookings: [], warnings: [] };
-    if (action === 'block') {
-      try {
-        cancelled = await cancelUpcomingBookings(lead, leadId, auth, reason);
-      } catch (e) {
-        console.error('[lead-block] annulation RDV:', e && e.message);
-        cancelled.warnings.push('Annulation des RDV à venir en échec : ' + ((e && e.message) || e));
-      }
-      const nOk = cancelled.bookings.filter(function (b) { return b.ok; }).length;
-      if (nOk) {
-        try {
-          await db.collection('leads').doc(leadId).update({
-            timeline_history: admin.firestore.FieldValue.arrayUnion({
-              text: '🔴 ' + nOk + ' RDV à venir annulé' + (nOk > 1 ? 's' : '') + ' (contact blacklisté) : '
-                  + cancelled.bookings.filter(function (b) { return b.ok; }).map(function (b) {
-                    return (b.date || '').split('-').reverse().join('/') + ' ' + (b.time || '');
-                  }).join(', '),
-              date: new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }),
-              color: '#ef4444',
-            }),
-          });
-        } catch (e) {
-          console.warn('[lead-block] timeline RDV annulés:', e && e.message);
-        }
-      }
-    }
-
-    /* Trace d'audit — best-effort, ne doit jamais faire échouer l'action. */
-    try {
-      await db.collection('audit_log').add({
-        type: 'lead_block',
-        action,
-        target,
-        leadId,
-        key: t.key,
-        value: t.value,
-        reason: reason || null,
-        actorUid: auth.uid || null,
-        actorEmail: auth.email || null,
-        bookingsCancelled: cancelled.bookings.map(function (b) { return { id: b.id, ok: b.ok, calendar: b.calendar }; }),
-        at: now,
-      });
-    } catch (e) {
-      console.warn('[lead-block] audit_log:', e && e.message);
-    }
-
+    const cancelled = await appliquerBlocage({ lead, leadId, t, action, reason, auth });
     res.status(200).json({ ok: true, action, target, key: t.key, value: t.value, bookingsCancelled: cancelled.bookings, warnings: cancelled.warnings });
   } catch (e) {
     console.error('[lead-block]', e && e.message);
     res.status(500).json({ ok: false, error: 'server_error' });
   }
 };
+
+module.exports.appliquerBlocage = appliquerBlocage;

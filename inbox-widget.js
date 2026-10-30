@@ -64,6 +64,7 @@
   const TOAST_TTL_MS = 6000;       // durée d'affichage d'un toast
   const SOUND_DEBOUNCE_MS = 1500;  // ne pas spammer le son
   const SMS_SEND_ENDPOINT = '/api/ringover-sms-send';
+  const SPAM_ENDPOINT = '/api/inbox-spam';
   const WA_SEND_ENDPOINT  = '/api/whatsapp-send';
   // Même plafond que api/whatsapp-send.js : au-delà, Vercel refuse le corps de
   // la requête avant même d'appeler la fonction.
@@ -77,6 +78,8 @@
   let currentRole = null;
   let unsubscribeListener = null;
   let notifications = [];          // cache local des notifs
+  let notifsBrutes = [];           // la même chose avant dédoublonnage (cf. idsConversation)
+  let composerNotif = null;        // notif dont la conversation est ouverte
   let lastSoundAt = 0;
   let initialSnapshotDone = false;
   let activeFilter = 'all';        // 'all' | 'unread' | 'sms' | 'calls'
@@ -414,6 +417,8 @@
           // Ouvrir la fiche sans quitter la conversation des yeux : répondre
           // puis chercher le lead à la main était le geste le plus fréquent.
           '<a class="iw-comp-fiche" title="Ouvrir la fiche dans Leads Live" style="display:none">Fiche ↗</a>' +
+          '<button class="iw-comp-spam" data-spam="block" title="Bloquer ce contact">🚫</button>' +
+          '<button class="iw-comp-spam" data-spam="delete" title="Supprimer de l\'Inbox">🗑</button>' +
           '<button class="iw-comp-close" title="Fermer">×</button>' +
         '</div>' +
       '</div>' +
@@ -437,6 +442,11 @@
     document.body.appendChild(composer);
 
     composer.querySelector('.iw-comp-close').addEventListener('click', closeComposer);
+    // Sur téléphone, pas de survol : c'est ici que se trouvent ces deux gestes.
+    composer.querySelector('.iw-comp-head-actions').addEventListener('click', function (e) {
+      const b = e.target.closest('.iw-comp-spam');
+      if (b && composerNotif) traiterSpam(composerNotif, b.dataset.spam);
+    });
     composer.querySelector('.iw-comp-send').addEventListener('click', sendComposerMessage);
 
     // Pièce jointe : WhatsApp uniquement. Le SMS Ringover ne transporte pas de
@@ -517,12 +527,16 @@
     listEl.innerHTML = groups.map(renderGroupItem).join('');
   }
 
+  function cleConversation(n) {
+    return n.leadId ? ('lead:' + n.leadId) : (n.fromNumber ? ('num:' + n.fromNumber) : ('id:' + n.id));
+  }
+
   // Regroupe une liste de notifs par conversation, triée par activité récente.
   // Chaque groupe : { rep (notif la plus récente), count, unreadCount, ids[] }.
   function groupNotifs(list) {
     const map = new Map();
     list.forEach(n => {
-      const key = n.leadId ? ('lead:' + n.leadId) : (n.fromNumber ? ('num:' + n.fromNumber) : ('id:' + n.id));
+      const key = cleConversation(n);
       let g = map.get(key);
       if (!g) {
         g = { key: key, rep: n, count: 0, unreadCount: 0, ids: [] };
@@ -564,6 +578,10 @@
     if (notif.leadId) {
       actions.push('<button class="iw-action-btn" data-action="open" title="Ouvrir fiche">👁</button>');
     }
+    if (notif.fromNumber || notif.fromEmail) {
+      actions.push('<button class="iw-action-btn" data-action="block" title="Bloquer ce contact">🚫</button>');
+    }
+    actions.push('<button class="iw-action-btn" data-action="delete" title="Supprimer de l\'Inbox">🗑</button>');
 
     // Badge compteur : nombre de messages non lus dans la conversation (ou
     // nombre total de messages si tout est lu, pour signaler un fil multi-SMS).
@@ -735,6 +753,10 @@
   }
 
   function handleNotifAction(notif, action) {
+    if (action === 'block' || action === 'delete') {
+      traiterSpam(notif, action);
+      return;
+    }
     if (action === 'whatsapp') {
       markAsRead(notif);
       openComposer(notif);
@@ -768,6 +790,57 @@
       if (target) window.location.href = target;
       return;
     }
+  }
+
+  // Toutes les notifs de la conversation, y compris celles masquées par l'onglet
+  // actif ou le dédoublonnage : un doublon oublié réapparaîtrait aussitôt à la
+  // place de la ligne supprimée. La notif affichée d'abord : c'est son
+  // expéditeur que le serveur bloque.
+  function idsConversation(notif) {
+    const cle = cleConversation(notif);
+    const autres = notifsBrutes.filter(n => n.id !== notif.id && cleConversation(n) === cle).map(n => n.id);
+    return [notif.id].concat(autres);
+  }
+
+  function messageSpam(notif, action) {
+    const qui = notif.leadName || notif.fromNumber || notif.fromEmail || 'ce contact';
+    if (action === 'delete') {
+      return 'Supprimer la conversation avec ' + qui + ' de l\'Inbox ?\n\nElle disparaît pour toute l\'équipe. La fiche et son historique ne bougent pas.';
+    }
+    return 'Bloquer ' + (notif.fromNumber || notif.fromEmail) + ' ?\n\nSes prochains messages n\'arriveront plus et sa conversation disparaît de l\'Inbox.' +
+      (notif.leadId ? '\n\nSa fiche part en poubelle et ses RDV à venir sont annulés.' : '');
+  }
+
+  async function traiterSpam(notif, action) {
+    if (!window.confirm(messageSpam(notif, action))) return;
+    const ids = idsConversation(notif);
+    let data = null;
+    try {
+      const idToken = await firebaseAuth.currentUser.getIdToken();
+      const resp = await fetch(SPAM_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+        body: JSON.stringify({ action: action, notifIds: ids }),
+      });
+      data = await resp.json().catch(() => null);
+    } catch (e) {
+      console.warn('[InboxWidget] spam:', e);
+    }
+    if (!data || !data.ok) {
+      const motif = data && data.error;
+      window.alert(motif === 'lead_is_client'
+        ? 'C\'est un client : le blocage se fait depuis sa fiche, pas depuis l\'Inbox.'
+        : 'Action impossible, réessaie.');
+      return;
+    }
+    if (data.warnings && data.warnings.length) window.alert(data.warnings.join('\n'));
+    // Le listener retire aussi ces lignes ; le polling Safari, lui, attendrait 15 s.
+    const parties = new Set((data.archived || []).concat(ids));
+    notifsBrutes = notifsBrutes.filter(n => !parties.has(n.id));
+    notifications = notifications.filter(n => !parties.has(n.id));
+    if (composerNotif && parties.has(composerNotif.id)) closeComposer();
+    updateBadge();
+    renderList();
   }
 
   function markAsRead(notif) {
@@ -1026,6 +1099,8 @@
     const composer = document.getElementById('ambitio-inbox-composer');
     if (!composer) return;
     composerLeadId = notif.leadId || null;
+    composerNotif = notif;
+    composer.querySelector('[data-spam="block"]').style.display = (notif.fromNumber || notif.fromEmail) ? '' : 'none';
 
     composer.querySelector('.iw-comp-to-name').textContent = notif.leadName || 'Numéro inconnu';
     composer.querySelector('.iw-comp-to').textContent = notif.fromNumber || '';
@@ -1088,6 +1163,7 @@
     if (!composer) return;
     composer.classList.remove('open');
     composerLeadId = null;
+    composerNotif = null;
     // Sans ce détachement, chaque ouverture empilerait un écouteur temps réel
     // de plus sur Firestore, et le panneau finirait par rendre le fil d'une
     // conversation qu'on a quittée.
@@ -1352,6 +1428,7 @@
         });
       }
 
+      notifsBrutes = newNotifs;
       notifications = iwDedupeNotifs(newNotifs);
       initialSnapshotDone = true;
       updateBadge();
@@ -1382,6 +1459,7 @@
           }
         });
         _lastPollIds = new Set(newNotifs.map(n => n.id));
+        notifsBrutes = newNotifs;
         notifications = iwDedupeNotifs(newNotifs);
         initialSnapshotDone = true;
         updateBadge();
@@ -1396,6 +1474,7 @@
     if (_pollTimerId) { clearInterval(_pollTimerId); _pollTimerId = null; }
     if (unsubscribeListener) { unsubscribeListener(); unsubscribeListener = null; }
     notifications = [];
+    notifsBrutes = [];
     initialSnapshotDone = false;
     updateBadge();
     renderList();

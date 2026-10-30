@@ -32,6 +32,7 @@
 
 const crypto = require('crypto');
 const { db, admin } = require('./_firebaseAdmin');
+const { estBloque } = require('./_blockedContacts');
 const { getWhatsappCreds, majConversation, rattacherLead,
         importerMediaEntrant, FENETRE_MS } = require('./_whatsappClient');
 
@@ -250,6 +251,10 @@ async function enregistrerEntrant(msg, contacts) {
   if (!wamid) return;
 
   const de = msg.from || null;
+  /* Contact blacklisté : le message reste dans whatsapp_inbound, et rien
+     d'autre. Ni boîte partagée, ni fenêtre de 24 h rouverte, ni cloche, ni
+     téléchargement de pièce jointe. */
+  const bloque = de ? await estBloque({ phone: de }) : null;
   let nom = null;
   if (Array.isArray(contacts)) {
     const c = contacts.find((x) => x && x.wa_id === de);
@@ -291,7 +296,9 @@ async function enregistrerEntrant(msg, contacts) {
     extra.legende = legende;
     extra.libelleMedia = libelle;
 
-    const imp = await importerMediaEntrant({ mediaId: charge.id, numero: de, wamid: wamid });
+    const imp = bloque
+      ? { ok: false, erreur: 'contact_bloque' }
+      : await importerMediaEntrant({ mediaId: charge.id, numero: de, wamid: wamid });
     if (imp.ok) {
       extra.mediaUrl = imp.mediaUrl;
       extra.mime = imp.mime || extra.mime;
@@ -324,6 +331,7 @@ async function enregistrerEntrant(msg, contacts) {
       at: Date.now(),
       date: new Date().toISOString(),
       traite: false,
+      bloque: !!bloque,
     }, { merge: true });
   } catch (e) {
     console.error('[whatsapp-webhook] entrant', wamid, e && e.message);
@@ -331,7 +339,7 @@ async function enregistrerEntrant(msg, contacts) {
 
   /* Et il rejoint la boîte partagée, en rouvrant la fenêtre de 24 h. C'est le
      seul évènement qui autorise à nouveau un message libre vers ce contact. */
-  if (de) {
+  if (de && !bloque) {
     await majConversation(de, {
       sens: 'in',
       wamid: wamid,
