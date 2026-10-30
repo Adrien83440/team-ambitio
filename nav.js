@@ -2332,141 +2332,53 @@
   var wrapTimer = null;
   function scheduleWrap() { if (wrapTimer || mode() === 'desk') return; wrapTimer = setTimeout(function () { wrapTimer = null; wrapTables(); }, 400); }
 
-  /* ── Colonne système sur le côté (écran de façade de l'iPhone Fold) ──
-     En application installée (écran d'accueil), iOS réserve sur cet écran
-     une colonne à droite pour l'heure et le réseau, et laisse la page à côté.
-     Comme les applis natives, on y range les boutons du haut : la page
-     demande alors tout l'écran (viewport-fit=cover), mesure la colonne
-     (env(safe-area-inset-right)) et y place ☰, la barre de Leads Live et le
-     bouton des outils (html.al-side-col, --al-col-w, cf. mobile.css).
-     Garde-fous : uniquement en application installée, en portrait, quand la
-     page est nettement plus étroite que l'écran, et si iOS confirme une
-     colonne d'un seul côté ; sinon on revient à l'affichage d'origine.
-     Safari (navigateur) : cette colonne lui appartient, rien ne change. */
-  function isStandalone() {
-    return window.navigator.standalone === true || mq('(display-mode: standalone)').matches;
+  /* ── Commandes à droite (écran de façade de l'iPhone Fold) ────────────
+     Sur l'écran de façade, iOS garde à droite une colonne pour l'heure et le
+     réseau. Les applis natives (Instagram) y rangent leurs commandes ; une
+     page web n'y a pas accès : iOS ne lui donne que la largeur à côté
+     (382 pt sur 466, zone sûre à 0, même en viewport-fit=cover — relevé
+     publié et essais du 30/10). On range donc ☰, la barre de Leads Live
+     (avatar, thème, agenda, recherche, +) et le bouton des outils dans une
+     colonne d'icônes de 52 px à droite DANS la page (html.al-side-col
+     .al-side-rail, cf. mobile.css §7) : la page récupère la hauteur de sa
+     barre du haut.
+     Deux déclencheurs, en portrait et format téléphone seulement :
+     - l'interrupteur « Commandes à droite » du menu de Leads Live
+       (localStorage al_rail_right, propre à l'appareil) ;
+     - automatique quand l'écran se déclare nettement plus large que la page
+       (Safari sur l'écran de façade, dont la colonne porte ses boutons).
+     Un iPhone classique et le bureau ne sont pas concernés. */
+  var RAIL_KEY = 'al_rail_right';
+  function railWanted() {
+    try { return localStorage.getItem(RAIL_KEY) === '1'; } catch (e) { return false; }
   }
-  var probe = null;
-  function insets() {
-    if (!document.body) return { t: 0, r: 0, b: 0, l: 0 };
-    if (!probe) {
-      probe = document.createElement('div');
-      probe.setAttribute('aria-hidden', 'true');
-      probe.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;' +
-        'padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
-      document.body.appendChild(probe);
-    }
-    var cs = getComputedStyle(probe);
-    return { t: parseFloat(cs.paddingTop) || 0, r: parseFloat(cs.paddingRight) || 0, b: parseFloat(cs.paddingBottom) || 0, l: parseFloat(cs.paddingLeft) || 0 };
-  }
-  function viewportMeta() { return document.querySelector('meta[name="viewport"]'); }
-  function hasCover() { var m = viewportMeta(); return !!(m && /viewport-fit\s*=\s*cover/.test(m.getAttribute('content') || '')); }
-  var coverAdded = false;
-  function setCover(on) {
-    var m = viewportMeta(); if (!m) return;
-    var c = (m.getAttribute('content') || '').replace(/\s*,?\s*viewport-fit\s*=\s*[a-z]+/g, '');
-    m.setAttribute('content', on ? c + ',viewport-fit=cover' : c);
-    coverAdded = !!on;
-  }
-  /* Largeur de la colonne quand iOS étend la page sans la déclarer en zone
-     sûre (relevé du 30/10 : comme Instagram, la page peut dessiner sous
-     l'heure, seule l'heure est protégée) — mesurée par l'élargissement de la
-     page après viewport-fit=cover. 0 = colonne déclarée par les zones sûres. */
-  var colByWidth = 0;
-  function applySideCol() {
-    var ins = insets(), portrait = window.innerHeight > window.innerWidth;
-    var side = '', w = 0;
-    if (portrait && ins.r >= 40 && ins.l < 20) { side = 'r'; w = ins.r; }
-    else if (portrait && colByWidth && ins.l < 20) { side = 'r'; w = Math.max(colByWidth, ins.r); }
-    de.classList.toggle('al-side-col', side === 'r');
-    if (side) de.style.setProperty('--al-col-w', Math.round(w) + 'px');
-    else de.style.removeProperty('--al-col-w');
-    if (grouped()) layoutFabs();
-    return !!side;
-  }
-  var sideChecked = false;
-  /* Relevé de la décision (carte de diagnostic, compte d'Adrien seulement,
-     cf. showSideDiag) : sert à régler la colonne sur l'appareil réel. */
-  var sideDiag = null;
-  function fmtIns(i) { return 'h ' + i.t + ' · d ' + i.r + ' · b ' + i.b + ' · g ' + i.l; }
-  function checkSideCol() {
-    if (IN_FRAME || !document.body) return;
-    if (sideChecked) { if (hasCover()) applySideCol(); return; }
-    sideChecked = true;
-    var portrait = window.innerHeight > window.innerWidth;
-    var screenW = portrait ? Math.min(screen.width, screen.height) : Math.max(screen.width, screen.height);
-    sideDiag = {
-      standalone: isStandalone(), navStandalone: window.navigator.standalone, portrait: portrait,
-      screen: screen.width + '×' + screen.height, avail: screen.availWidth + '×' + screen.availHeight,
-      page: window.innerWidth + '×' + window.innerHeight, docW: document.documentElement.clientWidth,
-      dpr: window.devicePixelRatio, insBefore: fmtIns(insets()), coverBefore: hasCover(), decision: ''
-    };
-    if (!sideDiag.standalone) {
-      sideDiag.decision = useRail() ? 'Safari : sa colonne est à lui → rangée d’icônes à droite dans la page' : 'Safari, pas de colonne → rien';
-      return showSideDiag();
-    }
-    if (hasCover()) { sideDiag.decision = applySideCol() ? 'colonne activée (cover déjà là)' : 'cover déjà là, pas de colonne mesurée'; return showSideDiag(); }
-    if (!portrait || screenW - window.innerWidth < 40) { sideDiag.decision = 'écart écran − page < 40 px → rien'; return showSideDiag(); }
-    // Sans confirmation d'iOS, on retombera sur la rangée d'icônes dans la page.
-    var wBefore = window.innerWidth;
-    setCover(true);
-    setTimeout(function () {
-      var wAfter = window.innerWidth, grown = wAfter - wBefore;
-      sideDiag.pageAfter = wAfter + '×' + window.innerHeight + ' (+' + grown + ' px)';
-      sideDiag.insAfter = fmtIns(insets());
-      // Page élargie d'au moins 40 px sans dépasser l'écran : la colonne est à nous.
-      if (grown >= 40 && wAfter <= screenW + 2) colByWidth = grown;
-      if (applySideCol()) sideDiag.decision = colByWidth ? 'colonne activée (page élargie de ' + grown + ' px)' : 'colonne activée (zones sûres)';
-      else { colByWidth = 0; setCover(false); sideDiag.decision = 'cover essayé, ni zone sûre ni page élargie → ' + (useRail() ? 'rangée d’icônes dans la page' : 'rien'); }
-      showSideDiag();
-    }, 450);
-  }
-  function getRoleSafe() { return window._currentRole || localStorage.getItem('ambitio_role') || ''; }
-  /* Rangée d'icônes dans la page, à droite (html.al-side-col.al-side-rail) :
-     quand la colonne du côté n'est pas utilisable — Safari y met ses propres
-     boutons. Même disposition que la colonne système, dans une bande de
-     52 px de la page. Uniquement en portrait, format téléphone, et quand la
-     page est nettement plus étroite que l'écran (écran de façade du Fold) :
-     un iPhone classique dans Safari n'est pas concerné. */
   function useRail() {
     var portrait = window.innerHeight > window.innerWidth;
     var screenW = portrait ? Math.min(screen.width, screen.height) : Math.max(screen.width, screen.height);
-    var ok = !IN_FRAME && portrait && mode() === 'phone' && screenW - window.innerWidth >= 40 && !hasCover();
+    var auto = screenW - window.innerWidth >= 40;
+    var forced = railWanted() && !!document.body && document.body.classList.contains('ll5');
+    var ok = !IN_FRAME && portrait && mode() === 'phone' && (forced || auto);
     de.classList.toggle('al-side-rail', ok);
+    de.classList.toggle('al-side-col', ok);
     if (ok) {
-      de.classList.add('al-side-col');
       de.style.setProperty('--al-col-w', '52px');
       de.style.setProperty('--al-col-top', '10px');
-    } else if (!de.classList.contains('al-side-col') || !hasCover()) {
-      de.classList.remove('al-side-col');
+    } else {
       de.style.removeProperty('--al-col-w'); de.style.removeProperty('--al-col-top');
+    }
+    var on = railWanted();
+    var items = document.querySelectorAll('[data-al-rail]');
+    for (var i = 0; i < items.length; i++) {
+      items[i].classList.toggle('on', on);
+      var lb = items[i].querySelector('.lb');
+      if (lb) lb.textContent = on ? 'Commandes à droite : oui' : 'Commandes à droite : non';
     }
     if (grouped()) layoutFabs();
     return ok;
   }
-  function showSideDiag() {
-    // Admins, en application installée seulement (dans Safari la réponse est connue).
-    if (getRoleSafe() !== 'admin' || !isStandalone() || mode() !== 'phone' || !MQ_TOUCH.matches) return;
-    if (localStorage.getItem('al_side_diag_off2') === '1' || !sideDiag || document.getElementById('al-side-diag')) return;
-    var d = sideDiag, el = document.createElement('div');
-    el.id = 'al-side-diag';
-    el.style.cssText = 'position:fixed;left:8px;right:8px;top:8px;z-index:100001;background:rgba(10,10,24,.94);color:#e5e7eb;' +
-      'font:600 12px/1.45 ui-monospace,Menlo,monospace;padding:10px 12px;border-radius:12px;border:1px solid rgba(139,92,246,.6);box-shadow:0 8px 30px rgba(0,0,0,.5)';
-    var rows = [['application installée', d.standalone + ' (navigator.standalone ' + d.navStandalone + ')'], ['écran', d.screen + ' · dispo ' + d.avail],
-      ['page', d.page + ' · html ' + d.docW + ' · dpr ' + d.dpr], ['zones sûres', d.insBefore], ['cover au départ', d.coverBefore]];
-    if (d.pageAfter) { rows.push(['page après cover', d.pageAfter]); rows.push(['zones après cover', d.insAfter]); }
-    rows.push(['décision', d.decision]);
-    var h = '<div style="font-weight:800;color:#c4b5fd;margin-bottom:4px">📐 Diagnostic écran — capture et envoie à Claude</div>';
-    rows.forEach(function (r) { h += '<div><span style="color:#9ca3af">' + r[0] + ' :</span> ' + esc(String(r[1])) + '</div>'; });
-    h += '<div style="display:flex;gap:8px;margin-top:8px"><button type="button" data-d="hide" style="flex:1;min-height:36px;border-radius:9px;border:1px solid rgba(255,255,255,.2);background:transparent;color:#fff;font:700 12px system-ui">Masquer</button>' +
-      '<button type="button" data-d="off" style="flex:1;min-height:36px;border-radius:9px;border:0;background:#8b5cf6;color:#fff;font:700 12px system-ui">Ne plus afficher</button></div>';
-    el.innerHTML = h;
-    el.addEventListener('click', function (ev) {
-      var b = ev.target.closest ? ev.target.closest('[data-d]') : null; if (!b) return;
-      if (b.getAttribute('data-d') === 'off') localStorage.setItem('al_side_diag_off2', '1');
-      el.remove();
-    });
-    document.body.appendChild(el);
+  function setRail(on) {
+    try { if (on) localStorage.setItem(RAIL_KEY, '1'); else localStorage.removeItem(RAIL_KEY); } catch (e) {}
+    useRail();
   }
 
   var lastMode = null;
@@ -2483,19 +2395,21 @@
   applyMode();
   onMq(MQ_PHONE, applyMode); onMq(MQ_COMPACT, applyMode);
   var rz = null;
-  window.addEventListener('resize', function () { if (rz) cancelAnimationFrame(rz); rz = requestAnimationFrame(function () { applyMode(); if (sideChecked && hasCover()) applySideCol(); else if (sideChecked && de.classList.contains('al-side-rail')) useRail(); }); });
-  window.addEventListener('orientationchange', function () { setTimeout(function () { applyMode(); checkSideCol(); }, 250); });
+  window.addEventListener('resize', function () { if (rz) cancelAnimationFrame(rz); rz = requestAnimationFrame(function () { applyMode(); useRail(); }); });
+  window.addEventListener('orientationchange', function () { setTimeout(function () { applyMode(); useRail(); }, 250); });
   try { if (navigator.devicePosture && navigator.devicePosture.addEventListener) navigator.devicePosture.addEventListener('change', applyMode); } catch (e) {}
 
   function onReady() {
     buildLauncher();
     syncSidebar();
     applyMode();
-    checkSideCol();
+    useRail();
     if (window.MutationObserver) new MutationObserver(scheduleWrap).observe(document.body, { childList: true, subtree: true });
     document.addEventListener('click', function (ev) {
       var t = ev.target && ev.target.closest ? ev.target.closest('#navPosedToggle') : null;
       if (t) setPosed(!de.classList.contains('al-posed'));
+      var r = ev.target && ev.target.closest ? ev.target.closest('[data-al-rail]') : null;
+      if (r) setRail(!railWanted());
     });
     document.addEventListener('keydown', function (ev) {
       if (ev.key !== 'Escape') return;
@@ -2513,6 +2427,8 @@
     closeRail: closeRail,
     // Appelé à chaque (re)construction de la sidebar.
     onSidebar: function () { syncSidebar(); if (de.classList.contains('al-posed')) buildPanel(); },
-    setPosed: setPosed
+    setPosed: setPosed,
+    // Leads Live l'appelle une fois activé (body.ll5) : l'interrupteur ne vaut que là.
+    syncRail: useRail
   };
 })();

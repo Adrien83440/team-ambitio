@@ -1739,6 +1739,8 @@
     if (on) return;
     on = true;
     document.body.classList.add('ll3', 'll5');
+    /* Commandes à droite (écran de façade de l'iPhone Fold, cf. nav.js). */
+    if (window.AlMobile && window.AlMobile.syncRail) window.AlMobile.syncRail();
     patcherStatuts();
     /* L'en-tête historique est masqué : ses identifiants passent à la nouvelle liste. */
     ['l2Triage', 'l2FiltersBtn', 'l2SortBtn'].forEach(function (k) { var o = l2El(k); if (o) o.id = k + 'Ancien'; });
