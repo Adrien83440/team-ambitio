@@ -301,7 +301,7 @@ module.exports = async function (req, res) {
           mine: fu.closerUid === auth.uid, step: step, totalSteps: (fu.steps || []).length });
       });
       items.sort(function (a, b) { return (a.step.dueAt || 0) - (b.step.dueAt || 0); });
-      res.status(200).json({ ok: true, items: items, teamPending: auth.role === 'admin' ? teamPending : 0 });
+      res.status(200).json({ ok: true, items: items, teamPending: auth.role === 'admin' ? teamPending : 0, isAdmin: auth.role === 'admin' });
       return;
     }
 

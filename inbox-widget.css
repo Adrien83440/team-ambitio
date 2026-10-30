@@ -68,6 +68,77 @@
 
 #ambitio-inbox-fab .iw-fab-badge.hidden { display: none; }
 
+/* Follow-ups en retard (Leads Live) : pastille orange en bas à gauche,
+   distincte du compteur SMS/appels, SANS animation — c'est un rappel
+   silencieux, pas une alerte. */
+#ambitio-inbox-fab .iw-fab-fu {
+  position: absolute;
+  bottom: -4px;
+  left: -4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #c2410c 0%, #f97316 100%);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #1e1e2e;
+}
+
+#ambitio-inbox-fab .iw-fab-fu.hidden { display: none; }
+
+.iw-fu { flex-shrink: 0; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.iw-fu.hidden { display: none; }
+
+.iw-fu-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 9px 16px;
+  border: 0;
+  background: rgba(249, 115, 22, 0.1);
+  color: #fdba74;
+  font-family: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.iw-fu-row:hover { background: rgba(249, 115, 22, 0.16); }
+.iw-fu-row .iw-fu-go { margin-left: auto; font-weight: 700; transition: transform 0.15s ease; }
+.iw-fu.open .iw-fu-go { transform: rotate(180deg); }
+
+.iw-fu-list { display: none; max-height: 220px; overflow-y: auto; }
+.iw-fu.open .iw-fu-list { display: block; }
+
+.iw-fu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 16px;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.iw-fu-item:hover { background: rgba(255, 255, 255, 0.04); }
+.iw-fu-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.iw-fu-name i { font-weight: 400; opacity: 0.6; }
+.iw-fu-when { flex: none; font-size: 11px; color: #fdba74; }
+.iw-fu-more { padding: 7px 16px; font-size: 11px; opacity: 0.6; }
+
 /* ---------- PANNEAU ---------- */
 #ambitio-inbox-panel {
   position: fixed;

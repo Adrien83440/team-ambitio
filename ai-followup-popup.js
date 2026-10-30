@@ -8,7 +8,10 @@
    SMS ou email, puis : Envoyer · Pas cette fois · Ne plus relancer · Plus tard.
    Rien ne part sans ce clic (règle d'or du programme IA).
    Admin : bascule « Équipe » pour voir les relances en attente des autres.
-   Repli en pastille mémorisé (sessionStorage). ES5, sans SDK (jeton Auth).
+   Repli en pastille mémorisé (sessionStorage). Admins (30/10/2026) : la
+   pop-up démarre repliée en pastille tant qu'ils ne l'ont pas ouverte dans
+   la session — le rôle vient de l'API (isAdmin), car ambitio_role est forcé
+   à 'sales' en mode app. ES5, sans SDK (jeton Auth).
    ═══════════════════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
@@ -19,10 +22,18 @@
   var POLL_MS = 3 * 60 * 1000;
   var items = [], idx = 0, teamPending = 0, showAll = false, busy = false, channel = 'sms';
   var root = null;
+  var srvAdmin = false;   // rôle admin confirmé par /api/ai-followup
 
   function role() { try { return localStorage.getItem('ambitio_role') || ''; } catch (e) { return ''; } }
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
-  function minimized() { try { return sessionStorage.getItem('aifu_min') === '1'; } catch (e) { return false; } }
+  function isAdmin() { return srvAdmin || role() === 'admin'; }
+  function minimized() {
+    var v = null;
+    try { v = sessionStorage.getItem('aifu_min'); } catch (e) {}
+    if (v === '1') return true;
+    if (v === '0') return false;
+    return isAdmin();       // sans choix dans la session : repliée pour les admins
+  }
   function setMin(v) { try { sessionStorage.setItem('aifu_min', v ? '1' : '0'); } catch (e) {} }
   function user() {
     try { if (window.firebase && firebase.apps && firebase.apps.length && firebase.auth().currentUser) return firebase.auth().currentUser; } catch (e) {}
@@ -97,7 +108,7 @@
     var it = items[idx];
     var st = it.step || {};
     var h = '<div class="aifu-card"><div class="aifu-hd"><span>🤖</span><b>Relance proposée · étape ' + st.n + '/' + it.totalSteps + '</b>';
-    if (role() === 'admin') h += '<button type="button" class="aifu-x" data-fu="team" title="Basculer mes relances / toute l\'équipe">' + (showAll ? '👥' : '👤') + '</button>';
+    if (isAdmin()) h += '<button type="button" class="aifu-x" data-fu="team" title="Basculer mes relances / toute l\'équipe">' + (showAll ? '👥' : '👤') + '</button>';
     h += '<button type="button" class="aifu-x" data-fu="min" title="Réduire">—</button></div>';
     h += '<div class="aifu-bd"><div class="aifu-who">' + esc(it.prospectName) + '</div>';
     h += '<div class="aifu-sub">RDV ' + esc(outcomeLabel(it.outcome)) + (it.mine ? '' : ' · closer : ' + esc(it.closerName || '?')) + (st.dueAt ? ' · prévue le ' + dueLabel(st.dueAt) : '') + '</div>';
@@ -139,6 +150,7 @@
       var prevId = items[idx] && items[idx].id;
       items = j.items || [];
       teamPending = j.teamPending || 0;
+      srvAdmin = j.isAdmin === true;
       var k = -1;
       for (var i = 0; i < items.length; i++) if (items[i].id === prevId) k = i;
       idx = k >= 0 ? k : 0;

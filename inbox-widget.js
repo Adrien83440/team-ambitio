@@ -36,6 +36,14 @@
  * remplacée par un renvoi vers la boîte partagée, seule à porter les modèles
  * approuvés avec leurs variables.
  *
+ * FOLLOW-UPS EN RETARD (30/10/2026) : sur Leads Live, la page publie le
+ * liste des leads ayant un FU en retard (window.__fuOverdue { count, leads }
+ * + événement 'fu-overdue-changed'). La cloche l'affiche SANS bruit —
+ * pastille orange distincte du compteur SMS/appels — et le panneau en tête
+ * une section repliable ; un clic sur un lead émet 'fu-open-lead' (detail.id)
+ * et Leads Live ouvre sa fiche. Ailleurs, rien ne s'affiche : seule Leads
+ * Live charge les FU.
+ *
  * ARCHI : module IIFE auto-injectant, expose window.InboxWidget pour debug.
  * ==========================================================================
  */
@@ -311,7 +319,8 @@
     fab.title = 'Inbox SMS & appels';
     fab.innerHTML =
       '<span class="iw-fab-glyph">🔔</span>' +
-      '<span class="iw-fab-badge hidden">0</span>';
+      '<span class="iw-fab-badge hidden">0</span>' +
+      '<span class="iw-fab-fu hidden" title="Follow-ups en retard">0</span>';
     fab.addEventListener('click', togglePanel);
     document.body.appendChild(fab);
 
@@ -335,6 +344,10 @@
         '<button class="iw-tab" data-filter="whatsapp">WhatsApp</button>' +
         '<button class="iw-tab" data-filter="calls">Appels</button>' +
       '</div>' +
+      '<div class="iw-fu hidden">' +
+        '<button type="button" class="iw-fu-row" data-act="fu-toggle"></button>' +
+        '<div class="iw-fu-list"></div>' +
+      '</div>' +
       '<div class="iw-panel-list"></div>';
     document.body.appendChild(panel);
 
@@ -346,6 +359,18 @@
         activeFilter = tab.dataset.filter;
         panel.querySelectorAll('.iw-tab').forEach(t => t.classList.toggle('active', t === tab));
         renderList();
+        return;
+      }
+      // Follow-ups en retard : déplier la liste / ouvrir la fiche du lead
+      if (e.target.closest('[data-act="fu-toggle"]')) {
+        const box = panel.querySelector('.iw-fu');
+        if (box) box.classList.toggle('open');
+        return;
+      }
+      const fuItem = e.target.closest('.iw-fu-item');
+      if (fuItem) {
+        panel.classList.remove('open');
+        document.dispatchEvent(new CustomEvent('fu-open-lead', { detail: { id: fuItem.dataset.leadId } }));
         return;
       }
       // Action header
@@ -645,6 +670,35 @@
     const baseTitle = (window.__inboxBaseTitle = window.__inboxBaseTitle || document.title.replace(/^\(\d+\)\s*/, ''));
     document.title = unreadCount > 0 ? '(' + unreadCount + ') ' + baseTitle : baseTitle;
   }
+
+  const FU_LIST_MAX = 30;
+  function updateFuBadge() {
+    const fab = document.getElementById('ambitio-inbox-fab');
+    const pill = fab ? fab.querySelector('.iw-fab-fu') : null;
+    const box = document.querySelector('#ambitio-inbox-panel .iw-fu');
+    const fu = window.__fuOverdue || {};
+    const leads = fu.leads || [];
+    const n = fu.count || 0;
+    if (pill) {
+      pill.textContent = n > 99 ? '99+' : String(n);
+      pill.classList.toggle('hidden', n === 0);
+      pill.title = n + ' lead' + (n > 1 ? 's' : '') + ' avec un follow-up en retard';
+    }
+    if (!box) return;
+    box.classList.toggle('hidden', n === 0);
+    box.querySelector('.iw-fu-row').innerHTML =
+      '🔔 <b>' + n + '</b> lead' + (n > 1 ? 's' : '') + ' avec un follow-up en retard <span class="iw-fu-go">▾</span>';
+    let h = '';
+    leads.slice(0, FU_LIST_MAX).forEach(function (l) {
+      h += '<button type="button" class="iw-fu-item" data-lead-id="' + escapeHtml(l.id) + '">' +
+        '<span class="iw-fu-name">' + escapeHtml(l.nom) + (l.note ? ' <i>— ' + escapeHtml(l.note) + '</i>' : '') + '</span>' +
+        '<span class="iw-fu-when">' + escapeHtml(relativeTime(l.due)) + '</span>' +
+      '</button>';
+    });
+    if (leads.length > FU_LIST_MAX) h += '<div class="iw-fu-more">+ ' + (leads.length - FU_LIST_MAX) + ' autres</div>';
+    box.querySelector('.iw-fu-list').innerHTML = h;
+  }
+  document.addEventListener('fu-overdue-changed', updateFuBadge);
 
   // ---------- ACTIONS ----------
 
@@ -1393,6 +1447,7 @@
 
       // OK, on affiche
       if (fab) fab.style.display = 'flex';
+      updateFuBadge();
       ensureNotificationPermission();
       startListening();
     });

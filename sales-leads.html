@@ -1319,6 +1319,7 @@ body.ld-pilot-on .l2fam[data-fam="closing"] { display: none; }
 <!-- ── MENU ⋯ (partage / notifications / créer) ── -->
 <div class="l2menu" id="l2Menu">
   <button class="l2mi" id="pushBtn" title="Activer les notifications" onclick="requestPush()">🔕 <span>Activer les notifications</span></button>
+  <button class="l2mi" id="fuAlertsBtn" type="button" title="Alertes follow-up">🔔 <span>Alertes follow-up</span></button>
   <button class="l2mi" id="shareBtn" title="Liens app mobile" onclick="toggleSharePanel()">🔗 <span>Liens app mobile</span></button>
   <button class="l2mi" onclick="openCreateLead()" style="color:#34d399">➕ <span>Créer une fiche</span></button>
   <button class="l2mi" type="button" data-al-rail title="Écran de façade de l'iPhone Fold : barre du haut rangée en colonne à droite">➡️ <span class="lb">Commandes à droite : non</span></button>
@@ -9202,51 +9203,123 @@ async function deleteFollowUpCalendarEvent(removedFu, lead) {
 
 <!-- Follow-Up Reminder System -->
 <script>
-var _fuNotifiedIds = {};
+/* ═══ RAPPELS FOLLOW-UP (refonte 30/10/2026) ═══
+   1. Chaque FU ne sonne qu'UNE fois par appareil : les FU déjà signalés sont
+      mémorisés dans localStorage (FU_SEEN_KEY). Avant, la mémoire était
+      remise à zéro à chaque ouverture et TOUS les FU en retard re-sonnaient.
+      Au tout premier passage sur un appareil, les FU déjà en retard sont
+      marqués vus sans bruit (pas de rafale au déploiement).
+   2. Alertes (notif système + son + toast) réglables dans le menu ⋯ :
+      FU_ALERTS_KEY = '1' / '0' ; absent → coupées pour les admins (ils voient
+      tous les leads), actives pour les autres. Le rôle est relu dans
+      users/{uid} : en mode app (?app=1) ambitio_role est forcé à 'sales'.
+      Coupées, les FU restent marqués vus : les rallumer ne déclenche pas de
+      rafale.
+   3. Sans bruit, les FU en retard sont indiqués sur la cloche 🔔 de l'Inbox
+      (inbox-widget.js) via window.__fuOverdue { count, leads } + l'événement
+      'fu-overdue-changed' ; un clic sur un lead de la liste émet
+      'fu-open-lead' (detail.id) et ouvre sa fiche — marche aussi en mode
+      étapes, qui n'a pas de vue Follow-ups. */
+var FU_ALERTS_KEY = 'ambitio_fu_alerts';
+var FU_SEEN_KEY = 'ambitio_fu_seen';
+var FU_SEEN_TTL_MS = 60 * 24 * 3600 * 1000;
 var _fuCheckInterval = null;
+var _fuRealRole = null;      // null tant que users/{uid} n'est pas lu
+
+function fuLsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function fuLsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+function fuAlertsOn() {
+  var v = fuLsGet(FU_ALERTS_KEY);
+  if (v === '1') return true;
+  if (v === '0') return false;
+  return _fuRealRole !== 'admin';
+}
+
+function fuLoadSeen() {
+  var raw = fuLsGet(FU_SEEN_KEY);
+  if (!raw) return null;
+  try { var o = JSON.parse(raw); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; }
+}
+function fuSaveSeen(seen) {
+  var now = Date.now(), out = {};
+  for (var k in seen) { if (seen.hasOwnProperty(k) && now - seen[k] < FU_SEEN_TTL_MS) out[k] = seen[k]; }
+  fuLsSet(FU_SEEN_KEY, JSON.stringify(out));
+}
+
+function fuRenderAlertsBtn() {
+  var b = document.getElementById('fuAlertsBtn');
+  if (!b) return;
+  var on = fuAlertsOn();
+  b.innerHTML = (on ? '🔔' : '🔕') + ' <span>Alertes follow-up : ' + (on ? 'oui' : 'non') + '</span>';
+  b.title = on
+    ? 'Notification, son et message à l\'échéance de chaque follow-up'
+    : 'Silencieux : les follow-ups en retard sont seulement comptés sur la cloche 🔔';
+}
+
+function fuPublishOverdue(list) {
+  list.sort(function (a, b) { return a.due - b.due; });
+  window.__fuOverdue = { count: list.length, leads: list };
+  try { document.dispatchEvent(new CustomEvent('fu-overdue-changed', { detail: window.__fuOverdue })); } catch (e) {}
+}
 
 function checkFollowUpReminders() {
   if (!window.allLeads || allLeads.length === 0) return;
+  if (_fuRealRole === null) return;            // rôle inconnu : on attend
   var now = Date.now();
   var hasOverdue = false;
+  var alertsOn = fuAlertsOn();
+  var seen = fuLoadSeen();
+  var firstRun = (seen === null);
+  if (firstRun) seen = {};
+  var seenChanged = firstRun;
+  var overdueLeads = [];
 
   for (var i = 0; i < allLeads.length; i++) {
     var l = allLeads[i];
     // In personal mode, only check my leads
     if (window.personalUser && l.assignedTo !== window.personalUser) continue;
     var fus = l.followUps || [];
+    var leadOverdue = null;      // FU en retard le plus ancien du lead
     for (var j = 0; j < fus.length; j++) {
       var fu = fus[j];
-      if (fu.done) continue;
+      if (!fu || fu.done) continue;
       var fuTs = new Date(fu.dateTime).getTime();
       var diff = fuTs - now;
-      // Notify if due within 2 minutes or overdue (and not already notified)
-      var fuKey = l.id + '_' + j + '_' + fu.dateTime;
-      if (diff <= 120000 && !_fuNotifiedIds[fuKey]) {
-        _fuNotifiedIds[fuKey] = true;
-        hasOverdue = true;
-        // Toast
-        var fuName = l.nom || 'Lead';
-        var fuNote = fu.note ? ' — ' + fu.note : '';
-        toast('🔔 FU: ' + fuName + fuNote);
-        // Browser notification
-        if ('Notification' in window && Notification.permission === 'granted') {
-          try {
-            var notifBody = 'Follow-up pour ' + fuName;
-            if (fu.note) notifBody += '\n' + fu.note;
-            new Notification('🔔 Rappel Follow-Up', {
-              body: notifBody,
-              icon: 'icon-leads.png',
-              tag: 'fu-' + fuKey,
-              requireInteraction: true
-            });
-          } catch(e) { console.warn('Notification error:', e); }
-        }
-        // Play sound
-        if (typeof playNotifSound === 'function') playNotifSound();
+      if (diff <= 0 && (!leadOverdue || fuTs < leadOverdue.due)) leadOverdue = { id: l.id, nom: l.nom || 'Lead', due: fuTs, note: fu.note || '' };
+      // Notify if due within 2 minutes or overdue (and not already notified on this device)
+      var fuKey = l.id + '_' + (fu.id || j) + '_' + fu.dateTime;
+      if (diff > 120000 || seen[fuKey]) continue;
+      seen[fuKey] = now;
+      seenChanged = true;
+      if (firstRun) continue;                  // 1er passage : FU déjà en retard, sans bruit
+      hasOverdue = true;
+      if (!alertsOn) continue;
+      // Toast
+      var fuName = l.nom || 'Lead';
+      var fuNote = fu.note ? ' — ' + fu.note : '';
+      toast('🔔 FU: ' + fuName + fuNote);
+      // Browser notification
+      if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+          var notifBody = 'Follow-up pour ' + fuName;
+          if (fu.note) notifBody += '\n' + fu.note;
+          new Notification('🔔 Rappel Follow-Up', {
+            body: notifBody,
+            icon: 'icon-leads.png',
+            tag: 'fu-' + fuKey,
+            requireInteraction: true
+          });
+        } catch(e) { console.warn('Notification error:', e); }
       }
+      // Play sound
+      if (typeof playNotifSound === 'function') playNotifSound();
     }
+    if (leadOverdue) overdueLeads.push(leadOverdue);
   }
+
+  if (seenChanged) fuSaveSeen(seen);
+  fuPublishOverdue(overdueLeads);
 
   // Re-render badges if there are overdue FUs (throttled)
   if (hasOverdue && !window._fuRenderThrottle) {
@@ -9255,6 +9328,35 @@ function checkFollowUpReminders() {
     setTimeout(function() { window._fuRenderThrottle = false; }, 10000);
   }
 }
+
+(function () {
+  var b = document.getElementById('fuAlertsBtn');
+  if (b) b.addEventListener('click', function () {
+    fuLsSet(FU_ALERTS_KEY, fuAlertsOn() ? '0' : '1');
+    fuRenderAlertsBtn();
+    toast(fuAlertsOn() ? '🔔 Alertes follow-up activées sur cet appareil' : '🔕 Alertes follow-up coupées — compteur sur la cloche 🔔');
+  });
+  fuRenderAlertsBtn();
+})();
+
+// Clic sur un lead dans la liste de la cloche de l'Inbox → sa fiche
+document.addEventListener('fu-open-lead', function (e) {
+  var id = e && e.detail && e.detail.id;
+  if (id && typeof l2OpenLead === 'function') l2OpenLead(id);
+});
+
+// Rôle réel (users/{uid}) — avant lui, aucune alerte ne part
+firebase.auth().onAuthStateChanged(function (u) {
+  if (!u) { _fuRealRole = null; return; }
+  firebase.firestore().collection('users').doc(u.uid).get().then(function (snap) {
+    _fuRealRole = (snap.exists && snap.data().role) || '';
+  }).catch(function () {
+    _fuRealRole = window._currentRole || fuLsGet('ambitio_role') || '';
+  }).then(function () {
+    fuRenderAlertsBtn();
+    checkFollowUpReminders();
+  });
+});
 
 // Check every 30 seconds
 _fuCheckInterval = setInterval(checkFollowUpReminders, 30000);
