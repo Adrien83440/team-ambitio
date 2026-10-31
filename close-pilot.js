@@ -56,7 +56,7 @@
   };
   /* Numéros de l'équipe à ajouter au groupe — process-onboarding-elite-closer.html. */
   var EQUIPE = [
-    { nom: 'Adrien/Emily', role: 'Mentors · co-fondateurs', tel: '07 66 83 36 32' },
+    { nom: 'Adrien/Emily', role: 'Mentors fondateurs', tel: '07 66 83 36 32' },
     { nom: 'Marine', role: 'Customer Satisfaction Manager', tel: '07 72 08 97 92' }
   ];
   var COACH_TELS = { 'edouard': '06 08 95 18 50', 'thomas': '06 15 29 66 82', 'flore': '07 56 82 60 05', 'vincent': '07 51 36 47 77' };
