@@ -7847,31 +7847,82 @@ function startCoachingBookingsListening() {
     });
 }
 
-/* ═══ LEADS ENTRANTS (admins, 30/10/2026) ═══
-   Combien de leads sont vraiment arrivés : une fiche compte une fois, le jour
-   de sa date réelle d'entrée (_realEntryDate), en jour de Paris. Un re-optin
-   ou un RDV posé plus tard sur une fiche existante ne change pas cette date,
-   donc n'ajoute rien. Même sélection que FunnelCore.loadLeads (date réelle,
-   _merged exclus, borne createdAt + 45 j pour les imports tardifs).
+/* ═══ LEADS ENTRANTS (admins, 30/10/2026 — re-optins comptés le 01/11/2026) ═══
+   Un lead entrant = une personne qui remplit un formulaire, ce jour-là :
+     · une nouvelle fiche, le jour de sa date réelle d'entrée (_realEntryDate) ;
+     · un RE-OPTIN sur une fiche existante (nouveau formulaire, tunnel, opt-in,
+       AlteoForm), le jour du re-optin : la personne re-rentre dans la boucle.
+   Ne comptent PAS : un RDV posé ou reposé (No booking / Self booking : il fait
+   remonter la fiche dans Leads Live via lastBookingAt, mais ce n'est pas un
+   lead), une fiche remontée à la main, une résurrection par message entrant ou
+   par la réparation de visibilité, et les re-optins des clients.
+   Une personne compte au plus une fois par jour (double envoi du formulaire).
+   Sources des re-optins : engagementHistory[] (archivedFor 'optin' / 'form',
+   archivedAt = moment du re-optin, garde l'historique) + lastOptinAt quand il
+   vient d'un vrai formulaire (le webhook Make n'écrit que celui-là).
+   Jour de Paris, _merged exclus.
    Aujourd'hui / hier : lus dans allLeads, en direct. Date à date : requête
-   ponctuelle, seulement à l'ouverture du pop-up ou au changement de dates. */
+   ponctuelle (créations + re-optins), seulement à l'ouverture du pop-up ou au
+   changement de dates. */
 var LD_EN_MAX_DAYS = 366;
 var LD_EN_LIMIT = 6000;
 var _ldEn = { open: false, from: '', to: '', seq: 0, bound: false };
 
 function ldEnIsAdmin() { return window._currentRole === 'admin'; }
 function ldEnDayStart(key) { return ldAgStartMs({ date: key, time: '00:00' }); }
+function ldEnMs(v) { var d = _parseFlexDate(v); return d ? d.getTime() : 0; }
+/* lastOptinAt vient-il d'un vrai formulaire ? Plusieurs écritures le posent
+   sans que la personne ait rien rempli : on les reconnaît à leur trace,
+   posée au même instant. hist = moments des re-optins de l'historique. */
+function ldEnOptinVrai(l, lo, hist) {
+  var i;
+  for (i = 0; i < hist.length; i++) if (Math.abs(hist[i] - lo) < 300000) return true;
+  function pres(v) { var m = ldEnMs(v); return m > 0 && Math.abs(m - lo) < 60000; }
+  if (pres(l.lastInboundAt)) return false;                 // message entrant (Cloud Function)
+  if (pres(l.visibilityResurrectedAt)) return !!l.resurrectedFromMergedTwin; // re-optin tombé sur un doublon : vrai ; réparation : non
+  var src = String(l.lastOptinSource || '');
+  if (src === 'manual' || src.indexOf('Remonté') === 0) return false; // remonté à la main
+  return true;
+}
+/* Moments (ms) des re-optins de la fiche. */
+function ldEnOptinTimes(l) {
+  var out = [];
+  if (l.isClient === true || l.stage === 'closed_won_setting' || l.stage === 'closed_won_self') return out;
+  var h = Array.isArray(l.engagementHistory) ? l.engagementHistory : [];
+  for (var i = 0; i < h.length; i++) {
+    var e = h[i];
+    if (!e || (e.archivedFor !== 'optin' && e.archivedFor !== 'form')) continue;
+    var m = ldEnMs(e.archivedAt);
+    if (m) out.push(m);
+  }
+  var lo = ldEnMs(l.lastOptinAt);
+  if (lo && ldEnOptinVrai(l, lo, out)) out.push(lo);
+  return out;
+}
+/* Jours (clé AAAA-MM-JJ de Paris) où la fiche compte comme lead entrant,
+   entre start et end (ms, end exclu). Un jour au plus une fois. */
+function ldEnJours(l, start, end) {
+  var jours = { _n: 0 }, n = 0;
+  if (!l || l._merged === true) return jours;
+  var re = _realEntryDate(l);
+  var ts = ldEnOptinTimes(l);
+  if (re) ts.push(re.getTime());
+  for (var i = 0; i < ts.length; i++) {
+    if (ts[i] < start || ts[i] >= end) continue;
+    var k = ldAgDayKey(ts[i]);
+    if (!jours[k]) { jours[k] = true; n++; }
+  }
+  jours._n = n;
+  return jours;
+}
 function ldEnCounts() {
-  var today = ldAgDayKey(Date.now());
-  var t0 = ldEnDayStart(ldAgShiftDay(today, -1)), t1 = ldEnDayStart(today), t2 = ldEnDayStart(ldAgShiftDay(today, 1));
+  var today = ldAgDayKey(Date.now()), hier = ldAgShiftDay(today, -1);
+  var t0 = ldEnDayStart(hier), t2 = ldEnDayStart(ldAgShiftDay(today, 1));
   var c = { today: 0, hier: 0 };
   allLeads.forEach(function (l) {
-    if (l._merged === true) return;
-    var d = _realEntryDate(l);
-    if (!d) return;
-    var m = d.getTime();
-    if (m >= t1 && m < t2) c.today++;
-    else if (m >= t0 && m < t1) c.hier++;
+    var j = ldEnJours(l, t0, t2);
+    if (j[today]) c.today++;
+    if (j[hier]) c.hier++;
   });
   return c;
 }
@@ -7902,22 +7953,34 @@ function ldEnLoad() {
   if (jours > LD_EN_MAX_DAYS) { res.textContent = 'Un an maximum.'; return; }
   res.textContent = 'Calcul…';
   var cap = Math.min(end + 45 * 86400000, Date.now() + 60000);
-  db.collection('leads')
-    .where('createdAt', '>=', firebase.firestore.Timestamp.fromDate(new Date(start)))
+  var tsStart = firebase.firestore.Timestamp.fromDate(new Date(start));
+  /* Créations de la période (borne +45 j pour les imports tardifs) et fiches
+     ré-optinées depuis le début de la période (lastOptinAt = dernier re-optin,
+     les précédents sont dans engagementHistory). */
+  var qCrees = db.collection('leads')
+    .where('createdAt', '>=', tsStart)
     .where('createdAt', '<=', firebase.firestore.Timestamp.fromDate(new Date(cap)))
-    .limit(LD_EN_LIMIT)
-    .get().then(function (snap) {
+    .limit(LD_EN_LIMIT).get();
+  var qReoptins = db.collection('leads')
+    .where('lastOptinAt', '>=', tsStart)
+    .limit(LD_EN_LIMIT).get();
+  Promise.all([qCrees, qReoptins]).then(function (snaps) {
       if (seq !== _ldEn.seq) return;
-      var n = 0;
-      snap.forEach(function (doc) {
-        var d = doc.data();
-        if (d._merged === true) return;
-        var re = _realEntryDate(d);
-        if (!re) return;
-        var m = re.getTime();
-        if (m >= start && m < end) n++;
+      var vus = {}, n = 0, nReoptins = 0, plein = false;
+      snaps.forEach(function (snap) {
+        if (snap.size >= LD_EN_LIMIT) plein = true;
+        snap.forEach(function (doc) {
+          if (vus[doc.id]) return;
+          vus[doc.id] = true;
+          var d = doc.data();
+          var j = ldEnJours(d, start, end);
+          n += j._n;
+          var re = _realEntryDate(d), mre = re ? re.getTime() : 0;
+          nReoptins += j._n - ((mre >= start && mre < end) ? 1 : 0);
+        });
       });
-      var h = (snap.size >= LD_EN_LIMIT ? 'Au moins ' : '') + '<b>' + n + '</b> lead' + (n > 1 ? 's' : '');
+      var h = (plein ? 'Au moins ' : '') + '<b>' + n + '</b> lead' + (n > 1 ? 's' : '');
+      if (nReoptins > 0) h += ' dont ' + nReoptins + ' re-optin' + (nReoptins > 1 ? 's' : '');
       if (jours > 1) h += ' · ' + (n / jours).toFixed(1).replace('.', ',') + ' par jour';
       res.innerHTML = h;
     }).catch(function (err) {
@@ -8243,6 +8306,7 @@ function startOptinResurrectListening() {
         }
       });
 
+      if (changed) ldEnRender();
       if (changed && !isEditingLead) renderFeed();
     }, function(err) {
       console.warn('[leads-optin-resurrect] listener error (index manquant ?):', err.message);
