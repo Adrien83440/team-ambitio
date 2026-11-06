@@ -565,19 +565,22 @@
     var withMqs = ax.rows.filter(function (x) { return x.m; }).sort(function (a, b) { return b.m.mqs - a.m.mqs; });
     if (withMqs.length >= 2) {
       var top = withMqs[0], low = withMqs[withMqs.length - 1];
-      h += '<div class="fn-rates"><span class="rt">🏆 Meilleure source : <strong>' + esc(top.label) + '</strong> MQS ' + fDec(top.m.mqs, 1) + ' · ' + fPct(top.agg.pct45, 0) + ' de 4-5 · ' + fEur(top.agg.cashPerLead) + ' / lead</span>'
+      h += '<div class="fn-rates"><span class="rt">🏆 Meilleure source : <strong>' + esc(top.label) + '</strong> MQS ' + fDec(top.m.mqs, 1) + ' · ' + fPct(top.agg.pct45, 0) + ' de 4-5 · ' + fEur(top.agg.cashPerLead) + ' / lead' + (top.agg.closes ? ' · ' + offerSplit(top.agg) : '') + '</span>'
         + '<span class="rt">⚠️ Plus faible : <strong>' + esc(low.label) + '</strong> MQS ' + fDec(low.m.mqs, 1) + ' · ' + fPct(low.agg.pct45, 0) + ' de 4-5</span></div>';
     }
     var t = ax.total;
-    var body = '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr><th class="l">Source</th><th title="Marketing Quality Score">MQS</th><th>Dépense</th><th>Leads</th><th>CPL</th><th>LQS moyen</th><th>% 4-5</th><th title="Dépense ÷ leads notés 4-5">Coût / lead 4-5</th><th class="l" style="min-width:110px">Répartition</th><th>RDV</th><th>Présents</th><th>Closes</th><th>Cash</th><th>ROAS</th></tr></thead><tbody>';
+    var body = '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr><th class="l">Source</th><th title="Marketing Quality Score">MQS</th><th>Dépense</th><th>Leads</th><th>CPL</th><th>LQS moyen</th><th>% 4-5</th><th title="Dépense ÷ leads notés 4-5">Coût / lead 4-5</th><th class="l" style="min-width:110px">Répartition</th><th>RDV</th><th>Présents</th><th>Closes</th><th title="Closes offre Élite et leur cash encaissé" class="lq-oe">Élite</th><th title="Closes offre Business Phénix et leur cash encaissé" class="lq-ob">Business</th><th>Cash</th><th>ROAS</th></tr></thead><tbody>';
     ax.rows.forEach(function (x) {
       var a = x.agg;
       body += '<tr' + (x.outOfAds ? ' class="lq-dim"' : '') + '><td class="l"><span class="lq-src" title="' + esc(x.label) + '">' + esc(x.label) + '</span>' + (x.legacy ? ' <span class="fn-tbadge lq-toff" title="Attribution reconstruite depuis l\'ancien champ utm">⚠</span>' : '') + '</td>'
         + '<td>' + mqsBadge(x.m) + '</td><td>' + (x.hasSpend ? fEur(x.spend) : '—') + '</td><td>' + fNum(a.leads) + '</td><td>' + fEur(x.cpl) + '</td>'
         + '<td>' + avgBadge(a.avgNote) + '</td><td>' + fPct(a.pct45, 0) + '</td><td>' + fEur(x.cpl45) + '</td><td class="l">' + distBar(a.dist) + '</td>'
-        + '<td>' + fNum(a.booked) + '</td><td>' + fNum(a.present) + '</td><td>' + fNum(a.closes) + '</td><td><strong>' + fEur(a.cash) + '</strong></td><td>' + fRoas(x.roas) + '</td></tr>';
+        + '<td>' + fNum(a.booked) + '</td><td>' + fNum(a.present) + '</td><td>' + fNum(a.closes) + (a.closesU ? sub(fNum(a.closesU) + ' sans offre') : '') + '</td>'
+        + '<td>' + (a.closesE ? '<span class="lq-oe">' + fNum(a.closesE) + '</span>' + sub(fEur(a.cashE)) : '—') + '</td>'
+        + '<td>' + (a.closesB ? '<span class="lq-ob">' + fNum(a.closesB) + '</span>' + sub(fEur(a.cashB)) : '—') + '</td>'
+        + '<td><strong>' + fEur(a.cash) + '</strong></td><td>' + fRoas(x.roas) + '</td></tr>';
     });
-    body += '<tr class="tot"><td class="l">Total</td><td></td><td>' + (ax.spend ? fEur(ax.spend) : '—') + '</td><td>' + fNum(t.leads) + '</td><td>' + fEur(ax.spend && t.leads ? ax.spend / t.leads : null) + '</td><td>' + avgBadge(t.avgNote) + '</td><td>' + fPct(t.pct45, 0) + '</td><td>' + fEur(ax.spend && t.n45 ? ax.spend / t.n45 : null) + '</td><td class="l">' + distBar(t.dist) + '</td><td>' + fNum(t.booked) + '</td><td>' + fNum(t.present) + '</td><td>' + fNum(t.closes) + '</td><td>' + fEur(t.cash) + '</td><td>' + fRoas(ax.spend > 0 && t.cash > 0 ? t.cash / ax.spend : null) + '</td></tr>';
+    body += '<tr class="tot"><td class="l">Total</td><td></td><td>' + (ax.spend ? fEur(ax.spend) : '—') + '</td><td>' + fNum(t.leads) + '</td><td>' + fEur(ax.spend && t.leads ? ax.spend / t.leads : null) + '</td><td>' + avgBadge(t.avgNote) + '</td><td>' + fPct(t.pct45, 0) + '</td><td>' + fEur(ax.spend && t.n45 ? ax.spend / t.n45 : null) + '</td><td class="l">' + distBar(t.dist) + '</td><td>' + fNum(t.booked) + '</td><td>' + fNum(t.present) + '</td><td>' + fNum(t.closes) + (t.closesU ? sub(fNum(t.closesU) + ' sans offre') : '') + '</td><td>' + (t.closesE ? fNum(t.closesE) + sub(fEur(t.cashE)) : '—') + '</td><td>' + (t.closesB ? fNum(t.closesB) + sub(fEur(t.cashB)) : '—') + '</td><td>' + fEur(t.cash) + '</td><td>' + fRoas(ax.spend > 0 && t.cash > 0 ? t.cash / ax.spend : null) + '</td></tr>';
     body += '</tbody></table></div><div class="fn-stage-note" style="margin-top:8px">Leads entrés dans la période · dépense = données Meta par pub (ads_insights_ad) quand Make les envoie, sinon « — » · cash = encaissé à ce jour (HT) par les leads de la ligne · les lignes « hors pub » sont en bas.</div>';
     h += card('📣 Qualité par ' + AXES.filter(function (a) { return a[0] === S.axis; })[0][1].toLowerCase(), S.closer ? 'leads de ' + esc(S.M.memberName(S.closer)) : '', body);
     return h;
