@@ -85,6 +85,7 @@
     if (a.closesU) p.push('<span class="lq-muted" title="Close sans offre renseignée">' + fNum(a.closesU) + ' ?</span>');
     return p.join(' · ');
   }
+  function plur(n, one, many) { return (n > 1 ? many : one); }
   function bar(pct, cls) { return '<div class="lq-bar"><span class="' + (cls || '') + '" style="width:' + (ok(pct) ? Math.max(0, Math.min(100, pct)).toFixed(1) : 0) + '%"></span></div>'; }
   function sub(v) { return '<div class="lq-sub">' + v + '</div>'; }
   function kpi(v, l, s) { return '<div class="fn-kpi"><div class="v">' + v + '</div><div class="l">' + l + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>'; }
@@ -404,12 +405,12 @@
   function stepHead(c) {
     var st = c.step, bits = [];
     if (st) {
-      bits.push('<strong>' + fNum(st.reached) + '</strong> visiteurs ont vu la question');
-      bits.push('<strong>' + fNum(st.answered) + '</strong> ont répondu');
+      bits.push('<strong>' + fNum(st.reached) + '</strong> ' + plur(st.reached, 'visiteur a vu la question', 'visiteurs ont vu la question'));
+      bits.push('<strong>' + fNum(st.answered) + '</strong> ' + plur(st.answered, 'a répondu', 'ont répondu'));
       if (st.conditional) bits.push('<span class="lq-muted">question montrée à ' + fPct(st.seenPct, 0) + ' des visiteurs seulement</span>');
-      else if (st.left != null) bits.push('<span class="' + (st.left > 0 ? 'lq-down' : 'lq-muted') + '">🚪 <strong>' + fNum(st.left) + '</strong> sont partis ici (' + fPct(st.leftPct, 0) + ')</span>');
+      else if (st.left != null) bits.push('<span class="' + (st.left > 0 ? 'lq-down' : 'lq-muted') + '">🚪 <strong>' + fNum(st.left) + '</strong> ' + plur(st.left, 'est parti ici', 'sont partis ici') + ' (' + fPct(st.leftPct, 0) + ')</span>');
     } else if (!c.diag) bits.push('<span class="lq-muted">visiteurs : en attente des premières mesures</span>');
-    if (c.lq) bits.push('<strong>' + fNum(c.lq.agg.leads) + '</strong> contacts ont répondu');
+    if (c.lq) bits.push('<strong>' + fNum(c.lq.agg.leads) + '</strong> ' + plur(c.lq.agg.leads, 'contact a répondu', 'contacts ont répondu'));
     var badges = '';
     if (c.diag) badges += ' <span class="fn-tbadge lq-tf">résultat calculé par le quiz</span>';
     if (st && st.conditional) badges += ' <span class="fn-tbadge lq-tf">question conditionnelle</span>';
@@ -430,9 +431,9 @@
       res += ' · <strong>' + fEur(a.cash) + '</strong> encaissés';
     }
     return '<div class="lq-arow"><span class="lq-al">' + esc(o.label) + tag + '</span>'
-      + '<span class="lq-av">' + (o.visitors != null ? bar(o.visitorShare, 'lq-blue') + '<span class="lq-mono">' + fNum(o.visitors) + ' · ' + fPct(o.visitorShare, 0) + '</span>' : '<span class="lq-muted">en attente</span>') + '</span>'
-      + '<span class="lq-ax">' + res + '</span>'
-      + '<span class="lq-ap">' + (o.pts != null || o.ko ? ptsChip(o) : '') + '</span></div>';
+      + '<span class="lq-av" data-l="Choisie par">' + (o.visitors != null ? bar(o.visitorShare, 'lq-blue') + '<span class="lq-mono">' + fNum(o.visitors) + ' · ' + fPct(o.visitorShare, 0) + '</span>' : '<span class="lq-muted">en attente</span>') + '</span>'
+      + '<span class="lq-ax" data-l="Chez les contacts">' + res + '</span>'
+      + '<span class="lq-ap" data-l="Points">' + (o.pts != null || o.ko ? ptsChip(o) : '') + '</span></div>';
   }
   function detailTable(c) {
     var h = '<div class="fn-table-wrap" style="margin-top:8px"><table class="fn-igt lq-t"><thead>'
@@ -497,11 +498,15 @@
       h += '<div class="lq-step' + (c.hot ? ' hot' : '') + (c.diag ? ' diag' : '') + '">' + stepHead(c);
       if (cmp) h += compareTable(c, cmp);
       else {
-        h += '<div class="lq-alist">' + answerHead();
-        c.answers.forEach(function (o) { h += answerLine(o); });
-        h += '</div>';
-        h += '<button class="fn-ig-detbtn lq-detbtn" data-lq-det="' + esc(key) + '">' + (open ? '▾ masquer le détail' : '▸ tout le détail (RDV, venus, Élite / Business…)') + '</button>';
-        if (open) h += detailTable(c);
+        if (!c.answers.length) {
+          h += '<div class="lq-alist"><div class="lq-empty">Pas encore de réponse enregistrée à cette question' + (c.step && c.step.reached ? ' : les visiteurs qui l\'ont vue sont partis sans répondre.' : '.') + '</div></div>';
+        } else {
+          h += '<div class="lq-alist">' + answerHead();
+          c.answers.forEach(function (o) { h += answerLine(o); });
+          h += '</div>';
+          h += '<button class="fn-ig-detbtn lq-detbtn" data-lq-det="' + esc(key) + '">' + (open ? '▾ masquer le détail' : '▸ tout le détail (RDV, venus, Élite / Business…)') + '</button>';
+          if (open) h += detailTable(c);
+        }
       }
       h += '</div>';
       if (!gateDone && d.gate.shown && c.step && /ca[-_ ]?mensuel/i.test(c.step.id)) {
@@ -522,15 +527,15 @@
     var max = 0;
     view.cards.forEach(function (c) { if (c.step && c.step.left > max) max = c.step.left; });
     var h = '<div class="lq-exit"><div class="lq-exit-t">🚪 À quel moment les gens quittent le quiz</div>'
-      + '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr><th>#</th><th class="l">Question</th><th>Ont vu la question</th><th>Ont répondu</th><th class="l" style="min-width:190px">Sont partis sur cette question</th><th title="Ont vu la question et sont partis sans répondre">… sans répondre</th><th title="Ont répondu, puis ne sont jamais arrivés à la question suivante">… après avoir répondu</th></tr></thead><tbody>';
+      + '<div class="fn-table-wrap"><table class="fn-igt lq-t lq-stack"><thead><tr><th>#</th><th class="l">Question</th><th>Ont vu la question</th><th>Ont répondu</th><th class="l" style="min-width:190px">Sont partis sur cette question</th><th title="Ont vu la question et sont partis sans répondre">… sans répondre</th><th title="Ont répondu, puis ne sont jamais arrivés à la question suivante">… après avoir répondu</th></tr></thead><tbody>';
     view.cards.forEach(function (c) {
       if (c.diag) return;
       var st = c.step;
       h += '<tr' + (c.hot ? ' class="lq-hot"' : '') + '><td>' + c.n + '</td><td class="l">' + esc(c.label) + (c.hot ? ' <span class="fn-tbadge lq-warn">fait le plus partir</span>' : '') + (st && st.conditional ? ' <span class="fn-tbadge lq-tf">conditionnelle</span>' : '') + '</td>';
       if (!st) { h += '<td colspan="5" class="l lq-muted">en attente des premières visites mesurées</td></tr>'; return; }
-      h += '<td>' + fNum(st.reached) + sub(fPct(st.pctStart, 0) + ' de ceux qui ont commencé') + '</td><td>' + fNum(st.answered) + '</td>'
+      h += '<td data-l="Ont vu la question">' + fNum(st.reached) + sub(fPct(st.pctStart, 0) + ' de ceux qui ont commencé') + '</td><td data-l="Ont répondu">' + fNum(st.answered) + '</td>'
         + (st.left == null ? '<td class="l lq-muted" colspan="3">non calculable : question montrée à une partie des visiteurs seulement</td>'
-          : '<td class="l">' + bar(max ? st.left / max * 100 : 0, 'lq-n1') + sub('<strong>' + fNum(st.left) + '</strong> personnes · ' + fPct(st.leftPct, 0) + ' de ceux qui l\'ont vue') + '</td><td>' + fNum(st.leftNoAnswer) + '</td><td>' + fNum(st.leftAfterAnswer) + '</td>')
+          : '<td class="l" data-l="Partis ici">' + bar(max ? st.left / max * 100 : 0, 'lq-n1') + sub('<strong>' + fNum(st.left) + '</strong> ' + plur(st.left, 'personne', 'personnes') + ' · ' + fPct(st.leftPct, 0) + ' de ceux qui l\'ont vue') + '</td><td data-l="… sans répondre">' + fNum(st.leftNoAnswer) + '</td><td data-l="… après avoir répondu">' + fNum(st.leftAfterAnswer) + '</td>')
         + '</tr>';
     });
     h += '<tr class="tot"><td>✓</td><td class="l">Ont rempli le quiz en entier</td><td>' + (d.has ? fNum(d.completes) + sub(fPct(d.completeRate, 0) + ' de ceux qui ont commencé') : '—') + '</td><td colspan="4"></td></tr>';

@@ -973,6 +973,19 @@
 
   /* Fusion de la mesure anonyme de plusieurs pages (mêmes identifiants de
      question) + détection des questions conditionnelles. */
+  /* Titre lisible d'une question : les premières mesures ont pu enregistrer
+     l'identifiant technique de l'étape (« pain », « r_charge ») quand la page
+     n'avait pas de texte dans STEPS. On le rend lisible, sans rien inventer. */
+  var KNOWN_Q = { pain: 'Principale difficulté (choix de la douleur)' };
+  function prettyQuestion(label, id) {
+    var t = String(label || '').trim();
+    if (t && !/^[a-z0-9_-]+$/i.test(t)) return t;
+    var k = String(id || t).toLowerCase().replace(/-/g, '_');
+    if (KNOWN_Q[k]) return KNOWN_Q[k];
+    var h = (t || String(id || '')).replace(/^(r|yn|q)_/i, '').replace(/[_-]+/g, ' ').trim();
+    return h ? h.charAt(0).toUpperCase() + h.slice(1) : '—';
+  }
+
   function mergeDropoff(pages) {
     var m = { starts: 0, completes: 0, gate: { shown: 0, 'continue': 0, exit: 0 }, steps: [], has: pages.length > 0 };
     var qs = {};
@@ -1184,7 +1197,7 @@
     drop.steps.forEach(function (st) {
       var k = leadQFor(st);
       if (k) used[k] = 1;
-      cards.push({ step: st, lq: k ? lq[k] : null, q: k, label: st.label, diag: false });
+      cards.push({ step: st, lq: k ? lq[k] : null, q: k, label: prettyQuestion(st.label, st.id), diag: false });
     });
     Object.keys(lq).filter(function (k) { return !used[k]; })
       .sort(function (a, b) { return lq[a].ord - lq[b].ord; })
