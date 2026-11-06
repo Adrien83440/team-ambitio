@@ -399,9 +399,10 @@
   function stepHead(c) {
     var st = c.step, bits = [];
     if (st) {
-      bits.push('<strong>' + fNum(st.reached) + '</strong> arrivés' + (st.pctStart != null ? ' · ' + fPct(st.pctStart, 0) + ' des débuts' : ''));
-      if (st.conditional) bits.push('<span class="lq-muted">vue par ' + fPct(st.seenPct, 0) + ' des visiteurs</span>');
-      else if (st.lost != null) bits.push('<span class="' + (st.lost > 0 ? 'lq-down' : 'lq-muted') + '">−' + fNum(st.lost) + ' perdus ici (' + fPct(st.lostPct, 0) + ')</span>');
+      bits.push('<strong>' + fNum(st.reached) + '</strong> arrivés' + (st.pctStart != null ? ' (' + fPct(st.pctStart, 0) + ' des débuts)' : ''));
+      bits.push('<strong>' + fNum(st.answered) + '</strong> ont répondu');
+      if (st.conditional) bits.push('<span class="lq-muted">question vue par ' + fPct(st.seenPct, 0) + ' des visiteurs</span>');
+      else if (st.left != null) bits.push('<span class="' + (st.left > 0 ? 'lq-down' : 'lq-muted') + '" title="' + fNum(st.leftNoAnswer) + ' sans répondre · ' + fNum(st.leftAfterAnswer) + ' après avoir répondu">🚪 ' + fNum(st.left) + ' partis sur cette question (' + fPct(st.leftPct, 0) + ')</span>');
     } else if (!c.diag) bits.push('<span class="lq-muted">pas de mesure visiteurs</span>');
     if (c.lq) bits.push(fNum(c.lq.agg.leads) + ' leads');
     var badges = '';
@@ -482,6 +483,7 @@
       + '<div class="lq-strip-arrow">›</div>' + stripStep(fNum(t.closes), 'Closes', (t.closes ? offerSplit(t) : fPct(t.closeLead, 1) + ' des leads'))
       + '<div class="lq-strip-arrow">›</div>' + stripStep(fEur(t.cash), 'Cash encaissé', t.leads ? fEur(t.cash / t.leads) + ' / lead' : '')
       + '</div>';
+    if (d.has && !cmp) h += exitMap(view);
     if (!view.cards.length) return h + '<div class="lq-muted">Aucune question à afficher.</div>';
     var gateDone = false;
     view.cards.forEach(function (c) {
@@ -504,9 +506,31 @@
     });
     if (!gateDone && d.gate.shown) h += gateBlock(d.gate);
     if (d.has) h += '<div class="lq-step end"><div class="lq-step-head"><span class="lq-step-n">✓</span><span class="lq-step-t">Quiz terminé (résultats affichés)</span><span class="lq-step-m"><strong>' + fNum(d.completes) + '</strong> visiteurs · ' + fPct(d.completeRate, 0) + ' des débuts'
-      + (d.lastReached ? ' · <span class="lq-down">−' + fNum(Math.max(0, d.lastReached - d.completes)) + ' perdus après la dernière question</span>' : '') + '</span></div></div>';
+      + '</span></div></div>';
     return h;
   }
+  /* 🚪 Carte des départs : pour CHAQUE question, combien l'ont atteinte,
+     combien y ont répondu, combien sont partis dessus (sans répondre / après
+     avoir répondu), puis combien ont tout rempli. */
+  function exitMap(view) {
+    var d = view.drop;
+    var max = 0;
+    view.cards.forEach(function (c) { if (c.step && c.step.left > max) max = c.step.left; });
+    var h = '<div class="lq-exit"><div class="lq-exit-t">🚪 Où les visiteurs quittent le quiz</div>'
+      + '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr><th>#</th><th class="l">Question</th><th>Arrivés</th><th>Ont répondu</th><th class="l" style="min-width:170px">Partis sur cette question</th><th title="Ont vu la question, sont partis sans répondre">dont sans répondre</th><th title="Ont répondu, mais ne sont jamais arrivés à la question suivante">dont après avoir répondu</th></tr></thead><tbody>';
+    view.cards.forEach(function (c) {
+      var st = c.step;
+      if (!st) return;
+      h += '<tr' + (c.hot ? ' class="lq-hot"' : '') + '><td>' + c.n + '</td><td class="l">' + esc(c.label) + (c.hot ? ' <span class="fn-tbadge lq-warn">plus gros départ</span>' : '') + (st.conditional ? ' <span class="fn-tbadge lq-tf">conditionnelle</span>' : '') + '</td>'
+        + '<td>' + fNum(st.reached) + sub(fPct(st.pctStart, 0) + ' des débuts') + '</td><td>' + fNum(st.answered) + '</td>'
+        + (st.left == null ? '<td class="l lq-muted" colspan="3">non calculable (question montrée à une partie des visiteurs)</td>'
+          : '<td class="l">' + bar(max ? st.left / max * 100 : 0, 'lq-n1') + sub('<strong>' + fNum(st.left) + '</strong> · ' + fPct(st.leftPct, 0) + ' des arrivés') + '</td><td>' + fNum(st.leftNoAnswer) + '</td><td>' + fNum(st.leftAfterAnswer) + '</td>')
+        + '</tr>';
+    });
+    h += '<tr class="tot"><td>✓</td><td class="l">Ont rempli le quiz en entier</td><td>' + fNum(d.completes) + sub(fPct(d.completeRate, 0) + ' des débuts') + '</td><td colspan="4"></td></tr>';
+    return h + '</tbody></table></div></div>';
+  }
+
   function gateBlock(g) {
     return '<div class="lq-step gate"><div class="lq-step-head"><span class="lq-step-n">€</span><span class="lq-step-t">Écran prix (CA mensuel ≤ 20 000 €)</span><span class="lq-step-m">vu <strong>' + fNum(g.shown) + '</strong> fois · '
       + fNum(g['continue']) + ' continuent (' + fPct(g.shown ? g['continue'] / g.shown * 100 : null, 0) + ') · <span class="lq-down">' + fNum(g.exit) + ' s\'arrêtent</span></span></div></div>';

@@ -999,11 +999,24 @@
       for (var j = k + 1; j < list.length; j++) if (list[j].reached > later) later = list[j].reached;
       q.conditional = later > q.reached * 1.05 + 1;
     });
+    /* Départs : sur chaque question, ceux qui l'ont VUE mais ne sont pas
+       arrivés à la suivante (question non conditionnelle suivante, ou fin du
+       quiz pour la dernière). Ventilés : partis sans répondre (vue, pas de
+       réponse) / partis après avoir répondu. Une question conditionnelle
+       (sautée par une partie des visiteurs) n'a pas de départ calculable. */
     var base = m.starts || (list[0] ? list[0].reached : 0), prev = null;
-    list.forEach(function (q) {
+    list.forEach(function (q, k) {
       q.pctStart = base ? q.reached / base * 100 : null;
-      if (q.conditional) { q.lost = null; q.seenPct = prev ? q.reached / prev * 100 : null; }
-      else { q.lost = prev != null ? Math.max(0, prev - q.reached) : null; q.lostPct = prev ? q.lost / prev * 100 : null; prev = q.reached; }
+      q.left = null; q.leftPct = null; q.leftNoAnswer = null; q.leftAfterAnswer = null;
+      if (q.conditional) { q.seenPct = prev ? q.reached / prev * 100 : null; return; }
+      var next = null;
+      for (var j = k + 1; j < list.length; j++) if (!list[j].conditional) { next = list[j].reached; break; }
+      if (next == null) next = m.completes;
+      q.left = Math.max(0, q.reached - next);
+      q.leftPct = q.reached ? q.left / q.reached * 100 : null;
+      q.leftNoAnswer = Math.min(q.left, Math.max(0, q.reached - q.answered));
+      q.leftAfterAnswer = Math.max(0, q.left - q.leftNoAnswer);
+      prev = q.reached;
     });
     if (!m.starts && list.length) m.starts = list[0].reached;
     m.lastReached = prev;
@@ -1215,8 +1228,8 @@
       if (best && worst && best !== worst && best.agg.cashPerLead > worst.agg.cashPerLead) { best.best = true; worst.worst = true; }
     });
     var worstLoss = null;
-    cards.forEach(function (c) { if (c.step && c.step.lost != null && (!worstLoss || c.step.lost > worstLoss.step.lost)) worstLoss = c; });
-    if (worstLoss && worstLoss.step.lost > 0) worstLoss.hot = true;
+    cards.forEach(function (c) { if (c.step && c.step.left != null && (!worstLoss || c.step.left > worstLoss.step.left)) worstLoss = c; });
+    if (worstLoss && worstLoss.step.left > 0) worstLoss.hot = true;
 
     return { versionKey: versionKey || '', drop: drop, total: tot, cards: cards, leads: vRows.length };
   }

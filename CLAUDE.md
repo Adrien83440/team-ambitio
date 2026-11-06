@@ -349,9 +349,10 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   réponses éliminatoires, seuils) ; calculée à l'affichage, **jamais écrite sur les leads**.
   **MQS** = note d'une campagne / adset / créa / canal = 60 % LQS moyen + 40 % cash par lead vs
   moyenne. Abandon question par question du quiz : `ALTEO.quiz()` (`tunnel-runtime.js`) →
-  `api/tunnel-event.js` (événement `quiz`) → `quiz_funnel_daily` ; la page quiz (Storage) est
-  instrumentée par `scripts/quiz-tracking-patch.js` (dry-run par défaut), qui ajoute aussi
-  l'écran prix « CA mensuel ≤ 20 k€ → investissement > 6 000 € ».
+  `api/tunnel-event.js` (événement `quiz`) → `quiz_funnel_daily`. La MESURE est ajoutée à la
+  volée par `api/tunnel-render.js` (module partagé `api/_quizTracking.js`, aucune écriture
+  Storage) ; l'écran prix « CA mensuel ≤ 20 k€ → investissement > 6 000 € » n'existe que si la
+  page est republiée par `scripts/quiz-tracking-patch.js --apply` (dry-run par défaut).
 
 Spécification de référence du flux commercial : `REFONTE-SPEC.md`.
 
