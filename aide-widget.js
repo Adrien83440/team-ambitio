@@ -3,8 +3,7 @@
    ─────────────────────────────────────────────────────────────────────────
    Injecté par nav.js ; s'active UNIQUEMENT pour les rôles sales et admin
    (jamais coach / CSM), jamais dans une iframe.
-   • Bulle flottante en bas à droite (au-dessus de l'Inbox, et de l'orbe IA
-     chez les admins) → panneau de discussion.
+   • Bulle flottante en bas à droite (au-dessus de l'Inbox) → panneau de discussion.
    • Questions techniques → api/aide-ask (Sonnet 5.5 + fiches pratiques).
    • 📎 ou coller (⌘/Ctrl + V) une capture d'écran : réduite à 1600 px dans le
      navigateur avant l'envoi.

@@ -2,7 +2,7 @@
 // api/_aiTools.js — OUTILS « DONNÉES ALTEORE » en LECTURE SEULE (Lot 5)
 // ----------------------------------------------------------------------------
 // Une seule définition d'outils, deux consommateurs :
-//   • api/ai-ask.js  — « Demande à Alteore » (chat vocal des admins, Opus) ;
+//   • api/ai-ask.js  — « Demande à Alteore » (réponse admin de la barre ⌘K, Opus) ;
 //   • api/mcp.js     — serveur MCP (Claude Desktop / claude.ai d'Adrien).
 // AUCUN outil n'écrit en base. Chaque outil renvoie un objet JSON compact.
 // Périmètre : données sales, coaching, paiements, IA. Pas de factures

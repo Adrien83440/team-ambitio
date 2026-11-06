@@ -9,7 +9,8 @@
 //   { history:[{ role:'user'|'assistant', text }], question, voice? }
 //   → { ok, answer, tools:[noms utilisés] }
 // `voice: true` → réponse courte, sans mise en forme, faite pour être lue à
-// voix haute (ElevenLabs, api/ai-voice.js).
+// voix haute. Plus utilisé depuis le retrait de l'orbe vocal (06/11/2026) :
+// seule la barre ⌘K (ai-cmdk.js) appelle encore cet endpoint, en texte.
 // ============================================================================
 
 const { requireAdmin } = require('./_verifyFirebaseAuth');

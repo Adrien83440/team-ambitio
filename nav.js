@@ -1654,9 +1654,10 @@
   function injectAiFollowupWidget() {
     if (window.__aiFollowupInjected) return;
     window.__aiFollowupInjected = true;
-    // + barre de commande ⌘K (tous rôles internes) et orbe vocal « Demande à
-    //   Alteore » (admins) — chaque script vérifie lui-même le rôle.
-    ['ai-followup-popup.js', 'ai-cmdk.js', 'ai-ask-orb.js'].forEach(function (src) {
+    // + barre de commande ⌘K (tous rôles internes) — chaque script vérifie
+    //   lui-même le rôle. (L'orbe vocal « Demande à Alteore » a été retiré le
+    //   06/11/2026 : inutilisé, il consommait des crédits ElevenLabs.)
+    ['ai-followup-popup.js', 'ai-cmdk.js'].forEach(function (src) {
       if (document.querySelector('script[src="' + src + '"]')) return;
       var script = document.createElement('script');
       script.src = src;
@@ -2128,7 +2129,6 @@
   var FABS = [
     { s: '#ambitio-inbox-fab', label: 'Messages', ic: '🔔', isNew: function (el) { var b = el.querySelector('.iw-fab-badge'); return !!(b && !b.classList.contains('hidden')); } },
     { s: '#alteoInfosBell', label: 'Infos équipe', ic: '📣', isNew: function (el) { return el.classList.contains('has-new'); } },
-    { s: '.aio-fab', label: 'Assistant IA', ic: '🔮' },
     { s: '.aidw-fab', label: 'Aide', ic: '❓' }
   ];
   var FAB_SEL = FABS.map(function (f) { return f.s; }).join(',');
