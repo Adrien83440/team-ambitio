@@ -379,9 +379,22 @@
   function ocPresent(b) { var o = ocOf(b); return o ? (o === 'offre' || o === 'close' || o === 'non_close' || o === 'disqualifie') : b.status === 'completed'; }
   function ocPitched(b) { var o = ocOf(b); return o === 'offre' || o === 'close' || o === 'non_close'; }
 
+  /* Offre vendue d'un close (06/11/2026) : closeData.offre ('Elite' |
+     'BP 12' = Business Phénix) ou offreLabel ('Elite' | 'Business'), posés
+     par CloseWizard.persist ; copie sur la fiche (leads.closedData). Rien
+     d'écrit → null (« offre non renseignée »), jamais déduit du montant. */
+  function offerOf(cd) {
+    if (!cd) return null;
+    var t = norm((cd.offreLabel || '') + ' ' + (cd.offre || ''));
+    if (/elite/.test(t)) return 'elite';
+    if (/business|\bbp\b|phenix/.test(t)) return 'business';
+    return null;
+  }
+
   function newAgg() {
     return { leads: 0, noted: 0, noteSum: 0, n45: 0, n12: 0, dist: [0, 0, 0, 0, 0, 0],
       booked: 0, present: 0, noshow: 0, cancelled: 0, pitched: 0, closes: 0, cash: 0, con: 0,
+      closesE: 0, closesB: 0, closesU: 0, cashE: 0, cashB: 0, cashU: 0,
       teamN: 0, teamSum: 0, rdv: 0 };
   }
   function addNote(a, note) {
@@ -398,11 +411,17 @@
     if (r.noshow) a.noshow++;
     if (r.allCancelled) a.cancelled++;
     if (r.pitched) a.pitched++;
-    if (r.closed) { a.closes++; a.cash += r.cash; a.con += r.con; }
+    if (r.closed) {
+      a.closes++; a.cash += r.cash; a.con += r.con;
+      if (r.offer === 'elite') { a.closesE++; a.cashE += r.cash; }
+      else if (r.offer === 'business') { a.closesB++; a.cashB += r.cash; }
+      else { a.closesU++; a.cashU += r.cash; }
+    }
     if (r.team != null) { a.teamN++; a.teamSum += r.team; }
   }
   function fin(a) {
     a.cash = r2(a.cash); a.con = r2(a.con);
+    a.cashE = r2(a.cashE); a.cashB = r2(a.cashB); a.cashU = r2(a.cashU);
     a.avgNote = a.noted ? r2(a.noteSum / a.noted) : null;
     a.pct45 = a.noted ? a.n45 / a.noted * 100 : null;
     a.pct12 = a.noted ? a.n12 / a.noted * 100 : null;
@@ -535,7 +554,7 @@
         answers: l._answers || [], entry: entry, reopt: !!l._reopt,
         booked: heads.length > 0, present: false, noshow: false, pitched: false, closeOc: false,
         allCancelled: heads.length > 0, upcoming: false, closed: false, closeCancelled: false,
-        cash: 0, con: 0, closer: null, rdvDate: null,
+        cash: 0, con: 0, offer: null, closer: null, rdvDate: null,
         team: (l.leadScore >= 1 && l.leadScore <= 5) ? Number(l.leadScore) : null };
       var pick = null;
       heads.forEach(function (h) {
@@ -556,7 +575,12 @@
       if (won) {
         var rv = FC.revClient(pays, l, declFor(l));
         if (rv.cancelled) { r.closeCancelled = true; }
-        else { r.closed = true; r.cash = rv.paid; r.con = rv.con; }
+        else {
+          r.closed = true; r.cash = rv.paid; r.con = rv.con;
+          var cdo = null;
+          (bkByLead[l._id] || []).forEach(function (b) { if (b.outcome === 'close' && b.closeData && offerOf(b.closeData)) cdo = b.closeData; });
+          r.offer = offerOf(cdo) || offerOf(l.closedData);
+        }
         if (!r.closer) {
           var pc = null;
           pays.forEach(function (p) { if (p.closerSlug) pc = p.closerSlug; });
@@ -1225,6 +1249,6 @@
     byNote: byNote, byAnswer: byAnswer, byAxis: byAxis, byCloser: byCloser, closerBoard: closerBoard,
     suggestPoints: suggestPoints, suggestBasis: suggestBasis,
     quizVersions: quizVersions, buildQuizView: buildQuizView, versionMeta: versionMeta, OLD_QUIZ_KEY: OLD_KEY, mqsOf: mqsOf, buildQuizFunnel: buildQuizFunnel, insights: insights,
-    newAgg: newAgg, addLeadRow: addLeadRow, fin: fin, isoDay: isoDay
+    newAgg: newAgg, offerOf: offerOf, addLeadRow: addLeadRow, fin: fin, isoDay: isoDay
   };
 }));

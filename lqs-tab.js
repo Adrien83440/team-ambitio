@@ -75,6 +75,16 @@
     });
     return '<div class="lq-dist">' + h + '</div>';
   }
+  /* Closes ventilés par offre vendue (closeData.offre : Élite / Business
+     Phénix). « ? » = close sans offre renseignée (anciens closes). */
+  function offerSplit(a) {
+    if (!a || !a.closes) return '';
+    var p = [];
+    if (a.closesE) p.push('<span class="lq-oe">' + fNum(a.closesE) + ' Élite</span>');
+    if (a.closesB) p.push('<span class="lq-ob">' + fNum(a.closesB) + ' Business</span>');
+    if (a.closesU) p.push('<span class="lq-muted" title="Close sans offre renseignée">' + fNum(a.closesU) + ' ?</span>');
+    return p.join(' · ');
+  }
   function bar(pct, cls) { return '<div class="lq-bar"><span class="' + (cls || '') + '" style="width:' + (ok(pct) ? Math.max(0, Math.min(100, pct)).toFixed(1) : 0) + '%"></span></div>'; }
   function sub(v) { return '<div class="lq-sub">' + v + '</div>'; }
   function kpi(v, l, s) { return '<div class="fn-kpi"><div class="v">' + v + '</div><div class="l">' + l + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>'; }
@@ -197,7 +207,7 @@
     h += kpi(fPct(t.pct45, 0), 'Leads notés 4-5', fNum(t.n45) + ' leads · 1-2 : ' + fPct(t.pct12, 0));
     h += kpi(fNum(t.booked), 'RDV pris', fPct(t.bookRate) + ' des leads');
     h += kpi(fNum(t.present), 'Présents', fPct(t.showRate) + ' des RDV');
-    h += kpi(fNum(closesOf(t)), S.cashMode === 'periode' ? 'Clients ayant payé' : 'Closes', S.cashMode === 'periode' ? 'sur la période' : fPct(t.closePresent) + ' des présents');
+    h += kpi(fNum(closesOf(t)), S.cashMode === 'periode' ? 'Clients ayant payé' : 'Closes', S.cashMode === 'periode' ? 'sur la période' : fPct(t.closePresent) + ' des présents' + (t.closes ? '<br>' + offerSplit(t) : ''));
     h += kpi(fEur(totCash), S.cashMode === 'periode' ? 'Encaissé sur la période' : 'Cash encaissé', S.cashMode === 'periode' ? 'HT, tous leads confondus' : 'HT, à ce jour, par ces leads');
     h += '</div>';
 
@@ -210,7 +220,7 @@
     /* Tableau LQS */
     var body = '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr>'
       + '<th class="l">Note LQS</th><th>Leads</th><th>Part</th><th>RDV pris</th><th>Présents</th>'
-      + '<th>' + (S.cashMode === 'periode' ? 'Clients payants' : 'Closes') + '</th><th title="Closes ÷ présents">Closing / présents</th><th title="Closes ÷ RDV pris">Closing / RDV</th>'
+      + '<th>' + (S.cashMode === 'periode' ? 'Clients payants' : 'Closes') + '</th><th title="Offre vendue : Élite / Business Phénix (closes des leads de la période)">Élite / Business</th><th title="Closes ÷ présents">Closing / présents</th><th title="Closes ÷ RDV pris">Closing / RDV</th>'
       + '<th>Cash</th><th class="l" style="min-width:140px">Part du cash</th><th>Cash / client</th><th>Cash / lead</th><th title="Moyenne du curseur ★ posé par l\'équipe dans Leads Live">Note équipe</th></tr></thead><tbody>';
     LC.NOTE_KEYS.forEach(function (k) {
       var a = m[k];
@@ -222,6 +232,7 @@
         + '<td>' + fNum(a.booked) + sub(fPct(a.bookRate, 0)) + '</td>'
         + '<td>' + fNum(a.present) + sub(fPct(a.showRate, 0) + ' des RDV') + '</td>'
         + '<td><strong>' + fNum(cl) + '</strong></td>'
+        + '<td>' + (a.closes ? fNum(a.closesE) + ' / ' + fNum(a.closesB) + (a.closesU ? sub(fNum(a.closesU) + ' sans offre') : '') : '—') + '</td>'
         + '<td>' + fPct(a.closePresent, 0) + '</td><td>' + fPct(a.closeRdv, 0) + '</td>'
         + '<td><strong>' + fEur(c) + '</strong></td>'
         + '<td class="l">' + bar(share, 'lq-n' + k) + sub(fPct(share)) + '</td>'
@@ -229,7 +240,7 @@
         + '<td>' + (a.teamAvg != null ? '★ ' + fDec(a.teamAvg, 1) : '—') + '</td></tr>';
     });
     body += '<tr class="tot"><td class="l">Total</td><td>' + fNum(t.leads) + '</td><td>100 %</td><td>' + fNum(t.booked) + sub(fPct(t.bookRate, 0)) + '</td><td>' + fNum(t.present) + sub(fPct(t.showRate, 0) + ' des RDV') + '</td>'
-      + '<td>' + fNum(closesOf(t)) + '</td><td>' + fPct(t.closePresent, 0) + '</td><td>' + fPct(t.closeRdv, 0) + '</td><td>' + fEur(totCash) + '</td><td class="l"></td>'
+      + '<td>' + fNum(closesOf(t)) + '</td><td>' + (t.closes ? fNum(t.closesE) + ' / ' + fNum(t.closesB) + (t.closesU ? sub(fNum(t.closesU) + ' sans offre') : '') : '—') + '</td><td>' + fPct(t.closePresent, 0) + '</td><td>' + fPct(t.closeRdv, 0) + '</td><td>' + fEur(totCash) + '</td><td class="l"></td>'
       + '<td>' + fEur(closesOf(t) ? totCash / closesOf(t) : null) + '</td><td>' + fEur(t.leads ? totCash / t.leads : null) + '</td><td>' + (t.teamAvg != null ? '★ ' + fDec(t.teamAvg, 1) : '—') + '</td></tr>';
     body += '</tbody></table></div>';
     body += '<div class="fn-stage-note" style="margin-top:8px">' + (S.cashMode === 'periode'
@@ -380,7 +391,8 @@
       + '<div class="lq-vname">' + esc(v.name) + '</div><div class="lq-vsub">' + esc(v.sub || '') + '</div>'
       + '<div class="lq-vline">' + (v.starts ? '<strong>' + fNum(v.starts) + '</strong> débuts · ' + fPct(v.completeRate, 0) + ' terminés'
         : (v.views ? '<strong>' + fNum(v.views) + '</strong> visites · ' + fNum(v.optins) + ' formulaires (' + fPct(v.views ? v.optins / v.views * 100 : null, 1) + ')' : '<span class="lq-muted">mesure des visiteurs à venir</span>')) + '</div>'
-      + '<div class="lq-vline"><strong>' + fNum(a.leads) + '</strong> leads · ' + fNum(a.closes) + ' close' + (a.closes > 1 ? 's' : '') + ' · <strong>' + fEur(a.cash) + '</strong></div></div>';
+      + '<div class="lq-vline"><strong>' + fNum(a.leads) + '</strong> leads · ' + fNum(a.closes) + ' close' + (a.closes > 1 ? 's' : '') + ' · <strong>' + fEur(a.cash) + '</strong></div>'
+      + (a.closes ? '<div class="lq-vline">' + offerSplit(a) + '</div>' : '') + '</div>';
   }
 
   /* ── Parcours ── */
@@ -401,24 +413,26 @@
   function answerLine(o) {
     var a = o.agg;
     var tag = o.best ? ' <span class="fn-tbadge lq-good">la plus rentable</span>' : (o.worst ? ' <span class="fn-tbadge lq-warn">la moins rentable</span>' : '');
-    var res = a ? '<strong>' + fNum(a.leads) + '</strong> lead' + (a.leads > 1 ? 's' : '') + ' · ' + fNum(a.closes) + ' close' + (a.closes > 1 ? 's' : '') + ' · <strong>' + fEur(a.cashPerLead) + '</strong> / lead' : '<span class="lq-muted">aucun lead</span>';
+    var res = a ? '<strong>' + fNum(a.leads) + '</strong> lead' + (a.leads > 1 ? 's' : '') + ' · ' + fNum(a.closes) + ' close' + (a.closes > 1 ? 's' : '') + (a.closes ? ' (' + offerSplit(a) + ')' : '') + ' · <strong>' + fEur(a.cashPerLead) + '</strong> / lead' : '<span class="lq-muted">aucun lead</span>';
     return '<div class="lq-arow"><span class="lq-al">' + esc(o.label) + tag + '</span>'
       + '<span class="lq-av">' + (o.visitorShare != null ? bar(o.visitorShare, 'lq-blue') + '<span class="lq-mono">' + fPct(o.visitorShare, 0) + ' des visiteurs</span>' : '<span class="lq-muted">—</span>') + '</span>'
       + '<span class="lq-ax">' + res + '</span>'
       + '<span class="lq-ap">' + (o.pts != null || o.ko ? ptsChip(o) : '') + '</span></div>';
   }
   function detailTable(c) {
-    var h = '<div class="fn-table-wrap" style="margin-top:8px"><table class="fn-igt lq-t"><thead><tr><th class="l">Réponse</th><th>Visiteurs</th><th>% visiteurs</th><th>Leads</th><th>% leads</th><th>RDV pris</th><th>Présents</th><th>Closes</th><th>Closing / lead</th><th>Cash</th><th>Cash / lead</th><th>LQS moyen</th><th>Points</th></tr></thead><tbody>';
+    var h = '<div class="fn-table-wrap" style="margin-top:8px"><table class="fn-igt lq-t"><thead><tr><th class="l">Réponse</th><th>Visiteurs</th><th>% visiteurs</th><th>Leads</th><th>% leads</th><th>RDV pris</th><th>Présents</th><th>Closes</th><th title="Closes offre Élite (et leur cash)">dont Élite</th><th title="Closes offre Business Phénix (et leur cash)">dont Business</th><th>Closing / lead</th><th>Cash</th><th>Cash / lead</th><th>LQS moyen</th><th>Points</th></tr></thead><tbody>';
     c.answers.forEach(function (o) {
       var a = o.agg;
       h += '<tr><td class="l">' + esc(o.label) + '</td><td>' + fNum(o.visitors) + '</td><td>' + fPct(o.visitorShare, 0) + '</td>'
-        + (a ? '<td>' + fNum(a.leads) + '</td><td>' + fPct(o.leadShare, 0) + '</td><td>' + fNum(a.booked) + sub(fPct(a.bookRate, 0)) + '</td><td>' + fNum(a.present) + sub(fPct(a.showRate, 0)) + '</td><td>' + fNum(a.closes) + '</td><td>' + fPct(a.closeLead, 1) + '</td><td>' + fEur(a.cash) + '</td><td><strong>' + fEur(a.cashPerLead) + '</strong></td><td>' + avgBadge(a.avgNote) + '</td>'
-          : '<td colspan="9" class="l lq-muted">aucun lead avec cette réponse sur la période</td>')
+        + (a ? '<td>' + fNum(a.leads) + '</td><td>' + fPct(o.leadShare, 0) + '</td><td>' + fNum(a.booked) + sub(fPct(a.bookRate, 0)) + '</td><td>' + fNum(a.present) + sub(fPct(a.showRate, 0)) + '</td><td>' + fNum(a.closes) + (a.closesU ? sub(fNum(a.closesU) + ' sans offre') : '') + '</td>'
+          + '<td>' + fNum(a.closesE) + (a.closesE ? sub(fEur(a.cashE)) : '') + '</td><td>' + fNum(a.closesB) + (a.closesB ? sub(fEur(a.cashB)) : '') + '</td>'
+          + '<td>' + fPct(a.closeLead, 1) + '</td><td>' + fEur(a.cash) + '</td><td><strong>' + fEur(a.cashPerLead) + '</strong></td><td>' + avgBadge(a.avgNote) + '</td>'
+          : '<td colspan="11" class="l lq-muted">aucun lead avec cette réponse sur la période</td>')
         + '<td>' + (o.pts != null || o.ko ? ptsChip(o) : '—') + '</td></tr>';
     });
     if (c.lq) {
       var t = c.lq.agg;
-      h += '<tr class="tot"><td class="l">Total</td><td>' + (c.step ? fNum(c.step.answered) : '—') + '</td><td></td><td>' + fNum(t.leads) + '</td><td>100 %</td><td>' + fNum(t.booked) + '</td><td>' + fNum(t.present) + '</td><td>' + fNum(t.closes) + '</td><td>' + fPct(t.closeLead, 1) + '</td><td>' + fEur(t.cash) + '</td><td>' + fEur(t.cashPerLead) + '</td><td>' + avgBadge(t.avgNote) + '</td><td></td></tr>';
+      h += '<tr class="tot"><td class="l">Total</td><td>' + (c.step ? fNum(c.step.answered) : '—') + '</td><td></td><td>' + fNum(t.leads) + '</td><td>100 %</td><td>' + fNum(t.booked) + '</td><td>' + fNum(t.present) + '</td><td>' + fNum(t.closes) + '</td><td>' + fNum(t.closesE) + (t.closesE ? sub(fEur(t.cashE)) : '') + '</td><td>' + fNum(t.closesB) + (t.closesB ? sub(fEur(t.cashB)) : '') + '</td><td>' + fPct(t.closeLead, 1) + '</td><td>' + fEur(t.cash) + '</td><td>' + fEur(t.cashPerLead) + '</td><td>' + avgBadge(t.avgNote) + '</td><td></td></tr>';
     }
     return h + '</tbody></table></div>';
   }
@@ -455,7 +469,7 @@
         + '<div class="lq-strip-arrow">›</div>' + stripStep(fNum(cur.optins), 'Formulaires envoyés', fPct(cur.views ? cur.optins / cur.views * 100 : null, 1) + ' des visites')
         + '<div class="lq-strip-arrow">›</div>' + stripStep(fNum(t.leads), 'Leads de la période', 'avec réponses au quiz')
         + '<div class="lq-strip-arrow">›</div>' + stripStep(fNum(t.booked), 'RDV pris', fPct(t.bookRate, 0) + ' des leads')
-        + '<div class="lq-strip-arrow">›</div>' + stripStep(fNum(t.closes), 'Closes', fPct(t.closeLead, 1) + ' des leads')
+        + '<div class="lq-strip-arrow">›</div>' + stripStep(fNum(t.closes), 'Closes', (t.closes ? offerSplit(t) : fPct(t.closeLead, 1) + ' des leads'))
         + '<div class="lq-strip-arrow">›</div>' + stripStep(fEur(t.cash), 'Cash encaissé', t.leads ? fEur(t.cash / t.leads) + ' / lead' : '')
         + '</div>';
     }
@@ -465,7 +479,7 @@
       + '<div class="lq-strip-arrow">›</div>' + stripStep(fNum(d.completes), 'Quiz terminés', fPct(d.completeRate, 0) + ' des débuts')
       + '<div class="lq-strip-arrow">›</div>' + stripStep(fNum(t.leads), 'Formulaires envoyés', 'leads de la période')
       + '<div class="lq-strip-arrow">›</div>' + stripStep(fNum(t.booked), 'RDV pris', fPct(t.bookRate, 0) + ' des leads')
-      + '<div class="lq-strip-arrow">›</div>' + stripStep(fNum(t.closes), 'Closes', fPct(t.closeLead, 1) + ' des leads')
+      + '<div class="lq-strip-arrow">›</div>' + stripStep(fNum(t.closes), 'Closes', (t.closes ? offerSplit(t) : fPct(t.closeLead, 1) + ' des leads'))
       + '<div class="lq-strip-arrow">›</div>' + stripStep(fEur(t.cash), 'Cash encaissé', t.leads ? fEur(t.cash / t.leads) + ' / lead' : '')
       + '</div>';
     if (!view.cards.length) return h + '<div class="lq-muted">Aucune question à afficher.</div>';
