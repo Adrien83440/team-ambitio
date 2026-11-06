@@ -248,7 +248,7 @@
   }
   function tunnelStrip(t) {
     var q = quizTotals();
-    var V = LC.quizVersions(rows(), S.M.quiz || [], S.ctx.tunnelsMeta || null, S.M.views);
+    var V = LC.quizVersions(rows(), S.M.quiz || [], S.M.tunnels || S.ctx.tunnelsMeta || null, S.M.views);
     var quizLeads = rows().filter(function (r) { return r.answers.some(function (a) { return a.o === 'quiz'; }); }).length;
     var steps = [
       q.has ? { v: fNum(q.starts), l: 'Quiz commencés', s: V.all.views ? fPct(q.starts / V.all.views * 100, 0) + ' des visites' : '' }
@@ -330,7 +330,7 @@
      3. « Comparer » : une colonne par version, réponse par réponse ;
      4. formulaires hors quiz (VSL, AlteoForms) à part, repliés. */
   function viewQuiz() {
-    var meta = S.ctx.tunnelsMeta || null;
+    var meta = S.M.tunnels || S.ctx.tunnelsMeta || null;
     var pages = S.M.quiz || [];
     var R = rows();
     var V = LC.quizVersions(R, pages, meta, S.M.views);
@@ -355,6 +355,7 @@
       }
       var cur = S.quizVer ? V.list.filter(function (v) { return v.key === S.quizVer; })[0] : V.all;
       h += card('🧭 Parcours — ' + esc(cur.name), cur.sub ? esc(cur.sub) : '', parcours(view, cmp, cur));
+      if (V.hiddenLeads) h += '<div class="fn-stage-note" style="margin:-6px 0 14px">Seuls les quiz en ligne sont affichés. ' + fNum(V.hiddenLeads) + ' lead' + (V.hiddenLeads > 1 ? 's' : '') + ' de la période vien' + (V.hiddenLeads > 1 ? 'nent' : 't') + ' de pages hors ligne ou anciennes : ils restent comptés dans la vue d\'ensemble, le marketing et les closers.</div>';
     }
 
     var ba = LC.byAnswer(R, activeGrid(), 'form');

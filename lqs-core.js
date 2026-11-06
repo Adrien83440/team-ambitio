@@ -299,7 +299,8 @@
       db.collection('booking_config').get().then(function (snap) {
         snap.forEach(function (doc) { var d = doc.data() || {}; if (d.__type === 'person') { d.id = doc.id; D.persons[doc.id] = d; } });
       }).catch(function () {}),
-      db.collection('_config').doc('lqs_grid').get().then(function (s) { D.gridRaw = s.exists ? s.data() : null; })
+      db.collection('_config').doc('lqs_grid').get().then(function (s) { D.gridRaw = s.exists ? s.data() : null; }),
+      loadTunnelsLive(db, D)
     ];
     return Promise.all(jobs).then(function () {
       return FC.resolveChains(db, D, typeMap);
@@ -307,6 +308,34 @@
       D.bookings = Object.keys(D.bookingsById).map(function (k) { return D.bookingsById[k]; });
       return loadMissingLeads(db, D, P);
     }).then(function () { return D; });
+  }
+
+  /* Tunnels avec leurs STATUTS (tunnels/{id}, lecture admin) : la vue Quiz
+     ne montre que les versions réellement servies aujourd'hui — tunnel,
+     étape et variante « live », rien d'archivé (même règle que
+     api/_tunnelRegistry.js). Même forme que FunnelCore tunnelsMeta
+     (name, source, steps[slug].variants[id].label) + statuts. */
+  function loadTunnelsLive(db, D) {
+    D.tunnels = {};
+    return db.collection('tunnels').get().then(function (snap) {
+      snap.forEach(function (doc) {
+        var t = doc.data() || {};
+        if (!t.slug) return;
+        var steps = {};
+        (t.steps || []).forEach(function (st) {
+          if (!st || !st.slug) return;
+          var vars = {};
+          (st.variants || []).forEach(function (v) {
+            if (!v || !v.id) return;
+            vars[String(v.id)] = { label: v.label || '', live: v.status === 'live' && v.archived !== true, weight: Number(v.weight) || 0 };
+          });
+          steps[String(st.slug)] = { name: st.name || st.slug, source: st.trackingSource || '', variants: vars,
+            live: st.status === 'live' && st.archived !== true };
+        });
+        D.tunnels[String(t.slug)] = { name: t.name || t.slug, source: (t.settings && t.settings.trackingSource) || '', steps: steps,
+          live: t.status === 'live' && t.archived !== true && t.kind !== 'test' };
+      });
+    }).catch(function (e) { D.tunnelsErr = e && e.message ? e.message : 'erreur'; });
   }
 
   /* Fiches référencées par un RDV ou un paiement, absentes de la cohorte. */
@@ -612,6 +641,7 @@
       rows: rows, rdvRows: rdvRows, periodPays: periodPays, closers: closers,
       quiz: buildQuizFunnel(D.quizDocs || []), quizErr: D.quizErr || null,
       adsByAd: D.adsByAd || [], creIdx: CRE_IDX, views: D.views || [],
+      tunnels: D.tunnelsErr ? null : (D.tunnels || null),
       leadsTruncated: !!D.leadsTruncated, memberName: memberName
     };
   }
@@ -988,15 +1018,46 @@
     return list;
   }
 
+  /* Version en ligne ET de type quiz :
+       · tunnel, étape et variante « live », non archivés ;
+       · si plusieurs variantes servies portent un poids, poids > 0 ;
+       · quiz = la page est mesurée comme quiz (quiz_funnel_daily), sinon le
+         libellé de la variante dit « quiz » (une variante « VSL Direct » du
+         même tunnel n'en est pas un), à défaut le nom de l'étape / du tunnel.
+       Sans référentiel lisible (meta null), on ne filtre pas : mieux vaut
+       tout montrer que masquer à tort. */
+  function onlineQuiz(key, meta, measured) {
+    if (!meta) return key !== OLD_KEY;
+    if (key === OLD_KEY) return false;
+    var parts = String(key).split('--');
+    var sp = splitPage(parts[0]), v = parts[1] || '';
+    var t = meta[sp.tunnel];
+    var st = t && t.steps ? t.steps[sp.step] : null;
+    if (!t || !st || t.live === false || st.live === false) return false;
+    var vars = st.variants || {};
+    var vm = v ? vars[v] : null;
+    if (!vm || vm.live === false) return false;
+    var weighted = Object.keys(vars).some(function (id) { return vars[id].live !== false && vars[id].weight > 0; });
+    if (weighted && !(vm.weight > 0)) return false;
+    if (measured[key]) return true;
+    if (vm.label) return /quiz/i.test(vm.label);
+    return /quiz/i.test((st.name || '') + ' ' + (t.name || ''));
+  }
+
   function quizContext(rows, pages, meta) {
+    var measured = {};
+    pages.forEach(function (p) { measured[p.key] = 1; });
+    pages = pages.filter(function (p) { return onlineQuiz(p.key, meta, measured); });
     var pagesByPage = {}, pageByKey = {};
     pages.forEach(function (p) {
       pageByKey[p.key] = p;
       (pagesByPage[p.page] = pagesByPage[p.page] || []).push(p.key);
     });
-    var quizRows = rows.filter(hasQuizAnswers);
-    quizRows.forEach(function (r) { r._qv = quizVersionOf(r.lead, pagesByPage); });
-    return { pagesByPage: pagesByPage, pageByKey: pageByKey, quizRows: quizRows, meta: meta };
+    var allQuiz = rows.filter(hasQuizAnswers);
+    allQuiz.forEach(function (r) { r._qv = quizVersionOf(r.lead, pagesByPage); });
+    var quizRows = allQuiz.filter(function (r) { return onlineQuiz(r._qv, meta, measured); });
+    return { pagesByPage: pagesByPage, pageByKey: pageByKey, quizRows: quizRows, pages: pages, meta: meta,
+      hiddenLeads: allQuiz.length - quizRows.length };
   }
 
   /* Cartes : une par version (mesure anonyme et/ou leads), triées par volume. */
@@ -1015,6 +1076,7 @@
   }
   function quizVersions(rows, pages, meta, views) {
     var C = quizContext(rows, pages, meta);
+    pages = C.pages;
     var keys = {};
     pages.forEach(function (p) { keys[p.key] = 1; });
     C.quizRows.forEach(function (r) { keys[r._qv] = 1; });
@@ -1042,13 +1104,14 @@
     all.views = 0; all.optins = 0;
     list.forEach(function (v) { all.views += v.views; all.optins += v.optins; });
     all.completeRate = all.starts ? all.completes / all.starts * 100 : null;
-    return { all: all, list: list };
+    return { all: all, list: list, hiddenLeads: C.hiddenLeads };
   }
 
   /* Parcours d'une version ('' = toutes) : questions dans l'ordre, chacune
      avec la mesure anonyme ET les résultats des leads, réponse par réponse. */
   function buildQuizView(rows, pages, versionKey, grid, meta) {
     var C = quizContext(rows, pages, meta);
+    pages = C.pages;
     var vPages = versionKey ? pages.filter(function (p) { return p.key === versionKey; }) : pages;
     var drop = mergeDropoff(vPages);
     var vRows = versionKey ? C.quizRows.filter(function (r) { return r._qv === versionKey; }) : C.quizRows;
