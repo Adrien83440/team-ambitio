@@ -33,7 +33,7 @@
     loadedKey: null, loading: false, err: null, bound: false,
     view: 'overview', closer: '', cashMode: 'cohorte', axis: 'campaign',
     crMode: 'period', leadsNote: 'all', leadsQ: '', leadsLimit: 150,
-    openQ: {}, openQuizQ: {}, openLead: {}, quizPage: '', saving: false
+    openQ: {}, openLead: {}, openDetail: {}, quizVer: '', quizCompare: false, formsOpen: false, saving: false
   };
 
   /* ══ FORMATS ══════════════════════════════════════════════════════════ */
@@ -248,10 +248,13 @@
   }
   function tunnelStrip(t) {
     var q = quizTotals();
+    var V = LC.quizVersions(rows(), S.M.quiz || [], S.ctx.tunnelsMeta || null, S.M.views);
     var quizLeads = rows().filter(function (r) { return r.answers.some(function (a) { return a.o === 'quiz'; }); }).length;
     var steps = [
-      { v: q.has ? fNum(q.starts) : '—', l: 'Quiz commencés', s: q.has ? '' : 'mesure à activer' },
-      { v: q.has ? fNum(q.completes) : '—', l: 'Quiz terminés', s: q.has && q.starts ? fPct(q.completes / q.starts * 100, 0) + ' des débuts' : '' },
+      q.has ? { v: fNum(q.starts), l: 'Quiz commencés', s: V.all.views ? fPct(q.starts / V.all.views * 100, 0) + ' des visites' : '' }
+        : { v: V.all.views ? fNum(V.all.views) : '—', l: V.all.views ? 'Visites des pages quiz' : 'Quiz commencés', s: V.all.views ? 'commencés : mesure à activer' : 'mesure à activer' },
+      q.has ? { v: fNum(q.completes), l: 'Quiz terminés', s: q.starts ? fPct(q.completes / q.starts * 100, 0) + ' des débuts' : '' }
+        : { v: V.all.views ? fNum(V.all.optins) : '—', l: V.all.views ? 'Formulaires quiz envoyés' : 'Quiz terminés', s: V.all.views ? fPct(V.all.optins / V.all.views * 100, 1) + ' des visites' : '' },
       { v: fNum(t.leads), l: 'Leads', s: fNum(quizLeads) + ' via le quiz' },
       { v: fNum(t.booked), l: 'RDV pris', s: fPct(t.bookRate, 0) + ' des leads' },
       { v: fNum(t.present), l: 'Présents', s: fPct(t.showRate, 0) + ' des RDV' },
@@ -265,13 +268,24 @@
     });
     h += '</div>';
     if (q.has && q.gateShown) h += '<div class="fn-stage-note" style="margin-top:8px">Écran prix : affiché ' + fNum(q.gateShown) + ' fois · ' + fNum(q.gateExit) + ' visiteurs se sont arrêtés là (disqualifiés avant de prendre un créneau).</div>';
-    if (!q.has) h += '<div class="fn-stage-note" style="margin-top:8px">Les débuts / fins de quiz s\'afficheront dès que la page quiz sera instrumentée (scripts/quiz-tracking-patch.js). Le reste du tunnel est déjà mesuré.</div>';
+    if (!q.has) h += '<div class="fn-stage-note" style="margin-top:8px">« Quiz commencés / terminés » et l\'abandon question par question démarrent à l\'instrumentation de la page quiz (scripts/quiz-tracking-patch.js --apply) : ils ne se reconstituent pas pour le passé. Visites et formulaires envoyés, eux, sont mesurés depuis septembre.</div>';
     return h;
   }
 
   function insightsHtml(bn) {
     var list = LC.insights(bn, S.cashMode);
     var cashWord = S.cashMode === 'periode' ? 'de l\'encaissé de la période' : 'du cash encaissé';
+    var totC = S.cashMode === 'periode' ? bn.total.periodCash : bn.total.cash;
+    if (!(totC > 0)) {
+      list = list.filter(function (x) { return x.k === 'hi' || x.k === 'lo' || x.k === 'none'; });
+      var h0 = '<ul class="lq-ins">';
+      list.forEach(function (x) {
+        if (x.k === 'hi') h0 += '<li><span class="lq-note lq-n5">4-5</span> Les leads notés <strong>4 et 5</strong> sont <strong>' + fNum(x.leads) + '</strong> (' + fPct(x.leadsPct, 0) + ' des leads). Pas encore de cash encaissé sur ces leads : la part du cash par note s\'affichera avec les premiers prélèvements.</li>';
+        else if (x.k === 'lo') h0 += '<li><span class="lq-note lq-n1">1</span> Les leads notés <strong>1</strong> : ' + fNum(x.leads) + ' leads, ' + fNum(x.booked) + ' RDV pris.</li>';
+        else if (x.k === 'none') h0 += '<li><span class="lq-note lq-n0">–</span> ' + fNum(x.leads) + ' leads (' + fPct(x.pct, 0) + ') sans réponse exploitable : pas de quiz ni de formulaire noté (RDV direct, import, ancien tunnel).</li>';
+      });
+      return h0 + '</ul>';
+    }
     if (!list.length) return '<div class="lq-muted">Aucun lead noté sur la période : les leads n\'ont pas de réponses exploitables (quiz ou formulaire).</div>';
     var h = '<ul class="lq-ins">';
     list.forEach(function (x) {
@@ -306,57 +320,183 @@
     return card('🤝 Alignement marketing ↔ équipe', '', body);
   }
 
-  /* ══ VUE 2 — QUIZ & RÉPONSES ═══════════════════════════════════════════ */
+  /* ══ VUE 2 — QUIZ & RÉPONSES (refonte lisibilité 06/11/2026) ═══════════
+     1. une carte par version de quiz (Meta Dark / White, YouTube, anciennes
+        versions) + « Tous les quiz » : un clic filtre toute la vue ;
+     2. UN parcours, dans l'ordre du quiz : chaque question réunit la mesure
+        anonyme (arrivés, perdus, réponses de tous les visiteurs) et ce que
+        chaque réponse a rapporté (leads, closes, cash, points) ; le détail
+        complet reste à un clic ;
+     3. « Comparer » : une colonne par version, réponse par réponse ;
+     4. formulaires hors quiz (VSL, AlteoForms) à part, repliés. */
   function viewQuiz() {
-    var h = '';
-    h += card('📉 Abandon question par question', 'visiteurs du quiz, comptés anonymement (une fois par session)', quizDropoff());
-    var ba = LC.byAnswer(rows(), activeGrid());
-    var body = '';
-    if (!ba.questions.length) body = '<div class="lq-muted">Aucune réponse sur les leads de la période.</div>';
-    ba.questions.forEach(function (q) { body += questionCard(q, ba.total); });
-    h += card('🧩 Chaque réponse → ce qu\'elle rapporte', 'leads de la période · clique une question pour la déplier', body);
+    var meta = S.ctx.tunnelsMeta || null;
+    var pages = S.M.quiz || [];
+    var R = rows();
+    var V = LC.quizVersions(R, pages, meta, S.M.views);
+    if (S.quizVer && !V.list.some(function (v) { return v.key === S.quizVer; })) S.quizVer = '';
+    var h = help('ℹ️ Comment lire cette vue', '<p>Chaque <strong>carte</strong> est une version du quiz (page × variante). Clique une carte pour ne voir qu\'elle ; « Tous les quiz » additionne tout.</p>'
+      + '<p>Le <strong>parcours</strong> suit l\'ordre réel du quiz. Pour chaque question : combien de visiteurs y arrivent et combien partent ici (mesure anonyme, tous les visiteurs, à partir de l\'instrumentation de la page), puis pour chaque réponse : la part des visiteurs qui la choisissent et <strong>ce qu\'elle a rapporté</strong> chez les leads de la période (leads, closes, cash par lead) et ses points dans le barème.</p>'
+      + '<p>Une question <strong>conditionnelle</strong> n\'est montrée qu\'à une partie des visiteurs (selon une réponse précédente) : sa perte n\'est pas calculée, on indique la part de visiteurs qui l\'ont vue.</p>'
+      + '<p>« Comparer » met les versions côte à côte, réponse par réponse. Les formulaires hors quiz (VSL, AlteoForms) sont en bas.</p>');
+
+    if (!V.list.length) {
+      h += card('🧭 Parcours du quiz', '', '<div class="lq-muted">Aucun lead issu d\'un quiz et aucune mesure sur la période. La mesure démarre quand la page quiz est instrumentée (<code>node scripts/quiz-tracking-patch.js --apply</code>).</div>');
+    } else {
+      h += '<div class="lq-vcards">' + versionCard(V.all, !S.quizVer);
+      V.list.forEach(function (v) { h += versionCard(v, S.quizVer === v.key); });
+      h += '</div>';
+      var canCompare = !S.quizVer && V.list.length >= 2;
+      if (canCompare) h += '<div class="lq-actions" style="margin:-4px 0 14px"><button class="fn-btn' + (S.quizCompare ? ' primary' : '') + '" data-lq-compare>' + (S.quizCompare ? '✓ Comparaison des versions' : '⇄ Comparer les versions côte à côte') + '</button></div>';
+      var view = LC.buildQuizView(R, pages, S.quizVer, activeGrid(), meta);
+      var cmp = null;
+      if (canCompare && S.quizCompare) {
+        cmp = V.list.slice(0, 4).map(function (v) { return { v: v, view: LC.buildQuizView(R, pages, v.key, activeGrid(), meta) }; });
+      }
+      var cur = S.quizVer ? V.list.filter(function (v) { return v.key === S.quizVer; })[0] : V.all;
+      h += card('🧭 Parcours — ' + esc(cur.name), cur.sub ? esc(cur.sub) : '', parcours(view, cmp, cur));
+    }
+
+    var ba = LC.byAnswer(R, activeGrid(), 'form');
+    if (ba.questions.length) {
+      var body = '<div class="fn-stage-note" style="margin-bottom:10px">Leads arrivés par une VSL, un AlteoForm ou un ancien tunnel : leurs réponses ne viennent pas du quiz. Clique une question pour la déplier.</div>';
+      ba.questions.sort(function (a, b) { return a.ord - b.ord; }).forEach(function (q) { body += questionCard(q, ba.total); });
+      h += '<details class="fn-help lq-forms"' + (S.formsOpen ? ' open' : '') + '><summary data-lq-forms>📝 Formulaires hors quiz — ' + ba.questions.length + ' question' + (ba.questions.length > 1 ? 's' : '') + ' · ' + fNum(ba.total.leads) + ' leads</summary><div class="hb">' + body + '</div></details>';
+    }
     return h;
   }
 
-  function quizDropoff() {
-    var pages = S.M.quiz || [];
-    if (S.M.quizErr) return '<div class="fn-ig-alert">Lecture impossible (' + esc(S.M.quizErr) + ') — les règles Firestore de quiz_funnel_daily sont-elles déployées ?</div>';
-    if (!pages.length) return '<div class="lq-muted">Pas encore de mesure sur la période. Elle démarre dès que la page quiz est instrumentée : déploiement Vercel, puis <code>node scripts/quiz-tracking-patch.js --apply</code> (dry-run d\'abord). Les leads, eux, sont déjà analysés ci-dessous.</div>';
-    var p = pages.filter(function (x) { return x.key === S.quizPage; })[0] || pages[0];
-    var h = '';
-    if (pages.length > 1) {
-      h += '<div class="fn-seg" style="margin-bottom:12px;width:fit-content">';
-      pages.forEach(function (x) { h += '<button data-lq-qpage="' + esc(x.key) + '" class="' + (x === p ? 'active' : '') + '">' + esc(x.label) + ' (' + fNum(x.starts) + ')</button>'; });
-      h += '</div>';
+  function platformBadge(p) {
+    if (p === 'youtube') return '<span class="fn-tbadge lq-pyt">▶ YouTube</span>';
+    if (p === 'meta') return '<span class="fn-tbadge lq-pmeta">Meta</span>';
+    if (p === 'old') return '<span class="fn-tbadge lq-toff">Historique</span>';
+    return '<span class="fn-tbadge lq-tq">Ensemble</span>';
+  }
+  function versionCard(v, active) {
+    var a = v.agg;
+    return '<div class="lq-vcard' + (active ? ' active' : '') + '" data-lq-ver="' + esc(v.key) + '">'
+      + '<div class="lq-vtop">' + platformBadge(v.platform) + (a.avgNote != null ? avgBadge(a.avgNote) : '') + '</div>'
+      + '<div class="lq-vname">' + esc(v.name) + '</div><div class="lq-vsub">' + esc(v.sub || '') + '</div>'
+      + '<div class="lq-vline">' + (v.starts ? '<strong>' + fNum(v.starts) + '</strong> débuts · ' + fPct(v.completeRate, 0) + ' terminés'
+        : (v.views ? '<strong>' + fNum(v.views) + '</strong> visites · ' + fNum(v.optins) + ' formulaires (' + fPct(v.views ? v.optins / v.views * 100 : null, 1) + ')' : '<span class="lq-muted">mesure des visiteurs à venir</span>')) + '</div>'
+      + '<div class="lq-vline"><strong>' + fNum(a.leads) + '</strong> leads · ' + fNum(a.closes) + ' close' + (a.closes > 1 ? 's' : '') + ' · <strong>' + fEur(a.cash) + '</strong></div></div>';
+  }
+
+  /* ── Parcours ── */
+  function stepHead(c) {
+    var st = c.step, bits = [];
+    if (st) {
+      bits.push('<strong>' + fNum(st.reached) + '</strong> arrivés' + (st.pctStart != null ? ' · ' + fPct(st.pctStart, 0) + ' des débuts' : ''));
+      if (st.conditional) bits.push('<span class="lq-muted">vue par ' + fPct(st.seenPct, 0) + ' des visiteurs</span>');
+      else if (st.lost != null) bits.push('<span class="' + (st.lost > 0 ? 'lq-down' : 'lq-muted') + '">−' + fNum(st.lost) + ' perdus ici (' + fPct(st.lostPct, 0) + ')</span>');
+    } else if (!c.diag) bits.push('<span class="lq-muted">pas de mesure visiteurs</span>');
+    if (c.lq) bits.push(fNum(c.lq.agg.leads) + ' leads');
+    var badges = '';
+    if (c.diag) badges += ' <span class="fn-tbadge lq-tf">calculé par le quiz</span>';
+    if (st && st.conditional) badges += ' <span class="fn-tbadge lq-tf">question conditionnelle</span>';
+    if (c.hot) badges += ' <span class="fn-tbadge lq-warn">plus grosse perte</span>';
+    return '<div class="lq-step-head"><span class="lq-step-n">' + (c.diag ? '★' : c.n) + '</span><span class="lq-step-t">' + esc(c.label) + badges + '</span><span class="lq-step-m">' + bits.join(' · ') + '</span></div>';
+  }
+  function answerLine(o) {
+    var a = o.agg;
+    var tag = o.best ? ' <span class="fn-tbadge lq-good">la plus rentable</span>' : (o.worst ? ' <span class="fn-tbadge lq-warn">la moins rentable</span>' : '');
+    var res = a ? '<strong>' + fNum(a.leads) + '</strong> lead' + (a.leads > 1 ? 's' : '') + ' · ' + fNum(a.closes) + ' close' + (a.closes > 1 ? 's' : '') + ' · <strong>' + fEur(a.cashPerLead) + '</strong> / lead' : '<span class="lq-muted">aucun lead</span>';
+    return '<div class="lq-arow"><span class="lq-al">' + esc(o.label) + tag + '</span>'
+      + '<span class="lq-av">' + (o.visitorShare != null ? bar(o.visitorShare, 'lq-blue') + '<span class="lq-mono">' + fPct(o.visitorShare, 0) + ' des visiteurs</span>' : '<span class="lq-muted">—</span>') + '</span>'
+      + '<span class="lq-ax">' + res + '</span>'
+      + '<span class="lq-ap">' + (o.pts != null || o.ko ? ptsChip(o) : '') + '</span></div>';
+  }
+  function detailTable(c) {
+    var h = '<div class="fn-table-wrap" style="margin-top:8px"><table class="fn-igt lq-t"><thead><tr><th class="l">Réponse</th><th>Visiteurs</th><th>% visiteurs</th><th>Leads</th><th>% leads</th><th>RDV pris</th><th>Présents</th><th>Closes</th><th>Closing / lead</th><th>Cash</th><th>Cash / lead</th><th>LQS moyen</th><th>Points</th></tr></thead><tbody>';
+    c.answers.forEach(function (o) {
+      var a = o.agg;
+      h += '<tr><td class="l">' + esc(o.label) + '</td><td>' + fNum(o.visitors) + '</td><td>' + fPct(o.visitorShare, 0) + '</td>'
+        + (a ? '<td>' + fNum(a.leads) + '</td><td>' + fPct(o.leadShare, 0) + '</td><td>' + fNum(a.booked) + sub(fPct(a.bookRate, 0)) + '</td><td>' + fNum(a.present) + sub(fPct(a.showRate, 0)) + '</td><td>' + fNum(a.closes) + '</td><td>' + fPct(a.closeLead, 1) + '</td><td>' + fEur(a.cash) + '</td><td><strong>' + fEur(a.cashPerLead) + '</strong></td><td>' + avgBadge(a.avgNote) + '</td>'
+          : '<td colspan="9" class="l lq-muted">aucun lead avec cette réponse sur la période</td>')
+        + '<td>' + (o.pts != null || o.ko ? ptsChip(o) : '—') + '</td></tr>';
+    });
+    if (c.lq) {
+      var t = c.lq.agg;
+      h += '<tr class="tot"><td class="l">Total</td><td>' + (c.step ? fNum(c.step.answered) : '—') + '</td><td></td><td>' + fNum(t.leads) + '</td><td>100 %</td><td>' + fNum(t.booked) + '</td><td>' + fNum(t.present) + '</td><td>' + fNum(t.closes) + '</td><td>' + fPct(t.closeLead, 1) + '</td><td>' + fEur(t.cash) + '</td><td>' + fEur(t.cashPerLead) + '</td><td>' + avgBadge(t.avgNote) + '</td><td></td></tr>';
     }
-    h += '<div class="fn-grid" style="margin-bottom:12px">'
-      + kpi(fNum(p.starts), 'Quiz commencés', 'ont vu la 1re question')
-      + kpi(fNum(p.completes), 'Quiz terminés', fPct(p.completeRate, 0) + ' des débuts')
-      + kpi(fNum(p.starts - p.completes), 'Abandons', fPct(p.starts ? (p.starts - p.completes) / p.starts * 100 : null, 0));
-    if (p.gate.shown) h += kpi(fNum(p.gate.shown), 'Écran prix affiché', fNum(p.gate['continue']) + ' continuent · ' + fNum(p.gate.exit) + ' s\'arrêtent');
-    h += '</div>';
-    var worst = null;
-    p.steps.forEach(function (q) { if (q.lossPrev != null && (!worst || q.lossPrev > worst.lossPrev)) worst = q; });
-    h += '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr><th>#</th><th class="l">Question</th><th>Arrivés</th><th class="l" style="min-width:160px">% des débuts</th><th>Perdus ici</th><th>Répondus</th><th></th></tr></thead><tbody>';
-    p.steps.forEach(function (q, i) {
-      var open = !!S.openQuizQ[p.key + '|' + q.id];
-      var hot = worst && q === worst && q.lossPrev > 0;
-      h += '<tr' + (hot ? ' class="lq-hot"' : '') + '><td>' + (i + 1) + '</td><td class="l">' + esc(q.label) + (hot ? ' <span class="fn-tbadge lq-warn">plus grosse perte</span>' : '') + '</td>'
-        + '<td>' + fNum(q.reached) + '</td><td class="l">' + bar(q.pctStart, 'lq-blue') + sub(fPct(q.pctStart, 0)) + '</td>'
-        + '<td>' + (q.lossPrev != null ? '−' + fNum(q.lossPrev) + sub(fPct(q.lossPrevPct, 0) + ' des arrivés précédents') : '—') + '</td>'
-        + '<td>' + fNum(q.answered) + '</td>'
-        + '<td>' + (q.answerList.length ? '<button class="fn-ig-detbtn" data-lq-qq="' + esc(p.key + '|' + q.id) + '">' + (open ? '▾' : '▸') + ' réponses</button>' : '') + '</td></tr>';
-      if (open) {
-        h += '<tr class="fn-ig-det"><td></td><td colspan="6" class="l">';
-        q.answerList.forEach(function (a) { h += '<div class="lq-ansline"><span>' + esc(a.label) + '</span>' + bar(a.share, 'lq-blue') + '<span class="lq-mono">' + fNum(a.n) + ' · ' + fPct(a.share, 0) + '</span></div>'; });
-        h += '</td></tr>';
+    return h + '</tbody></table></div>';
+  }
+  function compareTable(c, cmp) {
+    var others = cmp.map(function (x) {
+      var k = LC.keyOf(c.label);
+      var cc = x.view.cards.filter(function (y) { return LC.keyOf(y.label) === k || (c.q && y.q === c.q); })[0] || null;
+      return { v: x.v, c: cc };
+    });
+    var h = '<div class="fn-table-wrap"><table class="fn-igt lq-t lq-cmp"><thead><tr><th class="l" rowspan="2">Réponse</th>';
+    others.forEach(function (o) { h += '<th colspan="3" class="lq-cmp-g">' + platformBadge(o.v.platform) + ' ' + esc(o.v.name) + '</th>'; });
+    h += '</tr><tr>';
+    others.forEach(function () { h += '<th class="lq-cmp-g">% visit.</th><th>Leads</th><th>€ / lead</th>'; });
+    h += '</tr></thead><tbody>';
+    c.answers.forEach(function (ans) {
+      h += '<tr><td class="l">' + esc(ans.label) + '</td>';
+      others.forEach(function (o) {
+        var m = o.c ? o.c.answers.filter(function (x) { return x.key === ans.key; })[0] : null;
+        h += '<td class="lq-cmp-g">' + (m ? fPct(m.visitorShare, 0) : '—') + '</td><td>' + (m && m.agg ? fNum(m.agg.leads) : '—') + '</td><td>' + (m && m.agg ? fEur(m.agg.cashPerLead) : '—') + '</td>';
+      });
+      h += '</tr>';
+    });
+    h += '<tr class="tot"><td class="l">Arrivés à la question</td>';
+    others.forEach(function (o) { h += '<td class="lq-cmp-g">' + (o.c && o.c.step ? fNum(o.c.step.reached) : '—') + '</td><td>' + (o.c && o.c.lq ? fNum(o.c.lq.agg.leads) : '—') + '</td><td>' + (o.c && o.c.lq ? fEur(o.c.lq.agg.cashPerLead) : '—') + '</td>'; });
+    return h + '</tr></tbody></table></div>';
+  }
+  function parcours(view, cmp, cur) {
+    var d = view.drop, t = view.total;
+    var h = '';
+    if (!d.has) {
+      h += '<div class="fn-alert" style="margin:0 0 12px">Mesure question par question pas encore active pour cette version : « quiz commencés / terminés », pertes et « % des visiteurs » apparaîtront dès l\'instrumentation de la page (elle ne se reconstitue pas pour le passé). En attendant : visites de la page et formulaires envoyés, déjà mesurés.</div>';
+      if (cur && cur.views) h += '<div class="lq-strip" style="margin-bottom:14px">'
+        + stripStep(fNum(cur.views), 'Visites de la page', 'une session = une visite')
+        + '<div class="lq-strip-arrow">›</div>' + stripStep(fNum(cur.optins), 'Formulaires envoyés', fPct(cur.views ? cur.optins / cur.views * 100 : null, 1) + ' des visites')
+        + '<div class="lq-strip-arrow">›</div>' + stripStep(fNum(t.leads), 'Leads de la période', 'avec réponses au quiz')
+        + '<div class="lq-strip-arrow">›</div>' + stripStep(fNum(t.booked), 'RDV pris', fPct(t.bookRate, 0) + ' des leads')
+        + '<div class="lq-strip-arrow">›</div>' + stripStep(fNum(t.closes), 'Closes', fPct(t.closeLead, 1) + ' des leads')
+        + '<div class="lq-strip-arrow">›</div>' + stripStep(fEur(t.cash), 'Cash encaissé', t.leads ? fEur(t.cash / t.leads) + ' / lead' : '')
+        + '</div>';
+    }
+    else h += '<div class="lq-strip" style="margin-bottom:14px">'
+      + (cur && cur.views ? stripStep(fNum(cur.views), 'Visites de la page', '') + '<div class="lq-strip-arrow">›</div>' : '')
+      + stripStep(fNum(d.starts), 'Quiz commencés', cur && cur.views ? fPct(d.starts / cur.views * 100, 0) + ' des visites' : '')
+      + '<div class="lq-strip-arrow">›</div>' + stripStep(fNum(d.completes), 'Quiz terminés', fPct(d.completeRate, 0) + ' des débuts')
+      + '<div class="lq-strip-arrow">›</div>' + stripStep(fNum(t.leads), 'Formulaires envoyés', 'leads de la période')
+      + '<div class="lq-strip-arrow">›</div>' + stripStep(fNum(t.booked), 'RDV pris', fPct(t.bookRate, 0) + ' des leads')
+      + '<div class="lq-strip-arrow">›</div>' + stripStep(fNum(t.closes), 'Closes', fPct(t.closeLead, 1) + ' des leads')
+      + '<div class="lq-strip-arrow">›</div>' + stripStep(fEur(t.cash), 'Cash encaissé', t.leads ? fEur(t.cash / t.leads) + ' / lead' : '')
+      + '</div>';
+    if (!view.cards.length) return h + '<div class="lq-muted">Aucune question à afficher.</div>';
+    var gateDone = false;
+    view.cards.forEach(function (c) {
+      var key = view.versionKey + '|' + (c.q || c.label);
+      var open = !!S.openDetail[key];
+      h += '<div class="lq-step' + (c.hot ? ' hot' : '') + (c.diag ? ' diag' : '') + '">' + stepHead(c);
+      if (cmp) h += compareTable(c, cmp);
+      else {
+        h += '<div class="lq-alist">';
+        c.answers.forEach(function (o) { h += answerLine(o); });
+        h += '</div>';
+        h += '<button class="fn-ig-detbtn lq-detbtn" data-lq-det="' + esc(key) + '">' + (open ? '▾ masquer le détail' : '▸ détail complet (RDV, présents, closing, LQS…)') + '</button>';
+        if (open) h += detailTable(c);
+      }
+      h += '</div>';
+      if (!gateDone && d.gate.shown && c.step && /ca[-_ ]?mensuel/i.test(c.step.id)) {
+        gateDone = true;
+        h += gateBlock(d.gate);
       }
     });
-    h += '<tr class="tot"><td></td><td class="l">✅ Quiz terminé (résultats affichés)</td><td>' + fNum(p.completes) + '</td><td class="l">' + bar(p.completeRate, 'lq-n5') + sub(fPct(p.completeRate, 0)) + '</td><td colspan="3"></td></tr>';
-    h += '</tbody></table></div>';
-    h += '<div class="fn-stage-note" style="margin-top:8px">Réponses de TOUS les visiteurs, y compris ceux qui abandonnent ensuite (anonyme). Les résultats commerciaux par réponse sont plus bas, sur les leads.</div>';
+    if (!gateDone && d.gate.shown) h += gateBlock(d.gate);
+    if (d.has) h += '<div class="lq-step end"><div class="lq-step-head"><span class="lq-step-n">✓</span><span class="lq-step-t">Quiz terminé (résultats affichés)</span><span class="lq-step-m"><strong>' + fNum(d.completes) + '</strong> visiteurs · ' + fPct(d.completeRate, 0) + ' des débuts'
+      + (d.lastReached ? ' · <span class="lq-down">−' + fNum(Math.max(0, d.lastReached - d.completes)) + ' perdus après la dernière question</span>' : '') + '</span></div></div>';
     return h;
   }
+  function gateBlock(g) {
+    return '<div class="lq-step gate"><div class="lq-step-head"><span class="lq-step-n">€</span><span class="lq-step-t">Écran prix (CA mensuel ≤ 20 000 €)</span><span class="lq-step-m">vu <strong>' + fNum(g.shown) + '</strong> fois · '
+      + fNum(g['continue']) + ' continuent (' + fPct(g.shown ? g['continue'] / g.shown * 100 : null, 0) + ') · <span class="lq-down">' + fNum(g.exit) + ' s\'arrêtent</span></span></div></div>';
+  }
+  function stripStep(v, l, s) { return '<div class="lq-strip-step"><div class="v">' + v + '</div><div class="l">' + l + '</div><div class="s">' + (s || '&nbsp;') + '</div></div>'; }
 
   function questionCard(q, tot) {
     var open = !!S.openQ[q.q];
@@ -672,8 +812,10 @@
       if ((el = closest(t, '[data-lq-go]'))) { e.preventDefault(); S.view = el.getAttribute('data-lq-go'); render(); return; }
       if ((el = closest(t, '[data-lq-cash]'))) { S.cashMode = el.getAttribute('data-lq-cash'); render(); return; }
       if ((el = closest(t, '[data-lq-axis]'))) { S.axis = el.getAttribute('data-lq-axis'); render(); return; }
-      if ((el = closest(t, '[data-lq-qpage]'))) { S.quizPage = el.getAttribute('data-lq-qpage'); render(); return; }
-      if ((el = closest(t, '[data-lq-qq]'))) { var k1 = el.getAttribute('data-lq-qq'); S.openQuizQ[k1] = !S.openQuizQ[k1]; render(); return; }
+      if ((el = closest(t, '[data-lq-ver]'))) { S.quizVer = el.getAttribute('data-lq-ver'); if (S.quizVer) S.quizCompare = false; render(); return; }
+      if (closest(t, '[data-lq-compare]')) { S.quizCompare = !S.quizCompare; render(); return; }
+      if ((el = closest(t, '[data-lq-det]'))) { var k1 = el.getAttribute('data-lq-det'); S.openDetail[k1] = !S.openDetail[k1]; render(); return; }
+      if (closest(t, '[data-lq-forms]')) { e.preventDefault(); S.formsOpen = !S.formsOpen; render(); return; }
       if ((el = closest(t, '[data-lq-q]'))) {
         var k2 = el.getAttribute('data-lq-q');
         if (k2.indexOf('g_') === 0) S.openQ[k2] = S.openQ[k2] === false;   // barème : ouvert par défaut

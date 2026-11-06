@@ -73,7 +73,10 @@
 
   function extractAnswers(l) {
     var out = [], seenQ = {}, namedVals = {};
-    function add(qKey, qLabel, val, origin) {
+    /* ord = position dans le quiz (index dans reponses[]), pour afficher les
+       questions dans l'ordre du parcours : champs nommés rattachés à leur
+       question, formulaires après, score du diagnostic en dernier. */
+    function add(qKey, qLabel, val, origin, ord) {
       if (val == null || seenQ[qKey]) return;
       if (Array.isArray(val)) val = val.filter(function (x) { return x != null && x !== ''; }).join(', ');
       if (typeof val === 'object') return;
@@ -82,31 +85,40 @@
       var ak = keyOf(v);
       if (!ak) return;
       seenQ[qKey] = 1;
-      out.push({ q: qKey, ql: String(qLabel).slice(0, 200), a: ak, al: v, o: origin });
+      out.push({ q: qKey, ql: String(qLabel).slice(0, 200), a: ak, al: v, o: origin, ord: ord == null ? 999 : ord });
     }
     var qz = l && l.quiz;
     if (qz && typeof qz === 'object') {
-      QUIZ_NAMED.forEach(function (n) {
+      var reps = Array.isArray(qz.reponses) ? qz.reponses : [];
+      var posOfVal = {};
+      reps.forEach(function (r, i) {
+        if (!r) return;
+        var v0 = Array.isArray(r.reponse) ? r.reponse.join(', ') : r.reponse;
+        var k0 = keyOf(v0);
+        if (k0 && posOfVal[k0] == null) posOfVal[k0] = i;
+      });
+      QUIZ_NAMED.forEach(function (n, ni) {
         var v = qz[n.f];
         if (v == null || v === '') return;
-        add('quiz_' + n.f, n.label, v, 'quiz');
+        var pos = posOfVal[keyOf(v)];
+        add('quiz_' + n.f, n.label, v, 'quiz', pos != null ? pos : 500 + ni);
         namedVals[keyOf(v)] = 1;
       });
       if (qz.score_global != null && qz.score_global !== '' && isFinite(Number(qz.score_global))) {
-        add('quiz_score_global', 'Score du diagnostic', scoreBucket(Number(qz.score_global)), 'quiz');
+        add('quiz_score_global', 'Score du diagnostic', scoreBucket(Number(qz.score_global)), 'quiz', 3000);
       }
-      (Array.isArray(qz.reponses) ? qz.reponses : []).forEach(function (r) {
+      reps.forEach(function (r, i) {
         if (!r || !r.question) return;
         var v = Array.isArray(r.reponse) ? r.reponse.join(', ') : r.reponse;
         if (v != null && namedVals[keyOf(v)]) return;       // doublon d'un champ nommé
-        add('qq_' + keyOf(r.question), r.question, v, 'quiz');
+        add('qq_' + keyOf(r.question), r.question, v, 'quiz', i);
       });
     }
-    (Array.isArray(l && l.formAnswers) ? l.formAnswers : []).forEach(function (fa) {
+    (Array.isArray(l && l.formAnswers) ? l.formAnswers : []).forEach(function (fa, i) {
       if (!fa) return;
       var lbl = fa.label || fa.fieldId;
       if (!lbl || CONTACT_RE.test(norm(lbl))) return;
-      add('fa_' + keyOf(lbl), lbl, fa.value, 'form');
+      add('fa_' + keyOf(lbl), lbl, fa.value, 'form', 2000 + i);
     });
     return out;
   }
@@ -280,6 +292,7 @@
       FC.loadPayments(db, D),
       FC.loadCreatives(db, D),
       FC.loadAdsByAd(db, P, D),
+      FC.loadViews(db, P, D),   // visites et formulaires par page (historique avant la mesure fine)
       db.collection('quiz_funnel_daily').where('date', '>=', sIso).where('date', '<=', eIso).get().then(function (snap) {
         snap.forEach(function (doc) { var d = doc.data() || {}; d._id = doc.id; D.quizDocs.push(d); });
       }).catch(function (e) { D.quizErr = e && e.message ? e.message : 'erreur'; }),
@@ -598,7 +611,7 @@
     return {
       rows: rows, rdvRows: rdvRows, periodPays: periodPays, closers: closers,
       quiz: buildQuizFunnel(D.quizDocs || []), quizErr: D.quizErr || null,
-      adsByAd: D.adsByAd || [], creIdx: CRE_IDX,
+      adsByAd: D.adsByAd || [], creIdx: CRE_IDX, views: D.views || [],
       leadsTruncated: !!D.leadsTruncated, memberName: memberName
     };
   }
@@ -626,15 +639,17 @@
   }
 
   /* Réponses : par question, par réponse — résultats + points + suggestion. */
-  function byAnswer(rows, grid) {
+  function byAnswer(rows, grid, origin) {
     var tot = newAgg();
     rows.forEach(function (r) { addLeadRow(tot, r); });
     fin(tot);
     var qs = {};
     rows.forEach(function (r) {
       r.answers.forEach(function (a) {
+        if (origin && a.o !== origin) return;
         var q = qs[a.q];
-        if (!q) q = qs[a.q] = { q: a.q, label: a.ql, origin: a.o, answers: {}, agg: newAgg() };
+        if (!q) q = qs[a.q] = { q: a.q, label: a.ql, origin: a.o, ord: a.ord, answers: {}, agg: newAgg() };
+        if (a.ord < q.ord) q.ord = a.ord;
         var x = q.answers[a.a];
         if (!x) x = q.answers[a.a] = { a: a.a, label: a.al, agg: newAgg() };
         addLeadRow(x.agg, r);
@@ -810,6 +825,7 @@
       var k = (d.page || '?') + (d.variant ? '--' + d.variant : '');
       var p = pages[k];
       if (!p) p = pages[k] = { key: k, page: d.page, variant: d.variant || null,
+        pageLabel: d.pageLabel || '', variantLabel: d.variantLabel || '',
         label: (d.pageLabel || d.page || '?') + (d.variantLabel ? ' · ' + d.variantLabel : (d.variant ? ' · ' + d.variant : '')),
         starts: 0, completes: 0, gate: { shown: 0, 'continue': 0, exit: 0 }, questions: {}, days: 0, n: 0 };
       p.days++;
@@ -855,6 +871,269 @@
     }).sort(function (a, b) { return b.starts - a.starts; });
   }
 
+
+  /* ══ 7 bis. VUE QUIZ PAR VERSION (refonte lisibilité, 06/11/2026) ══════
+     Une « version » = une page de quiz × une variante (ex. /optin-a A
+     « Funnel Quizz Dark », /optin-youtube A). Un lead est rattaché à la
+     version qui l'a amené (landingLast / landingFirst : page lp + variante v,
+     posées par api/lead-optin.js). Les leads de quiz sans page connue (avant
+     le 28/09) vont dans « Anciennes versions ».
+     buildQuizView fusionne, question par question et DANS L'ORDRE DU QUIZ,
+     la mesure anonyme (arrivés, perdus, réponses de tous les visiteurs) et
+     les résultats des leads (RDV, closes, cash, points). */
+  var OLD_KEY = '_old';
+  var DIAG_Q = { quiz_score_global: 1, quiz_pilier_prioritaire: 1 };
+
+  function splitPage(page) { var m = String(page || '').split('__'); return { tunnel: m[0] || '', step: m[1] || '' }; }
+
+  function versionMeta(key, pageObj, meta) {
+    if (key === OLD_KEY) return { key: key, name: 'Anciennes versions', sub: 'leads du quiz avant le suivi par page (System.io, quiz_elite…)', platform: 'old' };
+    var parts = String(key).split('--');
+    var page = parts[0], v = parts[1] || '';
+    var sp = splitPage(page);
+    var tm = meta && meta[sp.tunnel];
+    var st = tm && tm.steps ? tm.steps[sp.step] : null;
+    var vm = st && st.variants && v ? st.variants[v] : null;
+    var name = (pageObj && pageObj.variantLabel) || (vm && vm.label) || (st && st.name) || ('/' + sp.step);
+    var youtube = /youtube/i.test(page) || (st && st.source === 'youtube') || (tm && tm.source === 'youtube');
+    return { key: key, name: name, sub: '/' + sp.step + (v ? ' · variante ' + v.toUpperCase() : ' · variante non transmise'),
+      platform: youtube ? 'youtube' : 'meta', page: page, variant: v || null };
+  }
+
+  /* Version de quiz d'un lead. pagesByPage : { page: [clés de versions] }. */
+  function quizVersionOf(l, pagesByPage) {
+    var cands = [l && l.landingLast, l && l.landingFirst];
+    for (var i = 0; i < cands.length; i++) {
+      var L = cands[i];
+      if (!L || !L.page) continue;
+      var page = String(L.page);
+      if (!/__/.test(page)) continue;
+      if (!pagesByPage[page] && !/quiz/i.test(page)) continue;
+      var v = L.variant ? String(L.variant) : '';
+      if (!v && pagesByPage[page] && pagesByPage[page].length === 1) return pagesByPage[page][0];
+      return page + (v ? '--' + v : '');
+    }
+    return OLD_KEY;
+  }
+  function hasQuizAnswers(r) { return r.answers.some(function (a) { return a.o === 'quiz'; }); }
+
+  /* Fusion de la mesure anonyme de plusieurs pages (mêmes identifiants de
+     question) + détection des questions conditionnelles. */
+  function mergeDropoff(pages) {
+    var m = { starts: 0, completes: 0, gate: { shown: 0, 'continue': 0, exit: 0 }, steps: [], has: pages.length > 0 };
+    var qs = {};
+    pages.forEach(function (p) {
+      m.starts += p.starts; m.completes += p.completes;
+      m.gate.shown += p.gate.shown; m.gate['continue'] += p.gate['continue']; m.gate.exit += p.gate.exit;
+      Object.keys(p.questions || {}).forEach(function (qk) {
+        var q = p.questions[qk];
+        var x = qs[qk] || (qs[qk] = { id: qk, i: q.i, label: q.label, reached: 0, answered: 0, answers: {} });
+        if (q.i < x.i) x.i = q.i;
+        x.reached += q.reached; x.answered += q.answered;
+        Object.keys(q.answers || {}).forEach(function (ak) {
+          var y = x.answers[ak] || (x.answers[ak] = { label: q.answers[ak].label, n: 0 });
+          y.n += q.answers[ak].n;
+        });
+      });
+    });
+    var list = Object.keys(qs).map(function (k) { return qs[k]; }).sort(function (a, b) { return a.i - b.i; });
+    /* Conditionnelle : des visiteurs l'ont SAUTÉE (une question plus loin a
+       plus d'arrivés). Sa perte ne se calcule pas ; les suivantes se
+       comparent à la dernière question non conditionnelle. */
+    list.forEach(function (q, k) {
+      var later = 0;
+      for (var j = k + 1; j < list.length; j++) if (list[j].reached > later) later = list[j].reached;
+      q.conditional = later > q.reached * 1.05 + 1;
+    });
+    var base = m.starts || (list[0] ? list[0].reached : 0), prev = null;
+    list.forEach(function (q) {
+      q.pctStart = base ? q.reached / base * 100 : null;
+      if (q.conditional) { q.lost = null; q.seenPct = prev ? q.reached / prev * 100 : null; }
+      else { q.lost = prev != null ? Math.max(0, prev - q.reached) : null; q.lostPct = prev ? q.lost / prev * 100 : null; prev = q.reached; }
+    });
+    if (!m.starts && list.length) m.starts = list[0].reached;
+    m.lastReached = prev;
+    m.completeRate = m.starts ? m.completes / m.starts * 100 : null;
+    m.steps = list;
+    return m;
+  }
+
+  /* Ordre naturel des réponses : montants / nombres croissants quand la
+     question est chiffrée (tranches de CA, équipe, notes), Oui avant Non,
+     sinon les plus fréquentes d'abord. */
+  function answerRank(label) {
+    var a = norm(label);
+    if (/^oui\b/.test(a)) return { n: 0 };
+    if (/^non\b/.test(a)) return { n: 1 };
+    if (/pas encore|aucun|^seul|juste moi/.test(a)) return { n: -1 };
+    var ns = amounts(a);
+    if (!ns.length) return null;
+    var max = Math.max.apply(null, ns), min = Math.min.apply(null, ns);
+    if (/moins de|inferieur|</.test(a)) return { n: max - 0.5 };
+    if (/plus de|superieur|au-dela|>|\+/.test(a)) return { n: max + 0.5 };
+    return { n: (min + max) / 2 };
+  }
+  function naturalSort(list, labelOf, countOf) {
+    var ranked = 0;
+    list.forEach(function (x) { x._rk = answerRank(labelOf(x)); if (x._rk) ranked++; });
+    var numeric = list.length > 1 && ranked >= Math.ceil(list.length * 0.6);
+    list.sort(function (a, b) {
+      if (numeric) {
+        var ra = a._rk ? a._rk.n : Infinity, rb = b._rk ? b._rk.n : Infinity;
+        if (ra !== rb) return ra - rb;
+      }
+      return countOf(b) - countOf(a);
+    });
+    list.forEach(function (x) { delete x._rk; });
+    return list;
+  }
+
+  function quizContext(rows, pages, meta) {
+    var pagesByPage = {}, pageByKey = {};
+    pages.forEach(function (p) {
+      pageByKey[p.key] = p;
+      (pagesByPage[p.page] = pagesByPage[p.page] || []).push(p.key);
+    });
+    var quizRows = rows.filter(hasQuizAnswers);
+    quizRows.forEach(function (r) { r._qv = quizVersionOf(r.lead, pagesByPage); });
+    return { pagesByPage: pagesByPage, pageByKey: pageByKey, quizRows: quizRows, meta: meta };
+  }
+
+  /* Cartes : une par version (mesure anonyme et/ou leads), triées par volume. */
+  /* Visites de la page et formulaires envoyés (page_views_daily, beacon des
+     tunnels depuis 09/2026) : disponibles AVANT la mesure question par
+     question, et sur tout l'historique. */
+  function viewsFor(views, key) {
+    var o = { views: 0, optins: 0 };
+    (views || []).forEach(function (d) {
+      if (!d || !d.page) return;
+      var k = String(d.page) + (d.variant ? '--' + d.variant : '');
+      if (k !== key) return;
+      o.views += num(d.views); o.optins += num(d.optins);
+    });
+    return o;
+  }
+  function quizVersions(rows, pages, meta, views) {
+    var C = quizContext(rows, pages, meta);
+    var keys = {};
+    pages.forEach(function (p) { keys[p.key] = 1; });
+    C.quizRows.forEach(function (r) { keys[r._qv] = 1; });
+    var list = Object.keys(keys).map(function (k) {
+      var m = versionMeta(k, C.pageByKey[k], meta);
+      var p = C.pageByKey[k];
+      var agg = newAgg();
+      C.quizRows.forEach(function (r) { if (r._qv === k) addLeadRow(agg, r); });
+      m.starts = p ? p.starts : 0; m.completes = p ? p.completes : 0;
+      var pv = k === OLD_KEY ? { views: 0, optins: 0 } : viewsFor(views, k);
+      m.views = pv.views; m.optins = pv.optins;
+      m.completeRate = p && p.starts ? p.completes / p.starts * 100 : null;
+      m.agg = fin(agg);
+      return m;
+    });
+    list.sort(function (a, b) {
+      if ((a.key === OLD_KEY) !== (b.key === OLD_KEY)) return a.key === OLD_KEY ? 1 : -1;
+      return (b.starts + b.agg.leads * 10) - (a.starts + a.agg.leads * 10);
+    });
+    var tot = newAgg();
+    C.quizRows.forEach(function (r) { addLeadRow(tot, r); });
+    var all = { key: '', name: 'Tous les quiz', sub: list.length + ' version' + (list.length > 1 ? 's' : ''), platform: 'all',
+      starts: 0, completes: 0, agg: fin(tot) };
+    pages.forEach(function (p) { all.starts += p.starts; all.completes += p.completes; });
+    all.views = 0; all.optins = 0;
+    list.forEach(function (v) { all.views += v.views; all.optins += v.optins; });
+    all.completeRate = all.starts ? all.completes / all.starts * 100 : null;
+    return { all: all, list: list };
+  }
+
+  /* Parcours d'une version ('' = toutes) : questions dans l'ordre, chacune
+     avec la mesure anonyme ET les résultats des leads, réponse par réponse. */
+  function buildQuizView(rows, pages, versionKey, grid, meta) {
+    var C = quizContext(rows, pages, meta);
+    var vPages = versionKey ? pages.filter(function (p) { return p.key === versionKey; }) : pages;
+    var drop = mergeDropoff(vPages);
+    var vRows = versionKey ? C.quizRows.filter(function (r) { return r._qv === versionKey; }) : C.quizRows;
+    var tot = newAgg();
+    vRows.forEach(function (r) { addLeadRow(tot, r); });
+    fin(tot);
+
+    /* Questions des leads (origine quiz) */
+    var lq = {};
+    vRows.forEach(function (r) {
+      r.answers.forEach(function (a) {
+        if (a.o !== 'quiz') return;
+        var q = lq[a.q] || (lq[a.q] = { q: a.q, label: a.ql, ord: a.ord, answers: {}, agg: newAgg() });
+        if (a.ord < q.ord) q.ord = a.ord;
+        var x = q.answers[a.a] || (q.answers[a.a] = { a: a.a, label: a.al, agg: newAgg() });
+        addLeadRow(x.agg, r); addLeadRow(q.agg, r);
+      });
+    });
+
+    /* Rapprochement mesure ↔ leads : même libellé de question, ou champ
+       nommé (quiz_ca_mensuel ↔ question « ca_mensuel »). */
+    var byLabel = {};
+    Object.keys(lq).forEach(function (k) { byLabel[keyOf(lq[k].label)] = k; });
+    var used = {};
+    function leadQFor(step) {
+      var k1 = byLabel[keyOf(step.label)];
+      if (k1 && !used[k1]) return k1;
+      var k2 = 'quiz_' + String(step.id).replace(/-/g, '_');
+      if (lq[k2] && !used[k2]) return k2;
+      return null;
+    }
+    var cards = [];
+    drop.steps.forEach(function (st) {
+      var k = leadQFor(st);
+      if (k) used[k] = 1;
+      cards.push({ step: st, lq: k ? lq[k] : null, q: k, label: st.label, diag: false });
+    });
+    Object.keys(lq).filter(function (k) { return !used[k]; })
+      .sort(function (a, b) { return lq[a].ord - lq[b].ord; })
+      .forEach(function (k) { cards.push({ step: null, lq: lq[k], q: k, label: lq[k].label, diag: !!DIAG_Q[k] }); });
+    /* Résultat du diagnostic toujours à la fin */
+    cards.sort(function (a, b) { return (a.diag ? 1 : 0) - (b.diag ? 1 : 0); });
+
+    cards.forEach(function (c, idx) {
+      c.n = idx + 1;
+      if (c.lq) fin(c.lq.agg);
+      var m = {};
+      if (c.step) Object.keys(c.step.answers).forEach(function (ak) {
+        var y = c.step.answers[ak];
+        var key = keyOf(y.label);
+        m[key] = { key: key, label: y.label, visitors: y.n, agg: null };
+      });
+      if (c.lq) Object.keys(c.lq.answers).forEach(function (ak) {
+        var x = c.lq.answers[ak];
+        var key = keyOf(x.label);
+        var o = m[key] || (m[key] = { key: key, label: x.label, visitors: null, agg: null });
+        o.agg = fin(x.agg); o.a = ak;
+      });
+      var answered = c.step ? c.step.answered : 0;
+      var list = Object.keys(m).map(function (k2) {
+        var o = m[k2];
+        o.visitorShare = answered && o.visitors != null ? o.visitors / answered * 100 : null;
+        o.leadShare = c.lq && o.agg ? o.agg.leads / c.lq.agg.leads * 100 : null;
+        if (c.q && o.a) {
+          var rule = ruleFor(grid, { q: c.q, a: o.a, ql: c.lq.label, al: o.label });
+          o.pts = rule.off ? 0 : rule.pts; o.ko = !!rule.ko; o.known = !!rule.known;
+        }
+        return o;
+      });
+      c.answers = naturalSort(list, function (o) { return o.label; }, function (o) { return (o.visitors || 0) + (o.agg ? o.agg.leads * 10 : 0); });
+      var best = null, worst = null;
+      c.answers.forEach(function (o) {
+        if (!o.agg || o.agg.leads < SUGGEST_MIN || o.agg.cashPerLead == null) return;
+        if (!best || o.agg.cashPerLead > best.agg.cashPerLead) best = o;
+        if (!worst || o.agg.cashPerLead < worst.agg.cashPerLead) worst = o;
+      });
+      if (best && worst && best !== worst && best.agg.cashPerLead > worst.agg.cashPerLead) { best.best = true; worst.worst = true; }
+    });
+    var worstLoss = null;
+    cards.forEach(function (c) { if (c.step && c.step.lost != null && (!worstLoss || c.step.lost > worstLoss.step.lost)) worstLoss = c; });
+    if (worstLoss && worstLoss.step.lost > 0) worstLoss.hot = true;
+
+    return { versionKey: versionKey || '', drop: drop, total: tot, cards: cards, leads: vRows.length };
+  }
+
   /* ══ 8. PHRASES CLÉS (lecture en 10 secondes) ══════════════════════════ */
   function insights(bn, cashMode) {
     var out = [];
@@ -881,7 +1160,8 @@
     normalizeGrid: normalizeGrid, ruleFor: ruleFor, noteFromPoints: noteFromPoints, scoreAnswers: scoreAnswers,
     loadAll: loadAll, buildModel: buildModel,
     byNote: byNote, byAnswer: byAnswer, byAxis: byAxis, byCloser: byCloser, closerBoard: closerBoard,
-    suggestPoints: suggestPoints, suggestBasis: suggestBasis, mqsOf: mqsOf, buildQuizFunnel: buildQuizFunnel, insights: insights,
+    suggestPoints: suggestPoints, suggestBasis: suggestBasis,
+    quizVersions: quizVersions, buildQuizView: buildQuizView, versionMeta: versionMeta, OLD_QUIZ_KEY: OLD_KEY, mqsOf: mqsOf, buildQuizFunnel: buildQuizFunnel, insights: insights,
     newAgg: newAgg, addLeadRow: addLeadRow, fin: fin, isoDay: isoDay
   };
 }));
