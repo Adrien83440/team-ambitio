@@ -1116,6 +1116,16 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Compteurs journaliers quiz_funnel_daily/{YYYY-MM-DD}_{page}--{variante}
+    // (11/2026) : abandon question par question d'un quiz, réponses comptées
+    // de façon anonyme, écran prix. Incrémentés UNIQUEMENT par
+    // api/tunnel-event.js (Admin SDK, événement 'quiz'). Lus par l'onglet
+    // « Qualité leads » du Funnel Sales (lqs-tab.js), admin uniquement.
+    match /quiz_funnel_daily/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
 
     // ═══ FUNNEL SNAPSHOTS — OBSOLÈTE (26/07/2026) ═══
     // Mécanisme d'instantanés pré-publiés, remplacé par le calcul à la

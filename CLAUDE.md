@@ -341,6 +341,18 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   (`sandbox-leads-live-db.js`, faux leads de `sandbox-pipeline-data.js`) ; après toute
   modification de `sales-leads.html` : `node scripts/build-sandbox-leads-live.js`.
 
+- **Qualité leads — LQS / MQS (06/11/2026, demande Vincent)** : onglet « ⭐ Qualité leads »
+  de `sales-funnel.html` (admin seul ; la note n'est montrée **nulle part** ailleurs, les closers
+  ne la voient pas). Calcul `lqs-core.js` (s'appuie sur `funnel-core.js` : attribution, cash
+  `revClient`), rendu `lqs-tab.js`. **LQS** = note 1-5 d'un lead calculée UNIQUEMENT depuis ses
+  réponses (`leads.quiz`, `formAnswers`) avec le barème `_config/lqs_grid` (points par réponse,
+  réponses éliminatoires, seuils) ; calculée à l'affichage, **jamais écrite sur les leads**.
+  **MQS** = note d'une campagne / adset / créa / canal = 60 % LQS moyen + 40 % cash par lead vs
+  moyenne. Abandon question par question du quiz : `ALTEO.quiz()` (`tunnel-runtime.js`) →
+  `api/tunnel-event.js` (événement `quiz`) → `quiz_funnel_daily` ; la page quiz (Storage) est
+  instrumentée par `scripts/quiz-tracking-patch.js` (dry-run par défaut), qui ajoute aussi
+  l'écran prix « CA mensuel ≤ 20 k€ → investissement > 6 000 € ».
+
 Spécification de référence du flux commercial : `REFONTE-SPEC.md`.
 
 ---

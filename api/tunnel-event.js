@@ -23,6 +23,12 @@
 //         sources: { clé: { utm_source, utm_campaign, utm_content,
 //                           visits, ctas } } }
 //       → onglet Stats de admin-tunnels.html (entonnoir + acquisition).
+//   quiz_funnel_daily/{date}_{page}--{variant}   (événement 'quiz', 11/2026)
+//       { starts, completes, nQuestions,
+//         questions: { qid: { i, label, reached, answered,
+//                             answers: { clé: { label, n } } } },
+//         gate: { shown, continue, exit } }
+//       → onglet « Qualité leads » du Funnel Sales (abandon par question).
 //
 // Anti-abus : tunnel et étape doivent exister dans le registre (cache
 // 20 s), événement dans une liste fermée, chaînes bornées. Compteur
@@ -36,7 +42,63 @@ const Reg = require('./_tunnelRegistry');
 /* optin (28/09/2026) : pages dont le formulaire ne passe pas par le runtime
    (quiz → Make → lead-optin) — la page appelle ALTEO.track('optin') après
    l'envoi. La fiche lead, elle, reste créée par lead-optin. */
-const EVENTS = { visit: 1, view: 1, cta: 1, optin: 1 };
+const EVENTS = { visit: 1, view: 1, cta: 1, optin: 1, quiz: 1 };
+
+/* ── QUIZ — abandon question par question (06/11/2026, demande Vincent) ──
+   La page quiz appelle window.ALTEO.quiz(…) (tunnel-runtime.js), qui poste
+   e: 'quiz' avec un sous-type k :
+     start → 1re question affichée (une fois par session)
+     q     → question affichée   { q: { id, i, n, label } }
+     a     → question répondue   { q: {…}, a: 'réponse' | ['réponse', …] }
+     gate  → écran « prix » (CA sous le seuil) { g: 'shown'|'continue'|'exit' }
+     done  → écran de résultats atteint (quiz terminé, avant le formulaire)
+   Dédoublonné côté page (une fois par session et par question). Compteurs
+   ANONYMES, aucune donnée personnelle : la réponse est une option du quiz,
+   jamais un champ libre (bornée à 120 caractères).
+   Écrit dans quiz_funnel_daily/{date}_{page}--{variante}, lu par l'onglet
+   « Qualité leads » du Funnel Sales (lqs-tab.js). */
+const QUIZ_KINDS = { start: 1, q: 1, a: 1, gate: 1, done: 1 };
+const GATE_KINDS = { shown: 1, 'continue': 1, exit: 1 };
+function quizKey(v) {
+  return String(v == null ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50);
+}
+function quizPatch(body, base, FV) {
+  const k = QUIZ_KINDS[str(body.k, 10)] ? str(body.k, 10) : null;
+  if (!k) return null;
+  const inc = FV.increment(1);
+  const patch = Object.assign({}, base);
+  if (k === 'start') { patch.starts = inc; return patch; }
+  if (k === 'done') { patch.completes = inc; return patch; }
+  if (k === 'gate') {
+    const g = str(body.g, 12);
+    if (!GATE_KINDS[g]) return null;
+    patch.gate = {}; patch.gate[g] = inc;
+    return patch;
+  }
+  const qIn = (body.q && typeof body.q === 'object') ? body.q : {};
+  const qid = quizKey(qIn.id);
+  if (!qid) return null;
+  const i = Math.max(0, Math.min(99, parseInt(qIn.i, 10) || 0));
+  const q = { i: i, label: str(qIn.label, 200) || qid };
+  const n = parseInt(qIn.n, 10);
+  if (n > 0 && n < 100) patch.nQuestions = n;
+  if (k === 'q') q.reached = inc;
+  else {
+    q.answered = inc;
+    const list = (Array.isArray(body.a) ? body.a : [body.a]).slice(0, 10);
+    const answers = {};
+    list.forEach(function (a) {
+      const lbl = str(a, 120);
+      const ak = quizKey(lbl);
+      if (!ak) return;
+      answers[ak] = { label: lbl, n: inc };
+    });
+    if (Object.keys(answers).length) q.answers = answers;
+  }
+  patch.questions = {}; patch.questions[qid] = q;
+  return patch;
+}
 
 function todayIsoParis() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
@@ -88,6 +150,27 @@ module.exports = async (req, res) => {
   const date = todayIsoParis();
   const pageK = Reg.pageKey(tunnel, step);
   const writes = [];
+
+  /* Quiz : un seul document, rien dans page_views_daily ni tunnel_stats_daily
+     (les vues et opt-ins de la page restent comptés par les événements
+     habituels). Écrit AVANT la réponse (Vercel coupe après res.end). */
+  if (event === 'quiz') {
+    const vQ = variant ? (step.variants || []).filter(function (v) { return v && String(v.id) === variant; })[0] : null;
+    const base = {
+      date: date, page: pageK, variant: variant, tunnelId: tunnel.id, stepId: step.id,
+      pageLabel: Reg.pageLabel(tunnel, step), updatedAt: FV.serverTimestamp()
+    };
+    if (vQ && vQ.label) base.variantLabel = String(vQ.label).slice(0, 80);
+    const qp = quizPatch(body, base, FV);
+    if (!qp) { res.status(200).json({ ok: true, ignored: 'quiz' }); return; }
+    try {
+      await db.collection('quiz_funnel_daily').doc(date + '_' + pageK + (variant ? '--' + variant : '')).set(qp, { merge: true });
+    } catch (e) {
+      console.error('[tunnel-event] quiz :', e && e.message);
+    }
+    res.status(200).json({ ok: true });
+    return;
+  }
 
   const FIELD = { visit: 'visits', view: 'views', cta: 'ctas', optin: 'optins' };
   if (event === 'view' || event === 'cta' || event === 'optin') {

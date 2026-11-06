@@ -40,6 +40,7 @@
      <input name="website">             → pot de miel anti-spam (rester vide)
      window.ALTEO.next()                → aller à l'étape suivante
      window.ALTEO.track('cta')          → événement manuel
+     window.ALTEO.quiz('q', {q:{…}})    → mesure d'un quiz (§2 bis)
 
    ES5 strict : Safari ancien. Aucune dépendance.
    ============================================================================ */
@@ -151,6 +152,34 @@
   }
   track('visit');
   track('view');
+
+  /* ── 2 bis. Quiz : abandon question par question (11/2026) ──────────────
+     Appelé par la page quiz (patch scripts/quiz-tracking-patch.js) :
+       ALTEO.quiz('start')                                 1re question vue
+       ALTEO.quiz('q', { q: { id, i, n, label } })         question affichée
+       ALTEO.quiz('a', { q: {…}, a: 'réponse' | [ … ] })   question répondue
+       ALTEO.quiz('gate', { g: 'shown'|'continue'|'exit' }) écran prix
+       ALTEO.quiz('done')                                  résultats atteints
+     Une fois par session et par question : revenir en arrière ou recharger
+     ne gonfle pas les compteurs. Jamais en aperçu (/t/…). */
+  function quiz(kind, data) {
+    if (C.preview) return;
+    data = data || {};
+    var q = data.q && typeof data.q === 'object' ? data.q : null;
+    var qid = q && q.id != null ? String(q.id) : '';
+    var base = 'qz_' + C.stepId + '_' + C.variant + '_';
+    var key;
+    if (kind === 'start' || kind === 'done') key = base + kind;
+    else if (kind === 'q' || kind === 'a') { if (!qid) return; key = base + kind + '_' + qid; }
+    else if (kind === 'gate') { if (!data.g) return; key = base + 'gate_' + data.g; }
+    else return;
+    if (!once(key)) return;
+    var payload = { t: C.tunnelId, s: C.stepId, v: C.variant, e: 'quiz', k: kind, src: srcOf() };
+    if (q) payload.q = { id: qid, i: q.i, n: q.n, label: q.label };
+    if (kind === 'a') payload.a = data.a;
+    if (kind === 'gate') payload.g = data.g;
+    post(C.eventEndpoint, payload, true);
+  }
 
   /* ── 3. Pixel Meta ──────────────────────────────────────────────────── */
   /* Visiteur venu de YouTube (tunnel YouTube, ou page commune — merci après
@@ -516,6 +545,7 @@
     leadId: function () { return leadId; },
     next: function () { return goNext(null); },
     track: track,
+    quiz: quiz,
     decorate: decorate,
     submit: submitOptin
   };
