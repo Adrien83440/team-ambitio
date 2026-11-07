@@ -1181,27 +1181,61 @@
       });
     });
 
-    /* Rapprochement mesure ↔ leads : même libellé de question, ou champ
-       nommé (quiz_ca_mensuel ↔ question « ca_mensuel »). */
+    /* Rapprochement mesure ↔ contacts : même libellé de question, champ
+       nommé (quiz_ca_mensuel ↔ question « ca_mensuel »), sinon libellé
+       proche (mots en commun ≥ 60 %, ou l'un contient l'autre) — le titre
+       lu à l'écran peut différer d'une virgule de celui du quiz. */
+    function words(t) { return keyOf(t).split('_').filter(function (w) { return w.length > 2; }); }
+    function wordSim(a, b) {
+      var A = words(a), B = words(b);
+      if (!A.length || !B.length) return 0;
+      var setB = {}, inter = 0, uni = {};
+      B.forEach(function (w) { setB[w] = 1; uni[w] = 1; });
+      A.forEach(function (w) { if (setB[w]) inter++; uni[w] = 1; });
+      return inter / Object.keys(uni).length;
+    }
     var byLabel = {};
     Object.keys(lq).forEach(function (k) { byLabel[keyOf(lq[k].label)] = k; });
     var used = {};
     function leadQFor(step) {
-      var k1 = byLabel[keyOf(step.label)];
+      var sk = keyOf(step.label);
+      var k1 = byLabel[sk];
       if (k1 && !used[k1]) return k1;
       var k2 = 'quiz_' + String(step.id).replace(/-/g, '_');
       if (lq[k2] && !used[k2]) return k2;
-      return null;
+      var best = null, bestS = 0;
+      Object.keys(lq).forEach(function (k) {
+        if (used[k] || DIAG_Q[k]) return;
+        var lk = keyOf(lq[k].label);
+        var sc = wordSim(step.label, lq[k].label);
+        if (sk.length > 8 && lk.length > 8 && (sk.indexOf(lk) >= 0 || lk.indexOf(sk) >= 0)) sc = Math.max(sc, 0.9);
+        if (sc > bestS) { bestS = sc; best = k; }
+      });
+      return bestS >= 0.6 ? best : null;
     }
+    /* Ordre = ordre d'apparition au prospect : celui de la page (rang de la
+       question dans le quiz). Une question connue seulement par les contacts
+       (pas encore mesurée) est remise juste après la question mesurée qui la
+       précède dans les réponses des contacts — jamais reléguée en fin. */
     var cards = [];
     drop.steps.forEach(function (st) {
       var k = leadQFor(st);
       if (k) used[k] = 1;
-      cards.push({ step: st, lq: k ? lq[k] : null, q: k, label: prettyQuestion(st.label, st.id), diag: false });
+      cards.push({ step: st, lq: k ? lq[k] : null, q: k, label: prettyQuestion(st.label, st.id), diag: false, pos: st.i });
     });
-    Object.keys(lq).filter(function (k) { return !used[k]; })
-      .sort(function (a, b) { return lq[a].ord - lq[b].ord; })
-      .forEach(function (k) { cards.push({ step: null, lq: lq[k], q: k, label: lq[k].label, diag: !!DIAG_Q[k] }); });
+    var anchors = cards.filter(function (c) { return c.lq; }).map(function (c) { return { ord: c.lq.ord, pos: c.pos }; })
+      .sort(function (a, b) { return a.ord - b.ord; });
+    Object.keys(lq).filter(function (k) { return !used[k]; }).forEach(function (k) {
+      var o = lq[k].ord, pos;
+      if (!drop.steps.length) pos = o;
+      else {
+        pos = -1;
+        anchors.forEach(function (a) { if (a.ord <= o) pos = a.pos; });
+        pos += 0.5 + Math.min(o, 999) / 10000;
+      }
+      cards.push({ step: null, lq: lq[k], q: k, label: lq[k].label, diag: !!DIAG_Q[k], pos: pos });
+    });
+    cards.sort(function (a, b) { return a.pos - b.pos; });
     /* Résultat du diagnostic toujours à la fin */
     cards.sort(function (a, b) { return (a.diag ? 1 : 0) - (b.diag ? 1 : 0); });
 
