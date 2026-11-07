@@ -23,12 +23,18 @@
 //         sources: { clé: { utm_source, utm_campaign, utm_content,
 //                           visits, ctas } } }
 //       → onglet Stats de admin-tunnels.html (entonnoir + acquisition).
-//   quiz_funnel_daily/{date}_{page}--{variant}   (événement 'quiz', 11/2026)
-//       { starts, completes, nQuestions,
+//   quiz_funnel_daily/{date}_{page}--{variant}@{version}   (événement 'quiz', 11/2026)
+//       { starts, completes, nQuestions, pageVersion, pageVersionAt,
 //         questions: { qid: { i, label, reached, answered,
 //                             answers: { clé: { label, n } } } },
-//         gate: { shown, continue, exit } }
+//         gate: { shown, continue, exit, repris, stop } }
 //       → onglet « Qualité leads » du Funnel Sales (abandon par question).
+//       @{version} (07/11/2026) = version publiée de la page (html.version de
+//       la variante) : une republication ouvre de nouveaux compteurs, la
+//       mesure d'une version ne se mélange plus avec celle d'avant.
+//
+// Visites internes (07/11/2026) : x === 1 (posé par tunnel-runtime.js pour
+// ?test_claude, ?apercu, ?alteo_interne=1) → rien n'est compté.
 //
 // Anti-abus : tunnel et étape doivent exister dans le registre (cache
 // 20 s), événement dans une liste fermée, chaînes bornées. Compteur
@@ -50,7 +56,8 @@ const EVENTS = { visit: 1, view: 1, cta: 1, optin: 1, quiz: 1 };
      start → 1re question affichée (une fois par session)
      q     → question affichée   { q: { id, i, n, label } }
      a     → question répondue   { q: {…}, a: 'réponse' | ['réponse', …] }
-     gate  → écran « prix » (CA sous le seuil) { g: 'shown'|'continue'|'exit' }
+     gate  → écran « prix » (CA sous le seuil)
+             { g: 'shown'|'continue'|'exit'|'repris'|'stop' }
      done  → écran de résultats atteint (quiz terminé, avant le formulaire)
    Dédoublonné côté page (une fois par session et par question). Compteurs
    ANONYMES, aucune donnée personnelle : la réponse est une option du quiz,
@@ -58,7 +65,9 @@ const EVENTS = { visit: 1, view: 1, cta: 1, optin: 1, quiz: 1 };
    Écrit dans quiz_funnel_daily/{date}_{page}--{variante}, lu par l'onglet
    « Qualité leads » du Funnel Sales (lqs-tab.js). */
 const QUIZ_KINDS = { start: 1, q: 1, a: 1, gate: 1, done: 1 };
-const GATE_KINDS = { shown: 1, 'continue': 1, exit: 1 };
+/* repris = « pas les moyens » puis retour au diagnostic ; stop = abandon
+   définitif depuis l'écran « pas les moyens » (avertissement du 06/11). */
+const GATE_KINDS = { shown: 1, 'continue': 1, exit: 1, repris: 1, stop: 1 };
 function quizKey(v) {
   return String(v == null ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50);
@@ -80,7 +89,11 @@ function quizPatch(body, base, FV) {
   const qid = quizKey(qIn.id);
   if (!qid) return null;
   const i = Math.max(0, Math.min(99, parseInt(qIn.i, 10) || 0));
-  const q = { i: i, label: str(qIn.label, 200) || qid };
+  const q = { i: i };
+  /* Libellé : seulement un vrai intitulé. Un libellé vide ou réduit à
+     l'identifiant (anciennes versions de page) n'écrase jamais le bon. */
+  const lbl = str(qIn.label, 200);
+  if (lbl && quizKey(lbl) !== qid) q.label = lbl;
   const n = parseInt(qIn.n, 10);
   if (n > 0 && n < 100) patch.nQuestions = n;
   if (k === 'q') q.reached = inc;
@@ -138,6 +151,7 @@ module.exports = async (req, res) => {
   };
 
   if (!tunnelId || !stepId || !event) { res.status(200).json({ ok: true, ignored: 'payload' }); return; }
+  if (body.x === 1 || body.x === '1') { res.status(200).json({ ok: true, ignored: 'internal' }); return; }   // visite interne (test, aperçu, équipe)
 
   let hit = null;
   try { hit = await Reg.findByIds(tunnelId, stepId); } catch (e) { console.error('[tunnel-event] registre :', e && e.message); }
@@ -161,10 +175,12 @@ module.exports = async (req, res) => {
       pageLabel: Reg.pageLabel(tunnel, step), updatedAt: FV.serverTimestamp()
     };
     if (vQ && vQ.label) base.variantLabel = String(vQ.label).slice(0, 80);
+    const pv = vQ && vQ.html ? parseInt(vQ.html.version, 10) : 0;
+    if (pv > 0) { base.pageVersion = pv; base.pageVersionAt = new Date(pv).toISOString(); }
     const qp = quizPatch(body, base, FV);
     if (!qp) { res.status(200).json({ ok: true, ignored: 'quiz' }); return; }
     try {
-      await db.collection('quiz_funnel_daily').doc(date + '_' + pageK + (variant ? '--' + variant : '')).set(qp, { merge: true });
+      await db.collection('quiz_funnel_daily').doc(date + '_' + pageK + (variant ? '--' + variant : '') + (pv > 0 ? '@' + pv : '')).set(qp, { merge: true });
     } catch (e) {
       console.error('[tunnel-event] quiz :', e && e.message);
     }

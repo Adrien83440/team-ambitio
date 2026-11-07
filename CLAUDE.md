@@ -353,6 +353,11 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   volée par `api/tunnel-render.js` (module partagé `api/_quizTracking.js`, aucune écriture
   Storage) ; l'écran prix « CA mensuel ≤ 20 k€ → investissement > 6 000 € » n'existe que si la
   page est republiée par `scripts/quiz-tracking-patch.js --apply` (dry-run par défaut).
+  Depuis le 07/11/2026 : `quiz_funnel_daily` a un document par **version publiée** de la page
+  (`…--{variante}@{html.version}`) — l'onglet montre par défaut la dernière publication, jamais
+  deux versions mélangées ; « Tous les quiz » ne fusionne jamais deux tunnels (Élite ≠
+  Présidentielles). Visites internes : `?test_claude`, `?apercu` (session) ou `?alteo_interne=1`
+  (appareil) → `x: 1`, ignorées par `api/tunnel-event.js`.
 
 Spécification de référence du flux commercial : `REFONTE-SPEC.md`.
 

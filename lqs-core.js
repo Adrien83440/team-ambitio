@@ -872,8 +872,36 @@
     }).sort(function (a, b) { return b.rdv - a.rdv; });
   }
 
-  /* ══ 7. QUIZ — abandon question par question (quiz_funnel_daily) ═══════ */
+  /* ══ 7. QUIZ — abandon question par question (quiz_funnel_daily) ═══════
+     07/11/2026 : un document par jour × page × variante × VERSION publiée
+     de la page (pageVersion, api/tunnel-event.js). Chaque page agrégée porte
+     `latest` = la même mesure limitée à la dernière version publiée : une
+     republication (suivi corrigé, question modifiée) ne mélange plus les
+     compteurs d'avant et d'après. Libellé : le dernier VRAI intitulé reçu
+     (un libellé égal à l'identifiant, envoyé par une ancienne version,
+     ne l'emporte jamais). */
+  function realLabel(label, id) { return !!label && keyOf(label) !== keyOf(id); }
+  function docKeyOf(d) { return (d.page || '?') + (d.variant ? '--' + d.variant : ''); }
   function buildQuizFunnel(docs) {
+    docs = docs.slice().sort(function (a, b) {
+      return String(a.date || '').localeCompare(String(b.date || '')) || (num(a.pageVersion) - num(b.pageVersion));
+    });
+    var all = aggQuizDocs(docs);
+    var maxV = {};
+    docs.forEach(function (d) { var k = docKeyOf(d), v = num(d.pageVersion); if (v > (maxV[k] || 0)) maxV[k] = v; });
+    var lat = {};
+    aggQuizDocs(docs.filter(function (d) { var v = maxV[docKeyOf(d)]; return v && num(d.pageVersion) === v; }))
+      .forEach(function (p) { lat[p.key] = p; });
+    all.forEach(function (p) {
+      var l = lat[p.key];
+      if (!l) return;
+      l.since = maxV[p.key]; l.isLatest = true;
+      l.partial = l.starts !== p.starts || l.days !== p.days;
+      p.latest = l;
+    });
+    return all;
+  }
+  function aggQuizDocs(docs) {
     var pages = {};
     docs.forEach(function (d) {
       var k = (d.page || '?') + (d.variant ? '--' + d.variant : '');
@@ -881,18 +909,19 @@
       if (!p) p = pages[k] = { key: k, page: d.page, variant: d.variant || null,
         pageLabel: d.pageLabel || '', variantLabel: d.variantLabel || '',
         label: (d.pageLabel || d.page || '?') + (d.variantLabel ? ' · ' + d.variantLabel : (d.variant ? ' · ' + d.variant : '')),
-        starts: 0, completes: 0, gate: { shown: 0, 'continue': 0, exit: 0 }, questions: {}, days: 0, n: 0 };
+        starts: 0, completes: 0, gate: { shown: 0, 'continue': 0, exit: 0, repris: 0, stop: 0 }, questions: {}, days: 0, n: 0 };
       p.days++;
       p.starts += num(d.starts); p.completes += num(d.completes);
       if (d.nQuestions) p.n = Math.max(p.n, num(d.nQuestions));
       var g = d.gate || {};
       p.gate.shown += num(g.shown); p.gate['continue'] += num(g['continue']); p.gate.exit += num(g.exit);
+      p.gate.repris += num(g.repris); p.gate.stop += num(g.stop);
       var qs = d.questions || {};
       Object.keys(qs).forEach(function (qk) {
         var q = qs[qk] || {};
         var x = p.questions[qk];
-        if (!x) x = p.questions[qk] = { id: qk, i: num(q.i, 99), label: q.label || qk, reached: 0, answered: 0, answers: {} };
-        if (q.label) x.label = q.label;
+        if (!x) x = p.questions[qk] = { id: qk, i: num(q.i, 99), label: realLabel(q.label, qk) ? q.label : qk, reached: 0, answered: 0, answers: {} };
+        if (realLabel(q.label, qk)) x.label = q.label;
         x.reached += num(q.reached); x.answered += num(q.answered);
         var as = q.answers || {};
         Object.keys(as).forEach(function (ak) {
@@ -939,6 +968,17 @@
   var DIAG_Q = { quiz_score_global: 1, quiz_pilier_prioritaire: 1 };
 
   function splitPage(page) { var m = String(page || '').split('__'); return { tunnel: m[0] || '', step: m[1] || '' }; }
+  /* Famille = le quiz (tunnel) d'une version : « fam:funnel-quizz-elite »
+     réunit toutes ses variantes. Deux quiz différents (Élite, Présidentielles)
+     ont des identifiants de questions communs (ca_mensuel, equipe…) : leurs
+     parcours ne se fusionnent JAMAIS (07/11/2026). */
+  var FAM = 'fam:';
+  function familyOfKey(k) { return k && k !== OLD_KEY ? splitPage(String(k).split('--')[0]).tunnel : ''; }
+  function inVersion(versionKey, k) {
+    if (!versionKey) return true;
+    if (versionKey.indexOf(FAM) === 0) return familyOfKey(k) === versionKey.slice(FAM.length);
+    return k === versionKey;
+  }
 
   function versionMeta(key, pageObj, meta) {
     if (key === OLD_KEY) return { key: key, name: 'Anciennes versions', sub: 'leads du quiz avant le suivi par page (System.io, quiz_elite…)', platform: 'old' };
@@ -987,15 +1027,17 @@
   }
 
   function mergeDropoff(pages) {
-    var m = { starts: 0, completes: 0, gate: { shown: 0, 'continue': 0, exit: 0 }, steps: [], has: pages.length > 0 };
+    var m = { starts: 0, completes: 0, gate: { shown: 0, 'continue': 0, exit: 0, repris: 0, stop: 0 }, steps: [], has: pages.length > 0 };
     var qs = {};
     pages.forEach(function (p) {
       m.starts += p.starts; m.completes += p.completes;
       m.gate.shown += p.gate.shown; m.gate['continue'] += p.gate['continue']; m.gate.exit += p.gate.exit;
+      m.gate.repris += p.gate.repris || 0; m.gate.stop += p.gate.stop || 0;
       Object.keys(p.questions || {}).forEach(function (qk) {
         var q = p.questions[qk];
         var x = qs[qk] || (qs[qk] = { id: qk, i: q.i, label: q.label, reached: 0, answered: 0, answers: {} });
         if (q.i < x.i) x.i = q.i;
+        if (realLabel(q.label, qk) && !realLabel(x.label, qk)) x.label = q.label;
         x.reached += q.reached; x.answered += q.answered;
         Object.keys(q.answers || {}).forEach(function (ak) {
           var y = x.answers[ak] || (x.answers[ak] = { label: q.answers[ak].label, n: 0 });
@@ -1154,26 +1196,96 @@
     all.views = 0; all.optins = 0;
     list.forEach(function (v) { all.views += v.views; all.optins += v.optins; });
     all.completeRate = all.starts ? all.completes / all.starts * 100 : null;
-    return { all: all, list: list, hiddenLeads: C.hiddenLeads };
+    /* Familles : un quiz (tunnel) toutes variantes confondues. */
+    var fams = {};
+    list.forEach(function (v) {
+      var f = familyOfKey(v.key);
+      if (!f) return;
+      var F = fams[f] || (fams[f] = { key: FAM + f, family: f, name: '', sub: '', platform: v.platform, starts: 0, completes: 0, views: 0, optins: 0, versions: [], leads: 0 });
+      F.versions.push(v.key); F.starts += v.starts; F.completes += v.completes; F.views += v.views; F.optins += v.optins; F.leads += v.agg.leads;
+    });
+    var famList = Object.keys(fams).map(function (f) {
+      var F = fams[f], tm = meta && meta[f];
+      var pg = C.pageByKey[F.versions[0]];
+      F.name = (tm && tm.name) || (pg && pg.pageLabel ? String(pg.pageLabel).split(' · ')[0] : f);
+      F.sub = F.versions.length + ' variante' + (F.versions.length > 1 ? 's' : '') + ' réunie' + (F.versions.length > 1 ? 's' : '');
+      F.completeRate = F.starts ? F.completes / F.starts * 100 : null;
+      var agg = newAgg();
+      C.quizRows.forEach(function (r) { if (familyOfKey(r._qv) === f) addLeadRow(agg, r); });
+      F.agg = fin(agg);
+      return F;
+    }).sort(function (a, b) { return (b.starts + b.leads * 10) - (a.starts + a.leads * 10); });
+    return { all: all, list: list, hiddenLeads: C.hiddenLeads, families: famList };
   }
 
-  /* Parcours d'une version ('' = toutes) : questions dans l'ordre, chacune
-     avec la mesure anonyme ET les résultats des leads, réponse par réponse. */
+  /* Regroupe les questions de leads qui sont le même écran sous deux
+     intitulés. Retourne { clé: clé retenue, _label: { clé retenue: libellé } }. */
+  function canonLeadQuestions(vRows, steps) {
+    var info = {}, order = [];
+    vRows.forEach(function (r, ri) {
+      r.answers.forEach(function (a) {
+        if (a.o !== 'quiz' || DIAG_Q[a.q]) return;
+        var x = info[a.q];
+        if (!x) { x = info[a.q] = { q: a.q, label: a.ql, ans: {}, rows: {}, n: 0 }; order.push(a.q); }
+        x.ans[a.a] = 1; if (!x.rows[ri]) { x.rows[ri] = 1; x.n++; }
+      });
+    });
+    var stepLabels = {};
+    (steps || []).forEach(function (st) { stepLabels[keyOf(st.label)] = 1; stepLabels['quiz_' + String(st.id).replace(/-/g, '_')] = 1; });
+    function matchesStep(k) { return !!(stepLabels[keyOf(info[k].label)] || stepLabels[k]); }
+    function overlap(a, b) {
+      var ka = Object.keys(info[a].ans), kb = info[b].ans, c = 0;
+      ka.forEach(function (x) { if (kb[x]) c++; });
+      var m = Math.min(ka.length, Object.keys(kb).length);
+      return m >= 2 ? c / m : 0;
+    }
+    function crosses(a, b) { for (var ri in info[a].rows) if (info[b].rows[ri]) return true; return false; }
+    order.sort(function (a, b) { return info[b].n - info[a].n; });
+    var group = {}, groups = [];
+    order.forEach(function (k) {
+      if (group[k]) return;
+      var g = [k]; group[k] = g; groups.push(g);
+      order.forEach(function (j) {
+        if (group[j] || j === k) return;
+        if (overlap(k, j) >= 0.6 && !g.some(function (m) { return crosses(m, j); })) { g.push(j); group[j] = g; }
+      });
+    });
+    var out = { _label: {} };
+    groups.forEach(function (g) {
+      if (g.length < 2) return;
+      var keep = g.filter(matchesStep)[0] || g[0];
+      g.forEach(function (k) { out[k] = keep; });
+      out._label[keep] = info[keep].label;
+    });
+    return out;
+  }
+
+  /* Parcours d'une version ('' = toutes, 'fam:<tunnel>' = un quiz toutes
+     variantes) : questions dans l'ordre, chacune avec la mesure anonyme ET
+     les résultats des leads, réponse par réponse. */
   function buildQuizView(rows, pages, versionKey, grid, meta) {
     var C = quizContext(rows, pages, meta);
     pages = C.pages;
-    var vPages = versionKey ? pages.filter(function (p) { return p.key === versionKey; }) : pages;
+    var vPages = pages.filter(function (p) { return inVersion(versionKey, p.key); });
     var drop = mergeDropoff(vPages);
-    var vRows = versionKey ? C.quizRows.filter(function (r) { return r._qv === versionKey; }) : C.quizRows;
+    var vRows = C.quizRows.filter(function (r) { return inVersion(versionKey, r._qv); });
     var tot = newAgg();
     vRows.forEach(function (r) { addLeadRow(tot, r); });
     fin(tot);
 
-    /* Questions des leads (origine quiz) */
+    /* Questions des leads (origine quiz). Les leads n'ont que le TEXTE de la
+       question (reponses_json) : un intitulé qui change (ex. Q1 courte de la
+       variante d avant le 07/11 13 h 20) créait une 2e ligne. Deux questions
+       de leads sont la même si elles ne se croisent jamais chez un même lead
+       ET partagent l'essentiel de leurs réponses ; la question retenue est
+       celle dont l'intitulé correspond à la mesure visiteurs. */
+    var canon = canonLeadQuestions(vRows, drop.steps);
     var lq = {};
     vRows.forEach(function (r) {
       r.answers.forEach(function (a) {
         if (a.o !== 'quiz') return;
+        var ck = canon[a.q] || a.q;
+        if (ck !== a.q) a = { q: ck, ql: canon._label[ck], a: a.a, al: a.al, o: a.o, ord: a.ord };
         var q = lq[a.q] || (lq[a.q] = { q: a.q, label: a.ql, ord: a.ord, answers: {}, agg: newAgg() });
         if (a.ord < q.ord) q.ord = a.ord;
         var x = q.answers[a.a] || (q.answers[a.a] = { a: a.a, label: a.al, agg: newAgg() });
@@ -1211,7 +1323,21 @@
         if (sk.length > 8 && lk.length > 8 && (sk.indexOf(lk) >= 0 || lk.indexOf(sk) >= 0)) sc = Math.max(sc, 0.9);
         if (sc > bestS) { bestS = sc; best = k; }
       });
-      return bestS >= 0.6 ? best : null;
+      if (bestS >= 0.6) return best;
+      /* Intitulés différents (07/11/2026) : mêmes réponses = même question
+         (au moins 2 réponses communes, 60 % des réponses de la plus petite). */
+      var sa = {};
+      Object.keys(step.answers || {}).forEach(function (ak) { sa[keyOf(step.answers[ak].label)] = 1; });
+      var ns = Object.keys(sa).length, bestR = 0;
+      best = null;
+      if (ns >= 2) Object.keys(lq).forEach(function (k) {
+        if (used[k] || DIAG_Q[k]) return;
+        var la = Object.keys(lq[k].answers).map(function (a) { return keyOf(lq[k].answers[a].label); });
+        var c = la.filter(function (x) { return sa[x]; }).length, m = Math.min(ns, la.length);
+        var r = m >= 2 && c >= 2 ? c / m : 0;
+        if (r >= 0.6 && r > bestR) { best = k; bestR = r; }
+      });
+      return best;
     }
     /* Ordre = ordre d'apparition au prospect : celui de la page (rang de la
        question dans le quiz). Une question connue seulement par les contacts
@@ -1308,7 +1434,7 @@
     loadAll: loadAll, buildModel: buildModel,
     byNote: byNote, byAnswer: byAnswer, byAxis: byAxis, byCloser: byCloser, closerBoard: closerBoard,
     suggestPoints: suggestPoints, suggestBasis: suggestBasis,
-    quizVersions: quizVersions, buildQuizView: buildQuizView, versionMeta: versionMeta, OLD_QUIZ_KEY: OLD_KEY, mqsOf: mqsOf, buildQuizFunnel: buildQuizFunnel, insights: insights,
+    quizVersions: quizVersions, buildQuizView: buildQuizView, versionMeta: versionMeta, OLD_QUIZ_KEY: OLD_KEY, FAMILY_PREFIX: FAM, familyOfKey: familyOfKey, mqsOf: mqsOf, buildQuizFunnel: buildQuizFunnel, insights: insights,
     newAgg: newAgg, offerOf: offerOf, addLeadRow: addLeadRow, fin: fin, isoDay: isoDay
   };
 }));

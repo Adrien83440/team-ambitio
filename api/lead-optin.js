@@ -175,6 +175,17 @@ function sanitizeQuiz(raw) {
     if (v) out[k] = v;
   });
 
+  /* 07/11/2026 : version du quiz (v2-restauree-sombre, v4-entree-d…),
+     avertissement investissement vu / repris, accroche reprise de la pub
+     (variante d). Gardés s'ils arrivent — le scénario Make « Leads QUIZ
+     ÉLITE » doit les ajouter au bloc quiz pour qu'ils arrivent. */
+  const qv = quizStr(raw.quiz_version, 60);
+  if (qv) out.quiz_version = qv;
+  const alerte = quizStr(raw.alerte_investissement, 300);
+  if (alerte) out.alerte_investissement = alerte;
+  const acc = quizStr(raw.accroche, 40);
+  if (acc) out.accroche = acc.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 40);
+
   if (Array.isArray(raw.reponses)) {
     const rows = [];
     for (let i = 0; i < raw.reponses.length && rows.length < 60; i++) {
@@ -274,9 +285,15 @@ function landingFromUrl(url) {
 // (retiré avant écriture).
 async function buildLanding(body, type, hasQuiz) {
   let src = body && typeof body.landing === 'object' ? body.landing : null;
-  const url0 = String((src && src.pageUrl) || (body && (body.landingUrl || body.pageUrl || body.url)) || '').slice(0, 500);
+  /* 07/11/2026 : lp / v se lisent sur l'URL ENTIÈRE. Le quiz ajoute lp et v
+     à la FIN de page_url ; avec un fbclid et des utm longs, l'URL dépasse
+     500 caractères et la coupe tombait au milieu de lp (19 leads en
+     « funnel-quizz-elite__o », « __opti »…, variante perdue). La coupe à
+     500 ne vaut plus que pour le stockage (pageUrl). */
+  const urlFull = String((src && src.pageUrl) || (body && (body.landingUrl || body.pageUrl || body.url)) || '').slice(0, 8000);
   if (!src || !landingSlug(src.page, 90)) {
-    const fromUrl = landingFromUrl(url0);
+    const fromUrl = landingFromUrl(urlFull)
+      || (body && landingSlug(body.lp, 90) ? { page: landingSlug(body.lp, 90), variant: landingSlug(body.v, 20) || null } : null);
     if (fromUrl) src = Object.assign({}, src || {}, fromUrl);
   }
   let page = src ? landingSlug(src.page, 90) : '';

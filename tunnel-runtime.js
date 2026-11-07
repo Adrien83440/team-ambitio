@@ -112,6 +112,14 @@
       if (saved && saved.a && Date.now() - (saved.at || 0) < ATTR_TTL) attr = saved.a;
     } catch (e) { attr = null; }
   }
+  /* Visite interne (07/11/2026) : tests et aperçus ne gonflent pas les
+     compteurs. ?test_claude / ?apercu → la session ; ?alteo_interne=1 →
+     l'appareil (équipe), jusqu'à ?alteo_interne=0. Les événements partent
+     avec x: 1 et api/tunnel-event.js les ignore. */
+  if (Q.alteo_interne === '1') lsSet('alteo_internal', '1');
+  else if (Q.alteo_interne === '0') { try { var ls0 = store('local'); if (ls0) ls0.removeItem('alteo_internal'); } catch (e) {} }
+  if (Q.test_claude != null || Q.apercu != null) ssSet('alteo_internal', '1');
+  var INTERNAL = lsGet('alteo_internal') === '1' || ssGet('alteo_internal') === '1';
   var leadId = String(Q.leadId || ssGet(SS_LEAD) || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 120);
   if (leadId) ssSet(SS_LEAD, leadId);
 
@@ -148,7 +156,9 @@
     if (ev === 'visit' && !once('visit_' + C.tunnelId)) return;
     if (ev === 'view' && !once('view_' + C.stepId + '_' + C.variant)) return;
     if (ev === 'cta' && !once('cta_' + C.stepId)) return;
-    post(C.eventEndpoint, { t: C.tunnelId, s: C.stepId, v: C.variant, e: ev, src: srcOf() }, true);
+    var pl = { t: C.tunnelId, s: C.stepId, v: C.variant, e: ev, src: srcOf() };
+    if (INTERNAL) pl.x = 1;
+    post(C.eventEndpoint, pl, true);
   }
   track('visit');
   track('view');
@@ -178,6 +188,7 @@
     if (q) payload.q = { id: qid, i: q.i, n: q.n, label: q.label };
     if (kind === 'a') payload.a = data.a;
     if (kind === 'gate') payload.g = data.g;
+    if (INTERNAL) payload.x = 1;
     post(C.eventEndpoint, payload, true);
   }
 

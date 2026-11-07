@@ -33,7 +33,7 @@
     loadedKey: null, loading: false, err: null, bound: false,
     view: 'overview', closer: '', cashMode: 'cohorte', axis: 'campaign',
     crMode: 'period', leadsNote: 'all', leadsQ: '', leadsLimit: 150,
-    openQ: {}, openLead: {}, openDetail: {}, quizVer: '', quizCompare: false, formsOpen: false, saving: false
+    openQ: {}, openLead: {}, openDetail: {}, quizVer: '', quizCompare: false, quizLatest: true, formsOpen: false, saving: false
   };
 
   /* ══ FORMATS ══════════════════════════════════════════════════════════ */
@@ -343,30 +343,56 @@
      4. formulaires hors quiz (VSL, AlteoForms) à part, repliés. */
   function viewQuiz() {
     var meta = S.M.tunnels || S.ctx.tunnelsMeta || null;
-    var pages = S.M.quiz || [];
+    /* 07/11/2026 : par défaut, la mesure visiteurs de chaque version ne
+       compte que la DERNIÈRE publication de la page (compteurs séparés par
+       version, api/tunnel-event.js) — les leads restent sur toute la période. */
+    var pagesAll = S.M.quiz || [];
+    var hasLatest = pagesAll.some(function (p) { return p.latest && p.latest.partial; });
+    var pages = S.quizLatest ? pagesAll.map(function (p) { return p.latest || p; }) : pagesAll;
     var R = rows();
     var V = LC.quizVersions(R, pages, meta, S.M.views);
-    if (S.quizVer && !V.list.some(function (v) { return v.key === S.quizVer; })) S.quizVer = '';
+    var fams = V.families || [];
+    if (S.quizVer && !V.list.some(function (v) { return v.key === S.quizVer; }) && !fams.some(function (f) { return f.key === S.quizVer; })) S.quizVer = '';
     var h = help('ℹ️ Comment lire cette vue', '<p>Deux types de personnes : les <strong>visiteurs</strong> (tous ceux qui font le quiz, comptés anonymement) et les <strong>contacts</strong> (ceux qui ont laissé leurs coordonnées à la fin).</p>'
       + '<p><strong>🚪 À quel moment les gens quittent le quiz</strong> : pour chaque question, combien de visiteurs l\'ont vue, combien y ont répondu, combien sont partis dessus — puis combien ont tout rempli. Une question qui fait partir beaucoup de monde est peut-être mal posée, pas pertinente ou gênante.</p>'
       + '<p><strong>📋 Question par question</strong> : pour chaque réponse, combien de visiteurs l\'ont choisie, et ce que ça a donné chez les contacts (clients Élite / Business, cash encaissé), avec ses points dans le barème.</p>'
-      + '<p>Les <strong>cartes</strong> en haut filtrent par version du quiz (Dark, White, YouTube…). « Comparer » les met côte à côte. Les formulaires hors quiz sont tout en bas.</p>');
+      + '<p>Les <strong>cartes</strong> en haut filtrent par version du quiz (Dark, White, YouTube…). « Comparer » les met côte à côte. Les formulaires hors quiz sont tout en bas.</p>'
+      + '<p><strong>Dernière publication</strong> (par défaut) : chaque republication de la page ouvre de nouveaux compteurs visiteurs, pour ne jamais mélanger un suivi corrigé avec l\'ancien. « Toute la période » additionne toutes les publications. Les contacts, eux, couvrent toujours toute la période.</p>');
 
     if (!V.list.length) {
       h += card('🧭 Parcours du quiz', '', '<div class="lq-muted">Aucun lead issu d\'un quiz et aucune mesure sur la période. La mesure démarre quand la page quiz est instrumentée (<code>node scripts/quiz-tracking-patch.js --apply</code>).</div>');
     } else {
       h += '<div class="lq-vcards">' + versionCard(V.all, !S.quizVer);
+      fams.forEach(function (f) { if (f.versions.length > 1) h += versionCard(f, S.quizVer === f.key); });
       V.list.forEach(function (v) { h += versionCard(v, S.quizVer === v.key); });
       h += '</div>';
       var canCompare = !S.quizVer && V.list.length >= 2;
-      if (canCompare) h += '<div class="lq-actions" style="margin:-4px 0 14px"><button class="fn-btn' + (S.quizCompare ? ' primary' : '') + '" data-lq-compare>' + (S.quizCompare ? '✓ Comparaison des versions' : '⇄ Comparer les versions côte à côte') + '</button></div>';
-      var view = LC.buildQuizView(R, pages, S.quizVer, activeGrid(), meta);
+      var sinceTxt = '';
+      if (S.quizLatest && hasLatest) {
+        var sinces = pages.filter(function (p) { return p.isLatest && (!S.quizVer || S.quizVer.indexOf(LC.FAMILY_PREFIX) === 0 || p.key === S.quizVer); })
+          .map(function (p) { return p.since; }).sort();
+        if (sinces.length) sinceTxt = ' · mesure visiteurs depuis la publication du ' + fDay(sinces[sinces.length - 1]) + ' ' + new Date(sinces[sinces.length - 1]).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
+      }
+      h += '<div class="lq-actions" style="margin:-4px 0 14px">'
+        + (canCompare ? '<button class="fn-btn' + (S.quizCompare ? ' primary' : '') + '" data-lq-compare>' + (S.quizCompare ? '✓ Comparaison des versions' : '⇄ Comparer les versions côte à côte') + '</button> ' : '')
+        + '<button class="fn-btn' + (S.quizLatest ? ' primary' : '') + '" data-lq-latest title="Chaque republication de la page ouvre de nouveaux compteurs : ne pas mélanger le suivi d\'avant et d\'après une correction.">' + (S.quizLatest ? '✓ Depuis la dernière publication de la page' : 'Toute la période (toutes publications)') + '</button>'
+        + (sinceTxt ? ' <span class="lq-muted">' + esc(sinceTxt.slice(3)) + '</span>' : '') + '</div>';
+      /* « Tous les quiz » : jamais deux quiz différents dans un même parcours
+         (identifiants de questions communs) → le parcours montré est celui du
+         quiz principal, toutes variantes réunies. */
+      var viewKey = S.quizVer;
+      var famNote = '';
+      if (!viewKey && fams.length > 1) {
+        viewKey = fams[0].key;
+        famNote = 'Parcours de « ' + fams[0].name + ' » (toutes variantes). Autres quiz : clique leur carte.';
+      }
+      var view = LC.buildQuizView(R, pages, viewKey, activeGrid(), meta);
       var cmp = null;
       if (canCompare && S.quizCompare) {
         cmp = V.list.slice(0, 4).map(function (v) { return { v: v, view: LC.buildQuizView(R, pages, v.key, activeGrid(), meta) }; });
       }
-      var cur = S.quizVer ? V.list.filter(function (v) { return v.key === S.quizVer; })[0] : V.all;
-      h += card('🧭 Parcours — ' + esc(cur.name), cur.sub ? esc(cur.sub) : '', parcours(view, cmp, cur));
+      var cur = viewKey ? (V.list.concat(fams).filter(function (v) { return v.key === viewKey; })[0] || V.all) : V.all;
+      h += card('🧭 Parcours — ' + esc(cur.name), esc((cur.sub || '') + (famNote ? (cur.sub ? ' · ' : '') + famNote : '')), parcours(view, cmp, cur));
       if (V.hiddenLeads) h += '<div class="fn-stage-note" style="margin:-6px 0 14px">Seuls les quiz en ligne sont affichés. ' + fNum(V.hiddenLeads) + ' lead' + (V.hiddenLeads > 1 ? 's' : '') + ' de la période vien' + (V.hiddenLeads > 1 ? 'nent' : 't') + ' de pages hors ligne ou anciennes : ils restent comptés dans la vue d\'ensemble, le marketing et les closers.</div>';
     }
 
@@ -867,6 +893,7 @@
       if ((el = closest(t, '[data-lq-axis]'))) { S.axis = el.getAttribute('data-lq-axis'); render(); return; }
       if ((el = closest(t, '[data-lq-ver]'))) { S.quizVer = el.getAttribute('data-lq-ver'); if (S.quizVer) S.quizCompare = false; render(); return; }
       if (closest(t, '[data-lq-compare]')) { S.quizCompare = !S.quizCompare; render(); return; }
+      if (closest(t, '[data-lq-latest]')) { S.quizLatest = !S.quizLatest; render(); return; }
       if ((el = closest(t, '[data-lq-det]'))) { var k1 = el.getAttribute('data-lq-det'); S.openDetail[k1] = !S.openDetail[k1]; render(); return; }
       if (closest(t, '[data-lq-forms]')) { e.preventDefault(); S.formsOpen = !S.formsOpen; render(); return; }
       if ((el = closest(t, '[data-lq-q]'))) {
