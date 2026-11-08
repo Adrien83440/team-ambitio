@@ -1095,13 +1095,16 @@
       m.gate.repris += p.gate.repris || 0; m.gate.stop += p.gate.stop || 0;
       Object.keys(p.questions || {}).forEach(function (qk) {
         var q = p.questions[qk];
-        var x = qs[qk] || (qs[qk] = { id: qk, i: q.i, label: q.label, reached: 0, answered: 0, answers: {} });
+        var x = qs[qk] || (qs[qk] = { id: qk, i: q.i, label: q.label, reached: 0, answered: 0, answers: {}, answeredByV: {} });
         if (q.i < x.i) x.i = q.i;
         if (realLabel(q.label, qk) && !realLabel(x.label, qk)) x.label = q.label;
         x.reached += q.reached; x.answered += q.answered;
+        var pv = p.variant || '—';
+        x.answeredByV[pv] = (x.answeredByV[pv] || 0) + q.answered;
         Object.keys(q.answers || {}).forEach(function (ak) {
-          var y = x.answers[ak] || (x.answers[ak] = { label: q.answers[ak].label, n: 0 });
+          var y = x.answers[ak] || (x.answers[ak] = { label: q.answers[ak].label, n: 0, byV: {} });
           y.n += q.answers[ak].n;
+          y.byV[pv] = (y.byV[pv] || 0) + q.answers[ak].n;
         });
       });
     });
@@ -1227,14 +1230,18 @@
     var allQuiz = rows.filter(hasQuizAnswers);
     allQuiz.forEach(function (r) { r._qv = quizVersionOf(r.lead, pagesByPage); });
     var quizRows = allQuiz.filter(function (r) { return onlineQuiz(r._qv, meta, measured); });
+    /* 08/11/2026 (2e version) : les leads ne sont PLUS retirés. Les
+       résultats commerciaux (leads, closes, signé) couvrent toute la période
+       choisie ; seul le décompte « devenus leads » du parcours visiteurs est
+       limité à la période mesurée (r._inMeasure), pour se lire avec lui. */
     var before = 0;
-    quizRows = quizRows.filter(function (r) {
+    quizRows.forEach(function (r) {
       var from = measureFrom(pageByKey[r._qv]);
-      if (from == null || r.entry == null || r.entry >= from) return true;
-      before++; return false;
+      r._inMeasure = from == null || r.entry == null || r.entry >= from;
+      if (!r._inMeasure) before++;
     });
     return { pagesByPage: pagesByPage, pageByKey: pageByKey, quizRows: quizRows, pages: pages, meta: meta,
-      hiddenLeads: allQuiz.length - quizRows.length - before, beforeMeasure: before };
+      hiddenLeads: allQuiz.length - quizRows.length, beforeMeasure: before };
   }
 
   /* Cartes : une par version (mesure anonyme et/ou leads), triées par volume. */
@@ -1462,13 +1469,8 @@
     function disjoint(q1, q2) { return !q2.rows.some(function (r) { return q1.ids[r.id]; }); }
     function mergeInto(dst, src) {
       src.rows.forEach(function (r) { if (!dst.ids[r.id]) { dst.ids[r.id] = 1; dst.rows.push(r); addLeadRow(dst.agg, r); } });
-      Object.keys(src.answers).forEach(function (ak) {
-        var y = src.answers[ak], key = keyOf(y.label);
-        var x = null;
-        Object.keys(dst.answers).forEach(function (dk) { if (keyOf(dst.answers[dk].label) === key) x = dst.answers[dk]; });
-        if (!x) { dst.answers[src.q + '§' + ak] = y; return; }
-        y.rows.forEach(function (r) { addLeadRow(x.agg, r); x.rows.push(r); });
-      });
+      /* réponses gardées par version de la question (sous-titres) */
+      Object.keys(src.answers).forEach(function (ak) { dst.answers[src.q + '§' + ak] = src.answers[ak]; });
     }
     var measured = cards.filter(function (c) { return c.step && !c.diag; });
     cards = cards.filter(function (c) {
@@ -1493,21 +1495,77 @@
     cards.forEach(function (c, idx) {
       c.n = idx + 1;
       if (c.lq) fin(c.lq.agg);
-      var m = {};
+      /* Réponses (08/11/2026, demande Adrien) :
+         · choix MULTIPLE (« A | B | C ») découpé : une ligne par option, une
+           personne qui en coche 3 compte dans les 3 (total > 100 %) ;
+         · groupées par VERSION de la question (intitulé qui change selon Q1) ;
+         · détail par variante de page (byV) quand la vue en réunit plusieurs. */
+      var defBranch = c.lq ? c.lq.label : c.label;
+      var multi = false;
+      if (c.step) Object.keys(c.step.answers).forEach(function (ak) { if (/ \| /.test(c.step.answers[ak].label || '')) multi = true; });
+      if (c.lq) Object.keys(c.lq.answers).forEach(function (ak) { if (/ \| /.test(c.lq.answers[ak].label || '')) multi = true; });
+      function partsOf(label) {
+        var t = String(label == null ? '' : label);
+        return multi ? t.split(' | ').map(function (x) { return x.trim(); }).filter(Boolean) : [t];
+      }
+      /* Grouper par version seulement si les versions ont des options
+         différentes ; mêmes options partout (« Depuis combien de temps… ») →
+         une seule liste, sinon « Plus de 3 ans » serait éclaté en 3 lignes. */
+      var brOf = {}, overlap = false, nBr = {};
+      if (c.lq) Object.keys(c.lq.answers).forEach(function (ak) {
+        var x = c.lq.answers[ak], br = x.ql || defBranch;
+        nBr[br] = 1;
+        partsOf(x.label).forEach(function (pt) {
+          var k = keyOf(pt);
+          if (brOf[k] && brOf[k] !== br) overlap = true;
+          brOf[k] = br;
+        });
+      });
+      var grouped = !overlap && Object.keys(nBr).length > 1;
+      var OTHER = 'Autres versions de la question (réponses vues seulement chez les visiteurs)';
+      var m = {}, order = [];
+      function opt(label, branch) {
+        if (!grouped) branch = defBranch;
+        var key = keyOf(branch) + '§' + keyOf(label);
+        if (!m[key]) { m[key] = { key: keyOf(label), label: label, branch: branch, visitors: null, byV: {}, agg: null, rows: [], ids: {}, leadsByV: {} }; order.push(key); }
+        return m[key];
+      }
+      if (c.lq) Object.keys(c.lq.answers).forEach(function (ak) {
+        var x = c.lq.answers[ak], br = x.ql || defBranch;
+        partsOf(x.label).forEach(function (pt) {
+          var o = opt(pt, br);
+          o.a = multi ? keyOf(pt) : (x.a || ak); o.qk = x.q; o.ql = x.ql;
+          x.rows.forEach(function (r) {
+            if (o.ids[r.id]) return;
+            o.ids[r.id] = 1; o.rows.push(r);
+            var v = String(r._qv || '').split('--')[1] || '—';
+            o.leadsByV[v] = (o.leadsByV[v] || 0) + 1;
+          });
+        });
+      });
+      /* Libellé coupé par la mesure (60 car.) : rattaché à l'option connue
+         qui commence pareil, dans n'importe quelle version de la question. */
+      function findOpt(pt) {
+        var k = keyOf(pt), hit = null;
+        order.forEach(function (key) { var o = m[key]; if (!hit && o.key === k) hit = o; });
+        if (!hit && pt.length >= 8) order.forEach(function (key) { var o = m[key]; if (!hit && keyOf(o.label).indexOf(k) === 0) hit = o; });
+        return hit;
+      }
       if (c.step) Object.keys(c.step.answers).forEach(function (ak) {
         var y = c.step.answers[ak];
-        var key = keyOf(y.label);
-        m[key] = { key: key, label: y.label, visitors: y.n, agg: null };
-      });
-      if (c.lq) Object.keys(c.lq.answers).forEach(function (ak) {
-        var x = c.lq.answers[ak];
-        var key = keyOf(x.label);
-        var o = m[key] || (m[key] = { key: key, label: x.label, visitors: null, agg: null });
-        o.agg = fin(x.agg); o.a = x.a || ak; o.qk = x.q; o.ql = x.ql;
+        partsOf(y.label).forEach(function (pt) {
+          var cut = pt === partsOf(y.label).slice(-1)[0] && String(y.label).length >= 118 && !findOpt(pt);   // libellé coupé à 120 car. (api/tunnel-event.js)
+          var o = findOpt(pt) || opt(cut ? pt + '…' : pt, grouped ? OTHER : defBranch);
+          o.visitors = (o.visitors || 0) + y.n;
+          Object.keys(y.byV || {}).forEach(function (v) { o.byV[v] = (o.byV[v] || 0) + y.byV[v]; });
+        });
       });
       var answered = c.step ? c.step.answered : 0;
-      var list = Object.keys(m).map(function (k2) {
+      c.multi = multi;
+      var list = order.map(function (k2) {
         var o = m[k2];
+        if (o.rows.length) { o.agg = newAgg(); o.rows.forEach(function (r) { addLeadRow(o.agg, r); }); fin(o.agg); }
+        delete o.ids;
         o.visitorShare = answered && o.visitors != null ? o.visitors / answered * 100 : null;
         o.leadShare = c.lq && o.agg ? o.agg.leads / c.lq.agg.leads * 100 : null;
         if (c.q && o.a) {
@@ -1517,6 +1575,20 @@
         return o;
       });
       c.answers = naturalSort(list, function (o) { return o.label; }, function (o) { return (o.visitors || 0) + (o.agg ? o.agg.leads * 10 : 0); });
+      /* Réponse NON ENREGISTRÉE (08/11/2026, revue) : une ancienne version
+         de la page (et la page Présidentielles) comptait qu'on avait répondu
+         sans dire quoi. Ligne à part pour que les réponses fassent le total
+         de « ont répondu » (question à choix unique). */
+      if (c.step && !multi) {
+        var known = 0, knownV = {};
+        c.answers.forEach(function (o) { known += o.visitors || 0; Object.keys(o.byV || {}).forEach(function (v) { knownV[v] = (knownV[v] || 0) + o.byV[v]; }); });
+        if (answered - known > 0) {
+          var nrV = {};
+          Object.keys(c.step.answeredByV || {}).forEach(function (v) { var d = c.step.answeredByV[v] - (knownV[v] || 0); if (d > 0) nrV[v] = d; });
+          c.answers.push({ key: '__nr', label: 'Réponse non enregistrée par la page', branch: defBranch, visitors: answered - known,
+            byV: nrV, agg: null, leadsByV: {}, nr: true, visitorShare: (answered - known) / answered * 100 });
+        }
+      }
       var best = null, worst = null;
       c.answers.forEach(function (o) {
         if (!o.agg || o.agg.leads < SUGGEST_MIN || o.agg.conPerLead == null) return;
@@ -1524,12 +1596,29 @@
         if (!worst || o.agg.conPerLead < worst.agg.conPerLead) worst = o;
       });
       if (best && worst && best !== worst && best.agg.conPerLead > worst.agg.conPerLead) { best.best = true; worst.worst = true; }
+      /* Sous-titres : une version de la question = un groupe (ordre : celle
+         de la mesure d'abord, puis par nombre de leads). */
+      var gm = {}, gl = [];
+      c.answers.forEach(function (o) {
+        var g = gm[o.branch];
+        if (!g) { g = gm[o.branch] = { label: o.branch, answers: [], n: 0 }; gl.push(g); }
+        g.answers.push(o); g.n += (o.visitors || 0) + (o.agg ? o.agg.leads : 0);
+      });
+      gl.sort(function (a, b) { return (a.label === OTHER ? 1 : 0) - (b.label === OTHER ? 1 : 0) || b.n - a.n; });
+      c.groups = gl;
     });
+    /* Variantes de page présentes dans la vue (détail A / D) */
+    var vset = {};
+    vPages.forEach(function (p) { if (p.variant) vset[p.variant] = 1; });
+    vRows.forEach(function (r) { var v = String(r._qv || '').split('--')[1]; if (v) vset[v] = 1; });
+    var variants = Object.keys(vset).sort();
     var worstLoss = null;
     cards.forEach(function (c) { if (c.step && !c.step.first && c.step.left != null && (!worstLoss || c.step.left > worstLoss.step.left)) worstLoss = c; });   // la 1re question = ceux qui n'ont pas cliqué, pas un abandon
     if (worstLoss && worstLoss.step.left > 0) worstLoss.hot = true;
 
-    return { versionKey: versionKey || '', drop: drop, total: tot, cards: cards, leads: vRows.length, beforeMeasure: C.beforeMeasure };
+    var inM = vRows.filter(function (r) { return r._inMeasure !== false; }).length;
+    return { versionKey: versionKey || '', drop: drop, total: tot, cards: cards, leads: vRows.length, leadsInMeasure: inM,
+      beforeMeasure: vRows.length - inM, variants: variants };
   }
 
   /* ══ 8. PHRASES CLÉS (lecture en 10 secondes) ══════════════════════════ */

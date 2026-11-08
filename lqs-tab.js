@@ -426,9 +426,9 @@
     return '<div class="lq-vcard' + (active ? ' active' : '') + '" data-lq-ver="' + esc(v.key) + '">'
       + '<div class="lq-vtop">' + platformBadge(v.platform) + (a.avgNote != null ? avgBadge(a.avgNote) : '') + '</div>'
       + '<div class="lq-vname">' + esc(v.name) + '</div><div class="lq-vsub">' + esc(v.sub || '') + '</div>'
-      + '<div class="lq-vline">' + (v.starts ? '<strong>' + fNum(v.starts) + '</strong> ont commencé · ' + fPct(v.completeRate, 0) + ' ont tout rempli'
+      + '<div class="lq-vline"><span class="lq-muted">Visiteurs :</span> ' + (v.starts ? '<strong>' + fNum(v.starts) + '</strong> ont commencé · ' + fPct(v.completeRate, 0) + ' ont tout rempli'
         : (v.views ? '<strong>' + fNum(v.views) + '</strong> visites · ' + fNum(v.optins) + ' formulaires envoyés' : '<span class="lq-muted">visiteurs : en attente de mesure</span>')) + '</div>'
-      + '<div class="lq-vline"><strong>' + fNum(a.leads) + '</strong> contacts → <strong>' + fNum(a.closes) + '</strong> client' + (a.closes > 1 ? 's' : '') + ' · <strong>' + fEur(a.con) + '</strong> signés · ' + fEur(a.cash) + ' encaissés</div>'
+      + '<div class="lq-vline"><span class="lq-muted">Leads de la période :</span> <strong>' + fNum(a.leads) + '</strong> → <strong>' + fNum(a.closes) + '</strong> client' + (a.closes > 1 ? 's' : '') + ' · <strong>' + fEur(a.con) + '</strong> signés · ' + fEur(a.cash) + ' encaissés</div>'
       + (a.closes ? '<div class="lq-vline">' + offerSplit(a) + '</div>' : '') + '</div>';
   }
 
@@ -446,7 +446,7 @@
       if (st.conditional && !st.first) bits.push('<span class="lq-muted">question montrée à ' + fPct(st.seenPct, 0) + ' des visiteurs seulement</span>');
       else if (st.left != null) bits.push('<span class="' + (st.left > 0 ? 'lq-down' : 'lq-muted') + '">🚪 <strong>' + fNum(st.left) + '</strong> ' + plur(st.left, 'est parti ici', 'sont partis ici') + ' (' + fPct(st.leftPct, 0) + ')</span>');
     } else if (!c.diag) bits.push('<span class="lq-muted">visiteurs : en attente des premières mesures</span>');
-    if (c.lq) bits.push('<strong>' + fNum(c.lq.agg.leads) + '</strong> ' + plur(c.lq.agg.leads, 'est devenu lead', 'sont devenus leads'));
+    if (c.lq) bits.push('<strong>' + fNum(c.lq.agg.leads) + '</strong> ' + plur(c.lq.agg.leads, 'lead de la période', 'leads de la période'));
     var badges = '';
     if (c.diag) badges += ' <span class="fn-tbadge lq-tf">résultat calculé par le quiz</span>';
     if (st && st.conditional && !st.first) badges += ' <span class="fn-tbadge lq-tf">question conditionnelle</span>';
@@ -454,20 +454,29 @@
     return '<div class="lq-step-head"><span class="lq-step-n">' + (c.diag ? '★' : c.n) + '</span><span class="lq-step-t">' + esc(c.label) + badges + '</span><span class="lq-step-m">' + bits.join(' · ') + '</span></div>';
   }
   function answerHead() {
-    return '<div class="lq-arow lq-ahead"><span>Réponse</span><span>Choisie par (visiteurs)</span><span>Devenus leads → résultats</span><span class="lq-ap">Points</span></div>';
+    return '<div class="lq-arow lq-ahead"><span>Réponse</span><span>Choisie par (visiteurs)</span><span>Leads de la période → résultats</span><span class="lq-ap">Points</span></div>';
   }
-  function answerLine(o) {
+  /* « A 3 · D 2 » quand la vue réunit plusieurs variantes de page. */
+  function vSplit(byV, vars) {
+    if (!vars || vars.length < 2 || !byV) return '';
+    return vars.map(function (v) { return v.toUpperCase() + ' ' + fNum(byV[v] || 0); }).join(' · ');
+  }
+  function answerLine(o, vars) {
     var a = o.agg;
     var tag = o.best ? ' <span class="fn-tbadge lq-good">rapporte le plus</span>' : (o.worst ? ' <span class="fn-tbadge lq-warn">rapporte le moins</span>' : '');
     var res;
-    if (!a) res = '<span class="lq-muted">aucun lead avec cette réponse</span>';
+    if (o.nr) res = '<span class="lq-muted">ancienne version de la page : la réponse choisie n\'était pas transmise</span>';
+    else if (!a) res = '<span class="lq-muted">aucun lead avec cette réponse</span>';
     else {
       res = '<strong>' + fNum(a.leads) + '</strong> lead' + (a.leads > 1 ? 's' : '') + ' → <strong>' + fNum(a.closes) + '</strong> client' + (a.closes > 1 ? 's' : '');
       if (a.closes) res += ' (' + offerSplit(a) + ')';
       res += ' · <strong>' + fEur(a.con) + '</strong> signés · ' + fEur(a.cash) + ' encaissés';
+      var lv = vSplit(o.leadsByV, vars);
+      if (lv) res += sub('leads : ' + lv);
     }
-    return '<div class="lq-arow"><span class="lq-al">' + esc(o.label) + tag + '</span>'
-      + '<span class="lq-av" data-l="Choisie par">' + (o.visitors != null ? bar(o.visitorShare, 'lq-blue') + '<span class="lq-mono">' + fNum(o.visitors) + ' · ' + fPct(o.visitorShare, 0) + '</span>' : '<span class="lq-muted">en attente</span>') + '</span>'
+    var vv = o.visitors != null ? vSplit(o.byV, vars) : '';
+    return '<div class="lq-arow"><span class="lq-al">' + (o.nr ? '<em class="lq-muted">' + esc(o.label) + '</em>' : esc(o.label)) + tag + '</span>'
+      + '<span class="lq-av" data-l="Choisie par">' + (o.visitors != null ? bar(o.visitorShare, 'lq-blue') + '<span class="lq-mono">' + fNum(o.visitors) + ' · ' + fPct(o.visitorShare, 0) + '</span>' + (vv ? sub(vv) : '') : '<span class="lq-muted">en attente</span>') + '</span>'
       + '<span class="lq-ax" data-l="Devenus leads">' + res + '</span>'
       + '<span class="lq-ap" data-l="Points">' + (o.pts != null || o.ko ? ptsChip(o) : '') + '</span></div>';
   }
@@ -518,8 +527,13 @@
     var h = '';
     /* Résumé en une ligne, lisible sans rien connaître de l'outil. */
     if (d.has) {
-      h += '<div class="lq-summary"><strong>' + fNum(d.shown) + '</strong> visiteurs sont arrivés sur la page → <strong>' + fNum(d.starts) + '</strong> ont répondu à la 1re question → <strong>' + fNum(d.completes) + '</strong> ont rempli le quiz en entier → <strong>' + fNum(t.leads) + '</strong> sont devenus leads → <strong>' + fNum(t.closes) + '</strong> client' + (t.closes > 1 ? 's' : '') + (t.closes ? ' (' + offerSplit(t) + ')' : '') + ' · <strong>' + fEur(t.con) + '</strong> signés · ' + fEur(t.cash) + ' encaissés'
-        + (d.from ? '<div class="lq-sub">Tout est compté depuis le ' + fDay(d.from) + ' (début de la mesure affichée)' + (view.beforeMeasure ? ' : ' + fNum(view.beforeMeasure) + ' lead' + (view.beforeMeasure > 1 ? 's entrés' : ' entré') + ' avant ne ' + (view.beforeMeasure > 1 ? 'sont' : 'est') + ' pas compté' + (view.beforeMeasure > 1 ? 's' : '') + ' ici' : '') + '.</div>' : '') + '</div>';
+      /* Deux lectures, chacune sur SA période (08/11/2026) :
+         · parcours visiteurs = période mesurée ; « devenus leads » limité à
+           cette même période pour se lire avec lui ;
+         · résultats = tous les leads de la période choisie en haut de page. */
+      h += '<div class="lq-summary"><div><strong>Parcours des visiteurs</strong>' + (d.from ? ' <span class="lq-muted">depuis le ' + fDay(d.from) + '</span>' : '') + ' : <strong>' + fNum(d.shown) + '</strong> arrivés sur la page → <strong>' + fNum(d.starts) + '</strong> ont répondu à la 1re question → <strong>' + fNum(d.completes) + '</strong> ont rempli le quiz → <strong>' + fNum(view.leadsInMeasure) + '</strong> ' + plur(view.leadsInMeasure, 'est devenu lead', 'sont devenus leads') + '</div>'
+        + '<div style="margin-top:6px"><strong>Résultats des leads</strong> <span class="lq-muted">' + esc(S.ctx.periodLabel || 'période choisie') + '</span> : <strong>' + fNum(t.leads) + '</strong> lead' + (t.leads > 1 ? 's' : '') + ' de ce quiz → <strong>' + fNum(t.closes) + '</strong> client' + (t.closes > 1 ? 's' : '') + (t.closes ? ' (' + offerSplit(t) + ')' : '') + ' · <strong>' + fEur(t.con) + '</strong> signés · ' + fEur(t.cash) + ' encaissés'
+        + (view.beforeMeasure ? '<div class="lq-sub">dont ' + fNum(view.beforeMeasure) + ' lead' + (view.beforeMeasure > 1 ? 's entrés' : ' entré') + ' avant le début de la mesure visiteurs : ' + (view.beforeMeasure > 1 ? 'ils comptent' : 'il compte') + ' dans les résultats, pas dans le parcours.</div>' : '') + '</div></div>';
     } else {
       h += '<div class="fn-alert" style="margin:0 0 12px">⏳ <strong>Le suivi question par question est activé, mais aucune visite n\'a encore été mesurée sur cette période.</strong> Dès les prochaines personnes qui font le quiz, tu verras ici combien commencent, combien remplissent tout, et sur quelle question elles partent. Le passé ne peut pas être reconstitué.'
         + (cur && cur.views ? '<br>Déjà connu sur la période : <strong>' + fNum(cur.views) + '</strong> visites de la page quiz → <strong>' + fNum(cur.optins) + '</strong> formulaires envoyés (' + fPct(cur.views ? cur.optins / cur.views * 100 : null, 1) + ').' : '') + '</div>';
@@ -539,7 +553,12 @@
           h += '<div class="lq-alist"><div class="lq-empty">Pas encore de réponse enregistrée à cette question' + (c.step && c.step.reached ? ' : les visiteurs qui l\'ont vue sont partis sans répondre.' : '.') + '</div></div>';
         } else {
           h += '<div class="lq-alist">' + answerHead();
-          c.answers.forEach(function (o) { h += answerLine(o); });
+          if (c.multi) h += '<div class="lq-agroup lq-muted">Plusieurs réponses possibles : une personne compte dans chaque option cochée (total au-delà de 100 %).</div>';
+          var vars = view.variants || [];
+          (c.groups || [{ label: '', answers: c.answers }]).forEach(function (g, gi, all) {
+            if (all.length > 1) h += '<div class="lq-agroup"><strong>' + esc(g.label) + '</strong></div>';
+            g.answers.forEach(function (o) { h += answerLine(o, vars); });
+          });
           h += '</div>';
           h += '<button class="fn-ig-detbtn lq-detbtn" data-lq-det="' + esc(key) + '">' + (open ? '▾ masquer le détail' : '▸ tout le détail (RDV, venus, Élite / Business…)') + '</button>';
           if (open) h += detailTable(c);
@@ -584,7 +603,7 @@
       h += '<td data-l="Encore là">' + fPct(top ? st.reached / top * 100 : null, st.reached / (top || 1) < 0.1 ? 1 : 0) + '</td></tr>';
     });
     if (d.has) h += '<tr class="tot"><td>✓</td><td class="l">Ont rempli le quiz en entier</td><td><strong>' + fNum(d.completes) + '</strong></td><td></td><td></td><td>' + fPct(top ? d.completes / top * 100 : null, 1) + '</td></tr>';
-    h += '<tr class="tot"><td>👤</td><td class="l">Sont devenus leads (coordonnées envoyées)</td><td><strong>' + fNum(t.leads) + '</strong></td><td></td><td></td><td>' + fPct(top ? t.leads / top * 100 : null, 1) + '</td></tr>';
+    h += '<tr class="tot"><td>👤</td><td class="l">Sont devenus leads (coordonnées envoyées, même période)</td><td><strong>' + fNum(view.leadsInMeasure) + '</strong></td><td></td><td></td><td>' + fPct(top ? view.leadsInMeasure / top * 100 : null, 1) + '</td></tr>';
     return h + '</tbody></table></div></div>';
   }
 

@@ -360,7 +360,9 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   (`shown`) ; « ont répondu » est déduit de la question suivante quand la page ne le comptait pas ; les
   questions à branches (intitulé qui change selon Q1, même identifiant mesuré) sont réunies en une ligne.
   Lecture unique : arrivés → ont répondu → partis ici (= arrivés ici − arrivés à la suivante) → quiz rempli
-  → leads ; les leads des vues quiz ne comptent que ceux entrés depuis le début de la mesure affichée.
+  → leads (ce dernier compte limité à la période mesurée) ; les RÉSULTATS (leads, closes, signé) couvrent
+  toujours toute la période choisie — ne jamais retirer un lead parce qu'il précède la mesure. Choix multiples
+  découpés par option, réponses groupées par version de question, détail par variante (A / D).
   Depuis le 07/11/2026 : `quiz_funnel_daily` a un document par **version publiée** de la page
   (`…--{variante}@{html.version}`) — l'onglet montre par défaut la dernière publication, jamais
   deux versions mélangées ; « Tous les quiz » ne fusionne jamais deux tunnels (Élite ≠
