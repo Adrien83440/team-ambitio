@@ -958,12 +958,23 @@
       p.gate.shown += num(g.shown); p.gate['continue'] += num(g['continue']); p.gate.exit += num(g.exit);
       p.gate.repris += num(g.repris); p.gate.stop += num(g.stop);
       var qs = d.questions || {};
+      /* « Ont répondu » déduit de la question suivante (08/11/2026) : arriver
+         à la question i+1 suppose d'avoir répondu à la i. Les anciennes
+         versions de la page ne comptaient pas les réponses (Q1 surtout) :
+         16 réponses à Q1 pour 24 arrivés à Q2 en « toutes publications ». */
+      var byI = {};
+      Object.keys(qs).forEach(function (qk) { var q = qs[qk] || {}; byI[num(q.i, -1)] = q; });
+      function answeredOf(q) {
+        var a = num(q.answered), nx = byI[num(q.i, -1) + 1];
+        if (nx) a = Math.max(a, Math.min(num(q.reached), num(nx.reached)));
+        return a;
+      }
       Object.keys(qs).forEach(function (qk) {
         var q = qs[qk] || {};
         var x = p.questions[qk];
         if (!x) x = p.questions[qk] = { id: qk, i: num(q.i, 99), label: realLabel(q.label, qk) ? q.label : qk, reached: 0, answered: 0, answers: {} };
         if (realLabel(q.label, qk)) x.label = q.label;
-        x.reached += num(q.reached); x.answered += num(q.answered);
+        x.reached += num(q.reached); x.answered += answeredOf(q);
         var as = q.answers || {};
         Object.keys(as).forEach(function (ak) {
           var a = as[ak] || {};
@@ -977,6 +988,11 @@
       var prev = null;
       var sorted = Object.keys(p.questions).map(function (qk) { return p.questions[qk]; })
         .sort(function (a, b) { return a.i - b.i; });
+      /* COMMENCÉ = a cliqué une réponse à la 1re question (08/11/2026,
+         demande Adrien). Le quiz est sur la page d'arrivée : « a vu Q1 » =
+         a vu la page, ce n'est pas un début de quiz. p.shown garde ce chiffre. */
+      p.shown = p.starts;
+      if (sorted.length && sorted[0].answered > 0) p.starts = sorted[0].answered;
       var base = p.starts || (sorted[0] ? sorted[0].reached : 0);
       p.steps = sorted.map(function (q) {
           q.pctStart = base ? q.reached / base * 100 : null;
@@ -1068,10 +1084,10 @@
   }
 
   function mergeDropoff(pages) {
-    var m = { starts: 0, completes: 0, gate: { shown: 0, 'continue': 0, exit: 0, repris: 0, stop: 0 }, steps: [], has: pages.length > 0 };
+    var m = { starts: 0, shown: 0, completes: 0, gate: { shown: 0, 'continue': 0, exit: 0, repris: 0, stop: 0 }, steps: [], has: pages.length > 0 };
     var qs = {};
     pages.forEach(function (p) {
-      m.starts += p.starts; m.completes += p.completes;
+      m.starts += p.starts; m.shown += p.shown != null ? p.shown : p.starts; m.completes += p.completes;
       m.gate.shown += p.gate.shown; m.gate['continue'] += p.gate['continue']; m.gate.exit += p.gate.exit;
       m.gate.repris += p.gate.repris || 0; m.gate.stop += p.gate.stop || 0;
       Object.keys(p.questions || {}).forEach(function (qk) {
@@ -1100,21 +1116,33 @@
        quiz pour la dernière). Ventilés : partis sans répondre (vue, pas de
        réponse) / partis après avoir répondu. Une question conditionnelle
        (sautée par une partie des visiteurs) n'a pas de départ calculable. */
-    var base = m.starts || (list[0] ? list[0].reached : 0), prev = null;
+    /* Base = ceux qui ont CLIQUÉ une réponse à la 1re question. Sur la 1re
+       question, ceux qui l'ont vue sans cliquer « n'ont pas commencé »
+       (notStarted) : ce n'est pas un départ du quiz. */
+    var base = m.starts || (list[0] ? list[0].answered : 0), prev = null;
     list.forEach(function (q, k) {
+      q.first = k === 0;
       q.pctStart = base ? q.reached / base * 100 : null;
-      q.left = null; q.leftPct = null; q.leftNoAnswer = null; q.leftAfterAnswer = null;
-      if (q.conditional) { q.seenPct = prev ? q.reached / prev * 100 : null; return; }
+      q.left = null; q.leftPct = null; q.leftNoAnswer = null; q.leftAfterAnswer = null; q.notStarted = null;
+      if (q.conditional && !q.first) { q.seenPct = prev ? q.reached / prev * 100 : null; return; }
       var next = null;
       for (var j = k + 1; j < list.length; j++) if (!list[j].conditional) { next = list[j].reached; break; }
       if (next == null) next = m.completes;
+      if (q.first) {
+        q.notStarted = Math.max(0, q.reached - q.answered);
+        q.left = Math.max(0, q.answered - next);
+        q.leftPct = q.answered ? q.left / q.answered * 100 : null;
+        q.leftNoAnswer = 0; q.leftAfterAnswer = q.left;
+        prev = q.answered;
+        return;
+      }
       q.left = Math.max(0, q.reached - next);
       q.leftPct = q.reached ? q.left / q.reached * 100 : null;
       q.leftNoAnswer = Math.min(q.left, Math.max(0, q.reached - q.answered));
       q.leftAfterAnswer = Math.max(0, q.left - q.leftNoAnswer);
       prev = q.reached;
     });
-    if (!m.starts && list.length) m.starts = list[0].reached;
+    if (!m.starts && list.length) m.starts = list[0].answered;
     m.lastReached = prev;
     m.completeRate = m.starts ? m.completes / m.starts * 100 : null;
     m.steps = list;
@@ -1327,10 +1355,11 @@
         if (a.o !== 'quiz') return;
         var ck = canon[a.q] || a.q;
         if (ck !== a.q) a = { q: ck, ql: canon._label[ck], a: a.a, al: a.al, o: a.o, ord: a.ord };
-        var q = lq[a.q] || (lq[a.q] = { q: a.q, label: a.ql, ord: a.ord, answers: {}, agg: newAgg() });
+        var q = lq[a.q] || (lq[a.q] = { q: a.q, label: a.ql, ord: a.ord, answers: {}, agg: newAgg(), ids: {}, rows: [] });
         if (a.ord < q.ord) q.ord = a.ord;
-        var x = q.answers[a.a] || (q.answers[a.a] = { a: a.a, label: a.al, agg: newAgg() });
-        addLeadRow(x.agg, r); addLeadRow(q.agg, r);
+        var x = q.answers[a.a] || (q.answers[a.a] = { a: a.a, q: a.q, ql: a.ql, label: a.al, agg: newAgg(), rows: [] });
+        addLeadRow(x.agg, r); x.rows.push(r);
+        if (!q.ids[r.id]) { q.ids[r.id] = 1; q.rows.push(r); addLeadRow(q.agg, r); }
       });
     });
 
@@ -1402,6 +1431,45 @@
       }
       cards.push({ step: null, lq: lq[k], q: k, label: lq[k].label, diag: !!DIAG_Q[k], pos: pos });
     });
+    /* Questions à BRANCHES (08/11/2026) : la 2e question change d'intitulé
+       selon la réponse à Q1 (« déjà tenté pour sortir de l'opérationnel /
+       relancer votre CA / … ») mais la page la mesure sous UN identifiant.
+       Une question de contacts sans mesure rejoint la question mesurée dont
+       l'intitulé commence par les mêmes mots (4 au moins) si aucun contact
+       n'a répondu aux deux : une seule ligne, réponses de toutes les branches. */
+    function lead(t) { return keyOf(t).split('_').filter(Boolean); }
+    function sameStart(a, b) {
+      var A = lead(a), B = lead(b), n = 0;
+      while (n < A.length && n < B.length && A[n] === B[n]) n++;
+      return n >= 4;
+    }
+    function disjoint(q1, q2) { return !q2.rows.some(function (r) { return q1.ids[r.id]; }); }
+    function mergeInto(dst, src) {
+      src.rows.forEach(function (r) { if (!dst.ids[r.id]) { dst.ids[r.id] = 1; dst.rows.push(r); addLeadRow(dst.agg, r); } });
+      Object.keys(src.answers).forEach(function (ak) {
+        var y = src.answers[ak], key = keyOf(y.label);
+        var x = null;
+        Object.keys(dst.answers).forEach(function (dk) { if (keyOf(dst.answers[dk].label) === key) x = dst.answers[dk]; });
+        if (!x) { dst.answers[src.q + '§' + ak] = y; return; }
+        y.rows.forEach(function (r) { addLeadRow(x.agg, r); x.rows.push(r); });
+      });
+    }
+    var measured = cards.filter(function (c) { return c.step && !c.diag; });
+    cards = cards.filter(function (c) {
+      if (c.step || c.diag || !c.lq) return true;
+      var host = null;
+      measured.forEach(function (m) {
+        if (host) return;
+        if (!sameStart(m.label, c.lq.label) && !(m.lq && sameStart(m.lq.label, c.lq.label))) return;
+        if (m.lq && !disjoint(m.lq, c.lq)) return;
+        host = m;
+      });
+      if (!host) return true;
+      if (!host.lq) { host.lq = c.lq; host.q = c.q; }
+      else mergeInto(host.lq, c.lq);
+      host.branches = (host.branches || 1) + 1;
+      return false;
+    });
     cards.sort(function (a, b) { return a.pos - b.pos; });
     /* Résultat du diagnostic toujours à la fin */
     cards.sort(function (a, b) { return (a.diag ? 1 : 0) - (b.diag ? 1 : 0); });
@@ -1419,7 +1487,7 @@
         var x = c.lq.answers[ak];
         var key = keyOf(x.label);
         var o = m[key] || (m[key] = { key: key, label: x.label, visitors: null, agg: null });
-        o.agg = fin(x.agg); o.a = ak;
+        o.agg = fin(x.agg); o.a = x.a || ak; o.qk = x.q; o.ql = x.ql;
       });
       var answered = c.step ? c.step.answered : 0;
       var list = Object.keys(m).map(function (k2) {
@@ -1427,7 +1495,7 @@
         o.visitorShare = answered && o.visitors != null ? o.visitors / answered * 100 : null;
         o.leadShare = c.lq && o.agg ? o.agg.leads / c.lq.agg.leads * 100 : null;
         if (c.q && o.a) {
-          var rule = ruleFor(grid, { q: c.q, a: o.a, ql: c.lq.label, al: o.label });
+          var rule = ruleFor(grid, { q: o.qk || c.q, a: o.a, ql: o.ql || c.lq.label, al: o.label });
           o.pts = rule.off ? 0 : rule.pts; o.ko = !!rule.ko; o.known = !!rule.known;
         }
         return o;

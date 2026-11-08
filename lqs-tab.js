@@ -518,7 +518,7 @@
     var h = '';
     /* Résumé en une ligne, lisible sans rien connaître de l'outil. */
     if (d.has) {
-      h += '<div class="lq-summary"><strong>' + fNum(d.starts) + '</strong> personnes ont commencé le quiz · <strong>' + fNum(d.completes) + '</strong> l\'ont rempli en entier (' + fPct(d.completeRate, 0) + ') · <strong>' + fNum(Math.max(0, d.starts - d.completes)) + '</strong> sont parties en cours de route · <strong>' + fNum(t.leads) + '</strong> ont laissé leurs coordonnées → <strong>' + fNum(t.closes) + '</strong> client' + (t.closes > 1 ? 's' : '') + (t.closes ? ' (' + offerSplit(t) + ')' : '') + ' · <strong>' + fEur(t.con) + '</strong> signés · ' + fEur(t.cash) + ' encaissés</div>';
+      h += '<div class="lq-summary"><strong>' + fNum(d.shown) + '</strong> visiteurs ont vu la 1re question · <strong>' + fNum(d.starts) + '</strong> ont commencé le quiz (cliqué une réponse, ' + fPct(d.shown ? d.starts / d.shown * 100 : null, 0) + ') · <strong>' + fNum(d.completes) + '</strong> l\'ont rempli en entier (' + fPct(d.completeRate, 0) + ' de ceux qui ont commencé) · <strong>' + fNum(Math.max(0, d.starts - d.completes)) + '</strong> sont parties en cours de route · <strong>' + fNum(t.leads) + '</strong> ont laissé leurs coordonnées → <strong>' + fNum(t.closes) + '</strong> client' + (t.closes > 1 ? 's' : '') + (t.closes ? ' (' + offerSplit(t) + ')' : '') + ' · <strong>' + fEur(t.con) + '</strong> signés · ' + fEur(t.cash) + ' encaissés</div>';
     } else {
       h += '<div class="fn-alert" style="margin:0 0 12px">⏳ <strong>Le suivi question par question est activé, mais aucune visite n\'a encore été mesurée sur cette période.</strong> Dès les prochaines personnes qui font le quiz, tu verras ici combien commencent, combien remplissent tout, et sur quelle question elles partent. Le passé ne peut pas être reconstitué.'
         + (cur && cur.views ? '<br>Déjà connu sur la période : <strong>' + fNum(cur.views) + '</strong> visites de la page quiz → <strong>' + fNum(cur.optins) + '</strong> formulaires envoyés (' + fPct(cur.views ? cur.optins / cur.views * 100 : null, 1) + ').' : '') + '</div>';
@@ -567,11 +567,14 @@
     view.cards.forEach(function (c) {
       if (c.diag) return;
       var st = c.step;
-      h += '<tr' + (c.hot ? ' class="lq-hot"' : '') + '><td>' + c.n + '</td><td class="l">' + esc(c.label) + (c.hot ? ' <span class="fn-tbadge lq-warn">fait le plus partir</span>' : '') + (st && st.conditional ? ' <span class="fn-tbadge lq-tf">conditionnelle</span>' : '') + '</td>';
+      h += '<tr' + (c.hot ? ' class="lq-hot"' : '') + '><td>' + c.n + '</td><td class="l">' + esc(c.label) + (c.hot ? ' <span class="fn-tbadge lq-warn">fait le plus partir</span>' : '') + (c.branches > 1 ? ' <span class="fn-tbadge lq-tq" title="L\'intitulé change selon la réponse à la 1re question : toutes les versions sont réunies">' + c.branches + (st && st.first ? ' intitulés' : ' versions selon Q1') + '</span>' : '') + (st && st.conditional && !st.first ? ' <span class="fn-tbadge lq-tf">conditionnelle</span>' : '') + '</td>';
       if (!st) { h += '<td colspan="5" class="l lq-muted">en attente des premières visites mesurées</td></tr>'; return; }
-      h += '<td data-l="Ont vu la question">' + fNum(st.reached) + sub(fPct(st.pctStart, 0) + ' de ceux qui ont commencé') + '</td><td data-l="Ont répondu">' + fNum(st.answered) + '</td>'
+      h += st.first
+        ? '<td data-l="Ont vu la question">' + fNum(st.reached) + sub('visiteurs de la page') + '</td><td data-l="Ont répondu"><strong>' + fNum(st.answered) + '</strong>' + sub('ont commencé · ' + fNum(st.notStarted) + ' n\'ont pas cliqué') + '</td>'
+        : '<td data-l="Ont vu la question">' + fNum(st.reached) + sub(fPct(st.pctStart, 0) + ' de ceux qui ont commencé') + '</td><td data-l="Ont répondu">' + fNum(st.answered) + '</td>';
+      h += ''
         + (st.left == null ? '<td class="l lq-muted" colspan="3">non calculable : question montrée à une partie des visiteurs seulement</td>'
-          : '<td class="l" data-l="Partis ici">' + bar(max ? st.left / max * 100 : 0, 'lq-n1') + sub('<strong>' + fNum(st.left) + '</strong> ' + plur(st.left, 'personne', 'personnes') + ' · ' + fPct(st.leftPct, 0) + ' de ceux qui l\'ont vue') + '</td><td data-l="… sans répondre">' + fNum(st.leftNoAnswer) + '</td><td data-l="… après avoir répondu">' + fNum(st.leftAfterAnswer) + '</td>')
+          : '<td class="l" data-l="Partis ici">' + bar(max ? st.left / max * 100 : 0, 'lq-n1') + sub('<strong>' + fNum(st.left) + '</strong> ' + plur(st.left, 'personne', 'personnes') + ' · ' + fPct(st.leftPct, 0) + (st.first ? ' de ceux qui ont cliqué' : ' de ceux qui l\'ont vue')) + '</td><td data-l="… sans répondre">' + fNum(st.leftNoAnswer) + '</td><td data-l="… après avoir répondu">' + fNum(st.leftAfterAnswer) + '</td>')
         + '</tr>';
     });
     h += '<tr class="tot"><td>✓</td><td class="l">Ont rempli le quiz en entier</td><td>' + (d.has ? fNum(d.completes) + sub(fPct(d.completeRate, 0) + ' de ceux qui ont commencé') : '—') + '</td><td colspan="4"></td></tr>';
