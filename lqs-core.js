@@ -81,7 +81,10 @@
       if (Array.isArray(val)) val = val.filter(function (x) { return x != null && x !== ''; }).join(', ');
       if (typeof val === 'object') return;
       var v = String(val).replace(/\s+/g, ' ').trim();
-      if (!v || v.length > 140) return;
+      /* 140 car. max pour écarter le texte libre — sauf choix MULTIPLE
+         (« A | B | C »), qui dépasse vite : 4 options cochées ≈ 200 car.
+         (08/11/2026 : la réponse de Valérie Gachet à Q2 était ignorée). */
+      if (!v || v.length > (/ \| /.test(v) ? 1000 : 140)) return;
       var ak = keyOf(v);
       if (!ak) return;
       seenQ[qKey] = 1;
@@ -1380,7 +1383,10 @@
         if (ck !== a.q) a = { q: ck, ql: canon._label[ck], a: a.a, al: a.al, o: a.o, ord: a.ord };
         var q = lq[a.q] || (lq[a.q] = { q: a.q, label: a.ql, ord: a.ord, answers: {}, agg: newAgg(), ids: {}, rows: [] });
         if (a.ord < q.ord) q.ord = a.ord;
-        var x = q.answers[a.a] || (q.answers[a.a] = { a: a.a, q: a.q, ql: a.ql, label: a.al, agg: newAgg(), rows: [] });
+        /* Choix multiple : clé = texte COMPLET (keyOf coupe à 60 car. et
+           fusionnait deux combinaisons qui commencent pareil). */
+        var axk = / \| /.test(a.al || '') ? 'm§' + a.al : a.a;
+        var x = q.answers[axk] || (q.answers[axk] = { a: a.a, q: a.q, ql: a.ql, label: a.al, agg: newAgg(), rows: [] });
         addLeadRow(x.agg, r); x.rows.push(r);
         if (!q.ids[r.id]) { q.ids[r.id] = 1; q.rows.push(r); addLeadRow(q.agg, r); }
       });
@@ -1511,17 +1517,35 @@
       /* Grouper par version seulement si les versions ont des options
          différentes ; mêmes options partout (« Depuis combien de temps… ») →
          une seule liste, sinon « Plus de 3 ans » serait éclaté en 3 lignes. */
-      var brOf = {}, overlap = false, nBr = {};
+      var brOf = {}, shared = {}, nBr = {};
       if (c.lq) Object.keys(c.lq.answers).forEach(function (ak) {
         var x = c.lq.answers[ak], br = x.ql || defBranch;
         nBr[br] = 1;
         partsOf(x.label).forEach(function (pt) {
           var k = keyOf(pt);
-          if (brOf[k] && brOf[k] !== br) overlap = true;
+          if (brOf[k] && brOf[k] !== br) shared[k] = 1;
           brOf[k] = br;
         });
       });
-      var grouped = !overlap && Object.keys(nBr).length > 1;
+      /* une option commune à deux versions (« Rien de concret… ») ne suffit
+         pas à tout fusionner : liste unique seulement si la MAJORITÉ des
+         options est commune */
+      /* Versions aux options VRAIMENT différentes (Q2 : ~16 options, 4-5 par
+         version) → sous-titres ; mêmes options partout (Q3 « Depuis combien
+         de temps » : 4 durées) → une seule liste. Critère : au moins 6
+         options en tout, et au moins 1,8 fois la version la plus fournie. */
+      var perBr = {};
+      if (c.lq) Object.keys(c.lq.answers).forEach(function (ak) {
+        var x = c.lq.answers[ak], br = x.ql || defBranch;
+        perBr[br] = perBr[br] || {};
+        partsOf(x.label).forEach(function (pt) { perBr[br][keyOf(pt)] = 1; });
+      });
+      var union = {};
+      Object.keys(brOf).forEach(function (k) { union[k] = 1; });
+      if (c.step) Object.keys(c.step.answers).forEach(function (ak) { partsOf(c.step.answers[ak].label).forEach(function (pt) { union[keyOf(pt)] = 1; }); });
+      var nUnion = Object.keys(union).length, maxBr = 0;
+      Object.keys(perBr).forEach(function (b) { maxBr = Math.max(maxBr, Object.keys(perBr[b]).length); });
+      var grouped = Object.keys(nBr).length > 1 && nUnion >= 6 && nUnion >= 1.8 * maxBr;
       var OTHER = 'Autres versions de la question (réponses vues seulement chez les visiteurs)';
       var m = {}, order = [];
       function opt(label, branch) {
