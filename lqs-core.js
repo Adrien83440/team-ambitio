@@ -952,6 +952,7 @@
         label: (d.pageLabel || d.page || '?') + (d.variantLabel ? ' · ' + d.variantLabel : (d.variant ? ' · ' + d.variant : '')),
         starts: 0, completes: 0, gate: { shown: 0, 'continue': 0, exit: 0, repris: 0, stop: 0 }, questions: {}, days: 0, n: 0 };
       p.days++;
+      if (d.date && (!p.firstDate || d.date < p.firstDate)) p.firstDate = d.date;
       p.starts += num(d.starts); p.completes += num(d.completes);
       if (d.nQuestions) p.n = Math.max(p.n, num(d.nQuestions));
       var g = d.gate || {};
@@ -1084,10 +1085,12 @@
   }
 
   function mergeDropoff(pages) {
-    var m = { starts: 0, shown: 0, completes: 0, gate: { shown: 0, 'continue': 0, exit: 0, repris: 0, stop: 0 }, steps: [], has: pages.length > 0 };
+    var m = { starts: 0, shown: 0, completes: 0, from: null, gate: { shown: 0, 'continue': 0, exit: 0, repris: 0, stop: 0 }, steps: [], has: pages.length > 0 };
     var qs = {};
     pages.forEach(function (p) {
       m.starts += p.starts; m.shown += p.shown != null ? p.shown : p.starts; m.completes += p.completes;
+      var f0 = measureFrom(p);
+      if (f0 != null && (m.from == null || f0 < m.from)) m.from = f0;
       m.gate.shown += p.gate.shown; m.gate['continue'] += p.gate['continue']; m.gate.exit += p.gate.exit;
       m.gate.repris += p.gate.repris || 0; m.gate.stop += p.gate.stop || 0;
       Object.keys(p.questions || {}).forEach(function (qk) {
@@ -1128,14 +1131,10 @@
       var next = null;
       for (var j = k + 1; j < list.length; j++) if (!list[j].conditional) { next = list[j].reached; break; }
       if (next == null) next = m.completes;
-      if (q.first) {
-        q.notStarted = Math.max(0, q.reached - q.answered);
-        q.left = Math.max(0, q.answered - next);
-        q.leftPct = q.answered ? q.left / q.answered * 100 : null;
-        q.leftNoAnswer = 0; q.leftAfterAnswer = q.left;
-        prev = q.answered;
-        return;
-      }
+      if (q.first) q.notStarted = Math.max(0, q.reached - q.answered);
+      /* PARTIS ICI = arrivés ici − arrivés à la question suivante (08/11/2026,
+         lecture unique demandée par Adrien) ; sur la 1re question ce sont
+         surtout ceux qui n'ont pas cliqué. */
       q.left = Math.max(0, q.reached - next);
       q.leftPct = q.reached ? q.left / q.reached * 100 : null;
       q.leftNoAnswer = Math.min(q.left, Math.max(0, q.reached - q.answered));
@@ -1205,6 +1204,17 @@
     return /quiz/i.test((st.name || '') + ' ' + (t.name || ''));
   }
 
+  /* Début de la mesure affichée pour une page (08/11/2026) : la dernière
+     publication si la bascule est active, sinon le 1er jour mesuré. Les
+     leads entrés AVANT ne sont pas comptés dans les vues quiz : visiteurs et
+     leads d'une même ligne couvrent toujours la même période, et le parcours
+     se lit d'un bout à l'autre (arrivés → ont répondu → … → leads). */
+  function measureFrom(p) {
+    if (!p) return null;
+    if (p.isLatest && p.since) return num(p.since);
+    if (p.firstDate) { var ms = Date.parse(p.firstDate + 'T00:00:00+01:00'); return isFinite(ms) ? ms : null; }
+    return null;
+  }
   function quizContext(rows, pages, meta) {
     var measured = {};
     pages.forEach(function (p) { measured[p.key] = 1; });
@@ -1217,8 +1227,14 @@
     var allQuiz = rows.filter(hasQuizAnswers);
     allQuiz.forEach(function (r) { r._qv = quizVersionOf(r.lead, pagesByPage); });
     var quizRows = allQuiz.filter(function (r) { return onlineQuiz(r._qv, meta, measured); });
+    var before = 0;
+    quizRows = quizRows.filter(function (r) {
+      var from = measureFrom(pageByKey[r._qv]);
+      if (from == null || r.entry == null || r.entry >= from) return true;
+      before++; return false;
+    });
     return { pagesByPage: pagesByPage, pageByKey: pageByKey, quizRows: quizRows, pages: pages, meta: meta,
-      hiddenLeads: allQuiz.length - quizRows.length };
+      hiddenLeads: allQuiz.length - quizRows.length - before, beforeMeasure: before };
   }
 
   /* Cartes : une par version (mesure anonyme et/ou leads), triées par volume. */
@@ -1510,10 +1526,10 @@
       if (best && worst && best !== worst && best.agg.conPerLead > worst.agg.conPerLead) { best.best = true; worst.worst = true; }
     });
     var worstLoss = null;
-    cards.forEach(function (c) { if (c.step && c.step.left != null && (!worstLoss || c.step.left > worstLoss.step.left)) worstLoss = c; });
+    cards.forEach(function (c) { if (c.step && !c.step.first && c.step.left != null && (!worstLoss || c.step.left > worstLoss.step.left)) worstLoss = c; });   // la 1re question = ceux qui n'ont pas cliqué, pas un abandon
     if (worstLoss && worstLoss.step.left > 0) worstLoss.hot = true;
 
-    return { versionKey: versionKey || '', drop: drop, total: tot, cards: cards, leads: vRows.length };
+    return { versionKey: versionKey || '', drop: drop, total: tot, cards: cards, leads: vRows.length, beforeMeasure: C.beforeMeasure };
   }
 
   /* ══ 8. PHRASES CLÉS (lecture en 10 secondes) ══════════════════════════ */

@@ -441,34 +441,34 @@
   function stepHead(c) {
     var st = c.step, bits = [];
     if (st) {
-      bits.push('<strong>' + fNum(st.reached) + '</strong> ' + plur(st.reached, 'visiteur a vu la question', 'visiteurs ont vu la question'));
+      bits.push('<strong>' + fNum(st.reached) + '</strong> ' + plur(st.reached, 'arrivé', 'arrivés'));
       bits.push('<strong>' + fNum(st.answered) + '</strong> ' + plur(st.answered, 'a répondu', 'ont répondu'));
-      if (st.conditional) bits.push('<span class="lq-muted">question montrée à ' + fPct(st.seenPct, 0) + ' des visiteurs seulement</span>');
+      if (st.conditional && !st.first) bits.push('<span class="lq-muted">question montrée à ' + fPct(st.seenPct, 0) + ' des visiteurs seulement</span>');
       else if (st.left != null) bits.push('<span class="' + (st.left > 0 ? 'lq-down' : 'lq-muted') + '">🚪 <strong>' + fNum(st.left) + '</strong> ' + plur(st.left, 'est parti ici', 'sont partis ici') + ' (' + fPct(st.leftPct, 0) + ')</span>');
     } else if (!c.diag) bits.push('<span class="lq-muted">visiteurs : en attente des premières mesures</span>');
-    if (c.lq) bits.push('<strong>' + fNum(c.lq.agg.leads) + '</strong> ' + plur(c.lq.agg.leads, 'contact a répondu', 'contacts ont répondu'));
+    if (c.lq) bits.push('<strong>' + fNum(c.lq.agg.leads) + '</strong> ' + plur(c.lq.agg.leads, 'est devenu lead', 'sont devenus leads'));
     var badges = '';
     if (c.diag) badges += ' <span class="fn-tbadge lq-tf">résultat calculé par le quiz</span>';
-    if (st && st.conditional) badges += ' <span class="fn-tbadge lq-tf">question conditionnelle</span>';
+    if (st && st.conditional && !st.first) badges += ' <span class="fn-tbadge lq-tf">question conditionnelle</span>';
     if (c.hot) badges += ' <span class="fn-tbadge lq-warn">question qui fait le plus partir</span>';
     return '<div class="lq-step-head"><span class="lq-step-n">' + (c.diag ? '★' : c.n) + '</span><span class="lq-step-t">' + esc(c.label) + badges + '</span><span class="lq-step-m">' + bits.join(' · ') + '</span></div>';
   }
   function answerHead() {
-    return '<div class="lq-arow lq-ahead"><span>Réponse</span><span>Choisie par (visiteurs)</span><span>Ce que ça donne chez les contacts</span><span class="lq-ap">Points</span></div>';
+    return '<div class="lq-arow lq-ahead"><span>Réponse</span><span>Choisie par (visiteurs)</span><span>Devenus leads → résultats</span><span class="lq-ap">Points</span></div>';
   }
   function answerLine(o) {
     var a = o.agg;
     var tag = o.best ? ' <span class="fn-tbadge lq-good">rapporte le plus</span>' : (o.worst ? ' <span class="fn-tbadge lq-warn">rapporte le moins</span>' : '');
     var res;
-    if (!a) res = '<span class="lq-muted">aucun contact avec cette réponse</span>';
+    if (!a) res = '<span class="lq-muted">aucun lead avec cette réponse</span>';
     else {
-      res = '<strong>' + fNum(a.leads) + '</strong> contact' + (a.leads > 1 ? 's' : '') + ' → <strong>' + fNum(a.closes) + '</strong> client' + (a.closes > 1 ? 's' : '');
+      res = '<strong>' + fNum(a.leads) + '</strong> lead' + (a.leads > 1 ? 's' : '') + ' → <strong>' + fNum(a.closes) + '</strong> client' + (a.closes > 1 ? 's' : '');
       if (a.closes) res += ' (' + offerSplit(a) + ')';
       res += ' · <strong>' + fEur(a.con) + '</strong> signés · ' + fEur(a.cash) + ' encaissés';
     }
     return '<div class="lq-arow"><span class="lq-al">' + esc(o.label) + tag + '</span>'
       + '<span class="lq-av" data-l="Choisie par">' + (o.visitors != null ? bar(o.visitorShare, 'lq-blue') + '<span class="lq-mono">' + fNum(o.visitors) + ' · ' + fPct(o.visitorShare, 0) + '</span>' : '<span class="lq-muted">en attente</span>') + '</span>'
-      + '<span class="lq-ax" data-l="Chez les contacts">' + res + '</span>'
+      + '<span class="lq-ax" data-l="Devenus leads">' + res + '</span>'
       + '<span class="lq-ap" data-l="Points">' + (o.pts != null || o.ko ? ptsChip(o) : '') + '</span></div>';
   }
   function detailTable(c) {
@@ -518,7 +518,8 @@
     var h = '';
     /* Résumé en une ligne, lisible sans rien connaître de l'outil. */
     if (d.has) {
-      h += '<div class="lq-summary"><strong>' + fNum(d.shown) + '</strong> visiteurs ont vu la 1re question · <strong>' + fNum(d.starts) + '</strong> ont commencé le quiz (cliqué une réponse, ' + fPct(d.shown ? d.starts / d.shown * 100 : null, 0) + ') · <strong>' + fNum(d.completes) + '</strong> l\'ont rempli en entier (' + fPct(d.completeRate, 0) + ' de ceux qui ont commencé) · <strong>' + fNum(Math.max(0, d.starts - d.completes)) + '</strong> sont parties en cours de route · <strong>' + fNum(t.leads) + '</strong> ont laissé leurs coordonnées → <strong>' + fNum(t.closes) + '</strong> client' + (t.closes > 1 ? 's' : '') + (t.closes ? ' (' + offerSplit(t) + ')' : '') + ' · <strong>' + fEur(t.con) + '</strong> signés · ' + fEur(t.cash) + ' encaissés</div>';
+      h += '<div class="lq-summary"><strong>' + fNum(d.shown) + '</strong> visiteurs sont arrivés sur la page → <strong>' + fNum(d.starts) + '</strong> ont répondu à la 1re question → <strong>' + fNum(d.completes) + '</strong> ont rempli le quiz en entier → <strong>' + fNum(t.leads) + '</strong> sont devenus leads → <strong>' + fNum(t.closes) + '</strong> client' + (t.closes > 1 ? 's' : '') + (t.closes ? ' (' + offerSplit(t) + ')' : '') + ' · <strong>' + fEur(t.con) + '</strong> signés · ' + fEur(t.cash) + ' encaissés'
+        + (d.from ? '<div class="lq-sub">Tout est compté depuis le ' + fDay(d.from) + ' (début de la mesure affichée)' + (view.beforeMeasure ? ' : ' + fNum(view.beforeMeasure) + ' lead' + (view.beforeMeasure > 1 ? 's entrés' : ' entré') + ' avant ne ' + (view.beforeMeasure > 1 ? 'sont' : 'est') + ' pas compté' + (view.beforeMeasure > 1 ? 's' : '') + ' ici' : '') + '.</div>' : '') + '</div>';
     } else {
       h += '<div class="fn-alert" style="margin:0 0 12px">⏳ <strong>Le suivi question par question est activé, mais aucune visite n\'a encore été mesurée sur cette période.</strong> Dès les prochaines personnes qui font le quiz, tu verras ici combien commencent, combien remplissent tout, et sur quelle question elles partent. Le passé ne peut pas être reconstitué.'
         + (cur && cur.views ? '<br>Déjà connu sur la période : <strong>' + fNum(cur.views) + '</strong> visites de la page quiz → <strong>' + fNum(cur.optins) + '</strong> formulaires envoyés (' + fPct(cur.views ? cur.optins / cur.views * 100 : null, 1) + ').' : '') + '</div>';
@@ -559,27 +560,34 @@
      question — combien l'ont vue, combien y ont répondu, combien sont
      partis dessus — puis combien ont tout rempli. */
   function exitMap(view) {
-    var d = view.drop;
+    var d = view.drop, t = view.total;
+    var first = null;
+    view.cards.forEach(function (c) { if (!first && c.step) first = c.step; });
+    var top = first ? first.reached : 0;
     var max = 0;
-    view.cards.forEach(function (c) { if (c.step && c.step.left > max) max = c.step.left; });
-    var h = '<div class="lq-exit"><div class="lq-exit-t">🚪 À quel moment les gens quittent le quiz</div>'
-      + '<div class="fn-table-wrap"><table class="fn-igt lq-t lq-stack"><thead><tr><th>#</th><th class="l">Question</th><th>Ont vu la question</th><th>Ont répondu</th><th class="l" style="min-width:190px">Sont partis sur cette question</th><th title="Ont vu la question et sont partis sans répondre">… sans répondre</th><th title="Ont répondu, puis ne sont jamais arrivés à la question suivante">… après avoir répondu</th></tr></thead><tbody>';
+    view.cards.forEach(function (c) { if (c.step && c.step.left > max && !c.step.first) max = c.step.left; });
+    /* Lecture unique (08/11/2026) : arrivés → ont répondu → partis ici.
+       Partis ici = arrivés ici − arrivés à la question suivante. */
+    var h = '<div class="lq-exit"><div class="lq-exit-t">🚪 Le parcours, question par question</div>'
+      + '<div class="fn-table-wrap"><table class="fn-igt lq-t lq-stack"><thead><tr><th>#</th><th class="l">Question</th>'
+      + '<th title="Personnes arrivées sur cette question">Arrivés</th><th title="Ont cliqué une réponse">Ont répondu</th>'
+      + '<th class="l" style="min-width:190px" title="Arrivés ici moins arrivés à la question suivante">Partis ici</th>'
+      + '<th title="Part des visiteurs de la page encore là">Encore là</th></tr></thead><tbody>';
     view.cards.forEach(function (c) {
       if (c.diag) return;
       var st = c.step;
-      h += '<tr' + (c.hot ? ' class="lq-hot"' : '') + '><td>' + c.n + '</td><td class="l">' + esc(c.label) + (c.hot ? ' <span class="fn-tbadge lq-warn">fait le plus partir</span>' : '') + (c.branches > 1 ? ' <span class="fn-tbadge lq-tq" title="L\'intitulé change selon la réponse à la 1re question : toutes les versions sont réunies">' + c.branches + (st && st.first ? ' intitulés' : ' versions selon Q1') + '</span>' : '') + (st && st.conditional && !st.first ? ' <span class="fn-tbadge lq-tf">conditionnelle</span>' : '') + '</td>';
-      if (!st) { h += '<td colspan="5" class="l lq-muted">en attente des premières visites mesurées</td></tr>'; return; }
-      h += st.first
-        ? '<td data-l="Ont vu la question">' + fNum(st.reached) + sub('visiteurs de la page') + '</td><td data-l="Ont répondu"><strong>' + fNum(st.answered) + '</strong>' + sub('ont commencé · ' + fNum(st.notStarted) + ' n\'ont pas cliqué') + '</td>'
-        : '<td data-l="Ont vu la question">' + fNum(st.reached) + sub(fPct(st.pctStart, 0) + ' de ceux qui ont commencé') + '</td><td data-l="Ont répondu">' + fNum(st.answered) + '</td>';
-      h += ''
-        + (st.left == null ? '<td class="l lq-muted" colspan="3">non calculable : question montrée à une partie des visiteurs seulement</td>'
-          : '<td class="l" data-l="Partis ici">' + bar(max ? st.left / max * 100 : 0, 'lq-n1') + sub('<strong>' + fNum(st.left) + '</strong> ' + plur(st.left, 'personne', 'personnes') + ' · ' + fPct(st.leftPct, 0) + (st.first ? ' de ceux qui ont cliqué' : ' de ceux qui l\'ont vue')) + '</td><td data-l="… sans répondre">' + fNum(st.leftNoAnswer) + '</td><td data-l="… après avoir répondu">' + fNum(st.leftAfterAnswer) + '</td>')
-        + '</tr>';
+      h += '<tr' + (c.hot ? ' class="lq-hot"' : '') + '><td>' + c.n + '</td><td class="l">' + esc(c.label) + (c.hot ? ' <span class="fn-tbadge lq-warn">fait le plus partir</span>' : '') + (c.branches > 1 ? ' <span class="fn-tbadge lq-tq" title="L\'intitulé change selon la réponse à la 1re question : toutes les versions sont réunies">' + c.branches + (st && st.first ? ' intitulés' : ' versions selon Q1') + '</span>' : '') + '</td>';
+      if (!st) { h += '<td colspan="4" class="l lq-muted">pas encore mesurée</td></tr>'; return; }
+      h += '<td data-l="Arrivés"><strong>' + fNum(st.reached) + '</strong></td><td data-l="Ont répondu">' + fNum(st.answered) + '</td>';
+      if (st.left == null) h += '<td class="l lq-muted" data-l="Partis ici">montrée à une partie des visiteurs seulement</td>';
+      else h += '<td class="l" data-l="Partis ici">' + bar(st.first ? 0 : (max ? st.left / max * 100 : 0), 'lq-n1') + sub('<strong>' + fNum(st.left) + '</strong> · ' + fPct(st.leftPct, 0) + ' des arrivés' + (st.first ? ' (n\'ont pas cliqué, pour la plupart)' : '')) + '</td>';
+      h += '<td data-l="Encore là">' + fPct(top ? st.reached / top * 100 : null, st.reached / (top || 1) < 0.1 ? 1 : 0) + '</td></tr>';
     });
-    h += '<tr class="tot"><td>✓</td><td class="l">Ont rempli le quiz en entier</td><td>' + (d.has ? fNum(d.completes) + sub(fPct(d.completeRate, 0) + ' de ceux qui ont commencé') : '—') + '</td><td colspan="4"></td></tr>';
+    if (d.has) h += '<tr class="tot"><td>✓</td><td class="l">Ont rempli le quiz en entier</td><td><strong>' + fNum(d.completes) + '</strong></td><td></td><td></td><td>' + fPct(top ? d.completes / top * 100 : null, 1) + '</td></tr>';
+    h += '<tr class="tot"><td>👤</td><td class="l">Sont devenus leads (coordonnées envoyées)</td><td><strong>' + fNum(t.leads) + '</strong></td><td></td><td></td><td>' + fPct(top ? t.leads / top * 100 : null, 1) + '</td></tr>';
     return h + '</tbody></table></div></div>';
   }
+
 
   function gateBlock(g) {
     return '<div class="lq-step gate"><div class="lq-step-head"><span class="lq-step-n">€</span><span class="lq-step-t">Écran prix (CA mensuel ≤ 20 000 €)</span><span class="lq-step-m">vu par <strong>' + fNum(g.shown) + '</strong> visiteurs · '
