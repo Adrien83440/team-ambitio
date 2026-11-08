@@ -348,7 +348,10 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   réponses (`leads.quiz`, `formAnswers`) avec le barème `_config/lqs_grid` (points par réponse,
   réponses éliminatoires, seuils) ; calculée à l'affichage, **jamais écrite sur les leads**.
   **MQS** = note d'une campagne / adset / créa / canal = 60 % LQS moyen + 40 % cash par lead vs
-  moyenne. Abandon question par question du quiz : `ALTEO.quiz()` (`tunnel-runtime.js`) →
+  moyenne. Montants (08/11/2026) : partout **signé** (contrat HT du close, `con`) ET **encaissé**
+  (prélèvements passés, `cash`) ; le signé sert aux parts, « / lead », MQS, ROAS et suggestions du barème.
+  Un paiement rattaché à une fiche (`leadId`) ne compte plus sur ses doublons même email / téléphone.
+  Abandon question par question du quiz : `ALTEO.quiz()` (`tunnel-runtime.js`) →
   `api/tunnel-event.js` (événement `quiz`) → `quiz_funnel_daily`. La MESURE est ajoutée à la
   volée par `api/tunnel-render.js` (module partagé `api/_quizTracking.js`, aucune écriture
   Storage) ; l'écran prix « CA mensuel ≤ 20 k€ → investissement > 6 000 € » n'existe que si la

@@ -394,7 +394,7 @@
   function newAgg() {
     return { leads: 0, noted: 0, noteSum: 0, n45: 0, n12: 0, dist: [0, 0, 0, 0, 0, 0],
       booked: 0, present: 0, noshow: 0, cancelled: 0, pitched: 0, closes: 0, cash: 0, con: 0,
-      closesE: 0, closesB: 0, closesU: 0, cashE: 0, cashB: 0, cashU: 0,
+      closesE: 0, closesB: 0, closesU: 0, cashE: 0, cashB: 0, cashU: 0, conE: 0, conB: 0, conU: 0,
       teamN: 0, teamSum: 0, rdv: 0 };
   }
   function addNote(a, note) {
@@ -413,15 +413,16 @@
     if (r.pitched) a.pitched++;
     if (r.closed) {
       a.closes++; a.cash += r.cash; a.con += r.con;
-      if (r.offer === 'elite') { a.closesE++; a.cashE += r.cash; }
-      else if (r.offer === 'business') { a.closesB++; a.cashB += r.cash; }
-      else { a.closesU++; a.cashU += r.cash; }
+      if (r.offer === 'elite') { a.closesE++; a.cashE += r.cash; a.conE += r.con; }
+      else if (r.offer === 'business') { a.closesB++; a.cashB += r.cash; a.conB += r.con; }
+      else { a.closesU++; a.cashU += r.cash; a.conU += r.con; }
     }
     if (r.team != null) { a.teamN++; a.teamSum += r.team; }
   }
   function fin(a) {
     a.cash = r2(a.cash); a.con = r2(a.con);
     a.cashE = r2(a.cashE); a.cashB = r2(a.cashB); a.cashU = r2(a.cashU);
+    a.conE = r2(a.conE); a.conB = r2(a.conB); a.conU = r2(a.conU);
     a.avgNote = a.noted ? r2(a.noteSum / a.noted) : null;
     a.pct45 = a.noted ? a.n45 / a.noted * 100 : null;
     a.pct12 = a.noted ? a.n12 / a.noted * 100 : null;
@@ -432,6 +433,12 @@
     a.closeLead = ratio(a.closes, a.leads); if (a.closeLead != null) a.closeLead *= 100;
     a.cashPerLead = a.leads ? a.cash / a.leads : null;
     a.cashPerClient = a.closes ? a.cash / a.closes : null;
+    /* SIGNÉ (08/11/2026, validé Adrien) : montant HT du contrat (paiements
+       non annulés, sinon carte du close). C'est lui qui juge la valeur d'un
+       lead (MQS, suggestions, « / lead ») : l'encaissé arrive avec le préavis
+       SEPA et s'étale sur 12 mensualités. L'encaissé reste affiché à côté. */
+    a.conPerLead = a.leads ? a.con / a.leads : null;
+    a.conPerClient = a.closes ? a.con / a.closes : null;
     a.teamAvg = a.teamN ? r2(a.teamSum / a.teamN) : null;
     return a;
   }
@@ -554,7 +561,7 @@
         answers: l._answers || [], entry: entry, reopt: !!l._reopt,
         booked: heads.length > 0, present: false, noshow: false, pitched: false, closeOc: false,
         allCancelled: heads.length > 0, upcoming: false, closed: false, closeCancelled: false,
-        cash: 0, con: 0, offer: null, closer: null, rdvDate: null,
+        cash: 0, con: 0, closeDay: null, offer: null, closer: null, rdvDate: null,
         team: (l.leadScore >= 1 && l.leadScore <= 5) ? Number(l.leadScore) : null };
       var pick = null;
       heads.forEach(function (h) {
@@ -571,12 +578,24 @@
       if (pick) { r.closer = closerOf(pick); r.rdvDate = pick.date || null; }
       var csMs = FC.parseFlexMs(l.clientSince);
       var pays = FC.revPaymentsFor(payIdx, l._id, String(l.email || '').toLowerCase().trim(), l.telephone || l.phone);
+      /* 08/11/2026 : un paiement rattaché à UNE fiche (leadId) n'est plus
+         compté aussi sur les doublons qui partagent son email / téléphone
+         (Valérie Gachet : close compté deux fois, la 2e fiche « sans offre »).
+         Repli par email / téléphone seulement si la fiche du paiement n'est
+         pas chargée ou est fusionnée. */
+      pays = pays.filter(function (p) {
+        if (!p.leadId || p.leadId === l._id) return true;
+        var owner = allLeads[p.leadId];
+        return !owner || !!owner._merged;
+      });
       var won = r.closeOc || (csMs != null && csMs >= floor) || pays.length > 0;
       if (won) {
         var rv = FC.revClient(pays, l, declFor(l));
         if (rv.cancelled) { r.closeCancelled = true; }
         else {
           r.closed = true; r.cash = rv.paid; r.con = rv.con;
+          (bkByLead[l._id] || []).forEach(function (b) { if (b.outcome === 'close' && b.date && (!r.closeDay || b.date > r.closeDay)) r.closeDay = b.date; });
+          if (!r.closeDay && csMs != null) r.closeDay = FC.isoDate(new Date(csMs));
           var cdo = null;
           (bkByLead[l._id] || []).forEach(function (b) { if (b.outcome === 'close' && b.closeData && offerOf(b.closeData)) cdo = b.closeData; });
           r.offer = offerOf(cdo) || offerOf(l.closedData);
@@ -636,6 +655,7 @@
         cancelled: ocCancelled(b), noshow: ocNoShow(b), present: ocPresent(b), pitched: ocPitched(b),
         close: isClose && !(lr && lr.closeCancelled),
         cash: isClose && lr && lr.closed ? lr.cash : 0,
+        con: isClose && lr && lr.closed ? lr.con : 0,
         upcoming: !ocOf(b) && (b.status === 'confirmed' || b.status === 'pending') && b.date >= todayIso,
         name: (l && (l.nom || l.email)) || (b.prospect && (b.prospect.nom || b.prospect.email)) || '—',
         leadId: l ? l._id : null
@@ -658,11 +678,28 @@
         name: (l && (l.nom || l.email)) || p.leadName || p.leadEmail || '—' });
     });
 
+    /* ── SIGNÉ dans la période : closes datés dans la période (RDV de close,
+       sinon date client), quel que soit le mois d'entrée du lead ── */
+    var pSd = FC.isoDate(P.start), pEd = FC.isoDate(P.end);
+    var periodSigned = [], signedSeen = {};
+    function notePeriodClose(l) {
+      if (!l || signedSeen[l._id] || !leadPasses(l)) return;
+      var lr = rowOfLead(l);
+      if (!lr.closed || !lr.closeDay || lr.closeDay < pSd || lr.closeDay > pEd) return;
+      signedSeen[l._id] = 1;
+      periodSigned.push({ lead: l, leadRow: lr, con: lr.con, cash: lr.cash, note: lr.note, offer: lr.offer, day: lr.closeDay });
+    }
+    funnelBookings.forEach(function (b) { if (b.outcome === 'close' && b.date >= pSd && b.date <= pEd) notePeriodClose(b._lead); });
+    Object.keys(allLeads).forEach(function (id) {
+      var l = allLeads[id], cs = FC.parseFlexMs(l.clientSince);
+      if (cs != null && cs >= pS && cs <= pE) notePeriodClose(l);
+    });
+
     var closers = Object.keys(closerSet).sort(function (a, b) { return memberName(a).localeCompare(memberName(b)); })
       .map(function (s) { return { slug: s, name: memberName(s) }; });
 
     return {
-      rows: rows, rdvRows: rdvRows, periodPays: periodPays, closers: closers,
+      rows: rows, rdvRows: rdvRows, periodPays: periodPays, periodSigned: periodSigned, closers: closers,
       quiz: buildQuizFunnel(D.quizDocs || []), quizErr: D.quizErr || null,
       adsByAd: D.adsByAd || [], creIdx: CRE_IDX, views: D.views || [],
       tunnels: D.tunnelsErr ? null : (D.tunnels || null),
@@ -673,10 +710,14 @@
   /* ══ 6. AGRÉGATS ═══════════════════════════════════════════════════════ */
   var NOTE_KEYS = [5, 4, 3, 2, 1, 0];   // 0 = non noté
 
-  function byNote(rows, periodPays) {
+  function byNote(rows, periodPays, periodSigned) {
     var m = {};
-    NOTE_KEYS.forEach(function (k) { m[k] = newAgg(); m[k].note = k; m[k].payers = 0; m[k].periodCash = 0; });
-    var tot = newAgg(); tot.payers = 0; tot.periodCash = 0;
+    NOTE_KEYS.forEach(function (k) { m[k] = newAgg(); m[k].note = k; m[k].payers = 0; m[k].periodCash = 0; m[k].periodCon = 0; m[k].signers = 0; });
+    var tot = newAgg(); tot.payers = 0; tot.periodCash = 0; tot.periodCon = 0; tot.signers = 0;
+    (periodSigned || []).forEach(function (ps) {
+      var k = ps.note == null ? 0 : ps.note;
+      m[k].periodCon += ps.con; tot.periodCon += ps.con; m[k].signers++; tot.signers++;
+    });
     rows.forEach(function (r) { addLeadRow(m[r.note == null ? 0 : r.note], r); addLeadRow(tot, r); });
     if (periodPays) {
       var seen = {};
@@ -687,8 +728,8 @@
         if (!seen[id]) { seen[id] = 1; m[k].payers++; tot.payers++; }
       });
     }
-    NOTE_KEYS.forEach(function (k) { fin(m[k]); m[k].periodCash = r2(m[k].periodCash); });
-    fin(tot); tot.periodCash = r2(tot.periodCash);
+    NOTE_KEYS.forEach(function (k) { fin(m[k]); m[k].periodCash = r2(m[k].periodCash); m[k].periodCon = r2(m[k].periodCon); });
+    fin(tot); tot.periodCash = r2(tot.periodCash); tot.periodCon = r2(tot.periodCon);
     return { byNote: m, total: tot };
   }
 
@@ -733,7 +774,7 @@
   }
 
   /* Suggestion de points à partir des résultats réels d'une réponse :
-     valeur par lead rapportée à la moyenne — cash encaissé si la période
+     valeur par lead rapportée à la moyenne — montant SIGNÉ si la période
      compte au moins 8 closes, sinon RDV honorés (au moins 10 présents), sinon
      rien —, ramenée vers 1 sur les petits effectifs (10 leads « fictifs » à
      la moyenne), puis log2 × 1,5, arrondie au demi-point, bornée à ±3.
@@ -741,14 +782,14 @@
   var SUGGEST_MIN = 5;
   var SUGGEST_MIN_CLOSES = 8, SUGGEST_MIN_PRESENT = 10, SUGGEST_PRIOR = 10;
   function suggestBasis(tot) {
-    if (tot.closes >= SUGGEST_MIN_CLOSES && tot.cash > 0) return 'cash';
+    if (tot.closes >= SUGGEST_MIN_CLOSES && tot.con > 0) return 'cash';
     if (tot.present >= SUGGEST_MIN_PRESENT) return 'present';
     return null;
   }
   function suggestPoints(a, tot) {
     if (!a || a.leads < SUGGEST_MIN) return null;
     var basis = suggestBasis(tot), v, g;
-    if (basis === 'cash') { v = a.cash / a.leads; g = tot.cash / tot.leads; }
+    if (basis === 'cash') { v = a.con / a.leads; g = tot.con / tot.leads; }
     else if (basis === 'present') { v = a.present / a.leads; g = tot.present / tot.leads; }
     else return null;
     if (!(g > 0)) return null;
@@ -762,7 +803,7 @@
   function mqsOf(a, tot) {
     if (!a || a.noted < MQS_MIN || a.avgNote == null) return null;
     var rr = null;
-    if (tot.cash > 0 && tot.leads > 0) rr = (a.cash / a.leads) / (tot.cash / tot.leads);
+    if (tot.con > 0 && tot.leads > 0) rr = (a.con / a.leads) / (tot.con / tot.leads);
     else if (tot.present > 0 && tot.leads > 0) rr = (a.present / a.leads) / (tot.present / tot.leads);
     var c;
     if (rr == null) c = a.avgNote;
@@ -805,7 +846,7 @@
       fin(x.agg);
       x.cpl = x.hasSpend && x.agg.leads ? x.spend / x.agg.leads : null;
       x.cpl45 = x.hasSpend && x.agg.n45 ? x.spend / x.agg.n45 : null;
-      x.roas = x.hasSpend && x.spend > 0 && x.agg.cash > 0 ? x.agg.cash / x.spend : null;
+      x.roas = x.hasSpend && x.spend > 0 && x.agg.con > 0 ? x.agg.con / x.spend : null;   // ROAS sur le signé
       x.m = mqsOf(x.agg, tot);
       delete x.adIds;
     });
@@ -820,7 +861,7 @@
 
   /* Closers : RDV datés, mois par mois + par note. */
   function newRdvAgg() {
-    return { rdv: 0, cancelled: 0, noshow: 0, present: 0, pitched: 0, closes: 0, cash: 0, upcoming: 0,
+    return { rdv: 0, cancelled: 0, noshow: 0, present: 0, pitched: 0, closes: 0, cash: 0, con: 0, upcoming: 0,
       noted: 0, noteSum: 0, n45: 0, n12: 0, dist: [0, 0, 0, 0, 0, 0] };
   }
   function addRdv(a, x) {
@@ -830,11 +871,11 @@
     if (x.noshow) a.noshow++;
     if (x.present) a.present++;
     if (x.pitched) a.pitched++;
-    if (x.close) { a.closes++; a.cash += x.cash; }
+    if (x.close) { a.closes++; a.cash += x.cash; a.con += x.con || 0; }
     if (x.upcoming) a.upcoming++;
   }
   function finRdv(a) {
-    a.cash = r2(a.cash);
+    a.cash = r2(a.cash); a.con = r2(a.con);
     a.avgNote = a.noted ? r2(a.noteSum / a.noted) : null;
     a.pct45 = a.noted ? a.n45 / a.noted * 100 : null;
     a.kept = a.rdv - a.cancelled;
@@ -1394,11 +1435,11 @@
       c.answers = naturalSort(list, function (o) { return o.label; }, function (o) { return (o.visitors || 0) + (o.agg ? o.agg.leads * 10 : 0); });
       var best = null, worst = null;
       c.answers.forEach(function (o) {
-        if (!o.agg || o.agg.leads < SUGGEST_MIN || o.agg.cashPerLead == null) return;
-        if (!best || o.agg.cashPerLead > best.agg.cashPerLead) best = o;
-        if (!worst || o.agg.cashPerLead < worst.agg.cashPerLead) worst = o;
+        if (!o.agg || o.agg.leads < SUGGEST_MIN || o.agg.conPerLead == null) return;
+        if (!best || o.agg.conPerLead > best.agg.conPerLead) best = o;
+        if (!worst || o.agg.conPerLead < worst.agg.conPerLead) worst = o;
       });
-      if (best && worst && best !== worst && best.agg.cashPerLead > worst.agg.cashPerLead) { best.best = true; worst.worst = true; }
+      if (best && worst && best !== worst && best.agg.conPerLead > worst.agg.conPerLead) { best.best = true; worst.worst = true; }
     });
     var worstLoss = null;
     cards.forEach(function (c) { if (c.step && c.step.left != null && (!worstLoss || c.step.left > worstLoss.step.left)) worstLoss = c; });
@@ -1408,18 +1449,25 @@
   }
 
   /* ══ 8. PHRASES CLÉS (lecture en 10 secondes) ══════════════════════════ */
+  /* Parts calculées sur le SIGNÉ (cash), encaissé à côté (paid). */
   function insights(bn, cashMode) {
     var out = [];
     var m = bn.byNote, t = bn.total;
-    var cashOf = function (a) { return cashMode === 'periode' ? a.periodCash : a.cash; };
-    var totCash = cashOf(t);
-    var hi = { leads: m[5].leads + m[4].leads, cash: cashOf(m[5]) + cashOf(m[4]) };
-    var lo = { leads: m[1].leads, cash: cashOf(m[1]) };
-    var mid = { leads: m[3].leads + m[4].leads, cash: cashOf(m[3]) + cashOf(m[4]) };
+    var per = cashMode === 'periode';
+    var sigOf = function (a) { return per ? a.periodCon : a.con; };
+    var paidOf = function (a) { return per ? a.periodCash : a.cash; };
+    var totSig = sigOf(t);
+    function grp(keys) {
+      var g = { leads: 0, cash: 0, paid: 0 };
+      keys.forEach(function (k) { g.leads += m[k].leads; g.cash += sigOf(m[k]); g.paid += paidOf(m[k]); });
+      g.cashPct = totSig > 0 ? g.cash / totSig * 100 : null;
+      return g;
+    }
     if (t.noted) {
-      out.push({ k: 'hi', leads: hi.leads, leadsPct: hi.leads / t.leads * 100, cash: hi.cash, cashPct: totCash > 0 ? hi.cash / totCash * 100 : null });
-      out.push({ k: 'mid', leads: mid.leads, cash: mid.cash, cashPct: totCash > 0 ? mid.cash / totCash * 100 : null });
-      out.push({ k: 'lo', leads: lo.leads, booked: m[1].booked, cash: lo.cash, cashPct: totCash > 0 ? lo.cash / totCash * 100 : null });
+      var hi = grp([5, 4]), mid = grp([3, 4]), lo = grp([1]);
+      out.push({ k: 'hi', leads: hi.leads, leadsPct: hi.leads / t.leads * 100, cash: hi.cash, paid: hi.paid, cashPct: hi.cashPct });
+      out.push({ k: 'mid', leads: mid.leads, cash: mid.cash, paid: mid.paid, cashPct: mid.cashPct });
+      out.push({ k: 'lo', leads: lo.leads, booked: m[1].booked, cash: lo.cash, paid: lo.paid, cashPct: lo.cashPct });
     }
     if (m[0].leads) out.push({ k: 'none', leads: m[0].leads, pct: m[0].leads / t.leads * 100 });
     return out;
