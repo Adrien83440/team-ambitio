@@ -584,6 +584,18 @@ function bkLegalSync() {
   else window.AlteoLegalFooter.mount();
 }
 
+/* Durée AFFICHÉE au prospect (08/11/2026). L'Audit du quiz dure 1 h (agenda,
+   Meet, blocage des créneaux), mais s'annonce en 45 min pour ne pas freiner
+   la prise de RDV. Réglé dans Booking admin (« Durée affichée au prospect »,
+   champ displayDuration de la consultation). Ne sert QU'À l'affichage : tout
+   calcul (créneaux, booking.duration, ICS, messages au parent) garde
+   `duration`. */
+function bkShownDuration(t) {
+  if (!t) return 0;
+  var d = parseInt(t.displayDuration, 10);
+  return d > 0 ? d : t.duration;
+}
+
 /* ── INFO PANEL (left side) ── */
 function updateInfoPanel() {
   var el = document.getElementById('infoPanel');
@@ -606,7 +618,7 @@ function updateInfoPanel() {
     h += '<div class="bk-info-item visible"><div class="bk-info-icon"><span>🕐</span></div><div><div class="bk-info-label">Heure</div><div class="bk-info-value">' + S.selTime + '</div></div></div>';
   }
   if (S.selType && S.selType.duration) {
-    h += '<div class="bk-info-item visible"><div class="bk-info-icon"><span>⏱</span></div><div><div class="bk-info-label">Durée</div><div class="bk-info-value">' + S.selType.duration + ' min</div></div></div>';
+    h += '<div class="bk-info-item visible"><div class="bk-info-icon"><span>⏱</span></div><div><div class="bk-info-label">Durée</div><div class="bk-info-value">' + bkShownDuration(S.selType) + ' min</div></div></div>';
   }
   el.innerHTML = h;
 
@@ -1134,7 +1146,7 @@ function renderTypeCards() {
     h += '<div class="bk-type-top">';
     h += '<span class="bk-type-dot" style="background:' + t.color + '"></span>';
     h += '<span class="bk-type-name">' + esc(t.label) + '</span>';
-    h += '<span class="bk-type-dur">' + t.duration + ' min</span>';
+    h += '<span class="bk-type-dur">' + bkShownDuration(t) + ' min</span>';
     h += '<span class="bk-arrow">→</span>';
     h += '</div>';
     if (t.description) h += '<div class="bk-type-desc">' + esc(t.description) + '</div>';
@@ -1642,7 +1654,7 @@ function renderSummary() {
   if (S.selPerson) h += '<div class="bk-summary-row"><span class="bk-summary-label">Avec</span><span class="bk-summary-val">' + esc(S.selPerson.name) + '</span></div>';
   h += '<div class="bk-summary-row"><span class="bk-summary-label">Date</span><span class="bk-summary-val">' + dateFr + '</span></div>';
   h += '<div class="bk-summary-row"><span class="bk-summary-label">Heure</span><span class="bk-summary-val">' + S.selTime + '</span></div>';
-  if (S.selType) h += '<div class="bk-summary-row"><span class="bk-summary-label">Durée</span><span class="bk-summary-val">' + S.selType.duration + ' min</span></div>';
+  if (S.selType) h += '<div class="bk-summary-row"><span class="bk-summary-label">Durée</span><span class="bk-summary-val">' + bkShownDuration(S.selType) + ' min</span></div>';
   // Location
   if (S.selType && S.selType.location) {
     var locLabels = {meet:'📹 Google Meet',zoom:'📹 Zoom',teams:'📹 Teams',phone:'📞 Téléphone',inperson:'📍 En personne',custom:'🔗 Lien personnalisé'};
