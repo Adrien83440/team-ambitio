@@ -1138,13 +1138,15 @@
   function carteQuiz(l) {
     if (!aQuiz(l)) return '';
     var q = l.quiz, g = ldQuizNum(q.score_global);
+    var inv = typeof ldQuizInvest === 'function' ? ldQuizInvest(q) : null;   // écran prix vu (sales-leads.html)
     var niv = g === null ? '' : (g <= 40 ? 'lo' : (g <= 80 ? 'mid' : 'hi'));
     var sous = [];
     if (q.pilier_prioritaire) sous.push('Pilier prioritaire : ' + q.pilier_prioritaire);
     else if (Array.isArray(q.reponses) && q.reponses.length) sous.push(q.reponses.length + ' réponse' + (q.reponses.length > 1 ? 's' : ''));
     return '<button type="button" class="ll5quiz" data-ll5="go" data-v="quiz" aria-label="Voir le quiz diagnostic">' +
       '<span class="sc ' + niv + '">' + (g === null ? '🧭' : g + '<small>%</small>') + '</span>' +
-      '<span class="ll5tx"><b>Quiz diagnostic</b><span>' + escHtml(sous.join(' · ') || 'Voir les réponses') + '</span></span>' +
+      '<span class="ll5tx"><b>Quiz diagnostic</b><span>' + escHtml(sous.join(' · ') || 'Voir les réponses') + '</span>' +
+      (inv ? '<span class="warn ' + inv.kind + '">⚠️ CA &lt; 20 k€/mois · ' + escHtml(inv.short) + '</span>' : '') + '</span>' +
       '<span class="go">Voir le quiz' + ic('chev') + '</span></button>';
   }
   function ecranQuiz(l, id) {

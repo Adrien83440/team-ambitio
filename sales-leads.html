@@ -740,6 +740,10 @@ body.ld-pilot-on .l2fam[data-fam="closing"] { display: none; }
 .ld-quiz-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
 .ld-quiz-global { font-size: 21px; font-weight: 800; font-family: var(--fm); line-height: 1; }
 .ld-quiz-global small { font-size: 10px; font-weight: 600; color: var(--muted); display: block; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.5px; font-family: var(--fb); }
+.ld-quiz-inv { margin: 0 0 10px; padding: 9px 12px; border-radius: 9px; border: 1px solid rgba(251,191,36,0.35); background: rgba(251,191,36,0.10); color: #fde68a; font-size: 12.5px; line-height: 1.45; }
+.ld-quiz-inv b { color: #fbbf24; }
+.ld-quiz-inv.repris { border-color: rgba(248,113,113,0.4); background: rgba(248,113,113,0.10); color: #fecaca; }
+.ld-quiz-inv.repris b { color: #f87171; }
 .ld-quiz-prio { font-size: 11px; font-weight: 700; color: #fdba74; background: rgba(251,146,60,0.12); border: 1px solid rgba(251,146,60,0.3); border-radius: 7px; padding: 4px 9px; }
 .ld-quiz-bars { display: flex; flex-direction: column; gap: 7px; margin-bottom: 10px; }
 .ld-quiz-bar-top { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 3px; }
@@ -4328,6 +4332,30 @@ function ldQuizColor(p) {
   return p <= 40 ? '#f87171' : (p <= 80 ? '#fbbf24' : '#34d399');
 }
 
+// ── Écran prix du quiz Élite (CA < 20 000 €/mois, 11/2026) ──
+// La page ajoute une ligne « Avertissement investissement … » à reponses
+// (et alerte_investissement si Make le transmet). Le closer doit le voir
+// d'un coup d'œil : encart en tête du bloc, ligne retirée de la liste.
+var LD_QUIZ_INV_Q = /^avertissement investissement/i;
+function ldQuizInvest(qz) {
+  if (!qz || typeof qz !== 'object') return null;
+  var txt = qz.alerte_investissement ? String(qz.alerte_investissement) : '';
+  if (!txt && Array.isArray(qz.reponses)) {
+    qz.reponses.forEach(function(r){
+      if (!txt && r && r.question && LD_QUIZ_INV_Q.test(String(r.question)) && r.reponse) txt = String(r.reponse);
+    });
+  }
+  if (!txt) return null;
+  var repris = /repris|pas les moyens/i.test(txt);
+  return {
+    kind: repris ? 'repris' : 'continue',
+    short: repris ? 'A dit « pas les moyens », puis a repris' : 'A vu le prix et a continué',
+    html: repris
+      ? '⚠️ <b>CA inférieur à 20 000 €/mois</b> : a vu la carte prix (à partir de 6 000 € HT, environ 6 mois d\'accompagnement, paiement en plusieurs fois), a d\'abord répondu <b>« pas les moyens d\'investir »</b>, puis a repris le diagnostic. Budget à aborder tôt dans l\'appel.'
+      : '⚠️ <b>CA inférieur à 20 000 €/mois</b> : a vu la carte prix (à partir de 6 000 € HT, environ 6 mois d\'accompagnement, paiement en plusieurs fois) et <b>a choisi de continuer</b>.'
+  };
+}
+
 function renderQuizBlock(l, id) {
   var qz = l.quiz;
   if (!qz || typeof qz !== 'object') return '';
@@ -4348,6 +4376,9 @@ function renderQuizBlock(l, id) {
     h += '<span class="ld-quiz-prio">🎯 Pilier prioritaire : ' + escHtml(qz.pilier_prioritaire) + '</span>';
   }
   h += '</div>';
+
+  var inv = ldQuizInvest(qz);
+  if (inv) h += '<div class="ld-quiz-inv ' + inv.kind + '">' + inv.html + '</div>';
 
   // ── Barres des 4 piliers ──
   if (qz.scores && typeof qz.scores === 'object') {
@@ -4383,6 +4414,7 @@ function renderQuizBlock(l, id) {
     var rowsHtml = '';
     qz.reponses.forEach(function(r){
       if (!r || !r.question || r.reponse == null || r.reponse === '') return;
+      if (LD_QUIZ_INV_Q.test(String(r.question))) return;   // affiché dans l'encart ⚠️
       rowsHtml += '<div class="ld-form-answer-row">';
       rowsHtml += '<span class="ld-form-answer-label">' + escHtml(r.question) + '</span>';
       rowsHtml += '<span class="ld-form-answer-val">' + escHtml(String(r.reponse)) + '</span>';
