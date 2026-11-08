@@ -46,7 +46,7 @@ const parseBody = require('./_parseBody');
 // Meet, flags de rappels, stamps de statut…) est volontairement laissé de
 // côté pour que le nouveau RDV se comporte comme une résa neuve.
 const COPY_FIELDS = [
-  'type', 'typeLabel', 'date', 'time', 'duration', 'timezone',
+  'type', 'typeLabel', 'date', 'time', 'duration', 'displayDuration', 'timezone',
   'prospect', 'formData', 'formAnswers', 'leadId', 'formId', 'source',
   'clientId', 'clientNom', 'skipLeadCreation', 'isCoaching', 'notes',
   'ownerSlug', 'assignedToUid',

@@ -3047,6 +3047,9 @@ exports.onBookingCreated = functions.firestore
             + '</div>'
           : '';
 
+        // Durée annoncée au prospect (displayDuration, 08/11/2026) : l'Audit du
+        // quiz dure 1 h mais s'annonce en 45 min. Seul cet e-mail l'affiche ;
+        // l'événement agenda et le blocage des créneaux gardent `dur`.
         const greetName = (prospect.prenom || '').trim() || (prospect.nom || '').trim() || '';
         const content = '<p style="margin:0 0 18px">Bonjour' + (greetName ? ' <strong>' + greetName + '</strong>' : '') + ',</p>'
           + '<p style="margin:0 0 18px">Votre rendez-vous est confirmé. Vous trouverez ci-dessous les détails :</p>'
@@ -3055,7 +3058,7 @@ exports.onBookingCreated = functions.firestore
           + '<tr><td style="padding:10px 18px;font-size:13px;color:#6b7280;width:120px"><strong>Type</strong></td><td style="padding:10px 18px;font-size:14px;color:#111827">' + typeLabel + '</td></tr>'
           + (expertName ? '<tr><td style="padding:10px 18px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb"><strong>Avec</strong></td><td style="padding:10px 18px;font-size:14px;color:#111827;border-top:1px solid #e5e7eb">' + expertName + '</td></tr>' : '')
           + '<tr><td style="padding:10px 18px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb"><strong>Date</strong></td><td style="padding:10px 18px;font-size:14px;color:#111827;border-top:1px solid #e5e7eb">' + dateFr + '</td></tr>'
-          + '<tr><td style="padding:10px 18px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb"><strong>Heure</strong></td><td style="padding:10px 18px;font-size:14px;color:#111827;border-top:1px solid #e5e7eb">' + time + ' (' + dur + ' min)</td></tr>'
+          + '<tr><td style="padding:10px 18px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb"><strong>Heure</strong></td><td style="padding:10px 18px;font-size:14px;color:#111827;border-top:1px solid #e5e7eb">' + time + ' (' + (booking.displayDuration || dur) + ' min)</td></tr>'
           + '</tbody></table>'
           + meetBlock
           + (SEND_GOOGLE_INVITE_TO_PROSPECT

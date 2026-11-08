@@ -2487,6 +2487,9 @@ async function submitBooking() {
   };
   if (_formLeadId) booking.leadId = _formLeadId;
   if (_fromForm) booking.formId = _fromForm;
+  /* Durée annoncée au prospect (voir bkShownDuration), reprise par l'e-mail
+     de confirmation. Posée seulement si elle diffère de la durée réelle. */
+  if (S.selType && bkShownDuration(S.selType) !== S.selType.duration) booking.displayDuration = bkShownDuration(S.selType);
   // Distinguish who initiated the booking:
   //   - setter_booking : consultation marquée isSetterOnly:true dans booking-admin
   //                      (= consultation réservée aux setters, ne fait pas remonter le lead)

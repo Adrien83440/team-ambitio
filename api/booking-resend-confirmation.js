@@ -128,7 +128,8 @@ function htmlToText(content) {
 // ─── Gabarit de l'e-mail — copie de onBookingCreated, sans la phrase sur
 //     l'invitation Google (aucune invitation ne repart ici) ──────────────────
 function buildConfirmationEmail(booking, meetLink) {
-  const dur = booking.duration || 30;
+  // Durée annoncée au prospect (displayDuration, 08/11/2026), sinon la réelle.
+  const dur = booking.displayDuration || booking.duration || 30;
   const time = booking.time || '09:00';
   const prospect = booking.prospect || {};
   const expertName = booking.personName || '';
