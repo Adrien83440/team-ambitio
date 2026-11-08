@@ -493,6 +493,7 @@ function fetchFreeBusy() {
         console.log('FreeBusy listener error:', e);
         S.busyTimes[pid] = [];
         S.busyLoading = false;
+        bkQuizCalendarReady();
       }
     );
     // Trigger refresh cote serveur (resync Google Calendar via Cloud Function)
@@ -557,6 +558,15 @@ function goStep(n) {
   // vient après prefillFromForm() pour voir l'email éventuellement pré-rempli.
   if (n === 4) { renderSummary(); renderForm(); prefillFromForm(); recOnStep4(); }
   bkLegalSync();
+  bkQuizOnGoStep(n);
+}
+
+/* Pont quiz (voir « PONT QUIZ ») : hauteur à chaque étape, étapes mesurées. */
+function bkQuizOnGoStep(n) {
+  if (!_bkQuizBridge) return;
+  if (n === 3) bkQuizCalendarReady();
+  if (n === 4) bkQuizStep('formulaire');
+  bkQuizSendHeight();
 }
 
 /* Ligne légale (legal-footer.js, liens réglés dans Site & pages) : pages
@@ -863,6 +873,148 @@ if (_agentMode) {
   try { window.parent.postMessage({ type: 'bk_agent_ready' }, window.location.origin); } catch (e) {}
 }
 
+/* ═══ PONT QUIZ — page de réservation intégrée par une page externe (08/11/2026) ═══
+   Le quiz Élite (adrienemily.com/optin-a, optin-d) intègre cette page en
+   iframe (?embed=1). Échanges, uniquement par postMessage :
+     parent → nous : bk_prefill {prenom, email, tel}, ACCEPTÉ seulement depuis
+       BK_QUIZ_ORIGINS. Les coordonnées ne passent jamais par l'URL : la page
+       porte le pixel Meta, qui enregistre l'adresse complète.
+     nous → parent ('*', AUCUNE donnée personnelle) :
+       bk_ready                 page prête à recevoir bk_prefill ;
+       bk_height {h}            hauteur réelle du contenu ;
+       bk_step {step}           calendrier · jour · creneau · formulaire,
+                                une fois chacun par visite.
+   On ne pose JAMAIS _fromForm : sinon prefillFromForm() confirme tout seul et
+   la personne ne verrait plus l'engagement à cocher.
+   Inactif hors iframe et dans les modes internes (agent booking-admin, setter
+   Leads Live / CRM, replanification) : leur comportement ne change pas. */
+var BK_QUIZ_ORIGINS = ['https://www.adrienemily.com', 'https://adrienemily.com'];
+var _bkQuizBridge = _embedMode && window.parent !== window && !_agentMode && !_setterMode && !_rescheduleId;
+var _bkQuizStepsSent = {};
+
+function bkQuizPost(msg) {
+  if (!_bkQuizBridge) return;
+  try { window.parent.postMessage(msg, '*'); } catch (e) {}
+}
+
+/* Hauteur du CONTENU, pas de la fenêtre. body et .bk-shell ont un
+   min-height:100vh : en iframe, 100vh = hauteur du cadre, donc
+   documentElement.scrollHeight ne descend jamais sous la hauteur déjà donnée
+   par le parent (le cadre grandirait sans jamais rétrécir). Le bloc
+   .bk-panel-content lui-même est étiré par le flex à la hauteur du cadre :
+   on mesure donc le bas de ses deux enfants (#bkLoading, #bkApp — blocs non
+   animés, l'entrée d'étape en transform ne fausse pas la mesure), plus la
+   marge basse du panneau de droite. Sous 860 px, ce
+   panneau passe sous celui de gauche : la mesure l'inclut d'office.
+   Repli : scrollHeight. */
+function bkQuizContentHeight() {
+  var h = 0;
+  try {
+    var content = document.querySelector('.bk-panel-content');
+    var right = document.querySelector('.bk-panel-right');
+    if (content && right) {
+      var scrollY = window.pageYOffset || 0;
+      var kids = content.querySelectorAll('#bkLoading, #bkApp');
+      for (var i = 0; i < kids.length; i++) {
+        var r = kids[i].getBoundingClientRect();
+        if (!r.height) continue;
+        var mb = parseFloat(window.getComputedStyle(kids[i]).marginBottom) || 0;
+        if (r.bottom + mb + scrollY > h) h = r.bottom + mb + scrollY;
+      }
+      if (h > 0) h += parseFloat(window.getComputedStyle(right).paddingBottom) || 0;
+    }
+  } catch (e) { h = 0; }
+  if (!(h > 0)) h = document.documentElement.scrollHeight;
+  return Math.ceil(h);
+}
+
+/* Envoi limité à un toutes les 100 ms ; la dernière valeur part toujours. */
+var _bkQuizHLastAt = 0, _bkQuizHTimer = null, _bkQuizHSent = -1;
+function bkQuizSendHeight() {
+  if (!_bkQuizBridge || _bkQuizHTimer) return;
+  var wait = Math.max(0, 100 - (Date.now() - _bkQuizHLastAt));
+  _bkQuizHTimer = setTimeout(function() {
+    _bkQuizHTimer = null;
+    _bkQuizHLastAt = Date.now();
+    var h = bkQuizContentHeight();
+    if (h === _bkQuizHSent) return;
+    _bkQuizHSent = h;
+    bkQuizPost({ type: 'bk_height', h: h });
+  }, wait);
+}
+
+function bkQuizStep(step) {
+  if (!_bkQuizBridge || _bkQuizStepsSent[step]) return;
+  _bkQuizStepsSent[step] = true;
+  bkQuizPost({ type: 'bk_step', step: step });
+}
+
+/* « calendrier » : étape 3 affichée ET disponibilités Google chargées
+   (S.busyLoading retombe à false dans fetchFreeBusy). */
+function bkQuizCalendarReady() {
+  if (S.currentStep === 3 && !S.busyLoading) bkQuizStep('calendrier');
+}
+
+function bkQuizClean(v) {
+  if (typeof v !== 'string') return '';
+  return v.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 120);
+}
+
+/* Remplit l'étape 4 si elle est affichée — seulement les champs encore vides,
+   pour ne jamais écraser ce que la personne a commencé à taper. Aux passages
+   suivants à l'étape 4, prefillFromForm() (appelé par goStep) reprend les
+   valeurs, comme pour bk_agent_prefill. */
+function bkQuizFillStep4() {
+  if (S.currentStep !== 4) return;
+  var pairs = [['fPrenom', _formPrenom], ['fField_email', _formEmail], ['fField_phone', _formTel]];
+  for (var i = 0; i < pairs.length; i++) {
+    var el = document.getElementById(pairs[i][0]);
+    if (el && pairs[i][1] && !el.value) {
+      el.value = pairs[i][1];
+      try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+    }
+  }
+}
+
+if (_bkQuizBridge) {
+  window.addEventListener('message', function(ev) {
+    if (BK_QUIZ_ORIGINS.indexOf(ev.origin) < 0) return;
+    if (ev.source !== window.parent) return;
+    var m = ev.data;
+    if (!m || typeof m !== 'object' || m.type !== 'bk_prefill') return;
+    var prenom = bkQuizClean(m.prenom);
+    var email = bkQuizClean(m.email);
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) email = '';
+    var tel = bkQuizClean(m.tel).replace(/[^\d+]/g, '');
+    tel = (tel.charAt(0) === '+' ? '+' : '') + tel.replace(/\+/g, '');
+    if (tel.replace(/\+/g, '').length < 6) tel = '';
+    tel = tel.slice(0, 20);
+    if (prenom) _formPrenom = prenom;
+    if (email) _formEmail = email;
+    if (tel) _formTel = tel;
+    bkQuizFillStep4();
+  });
+
+  try {
+    if (window.ResizeObserver) {
+      var _bkQuizRO = new ResizeObserver(function() { bkQuizSendHeight(); });
+      _bkQuizRO.observe(document.body);
+      // body ne rétrécit pas sous 100vh : on observe aussi le contenu réel
+      // (chargement + application ; chaque étape vit dans #bkApp).
+      ['bkLoading', 'bkApp'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) _bkQuizRO.observe(el);
+      });
+    } else {
+      window.addEventListener('resize', bkQuizSendHeight);
+    }
+  } catch (e) {}
+  window.addEventListener('load', bkQuizSendHeight);
+
+  bkQuizPost({ type: 'bk_ready' });
+  bkQuizSendHeight();
+}
+
 db.collection('booking_config').get().then(function(snap) {
   snap.forEach(function(doc) {
     var d = doc.data();
@@ -1089,6 +1241,7 @@ function renderCalendar() {
     document.getElementById('slotsWrap').innerHTML = '<div class="bk-slots-panel"><div class="bk-slots-empty"><span>📅</span>Sélectionnez un jour</div></div>';
     document.getElementById('continueBar').style.display = 'none';
   }
+  bkQuizCalendarReady();
 }
 
 /* ── HOLIDAYS ── */
@@ -3049,6 +3202,7 @@ document.addEventListener('click', function(e) {
     if (S.rrPool && S.rrPool.length) S.selPerson = null; // RR v2 : l'expert suit le creneau
     renderCalendar();
     updateInfoPanel();
+    bkQuizStep('jour');
   }
   if (action === 'selectTime') {
     S.selTime = a.dataset.time;
@@ -3059,6 +3213,7 @@ document.addEventListener('click', function(e) {
     }
     renderSlots();
     updateInfoPanel();
+    bkQuizStep('creneau');
   }
   if (action === 'recToggle') {
     REC.enabled = !REC.enabled;
