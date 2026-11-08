@@ -955,6 +955,24 @@ function bkQuizCalendarReady() {
   if (S.currentStep === 3 && !S.busyLoading) bkQuizStep('calendrier');
 }
 
+/* Après le choix d'un créneau, « Continuer » apparaît sous la grille, souvent
+   hors écran sur mobile (calendrier en plein écran dans le quiz). On fait
+   défiler CETTE page jusqu'au bouton, seulement s'il est caché. Cadre
+   intégré à sa hauteur réelle (ordinateur) : la page ne défile pas, rien ne
+   bouge — jamais de scrollIntoView, qui ferait aussi défiler la page du quiz. */
+function bkQuizRevealContinue() {
+  if (!_bkQuizBridge) return;
+  setTimeout(function() {
+    var bar = document.getElementById('continueBar');
+    if (!bar || bar.style.display === 'none') return;
+    var vh = window.innerHeight || document.documentElement.clientHeight;
+    var r = bar.getBoundingClientRect();
+    if (!r.height || r.bottom <= vh) return;
+    var top = (window.pageYOffset || 0) + r.bottom - vh + 16;
+    try { window.scrollTo({ top: top, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, top); }
+  }, 60);
+}
+
 function bkQuizClean(v) {
   if (typeof v !== 'string') return '';
   return v.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 120);
@@ -3214,6 +3232,7 @@ document.addEventListener('click', function(e) {
     renderSlots();
     updateInfoPanel();
     bkQuizStep('creneau');
+    bkQuizRevealContinue();
   }
   if (action === 'recToggle') {
     REC.enabled = !REC.enabled;
