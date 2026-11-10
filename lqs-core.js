@@ -296,6 +296,11 @@
       FC.loadCreatives(db, D),
       FC.loadAdsByAd(db, P, D),
       FC.loadViews(db, P, D),   // visites et formulaires par page (historique avant la mesure fine)
+      /* Visites par source utm de chaque tunnel (10/11/2026, T6) : répartit la
+         dépense de chaque pub sur la page où ses visites arrivent vraiment. */
+      db.collection('tunnel_stats_daily').where('date', '>=', sIso).where('date', '<=', eIso).get().then(function (snap) {
+        D.tunnelStats = []; snap.forEach(function (doc) { D.tunnelStats.push(doc.data() || {}); });
+      }).catch(function () { D.tunnelStats = []; }),
       db.collection('quiz_funnel_daily').where('date', '>=', sIso).where('date', '<=', eIso).get().then(function (snap) {
         snap.forEach(function (doc) { var d = doc.data() || {}; d._id = doc.id; D.quizDocs.push(d); });
       }).catch(function (e) { D.quizErr = e && e.message ? e.message : 'erreur'; }),
@@ -1838,7 +1843,18 @@
         q.pages.push(row);
       });
     });
-    return Object.keys(byQuiz).map(function (k) {
+    /* 5. Dépense Meta par quiz (T6) — UNE campagne peut mener à deux quiz
+       (« TOFU | Funnel élections 2027 » contient d'anciennes pubs Élite qui
+       mènent à /optin-a) : la dépense de chaque pub (ads_insights_ad) est
+       répartie entre tunnels au prorata des visites de CETTE pub
+       (tunnel_stats_daily.sources, utm_content = nom ou id de la pub), le même
+       jour, sinon sur la période. Sans visite rattachée : « non rattachée ». */
+    var spend = ovSpend(D, sIso, eIso);
+    Object.keys(byQuiz).forEach(function (k) {
+      byQuiz[k].spend = r2(spend.byTunnel[k] || 0);
+      Object.keys(byQuiz[k].days).forEach(function (d) { byQuiz[k].days[d].spend = r2((spend.byTunnelDay[k] || {})[d] || 0); });
+    });
+    var out = Object.keys(byQuiz).map(function (k) {
       var q = byQuiz[k];
       ovFinish(q.total);
       q.dayList = Object.keys(q.days).sort().map(function (d) { return Object.assign({ day: d }, ovFinish(q.days[d])); });
@@ -1847,8 +1863,54 @@
       var lasts = q.pages.map(function (r) { return r.last; }).filter(Boolean).sort();
       q.first = firsts[0] || null; q.last = lasts[lasts.length - 1] || null;
       q.doneMeasured = q.total.doneMeasured;
+      q.cpl = q.total.newLeads ? r2(q.spend / q.total.newLeads) : null;
       return q;
     }).sort(function (a, b) { return b.total.arrives - a.total.arrives; });
+    out.spendUnattributed = r2(spend.unattributed);
+    out.spendTotal = r2(spend.total);
+    return out;
+  }
+  function adKeyOf(v) {
+    var x = String(v == null ? '' : v);
+    try { x = decodeURIComponent(x.replace(/\+/g, ' ')); } catch (e) { /* tel quel */ }
+    return norm(x).replace(/\s+/g, ' ').trim();
+  }
+  function ovSpend(D, sIso, eIso) {
+    var names = {};
+    (D.creatives || []).forEach(function (c) { if (c && c.ad_id) names[String(c.ad_id)] = c.ad_name || ''; });
+    var vDay = {}, vAll = {};   // clé pub → tunnel → visites (par jour / période)
+    (D.tunnelStats || []).forEach(function (t) {
+      if (!t || !t.date || t.date < sIso || t.date > eIso || !t.tunnelSlug) return;
+      var src = t.sources || {};
+      Object.keys(src).forEach(function (sk) {
+        var x = src[sk] || {}, k = adKeyOf(x.utm_content);
+        if (!k) return;
+        var n = num(x.visits);
+        if (!n) return;
+        var dk = t.date + '|' + k;
+        (vDay[dk] = vDay[dk] || {})[t.tunnelSlug] = ((vDay[dk] || {})[t.tunnelSlug] || 0) + n;
+        (vAll[k] = vAll[k] || {})[t.tunnelSlug] = ((vAll[k] || {})[t.tunnelSlug] || 0) + n;
+      });
+    });
+    var res = { byTunnel: {}, byTunnelDay: {}, unattributed: 0, total: 0 };
+    (D.adsByAd || []).forEach(function (a) {
+      if (!a || !a.date || a.date < sIso || a.date > eIso) return;
+      var sp = num(a.spend);
+      if (!sp) return;
+      res.total += sp;
+      var keys = [adKeyOf(a.ad_id), adKeyOf(a.ad_name || names[String(a.ad_id)])].filter(Boolean);
+      var share = null;
+      keys.forEach(function (k) { if (!share && vDay[a.date + '|' + k]) share = vDay[a.date + '|' + k]; });
+      keys.forEach(function (k) { if (!share && vAll[k]) share = vAll[k]; });
+      if (!share) { res.unattributed += sp; return; }
+      var tot = 0; Object.keys(share).forEach(function (t) { tot += share[t]; });
+      Object.keys(share).forEach(function (t) {
+        var part = sp * share[t] / tot;
+        res.byTunnel[t] = (res.byTunnel[t] || 0) + part;
+        (res.byTunnelDay[t] = res.byTunnelDay[t] || {})[a.date] = ((res.byTunnelDay[t] || {})[a.date] || 0) + part;
+      });
+    });
+    return res;
   }
 
   /* ══ 7 quater. CONTRÔLE DE COHÉRENCE QUOTIDIEN (10/11/2026, T5) ═════════

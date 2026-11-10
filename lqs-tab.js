@@ -402,6 +402,17 @@
         });
         body += '</tbody></table></div>';
       }
+      if (q.spend) {
+        var nl = q.total.newLeads + q.total.backLeads;
+        body += '<div class="lq-vline" style="margin-top:10px">💶 <strong>Dépense Meta : ' + fEur(q.spend) + '</strong>'
+          + ' · coût par arrivé ' + fEur(q.total.arrives ? q.spend / q.total.arrives : null)
+          + ' · par réponse à Q1 ' + fEur(q.total.q1 ? q.spend / q.total.q1 : null)
+          + ' · par formulaire ' + fEur(q.total.optins ? q.spend / q.total.optins : null)
+          + ' · <strong>par nouveau lead ' + fEur(q.cpl) + '</strong>'
+          + (nl !== q.total.newLeads ? ' (' + fEur(nl ? q.spend / nl : null) + ' en comptant les déjà connus)' : '') + '</div>'
+          + '<div class="fn-stage-note">Dépense de chaque pub répartie selon la page où arrivent SES visites (utm_content), jour par jour : une même campagne peut mener à deux quiz.'
+          + (list.spendUnattributed ? ' ' + fEur(list.spendUnattributed) + ' de dépense sur la période sans visite rattachée (pubs sans utm_content, autres pages).' : '') + '</div>';
+      }
       body += '<div class="fn-stage-note" style="margin-top:8px">Période couverte par la mesure : '
         + (q.first ? 'du ' + dayShort(q.first) + ' au ' + dayShort(q.last) : 'aucune visite mesurée')
         + ' · jours de Paris · visites internes (tests, équipe) exclues. Arrivés, réponses à Q1 et formulaires : compteurs de la page, toutes publications réunies. Leads et RDV : fiches Leads Live dont ce quiz est la page d\'entrée.</div>';
