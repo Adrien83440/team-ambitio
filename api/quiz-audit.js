@@ -111,7 +111,7 @@ async function leadsOf(from, to) {
       lastOptinDay: parisDay(ms(d.lastOptinAt)), lastOptinAt: ms(d.lastOptinAt),
       quizSubmittedDay: parisDay(ms(d.quizSubmittedAt)), hasQuiz: !!d.quiz,
       quizKeys: d.quiz && typeof d.quiz === 'object' ? Object.keys(d.quiz).slice(0, 60) : null,
-      quizMarks: d.quiz && typeof d.quiz === 'object' ? { version: d.quiz.version || d.quiz.quiz_version || null, lp: d.quiz.lp || null } : null,
+      quizMarks: d.quiz && typeof d.quiz === 'object' ? { version: d.quiz.quiz_version || null, firstQ: Array.isArray(d.quiz.reponses) && d.quiz.reponses[0] ? String(d.quiz.reponses[0].question || '').slice(0, 90) : null, nRep: Array.isArray(d.quiz.reponses) ? d.quiz.reponses.length : 0 } : null,
       type: d.type || null, sourceDetail: d.sourceDetail || null, source: d.source || null,
       stage: d.stage || null, status: d.status || null,
       landingFirst: landingOf(d.landingFirst), landingLast: landingOf(d.landingLast),
