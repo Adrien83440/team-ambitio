@@ -433,6 +433,28 @@
     return card('🩺 Contrôle de cohérence de la mesure', nAlert ? nAlert + ' jour' + (nAlert > 1 ? 's' : '') + ' en écart' : 'tout concorde', body);
   }
 
+  /* ── Qualité des leads par page d'entrée (10/11/2026, T7) ── */
+  function qualityCard() {
+    var list = LC.qualityByPage(rows(), S.M.tunnels || S.ctx.tunnelsMeta || null);
+    if (!list.length) return '';
+    var body = '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr><th class="l">Page d\'entrée</th><th>Leads</th>'
+      + '<th title="Leads qui ont pris un RDV · seul (lien de réservation) / par un setter">RDV pris</th><th>Honorés</th><th>Closes</th>'
+      + '<th title="Closes ÷ leads">Closing / lead</th><th title="Signé HT, encaissé dessous">Signé · encaissé</th><th>Signé / lead</th></tr></thead><tbody>';
+    var lastQuiz = '';
+    list.forEach(function (g) {
+      var a = g.agg;
+      if (g.quiz !== lastQuiz) { body += '<tr class="tot"><td class="l" colspan="8">' + esc(g.quiz) + '</td></tr>'; lastQuiz = g.quiz; }
+      body += '<tr><td class="l"><strong>' + esc(g.label) + '</strong>' + sub(esc(g.path + (g.variant ? ' · ' + g.variant.toUpperCase() : ''))) + '</td>'
+        + '<td>' + fNum(a.leads) + '</td>'
+        + '<td>' + fNum(a.booked) + sub(fPct(a.bookRate, 0) + ' · seul ' + fNum(g.self) + ' / setter ' + fNum(g.setter)) + '</td>'
+        + '<td>' + fNum(a.present) + sub(fPct(a.showRate, 0) + ' des RDV') + '</td>'
+        + '<td><strong>' + fNum(a.closes) + '</strong></td><td>' + fPct(a.closeLead, 1) + '</td>'
+        + '<td>' + money(a.con, a.cash) + '</td><td>' + fEur(a.leads ? a.con / a.leads : null) + '</td></tr>';
+    });
+    body += '</tbody></table></div><div class="fn-stage-note" style="margin-top:8px">Leads de la période choisie (pour la lecture du brief : période depuis le 01/10), rangés par la page quiz qui les a fait entrer. RDV et closes suivis jusqu\'à aujourd\'hui ; signé = contrat HT du close, encaissé = prélèvements passés.</div>';
+    return card('🏁 Qualité des leads par page d\'entrée', 'quel quiz, quelle variante amène les leads qui signent', body);
+  }
+
   function viewQuiz() {
     var meta = S.M.tunnels || S.ctx.tunnelsMeta || null;
     /* 07/11/2026 : par défaut, la mesure visiteurs de chaque version ne
@@ -454,6 +476,7 @@
     var ovList = LC.quizOverview(S.D || {}, S.ctx.P, S.M.tunnels || S.ctx.tunnelsMeta || null);
     h += overviewCards(ovList);
     h += checksCard(ovList);
+    h += qualityCard();
 
     if (!V.list.length) {
       h += card('🧭 Parcours du quiz', '', '<div class="lq-muted">Aucun lead issu d\'un quiz et aucune mesure sur la période. La mesure démarre quand la page quiz est instrumentée (<code>node scripts/quiz-tracking-patch.js --apply</code>).</div>');

@@ -565,7 +565,8 @@
         booked: heads.length > 0, present: false, noshow: false, pitched: false, closeOc: false,
         allCancelled: heads.length > 0, upcoming: false, closed: false, closeCancelled: false,
         cash: 0, con: 0, closeDay: null, offer: null, closer: null, rdvDate: null,
-        team: (l.leadScore >= 1 && l.leadScore <= 5) ? Number(l.leadScore) : null };
+        team: (l.leadScore >= 1 && l.leadScore <= 5) ? Number(l.leadScore) : null,
+        bookedBy: heads.length ? (heads[0]._class === 'setter' ? 'setter' : 'self') : null };
       var pick = null;
       heads.forEach(function (h) {
         var t = terminal(h);
@@ -1879,6 +1880,34 @@
     return out;
   }
 
+  /* ══ 7 quinquies. QUALITÉ DES LEADS PAR PAGE D'ENTRÉE (10/11/2026, T7) ══
+     Leads de la période (lignes du modèle), rangés par la page quiz qui les a
+     fait entrer (landingFirst, via optin) × variante : RDV pris (seul / par
+     un setter), honorés, closes, signé, encaissé. Sert à vérifier avec des
+     chiffres quel quiz / quelle variante amène les leads qui signent. */
+  function qualityByPage(rows, meta) {
+    var by = {};
+    (rows || []).forEach(function (r) {
+      var L = r.lead && r.lead.landingFirst;
+      if (!L || L.via !== 'optin' || !/^[a-z0-9-]+__[a-z0-9-]+$/.test(String(L.page || ''))) return;
+      if (!r.lead.quiz) return;
+      var k = L.page + '--' + (L.variant || '_');
+      var g = by[k];
+      if (!g) {
+        var sp = splitPage(L.page), tm = meta && meta[sp.tunnel], st = tm && tm.steps ? tm.steps[sp.step] : null;
+        var vm = st && st.variants && L.variant ? st.variants[L.variant] : null;
+        g = by[k] = { key: k, tunnel: sp.tunnel, quiz: (tm && tm.name) || sp.tunnel, path: '/' + sp.step, variant: L.variant || null,
+          label: (vm && vm.label) || (L.variant ? 'Variante ' + String(L.variant).toUpperCase() : 'variante non transmise'),
+          agg: newAgg(), self: 0, setter: 0 };
+      }
+      addLeadRow(g.agg, r);
+      if (r.bookedBy === 'self') g.self++;
+      else if (r.bookedBy === 'setter') g.setter++;
+    });
+    return Object.keys(by).map(function (k) { fin(by[k].agg); return by[k]; })
+      .sort(function (a, b) { return a.quiz < b.quiz ? -1 : (a.quiz > b.quiz ? 1 : (b.agg.leads - a.agg.leads)); });
+  }
+
   /* ══ 8. PHRASES CLÉS (lecture en 10 secondes) ══════════════════════════ */
   /* Parts calculées sur le SIGNÉ (cash), encaissé à côté (paid). */
   function insights(bn, cashMode) {
@@ -1915,6 +1944,6 @@
     suggestPoints: suggestPoints, suggestBasis: suggestBasis,
     quizVersions: quizVersions, buildQuizView: buildQuizView, versionMeta: versionMeta, OLD_QUIZ_KEY: OLD_KEY, FAMILY_PREFIX: FAM, familyOfKey: familyOfKey, mqsOf: mqsOf, buildQuizFunnel: buildQuizFunnel, insights: insights,
     newAgg: newAgg, offerOf: offerOf, addLeadRow: addLeadRow, fin: fin, isoDay: isoDay,
-    quizOverview: quizOverview, parisIso: parisIso, quizChecks: quizChecks
+    quizOverview: quizOverview, parisIso: parisIso, quizChecks: quizChecks, qualityByPage: qualityByPage
   };
 }));
