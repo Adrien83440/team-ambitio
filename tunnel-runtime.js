@@ -207,6 +207,7 @@
     if (q) payload.q = { id: qid, i: q.i, n: q.n, label: q.label };
     if (kind === 'a') payload.a = data.a;
     if (kind === 'gate') payload.g = data.g;
+    if (data.mv) payload.mv = data.mv;   // génération de la mesure (pages à mesure injectée, 10/11/2026)
     if (INTERNAL) payload.x = 1;
     post(C.eventEndpoint, payload, true);
   }

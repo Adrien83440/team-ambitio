@@ -32,6 +32,8 @@
 //       @{version} (07/11/2026) = version publiée de la page (html.version de
 //       la variante) : une republication ouvre de nouveaux compteurs, la
 //       mesure d'une version ne se mélange plus avec celle d'avant.
+//       m{mv} (10/11/2026) = génération de la mesure (pages à mesure injectée) :
+//       champ measure, même principe.
 //
 //   tunnel_visits/{date}_{vid}   (journal par visite, 10/11/2026, T3)
 //       { date, vid, tunnelId, entry: { page, variant, version, utm_* },
@@ -225,10 +227,14 @@ module.exports = async (req, res) => {
     if (vQ && vQ.label) base.variantLabel = String(vQ.label).slice(0, 80);
     const pv = vQ && vQ.html ? parseInt(vQ.html.version, 10) : 0;
     if (pv > 0) { base.pageVersion = pv; base.pageVersionAt = new Date(pv).toISOString(); }
+    /* measure (10/11/2026) : génération de la mesure envoyée par la page (mv).
+       Une mesure corrigée ouvre ses propres compteurs, même sans republication. */
+    const mv = Math.max(0, Math.min(9, parseInt(body.mv, 10) || 0));
+    if (mv) base.measure = mv;
     const qp = quizPatch(body, base, FV);
     if (!qp) { res.status(200).json({ ok: true, ignored: 'quiz' }); return; }
     try {
-      const qw = [db.collection('quiz_funnel_daily').doc(date + '_' + pageK + (variant ? '--' + variant : '') + (pv > 0 ? '@' + pv : '')).set(qp, { merge: true })];
+      const qw = [db.collection('quiz_funnel_daily').doc(date + '_' + pageK + (variant ? '--' + variant : '') + (pv > 0 ? '@' + pv : '') + (mv ? 'm' + mv : '')).set(qp, { merge: true })];
       const vw = visitWrite(body, { FV: FV, admin: admin, db: db, date: date, pageK: pageK, variant: variant, tunnelId: tunnel.id, version: pv, event: 'quiz', src: src });
       if (vw) qw.push(vw.catch(function (e) { console.error('[tunnel-event] journal :', e && e.message); }));
       await Promise.all(qw);

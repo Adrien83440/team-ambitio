@@ -926,20 +926,57 @@
      ne l'emporte jamais). */
   function realLabel(label, id) { return !!label && keyOf(label) !== keyOf(id); }
   function docKeyOf(d) { return (d.page || '?') + (d.variant ? '--' + d.variant : ''); }
+  /* Version EFFECTIVE d'un document : version publiée de la page + génération
+     de la mesure (champ measure, posé par api/tunnel-event.js quand la page
+     envoie mv — mesure injectée corrigée du 10/11/2026). */
+  function effVersion(d) { return num(d.pageVersion) + num(d.measure); }
+  /* Mesure COMPARABLE (10/11/2026, brief « chiffres justes », T4) : toutes les
+     publications réunies tant que les questions mesurées (identifiants) ne
+     changent pas. `latest` = le dernier segment de versions au même jeu de
+     questions ; une version sans question mesurée ce jour-là (que des
+     « start ») ne coupe pas le segment. Une nouvelle génération de mesure
+     (measure) ouvre toujours un nouveau segment. */
   function buildQuizFunnel(docs) {
     docs = docs.slice().sort(function (a, b) {
-      return String(a.date || '').localeCompare(String(b.date || '')) || (num(a.pageVersion) - num(b.pageVersion));
+      return String(a.date || '').localeCompare(String(b.date || '')) || (effVersion(a) - effVersion(b));
     });
     var all = aggQuizDocs(docs);
-    var maxV = {};
-    docs.forEach(function (d) { var k = docKeyOf(d), v = num(d.pageVersion); if (v > (maxV[k] || 0)) maxV[k] = v; });
+    var sig = {};   // page → version effective → { qid: 1 }
+    docs.forEach(function (d) {
+      var k = docKeyOf(d), v = effVersion(d);
+      var pk = sig[k] || (sig[k] = {});
+      var o = pk[v] || (pk[v] = { q: {}, measure: num(d.measure) });
+      Object.keys(d.questions || {}).forEach(function (qk) { o.q[qk] = 1; });
+    });
+    /* Deux versions se comparent si l'une ne mesure que des questions de
+       l'autre (une version peu visitée n'atteint que les premières questions). */
+    function within(a, b) { return Object.keys(a).every(function (q) { return b[q]; }); }
+    var seg = {}, segSince = {};
+    Object.keys(sig).forEach(function (k) {
+      var vs = Object.keys(sig[k]).map(Number).sort(function (a, b) { return b - a; });
+      var top = sig[k][vs[0]], ref = {}, keep = {};
+      for (var i = 0; i < vs.length; i++) {
+        var o = sig[k][vs[i]];
+        if (o.measure !== top.measure) break;
+        if (!within(o.q, ref) && !within(ref, o.q)) break;
+        Object.keys(o.q).forEach(function (q) { ref[q] = 1; });
+        keep[vs[i]] = 1;
+      }
+      seg[k] = keep;
+    });
     var lat = {};
-    aggQuizDocs(docs.filter(function (d) { var v = maxV[docKeyOf(d)]; return v && num(d.pageVersion) === v; }))
-      .forEach(function (p) { lat[p.key] = p; });
+    var latDocs = docs.filter(function (d) { var kp = seg[docKeyOf(d)]; return kp && kp[effVersion(d)]; });
+    latDocs.forEach(function (d) {
+      var k = docKeyOf(d);
+      var pv = num(d.pageVersion), day = Date.parse(String(d.date || '') + 'T00:00:00+01:00');
+      var from = Math.max(pv || 0, isFinite(day) ? day : 0);
+      if (!segSince[k] || from < segSince[k]) segSince[k] = from;
+    });
+    aggQuizDocs(latDocs).forEach(function (p) { lat[p.key] = p; });
     all.forEach(function (p) {
       var l = lat[p.key];
       if (!l) return;
-      l.since = maxV[p.key]; l.isLatest = true;
+      l.since = segSince[p.key] || null; l.isLatest = true;
       l.partial = l.starts !== p.starts || l.days !== p.days;
       p.latest = l;
     });
@@ -977,6 +1014,7 @@
         var q = qs[qk] || {};
         var x = p.questions[qk];
         if (!x) x = p.questions[qk] = { id: qk, i: num(q.i, 99), label: realLabel(q.label, qk) ? q.label : qk, reached: 0, answered: 0, answers: {} };
+        else if (q.i != null) x.i = num(q.i, x.i);   // documents triés par date : le rang le plus récent l'emporte
         if (realLabel(q.label, qk)) x.label = q.label;
         x.reached += num(q.reached); x.answered += answeredOf(q);
         var as = q.answers || {};

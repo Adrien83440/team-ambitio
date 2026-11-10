@@ -428,7 +428,8 @@
       + '<p><strong>🚪 À quel moment les gens quittent le quiz</strong> : pour chaque question, combien de visiteurs l\'ont vue, combien y ont répondu, combien sont partis dessus — puis combien ont tout rempli. Une question qui fait partir beaucoup de monde est peut-être mal posée, pas pertinente ou gênante.</p>'
       + '<p><strong>📋 Question par question</strong> : pour chaque réponse, combien de visiteurs l\'ont choisie, et ce que ça a donné chez les contacts (clients Élite / Business, signé et encaissé), avec ses points dans le barème.</p>'
       + '<p>Les <strong>cartes</strong> en haut filtrent par version du quiz (Dark, White, YouTube…). « Comparer » les met côte à côte. Les formulaires hors quiz sont tout en bas.</p>'
-      + '<p><strong>Dernière publication</strong> (par défaut) : chaque republication de la page ouvre de nouveaux compteurs visiteurs, pour ne jamais mélanger un suivi corrigé avec l\'ancien. « Toute la période » additionne toutes les publications. Les contacts, eux, couvrent toujours toute la période.</p>');
+      + '<p><strong>Période comparable</strong> (par défaut) : toutes les publications de la page sont réunies tant que les questions mesurées restent les mêmes ; un changement de questions ou une mesure corrigée ouvre une nouvelle période, pour ne jamais mélanger deux parcours qui ne se comparent pas. Les <strong>chiffres de référence</strong> en tête (arrivés, Q1, formulaires, leads, RDV) couvrent toujours toute la période choisie.</p>'
+      + '<p>Mêmes définitions sur toutes les pages : <strong>arrivés</strong> = page affichée, <strong>commencé</strong> = a cliqué une réponse à la question 1.</p>');
     h += overviewCards();
 
     if (!V.list.length) {
@@ -447,24 +448,24 @@
       }
       h += '<div class="lq-actions" style="margin:-4px 0 14px">'
         + (canCompare ? '<button class="fn-btn' + (S.quizCompare ? ' primary' : '') + '" data-lq-compare>' + (S.quizCompare ? '✓ Comparaison des versions' : '⇄ Comparer les versions côte à côte') + '</button> ' : '')
-        + '<button class="fn-btn' + (S.quizLatest ? ' primary' : '') + '" data-lq-latest title="Chaque republication de la page ouvre de nouveaux compteurs : ne pas mélanger le suivi d\'avant et d\'après une correction.">' + (S.quizLatest ? '✓ Depuis la dernière publication de la page' : 'Toute la période (toutes publications)') + '</button>'
+        + '<button class="fn-btn' + (S.quizLatest ? ' primary' : '') + '" data-lq-latest title="Toutes les publications sont réunies tant que les questions mesurées ne changent pas. Un changement de questions (ou une mesure corrigée) ouvre une nouvelle période : on ne mélange jamais deux parcours qui ne se comparent pas.">' + (S.quizLatest ? '✓ Période comparable (mêmes questions, toutes publications)' : 'Toute la période, mesures différentes additionnées') + '</button>'
         + (sinceTxt ? ' <span class="lq-muted">' + esc(sinceTxt.slice(3)) + '</span>' : '') + '</div>';
       /* « Tous les quiz » : jamais deux quiz différents dans un même parcours
          (identifiants de questions communs) → le parcours montré est celui du
          quiz principal, toutes variantes réunies. */
-      var viewKey = S.quizVer;
-      var famNote = '';
-      if (!viewKey && fams.length > 1) {
-        viewKey = fams[0].key;
-        famNote = 'Parcours de « ' + fams[0].name + ' » (toutes variantes). Autres quiz : clique leur carte.';
-      }
-      var view = LC.buildQuizView(R, pages, viewKey, activeGrid(), meta);
+      /* « Tous les quiz » (10/11/2026, T4) : UN bloc par quiz, aucun masqué —
+         jamais deux quiz différents dans un même parcours. */
+      var viewKeys = S.quizVer ? [S.quizVer] : (fams.length > 1 ? fams.map(function (f) { return f.key; }) : ['']);
       var cmp = null;
-      if (canCompare && S.quizCompare) {
+      if (canCompare && S.quizCompare && fams.length <= 1) {
         cmp = V.list.slice(0, 4).map(function (v) { return { v: v, view: LC.buildQuizView(R, pages, v.key, activeGrid(), meta) }; });
       }
-      var cur = viewKey ? (V.list.concat(fams).filter(function (v) { return v.key === viewKey; })[0] || V.all) : V.all;
-      h += card('🧭 Parcours — ' + esc(cur.name), esc((cur.sub || '') + (famNote ? (cur.sub ? ' · ' : '') + famNote : '')), parcours(view, cmp, cur));
+      viewKeys.forEach(function (viewKey) {
+        var view = LC.buildQuizView(R, pages, viewKey, activeGrid(), meta);
+        var cur = viewKey ? (V.list.concat(fams).filter(function (v) { return v.key === viewKey; })[0] || V.all) : V.all;
+        var famNote = !S.quizVer && fams.length > 1 ? 'toutes variantes de ce quiz' : '';
+        h += card('🧭 Parcours — ' + esc(cur.name), esc((cur.sub || '') + (famNote ? (cur.sub ? ' · ' : '') + famNote : '')), parcours(view, viewKeys.length === 1 ? cmp : null, cur));
+      });
       if (V.hiddenLeads) h += '<div class="fn-stage-note" style="margin:-6px 0 14px">Seuls les quiz en ligne sont affichés. ' + fNum(V.hiddenLeads) + ' lead' + (V.hiddenLeads > 1 ? 's' : '') + ' de la période vien' + (V.hiddenLeads > 1 ? 'nent' : 't') + ' de pages hors ligne ou anciennes : ils restent comptés dans la vue d\'ensemble, le marketing et les closers.</div>';
     }
 
