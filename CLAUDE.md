@@ -370,6 +370,18 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   deux versions mélangées ; « Tous les quiz » ne fusionne jamais deux tunnels (Élite ≠
   Présidentielles). Visites internes : `?test_claude`, `?apercu` (session) ou `?alteo_interne=1`
   (appareil) → `x: 1`, ignorées par `api/tunnel-event.js`.
+  **Chiffres justes (10/11/2026, audit T0 : chaque compteur rapproché du pixel et de Make, au jour
+  près).** Référence = `page_views_daily` (views = arrivés, ctas = ont répondu Q1 via
+  `trkStart`, optins = formulaires = exécutions Make). En tête de l'onglet Quiz : « chiffres de
+  référence » par quiz × variante (`LqsCore.quizOverview`), « Contrôle de cohérence »
+  (`quizChecks` : clics ↔ réponses Q1, formulaires ↔ fiches ; alerte > 20 % un jour de > 30 arrivés,
+  reprise dans le brief du matin), « Qualité des leads par page d'entrée » (`qualityByPage`).
+  Parcours : période COMPARABLE = publications réunies tant que les questions ne changent pas ; la
+  mesure injectée corrigée (Q1 de type `first`, réponse envoyée en QUITTANT la question) porte
+  `mv: 2` → champ `measure`, suffixe `m2`, jamais additionnée à l'ancienne. Journal anonyme par
+  visite `tunnel_visits` (`vid` de session). Une même campagne Meta peut mener à deux quiz : ne
+  jamais attribuer une campagne à une page sans les utm de `tunnel_stats_daily.sources`.
+
 
 Spécification de référence du flux commercial : `REFONTE-SPEC.md`.
 
