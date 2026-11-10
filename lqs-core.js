@@ -1670,14 +1670,19 @@
     if (ms == null || !isFinite(ms)) return null;
     try { return new Date(ms).toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' }); } catch (e) { return isoDay(ms); }
   }
-  var OV_FIELDS = ['arrives', 'q1', 'done', 'optins', 'newLeads', 'backLeads', 'booked', 'kept'];
-  function ovZero() { var o = { doneMeasured: false }; OV_FIELDS.forEach(function (f) { o[f] = 0; }); return o; }
-  function ovAdd(a, b) { OV_FIELDS.forEach(function (f) { a[f] += b[f] || 0; }); if (b.doneMeasured) a.doneMeasured = true; }
+  /* mQ1 / mOptins : ont répondu Q1 et formulaires des seuls jours où l'écran
+     de fin est mesuré — le taux « ont fini » ne compare que ce qui est comparable. */
+  var OV_FIELDS = ['arrives', 'q1', 'done', 'optins', 'newLeads', 'backLeads', 'booked', 'kept', 'mQ1', 'mOptins'];
+  function ovZero() { var o = { doneMeasured: false, doneSince: null }; OV_FIELDS.forEach(function (f) { o[f] = 0; }); return o; }
+  function ovAdd(a, b) {
+    OV_FIELDS.forEach(function (f) { a[f] += b[f] || 0; });
+    if (b.doneMeasured) { a.doneMeasured = true; if (b.doneSince && (!a.doneSince || b.doneSince < a.doneSince)) a.doneSince = b.doneSince; }
+  }
   function ovFinish(o) {
     o.none = Math.max(0, o.arrives - o.q1);
     o.rQ1 = o.arrives ? o.q1 / o.arrives * 100 : null;
-    o.rDone = o.doneMeasured && o.q1 ? o.done / o.q1 * 100 : null;
-    o.rOptin = o.doneMeasured ? (o.done ? o.optins / o.done * 100 : null) : (o.q1 ? o.optins / o.q1 * 100 : null);
+    o.rDone = o.doneMeasured && o.mQ1 ? o.done / o.mQ1 * 100 : null;
+    o.rOptin = o.doneMeasured ? (o.done ? o.mOptins / o.done * 100 : null) : (o.q1 ? o.optins / o.q1 * 100 : null);
     o.rLead = o.optins ? (o.newLeads + o.backLeads) / o.optins * 100 : null;
     o.rBook = (o.newLeads + o.backLeads) ? o.booked / (o.newLeads + o.backLeads) * 100 : null;
     o.rKept = o.booked ? o.kept / o.booked * 100 : null;
@@ -1712,7 +1717,8 @@
     (D.quizDocs || []).forEach(function (d) {
       var c = cell(d.page, d.variant, d.date);
       if (!c) return;
-      c.done += num(d.completes); c.doneMeasured = true;
+      c.done += num(d.completes);
+      if (!c.doneMeasured) { c.doneMeasured = true; c.doneSince = d.date; }
     });
     /* 2. Leads (nouveaux / revenus) */
     var leadsById = {}, byP9 = {}, byEmail = {};
@@ -1772,6 +1778,7 @@
           total: ovZero(), days: [], first: null, last: null };
         Object.keys(cells[page][v]).sort().forEach(function (day) {
           var c = cells[page][v][day];
+          if (c.doneMeasured) { c.mQ1 = c.q1; c.mOptins = c.optins; }
           ovAdd(row.total, c);
           if (c.arrives > 0) { if (!row.first) row.first = day; row.last = day; }
           var qd = q.days[day] || (q.days[day] = ovZero());
@@ -1779,6 +1786,7 @@
           row.days.push(Object.assign({ day: day }, ovFinish(c)));
         });
         ovFinish(row.total);
+        row.total.days = row.days.length;
         ovAdd(q.total, row.total);
         q.pages.push(row);
       });
@@ -1787,6 +1795,7 @@
       var q = byQuiz[k];
       ovFinish(q.total);
       q.dayList = Object.keys(q.days).sort().map(function (d) { return Object.assign({ day: d }, ovFinish(q.days[d])); });
+      q.total.days = q.dayList.length;
       var firsts = q.pages.map(function (r) { return r.first; }).filter(Boolean).sort();
       var lasts = q.pages.map(function (r) { return r.last; }).filter(Boolean).sort();
       q.first = firsts[0] || null; q.last = lasts[lasts.length - 1] || null;

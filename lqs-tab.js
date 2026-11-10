@@ -360,7 +360,7 @@
     return '<td><strong>' + fNum(o.arrives) + '</strong>' + ovRate(null) + '</td>'
       + '<td><strong>' + fNum(o.q1) + '</strong>' + ovRate(o.rQ1) + '</td>'
       + '<td>' + fNum(o.none) + ovRate(o.arrives ? o.none / o.arrives * 100 : null) + '</td>'
-      + '<td>' + (doneMeasured ? fNum(o.done) + ovRate(o.rDone) : '<span class="lq-muted">non mesuré</span>') + '</td>'
+      + '<td>' + (doneMeasured ? fNum(o.done) + ovRate(o.rDone) + (o.doneSince && o.days > 1 ? '<div class="lq-sub lq-muted">mesuré depuis le ' + dayShort(o.doneSince) + '</div>' : '') : '<span class="lq-muted">non mesuré</span>') + '</td>'
       + '<td>' + fNum(o.optins) + ovRate(o.rOptin) + '</td>'
       + '<td><strong>' + fNum(o.newLeads) + '</strong>' + ovRate(o.optins ? o.newLeads / o.optins * 100 : null) + '</td>'
       + '<td>' + fNum(o.backLeads) + ovRate(null) + '</td>'

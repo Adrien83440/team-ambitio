@@ -43,7 +43,9 @@ function parisDay(t) { return t == null ? null : new Date(t).toLocaleDateString(
 function phone9(v) { const d = String(v || '').replace(/\D/g, ''); return d.length >= 9 ? d.slice(-9) : ''; }
 function landingOf(L) {
   if (!L || typeof L !== 'object') return null;
-  return { page: L.page || null, variant: L.variant || null, via: L.via || null, label: L.label || null };
+  let path = null;
+  try { if (L.pageUrl) path = new URL(String(L.pageUrl)).pathname.slice(0, 80); } catch (e) { path = null; }
+  return { page: L.page || null, variant: L.variant || null, via: L.via || null, label: L.label || null, path: path, tunnelId: L.tunnelId || null, capturedAt: L.capturedAt || null };
 }
 /* Début / fin d'un jour de Paris en UTC (marge d'un jour de chaque côté,
    le filtrage fin se fait sur parisDay). */
@@ -108,6 +110,8 @@ async function leadsOf(from, to) {
       importedCreatedAt: ms(d.importedCreatedAt), dateWebinaire: ms(d.dateWebinaire),
       lastOptinDay: parisDay(ms(d.lastOptinAt)), lastOptinAt: ms(d.lastOptinAt),
       quizSubmittedDay: parisDay(ms(d.quizSubmittedAt)), hasQuiz: !!d.quiz,
+      quizKeys: d.quiz && typeof d.quiz === 'object' ? Object.keys(d.quiz).slice(0, 60) : null,
+      quizMarks: d.quiz && typeof d.quiz === 'object' ? { version: d.quiz.version || d.quiz.quiz_version || null, lp: d.quiz.lp || null } : null,
       type: d.type || null, sourceDetail: d.sourceDetail || null, source: d.source || null,
       stage: d.stage || null, status: d.status || null,
       landingFirst: landingOf(d.landingFirst), landingLast: landingOf(d.landingLast),
