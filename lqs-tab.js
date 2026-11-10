@@ -351,6 +351,67 @@
         complet reste à un clic ;
      3. « Comparer » : une colonne par version, réponse par réponse ;
      4. formulaires hors quiz (VSL, AlteoForms) à part, repliés. */
+  /* ── Vue d'ensemble par quiz : chiffres de référence (10/11/2026, T2) ──
+     Un bloc par quiz, une ligne par variante, jamais deux quiz mélangés.
+     Compteurs fiables uniquement (lqs-core quizOverview) : c'est la lecture
+     du test A/B (KPI : ont répondu Q1 / arrivés). */
+  function ovRate(v) { return '<div class="lq-sub">' + (v == null ? '&nbsp;' : fPct(v, 0)) + '</div>'; }
+  function ovCells(o, doneMeasured) {
+    return '<td><strong>' + fNum(o.arrives) + '</strong>' + ovRate(null) + '</td>'
+      + '<td><strong>' + fNum(o.q1) + '</strong>' + ovRate(o.rQ1) + '</td>'
+      + '<td>' + fNum(o.none) + ovRate(o.arrives ? o.none / o.arrives * 100 : null) + '</td>'
+      + '<td>' + (doneMeasured ? fNum(o.done) + ovRate(o.rDone) : '<span class="lq-muted">non mesuré</span>') + '</td>'
+      + '<td>' + fNum(o.optins) + ovRate(o.rOptin) + '</td>'
+      + '<td><strong>' + fNum(o.newLeads) + '</strong>' + ovRate(o.optins ? o.newLeads / o.optins * 100 : null) + '</td>'
+      + '<td>' + fNum(o.backLeads) + ovRate(null) + '</td>'
+      + '<td>' + fNum(o.booked) + ovRate(o.rBook) + '</td>'
+      + '<td>' + fNum(o.kept) + ovRate(o.rKept) + '</td>';
+  }
+  function ovHead(first) {
+    return '<thead><tr><th class="l">' + first + '</th>'
+      + '<th title="Page du quiz affichée (une fois par session)">Arrivés</th>'
+      + '<th title="Ont cliqué une réponse à la question 1 · taux = ÷ arrivés (KPI du test A/B)">Ont répondu Q1</th>'
+      + '<th title="Arrivés − ont répondu Q1">N\'ont rien cliqué</th>'
+      + '<th title="Écran de fin des questions atteint · taux = ÷ ont répondu Q1">Ont fini les questions</th>'
+      + '<th title="Formulaire de coordonnées envoyé · taux = ÷ ont fini les questions (sinon ÷ ont répondu Q1)">Formulaire envoyé</th>'
+      + '<th title="Nouvelles fiches Leads Live dont la page d\'entrée est ce quiz · taux = ÷ formulaires">Nouveaux leads</th>'
+      + '<th title="Fiches déjà connues, ré-inscrites par ce quiz pendant la période (mise à jour, pas de nouvelle fiche)">Déjà connus revenus</th>'
+      + '<th title="RDV créés sur la période (seul ou par un setter, hors replanifications) · taux = ÷ leads">RDV pris</th>'
+      + '<th title="RDV tenus (fin de chaîne de report) · taux = ÷ RDV pris">RDV honorés</th></tr></thead>';
+  }
+  function dayShort(iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] : '—'; }
+  function overviewCards() {
+    var meta = S.M.tunnels || S.ctx.tunnelsMeta || null;
+    var list = LC.quizOverview(S.D || {}, S.ctx.P, meta);
+    if (!list.length) return '';
+    var h = '';
+    list.forEach(function (q) {
+      var det = 'ov_' + q.tunnel;
+      var body = '<div class="fn-table-wrap"><table class="fn-igt lq-t">' + ovHead('Variante') + '<tbody>';
+      q.pages.forEach(function (r) {
+        body += '<tr><td class="l"><strong>' + esc(r.label) + '</strong>' + sub(esc(r.path + (r.variant ? ' · ' + r.variant.toUpperCase() : '')) + (r.first ? ' · du ' + dayShort(r.first) + ' au ' + dayShort(r.last) : '')) + '</td>' + ovCells(r.total, r.total.doneMeasured) + '</tr>';
+      });
+      if (q.pages.length > 1) body += '<tr class="tot"><td class="l">Total du quiz</td>' + ovCells(q.total, q.doneMeasured) + '</tr>';
+      body += '</tbody></table></div>';
+      body += '<div class="lq-actions" style="margin-top:8px"><button class="fn-btn' + (S.openDetail[det] ? ' primary' : '') + '" data-lq-det="' + esc(det) + '">' + (S.openDetail[det] ? '▾ Masquer le détail par jour' : '▸ Détail par jour') + '</button></div>';
+      if (S.openDetail[det]) {
+        body += '<div class="fn-table-wrap" style="margin-top:8px"><table class="fn-igt lq-t">' + ovHead('Jour') + '<tbody>';
+        q.dayList.forEach(function (d) { body += '<tr><td class="l">' + dayShort(d.day) + '</td>' + ovCells(d, d.doneMeasured) + '</tr>'; });
+        q.pages.forEach(function (r) {
+          if (q.pages.length < 2) return;
+          body += '<tr class="tot"><td class="l" colspan="10">' + esc(r.label) + '</td></tr>';
+          r.days.forEach(function (d) { body += '<tr><td class="l">' + dayShort(d.day) + ' · ' + esc((r.variant || '?').toUpperCase()) + '</td>' + ovCells(d, d.doneMeasured) + '</tr>'; });
+        });
+        body += '</tbody></table></div>';
+      }
+      body += '<div class="fn-stage-note" style="margin-top:8px">Période couverte par la mesure : '
+        + (q.first ? 'du ' + dayShort(q.first) + ' au ' + dayShort(q.last) : 'aucune visite mesurée')
+        + ' · jours de Paris · visites internes (tests, équipe) exclues. Arrivés, réponses à Q1 et formulaires : compteurs de la page, toutes publications réunies. Leads et RDV : fiches Leads Live dont ce quiz est la page d\'entrée.</div>';
+      h += card('🎯 ' + esc(q.name) + ' — chiffres de référence', 'un quiz, ses variantes · taux sous chaque chiffre', body);
+    });
+    return h;
+  }
+
   function viewQuiz() {
     var meta = S.M.tunnels || S.ctx.tunnelsMeta || null;
     /* 07/11/2026 : par défaut, la mesure visiteurs de chaque version ne
@@ -368,6 +429,7 @@
       + '<p><strong>📋 Question par question</strong> : pour chaque réponse, combien de visiteurs l\'ont choisie, et ce que ça a donné chez les contacts (clients Élite / Business, signé et encaissé), avec ses points dans le barème.</p>'
       + '<p>Les <strong>cartes</strong> en haut filtrent par version du quiz (Dark, White, YouTube…). « Comparer » les met côte à côte. Les formulaires hors quiz sont tout en bas.</p>'
       + '<p><strong>Dernière publication</strong> (par défaut) : chaque republication de la page ouvre de nouveaux compteurs visiteurs, pour ne jamais mélanger un suivi corrigé avec l\'ancien. « Toute la période » additionne toutes les publications. Les contacts, eux, couvrent toujours toute la période.</p>');
+    h += overviewCards();
 
     if (!V.list.length) {
       h += card('🧭 Parcours du quiz', '', '<div class="lq-muted">Aucun lead issu d\'un quiz et aucune mesure sur la période. La mesure démarre quand la page quiz est instrumentée (<code>node scripts/quiz-tracking-patch.js --apply</code>).</div>');

@@ -10,6 +10,16 @@
 // Le patch repère dans le <script> de la page : STEPS, go(i[, x]),
 // recordQuestion(s), l'objet A et (écran prix) stage. Une page déjà
 // instrumentée (« epqTrackQ ») n'est jamais patchée deux fois.
+// 10/11/2026 (brief « chiffres justes », T1) : mêmes définitions que la page
+// Élite, quelle que soit la page —
+//   start + q  à l'AFFICHAGE d'une question (y compris l'écran 1 pré-affiché
+//              en HTML, que le démarrage de la page montre sans appeler go() :
+//              accroche sur recordQuestion, limitée à l'écran affiché) ;
+//   a          quand on QUITTE une question répondue (jamais à l'affichage),
+//              uniquement des options du quiz (texte libre → « autre ») ;
+//   done       à l'écran qui suit la dernière question.
+// Question = type connu (pain, first, multi, single, rating, yesno) ou tout
+// écran identifié qui n'est ni info, ni final, ni résultat.
 // Tout passe par window.ALTEO.quiz (tunnel-runtime.js) : rien n'est envoyé
 // en aperçu (/t/…) ni hors tunnel. Fichier préfixé `_` : hors routing Vercel.
 // ============================================================================
@@ -68,7 +78,7 @@ module.exports = function quizTracking(opts) {
       '    if (!out.length) return null;',
       '    return out.join(\' | \');   // choix multiple : même format que la page Élite',
       '  }',
-      '  var epqCurQ = -1;',
+      '  var epqCurQ = -1, epqLastShown = -1;',
       '  /* On QUITTE une question : sa réponse part si elle existe (jamais à l\'affichage). */',
       '  function epqLeave(toIdx) {',
       '    try { if (epqCurQ < 0 || epqCurQ === toIdx) return; var s = STEPS[epqCurQ], a = s ? epqAnswer(s) : null; if (a != null) epqSend(\'a\', { q: epqQ(epqCurQ), a: a }); } catch (e) {}',
@@ -77,6 +87,7 @@ module.exports = function quizTracking(opts) {
       '  /* Une question S\'AFFICHE : 1re question → start ; chaque question → q. */',
       '  function epqShowQ(i) {',
       '    var qs = epqQuestions(); if (!qs.length) return;',
+      '    epqLastShown = i;',
       '    if (epqIsQ(STEPS[i])) { epqCurQ = i; if (qs.indexOf(i) === 0) epqSend(\'start\'); setTimeout(function () { epqSend(\'q\', { q: epqQ(i) }); }, 80); return; }',
       '    if (i > qs[qs.length - 1]) epqSend(\'done\');',
       '  }',
@@ -85,7 +96,7 @@ module.exports = function quizTracking(opts) {
       '  /* Tête de recordQuestion(s) : couvre l\'écran 1 pré-affiché en HTML, dont le démarrage n\'appelle pas go().',
       '     Ignoré pour tout écran qui n\'est pas celui affiché (ex. STEPS.forEach(recordQuestion) des résultats). */',
       '  function epqShown(s) {',
-      '    try { var i = STEPS.indexOf(s); if (i < 0 || i === epqCurQ) return; if (typeof cur !== \'undefined\' && STEPS[cur] !== s) return; epqLeave(i); epqShowQ(i); } catch (e) {}',
+      '    try { var i = STEPS.indexOf(s); if (i < 0 || i === epqCurQ || i === epqLastShown) return; if (typeof cur !== \'undefined\' && STEPS[cur] !== s) return; epqLeave(i); epqShowQ(i); } catch (e) {}',
       '  }',
       withGate ? gateCode() : '  function epqGate() { return false; }',
       ''

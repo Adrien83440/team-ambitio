@@ -386,6 +386,23 @@ Spécification de référence du flux commercial : `REFONTE-SPEC.md`.
 5. Toujours donner la **séquence de déploiement ordonnée** en fin de livraison
    (rules d'abord, puis frontend, etc.).
 6. Signaler les régressions possibles et les chemins non testés plutôt que de les taire.
+7. **Autonomie totale, autorisation à chaque fois (consigne d'Adrien, 10/11/2026).**
+   Adrien ne veut **aucune action à faire lui-même** : l'agent pousse, déploie, lance
+   les scripts, pose les variables Vercel, ouvre les accès réseau de sa session, lit
+   et (après dry-run validé) écrit Firestore, vérifie en ligne. Il ne lui demande que
+   son **autorisation**, une fois par action sortante (fusion sur `main` = mise en
+   production, écriture Firestore, déploiement de règles ou de functions, variable
+   Vercel), en disant précisément ce qui va se passer. Les recommandations sont
+   validées d'office si elles respectent ces consignes et servent la finalité
+   (des données fiables) ; ne demander que ce qui est vraiment une décision d'Adrien.
+   Ce qui exige un outil absent de la session (commande Firebase interactive, Console
+   GCP) : le dire, proposer la voie qui ne lui demande rien, et ne lui laisser que
+   l'autorisation.
+8. **Accès aux données de production sans clé de service dans la session.** Lecture :
+   endpoints Vercel en lecture seule protégés par une clé posée dans les variables
+   Vercel (ex. `api/quiz-audit.js`, `QUIZ_AUDIT_KEY`, limitée à la preview de la branche),
+   jamais dans le dépôt ; la supprimer coupe l'accès. Aucune donnée personnelle en
+   sortie. Écriture : même principe, toujours dry-run d'abord, `--apply` après accord.
 
 ---
 

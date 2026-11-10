@@ -1645,6 +1645,156 @@
       beforeMeasure: vRows.length - inM, variants: variants };
   }
 
+  /* ══ 7 ter. VUE D'ENSEMBLE PAR QUIZ — CHIFFRES DE RÉFÉRENCE (10/11/2026) ══
+     Brief « Mesure des quiz : des chiffres justes » (T2). Un tableau par
+     QUIZ (tunnel) et par variante, jamais deux quiz mélangés, construit
+     uniquement sur les compteurs déjà fiables, sans découpage par version :
+       · arrivés         = page affichée            page_views_daily.views
+       · ont répondu Q1  = 1er clic sur une réponse page_views_daily.ctas
+                           (ALTEO.track('cta') dans trkStart, deux pages)
+       · rien cliqué     = arrivés − ont répondu Q1
+       · fini les questions = écran final atteint   quiz_funnel_daily.completes
+                           (toutes publications réunies ; null = pas mesuré)
+       · formulaire envoyé = page_views_daily.optins
+       · nouveaux leads  = fiches dont la page d'entrée (landingFirst, via
+                           optin) est ce quiz, entrées ce jour-là
+       · déjà connus revenus = ré-inscrits (lastOptinAt) par ce quiz
+                           (landingLast), entrés avant la période
+       · RDV pris / honorés = RDV créés sur la période (self + setter, hors
+                           replanifications), provenance bookings.landing ou
+                           page d'entrée de la fiche ; honoré = RDV terminal
+                           de la chaîne tenu.
+     Jours de Paris. « Période couverte » = premier et dernier jour où la page
+     a des visites mesurées, dans la période choisie. */
+  function parisIso(ms) {
+    if (ms == null || !isFinite(ms)) return null;
+    try { return new Date(ms).toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' }); } catch (e) { return isoDay(ms); }
+  }
+  var OV_FIELDS = ['arrives', 'q1', 'done', 'optins', 'newLeads', 'backLeads', 'booked', 'kept'];
+  function ovZero() { var o = { doneMeasured: false }; OV_FIELDS.forEach(function (f) { o[f] = 0; }); return o; }
+  function ovAdd(a, b) { OV_FIELDS.forEach(function (f) { a[f] += b[f] || 0; }); if (b.doneMeasured) a.doneMeasured = true; }
+  function ovFinish(o) {
+    o.none = Math.max(0, o.arrives - o.q1);
+    o.rQ1 = o.arrives ? o.q1 / o.arrives * 100 : null;
+    o.rDone = o.doneMeasured && o.q1 ? o.done / o.q1 * 100 : null;
+    o.rOptin = o.doneMeasured ? (o.done ? o.optins / o.done * 100 : null) : (o.q1 ? o.optins / o.q1 * 100 : null);
+    o.rLead = o.optins ? (o.newLeads + o.backLeads) / o.optins * 100 : null;
+    o.rBook = (o.newLeads + o.backLeads) ? o.booked / (o.newLeads + o.backLeads) * 100 : null;
+    o.rKept = o.booked ? o.kept / o.booked * 100 : null;
+    return o;
+  }
+  function quizOverview(D, P, meta) {
+    D = D || {};
+    var sIso = parisIso(P.start.getTime()), eIso = parisIso(P.end.getTime());
+    var isTunnelKey = function (pg) { return /^[a-z0-9-]+__[a-z0-9-]+$/.test(String(pg || '')); };
+    /* 1. Pages quiz : mesurées comme quiz (quiz_funnel_daily) ou ayant amené
+       un lead avec des réponses de quiz. */
+    var quizPages = {};
+    (D.quizDocs || []).forEach(function (d) { if (isTunnelKey(d.page)) quizPages[d.page] = 1; });
+    function leadPage(L) { return L && L.page && L.via === 'optin' && isTunnelKey(L.page) ? L.page : null; }
+    (D.leads || []).concat(D.reoptins || []).forEach(function (l) {
+      if (!l || !l.quiz) return;
+      [l.landingFirst, l.landingLast].forEach(function (L) { var pg = leadPage(L); if (pg) quizPages[pg] = 1; });
+    });
+    var cells = {};   // page → variante → jour → compteurs
+    function cell(page, variant, day) {
+      if (!quizPages[page] || !day || day < sIso || day > eIso) return null;
+      var v = variant || '_';
+      var pc = cells[page] || (cells[page] = {});
+      var vc = pc[v] || (pc[v] = {});
+      return vc[day] || (vc[day] = ovZero());
+    }
+    (D.views || []).forEach(function (r) {
+      var c = cell(r.page, r.variant, r.date);
+      if (!c) return;
+      c.arrives += num(r.views); c.q1 += num(r.ctas); c.optins += num(r.optins);
+    });
+    (D.quizDocs || []).forEach(function (d) {
+      var c = cell(d.page, d.variant, d.date);
+      if (!c) return;
+      c.done += num(d.completes); c.doneMeasured = true;
+    });
+    /* 2. Leads (nouveaux / revenus) */
+    var leadsById = {}, byP9 = {}, byEmail = {};
+    function idx(l) {
+      if (!l || !l._id || leadsById[l._id]) return;
+      leadsById[l._id] = l;
+      if (l._p9 && !byP9[l._p9]) byP9[l._p9] = l;
+      var em = String(l.email || '').toLowerCase().trim();
+      if (em && !byEmail[em]) byEmail[em] = l;
+    }
+    (D.leads || []).forEach(function (l) {
+      idx(l);
+      var L = l.landingFirst, pg = leadPage(L);
+      if (!pg) return;
+      var c = cell(pg, L.variant, parisIso(l._entry));
+      if (c) c.newLeads++;
+    });
+    (D.reoptins || []).forEach(function (l) {
+      idx(l);
+      var L = l.landingLast, pg = leadPage(L);
+      if (!pg) return;
+      var c = cell(pg, L.variant, parisIso(FC.parseFlexMs(l.lastOptinAt)));
+      if (c) c.backLeads++;
+    });
+    (D.extraLeads || []).forEach(idx);
+    /* 3. RDV */
+    var byId = D.bookingsById || {};
+    function leadOf(b) {
+      if (b.leadId && leadsById[b.leadId]) return leadsById[b.leadId];
+      if (b._p9 && byP9[b._p9]) return byP9[b._p9];
+      var em = String(b.prospect && b.prospect.email || '').toLowerCase().trim();
+      return em && byEmail[em] ? byEmail[em] : null;
+    }
+    function terminal(b) { var c = b, g = 0; while (c && c.rescheduledToId && g++ < 10) { var n = byId[c.rescheduledToId]; if (!n) break; c = n; } return c; }
+    function present(b) { var o = b && b.outcome; return o ? (o === 'offre' || o === 'close' || o === 'non_close' || o === 'disqualifie') : !!(b && b.status === 'completed'); }
+    (D.bookings || []).forEach(function (b) {
+      if (b.rescheduledFromId) return;
+      if (b._class !== 'self' && b._class !== 'setter') return;
+      var cm = b._createdMs;
+      if (cm == null || cm < P.start.getTime() || cm > P.end.getTime()) return;
+      var L = b.landing && b.landing.page ? b.landing : null;
+      if (!L) { var l = leadOf(b); var LF = l && l.landingFirst; if (LF && leadPage(LF)) L = LF; }
+      if (!L) return;
+      var c = cell(L.page, L.variant, parisIso(cm));
+      if (!c) return;
+      c.booked++;
+      if (present(terminal(b))) c.kept++;
+    });
+    /* 4. Mise en forme : quiz → variantes → jours */
+    var byQuiz = {};
+    Object.keys(cells).forEach(function (page) {
+      var sp = splitPage(page), tm = meta && meta[sp.tunnel], st = tm && tm.steps ? tm.steps[sp.step] : null;
+      var q = byQuiz[sp.tunnel] || (byQuiz[sp.tunnel] = { tunnel: sp.tunnel, name: (tm && tm.name) || sp.tunnel, pages: [], total: ovZero(), days: {} });
+      Object.keys(cells[page]).sort().forEach(function (v) {
+        var vm = st && st.variants && v !== '_' ? st.variants[v] : null;
+        var row = { page: page, path: '/' + sp.step, variant: v === '_' ? null : v, label: (vm && vm.label) || (v === '_' ? 'variante non transmise' : 'Variante ' + v.toUpperCase()),
+          total: ovZero(), days: [], first: null, last: null };
+        Object.keys(cells[page][v]).sort().forEach(function (day) {
+          var c = cells[page][v][day];
+          ovAdd(row.total, c);
+          if (c.arrives > 0) { if (!row.first) row.first = day; row.last = day; }
+          var qd = q.days[day] || (q.days[day] = ovZero());
+          ovAdd(qd, c);
+          row.days.push(Object.assign({ day: day }, ovFinish(c)));
+        });
+        ovFinish(row.total);
+        ovAdd(q.total, row.total);
+        q.pages.push(row);
+      });
+    });
+    return Object.keys(byQuiz).map(function (k) {
+      var q = byQuiz[k];
+      ovFinish(q.total);
+      q.dayList = Object.keys(q.days).sort().map(function (d) { return Object.assign({ day: d }, ovFinish(q.days[d])); });
+      var firsts = q.pages.map(function (r) { return r.first; }).filter(Boolean).sort();
+      var lasts = q.pages.map(function (r) { return r.last; }).filter(Boolean).sort();
+      q.first = firsts[0] || null; q.last = lasts[lasts.length - 1] || null;
+      q.doneMeasured = q.total.doneMeasured;
+      return q;
+    }).sort(function (a, b) { return b.total.arrives - a.total.arrives; });
+  }
+
   /* ══ 8. PHRASES CLÉS (lecture en 10 secondes) ══════════════════════════ */
   /* Parts calculées sur le SIGNÉ (cash), encaissé à côté (paid). */
   function insights(bn, cashMode) {
@@ -1680,6 +1830,7 @@
     byNote: byNote, byAnswer: byAnswer, byAxis: byAxis, byCloser: byCloser, closerBoard: closerBoard,
     suggestPoints: suggestPoints, suggestBasis: suggestBasis,
     quizVersions: quizVersions, buildQuizView: buildQuizView, versionMeta: versionMeta, OLD_QUIZ_KEY: OLD_KEY, FAMILY_PREFIX: FAM, familyOfKey: familyOfKey, mqsOf: mqsOf, buildQuizFunnel: buildQuizFunnel, insights: insights,
-    newAgg: newAgg, offerOf: offerOf, addLeadRow: addLeadRow, fin: fin, isoDay: isoDay
+    newAgg: newAgg, offerOf: offerOf, addLeadRow: addLeadRow, fin: fin, isoDay: isoDay,
+    quizOverview: quizOverview, parisIso: parisIso
   };
 }));
