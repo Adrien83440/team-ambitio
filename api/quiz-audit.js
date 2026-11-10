@@ -179,6 +179,19 @@ module.exports = async (req, res) => {
     if (parts.indexOf('stats') >= 0) jobs.push(byDate('tunnel_stats_daily', from, to).then(function (x) { out.tunnel_stats_daily = x; }));
     if (parts.indexOf('quiz') >= 0) jobs.push(byDate('quiz_funnel_daily', from, to).then(function (x) { out.quiz_funnel_daily = x; }));
     if (parts.indexOf('ads') >= 0) jobs.push(byDate('ads_insights', from, to).then(function (x) { out.ads_insights = x; }));
+    if (parts.indexOf('visits') >= 0) jobs.push(byDate('tunnel_visits', from, to).then(function (x) {
+      /* Journal par visite (T3) : agrégats seulement, jamais les visites une à une. */
+      const agg = {};
+      x.forEach(function (v) {
+        Object.keys(v.p || {}).forEach(function (pk) {
+          const e = v.p[pk] || {}, k = v.date + '|' + pk;
+          const a = agg[k] || (agg[k] = { visits: 0, view: 0, cta: 0, start: 0, done: 0, optin: 0, answeredQ: 0 });
+          a.visits++; ['view', 'cta', 'start', 'done', 'optin'].forEach(function (f) { if (e[f]) a[f]++; });
+          a.answeredQ += Object.keys(e.a || {}).length;
+        });
+      });
+      out.tunnel_visits = agg;
+    }));
     if (parts.indexOf('adsad') >= 0) {
       jobs.push(byDate('ads_insights_ad', from, to).then(function (x) { out.ads_insights_ad = x; }));
       jobs.push(db.collection('ads_creatives').get().then(function (snap) {
