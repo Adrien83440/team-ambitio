@@ -14,7 +14,8 @@
 // Ce que le script ajoute dans le <script> du quiz (pages HTML écrites à la
 // main, stockées dans Storage, servies par api/tunnel-render.js) :
 //   · epqTrackQ(i) en tête de go(i)            → ALTEO.quiz('start'|'q'|'done')
-//   · epqTrackA(s) en tête de recordQuestion(s) → ALTEO.quiz('a')
+//   · epqShown(s) en tête de recordQuestion(s)  → écran affiché sans go() (écran 1)
+//     (la réponse 'a' part quand on quitte la question, voir api/_quizTracking.js)
 //   · epqGate(i, reprise) en tête de go(i)     → écran prix (si activé)
 // Tout passe par window.ALTEO.quiz (tunnel-runtime.js) : rien n'est envoyé
 // en aperçu (/t/…) ni en fichier local. DÉPLOYER le frontend (Vercel) AVANT

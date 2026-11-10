@@ -10,6 +10,16 @@
 // Le patch repère dans le <script> de la page : STEPS, go(i[, x]),
 // recordQuestion(s), l'objet A et (écran prix) stage. Une page déjà
 // instrumentée (« epqTrackQ ») n'est jamais patchée deux fois.
+// 10/11/2026 (brief « chiffres justes », T1) : mêmes définitions que la page
+// Élite, quelle que soit la page —
+//   start + q  à l'AFFICHAGE d'une question (y compris l'écran 1 pré-affiché
+//              en HTML, que le démarrage de la page montre sans appeler go() :
+//              accroche sur recordQuestion, limitée à l'écran affiché) ;
+//   a          quand on QUITTE une question répondue (jamais à l'affichage),
+//              uniquement des options du quiz (texte libre → « autre ») ;
+//   done       à l'écran qui suit la dernière question.
+// Question = type connu (pain, first, multi, single, rating, yesno) ou tout
+// écran identifié qui n'est ni info, ni final, ni résultat.
 // Tout passe par window.ALTEO.quiz (tunnel-runtime.js) : rien n'est envoyé
 // en aperçu (/t/…) ni hors tunnel. Fichier préfixé `_` : hors routing Vercel.
 // ============================================================================
@@ -44,27 +54,51 @@ module.exports = function quizTracking(opts) {
       '     Abandon question par question + réponses (compteurs anonymes) via',
       '     window.ALTEO.quiz — onglet « Qualité leads » du Funnel Sales.',
       '     Écran prix : CA mensuel sous ' + SEUIL + ' € → avertissement avant de continuer. */',
-      '  var EPQ_QTYPES = { pain: 1, multi: 1, single: 1, rating: 1, yesno: 1 };',
-      '  function epqSend(kind, data) { try { if (window.ALTEO && typeof window.ALTEO.quiz === \'function\') window.ALTEO.quiz(kind, data); } catch (e) {} }',
-      '  function epqQuestions() { var out = []; for (var k = 0; k < STEPS.length; k++) { if (STEPS[k] && EPQ_QTYPES[STEPS[k].type]) out.push(k); } return out; }',
+      '  /* Question = écran à réponse : types connus (dont « first », 1re question du quiz Élections),',
+      '     ou tout écran identifié qui n\'est ni info, ni final, ni résultat (10/11/2026). */',
+      '  var EPQ_QTYPES = { pain: 1, first: 1, multi: 1, single: 1, rating: 1, yesno: 1 };',
+      '  var EPQ_NONQ = { info: 1, final: 1, intro: 1, result: 1, results: 1, resultats: 1, form: 1, loading: 1, video: 1, merci: 1 };',
+      '  function epqIsQ(s) { return !!(s && s.id && s.type && (EPQ_QTYPES[s.type] || !EPQ_NONQ[s.type])); }',
+      '  /* mv : génération de la mesure (2 = 10/11/2026) — ses compteurs ne se mélangent pas avec ceux d\'avant. */',
+      '  var EPQ_MV = 2;',
+      '  function epqSend(kind, data) { try { data = data || {}; data.mv = EPQ_MV; if (window.ALTEO && typeof window.ALTEO.quiz === \'function\') window.ALTEO.quiz(kind, data); } catch (e) {} }',
+      '  function epqQuestions() { var out = []; for (var k = 0; k < STEPS.length; k++) { if (epqIsQ(STEPS[k])) out.push(k); } return out; }',
       '  /* Titre lisible : texte de la question dans STEPS, sinon le titre affiché à l\'écran (h1/h2/h3 de la zone du quiz), sinon l\'identifiant. */',
       '  function epqDomLabel() { try { var root = (typeof stage !== \'undefined\' && stage) || document.getElementById(\'epq\') || document.body; var h = root.querySelector(\'h1, h2, h3, legend, .q-title, .q-q\'); return h ? String(h.textContent || \'\').replace(/\\s+/g, \' \').trim() : \'\'; } catch (e) { return \'\'; } }',
-      '  function epqLabel(s) { var t = s && (s.q || s.question || s.title || s.label || s.t); if (typeof t === \'function\') { try { t = t(); } catch (e) { t = \'\'; } } t = String(t || \'\').replace(/<[^>]*>/g, \'\').replace(/\\s+/g, \' \').trim(); if (!t || /^[a-z0-9_-]+$/i.test(t)) { var d = epqDomLabel(); if (d && d.length > 3) t = d; } return (t || (s && s.id) || \'\').slice(0, 200); }',
+      '  function epqLabel(s) { var t = s && (s.q || s.question || s.title || s.text || s.label || s.t); if (!t && s && typeof s.titleFn === \'function\') { try { t = s.titleFn(); } catch (e) { t = \'\'; } } if (typeof t === \'function\') { try { t = t(); } catch (e) { t = \'\'; } } t = String(t || \'\').replace(/<[^>]*>/g, \'\').replace(/\\s+/g, \' \').trim(); if (!t || /^[a-z0-9_-]+$/i.test(t)) { var d = epqDomLabel(); if (d && d.length > 3) t = d; } return (t || (s && s.id) || \'\').slice(0, 200); }',
       '  function epqQ(idx) { var qs = epqQuestions(), pos = qs.indexOf(idx), s = STEPS[idx]; return { id: (s && s.id) || (\'q\' + idx), i: pos, n: qs.length, label: epqLabel(s) }; }',
-      '  function ' + MARK + '(i) {',
+      '  /* Options proposées (pour ne jamais envoyer de texte libre) : null si la question n\'en déclare pas. */',
+      '  function epqOpts(s) { var o = null; try { o = typeof s.optsFn === \'function\' ? s.optsFn() : s.options; } catch (e) { o = null; } if (!o || !o.length) return null; var out = []; for (var k = 0; k < o.length; k++) { var x = o[k]; out.push(String(x && typeof x === \'object\' ? (x.label || x.t || x.text || x.value || \'\') : x)); } return out; }',
+      '  /* Réponse anonyme d\'une question : option(s) du quiz, note « n / 5 », Oui / Non. null = pas répondu. */',
+      '  function epqAnswer(s) {',
+      '    var v = s.type === \'pain\' ? A.pain : A[s.id];',
+      '    if (v == null || v === \'\' || (Array.isArray(v) && !v.length)) return null;',
+      '    if (s.type === \'yesno\') return v ? \'Oui\' : \'Non\';',
+      '    if (s.type === \'rating\') return String(v) + \' / 5\';',
+      '    var opts = epqOpts(s), list = Array.isArray(v) ? v : [v], out = [];',
+      '    for (var k = 0; k < list.length; k++) { var x = list[k]; if (x && typeof x === \'object\') x = x.label || x.t || x.text || \'\'; x = String(x == null ? \'\' : x); if (!x) continue; if (opts && opts.indexOf(x) < 0) x = \'(autre réponse)\'; out.push(x); }',
+      '    if (!out.length) return null;',
+      '    return out.join(\' | \');   // choix multiple : même format que la page Élite',
+      '  }',
+      '  var epqCurQ = -1, epqLastShown = -1;',
+      '  /* On QUITTE une question : sa réponse part si elle existe (jamais à l\'affichage). */',
+      '  function epqLeave(toIdx) {',
+      '    try { if (epqCurQ < 0 || epqCurQ === toIdx) return; var s = STEPS[epqCurQ], a = s ? epqAnswer(s) : null; if (a != null) epqSend(\'a\', { q: epqQ(epqCurQ), a: a }); } catch (e) {}',
+      '    epqCurQ = -1;',
+      '  }',
+      '  /* Une question S\'AFFICHE : 1re question → start ; chaque question → q. */',
+      '  function epqShowQ(i) {',
       '    var qs = epqQuestions(); if (!qs.length) return;',
-      '    if (STEPS[i] && EPQ_QTYPES[STEPS[i].type]) { if (qs.indexOf(i) === 0) epqSend(\'start\'); setTimeout(function () { epqSend(\'q\', { q: epqQ(i) }); }, 80); return; }',
+      '    epqLastShown = i;',
+      '    if (epqIsQ(STEPS[i])) { epqCurQ = i; if (qs.indexOf(i) === 0) epqSend(\'start\'); setTimeout(function () { epqSend(\'q\', { q: epqQ(i) }); }, 80); return; }',
       '    if (i > qs[qs.length - 1]) epqSend(\'done\');',
       '  }',
-      '  function epqTrackA(s) {',
-      '    try {',
-      '      if (!s || !EPQ_QTYPES[s.type]) return;',
-      '      var v = s.type === \'pain\' ? A.pain : A[s.id];',
-      '      if (s.type === \'yesno\') v = v ? \'Oui\' : \'Non\';',
-      '      else if (s.type === \'rating\') v = (v == null ? \'\' : String(v)) + \' / 5\';',
-      '      if (v == null || v === \'\') return;',
-      '      epqSend(\'a\', { q: epqQ(STEPS.indexOf(s)), a: v });',
-      '    } catch (e) {}',
+      '  /* Tête de go(i) : quitte la question en cours, puis affiche i. */',
+      '  function ' + MARK + '(i) { epqLeave(i); epqShowQ(i); }',
+      '  /* Tête de recordQuestion(s) : couvre l\'écran 1 pré-affiché en HTML, dont le démarrage n\'appelle pas go().',
+      '     Ignoré pour tout écran qui n\'est pas celui affiché (ex. STEPS.forEach(recordQuestion) des résultats). */',
+      '  function epqShown(s) {',
+      '    try { var i = STEPS.indexOf(s); if (i < 0 || i === epqCurQ || i === epqLastShown) return; if (typeof cur !== \'undefined\' && STEPS[cur] !== s) return; epqLeave(i); epqShowQ(i); } catch (e) {}',
       '  }',
       withGate ? gateCode() : '  function epqGate() { return false; }',
       ''
@@ -144,7 +178,7 @@ module.exports = function quizTracking(opts) {
     let out = html.slice(0, mGo.index) + helpers(gate) + '\n  ' + injectGo + html.slice(mGo.index + mGo[0].length);
 
     const mRq = /function recordQuestion\(\s*([A-Za-z_$][\w$]*)\s*\)\s*\{/.exec(out);
-    out = out.slice(0, mRq.index) + mRq[0] + '\n    epqTrackA(' + mRq[1] + ');' + out.slice(mRq.index + mRq[0].length);
+    out = out.slice(0, mRq.index) + mRq[0] + '\n    epqShown(' + mRq[1] + ');' + out.slice(mRq.index + mRq[0].length);
 
     if (gate) {
       const cssAnchor = '</style>';

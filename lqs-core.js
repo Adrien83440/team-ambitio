@@ -296,6 +296,11 @@
       FC.loadCreatives(db, D),
       FC.loadAdsByAd(db, P, D),
       FC.loadViews(db, P, D),   // visites et formulaires par page (historique avant la mesure fine)
+      /* Visites par source utm de chaque tunnel (10/11/2026, T6) : répartit la
+         dépense de chaque pub sur la page où ses visites arrivent vraiment. */
+      db.collection('tunnel_stats_daily').where('date', '>=', sIso).where('date', '<=', eIso).get().then(function (snap) {
+        D.tunnelStats = []; snap.forEach(function (doc) { D.tunnelStats.push(doc.data() || {}); });
+      }).catch(function () { D.tunnelStats = []; }),
       db.collection('quiz_funnel_daily').where('date', '>=', sIso).where('date', '<=', eIso).get().then(function (snap) {
         snap.forEach(function (doc) { var d = doc.data() || {}; d._id = doc.id; D.quizDocs.push(d); });
       }).catch(function (e) { D.quizErr = e && e.message ? e.message : 'erreur'; }),
@@ -565,7 +570,8 @@
         booked: heads.length > 0, present: false, noshow: false, pitched: false, closeOc: false,
         allCancelled: heads.length > 0, upcoming: false, closed: false, closeCancelled: false,
         cash: 0, con: 0, closeDay: null, offer: null, closer: null, rdvDate: null,
-        team: (l.leadScore >= 1 && l.leadScore <= 5) ? Number(l.leadScore) : null };
+        team: (l.leadScore >= 1 && l.leadScore <= 5) ? Number(l.leadScore) : null,
+        bookedBy: heads.length ? (heads[0]._class === 'setter' ? 'setter' : 'self') : null };
       var pick = null;
       heads.forEach(function (h) {
         var t = terminal(h);
@@ -926,20 +932,57 @@
      ne l'emporte jamais). */
   function realLabel(label, id) { return !!label && keyOf(label) !== keyOf(id); }
   function docKeyOf(d) { return (d.page || '?') + (d.variant ? '--' + d.variant : ''); }
+  /* Version EFFECTIVE d'un document : version publiée de la page + génération
+     de la mesure (champ measure, posé par api/tunnel-event.js quand la page
+     envoie mv — mesure injectée corrigée du 10/11/2026). */
+  function effVersion(d) { return num(d.pageVersion) + num(d.measure); }
+  /* Mesure COMPARABLE (10/11/2026, brief « chiffres justes », T4) : toutes les
+     publications réunies tant que les questions mesurées (identifiants) ne
+     changent pas. `latest` = le dernier segment de versions au même jeu de
+     questions ; une version sans question mesurée ce jour-là (que des
+     « start ») ne coupe pas le segment. Une nouvelle génération de mesure
+     (measure) ouvre toujours un nouveau segment. */
   function buildQuizFunnel(docs) {
     docs = docs.slice().sort(function (a, b) {
-      return String(a.date || '').localeCompare(String(b.date || '')) || (num(a.pageVersion) - num(b.pageVersion));
+      return String(a.date || '').localeCompare(String(b.date || '')) || (effVersion(a) - effVersion(b));
     });
     var all = aggQuizDocs(docs);
-    var maxV = {};
-    docs.forEach(function (d) { var k = docKeyOf(d), v = num(d.pageVersion); if (v > (maxV[k] || 0)) maxV[k] = v; });
+    var sig = {};   // page → version effective → { qid: 1 }
+    docs.forEach(function (d) {
+      var k = docKeyOf(d), v = effVersion(d);
+      var pk = sig[k] || (sig[k] = {});
+      var o = pk[v] || (pk[v] = { q: {}, measure: num(d.measure) });
+      Object.keys(d.questions || {}).forEach(function (qk) { o.q[qk] = 1; });
+    });
+    /* Deux versions se comparent si l'une ne mesure que des questions de
+       l'autre (une version peu visitée n'atteint que les premières questions). */
+    function within(a, b) { return Object.keys(a).every(function (q) { return b[q]; }); }
+    var seg = {}, segSince = {};
+    Object.keys(sig).forEach(function (k) {
+      var vs = Object.keys(sig[k]).map(Number).sort(function (a, b) { return b - a; });
+      var top = sig[k][vs[0]], ref = {}, keep = {};
+      for (var i = 0; i < vs.length; i++) {
+        var o = sig[k][vs[i]];
+        if (o.measure !== top.measure) break;
+        if (!within(o.q, ref) && !within(ref, o.q)) break;
+        Object.keys(o.q).forEach(function (q) { ref[q] = 1; });
+        keep[vs[i]] = 1;
+      }
+      seg[k] = keep;
+    });
     var lat = {};
-    aggQuizDocs(docs.filter(function (d) { var v = maxV[docKeyOf(d)]; return v && num(d.pageVersion) === v; }))
-      .forEach(function (p) { lat[p.key] = p; });
+    var latDocs = docs.filter(function (d) { var kp = seg[docKeyOf(d)]; return kp && kp[effVersion(d)]; });
+    latDocs.forEach(function (d) {
+      var k = docKeyOf(d);
+      var pv = num(d.pageVersion), day = Date.parse(String(d.date || '') + 'T00:00:00+01:00');
+      var from = Math.max(pv || 0, isFinite(day) ? day : 0);
+      if (!segSince[k] || from < segSince[k]) segSince[k] = from;
+    });
+    aggQuizDocs(latDocs).forEach(function (p) { lat[p.key] = p; });
     all.forEach(function (p) {
       var l = lat[p.key];
       if (!l) return;
-      l.since = maxV[p.key]; l.isLatest = true;
+      l.since = segSince[p.key] || null; l.isLatest = true;
       l.partial = l.starts !== p.starts || l.days !== p.days;
       p.latest = l;
     });
@@ -977,6 +1020,7 @@
         var q = qs[qk] || {};
         var x = p.questions[qk];
         if (!x) x = p.questions[qk] = { id: qk, i: num(q.i, 99), label: realLabel(q.label, qk) ? q.label : qk, reached: 0, answered: 0, answers: {} };
+        else if (q.i != null) x.i = num(q.i, x.i);   // documents triés par date : le rang le plus récent l'emporte
         if (realLabel(q.label, qk)) x.label = q.label;
         x.reached += num(q.reached); x.answered += answeredOf(q);
         var as = q.answers || {};
@@ -1645,6 +1689,287 @@
       beforeMeasure: vRows.length - inM, variants: variants };
   }
 
+  /* ══ 7 ter. VUE D'ENSEMBLE PAR QUIZ — CHIFFRES DE RÉFÉRENCE (10/11/2026) ══
+     Brief « Mesure des quiz : des chiffres justes » (T2). Un tableau par
+     QUIZ (tunnel) et par variante, jamais deux quiz mélangés, construit
+     uniquement sur les compteurs déjà fiables, sans découpage par version :
+       · arrivés         = page affichée            page_views_daily.views
+       · ont répondu Q1  = 1er clic sur une réponse page_views_daily.ctas
+                           (ALTEO.track('cta') dans trkStart, deux pages)
+       · rien cliqué     = arrivés − ont répondu Q1
+       · fini les questions = écran final atteint   quiz_funnel_daily.completes
+                           (toutes publications réunies ; null = pas mesuré)
+       · formulaire envoyé = page_views_daily.optins
+       · nouveaux leads  = fiches dont la page d'entrée (landingFirst, via
+                           optin) est ce quiz, entrées ce jour-là
+       · déjà connus revenus = ré-inscrits (lastOptinAt) par ce quiz
+                           (landingLast), entrés avant la période
+       · RDV pris / honorés = RDV créés sur la période (self + setter, hors
+                           replanifications), provenance bookings.landing ou
+                           page d'entrée de la fiche ; honoré = RDV terminal
+                           de la chaîne tenu.
+     Jours de Paris. « Période couverte » = premier et dernier jour où la page
+     a des visites mesurées, dans la période choisie. */
+  function parisIso(ms) {
+    if (ms == null || !isFinite(ms)) return null;
+    try { return new Date(ms).toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' }); } catch (e) { return isoDay(ms); }
+  }
+  /* mQ1 / mOptins : ont répondu Q1 et formulaires des seuls jours où l'écran
+     de fin est mesuré — le taux « ont fini » ne compare que ce qui est comparable. */
+  var OV_FIELDS = ['arrives', 'q1', 'done', 'optins', 'newLeads', 'backLeads', 'booked', 'kept', 'mQ1', 'mOptins', 'q1Quiz'];
+  function ovZero() { var o = { doneMeasured: false, doneSince: null }; OV_FIELDS.forEach(function (f) { o[f] = 0; }); return o; }
+  function ovAdd(a, b) {
+    OV_FIELDS.forEach(function (f) { a[f] += b[f] || 0; });
+    if (b.doneMeasured) { a.doneMeasured = true; if (b.doneSince && (!a.doneSince || b.doneSince < a.doneSince)) a.doneSince = b.doneSince; }
+  }
+  function ovFinish(o) {
+    o.none = Math.max(0, o.arrives - o.q1);
+    o.rQ1 = o.arrives ? o.q1 / o.arrives * 100 : null;
+    o.rDone = o.doneMeasured && o.mQ1 ? o.done / o.mQ1 * 100 : null;
+    o.rOptin = o.doneMeasured ? (o.done ? o.mOptins / o.done * 100 : null) : (o.q1 ? o.optins / o.q1 * 100 : null);
+    o.rLead = o.optins ? (o.newLeads + o.backLeads) / o.optins * 100 : null;
+    o.rBook = (o.newLeads + o.backLeads) ? o.booked / (o.newLeads + o.backLeads) * 100 : null;
+    o.rKept = o.booked ? o.kept / o.booked * 100 : null;
+    return o;
+  }
+  function quizOverview(D, P, meta) {
+    D = D || {};
+    var sIso = parisIso(P.start.getTime()), eIso = parisIso(P.end.getTime());
+    var isTunnelKey = function (pg) { return /^[a-z0-9-]+__[a-z0-9-]+$/.test(String(pg || '')); };
+    /* 1. Pages quiz : mesurées comme quiz (quiz_funnel_daily) ou ayant amené
+       un lead avec des réponses de quiz. */
+    var quizPages = {};
+    (D.quizDocs || []).forEach(function (d) { if (isTunnelKey(d.page)) quizPages[d.page] = 1; });
+    function leadPage(L) { return L && L.page && L.via === 'optin' && isTunnelKey(L.page) ? L.page : null; }
+    (D.leads || []).concat(D.reoptins || []).forEach(function (l) {
+      if (!l || !l.quiz) return;
+      [l.landingFirst, l.landingLast].forEach(function (L) { var pg = leadPage(L); if (pg) quizPages[pg] = 1; });
+    });
+    var cells = {};   // page → variante → jour → compteurs
+    function cell(page, variant, day) {
+      if (!quizPages[page] || !day || day < sIso || day > eIso) return null;
+      var v = variant || '_';
+      var pc = cells[page] || (cells[page] = {});
+      var vc = pc[v] || (pc[v] = {});
+      return vc[day] || (vc[day] = ovZero());
+    }
+    (D.views || []).forEach(function (r) {
+      var c = cell(r.page, r.variant, r.date);
+      if (!c) return;
+      c.arrives += num(r.views); c.q1 += num(r.ctas); c.optins += num(r.optins);
+    });
+    (D.quizDocs || []).forEach(function (d) {
+      var c = cell(d.page, d.variant, d.date);
+      if (!c) return;
+      c.done += num(d.completes);
+      if (!c.doneMeasured) { c.doneMeasured = true; c.doneSince = d.date; }
+      /* Réponses à la 1re question vues par la mesure du quiz (contrôle T5) :
+         seulement la génération de mesure la plus récente du jour. */
+      var g = num(d.measure);
+      if (c._gen == null || g > c._gen) { c._gen = g; c.q1Quiz = 0; }
+      if (g === c._gen) {
+        var qs = d.questions || {};
+        Object.keys(qs).forEach(function (qk) { var q = qs[qk] || {}; if (num(q.i, -1) === 0) c.q1Quiz += num(q.answered); });
+      }
+    });
+    /* 2. Leads (nouveaux / revenus) */
+    var leadsById = {}, byP9 = {}, byEmail = {};
+    function idx(l) {
+      if (!l || !l._id || leadsById[l._id]) return;
+      leadsById[l._id] = l;
+      if (l._p9 && !byP9[l._p9]) byP9[l._p9] = l;
+      var em = String(l.email || '').toLowerCase().trim();
+      if (em && !byEmail[em]) byEmail[em] = l;
+    }
+    (D.leads || []).forEach(function (l) {
+      idx(l);
+      var L = l.landingFirst, pg = leadPage(L);
+      if (!pg) return;
+      var c = cell(pg, L.variant, parisIso(l._entry));
+      if (c) c.newLeads++;
+    });
+    (D.reoptins || []).forEach(function (l) {
+      idx(l);
+      var L = l.landingLast, pg = leadPage(L);
+      if (!pg) return;
+      var c = cell(pg, L.variant, parisIso(FC.parseFlexMs(l.lastOptinAt)));
+      if (c) c.backLeads++;
+    });
+    (D.extraLeads || []).forEach(idx);
+    /* 3. RDV */
+    var byId = D.bookingsById || {};
+    function leadOf(b) {
+      if (b.leadId && leadsById[b.leadId]) return leadsById[b.leadId];
+      if (b._p9 && byP9[b._p9]) return byP9[b._p9];
+      var em = String(b.prospect && b.prospect.email || '').toLowerCase().trim();
+      return em && byEmail[em] ? byEmail[em] : null;
+    }
+    function terminal(b) { var c = b, g = 0; while (c && c.rescheduledToId && g++ < 10) { var n = byId[c.rescheduledToId]; if (!n) break; c = n; } return c; }
+    function present(b) { var o = b && b.outcome; return o ? (o === 'offre' || o === 'close' || o === 'non_close' || o === 'disqualifie') : !!(b && b.status === 'completed'); }
+    (D.bookings || []).forEach(function (b) {
+      if (b.rescheduledFromId) return;
+      if (b._class !== 'self' && b._class !== 'setter') return;
+      var cm = b._createdMs;
+      if (cm == null || cm < P.start.getTime() || cm > P.end.getTime()) return;
+      var L = b.landing && b.landing.page ? b.landing : null;
+      if (!L) { var l = leadOf(b); var LF = l && l.landingFirst; if (LF && leadPage(LF)) L = LF; }
+      if (!L) return;
+      var c = cell(L.page, L.variant, parisIso(cm));
+      if (!c) return;
+      c.booked++;
+      if (present(terminal(b))) c.kept++;
+    });
+    /* 4. Mise en forme : quiz → variantes → jours */
+    var byQuiz = {};
+    Object.keys(cells).forEach(function (page) {
+      var sp = splitPage(page), tm = meta && meta[sp.tunnel], st = tm && tm.steps ? tm.steps[sp.step] : null;
+      var q = byQuiz[sp.tunnel] || (byQuiz[sp.tunnel] = { tunnel: sp.tunnel, name: (tm && tm.name) || sp.tunnel, pages: [], total: ovZero(), days: {} });
+      Object.keys(cells[page]).sort().forEach(function (v) {
+        var vm = st && st.variants && v !== '_' ? st.variants[v] : null;
+        var row = { page: page, path: '/' + sp.step, variant: v === '_' ? null : v, label: (vm && vm.label) || (v === '_' ? 'variante non transmise' : 'Variante ' + v.toUpperCase()),
+          total: ovZero(), days: [], first: null, last: null };
+        Object.keys(cells[page][v]).sort().forEach(function (day) {
+          var c = cells[page][v][day];
+          if (c.doneMeasured) { c.mQ1 = c.q1; c.mOptins = c.optins; }
+          ovAdd(row.total, c);
+          if (c.arrives > 0) { if (!row.first) row.first = day; row.last = day; }
+          var qd = q.days[day] || (q.days[day] = ovZero());
+          ovAdd(qd, c);
+          row.days.push(Object.assign({ day: day }, ovFinish(c)));
+        });
+        ovFinish(row.total);
+        row.total.days = row.days.length;
+        ovAdd(q.total, row.total);
+        q.pages.push(row);
+      });
+    });
+    /* 5. Dépense Meta par quiz (T6) — UNE campagne peut mener à deux quiz
+       (« TOFU | Funnel élections 2027 » contient d'anciennes pubs Élite qui
+       mènent à /optin-a) : la dépense de chaque pub (ads_insights_ad) est
+       répartie entre tunnels au prorata des visites de CETTE pub
+       (tunnel_stats_daily.sources, utm_content = nom ou id de la pub), le même
+       jour, sinon sur la période. Sans visite rattachée : « non rattachée ». */
+    var spend = ovSpend(D, sIso, eIso);
+    Object.keys(byQuiz).forEach(function (k) {
+      byQuiz[k].spend = r2(spend.byTunnel[k] || 0);
+      Object.keys(byQuiz[k].days).forEach(function (d) { byQuiz[k].days[d].spend = r2((spend.byTunnelDay[k] || {})[d] || 0); });
+    });
+    var out = Object.keys(byQuiz).map(function (k) {
+      var q = byQuiz[k];
+      ovFinish(q.total);
+      q.dayList = Object.keys(q.days).sort().map(function (d) { return Object.assign({ day: d }, ovFinish(q.days[d])); });
+      q.total.days = q.dayList.length;
+      var firsts = q.pages.map(function (r) { return r.first; }).filter(Boolean).sort();
+      var lasts = q.pages.map(function (r) { return r.last; }).filter(Boolean).sort();
+      q.first = firsts[0] || null; q.last = lasts[lasts.length - 1] || null;
+      q.doneMeasured = q.total.doneMeasured;
+      q.cpl = q.total.newLeads ? r2(q.spend / q.total.newLeads) : null;
+      return q;
+    }).sort(function (a, b) { return b.total.arrives - a.total.arrives; });
+    out.spendUnattributed = r2(spend.unattributed);
+    out.spendTotal = r2(spend.total);
+    return out;
+  }
+  function adKeyOf(v) {
+    var x = String(v == null ? '' : v);
+    try { x = decodeURIComponent(x.replace(/\+/g, ' ')); } catch (e) { /* tel quel */ }
+    return norm(x).replace(/\s+/g, ' ').trim();
+  }
+  function ovSpend(D, sIso, eIso) {
+    var names = {};
+    (D.creatives || []).forEach(function (c) { if (c && c.ad_id) names[String(c.ad_id)] = c.ad_name || ''; });
+    var vDay = {}, vAll = {};   // clé pub → tunnel → visites (par jour / période)
+    (D.tunnelStats || []).forEach(function (t) {
+      if (!t || !t.date || t.date < sIso || t.date > eIso || !t.tunnelSlug) return;
+      var src = t.sources || {};
+      Object.keys(src).forEach(function (sk) {
+        var x = src[sk] || {}, k = adKeyOf(x.utm_content);
+        if (!k) return;
+        var n = num(x.visits);
+        if (!n) return;
+        var dk = t.date + '|' + k;
+        (vDay[dk] = vDay[dk] || {})[t.tunnelSlug] = ((vDay[dk] || {})[t.tunnelSlug] || 0) + n;
+        (vAll[k] = vAll[k] || {})[t.tunnelSlug] = ((vAll[k] || {})[t.tunnelSlug] || 0) + n;
+      });
+    });
+    var res = { byTunnel: {}, byTunnelDay: {}, unattributed: 0, total: 0 };
+    (D.adsByAd || []).forEach(function (a) {
+      if (!a || !a.date || a.date < sIso || a.date > eIso) return;
+      var sp = num(a.spend);
+      if (!sp) return;
+      res.total += sp;
+      var keys = [adKeyOf(a.ad_id), adKeyOf(a.ad_name || names[String(a.ad_id)])].filter(Boolean);
+      var share = null;
+      keys.forEach(function (k) { if (!share && vDay[a.date + '|' + k]) share = vDay[a.date + '|' + k]; });
+      keys.forEach(function (k) { if (!share && vAll[k]) share = vAll[k]; });
+      if (!share) { res.unattributed += sp; return; }
+      var tot = 0; Object.keys(share).forEach(function (t) { tot += share[t]; });
+      Object.keys(share).forEach(function (t) {
+        var part = sp * share[t] / tot;
+        res.byTunnel[t] = (res.byTunnel[t] || 0) + part;
+        (res.byTunnelDay[t] = res.byTunnelDay[t] || {})[a.date] = ((res.byTunnelDay[t] || {})[a.date] || 0) + part;
+      });
+    });
+    return res;
+  }
+
+  /* ══ 7 quater. CONTRÔLE DE COHÉRENCE QUOTIDIEN (10/11/2026, T5) ═════════
+     Chaque jour et pour chaque quiz, deux chemins indépendants doivent dire
+     la même chose :
+       · ont répondu Q1 : 1er clic (page_views_daily.ctas, ALTEO.track('cta'))
+         ↔ réponse à la question 1 vue par la mesure du quiz (quiz_funnel_daily) ;
+       · formulaires envoyés (page_views_daily.optins, ALTEO.track('optin'))
+         ↔ fiches créées ou mises à jour par api/lead-optin.js avec ce quiz
+         pour page (nouveaux + déjà connus revenus).
+     Alerte si l'écart dépasse 20 % un jour de plus de 30 arrivés (règle du
+     brief). Les références hors Team (visites Meta, pixel, exécutions Make)
+     se rapprochent à la main : l'encart dit quoi comparer. */
+  var CHECK_TOL = 0.20, CHECK_MIN_VISITS = 30;
+  function gap(a, b) { var m = Math.max(a, b); return m ? Math.abs(a - b) / m : 0; }
+  function quizChecks(list) {
+    var out = [];
+    (list || []).forEach(function (q) {
+      q.dayList.forEach(function (d) {
+        var big = d.arrives > CHECK_MIN_VISITS;
+        var leads = d.newLeads + d.backLeads;
+        var items = [];
+        if (d.doneMeasured) items.push({ k: 'q1', label: 'Ont répondu Q1', a: d.q1, aLbl: '1ers clics', b: d.q1Quiz, bLbl: 'mesure du quiz', gap: gap(d.q1, d.q1Quiz) });
+        items.push({ k: 'optin', label: 'Formulaires', a: d.optins, aLbl: 'formulaires envoyés', b: leads, bLbl: 'fiches Leads Live', gap: gap(d.optins, leads) });
+        items.forEach(function (it) { it.alert = big && it.gap > CHECK_TOL && Math.abs(it.a - it.b) >= 2; });
+        out.push({ tunnel: q.tunnel, name: q.name, day: d.day, arrives: d.arrives, big: big, items: items, alert: items.some(function (it) { return it.alert; }) });
+      });
+    });
+    return out;
+  }
+
+  /* ══ 7 quinquies. QUALITÉ DES LEADS PAR PAGE D'ENTRÉE (10/11/2026, T7) ══
+     Leads de la période (lignes du modèle), rangés par la page quiz qui les a
+     fait entrer (landingFirst, via optin) × variante : RDV pris (seul / par
+     un setter), honorés, closes, signé, encaissé. Sert à vérifier avec des
+     chiffres quel quiz / quelle variante amène les leads qui signent. */
+  function qualityByPage(rows, meta) {
+    var by = {};
+    (rows || []).forEach(function (r) {
+      var L = r.lead && r.lead.landingFirst;
+      if (!L || L.via !== 'optin' || !/^[a-z0-9-]+__[a-z0-9-]+$/.test(String(L.page || ''))) return;
+      if (!r.lead.quiz) return;
+      var k = L.page + '--' + (L.variant || '_');
+      var g = by[k];
+      if (!g) {
+        var sp = splitPage(L.page), tm = meta && meta[sp.tunnel], st = tm && tm.steps ? tm.steps[sp.step] : null;
+        var vm = st && st.variants && L.variant ? st.variants[L.variant] : null;
+        g = by[k] = { key: k, tunnel: sp.tunnel, quiz: (tm && tm.name) || sp.tunnel, path: '/' + sp.step, variant: L.variant || null,
+          label: (vm && vm.label) || (L.variant ? 'Variante ' + String(L.variant).toUpperCase() : 'variante non transmise'),
+          agg: newAgg(), self: 0, setter: 0 };
+      }
+      addLeadRow(g.agg, r);
+      if (r.bookedBy === 'self') g.self++;
+      else if (r.bookedBy === 'setter') g.setter++;
+    });
+    return Object.keys(by).map(function (k) { fin(by[k].agg); return by[k]; })
+      .sort(function (a, b) { return a.quiz < b.quiz ? -1 : (a.quiz > b.quiz ? 1 : (b.agg.leads - a.agg.leads)); });
+  }
+
   /* ══ 8. PHRASES CLÉS (lecture en 10 secondes) ══════════════════════════ */
   /* Parts calculées sur le SIGNÉ (cash), encaissé à côté (paid). */
   function insights(bn, cashMode) {
@@ -1680,6 +2005,7 @@
     byNote: byNote, byAnswer: byAnswer, byAxis: byAxis, byCloser: byCloser, closerBoard: closerBoard,
     suggestPoints: suggestPoints, suggestBasis: suggestBasis,
     quizVersions: quizVersions, buildQuizView: buildQuizView, versionMeta: versionMeta, OLD_QUIZ_KEY: OLD_KEY, FAMILY_PREFIX: FAM, familyOfKey: familyOfKey, mqsOf: mqsOf, buildQuizFunnel: buildQuizFunnel, insights: insights,
-    newAgg: newAgg, offerOf: offerOf, addLeadRow: addLeadRow, fin: fin, isoDay: isoDay
+    newAgg: newAgg, offerOf: offerOf, addLeadRow: addLeadRow, fin: fin, isoDay: isoDay,
+    quizOverview: quizOverview, parisIso: parisIso, quizChecks: quizChecks, qualityByPage: qualityByPage
   };
 }));

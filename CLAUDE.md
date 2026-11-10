@@ -163,7 +163,9 @@ facture en production (incident du 22/07/2026 sur `_config/billing/cgv`).
 
 ### Règles métier sur les données
 - **Rien n'est jamais supprimé** — on archive, on met à jour, ou on soft-delete avec une
-  trace d'audit.
+  trace d'audit. **Seule exception** (validée par Adrien le 10/11/2026) : le journal
+  anonyme par visite `tunnel_visits` (mesure des tunnels, aucune personne derrière),
+  conservé 90 jours (`expireAt`) et purgé par le cron `api/tunnel-visits-purge.js`.
 - Téléphone canonique des leads : champ **`telephone`**, format E.164 strict `+33XXXXXXXXX`.
   Le champ legacy `phone` n'est plus utilisé.
 - Les documents portant `_merged: true` doivent être ignorés dans toute recherche de lead
@@ -368,6 +370,18 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   deux versions mélangées ; « Tous les quiz » ne fusionne jamais deux tunnels (Élite ≠
   Présidentielles). Visites internes : `?test_claude`, `?apercu` (session) ou `?alteo_interne=1`
   (appareil) → `x: 1`, ignorées par `api/tunnel-event.js`.
+  **Chiffres justes (10/11/2026, audit T0 : chaque compteur rapproché du pixel et de Make, au jour
+  près).** Référence = `page_views_daily` (views = arrivés, ctas = ont répondu Q1 via
+  `trkStart`, optins = formulaires = exécutions Make). En tête de l'onglet Quiz : « chiffres de
+  référence » par quiz × variante (`LqsCore.quizOverview`), « Contrôle de cohérence »
+  (`quizChecks` : clics ↔ réponses Q1, formulaires ↔ fiches ; alerte > 20 % un jour de > 30 arrivés,
+  reprise dans le brief du matin), « Qualité des leads par page d'entrée » (`qualityByPage`).
+  Parcours : période COMPARABLE = publications réunies tant que les questions ne changent pas ; la
+  mesure injectée corrigée (Q1 de type `first`, réponse envoyée en QUITTANT la question) porte
+  `mv: 2` → champ `measure`, suffixe `m2`, jamais additionnée à l'ancienne. Journal anonyme par
+  visite `tunnel_visits` (`vid` de session). Une même campagne Meta peut mener à deux quiz : ne
+  jamais attribuer une campagne à une page sans les utm de `tunnel_stats_daily.sources`.
+
 
 Spécification de référence du flux commercial : `REFONTE-SPEC.md`.
 
@@ -386,6 +400,23 @@ Spécification de référence du flux commercial : `REFONTE-SPEC.md`.
 5. Toujours donner la **séquence de déploiement ordonnée** en fin de livraison
    (rules d'abord, puis frontend, etc.).
 6. Signaler les régressions possibles et les chemins non testés plutôt que de les taire.
+7. **Autonomie totale, autorisation à chaque fois (consigne d'Adrien, 10/11/2026).**
+   Adrien ne veut **aucune action à faire lui-même** : l'agent pousse, déploie, lance
+   les scripts, pose les variables Vercel, ouvre les accès réseau de sa session, lit
+   et (après dry-run validé) écrit Firestore, vérifie en ligne. Il ne lui demande que
+   son **autorisation**, une fois par action sortante (fusion sur `main` = mise en
+   production, écriture Firestore, déploiement de règles ou de functions, variable
+   Vercel), en disant précisément ce qui va se passer. Les recommandations sont
+   validées d'office si elles respectent ces consignes et servent la finalité
+   (des données fiables) ; ne demander que ce qui est vraiment une décision d'Adrien.
+   Ce qui exige un outil absent de la session (commande Firebase interactive, Console
+   GCP) : le dire, proposer la voie qui ne lui demande rien, et ne lui laisser que
+   l'autorisation.
+8. **Accès aux données de production sans clé de service dans la session.** Lecture :
+   endpoints Vercel en lecture seule protégés par une clé posée dans les variables
+   Vercel (ex. `api/quiz-audit.js`, `QUIZ_AUDIT_KEY`, limitée à la preview de la branche),
+   jamais dans le dépôt ; la supprimer coupe l'accès. Aucune donnée personnelle en
+   sortie. Écriture : même principe, toujours dry-run d'abord, `--apply` après accord.
 
 ---
 

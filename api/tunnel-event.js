@@ -32,6 +32,17 @@
 //       @{version} (07/11/2026) = version publiée de la page (html.version de
 //       la variante) : une republication ouvre de nouveaux compteurs, la
 //       mesure d'une version ne se mélange plus avec celle d'avant.
+//       m{mv} (10/11/2026) = génération de la mesure (pages à mesure injectée) :
+//       champ measure, même principe.
+//
+//   tunnel_visits/{date}_{vid}   (journal par visite, 10/11/2026, T3)
+//       { date, vid, tunnelId, entry: { page, variant, version, utm_* },
+//         p: { '<page>--<variante>': { version, view, cta, optin, start,
+//              done, q: { qid: ms }, a: { qid: 'réponse' }, gate: { g: ms } } },
+//         expireAt }    → comptes UNIQUES exacts, parcours par pub, recalcul.
+//       vid = identifiant de visite aléatoire de l'onglet (tunnel-runtime.js),
+//       anonyme. Lecture Admin SDK seule (aucune règle client : refusé).
+//       Conservé 90 jours (expireAt), purgé par api/tunnel-visits-purge.js.
 //
 // Visites internes (07/11/2026) : x === 1 (posé par tunnel-runtime.js pour
 // ?test_claude, ?apercu, ?alteo_interne=1) → rien n'est compté.
@@ -113,6 +124,45 @@ function quizPatch(body, base, FV) {
   return patch;
 }
 
+/* ── Journal par visite (T3) ───────────────────────────────────────────── */
+const VISIT_TTL_MS = 90 * 86400000;
+function visitWrite(body, ctx) {
+  const vid = str(body.vid, 40);
+  if (!/^[a-z0-9]{16,32}$/.test(vid)) return null;
+  const FV = ctx.FV;
+  const pk = ctx.pageK + '--' + (ctx.variant || '_');
+  const now = Date.now();
+  const doc = {
+    date: ctx.date, vid: vid, tunnelId: ctx.tunnelId, updatedAt: FV.serverTimestamp(),
+    expireAt: ctx.admin.firestore.Timestamp.fromMillis(now + VISIT_TTL_MS), p: {}
+  };
+  const pg = { page: ctx.pageK, variant: ctx.variant || null };
+  if (ctx.version > 0) pg.version = ctx.version;
+  const e = ctx.event;
+  if (e === 'visit') {
+    doc.entry = { page: ctx.pageK, variant: ctx.variant || null, version: ctx.version > 0 ? ctx.version : null,
+      utm_source: ctx.src.utm_source || null, utm_campaign: ctx.src.utm_campaign || null, utm_content: ctx.src.utm_content || null, at: now };
+  } else if (e === 'view' || e === 'cta' || e === 'optin') {
+    pg[e] = now;
+  } else if (e === 'quiz') {
+    const k = str(body.k, 10);
+    if (k === 'start' || k === 'done') pg[k] = now;
+    else if (k === 'gate') { const g = str(body.g, 12); if (!GATE_KINDS[g]) return null; pg.gate = {}; pg.gate[g] = now; }
+    else if (k === 'q' || k === 'a') {
+      const qid = quizKey(body.q && body.q.id);
+      if (!qid) return null;
+      if (k === 'q') { pg.q = {}; pg.q[qid] = now; }
+      else {
+        const list = (Array.isArray(body.a) ? body.a : [body.a]).map(function (a) { return str(a, 120); }).filter(Boolean).slice(0, 10);
+        if (!list.length) return null;
+        pg.a = {}; pg.a[qid] = list.join(' | ').slice(0, 300);
+      }
+    } else return null;
+  } else return null;
+  doc.p[pk] = pg;
+  return ctx.db.collection('tunnel_visits').doc(ctx.date + '_' + vid).set(doc, { merge: true });
+}
+
 function todayIsoParis() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
 }
@@ -177,10 +227,17 @@ module.exports = async (req, res) => {
     if (vQ && vQ.label) base.variantLabel = String(vQ.label).slice(0, 80);
     const pv = vQ && vQ.html ? parseInt(vQ.html.version, 10) : 0;
     if (pv > 0) { base.pageVersion = pv; base.pageVersionAt = new Date(pv).toISOString(); }
+    /* measure (10/11/2026) : génération de la mesure envoyée par la page (mv).
+       Une mesure corrigée ouvre ses propres compteurs, même sans republication. */
+    const mv = Math.max(0, Math.min(9, parseInt(body.mv, 10) || 0));
+    if (mv) base.measure = mv;
     const qp = quizPatch(body, base, FV);
     if (!qp) { res.status(200).json({ ok: true, ignored: 'quiz' }); return; }
     try {
-      await db.collection('quiz_funnel_daily').doc(date + '_' + pageK + (variant ? '--' + variant : '') + (pv > 0 ? '@' + pv : '')).set(qp, { merge: true });
+      const qw = [db.collection('quiz_funnel_daily').doc(date + '_' + pageK + (variant ? '--' + variant : '') + (pv > 0 ? '@' + pv : '') + (mv ? 'm' + mv : '')).set(qp, { merge: true })];
+      const vw = visitWrite(body, { FV: FV, admin: admin, db: db, date: date, pageK: pageK, variant: variant, tunnelId: tunnel.id, version: pv, event: 'quiz', src: src });
+      if (vw) qw.push(vw.catch(function (e) { console.error('[tunnel-event] journal :', e && e.message); }));
+      await Promise.all(qw);
     } catch (e) {
       console.error('[tunnel-event] quiz :', e && e.message);
     }
@@ -222,6 +279,12 @@ module.exports = async (req, res) => {
     stats.sources[sk][field] = inc;
   }
   writes.push(db.collection('tunnel_stats_daily').doc(date + '_' + tunnel.id).set(stats, { merge: true }));
+  {
+    const vObj2 = variant ? (step.variants || []).filter(function (v) { return v && String(v.id) === variant; })[0] : null;
+    const pv2 = vObj2 && vObj2.html ? parseInt(vObj2.html.version, 10) : 0;
+    const vw = visitWrite(body, { FV: FV, admin: admin, db: db, date: date, pageK: pageK, variant: variant, tunnelId: tunnel.id, version: pv2, event: event, src: src });
+    if (vw) writes.push(vw.catch(function (e) { console.error('[tunnel-event] journal :', e && e.message); }));
+  }
 
   try {
     await Promise.all(writes);
