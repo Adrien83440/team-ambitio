@@ -160,6 +160,33 @@ async function collect(today) {
       s.forEach(function (d) { const f = d.data() || {}; list.push({ setter: f.name, appelsNotes: f.calls, moyenne: f.avg, conseilPrincipal: cap((f.conseils || [])[0] || '', 160) }); });
       out.feedbackSetters = list;
     }),
+    /* Mesure des quiz (10/11/2026, brief « chiffres justes », T5) : contrôle
+       de cohérence de la veille (lqs-core quizChecks). Rien si tout concorde. */
+    safe('quizMesure', async function () {
+      const LC = require('../lqs-core.js');
+      const FC = require('../funnel-core.js');
+      const D = { views: [], quizDocs: [], leads: [], reoptins: [], extraLeads: [], bookings: [], bookingsById: {} };
+      const [pv, qf, lc, lo, tu] = await Promise.all([
+        db.collection('page_views_daily').where('date', '==', yesterday).get(),
+        db.collection('quiz_funnel_daily').where('date', '==', yesterday).get(),
+        db.collection('leads').where('createdAt', '>=', yStart).where('createdAt', '<', tStart).get(),
+        db.collection('leads').where('lastOptinAt', '>=', yStart).where('lastOptinAt', '<', tStart).get(),
+        db.collection('tunnels').get()
+      ]);
+      pv.forEach(function (d) { D.views.push(d.data() || {}); });
+      qf.forEach(function (d) { D.quizDocs.push(d.data() || {}); });
+      const seen = {};
+      function lead(d) { const l = d.data() || {}; l._id = d.id; l._entry = FC.realEntryMs ? FC.realEntryMs(l) : tsToMs(l.createdAt); return l; }
+      lc.forEach(function (d) { const l = lead(d); if (l._merged === true) return; seen[d.id] = 1; D.leads.push(l); });
+      lo.forEach(function (d) { if (seen[d.id]) return; const l = lead(d); if (l._merged === true) return; if (l._entry != null && l._entry >= yStart.getTime()) D.leads.push(l); else D.reoptins.push(l); });
+      const meta = {};
+      tu.forEach(function (d) { const t = d.data() || {}; if (t.slug) meta[t.slug] = { name: t.name || t.slug, steps: {} }; });
+      const P = { start: yStart, end: new Date(tStart.getTime() - 1) };
+      const alerts = LC.quizChecks(LC.quizOverview(D, P, meta)).filter(function (c) { return c.alert; });
+      out.alertesMesureQuiz = alerts.map(function (c) {
+        return { quiz: c.name, arrives: c.arrives, ecarts: c.items.filter(function (i) { return i.alert; }).map(function (i) { return i.label + ' : ' + i.a + ' (' + i.aLbl + ') contre ' + i.b + ' (' + i.bLbl + ')'; }) };
+      });
+    }),
     safe('watch', async function () {
       const s = await db.collection('ai_watch').where('status', '==', 'open').limit(15).get();
       const list = [];
@@ -204,6 +231,7 @@ const SYSTEM = [
   '- titre : la tonalité de la journée ;',
   '- resume : 2 phrases, le plus important d\'abord (argent encaissé / perdu, risque client, opportunité chaude) ;',
   '- sections, dans cet ordre et seulement si elles ont du contenu : « Hier » (📊, chiffres clés commentés), « Leads chauds à appeler » (🔥), « Clients à risque » (🚨, TOUJOURS présente s\'il y a des clients rouges ; signale les nouveaux passages au rouge), « Renouvellements & upsell » (💎), « Agenda du jour » (📅), « Alertes » (⚠️) ; 3 à 6 puces chacune, courtes, chiffrées ;',
+  '- alertesMesureQuiz (si présent) : la mesure des quiz ne concorde pas hier — UNE puce dans « Alertes » par quiz, avec l\'écart chiffré (onglet Funnel Sales › Qualité leads › Quiz, encart « Contrôle de cohérence »). Absent = tout concorde : n\'en parle pas ;',
   '- actions : 3 à 6 actions concrètes pour aujourd\'hui, avec qui (prénom ou rôle) et quoi.',
   'Règles : uniquement les données fournies, aucune invention, aucun chiffre inventé. Si une donnée manque, n\'en parle pas. Ton direct, factuel, français.',
 ].join('\n');

@@ -380,9 +380,7 @@
       + '<th title="RDV tenus (fin de chaîne de report) · taux = ÷ RDV pris">RDV honorés</th></tr></thead>';
   }
   function dayShort(iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] : '—'; }
-  function overviewCards() {
-    var meta = S.M.tunnels || S.ctx.tunnelsMeta || null;
-    var list = LC.quizOverview(S.D || {}, S.ctx.P, meta);
+  function overviewCards(list) {
     if (!list.length) return '';
     var h = '';
     list.forEach(function (q) {
@@ -412,6 +410,29 @@
     return h;
   }
 
+  /* ── Contrôle de cohérence quotidien (10/11/2026, T5) ── */
+  function checksCard(list) {
+    var rows = LC.quizChecks(list);
+    if (!rows.length) return '';
+    var nAlert = rows.filter(function (r) { return r.alert; }).length;
+    var body = '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr><th class="l">Jour</th><th class="l">Quiz</th><th>Arrivés</th>'
+      + '<th title="1ers clics sur une réponse (page) ↔ réponses à la question 1 (mesure du quiz)">Ont répondu Q1 · clics ↔ quiz</th>'
+      + '<th title="Formulaires envoyés (page) ↔ fiches Leads Live créées ou mises à jour par ce quiz">Formulaires ↔ fiches</th><th>État</th></tr></thead><tbody>';
+    rows.slice().sort(function (a, b) { return a.day < b.day ? 1 : (a.day > b.day ? -1 : (a.name < b.name ? -1 : 1)); }).forEach(function (r) {
+      function cellOf(k) {
+        var it = r.items.filter(function (x) { return x.k === k; })[0];
+        if (!it) return '<td><span class="lq-muted">non mesuré</span></td>';
+        return '<td' + (it.alert ? ' class="lq-down"' : '') + '>' + fNum(it.a) + ' ↔ ' + fNum(it.b) + (it.gap ? sub(fPct(it.gap * 100, 0) + ' d\'écart') : '') + '</td>';
+      }
+      body += '<tr><td class="l">' + dayShort(r.day) + '</td><td class="l">' + esc(r.name) + '</td><td>' + fNum(r.arrives) + '</td>' + cellOf('q1') + cellOf('optin')
+        + '<td>' + (r.alert ? '<span class="fn-tbadge lq-warn">⚠ écart</span>' : (r.big ? '<span class="fn-tbadge lq-good">✓</span>' : '<span class="lq-muted">trop peu de visites</span>')) + '</td></tr>';
+    });
+    body += '</tbody></table></div>';
+    body += '<div class="fn-stage-note" style="margin-top:8px">Alerte : plus de 20 % d\'écart un jour de plus de 30 arrivés. Un écart « formulaires ↔ fiches » veut dire que des leads sont rangés sous une autre page (provenance mal lue) ; un écart « Q1 » veut dire que la mesure du quiz perd des réponses.</div>';
+    body += '<div class="fn-stage-note" style="margin-top:6px">À rapprocher à la main (hors Team) : <strong>arrivés</strong> ↔ landing page views Meta des campagnes qui mènent à la page (une même campagne peut mener à deux quiz : comparer par utm_campaign dans Admin → Tunnels → Stats) · <strong>ont répondu Q1</strong> ↔ <code>Quiz_Demarrage</code> du pixel (événements navigateur seuls, les deux quiz réunis) · <strong>formulaires</strong> ↔ exécutions du scénario Make « Leads QUIZ ÉLITE » (les deux quiz réunis).</div>';
+    return card('🩺 Contrôle de cohérence de la mesure', nAlert ? nAlert + ' jour' + (nAlert > 1 ? 's' : '') + ' en écart' : 'tout concorde', body);
+  }
+
   function viewQuiz() {
     var meta = S.M.tunnels || S.ctx.tunnelsMeta || null;
     /* 07/11/2026 : par défaut, la mesure visiteurs de chaque version ne
@@ -430,7 +451,9 @@
       + '<p>Les <strong>cartes</strong> en haut filtrent par version du quiz (Dark, White, YouTube…). « Comparer » les met côte à côte. Les formulaires hors quiz sont tout en bas.</p>'
       + '<p><strong>Période comparable</strong> (par défaut) : toutes les publications de la page sont réunies tant que les questions mesurées restent les mêmes ; un changement de questions ou une mesure corrigée ouvre une nouvelle période, pour ne jamais mélanger deux parcours qui ne se comparent pas. Les <strong>chiffres de référence</strong> en tête (arrivés, Q1, formulaires, leads, RDV) couvrent toujours toute la période choisie.</p>'
       + '<p>Mêmes définitions sur toutes les pages : <strong>arrivés</strong> = page affichée, <strong>commencé</strong> = a cliqué une réponse à la question 1.</p>');
-    h += overviewCards();
+    var ovList = LC.quizOverview(S.D || {}, S.ctx.P, S.M.tunnels || S.ctx.tunnelsMeta || null);
+    h += overviewCards(ovList);
+    h += checksCard(ovList);
 
     if (!V.list.length) {
       h += card('🧭 Parcours du quiz', '', '<div class="lq-muted">Aucun lead issu d\'un quiz et aucune mesure sur la période. La mesure démarre quand la page quiz est instrumentée (<code>node scripts/quiz-tracking-patch.js --apply</code>).</div>');

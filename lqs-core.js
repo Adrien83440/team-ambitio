@@ -1710,7 +1710,7 @@
   }
   /* mQ1 / mOptins : ont répondu Q1 et formulaires des seuls jours où l'écran
      de fin est mesuré — le taux « ont fini » ne compare que ce qui est comparable. */
-  var OV_FIELDS = ['arrives', 'q1', 'done', 'optins', 'newLeads', 'backLeads', 'booked', 'kept', 'mQ1', 'mOptins'];
+  var OV_FIELDS = ['arrives', 'q1', 'done', 'optins', 'newLeads', 'backLeads', 'booked', 'kept', 'mQ1', 'mOptins', 'q1Quiz'];
   function ovZero() { var o = { doneMeasured: false, doneSince: null }; OV_FIELDS.forEach(function (f) { o[f] = 0; }); return o; }
   function ovAdd(a, b) {
     OV_FIELDS.forEach(function (f) { a[f] += b[f] || 0; });
@@ -1757,6 +1757,14 @@
       if (!c) return;
       c.done += num(d.completes);
       if (!c.doneMeasured) { c.doneMeasured = true; c.doneSince = d.date; }
+      /* Réponses à la 1re question vues par la mesure du quiz (contrôle T5) :
+         seulement la génération de mesure la plus récente du jour. */
+      var g = num(d.measure);
+      if (c._gen == null || g > c._gen) { c._gen = g; c.q1Quiz = 0; }
+      if (g === c._gen) {
+        var qs = d.questions || {};
+        Object.keys(qs).forEach(function (qk) { var q = qs[qk] || {}; if (num(q.i, -1) === 0) c.q1Quiz += num(q.answered); });
+      }
     });
     /* 2. Leads (nouveaux / revenus) */
     var leadsById = {}, byP9 = {}, byEmail = {};
@@ -1842,6 +1850,35 @@
     }).sort(function (a, b) { return b.total.arrives - a.total.arrives; });
   }
 
+  /* ══ 7 quater. CONTRÔLE DE COHÉRENCE QUOTIDIEN (10/11/2026, T5) ═════════
+     Chaque jour et pour chaque quiz, deux chemins indépendants doivent dire
+     la même chose :
+       · ont répondu Q1 : 1er clic (page_views_daily.ctas, ALTEO.track('cta'))
+         ↔ réponse à la question 1 vue par la mesure du quiz (quiz_funnel_daily) ;
+       · formulaires envoyés (page_views_daily.optins, ALTEO.track('optin'))
+         ↔ fiches créées ou mises à jour par api/lead-optin.js avec ce quiz
+         pour page (nouveaux + déjà connus revenus).
+     Alerte si l'écart dépasse 20 % un jour de plus de 30 arrivés (règle du
+     brief). Les références hors Team (visites Meta, pixel, exécutions Make)
+     se rapprochent à la main : l'encart dit quoi comparer. */
+  var CHECK_TOL = 0.20, CHECK_MIN_VISITS = 30;
+  function gap(a, b) { var m = Math.max(a, b); return m ? Math.abs(a - b) / m : 0; }
+  function quizChecks(list) {
+    var out = [];
+    (list || []).forEach(function (q) {
+      q.dayList.forEach(function (d) {
+        var big = d.arrives > CHECK_MIN_VISITS;
+        var leads = d.newLeads + d.backLeads;
+        var items = [];
+        if (d.doneMeasured) items.push({ k: 'q1', label: 'Ont répondu Q1', a: d.q1, aLbl: '1ers clics', b: d.q1Quiz, bLbl: 'mesure du quiz', gap: gap(d.q1, d.q1Quiz) });
+        items.push({ k: 'optin', label: 'Formulaires', a: d.optins, aLbl: 'formulaires envoyés', b: leads, bLbl: 'fiches Leads Live', gap: gap(d.optins, leads) });
+        items.forEach(function (it) { it.alert = big && it.gap > CHECK_TOL && Math.abs(it.a - it.b) >= 2; });
+        out.push({ tunnel: q.tunnel, name: q.name, day: d.day, arrives: d.arrives, big: big, items: items, alert: items.some(function (it) { return it.alert; }) });
+      });
+    });
+    return out;
+  }
+
   /* ══ 8. PHRASES CLÉS (lecture en 10 secondes) ══════════════════════════ */
   /* Parts calculées sur le SIGNÉ (cash), encaissé à côté (paid). */
   function insights(bn, cashMode) {
@@ -1878,6 +1915,6 @@
     suggestPoints: suggestPoints, suggestBasis: suggestBasis,
     quizVersions: quizVersions, buildQuizView: buildQuizView, versionMeta: versionMeta, OLD_QUIZ_KEY: OLD_KEY, FAMILY_PREFIX: FAM, familyOfKey: familyOfKey, mqsOf: mqsOf, buildQuizFunnel: buildQuizFunnel, insights: insights,
     newAgg: newAgg, offerOf: offerOf, addLeadRow: addLeadRow, fin: fin, isoDay: isoDay,
-    quizOverview: quizOverview, parisIso: parisIso
+    quizOverview: quizOverview, parisIso: parisIso, quizChecks: quizChecks
   };
 }));
