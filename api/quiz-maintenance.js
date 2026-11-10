@@ -9,14 +9,12 @@
 // Action `elections` :
 //   1. tunnels/{id}.settings.crmLabel = « Funnel Quiz Élections » (nom affiché
 //      dans Leads Live pour ses futurs leads ; api/lead-optin.js le lit) ;
-//   2. fiches dont le quiz est celui des Élections (version « presidentielle »
-//      ou questions sur l'élection) mais rangées sous une autre page :
-//        · landingLast → page / variante / libellé Élections (le quiz porté par
-//          la fiche est toujours le dernier envoyé) ;
-//        · landingFirst → idem, seulement si la fiche n'a jamais été
-//          ré-inscrite (sinon la 1re page reste celle d'origine) ;
-//        · sourceDetail → « Funnel Quiz Élections » s'il vaut encore un libellé
-//          automatique de quiz.
+//   2. fiches dont une provenance (landingFirst / landingLast) a été envoyée
+//      depuis la page Élections — preuve : son URL d'envoi gardée (pageUrl) —
+//      mais rangée sous une autre page (quiz_elite, page Élite) :
+//        · cette provenance → page / variante / libellé Élections ;
+//        · sourceDetail → « Funnel Quiz Élections » si la DERNIÈRE provenance
+//          est Élections et qu'il vaut encore un libellé automatique.
 //      Trace d'audit : provenanceCorrections[] (date, action, valeurs d'avant). Rien
 //      n'est supprimé.
 //
@@ -47,13 +45,6 @@ function ref(id) { return crypto.createHash('sha256').update('qa:' + id).digest(
 function ms(v) { if (!v) return null; if (typeof v.toMillis === 'function') return v.toMillis(); const t = new Date(v).getTime(); return isNaN(t) ? null : t; }
 function day(t) { return t == null ? null : new Date(t).toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' }); }
 
-/* Le quiz porté par la fiche est-il celui des Élections ? */
-function isElectionsQuiz(q) {
-  if (!q || typeof q !== 'object') return false;
-  if (/presidentiel/i.test(String(q.quiz_version || ''))) return true;
-  const rep = Array.isArray(q.reponses) ? q.reponses : [];
-  return rep.some(function (r) { return r && /[ée]lection|pr[ée]sidentiel/i.test(String(r.question || '')); });
-}
 function pathOf(L) { try { return L && L.pageUrl ? new URL(String(L.pageUrl)).pathname : ''; } catch (e) { return ''; } }
 
 async function buildPlan() {
@@ -63,6 +54,7 @@ async function buildPlan() {
   const step = (t.steps || []).filter(function (s) { return s && !s.archived; })[0];
   if (!step) throw new Error('étape du tunnel Élections introuvable');
   const page = String(t.slug) + '__' + String(step.slug);
+  const ePath = '/' + String(step.slug);
   const liveVars = (step.variants || []).filter(function (v) { return v && v.status === 'live' && !v.archived; }).map(function (v) { return v.id; });
   const defVar = liveVars.length === 1 ? liveVars[0] : null;
   const target = { page: page, tunnelId: ELECTIONS_TUNNEL, stepId: step.id, stepLabel: step.name || step.slug || '', label: NEW_LABEL };
@@ -73,9 +65,12 @@ async function buildPlan() {
   snap.forEach(function (doc) {
     const d = doc.data() || {};
     if (d._merged === true) return;
-    if (!isElectionsQuiz(d.quiz)) return;
     const LF = d.landingFirst || null, LL = d.landingLast || null;
-    const reopted = !!d.lastOptinAt && Array.isArray(d.engagementHistory) && d.engagementHistory.length > 0;
+    /* Preuve fiche par fiche : l'URL d'envoi gardée sur la provenance
+       (pageUrl) est la page du quiz Élections. */
+    const firstIsE = pathOf(LF) === ePath, lastIsE = pathOf(LL) === ePath;
+    if (!firstIsE && !lastIsE) return;
+    const reopted = !!d.lastOptinAt;
     const upd = {};
     const before = { landingFirst: LF, landingLast: LL, sourceDetail: d.sourceDetail || null };
     function fixed(L) {
@@ -85,9 +80,9 @@ async function buildPlan() {
       o.correctedAt = new Date().toISOString();
       return o;
     }
-    if (!LL || LL.page !== page || LL.label !== NEW_LABEL) upd.landingLast = fixed(LL);
-    if (!reopted && (!LF || LF.page !== page || LF.label !== NEW_LABEL)) upd.landingFirst = fixed(LF);
-    if (d.sourceDetail && AUTO_LABELS[d.sourceDetail] && d.sourceDetail !== NEW_LABEL) upd.sourceDetail = NEW_LABEL;
+    if (lastIsE && (LL.page !== page || LL.label !== NEW_LABEL)) upd.landingLast = fixed(LL);
+    if (firstIsE && (LF.page !== page || LF.label !== NEW_LABEL)) upd.landingFirst = fixed(LF);
+    if (lastIsE && d.sourceDetail && AUTO_LABELS[d.sourceDetail] && d.sourceDetail !== NEW_LABEL) upd.sourceDetail = NEW_LABEL;
     if (!Object.keys(upd).length) return;
     plan.leads.push({
       ref: ref(doc.id), createdDay: day(ms(d.createdAt)), reopted: reopted,
