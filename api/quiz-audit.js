@@ -166,7 +166,7 @@ module.exports = async (req, res) => {
     }
     const from = isoOk(q.from) ? q.from : '2026-11-03';
     const to = isoOk(q.to) ? q.to : new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
-    const parts = String(q.only || 'tunnels,views,stats,quiz,leads,bookings,ads').split(',');
+    const parts = String(q.only || 'tunnels,views,stats,quiz,leads,bookings,ads,adsad').split(',');
     const out = { from: from, to: to, generatedAt: new Date().toISOString() };
     const L = parts.indexOf('leads') >= 0 || parts.indexOf('bookings') >= 0 ? await leadsOf(from, to) : null;
     const jobs = [];
@@ -175,6 +175,13 @@ module.exports = async (req, res) => {
     if (parts.indexOf('stats') >= 0) jobs.push(byDate('tunnel_stats_daily', from, to).then(function (x) { out.tunnel_stats_daily = x; }));
     if (parts.indexOf('quiz') >= 0) jobs.push(byDate('quiz_funnel_daily', from, to).then(function (x) { out.quiz_funnel_daily = x; }));
     if (parts.indexOf('ads') >= 0) jobs.push(byDate('ads_insights', from, to).then(function (x) { out.ads_insights = x; }));
+    if (parts.indexOf('adsad') >= 0) {
+      jobs.push(byDate('ads_insights_ad', from, to).then(function (x) { out.ads_insights_ad = x; }));
+      jobs.push(db.collection('ads_creatives').get().then(function (snap) {
+        out.ads_creatives = [];
+        snap.forEach(function (d) { const c = d.data() || {}; out.ads_creatives.push({ ad_id: d.id, ad_name: c.ad_name || null, adset_name: c.adset_name || null, campaign_id: c.campaign_id || null, campaign_name: c.campaign_name || null }); });
+      }));
+    }
     if (L && parts.indexOf('leads') >= 0) out.leads = L.list;
     if (L && parts.indexOf('bookings') >= 0) jobs.push(bookingsOf(from, to, L.keys).then(function (x) { out.bookings = x; }));
     await Promise.all(jobs);

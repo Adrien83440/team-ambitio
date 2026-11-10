@@ -120,6 +120,25 @@
   else if (Q.alteo_interne === '0') { try { var ls0 = store('local'); if (ls0) ls0.removeItem('alteo_internal'); } catch (e) {} }
   if (Q.test_claude != null || Q.apercu != null) ssSet('alteo_internal', '1');
   var INTERNAL = lsGet('alteo_internal') === '1' || ssGet('alteo_internal') === '1';
+  /* Identifiant de VISITE (10/11/2026, brief « chiffres justes », T3) :
+     aléatoire, anonyme, propre à l'onglet (sessionStorage), envoyé avec
+     chaque événement du beacon — jamais dans une URL, jamais relié à une
+     personne. Permet des comptes uniques exacts et le parcours d'une visite
+     (journal tunnel_visits, api/tunnel-event.js). */
+  var VID = (function () {
+    var v = ssGet('alteo_vid');
+    if (v && /^[a-z0-9]{16,32}$/.test(v)) return v;
+    v = '';
+    try {
+      var b = new Uint8Array(12);
+      (window.crypto || window.msCrypto).getRandomValues(b);
+      for (var i = 0; i < b.length; i++) v += ('0' + b[i].toString(16)).slice(-2);
+    } catch (e) {
+      for (var j = 0; j < 24; j++) v += Math.floor(Math.random() * 16).toString(16);
+    }
+    ssSet('alteo_vid', v);
+    return v;
+  })();
   var leadId = String(Q.leadId || ssGet(SS_LEAD) || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 120);
   if (leadId) ssSet(SS_LEAD, leadId);
 
@@ -156,7 +175,7 @@
     if (ev === 'visit' && !once('visit_' + C.tunnelId)) return;
     if (ev === 'view' && !once('view_' + C.stepId + '_' + C.variant)) return;
     if (ev === 'cta' && !once('cta_' + C.stepId)) return;
-    var pl = { t: C.tunnelId, s: C.stepId, v: C.variant, e: ev, src: srcOf() };
+    var pl = { t: C.tunnelId, s: C.stepId, v: C.variant, e: ev, src: srcOf(), vid: VID };
     if (INTERNAL) pl.x = 1;
     post(C.eventEndpoint, pl, true);
   }
@@ -184,7 +203,7 @@
     else if (kind === 'gate') { if (!data.g) return; key = base + 'gate_' + data.g; }
     else return;
     if (!once(key)) return;
-    var payload = { t: C.tunnelId, s: C.stepId, v: C.variant, e: 'quiz', k: kind, src: srcOf() };
+    var payload = { t: C.tunnelId, s: C.stepId, v: C.variant, e: 'quiz', k: kind, src: srcOf(), vid: VID };
     if (q) payload.q = { id: qid, i: q.i, n: q.n, label: q.label };
     if (kind === 'a') payload.a = data.a;
     if (kind === 'gate') payload.g = data.g;

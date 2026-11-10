@@ -163,7 +163,9 @@ facture en production (incident du 22/07/2026 sur `_config/billing/cgv`).
 
 ### Règles métier sur les données
 - **Rien n'est jamais supprimé** — on archive, on met à jour, ou on soft-delete avec une
-  trace d'audit.
+  trace d'audit. **Seule exception** (validée par Adrien le 10/11/2026) : le journal
+  anonyme par visite `tunnel_visits` (mesure des tunnels, aucune personne derrière),
+  conservé 90 jours (`expireAt`) et purgé par le cron `api/tunnel-visits-purge.js`.
 - Téléphone canonique des leads : champ **`telephone`**, format E.164 strict `+33XXXXXXXXX`.
   Le champ legacy `phone` n'est plus utilisé.
 - Les documents portant `_merged: true` doivent être ignorés dans toute recherche de lead
