@@ -194,6 +194,7 @@
       setStage: function (l, stage, cb) {
         var old = l.stage || 'lead', st = E.STATUS_OF[stage], up = { stage: stage, updatedAt: FV.serverTimestamp(), timeline_history: tl('Étape : ' + lab(old) + ' → ' + lab(stage) + ' (' + me.name + ', Pipeline)') };
         if (st) up.status = st;
+        if (E.avecDernierNrp) E.avecDernierNrp(stage, up);   /* NRP suivant après une sortie des NRP */
         if (st) journal(l, st);
         ref(l).update(up).then(ok(cb), ko(cb));
       },

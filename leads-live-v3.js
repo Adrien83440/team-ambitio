@@ -1168,13 +1168,17 @@
   }
   function grilleStatuts(l, id) {
     var h = '<div class="ld-status-grid">';
+    /* « Actuel » = l'étape de la fiche en mode étapes (même mot que la colonne),
+       sinon l'ancien statut */
+    var PEt = window.PipelineEtapes, cur = l.status || 'nouveau';
+    if (window.LLEtapes && window.LLEtapes.on() && PEt && PEt.STATUS_OF[l.stage || 'lead']) cur = PEt.STATUS_OF[l.stage || 'lead'];
     for (var f = 0; f < L2_FAMILIES.length; f++) {
       var fam = L2_FAMILIES[f];
       h += '<div class="l2fam" data-fam="' + fam.l.toLowerCase() + '"><div class="ll5gt">' + fam.l + '</div><div class="ll5group">';
       for (var si = 0; si < fam.k.length; si++) {
         var s = getStatusObj(fam.k[si]);
         if (window.LLEtapes && window.LLEtapes.hideStatus(s.key)) continue;
-        var act = (l.status || 'nouveau') === s.key;
+        var act = cur === s.key;
         h += '<button class="ll5line' + (act ? ' active' : '') + '" data-action="setStatus" data-id="' + id + '" data-status="' + s.key + '"><span class="ll5tx"><b>' + escHtml(s.label) + '</b>' +
           (s.oldLabel && s.oldLabel !== s.label ? '<span>avant : ' + escHtml(s.oldLabel) + '</span>' : '') + '</span>' + (act ? '<span class="ll5reco">Actuel</span>' : '') + '</button>';
       }
@@ -1389,12 +1393,16 @@
     g.innerHTML = '<button type="button" class="ld-status-btn" data-action="setStatus" data-id="' + escAttr(id) + '" data-status="' + st + '">' + escHtml(s.label) + '</button>';
     g.firstChild.click();
   }
+  /* Rappel demandé juste après « Pas de réponse » / « Messagerie » : le lead
+     garde son NRP (pense-bête), il ne passe pas en FU (11/11/2026). */
+  var rappelApresNrp = false;
   function programmerRappel(id, ms, agenda, note, duree) {
     var d = new Date(ms), g = fantome(), avant = openCardId, ecr = pile.slice(), dur = String(duree || 30);
+    var garde = rappelApresNrp; rappelApresNrp = false;
     g.innerHTML = '<input data-fu-field="date" value="' + ymd(d) + '"/><input data-fu-field="time" value="' + hm(d) + '"/>' +
       '<textarea data-fu-field="note"></textarea><select data-fu-field="duration"><option value="' + escAttr(dur) + '" selected>' + escHtml(dur) + '</option></select>' +
       '<input type="checkbox" data-fu-field="pushCal"' + (agenda ? ' checked' : '') + '/>' +
-      '<button type="button" data-action="addFu" data-id="' + escAttr(id) + '">Programmer le rappel</button>';
+      '<button type="button" data-action="addFu" data-id="' + escAttr(id) + '"' + (garde ? ' data-keep-stage="1"' : '') + '>Programmer le rappel</button>';
     if (note) g.querySelector('[data-fu-field="note"]').value = note;
     g.querySelector('[data-action="addFu"]').click();
     if (avant !== id) {
@@ -1406,6 +1414,7 @@
     var l = leadDe(id);
     if (!l) return;
     var st = l.status || 'nouveau';
+    rappelApresNrp = (v === 'no' || v === 'vm');
     if (v === 'yes') { aller('result2'); return; }
     if (v === 'no') { var n = nrpSuivant(l); poserStatut(id, n); infoRappel = getStatusObj(n).label; pile = ['lead', 'fuask']; anime = true; l2RenderSheet(id, false); return; }
     if (v === 'vm') { poserStatut(id, 'messagerie'); infoRappel = 'Messagerie'; pile = ['lead', 'fuask']; anime = true; l2RenderSheet(id, false); return; }
@@ -1415,6 +1424,7 @@
     var l = leadDe(id);
     if (!l) return;
     if (v === 'rdv') { accueilLead(); if (typeof openBookingModal === 'function') openBookingModal(l); return; }
+    rappelApresNrp = false;
     if (v === 'fu') { poserStatut(id, 'follow_up_pm'); infoRappel = 'Follow Up PM'; pile = ['lead', 'fuask']; anime = true; l2RenderSheet(id, false); return; }
     var map = { talk: 'decroche', no: 'pas_interesse', dq: 'disqualifie', win: 'client' };
     accueilLead();
@@ -1509,7 +1519,7 @@
         appelInv[ci] = !appelInv[ci];
         if (openCardId) l2RenderSheet(openCardId, true);
         return;
-      case 'home': accueilLead(); return;
+      case 'home': rappelApresNrp = false; accueilLead(); return;
       case 'list':
         liste = v;
         try { localStorage.setItem(LIST_KEY, v); } catch (e2) {}

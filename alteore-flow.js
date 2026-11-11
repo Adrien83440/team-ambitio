@@ -518,7 +518,12 @@
     var prev = (leadData && leadData.status) || null;
     var updates = { status: newStatus, updatedAt: ts() };
     var syncStage = STATUS_TO_STAGE[newStatus];
+    /* Jamais de retour à l'étape « lead » (Nouveau / Appelé / Décroché) sur
+       une fiche déjà avancée — même règle que Leads Live (11/11/2026). */
+    var curStage = (leadData && leadData.stage) || '';
+    if (syncStage === 'lead' && curStage && curStage !== 'lead') syncStage = null;
     if (syncStage && newStatus !== 'client') updates.stage = syncStage;
+    if (syncStage && /^(nrp[123]|all_nrp)$/.test(syncStage)) updates.dernierNrp = syncStage;
 
     recordLeadAction(leadId, leadData, newStatus, { prevStatus: prev, origin: opts.origin || 'leads_live' });
 

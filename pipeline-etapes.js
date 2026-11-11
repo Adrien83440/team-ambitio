@@ -24,7 +24,8 @@
    équipe avec le marqueur `cancellation.kind === 'non_honore'`.
 
    API : window.PipelineEtapes
-     COLS · STAGE_LABEL · STATUS_OF · NEXT_NRP
+     COLS · STAGE_LABEL · STATUS_OF · NEXT_NRP · NRP_STAGES
+     dernierNrpDe(lead) · avecDernierNrp(stage, update) · rappelEnAttente(lead)
      classify(lead, bookings[, opts]) → { col, sub, key, stage, booking, sb, upcoming, lastPast }
      match(lead, bookings, cle[, opts]) · count(leads, bookingsOf[, opts]) → { cle: n }
      label(cle) · colOf(id) · options() · sbOf(booking[, opts])
@@ -62,6 +63,37 @@
 
   /* Un appel sans réponse (ou une messagerie) fait passer au NRP suivant */
   var NEXT_NRP = { lead: 'nrp1', nrp1: 'nrp2', nrp2: 'nrp3', nrp3: 'all_nrp', all_nrp: 'all_nrp' };
+  var NRP_STAGES = { nrp1: 1, nrp2: 1, nrp3: 1, all_nrp: 1 };
+
+  /* Dernier NRP atteint (11/11/2026, retour Élodie) : une fiche sortie des NRP
+     (FU, no show…) qui ne répond de nouveau pas reprend au NRP SUIVANT, pas à
+     NRP 1. Champ `dernierNrp`, écrit à chaque passage en NRP (avecDernierNrp) ;
+     à défaut, la dernière étape NRP lue dans la timeline (« … → NRP 2 »). */
+  var NRP_DU_LIBELLE = { 'nrp 1': 'nrp1', 'nrp1': 'nrp1', 'nrp 2': 'nrp2', 'nrp2': 'nrp2', 'nrp 3': 'nrp3', 'nrp3': 'nrp3', 'all nrp': 'all_nrp' };
+  function dernierNrpDe(l) {
+    if (!l) return null;
+    if (NRP_STAGES[l.stage]) return l.stage;
+    if (NRP_STAGES[l.dernierNrp]) return l.dernierNrp;
+    var tl = l.timeline_history || [], i, m;
+    for (i = tl.length - 1; i >= 0; i--) {
+      /* « Lead → NRP 2 » (arrivée) puis, à défaut, « NRP 2 → FU » (départ) */
+      var tx = String((tl[i] && tl[i].text) || '');
+      m = /→\s*(all nrp|nrp ?[123])\b/i.exec(tx) || /\b(all nrp|nrp ?[123])\s*→/i.exec(tx);
+      if (m) return NRP_DU_LIBELLE[m[1].toLowerCase()] || null;
+    }
+    return null;
+  }
+  /* À appeler sur tout objet d'écriture qui pose une étape */
+  function avecDernierNrp(stage, up) {
+    if (up && NRP_STAGES[stage]) up.dernierNrp = stage;
+    return up;
+  }
+  /* Rappel programmé, pas encore fait */
+  function rappelEnAttente(l) {
+    var fu = (l && l.followUps) || [];
+    for (var i = 0; i < fu.length; i++) if (fu[i] && !fu[i].done) return true;
+    return false;
+  }
 
   var COLS = [
     { id: 'lead',     t: 'Lead',                  s: 'Arrivés depuis moins de 6 mois, aucune action', st: ['lead'] },
@@ -78,7 +110,8 @@
       subs: [{ id: 'faux_numero', t: 'Faux numéro' }, { id: 'poubelle', t: 'Poubelle' }] },
     { id: 'disqua',   t: 'Disqualification',      s: '', st: ['disqualification', 'disqualifie_closing'], fold: true,
       subs: [{ id: 'setting', t: 'Au setting' }, { id: 'closing', t: 'Au closing' }] },
-    { id: 'fu',       t: 'FU',                    s: 'Follow up : rappel convenu', st: ['follow_up_pm'] },
+    { id: 'fu',       t: 'FU',                    s: 'Follow up : rappel convenu', st: ['follow_up_pm'],
+      subs: [{ id: 'sans_rappel', t: 'Sans rappel daté' }] },
     { id: 'set',      t: 'SET NB',                s: 'RDV posé par l\'équipe', st: ['set', 'rdv_confirmes', 'partenariats'],
       subs: [{ id: 'a_confirmer', t: 'Présence à confirmer' }, { id: 'confirme', t: 'Présence confirmée' }, { id: 'nonsaisi', t: 'Résultat à saisir' }, { id: 'sans_rdv', t: 'Sans RDV retrouvé' }] },
     { id: 'sb',       t: 'Self booking',          s: 'RDV pris par le prospect', st: ['rdv_self_booking'],
@@ -126,7 +159,7 @@
 
   /* ── Ce qui s'est passé sur une fiche encore à l'étape « Lead » ──
      fu       : un rappel programmé, pas encore fait
-     decroche : un appel décroché (≥ 30 s ou marqué répondu), ou statut Décroché
+     decroche : un appel marqué répondu, ou statut Décroché
      essais   : appels sortants sans réponse (statut Appelé / Messagerie = 1 au moins)
      message  : SMS, WhatsApp ou e-mail envoyé à la main */
   function traces(l) {
@@ -135,7 +168,9 @@
     (l.communications || []).forEach(function (c) {
       if (!c || c.direction === 'inbound' || c.direction === 'in') return;
       if (c.type === 'call') {
-        if (c.answered === true || (+c.duration || 0) >= 30) t.decroche = true; else t.essais++;
+        /* Décroché = marqué répondu, jamais d'après la durée seule : une
+           messagerie où l'on laisse un message dépasse souvent 30 s (11/11/2026). */
+        if (c.answered === true) t.decroche = true; else t.essais++;
       } else if ((c.type === 'sms' || c.type === 'whatsapp' || c.type === 'email') && !c.auto) t.message = true;
     });
     if (l.status === 'decroche') t.decroche = true;
@@ -179,12 +214,15 @@
      il est dans le compte ; sinon on l'ajoute. */
   function nrpApresAppel(l) {
     var st = (l && l.stage) || 'lead';
-    if (st !== 'lead') return NEXT_NRP[st] || 'nrp1';
+    if (NRP_STAGES[st]) return NEXT_NRP[st];
+    var dn = dernierNrpDe(l);
+    if (dn) return NEXT_NRP[dn];
+    if (st !== 'lead') return 'nrp1';
     var t = traces(l), recent = false, now = Date.now();
     (l.communications || []).forEach(function (c) {
       if (!c || c.type !== 'call' || c.direction === 'inbound' || c.direction === 'in') return;
       var ms = Date.parse(c.date || c.createdAt || '');
-      if (ms && now - ms < 5 * 60000 && !(c.answered === true || (+c.duration || 0) >= 30)) recent = true;
+      if (ms && now - ms < 5 * 60000 && c.answered !== true) recent = true;
     });
     var n = t.essais + (recent ? 0 : 1);
     return n >= 4 ? 'all_nrp' : 'nrp' + Math.max(1, n);
@@ -246,14 +284,17 @@
       r.col = 'perdu'; r.booking = bl; r.sb = sbFallback(bl); r.sub = r.sb ? 'closed_lost_sb' : 'closed_lost_nb';
     } else if (stage === 'follow_up_pm') {
       r.col = 'fu';
+      if (!rappelEnAttente(l)) r.sub = 'sans_rappel';
     } else if (stage === 'lead') {
       /* « Lead » = arrivé, AUCUNE action (Adrien, 30/10/2026). Les appels du
          Dialer et les rappels ne changent pas l'étape en base : on lit donc ce
-         qui s'est vraiment passé sur la fiche. */
+         qui s'est vraiment passé sur la fiche.
+         FU = un rappel DATÉ en attente, rien d'autre (11/11/2026) : un simple
+         « décroché » sans suite ne remplit plus la colonne FU. */
       var t = traces(l);
-      if (t.fu || t.decroche) r.col = 'fu';
+      if (t.fu) r.col = 'fu';
       else if (t.essais) r.col = t.essais >= 4 ? 'all_nrp' : 'nrp' + t.essais;
-      else if (t.message) r.col = 'nrp1';
+      else if (t.message || t.decroche) r.col = 'nrp1';
       else if (estAncien(l)) { r.col = 'ancien'; r.sub = origineAncienne(l); }
       else r.col = 'lead';
       r.deduit = r.col !== 'lead';
@@ -302,7 +343,8 @@
   }
 
   window.PipelineEtapes = {
-    COLS: COLS, STAGE_LABEL: STAGE_LABEL, STATUS_OF: STATUS_OF, NEXT_NRP: NEXT_NRP, COL_OF_STAGE: COL_OF_STAGE,
+    COLS: COLS, STAGE_LABEL: STAGE_LABEL, STATUS_OF: STATUS_OF, NEXT_NRP: NEXT_NRP, NRP_STAGES: NRP_STAGES, COL_OF_STAGE: COL_OF_STAGE,
+    dernierNrpDe: dernierNrpDe, avecDernierNrp: avecDernierNrp, rappelEnAttente: rappelEnAttente,
     classify: classify, match: match, count: count, label: label, colOf: colOf, options: options,
     sbOf: sbOf, bookingStart: bookingStart, isCancelled: isCancelled, traces: traces, nrpApresAppel: nrpApresAppel, realMs: realMs, AGE_ANCIEN: AGE_ANCIEN
   };

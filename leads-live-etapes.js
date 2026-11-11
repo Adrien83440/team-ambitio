@@ -12,9 +12,12 @@
        disparaissent. Restent la recherche et « Qui s'en occupe ».
      - « Messagerie » fait passer au NRP suivant ;
      - après « Décroché », on demande toujours la suite (RDV, FU,
-       Disqualifié, Poubelle) ;
+       Disqualifié, Poubelle) — suite obligatoire (11/11/2026) : plus de
+       « Plus tard », ni fermeture par le fond ou Échap ;
      - « Appelé » n'est plus proposé ;
-     - programmer un rappel sur un lead Lead / NRP le passe en FU.
+     - programmer un rappel sur un lead Lead / NRP le passe en FU, SAUF le
+       rappel posé juste après « Pas de réponse » / « Messagerie » (le lead
+       garde son NRP, 11/11/2026).
    Hors mode, rien ne change.
 
    Interrupteur : ACTIF POUR TOUT LE MONDE depuis le 29/10/2026 (demande
@@ -196,15 +199,13 @@
       '<button type="button" data-llnext="rdv">🎯 <b>Poser un RDV</b><span>Il passe en SET NB</span></button>' +
       '<button type="button" data-llnext="follow_up_pm">🔔 <b>À rappeler</b><span>Il passe en FU, programme le rappel</span></button>' +
       '<button type="button" data-llnext="disqualifie">🚫 <b>Disqualifié</b><span>Hors cible</span></button>' +
-      '<button type="button" data-llnext="poubelle">🗑️ <b>Poubelle</b><span>Ne veut plus être contacté</span></button>' +
-      '<button type="button" class="llnext-later" data-llnext="later">Plus tard</button></div>';
+      '<button type="button" data-llnext="poubelle">🗑️ <b>Poubelle</b><span>Ne veut plus être contacté</span></button></div>';
     bg.addEventListener('click', function (e) {
-      if (e.target === bg) { fermerNext(); return; }
+      /* Suite obligatoire : un clic à côté ne ferme pas */
       var b = e.target.closest ? e.target.closest('[data-llnext]') : null;
       if (!b) return;
       var k = b.getAttribute('data-llnext');
       fermerNext();
-      if (k === 'later') return;
       if (k === 'rdv') { if (l && typeof openBookingModal === 'function') openBookingModal(l); return; }
       if (typeof ldApplyStatus === 'function') ldApplyStatus(leadId, k, null);
       if (k === 'follow_up_pm') ouvrirRappel(leadId);
@@ -223,7 +224,8 @@
       else if (typeof toast === 'function') toast('🔔 Programme le rappel dans la fiche');
     }, 350);
   }
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && document.getElementById('llNextBg')) { e.stopPropagation(); fermerNext(); } }, true);
+  /* Échap ne ferme pas la question (suite obligatoire), il ne doit pas non plus fermer la fiche dessous */
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && document.getElementById('llNextBg')) { e.stopPropagation(); e.preventDefault(); } }, true);
   document.addEventListener('change', function (e) { if (e.target && e.target.id === 'llEtapeSel') setEtape(e.target.value); });
 
   /* ── Style (inerte hors mode) ── */
@@ -247,8 +249,7 @@
       '.llnext-s{font-size:13px;opacity:.75;margin:4px 0 14px}' +
       '.llnext-box button{display:block;width:100%;text-align:left;margin-top:8px;padding:12px 14px;border-radius:12px;border:1.5px solid rgba(148,163,214,.22);background:transparent;color:inherit;font:inherit;font-size:15px;cursor:pointer}' +
       '.llnext-box button:hover,.llnext-box button:focus{border-color:#5b7cfa;outline:none}' +
-      '.llnext-box button span{display:block;font-size:12px;opacity:.7;margin:2px 0 0 26px}' +
-      '.llnext-box .llnext-later{text-align:center;border:0;opacity:.7;font-size:14px}';
+      '.llnext-box button span{display:block;font-size:12px;opacity:.7;margin:2px 0 0 26px}';
     var st = document.createElement('style');
     st.id = 'llEtapesCss'; st.textContent = css;
     (document.head || document.documentElement).appendChild(st);

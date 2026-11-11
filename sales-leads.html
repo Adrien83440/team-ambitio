@@ -4894,7 +4894,14 @@ function l2AiLastCallHTML(l, id) {
   if (pa.action && pa.action.toLowerCase() !== 'rien') h += '<p>➡️ <b>' + escHtml(pa.action) + '</b>' + (pa.quand ? ' — ' + escHtml(pa.quand) : '') + '</p>';
   h += '<div class="l2ai-acts">';
   var st = c.statutSuggere ? getStatusObj(c.statutSuggere) : null;
-  if (st && (l.status || 'nouveau') !== st.key) h += '<button class="ld-status-btn" style="color:' + st.color + ';border-color:' + st.color + '" data-action="setStatus" data-id="' + id + '" data-status="' + st.key + '">Appliquer : ' + st.icon + ' ' + st.label + '</button>';
+  var stKey = st ? st.key : null, stLab = st ? st.icon + ' ' + st.label : '';
+  /* Mode étapes : « NRP 1 » / « Messagerie » proposés par l'IA = le NRP
+     SUIVANT de la fiche (jamais un retour en NRP 1 depuis NRP 2) */
+  if (st && window.LLEtapes && window.LLEtapes.on() && (stKey === 'nrp1' || stKey === 'messagerie')) {
+    var stNx = getStatusObj(window.LLEtapes.nextNrp(l));
+    stKey = 'messagerie'; stLab = stNx.icon + ' ' + stNx.label; st = stNx;
+  }
+  if (st && (l.status || 'nouveau') !== st.key) h += '<button class="ld-status-btn" style="color:' + st.color + ';border-color:' + st.color + '" data-action="setStatus" data-id="' + id + '" data-status="' + stKey + '">Appliquer : ' + stLab + '</button>';
   h += '<button type="button" class="ld-status-btn" data-l2="aiNote" data-id="' + id + '">📝 Résumé → note</button>';
   if (pa.message) h += '<button type="button" class="ld-status-btn" data-l2="aiSmsUse" data-id="' + id + '">💬 SMS proposé → composeur</button>';
   h += '</div></div>';
@@ -6210,7 +6217,14 @@ function ldApplyStatus(leadId, newStatus, statusBtn) {
     poubelle:'poubelle'
   };
   var syncStage = STATUS_TO_STAGE[newStatus];
+  /* 11/11/2026 (retour Élodie) : Nouveau / Appelé / Décroché ne ramènent plus
+     JAMAIS une fiche à l'étape « lead » : un NRP 1 « décroché » restait sinon
+     rangé en FU sans aucun rappel daté. L'étape ne bouge qu'avec la suite
+     choisie (RDV, rappel, Disqualifié, Poubelle). */
+  var curStage = prevLeadObj ? (prevLeadObj.stage || '') : '';
+  if (syncStage === 'lead' && curStage && curStage !== 'lead') syncStage = null;
   var updates = { status: newStatus, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+  if (syncStage && window.PipelineEtapes && window.PipelineEtapes.avecDernierNrp) window.PipelineEtapes.avecDernierNrp(syncStage, updates);
   if (syncStage) {
     updates.stage = syncStage;
     for (var j = 0; j < allLeads.length; j++) {
@@ -6599,6 +6613,10 @@ document.addEventListener('click', function(e) {
     var fuNote = fuNoteEl ? fuNoteEl.value.trim() : '';
     var fuDuration = fuDurEl ? parseInt(fuDurEl.value, 10) || 30 : 30;
     var fuPushCal = fuPushCalEl ? !!fuPushCalEl.checked : false;
+    /* Rappel posé juste après « Pas de réponse » / « Messagerie » : simple
+       pense-bête, la fiche GARDE son NRP (11/11/2026). FU = rappel convenu
+       avec le prospect. */
+    var fuKeepStage = addFuBtn.getAttribute('data-keep-stage') === '1';
     if (!fuDate || !fuTime) { toast('⚠️ Date et heure requises'); return; }
     var fuDateTime = fuDate + 'T' + fuTime + ':00';
     var fuObj = {
@@ -6620,7 +6638,7 @@ document.addEventListener('click', function(e) {
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       };
       /* Mode étapes : un lead à joindre qu'on doit rappeler passe en FU (comme le Pipeline) */
-      if (window.LLEtapes && window.LLEtapes.on() && ['lead', 'nrp1', 'nrp2', 'nrp3', 'all_nrp'].indexOf(afLead.stage || 'lead') > -1) {
+      if (!fuKeepStage && window.LLEtapes && window.LLEtapes.on() && ['lead', 'nrp1', 'nrp2', 'nrp3', 'all_nrp'].indexOf(afLead.stage || 'lead') > -1) {
         afUpd.stage = 'follow_up_pm'; afUpd.status = 'follow_up_pm';
         afLead.stage = 'follow_up_pm'; afLead.status = 'follow_up_pm';
       }
