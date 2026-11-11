@@ -342,6 +342,11 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   `rdv_annules_equipe`). Les Labos Pipeline et Leads Live partagent la même fausse base
   (`sandbox-leads-live-db.js`, faux leads de `sandbox-pipeline-data.js`) ; après toute
   modification de `sales-leads.html` : `node scripts/build-sandbox-leads-live.js`.
+  **NRP / FU (11/11/2026, retour Élodie)** : FU = rappel DATÉ convenu avec le prospect. Le rappel
+  posé juste après « Pas de réponse » / « Messagerie » garde le NRP (`data-keep-stage` sur `addFu`) ;
+  Nouveau / Appelé / Décroché ne ramènent jamais une fiche avancée à `lead` ; décroché = `answered: true`,
+  jamais d'après la durée (messagerie). `leads.dernierNrp` (écrit avec chaque étape NRP, sinon lu dans la
+  timeline) : une fiche sortie des NRP reprend au NRP suivant. Sous-filtre `fu:sans_rappel`.
 
 - **Qualité leads — LQS / MQS (06/11/2026, demande Vincent)** : onglet « ⭐ Qualité leads »
   de `sales-funnel.html` (admin seul ; la note n'est montrée **nulle part** ailleurs, les closers
