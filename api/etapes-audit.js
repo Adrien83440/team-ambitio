@@ -99,12 +99,40 @@ async function analyser() {
     actionsParLead(),
   ]);
   const aCorriger = [], laisses = { fuLegitime: 0, sansRappelDate: 0, autreEcran: 0 };
+  /* Ventilation anonyme des FU laissées (d'où viennent-elles ?) */
+  const diagnostic = { derniereAction: {}, rappel: {}, statut: {}, origineFu: {}, majIlYa: {}, actionXrappel: {} };
+  function inc(o, k) { o[k] = (o[k] || 0) + 1; }
+  function origineFu(l) {
+    const tl = Array.isArray(l.timeline_history) ? l.timeline_history : [];
+    for (let i = tl.length - 1; i >= 0; i--) {
+      const t = String((tl[i] && tl[i].text) || '');
+      if (!/→\s*(FU|follow_up_pm|Follow Up)/i.test(t)) continue;
+      if (/rappel programmé/i.test(t)) return 'pipeline_rappel';
+      if (/Pipeline/.test(t)) return 'pipeline_deplacement';
+      if (/webhook/i.test(t)) return 'webhook';
+      return 'timeline_autre';
+    }
+    return 'aucune_trace';
+  }
+  function rappelDe(l) {
+    const fu = Array.isArray(l.followUps) ? l.followUps : [];
+    if (!fu.length) return 'jamais';
+    return fu.some(function (f) { return f && !f.done; }) ? 'en_attente' : 'tous_faits';
+  }
+  function age(l) {
+    const t = ms(l.updatedAt); if (!t) return 'inconnu';
+    const j = (Date.now() - t) / 864e5;
+    return j < 2 ? '<2j' : j < 7 ? '2-7j' : j < 30 ? '7-30j' : '>30j';
+  }
   const parCible = {};
   snap.forEach(function (d) {
     const l = d.data() || {};
     if (l._merged === true) return;
     const v = verdict(l, par[d.id]);
     if (!v) {
+      const acts = par[d.id] || [], der = acts.length ? acts[acts.length - 1].action : 'aucune', rp = rappelDe(l);
+      inc(diagnostic.derniereAction, der); inc(diagnostic.rappel, rp); inc(diagnostic.statut, String(l.status || 'vide'));
+      inc(diagnostic.origineFu, origineFu(l)); inc(diagnostic.majIlYa, age(l)); inc(diagnostic.actionXrappel, der + ' | ' + rp);
       laisses.fuLegitime++;
       if (!rappelEnAttente(l)) laisses.sansRappelDate++;
       return;
@@ -114,7 +142,7 @@ async function analyser() {
     aCorriger.push({ id: d.id, cible: v.cible, nrpLe: v.nrpLe, par: v.par, rappelEnAttente: rappelEnAttente(l), assignedTo: l.assignedTo || null });
   });
   aCorriger.sort(function (a, b) { return String(b.nrpLe).localeCompare(String(a.nrpLe)); });
-  return { totalFu: snap.size, aCorriger: aCorriger, parCible: parCible, laisses: laisses };
+  return { totalFu: snap.size, aCorriger: aCorriger, parCible: parCible, laisses: laisses, diagnostic: diagnostic };
 }
 
 module.exports = async (req, res) => {
