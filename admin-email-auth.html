@@ -44,7 +44,7 @@ h1{font-size:22px;font-weight:800;margin-bottom:8px}
 <div class="card">
 <h1>Connexion Email</h1>
 <p class="sub">Connecte les comptes Gmail de l'équipe pour envoyer et recevoir des emails depuis les fiches contacts.
-Les deux derniers ne sont pas des bo&icirc;tes mail&nbsp;: ce sont les acc&egrave;s Google&nbsp;Drive du mur de t&eacute;moignages et des formations internes.</p>
+Les entr&eacute;es Drive et Meet ne sont pas des bo&icirc;tes mail&nbsp;: ce sont des acc&egrave;s Google (mur de t&eacute;moignages, formations internes, replays closing, replays des coachings de groupe).</p>
 <div id="accounts"></div>
 <div class="msg" id="msg"></div>
 <a href="sales-equipe.html" class="back">← Retour</a>
@@ -75,7 +75,12 @@ var ACCOUNTS=[
   // Replay closing : à connecter avec le compte qui HÉBERGE les Meet de
   // closing (strategie@). Entrée distincte de « Stratégie » pour ne pas
   // toucher au token Gmail qui envoie les mails.
-  {key:'meet_closing',label:'Meet Closing',email:'Transcriptions et enregistrements des appels de closing — à connecter avec strategie@adrienemily.com',icon:'🎬',cls:'temo',scopes:MEET_SCOPES}
+  {key:'meet_closing',label:'Meet Closing',email:'Transcriptions et enregistrements des appels de closing — à connecter avec strategie@adrienemily.com',icon:'🎬',cls:'temo',scopes:MEET_SCOPES},
+  // Replays des coachings de groupe (api/coaching-replays-groupe.js) : lit
+  // « Meet Recordings » de coaching@, DÉPLACE la vidéo dans le dossier partagé
+  // et, au besoin, la partage par lien — d'où le scope Drive complet. Entrée
+  // distincte de « Coaching » pour ne pas toucher au jeton Gmail des emails.
+  {key:'drive_coaching',label:'Drive Coaching',email:'Replays des coachings de groupe → Academy — à connecter avec coaching@adrienemily.com',icon:'🎥',cls:'temo',scopes:DRIVE_SCOPES}
 ];
 
 function scopesFor(key){

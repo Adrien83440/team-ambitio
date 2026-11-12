@@ -324,6 +324,16 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
 - **AlteoForms** : `alteoforms.html` (builder), `alteoforms-render.html` (rendu public),
   collection `alteo_forms`
 - **Coaching** : `coaching*.html` — SDK modulaire, style ES6
+- **Replays des coachings de groupe (12/11/2026)** : `api/coaching-replays-groupe.js`, cron du
+  matin, derrière `_config/replays_groupe.enabled`. Lit « Meet Recordings » du Drive de
+  coaching@ (`email_tokens/drive_coaching`, entrée « Drive Coaching » d'admin-email-auth), lit
+  le coach dans le NOM du fichier (doit correspondre à UN sous-module du module Academy
+  « Replay Coaching GR » `f-elite/n58`, et porter la marque groupe `_config/replays_groupe.marqueur`
+  — jamais un coaching individuel), déplace la vidéo dans le dossier partagé par lien (déduit des
+  leçons déjà rangées), puis l'ajoute par le pont Academy `POST /api/bridge/replay-groupe`
+  (repo `ae-academy`, fonctions pures `src/lib/ep/replays.js`) : à la fin du sous-module, publiée,
+  titre Google, jamais de doublon, cours Business recopié aussitôt. Trace `replays_groupe/{fileId}`,
+  récap email. Accès manuel : clé Vercel `REPLAYS_GROUPE_KEY`, `?dry=1` d'abord.
 - **Scoring sociétés (30/10/2026)** : `admin-scoring.html` (admin : solvabilité, tout le
   catalogue Societe.com en boutons, documents officiels), `alteore-scoring.js` (bouton sur
   la fiche en phase de closing, pop-ups), `api/scoring.js`, client `api/_societeCom.js`
