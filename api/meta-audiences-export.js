@@ -14,7 +14,8 @@
 //                                   à la règle 8 du CLAUDE.md validée par
 //                                   Adrien le 12/11/2026 pour cet export.
 //
-// Accès : en-tête `x-export-key` égal à la variable Vercel META_EXPORT_KEY.
+// Accès : en-tête `x-export-key` (ou paramètre `key`, pour l'outil Vercel de
+// la session) égal à la variable Vercel META_EXPORT_KEY.
 // Variable absente ou clé fausse → 404. La retirer coupe l'accès.
 //
 // Règles (validées par Adrien, « tes recos ») :
@@ -47,7 +48,7 @@ const DAY = 86400000;
 
 function keyOk(req) {
   const want = String(process.env.META_EXPORT_KEY || '');
-  const got = String((req.headers && req.headers['x-export-key']) || '');
+  const got = String((req.headers && req.headers['x-export-key']) || (req.query && req.query.key) || '');
   if (want.length < 24 || got.length !== want.length) return false;
   return crypto.timingSafeEqual(Buffer.from(got), Buffer.from(want));
 }
@@ -458,7 +459,10 @@ module.exports = async function (req, res) {
       if (!out.rows[f]) { res.status(400).json({ error: 'file' }); return; }
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Cache-Control', 'no-store');
-      res.status(200).send(toCsv(out.rows[f]));
+      const off = Math.max(0, parseInt(q.offset, 10) || 0);
+      const lim = Math.max(1, Math.min(5000, parseInt(q.limit, 10) || 5000));
+      res.setHeader('X-Total-Rows', String(out.rows[f].length));
+      res.status(200).send(toCsv(out.rows[f].slice(off, off + lim)));
       return;
     }
     res.setHeader('Cache-Control', 'no-store');
