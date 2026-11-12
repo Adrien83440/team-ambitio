@@ -64,7 +64,9 @@ const ELITE_RULES = [
   { k: 'quiz_elections', re: /election/ },
   { k: 'audit_strategique', re: /audit strat/ },
   { k: 'quiz_elite', re: /quiz.{0,20}elite|elite.{0,20}quiz|quiz_elite|^quiz_funnel$/ },
-  { k: 'vsl_elite', re: /vsl.{0,3}elite|^elite$/ }
+  /* « Rendez-vous qualification Adrien&Emily (Elite) » : formulaire de prise
+     de RDV de la VSL Élite. */
+  { k: 'vsl_elite', re: /vsl.{0,3}elite|^elite$|\(elite\)/ }
 ];
 const BUSINESS_RE = /business|\bbp\b|bp_|phenix business/;
 
@@ -99,8 +101,12 @@ function provenanceTokens(l, tmap, bks, typeMap) {
     if (h.utm) out.push(String(h.utm));
     landingTokens(h.landing, tmap, out);
   });
+  /* Les RDV de coaching ne disent rien de la provenance : « Coaching 1:1
+     Business Elite » est suivi par des clients Elite. Seul l'audit Business
+     (type marqué coaching à tort) reste une trace Business. */
   (bks || []).forEach(function (b) {
     const t = typeMap[b.type];
+    if ((b.isCoaching === true || (t && t.isCoaching)) && !/audit business/.test(norm(t && t.label))) return;
     if (t && t.label) out.push('rdv:' + t.label);
     else if (b.type) out.push('rdv:' + b.type);
     landingTokens(b.landing, tmap, out);
