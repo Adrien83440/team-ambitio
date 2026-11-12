@@ -36,7 +36,10 @@
 //     n'est toujours pas lisible par lien, partage « lecteur, toute personne
 //     disposant du lien » sur CE FICHIER UNIQUEMENT.
 //  6. Ajout de la leçon (titre Google, publiée, à la fin du sous-module) par
-//     le pont — qui refuse tout doublon et recopie aussitôt dans Business.
+//     le pont — qui refuse tout doublon, recopie aussitôt dans Business 6 mois
+//     (f-bp-6m) ET ajoute dans Business Phénix historique (f-bp, module
+//     « Replay Coaching GR (<année>) », sous-module du même coach). Les replays
+//     déjà dans Elite mais absents de f-bp sont rattrapés à chaque passage.
 //  7. Trace replays_groupe/{driveFileId} (étape par étape : un déplacement
 //     sans ajout est repris au run suivant) + récap par email (boîte
 //     coaching) quand quelque chose a été ajouté ou mis de côté.
@@ -268,9 +271,10 @@ function recapHtml(rapport) {
   let h = '<div style="font-family:Arial,sans-serif;font-size:14px;color:#111">';
   h += '<p><b>Replays des coachings de groupe — passage du ' + esc(jourParis(new Date().toISOString())) + '</b></p>';
   if (rapport.ajoutes.length) {
-    h += '<p>✅ Ajoutés dans l\'Academy (Elite, et Business recopié) :</p><ul>';
+    h += '<p>✅ Ajoutés dans l\'Academy (Elite Phénix, Business Phénix, Business 6 mois) :</p><ul>';
     rapport.ajoutes.forEach(function (a) {
-      h += '<li><b>' + esc(a.coach) + '</b> — ' + esc(a.titre) + (a.business && a.business.change ? '' : ' <i>(Business : déjà à jour)</i>') + '</li>';
+      h += '<li><b>' + esc(a.coach) + '</b> — ' + esc(a.titre) + (a.rattrapage ? ' <i>(rattrapage)</i>' : '') +
+        '<br><span style="color:#555;font-size:12px">' + esc(a.bp || '') + (a.rattrapage ? '' : ' · Business 6 mois : ' + (a.business && a.business.change ? 'recopié' : 'déjà à jour')) + '</span></li>';
     });
     h += '</ul>';
   }
@@ -288,6 +292,21 @@ function recapHtml(rapport) {
   }
   h += '<p style="color:#666;font-size:12px">Envoyé automatiquement par Team (api/coaching-replays-groupe).</p></div>';
   return h;
+}
+
+// Le replay est-il bien dans Business Phénix (f-bp) ?
+function bpOk(bp) {
+  return !!(bp && bp.ok && (bp.change || bp.raison === 'deja_present'));
+}
+// Refus « de structure » (pas de module / sous-module pour ce coach dans f-bp) :
+// signalé une fois, pas retenté chaque matin. Le reste (réseau…) est retenté.
+function bpDefinitif(bp) {
+  return !!(bp && !bpOk(bp) && ['module_absent', 'sous_module_absent', 'sous_module_ambigu', 'coach_inconnu', 'cours_introuvable'].indexOf(bp.raison) >= 0);
+}
+function bpLibelle(bp) {
+  if (!bp) return 'Business Phénix : non traité';
+  if (bpOk(bp)) return 'Business Phénix : ' + (bp.change ? 'ajouté' : 'déjà présent') + (bp.sousModule ? ' (' + bp.module + ' › ' + bp.sousModule + ')' : '');
+  return 'Business Phénix : NON ajouté (' + (bp.raison || bp.erreur || 'refus') + ')';
 }
 
 // ─── Traitement d'une vidéo ───────────────────────────────────────────
@@ -335,7 +354,8 @@ async function traiter(drive, f, sub, dest, dry) {
   if (!r.ok) throw new Error('Academy : ' + (r.error || 'refus'));
   await ref.set({
     etat: 'ajoute', lessonId: r.lessonId || '', dejaPresent: r.raison === 'deja_present',
-    business: r.business || null, ajouteLe: admin.firestore.FieldValue.serverTimestamp(), erreur: '',
+    business: r.business || null, bp: r.bp || null, bpOk: bpOk(r.bp), bpDefinitif: bpDefinitif(r.bp),
+    ajouteLe: admin.firestore.FieldValue.serverTimestamp(), erreur: '',
   }, { merge: true });
   return { ok: true, resultat: r, partage: partage };
 }
@@ -385,6 +405,7 @@ module.exports = async function (req, res) {
     return;
   }
   const sousModules = etat.sousModules || [];
+  rapport.bp = etat.bp || null;
   rapport.sousModules = sousModules.map(function (s) { return { id: s.id, titre: s.titre, mots: motsDuCoach(s.titre), lecons: s.lecons.length }; });
 
   // Dossiers de destination.
@@ -478,14 +499,14 @@ module.exports = async function (req, res) {
       if (r.dry) {
         const deja = r.essai && r.essai.raison === 'deja_present';
         if (deja) rapport.dejaFaits.push(ligne);
-        else if (r.essai && r.essai.ok) rapport.aFaire.push(Object.assign(ligne, { businessSuivra: r.essai.business && r.essai.business.courseId }));
+        else if (r.essai && r.essai.ok) rapport.aFaire.push(Object.assign(ligne, { businessSuivra: r.essai.business && r.essai.business.courseId, bp: bpLibelle(r.essai.bp) }));
         else rapport.aClasser.push(Object.assign(ligne, { raison: (r.essai && r.essai.error) || 'refus_academy' }));
       } else if (r.deja) {
         rapport.dejaFaits.push(ligne);
       } else {
         faits += 1;
         if (r.resultat.raison === 'deja_present') rapport.dejaFaits.push(ligne);
-        else rapport.ajoutes.push(Object.assign(ligne, { business: r.resultat.business, partage: r.partage }));
+        else rapport.ajoutes.push(Object.assign(ligne, { business: r.resultat.business, bp: bpLibelle(r.resultat.bp), partage: r.partage }));
       }
     } catch (e) {
       const msg = String((e && e.message) || e).slice(0, 300);
@@ -494,6 +515,27 @@ module.exports = async function (req, res) {
         try { await db.collection(TRACE).doc(f.id).set({ etat: 'erreur', erreur: msg, majLe: admin.firestore.FieldValue.serverTimestamp() }, { merge: true }); }
         catch (e2) { /* rien */ }
       }
+    }
+  }
+
+  // Rattrapage Business Phénix (f-bp) : replays déjà dans Elite mais pas encore
+  // dans f-bp (ajoutés avant le 12/11/2026, ou f-bp refusé lors d'un passage).
+  rapport.rattrapageBP = [];
+  const dejaAjoutes = await db.collection(TRACE).where('etat', '==', 'ajoute').limit(200).get();
+  for (let z = 0; z < dejaAjoutes.docs.length; z++) {
+    const t = dejaAjoutes.docs[z].data() || {};
+    if (t.bpOk === true || t.bpDefinitif === true || !t.coachSubId || !t.driveFileId) continue;
+    try {
+      const rb = await pont({ action: 'ajouter', subId: t.coachSubId, fileId: t.driveFileId, titre: t.titre || '', dry: dry });
+      const ligneBP = { nom: t.nom || '', coach: t.coach || '', bp: bpLibelle(rb.bp) };
+      rapport.rattrapageBP.push(ligneBP);
+      if (!dry) {
+        await dejaAjoutes.docs[z].ref.set({ bp: rb.bp || null, bpOk: bpOk(rb.bp), bpDefinitif: bpDefinitif(rb.bp), bpMaj: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+        if (bpOk(rb.bp) && rb.bp.change) rapport.ajoutes.push({ nom: t.nom || '', coach: t.coach || '', titre: t.titre || '', bp: ligneBP.bp, rattrapage: true, business: { change: false } });
+        else if (!bpOk(rb.bp)) rapport.erreurs.push({ nom: t.nom || '', erreur: ligneBP.bp });
+      }
+    } catch (e) {
+      rapport.rattrapageBP.push({ nom: t.nom || '', coach: t.coach || '', bp: 'erreur : ' + String((e && e.message) || e).slice(0, 200) });
     }
   }
 

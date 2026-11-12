@@ -332,7 +332,9 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   — jamais un coaching individuel), déplace la vidéo dans le dossier partagé par lien (déduit des
   leçons déjà rangées), puis l'ajoute par le pont Academy `POST /api/bridge/replay-groupe`
   (repo `ae-academy`, fonctions pures `src/lib/ep/replays.js`) : à la fin du sous-module, publiée,
-  titre Google, jamais de doublon, cours Business recopié aussitôt. Trace `replays_groupe/{fileId}`,
+  titre Google, jamais de doublon, cours Business 6 mois (`f-bp-6m`) recopié aussitôt ET cours
+  Business Phénix historique (`f-bp`, module « Replay Coaching GR (<année>) », sous-module du même coach).
+  Source : TOUT le Drive de coaching@ (plus « Meet Recordings » depuis août 2026). Trace `replays_groupe/{fileId}`,
   récap email. Accès manuel : clé Vercel `REPLAYS_GROUPE_KEY`, `?dry=1` d'abord.
 - **Scoring sociétés (30/10/2026)** : `admin-scoring.html` (admin : solvabilité, tout le
   catalogue Societe.com en boutons, documents officiels), `alteore-scoring.js` (bouton sur
