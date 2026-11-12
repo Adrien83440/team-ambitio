@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Alteore — Qualité par pub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   Alteore — Qualité par pub · vue MÉDIA BUYEUSE (lecture seule, 12/11/2026)
+   Page publique AUTONOME : aucun SDK Firebase, aucune auth, aucun nav.js.
+   Seule source : GET /api/ads-quality-share?t=TOKEN (funnel-core.js côté
+   serveur, mêmes chiffres que l'onglet admin). Rendu : ads-quality-tab.js,
+   le module de l'onglet admin, sans ses encarts d'administration.
+   ═══════════════════════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #08080f; --bg2: #0f0f1a; --bg3: #14141f; --bg4: #1a1a28;
+  --border: rgba(255,255,255,0.07); --border2: rgba(255,255,255,0.13);
+  --red3: #fca5a5; --gold: #f59e0b; --green: #34d399; --blue: #60a5fa;
+  --text: rgba(255,255,255,0.92); --muted: rgba(255,255,255,0.48); --muted2: rgba(255,255,255,0.22);
+  --font-b: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-m: 'JetBrains Mono', ui-monospace, monospace;
+}
+html, body { background: var(--bg); color: var(--text); font-family: var(--font-b); font-size: 13px; }
+.aqp { max-width: 1680px; margin: 0 auto; padding: 22px 20px 60px; }
+.aqp-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+.aqp-brand { font-weight: 800; font-size: 16px; letter-spacing: -0.3px; margin-right: 6px; }
+.aqp-seg { display: flex; gap: 3px; padding: 3px; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; }
+.aqp-seg button { padding: 6px 11px; border-radius: 8px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--muted); background: none; border: none; }
+.aqp-seg button.on { background: var(--bg4); color: var(--text); }
+.aqp-in { background: var(--bg3); border: 1px solid var(--border); border-radius: 9px; color: var(--text); padding: 6px 9px; font: inherit; font-size: 12px; color-scheme: dark; }
+.aqp-btn { padding: 6px 11px; border-radius: 9px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); background: var(--bg3); color: var(--text); }
+.aqp-msg { padding: 40px 0; text-align: center; color: var(--muted); }
+.aqp-msg.err { color: var(--red3); }
+.aqp-foot { margin-top: 22px; color: var(--muted2); font-size: 11px; line-height: 1.6; }
+.hide { display: none !important; }
+</style>
+</head>
+<body>
+<div class="aqp">
+  <div class="aqp-top">
+    <span class="aqp-brand">Alteore</span>
+    <div class="aqp-seg" id="aqpMode">
+      <button type="button" data-mode="month" class="on">Mois</button>
+      <button type="button" data-mode="7d">7 j</button>
+      <button type="button" data-mode="30d">30 j</button>
+      <button type="button" data-mode="custom">Dates</button>
+    </div>
+    <input type="month" class="aqp-in" id="aqpMonth">
+    <span id="aqpCustom" class="hide"><input type="date" class="aqp-in" id="aqpFrom"> → <input type="date" class="aqp-in" id="aqpTo"> <button type="button" class="aqp-btn" id="aqpGo">OK</button></span>
+    <select class="aqp-in" id="aqpTunnel">
+      <option value="all">Tous les tunnels</option>
+      <option value="elite">Élite</option>
+      <option value="business">Business</option>
+    </select>
+    <button type="button" class="aqp-btn" id="aqpRefresh">⟳</button>
+  </div>
+  <div id="aqpBody"><div class="aqp-msg">Chargement…</div></div>
+  <div class="aqp-foot">Vue en lecture seule. Leads entrés sur la période, RDV et ventes suivis jusqu'à aujourd'hui ; chiffres calculés à l'ouverture, hors trafic YouTube. Aucune donnée personnelle n'est transmise.</div>
+</div>
+<script src="ads-quality-tab.js"></script>
+<script>
+(function () {
+  'use strict';
+  var TOKEN = (function () { try { return new URLSearchParams(location.search).get('t') || ''; } catch (e) { return ''; } })();
+  var S = { mode: 'month', month: '', from: '', to: '', tunnel: 'all' };
+  function $(id) { return document.getElementById(id); }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  var now = new Date();
+  S.month = now.getFullYear() + '-' + pad(now.getMonth() + 1);
+  $('aqpMonth').value = S.month;
+  var MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  function frDate(iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : iso; }
+  function label(j) {
+    if (S.mode === 'month') { var p = S.month.split('-'); return MOIS[+p[1] - 1] + ' ' + p[0]; }
+    return 'du ' + frDate(j.from) + ' au ' + frDate(j.to);
+  }
+  function load() {
+    if (!TOKEN) { $('aqpBody').innerHTML = '<div class="aqp-msg err">Lien incomplet.</div>'; return; }
+    var q = 't=' + encodeURIComponent(TOKEN) + '&mode=' + S.mode + '&tunnel=' + S.tunnel;
+    if (S.mode === 'month') q += '&month=' + S.month;
+    if (S.mode === 'custom') q += '&from=' + S.from + '&to=' + S.to;
+    $('aqpBody').innerHTML = '<div class="aqp-msg">Calcul en cours…</div>';
+    fetch('/api/ads-quality-share?' + q).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j || !j.ok) { $('aqpBody').innerHTML = '<div class="aqp-msg err">Ce lien n\'est pas (ou plus) valide.</div>'; return; }
+      window.AdsQualityTab.render($('aqpBody'), { rowsByAxis: j.rowsByAxis, coverage: j.coverage, periodLabel: label(j) }, { admin: false });
+    }).catch(function () { $('aqpBody').innerHTML = '<div class="aqp-msg err">Chargement impossible. Réessaie dans un instant.</div>'; });
+  }
+  $('aqpMode').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-mode]') : null;
+    if (!b) return;
+    S.mode = b.getAttribute('data-mode');
+    var bs = $('aqpMode').querySelectorAll('button');
+    for (var i = 0; i < bs.length; i++) bs[i].className = bs[i] === b ? 'on' : '';
+    $('aqpMonth').className = 'aqp-in' + (S.mode === 'month' ? '' : ' hide');
+    $('aqpCustom').className = S.mode === 'custom' ? '' : 'hide';
+    if (S.mode !== 'custom') load();
+  });
+  $('aqpMonth').addEventListener('change', function () { if (this.value) { S.month = this.value; load(); } });
+  $('aqpGo').addEventListener('click', function () {
+    S.from = $('aqpFrom').value; S.to = $('aqpTo').value;
+    if (S.from && S.to && S.from <= S.to) load();
+  });
+  $('aqpTunnel').addEventListener('change', function () { S.tunnel = this.value; load(); });
+  $('aqpRefresh').addEventListener('click', load);
+  load();
+})();
+</script>
+</body>
+</html>

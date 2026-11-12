@@ -393,6 +393,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
 <!-- Qualité leads (LQS / MQS, 06/11/2026) : cœur + onglet, admin uniquement -->
 <script src="lqs-core.js"></script>
 <script src="lqs-tab.js"></script>
+<script src="ads-quality-tab.js"></script>
 <!-- Comptage des créneaux (capacité des closeurs / setteurs), partagé à
      l'identique avec api/availability-snapshot.js qui alimente l'archive. -->
 <script src="dispo-core.js"></script>
@@ -453,6 +454,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
   <div class="fn-tabs" id="fnTabs">
     <div class="fn-tab active" data-tab="funnel">🎯 Funnel</div>
     <div class="fn-tab" data-tab="lqs">⭐ Qualité leads</div>
+    <div class="fn-tab" data-tab="adq">🎯 Qualité par pub</div>
     <div class="fn-tab" data-tab="leads">👥 Leads</div>
     <div class="fn-tab" data-tab="ads">💶 Données Ads</div>
     <div class="fn-tab" data-tab="instagram">📸 Instagram</div>
@@ -462,6 +464,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
 
   <section id="fnTabFunnel"><div class="fn-loading">Chargement du funnel…</div></section>
   <section id="fnTabLqs" style="display:none"></section>
+  <section id="fnTabAdq" style="display:none"></section>
   <section id="fnTabLeads" style="display:none"></section>
   <section id="fnTabAds" style="display:none"></section>
   <section id="fnTabInsta" style="display:none"></section>
@@ -3326,6 +3329,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
   function renderActiveTab() {
     if (activeTab === 'funnel') renderFunnel();
     else if (activeTab === 'lqs') renderLqs();
+    else if (activeTab === 'adq') renderAdq();
     else if (activeTab === 'leads') renderLeads();
     else if (activeTab === 'ads') renderAds();
     else if (activeTab === 'instagram') renderInstagram();
@@ -3351,11 +3355,23 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     window.LqsTab.show($('#fnTabLqs'), lqsCtx());
   }
 
+  /* 🎯 Qualité par pub (ads-quality-tab.js, 12/11/2026) — lignes calculées par
+     funnel-core.js (K.utmRowsByAxis), aucun chargement propre ; encarts
+     admin : lien média buyeuse + API Conversions Meta. */
+  function renderAdq() {
+    if (!window.AdsQualityTab) { $('#fnTabAdq').innerHTML = '<div class="fn-ig-alert">Module Qualité par pub non chargé (ads-quality-tab.js).</div>'; return; }
+    if (!K) { $('#fnTabAdq').innerHTML = '<div class="fn-loading">Chargement…</div>'; return; }
+    window.AdsQualityTab.render($('#fnTabAdq'), window.AdsQualityTab.fromKpis(K, periodLabel()), {
+      admin: true, adminCtx: { db: db, user: currentUser, toast: toast }
+    });
+  }
+
   function switchTab(tab) {
     activeTab = tab;
     $$('#fnTabs .fn-tab').forEach(function (t) { t.classList.toggle('active', t.getAttribute('data-tab') === tab); });
     $('#fnTabFunnel').style.display  = tab === 'funnel'  ? '' : 'none';
     $('#fnTabLqs').style.display     = tab === 'lqs'     ? '' : 'none';
+    $('#fnTabAdq').style.display     = tab === 'adq'     ? '' : 'none';
     $('#fnTabLeads').style.display   = tab === 'leads'   ? '' : 'none';
     $('#fnTabAds').style.display     = tab === 'ads'     ? '' : 'none';
     $('#fnTabInsta').style.display   = tab === 'instagram' ? '' : 'none';

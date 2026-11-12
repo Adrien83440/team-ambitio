@@ -415,6 +415,29 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   (`disqualification` + `pas_interesse`). STOP : les deux champs historiques `smsOptedOut` (Twilio) et
   `smsOptOut` (Ringover) sont lus.
 
+- **Qualité par pub + API Conversions Meta (12/11/2026, brief « Outil 2 »)** :
+  - **Capture** : à chaque opt-in, bloc `leads/{id}.metaIds` (eventId du Lead navigateur, `fbp`/`fbc`,
+    fbclid, user-agent, IP si appel direct, ad/adset/campaign id, `allowed` = pixel autorisé chez ce
+    visiteur, jamais pour YouTube) — `api/_metaIds.js`, écrit par `lead-optin` (champ `meta` relayé par
+    Make « Leads QUIZ ÉLITE ») et `tunnel-optin` (`tunnel-runtime.js` envoie `meta`, expose `ALTEO.meta()`).
+    Pages quiz : `api/_quizMetaIds.js` ajoute à la volée (tunnel-render, aucune écriture Storage) les
+    champs au payload Make et l'`eventID` au Lead navigateur. Anciens leads : pas de metaIds, rien reconstruit.
+  - **Tableau** : onglet « 🎯 Qualité par pub » de `sales-funnel.html` (`ads-quality-tab.js`), lignes =
+    `K.utmRowsByAxis` de `funnel-core.js` (nouvelles colonnes : `qualCa` = CA déclaré ≥ 20 k€ via
+    `FunnelCore.caQualifOf`, `faux`, `disq`, `neverReached` = aucun appel décroché ni RDV après 48 h,
+    `honored` = issue close / non close / offre, `con`, `cpq` / `cph` / `cpv`). Coûts masqués si la dépense
+    Make manque plus d'un jour. Média buyeuse : `ads-quality.html?t=…` → `api/ads-quality-share.js`
+    (liste blanche de champs, jeton `_config/ads_quality_access`, distinct du lien Agence, audit_log).
+  - **API Conversions** : `api/meta-capi-cron.js` (*/10) + règles `api/_metaCapi.js` → pixel
+    `1341581597802071` : Lead et Schedule (jumeaux, même event_id que le navigateur), LeadQualifie, RdvPose,
+    RdvHonore, Vente (contracté HT). Exclus : faux numéro / poubelle, contact bloqué, YouTube, pixel non
+    autorisé, organique sans metaIds, téléphone invalide (LeadQualifie). Réglages `_config/meta_capi`
+    (`enabled`, `testMode` VRAI par défaut, `testEventCode`, `testSince` / `productionSince` — jamais de
+    rattrapage du passé ; réel = « PRODUCTION » tapé). Jeton : variable Vercel `META_CAPI_TOKEN`. Journal
+    `meta_capi_events` (Admin SDK seul, lu par `api/meta-capi.js`, aucune donnée personnelle en clair) ;
+    bouton « 🧪 6 événements de test » = contact fictif, code de test obligatoire.
+  - **Paramètres d'URL des pubs** (média buyeuse) : `utm_source={{site_source_name}}&utm_medium={{placement}}&utm_campaign={{campaign.name}}&utm_content={{ad.name}}&Audience={{adset.name}}&campaign_id={{campaign.id}}&adset_id={{adset.id}}&ad_id={{ad.id}}`.
+
 Spécification de référence du flux commercial : `REFONTE-SPEC.md`.
 
 ---

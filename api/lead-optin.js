@@ -96,6 +96,9 @@ const Core = require('../funnel-core.js');
 // Registre des tunnels hébergés : relie la clé de page `<tunnel>__<etape>`
 // (lp du quiz) au tunnel, pour son nom Leads Live et son type de lead.
 const Reg = require('./_tunnelRegistry');
+// Identifiants Meta de l'opt-in (API Conversions, 12/11/2026) : relayés par
+// Make dans `meta` (event_id, fbp, fbc, user_agent, meta_allowed), ou à plat.
+const MetaIds = require('./_metaIds');
 
 // ─── ATTRIBUTION PUBLICITAIRE (chantier UTM 17/08/2026) ───────────────
 // Le champ `utm` reste écrit tel quel (Leads Live, CRM, export en
@@ -389,6 +392,12 @@ module.exports = async (req, res) => {
   const utm         = Core.decodeUtm(String(utmRaw || tunnelLabel));
   const source      = String(sourceRaw || 'webhook');
   const attribution = buildAttribution(body, utmRaw, 'optin');
+  // L'IP n'est PAS prise ici : l'appel vient des serveurs de Make, pas du
+  // navigateur du visiteur.
+  const metaIn = (body && body.meta && typeof body.meta === 'object') ? body.meta : (body || {});
+  const metaIds = MetaIds.build(metaIn, attribution, {
+    via: 'optin', pageUrl: landing && landing.pageUrl, FieldValue: admin.firestore.FieldValue
+  });
 
   // ─── 3bis. LISTE DE BLOCAGE ─────────────────────────────────────────
   // Faux numéros et emails bidon bloqués depuis Leads Live : on s'arrête
@@ -510,6 +519,8 @@ module.exports = async (req, res) => {
       update.landingLast = landing;
       if (!prev.landingFirst || !prev.landingFirst.page) update.landingFirst = landing;
     }
+    // Identifiants Meta du DERNIER opt-in (API Conversions).
+    if (metaIds) update.metaIds = metaIds;
 
     // ─── Soft-reset stage/status (sauf clients) ────────────────────────
     if (!isClient) {
@@ -580,6 +591,7 @@ module.exports = async (req, res) => {
     newLead.landingFirst = landing;
     newLead.landingLast  = landing;
   }
+  if (metaIds) newLead.metaIds = metaIds;
 
   try {
     const ref = await db.collection('leads').add(newLead);

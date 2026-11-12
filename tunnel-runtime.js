@@ -21,7 +21,12 @@
         la fiche Leads Live ;
      5. intercepte les formulaires `data-alteo-optin` : envoi à
         /api/tunnel-optin (fiche Leads Live), pixel Lead, puis redirection
-        vers l'étape suivante.
+        vers l'étape suivante ;
+     6. identifiants Meta de l'opt-in (12/11/2026) : cookies _fbp / _fbc,
+        navigateur, identifiant de l'événement Lead (le même part ensuite
+        de l'API Conversions → Meta dédoublonne) et « pixel autorisé ou
+        non » — envoyés avec l'opt-in, exposés aux pages quiz par
+        window.ALTEO.meta(). Rien n'est lu si le pixel ne tourne pas.
 
    Contrat côté page HTML :
      <form data-alteo-optin>            → formulaire d'opt-in (champs par
@@ -220,9 +225,11 @@
     var s = String((attr && attr.utm_source) || '').toLowerCase();
     return s.indexOf('youtube') >= 0 || s === 'yt';
   }
+  var PIXEL_ON = false;   // le pixel a-t-il réellement été chargé chez ce visiteur ?
   function pixelInit() {
     if (!C.pixelId || C.preview || isYoutubeVisitor()) return;
     if (C.consent && consentRead() !== 'accepted') return;   // site vitrine : consentement d'abord
+    PIXEL_ON = true;
     try {
       if (!window.fbq) {
         (function (f, b, e, v, n, t, sc) {
@@ -323,9 +330,37 @@
   }
 
   pixelInit();
-  function pixelLead() {
+  function pixelLead(eventId) {
     if (!C.pixelId || C.preview || !window.fbq || isYoutubeVisitor()) return;
-    try { window.fbq('track', 'Lead', { content_name: C.page }); } catch (e) {}
+    try {
+      if (eventId) window.fbq('track', 'Lead', { content_name: C.page }, { eventID: eventId });
+      else window.fbq('track', 'Lead', { content_name: C.page });
+    } catch (e) {}
+  }
+
+  /* ── 3 ter. Identifiants Meta de l'opt-in (API Conversions, 12/11/2026) ──
+     Lus au moment de l'opt-in, envoyés avec lui. Pixel non autorisé (visiteur
+     YouTube, refus du bandeau, pas de pixel réglé) → aucun cookie lu, seul
+     meta_allowed: '0' part : le serveur n'enverra alors rien à Meta. */
+  function cookieRead(name) {
+    try {
+      var parts = String(document.cookie || '').split(';');
+      for (var i = 0; i < parts.length; i++) {
+        var kv = parts[i].replace(/^\s+/, '');
+        if (kv.indexOf(name + '=') === 0) return decodeURIComponent(kv.slice(name.length + 1));
+      }
+    } catch (e) {}
+    return '';
+  }
+  function newEventId() { return 'ld-' + VID.slice(0, 10) + '-' + Date.now().toString(36); }
+  function metaPayload(eventId) {
+    var out = { event_id: eventId || newEventId(), meta_allowed: PIXEL_ON ? '1' : '0' };
+    if (!PIXEL_ON) return out;
+    var fbp = cookieRead('_fbp'), fbc = cookieRead('_fbc');
+    if (fbp) out.fbp = fbp;
+    if (fbc) out.fbc = fbc;
+    try { out.user_agent = String(navigator.userAgent || '').slice(0, 400); } catch (e) {}
+    return out;
   }
 
   /* ── 4. Propagation de la provenance ────────────────────────────────── */
@@ -537,12 +572,14 @@
     if (f.email && !emailOk) { showError(form, 'Cet email ne semble pas valide.'); return; }
     form.__alteoBusy = true;
     setBusy(form, true);
+    var meta = metaPayload();
     var payload = {
       t: C.tunnelId, s: C.stepId, v: C.variant,
       fields: f, extras: data.extras,
       attribution: attr, leadId: leadId,
       pageUrl: String(window.location.href).slice(0, 500),
-      src: srcOf()
+      src: srcOf(),
+      meta: meta
     };
     request(C.optinEndpoint, payload, function (ok, resp) {
       if (!ok) {
@@ -552,7 +589,7 @@
         return;
       }
       if (resp.leadId) { leadId = resp.leadId; ssSet(SS_LEAD, leadId); }
-      pixelLead();
+      pixelLead(meta.event_id);
       if (typeof window.alteoOnOptin === 'function') { try { window.alteoOnOptin(resp); } catch (e) {} }
       if (!goNext(form)) {
         setBusy(form, false);
@@ -578,6 +615,10 @@
     track: track,
     quiz: quiz,
     decorate: decorate,
-    submit: submitOptin
+    submit: submitOptin,
+    /* Pages quiz (envoi à Make) : ALTEO.meta(eventId?) → { event_id, fbp,
+       fbc, user_agent, meta_allowed } à joindre au lead. */
+    meta: metaPayload,
+    pixelOn: function () { return PIXEL_ON; }
   };
 })();

@@ -43,6 +43,9 @@ const { storage } = require('./_firebaseAdmin');
 const Reg = require('./_tunnelRegistry');
 const Legal = require('./_legal');
 const QuizTracking = require('./_quizTracking');
+/* Identifiants Meta des pages quiz (API Conversions, 12/11/2026) — même
+   principe : ajoutés à la volée au payload envoyé à Make. */
+const QuizMetaIds = require('./_quizMetaIds');
 
 const PROPAGATE_HOSTS = ['www.adrienemily.com', 'adrienemily.com'];
 const COOKIE_DAYS = 30;
@@ -76,7 +79,7 @@ async function loadHtml(storagePath, version) {
      volée (api/_quizTracking.js, 06/11/2026) — invisible pour le visiteur,
      sans écriture dans Storage ; page d'origine servie si le quiz n'est pas
      reconnu. Mis en cache avec la version, donc calculé une fois. */
-  const html = QuizTracking.instrument(buf.toString('utf8'));
+  const html = QuizMetaIds.instrument(QuizTracking.instrument(buf.toString('utf8')));
   if (_html.size >= HTML_CACHE_MAX) _html.delete(_html.keys().next().value);
   _html.set(storagePath, { version: version, html: html });
   return html;

@@ -56,6 +56,9 @@ const parseBody = require('./_parseBody');
 const Lookup = require('./_leadLookup');
 const Reg = require('./_tunnelRegistry');
 const Core = require('../funnel-core.js');
+// Identifiants Meta de l'opt-in (API Conversions, 12/11/2026) : body.meta
+// posé par tunnel-runtime.js + IP du visiteur (appel direct du navigateur).
+const MetaIds = require('./_metaIds');
 
 const str = Lookup.str;
 const KNOWN_TYPES = { vsl_elite: 1, quiz_funnel: 1, business: 1, self_booking: 1, webinaire: 1 };
@@ -239,6 +242,9 @@ module.exports = async (req, res) => {
   const pageK = Reg.pageKey(tunnel, step);
   const type = leadTypeOf(tunnel);
   const attribution = buildAttribution(body, pageUrl, tunnel, step);
+  const metaIds = MetaIds.build(body.meta, attribution, {
+    via: 'tunnel', ip: MetaIds.clientIp(req), pageUrl: pageUrl, FieldValue: FV
+  });
   const landing = { page: pageK, variant: variant, tunnelId: tunnel.id, stepId: step.id, label: crmLabel, stepLabel: step.name || step.slug || '', capturedAt: new Date().toISOString() };
   if (pageUrl) landing.pageUrl = pageUrl;
 
@@ -304,6 +310,7 @@ module.exports = async (req, res) => {
         update.attributionLast = attribution;
         if (!Core.attrHasSignal(prev.attributionFirst)) update.attributionFirst = attribution;
       }
+      if (metaIds) update.metaIds = metaIds;   // dernier opt-in (API Conversions)
       if (!isClient) {
         update.previousStatus = prev.status || null;
         update.previousStage = prev.stage || null;
@@ -354,6 +361,7 @@ module.exports = async (req, res) => {
       updatedAt: FV.serverTimestamp()
     }, directFields);
     if (attribution) { lead.attributionFirst = attribution; lead.attributionLast = attribution; }
+    if (metaIds) lead.metaIds = metaIds;
 
     const ref = db.collection('leads').doc(newId);
     let action = 'created';

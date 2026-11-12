@@ -652,6 +652,61 @@
     return { label: lbl, group: creativeGroupKey(lbl), adId: '', legacy: true, outOfAds: true };
   }
 
+  /* ══ QUALITÉ PAR PUB (12/11/2026, brief « Outil 2 ») ══════════════════
+     Qualifié = chiffre d'affaires DÉCLARÉ au quiz ≥ 20 000 €/mois.
+     Source, dans l'ordre : quiz.ca_mensuel (quiz Élite via Make → lead-
+     optin), réponse « ca » d'un tunnel hébergé (formAnswers / champ ca).
+     Renvoie true / false, ou null quand le lead n'a rien déclaré (VSL,
+     formulaire sans CA) : il sort alors du dénominateur, jamais compté
+     « non qualifié » par défaut. Même règle côté serveur (API Conversions,
+     événement LeadQualifie) : api/_metaCapi.js appelle CETTE fonction. */
+  var CA_QUALIF_SEUIL = 20000;
+  function caAmountsOf(txt) {
+    var s = String(txt == null ? '' : txt).toLowerCase()
+      .replace(/[\u00a0\u202f]/g, ' ')
+      .replace(/(\d)[ .](?=\d{3}\b)/g, '$1');          // 20 000 / 20.000 → 20000
+    var out = [], re = /(\d+(?:,\d+)?)\s*(k|m€|m\b|million)?/g, m;
+    while ((m = re.exec(s))) {
+      var n = parseFloat(m[1].replace(',', '.'));
+      if (!isFinite(n)) continue;
+      if (m[2] === 'k') n *= 1000;
+      else if (m[2]) n *= 1000000;
+      out.push(n);
+    }
+    return { s: s, nums: out };
+  }
+  function caQualifOfText(txt) {
+    var a = caAmountsOf(txt);
+    if (!a.s.trim() || !a.nums.length) return null;
+    if (/moins|inf[ée]rieur|<|jusqu/.test(a.s)) {
+      return Math.max.apply(null, a.nums) <= CA_QUALIF_SEUIL ? false : null;
+    }
+    return a.nums[0] >= CA_QUALIF_SEUIL;
+  }
+  function caDeclaredOf(l) {
+    if (!l) return '';
+    if (l.quiz && l.quiz.ca_mensuel) return String(l.quiz.ca_mensuel);
+    var fa = Array.isArray(l.formAnswers) ? l.formAnswers : [];
+    for (var i = 0; i < fa.length; i++) {
+      var f = fa[i] || {};
+      var id = String(f.fieldId || '').toLowerCase();
+      var lb = String(f.label || '').toLowerCase();
+      if (id === 'ca' || id === 'ca_mensuel' || /chiffre d.?affaires|\bca\b/.test(lb)) {
+        if (f.value != null && String(f.value).trim()) return String(f.value);
+      }
+    }
+    return l.ca ? String(l.ca) : '';
+  }
+  function caQualifOf(l) {
+    var t = caDeclaredOf(l);
+    return t ? caQualifOfText(t) : null;
+  }
+  /* Faux numéro / poubelle et disqualifiés : étape du Pipeline (stage). */
+  function isFauxNumeroLead(l) { var st = l && l.stage; return st === 'faux_numero' || st === 'poubelle'; }
+  function isDisqualifiedLead(l) { var st = l && l.stage; return st === 'disqualification' || st === 'disqualifie_closing'; }
+  /* « Jamais joint » : délai laissé au setting avant de conclure. */
+  var NEVER_REACHED_MIN_AGE_MS = 48 * 3600000;
+
   /* ── Dates "réelles" lead — portage ES5 de api/_leadDates.js ── */
   function parseFlexMs(v) {
     if (v == null) return null;
@@ -2051,6 +2106,7 @@
       mandatSum += rv.pending;
       var col = rv.paid, con = rv.con;
       l._wonCol = col;   /* collecté consolidé par fiche — réutilisé par la section « par créative » */
+      l._wonCon = con;   /* contracté (signé HT) — colonne « Chiffre contracté » de Qualité par pub */
       /* Ventilation pub / hors pub — le ROAS global divisait TOUT le
          collecté par la dépense publicitaire, créditant donc les pubs du
          chiffre venu d'Instagram organique, du setting téléphonique et des
@@ -2187,6 +2243,28 @@
        viennent mes leads » (VSL, webinaire, Skool, bio Instagram…), la
        question que 2 741 des 8 051 fiches savent réellement documenter.
        Le mélanger aux créatives ferait passer une page pour une pub. */
+    /* Qualité par pub — drapeaux par lead, calculés une fois pour les 4 axes.
+       Jamais joint = aucun appel décroché (règle isAnsweredCall, répondeurs
+       exclus — entrant ou sortant) ET aucun RDV, pour un lead entré depuis
+       plus de 48 h (sinon le setting n'a pas eu sa chance). Faux numéros,
+       disqualifiés et clients sortent de ce compte. */
+    var reachedP9 = {}, bookedP9 = {}, bookedLead = {};
+    (DATA.calls || []).forEach(function (c) { if (c._p9 && isAnsweredCall(c)) reachedP9[c._p9] = 1; });
+    (DATA.bookings || []).concat(DATA.bookingsTtb || []).forEach(function (b) {
+      if (b._class === 'excluded') return;
+      if (b.leadId) bookedLead[b.leadId] = 1;
+      if (b._p9) bookedP9[b._p9] = 1;
+    });
+    var neverRefMs = Math.min(Date.now(), lookaheadEndMs());
+    cohort.forEach(function (l) {
+      l._caQualif = caQualifOf(l);
+      l._faux = isFauxNumeroLead(l);
+      l._disq = isDisqualifiedLead(l);
+      var isCli = l.isClient === true || l.stage === 'closed_won_setting' || l.stage === 'closed_won_self';
+      l._neverEligible = !l._faux && !l._disq && !isCli && l._entry != null && (neverRefMs - l._entry) >= NEVER_REACHED_MIN_AGE_MS;
+      l._neverReached = l._neverEligible && !(l._p9 && reachedP9[l._p9]) && !bookedLead[l._id] && !(l._p9 && bookedP9[l._p9]);
+    });
+
     var AXES = ['creative', 'adset', 'campaign', 'channel'];
     var maps = { creative: {}, adset: {}, campaign: {}, channel: {} };
     var unattr = {
@@ -2204,7 +2282,10 @@
           outOfAds: !!kk.outOfAds, adIds: {},
           leads: 0, scoreSum: 0, scoreN: 0, qual: 0,
           booked: 0, cancelled: 0, noshow: 0, closes: 0, col: 0,
-          spend: 0, impressions: 0, clicks: 0, hasSpend: false };
+          spend: 0, impressions: 0, clicks: 0, hasSpend: false,
+          /* Qualité par pub (12/11/2026) */
+          caKnown: 0, qualCa: 0, faux: 0, disq: 0, neverReached: 0, neverEligible: 0,
+          honored: 0, con: 0 };
       }
       var r = m[kk.group];
       /* Une ligne redevient « propre » dès qu'un seul lead y arrive avec
@@ -2223,6 +2304,11 @@
           r.scoreSum += l.leadScore; r.scoreN++;
           if (l.leadScore >= 4) r.qual++;
         }
+        var cq = l._caQualif;
+        if (cq !== null) { r.caKnown++; if (cq) r.qualCa++; }
+        if (l._faux) r.faux++;
+        else if (l._disq) r.disq++;
+        if (l._neverEligible) { r.neverEligible++; if (l._neverReached) r.neverReached++; }
       });
       createdFunnel.forEach(function (b) {
         var ul = bookingLead(b);
@@ -2237,10 +2323,16 @@
         var r2 = rowOf(axis, ul2);
         if (isCancel) r2.cancelled++; else r2.noshow++;
       });
+      due.forEach(function (b) {
+        if (!ocPitched(b)) return;               // honoré = issue close / non close / offre
+        var ul4 = bookingLead(b);
+        if (ul4) rowOf(axis, ul4).honored++;
+      });
       closedLeads.forEach(function (l) {
         var r3 = rowOf(axis, l);
         r3.closes++;
         r3.col += (l._wonCol || 0);
+        r3.con += (l._wonCon || 0);
       });
       unattr[axis].closes = closesNoLeadSB + closesNoLeadNB + payClosesSB + payClosesNB;
     });
@@ -2272,6 +2364,13 @@
         r.cpl  = (r.hasSpend && r.leads > 0)  ? r.spend / r.leads  : null;
         r.cpr  = (r.hasSpend && r.booked > 0) ? r.spend / r.booked : null;
         r.roas = (r.hasSpend && r.spend > 0 && r.col > 0) ? r.col / r.spend : null;
+        r.con = Math.round(r.con * 100) / 100;
+        /* Les trois coûts mis en avant (Qualité par pub). Sans dépense connue
+           → null (« — »), jamais un 0 € qui se lirait « pub gratuite ». */
+        r.cpq = (r.hasSpend && r.qualCa > 0) ? r.spend / r.qualCa : null;
+        r.cph = (r.hasSpend && r.honored > 0) ? r.spend / r.honored : null;
+        r.cpv = (r.hasSpend && r.closes > 0) ? r.spend / r.closes : null;
+        r.smallSample = r.leads < 10;
         r.adIdList = Object.keys(r.adIds);
         delete r.adIds;
       });
@@ -2547,6 +2646,9 @@
     ANSWERED_MIN_SEC: ANSWERED_MIN_SEC,
     isAnsweredCall: isAnsweredCall, ringingSecOf: ringingSecOf,
     isAdvertisingLead: isAdvertisingLead,
+    /* Qualité par pub / API Conversions (12/11/2026) */
+    CA_QUALIF_SEUIL: CA_QUALIF_SEUIL, caQualifOf: caQualifOf, caQualifOfText: caQualifOfText,
+    caDeclaredOf: caDeclaredOf, isFauxNumeroLead: isFauxNumeroLead, isDisqualifiedLead: isDisqualifiedLead,
     JOURNAL_GOLIVE: JOURNAL_GOLIVE,
     TTX_LOOKAHEAD_MS: TTX_LOOKAHEAD_MS,
     LEADS_QUERY_LIMIT: LEADS_QUERY_LIMIT,
