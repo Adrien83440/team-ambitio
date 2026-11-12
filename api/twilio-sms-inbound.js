@@ -33,6 +33,7 @@ const { db, admin } = require('./_firebaseAdmin');
 const { requireValidSignature } = require('./_twilioSignature');
 const { phoneNormalized, telVariants } = require('./_leadLookup');
 const { estBloque, tracerEntrantBloque } = require('./_blockedContacts');
+const RelancesHooks = require('./_relances-hooks');
 const twilio = require('twilio');
 const MessagingResponse = twilio.twiml.MessagingResponse;
 
@@ -279,6 +280,8 @@ module.exports = async (req, res) => {
           smsOptedOutAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
+        /* Relances : exclusion définitive + séquence arrêtée. */
+        await RelancesHooks.surEntrant({ leadId: found.id, canal: 'sms', texte: trimmed, cle: messageSid });
       }
       return respondWithMessage(
         res,
@@ -367,6 +370,14 @@ module.exports = async (req, res) => {
       ownerSlug: ownerSlug,
       source: 'twilio-sms',
       providerMessageSid: messageSid,
+    });
+
+    /* Relances : un lead en séquence qui répond l'arrête, et son setter est
+       prévenu (la cloche ci-dessus va au titulaire du numéro Twilio, qui
+       n'est pas forcément lui). */
+    await RelancesHooks.surEntrant({
+      leadId: found.id, canal: 'sms', texte: smsContent, fromNumber: fromNumber,
+      leadName: found.data.nom || null, dejaNotifieUid: ownerUid || null, cle: messageSid,
     });
 
     console.log('[twilio-sms-inbound] ✅ Stored on lead ' + found.id + ' (' + (found.data.nom || 'sans nom') + ') + inbox notif' + (autoClosedSlot ? ' + auto-close slot' : ''));

@@ -157,6 +157,8 @@ module.exports = async (req, res) => {
           smsOptOut: true, smsOptOutAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }).catch(() => {});
+        /* Relances : exclusion définitive + séquence arrêtée. */
+        await require('./_relances-hooks').surEntrant({ leadId: lead.id, canal: 'sms', texte: text, cle: String(msgId || '') });
       }
       res.status(200).end();
       return;
@@ -238,6 +240,14 @@ module.exports = async (req, res) => {
       console.log('[sms-inbound] ✓ notification created:', docRef.id);
     } catch (e) {
       console.error('[sms-inbound] notification ERROR:', e.code, e.message);
+    }
+
+    /* Relances : réponse d'un lead en séquence → arrêt + setter prévenu. */
+    if (lead) {
+      await require('./_relances-hooks').surEntrant({
+        leadId: lead.id, canal: 'sms', texte: text, fromNumber: fromNumber,
+        leadName: lead.nom || null, dejaNotifieUid: ownerUid || null, cle: String(msgId || ''),
+      });
     }
 
     res.status(200).end();

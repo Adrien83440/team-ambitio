@@ -740,6 +740,30 @@ async function envoyerModele(opts) {
       }]
     : [];
 
+  /* En-tête média et boutons (module Relances, 12/11/2026). Ajout pur : un
+     appel sans `entete` ni `boutons` produit exactement la même requête
+     qu'avant. La vidéo part par LIEN (https public) : Meta la télécharge
+     lui-même, rien ne transite par la fonction Vercel. */
+  if (opts.entete && opts.entete.lien) {
+    const genreEntete = ({ video: 'video', image: 'image', document: 'document' })[String(opts.entete.type || 'video')] || 'video';
+    const media = { link: String(opts.entete.lien) };
+    composants.unshift({ type: 'header', parameters: [{ type: genreEntete, [genreEntete]: media }] });
+    base.entete = { type: genreEntete, lien: media.link };
+  }
+  if (Array.isArray(opts.boutons)) {
+    opts.boutons.forEach((b) => {
+      if (!b || b.index == null) return;
+      if (b.sousType === 'url' && b.texte) {
+        composants.push({ type: 'button', sub_type: 'url', index: String(b.index),
+          parameters: [{ type: 'text', text: String(b.texte) }] });
+      } else if (b.sousType === 'quick_reply' && b.payload) {
+        composants.push({ type: 'button', sub_type: 'quick_reply', index: String(b.index),
+          parameters: [{ type: 'payload', payload: String(b.payload) }] });
+      }
+    });
+    if (opts.boutons.length) base.boutons = opts.boutons;
+  }
+
   const rep = await graph(creds.phoneNumberId + '/messages', {
     method: 'POST',
     body: {
@@ -764,7 +788,8 @@ async function envoyerModele(opts) {
       codeMeta: rep.code != null ? rep.code : null,
       sousCodeMeta: rep.sousCode != null ? rep.sousCode : null,
     }));
-    return { ok: false, wamid: null, erreur: rep.erreur || 'echec' };
+    return { ok: false, wamid: null, erreur: rep.erreur || 'echec',
+             code: rep.code != null ? rep.code : null };
   }
 
   const msgs = (rep.data && rep.data.messages) || [];

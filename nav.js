@@ -139,6 +139,9 @@
     { id: 'site-pages',        icon: '🌐', label: 'Site & pages',      href: 'admin-site.html',        section: 'Marketing', perm: '_admin' },
     // Attribution IA (programme IA 10/2026) : provenance → RDV → close → CA.
     { id: 'admin-attribution', icon: '📈', label: 'Attribution IA',    href: 'admin-attribution.html', section: 'Marketing', perm: '_admin' },
+    // Relances (12/11/2026) : segment de leads → séquence WhatsApp / SMS /
+    // e-mail → réponses, RDV, ventes. Admin seul (api/relances.js).
+    { id: 'admin-relances',    icon: '🔁', label: 'Relances',          href: 'admin-relances.html',    section: 'Marketing', perm: '_admin' },
     { id: 'alteoforms',        icon: '📝', label: 'AlteoForms',        href: 'alteoforms.html',        section: 'Marketing', perm: 'alteoforms' },
     // Mur de témoignages : ouvert à toute l'équipe connectée, coachs et CSM
     // compris — ce sont eux qui reçoivent le plus de retours clients. Chacun
@@ -281,7 +284,7 @@
     'alteoforms.html', 'booking-admin.html', 'clients-dedup.html',
     'csm-diagnostic.html', 'csm-import.html', 'formations.html',
     'formations-admin.html', 'payments.html',
-    'admin-pilotage.html', 'admin-scoring.html',
+    'admin-pilotage.html', 'admin-scoring.html', 'admin-relances.html',
     'sales-appels.html', 'sales-clients.html', 'sales-closing.html', 'sales-commissions.html',
     'sales-contact.html', 'sales-crm.html', 'sales-dashboard.html',
     'sales-dialer.html', 'sales-eod.html', 'sales-equipe.html',

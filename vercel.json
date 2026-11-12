@@ -99,6 +99,10 @@
     {
       "path": "/api/coaching-replays-groupe",
       "schedule": "15 5 * * *"
+    },
+    {
+      "path": "/api/relances-cron",
+      "schedule": "*/10 * * * *"
     }
   ],
   "functions": {
@@ -166,7 +170,8 @@
       "maxDuration": 60
     },
     "api/whatsapp-webhook.js": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": "pipeline-etapes.js"
     },
     "api/instagram-sync-cron.js": {
       "maxDuration": 300
@@ -251,6 +256,17 @@
     },
     "api/coaching-replays-groupe.js": {
       "maxDuration": 120
+    },
+    "api/relances.js": {
+      "maxDuration": 120,
+      "includeFiles": "pipeline-etapes.js"
+    },
+    "api/relances-cron.js": {
+      "maxDuration": 300,
+      "includeFiles": "pipeline-etapes.js"
+    },
+    "api/relance-lien.js": {
+      "includeFiles": "pipeline-etapes.js"
     }
   },
   "routes": [
@@ -278,6 +294,10 @@
     {
       "src": "^/g/([^/]+)$",
       "dest": "/api/group-redirect?id=$1"
+    },
+    {
+      "src": "^/r/([A-Za-z0-9]{6,32})/?$",
+      "dest": "/api/relance-lien?t=$1"
     },
     {
       "src": "^/m/([A-Za-z0-9_-]{5,64})/?$",

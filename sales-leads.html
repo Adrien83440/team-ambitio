@@ -4717,6 +4717,14 @@ function renderLeadTags(l, compact) {
     var stName = L2_STAGE_NAMES[l.stage] || l.stage;
     h += '<span class="ld-assigned" style="color:var(--purple);border-color:rgba(167,139,250,0.25)">🔀 ' + escHtml(stName) + '</span>';
   }
+  /* Relances (12/11/2026) : le lead a répondu à une campagne de relance
+     (api/_relances-hooks.js). Le statut ne change pas — c'est ce badge qui
+     le signale, pendant 30 jours, au setter qui doit le rappeler. */
+  if (l.relanceRepondu && Number(l.relanceRepondu.at) > Date.now() - 30 * 864e5) {
+    h += '<span class="ld-assigned" style="color:#22c55e;border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.12)" title="'
+      + escHtml('Réponse à la relance « ' + (l.relanceRepondu.campagneNom || '') + ' » (' + (l.relanceRepondu.canal || '') + ') · '
+      + formatDateTimeFr(Number(l.relanceRepondu.at)) + (l.relanceRepondu.extrait ? ' — ' + l.relanceRepondu.extrait : '')) + '">💬 A répondu (relance)</span>';
+  }
   /* WhatsApp — le badge répond à UNE question qui obligeait à ouvrir la fiche :
      ce lead a-t-il déjà reçu un message ? Éteint tant que rien n'est parti,
      vert avec sa coche dès le premier envoi.

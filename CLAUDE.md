@@ -393,6 +393,26 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   jamais attribuer une campagne à une page sans les utm de `tunnel_stats_daily.sources`.
 
 
+- **Relances (12/11/2026)** : `admin-relances.html` (admin seul, Marketing → 🔁), segment de leads →
+  séquence WhatsApp / SMS / e-mail → réponses, RDV, ventes. Règles partagées `relances-core.js`
+  (filtres, exclusions NON désactivables, plage 9 h – 19 h Paris sans dimanche ni férié, détecteur de
+  prix : aucun texte avec un tarif ne part). Serveur `api/_relances.js`, page `api/relances.js`, envois
+  `api/relances-cron.js` (*/10, lissés, plafond de NOUVEAUX leads/jour par campagne, 80 % du palier Meta,
+  pause auto si qualité WhatsApp ROUGE), réponses `api/_relances-hooks.js` (appelé par whatsapp-webhook,
+  twilio-sms-inbound, ringover-sms-inbound, gmail-inbound-sync), liens courts `/r/{jeton}` →
+  `api/relance-lien.js` (lien du setter assigné, type `attributedSetterSlug`, jamais le lien public ;
+  « Plus intéressé » exige un clic sur la page à cause des pré-chargements). Fournisseurs inchangés :
+  `envoyerModele` accepte désormais `entete` (vidéo par lien) et `boutons` (URL dynamique, quick reply
+  `RLC_STOP:{inscription}`). **`_config/relances.modeTest` vrai par défaut** : le cron n'envoie rien,
+  le lancement est refusé ; production = bascule tapée « PRODUCTION ». Lancement = test réussi sur
+  l'empreinte exacte de la séquence + nombre de leads retapé. Données Admin SDK seul (aucune règle) :
+  `relance_segments`, `relance_campagnes`, `relance_inscriptions/{camp}_{lead}`, `relance_verrous/{lead}`
+  (une séquence à la fois), `relance_exclusions/{lead}` (définitif), `relance_envois`, `relance_liens`,
+  `relance_compteurs`. Sur le lead : AJOUTS seulement (`communications` `auto:true` source `relance`,
+  `timeline_history`, `relanceRepondu` → badge Leads Live) ; seul « Plus intéressé » change l'étape
+  (`disqualification` + `pas_interesse`). STOP : les deux champs historiques `smsOptedOut` (Twilio) et
+  `smsOptOut` (Ringover) sont lus.
+
 Spécification de référence du flux commercial : `REFONTE-SPEC.md`.
 
 ---

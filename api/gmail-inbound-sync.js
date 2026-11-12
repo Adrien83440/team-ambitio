@@ -411,6 +411,15 @@ async function run(opts) {
           }), { merge: true });
         }
       }
+      /* Relances : réponse d'un lead en séquence → arrêt + setter prévenu
+         (la cloche ci-dessus va déjà au titulaire de la fiche). Pas au
+         premier passage de rattrapage : ces e-mails sont anciens. */
+      if (!firstRun) {
+        await require('./_relances-hooks').surEntrant({
+          leadId: leadId, canal: 'email', texte: (subject ? subject + ' — ' : '') + text,
+          leadName: nom, dejaNotifieSetter: notify, cle: 'mail_' + id,
+        });
+      }
       await db.collection('email_inbound').doc(id).set(Object.assign({
         status: 'attached', leadId: leadId, via: found.via, notified: notify,
       }, trace));

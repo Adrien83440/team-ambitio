@@ -35,6 +35,7 @@ const { db, admin } = require('./_firebaseAdmin');
 const { estBloque } = require('./_blockedContacts');
 const { getWhatsappCreds, majConversation, rattacherLead,
         importerMediaEntrant, FENETRE_MS } = require('./_whatsappClient');
+const RelancesHooks = require('./_relances-hooks');
 
 /* Lecture du corps brut. La signature porte sur les octets exacts envoyés par
    Meta : re-sérialiser un objet déjà parsé donnerait un JSON différent (ordre
@@ -377,6 +378,17 @@ async function enregistrerEntrant(msg, contacts) {
       await db.collection('leads').doc(String(lead.leadId)).set({
         whatsappFenetre: Date.now() + FENETRE_MS,
       }, { merge: true }).catch((e) => console.warn('[whatsapp-webhook] fenêtre lead:', e && e.message));
+
+      /* Module Relances : réponse, STOP ou bouton « Plus intéressé ». Le
+         setter vient déjà d'être prévenu par la cloche ci-dessus. */
+      const payload = (msg.button && msg.button.payload)
+        || (msg.interactive && msg.interactive.button_reply && msg.interactive.button_reply.id)
+        || null;
+      await RelancesHooks.surEntrant({
+        leadId: lead.leadId, canal: 'whatsapp', texte: texte, payload: payload,
+        fromNumber: '+' + de, leadName: lead.nom || nom || null,
+        dejaNotifieUid: await uidDuSlug(ownerSlug), cle: wamid,
+      });
     }
   }
 }

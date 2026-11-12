@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relances · Alteore</title>
+<link rel="stylesheet" href="sales.css">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}</script>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   admin-relances.html — Module « Relances » (12/11/2026, admin)
+   Construire un segment de leads, lui envoyer une séquence WhatsApp / SMS /
+   e-mail, suivre les réponses jusqu'au RDV et à la vente.
+   Données : api/relances.js (Admin SDK). Règles : relances-core.js.
+   Envois : api/relances-cron.js (toutes les 10 min, 9 h – 19 h Paris).
+   ═══════════════════════════════════════════════════════════════════════ */
+.rl{padding:20px 26px 80px;max-width:1240px;margin:0 auto}
+.rl .sp{flex:1}
+.rl-top{display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.rl-ic{width:44px;height:44px;border-radius:13px;background:linear-gradient(135deg,#6d5efc,#ec4899);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.rl-top h1{font-family:var(--font-d);font-size:21px;font-weight:800;letter-spacing:-.4px;line-height:1.2}
+.rl-top small{display:block;font-size:12px;color:var(--muted);margin-top:3px}
+.rl-pills{display:flex;gap:8px;flex-wrap:wrap;margin-right:36px}
+.rl-pill{padding:7px 12px;border-radius:10px;font-size:12px;font-weight:700;border:1px solid var(--border);background:var(--bg2)}
+.rl-pill.test{border-color:rgba(34,197,94,.5);color:#4ade80}
+.rl-pill.prod{border-color:rgba(239,68,68,.6);color:#f87171}
+.rl-pill.rouge{border-color:rgba(239,68,68,.6);color:#f87171}
+.rl-pill.jaune{border-color:rgba(251,191,36,.6);color:#fbbf24}
+.rl-pill.vert{border-color:rgba(34,197,94,.5);color:#4ade80}
+.rl-tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.rl-tab{padding:8px 16px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.rl-tab:hover{color:var(--text)}
+.rl-tab.on{color:var(--text);border-color:rgba(109,94,252,.6);background:rgba(109,94,252,.12)}
+.rl-pane{display:none}
+.rl-pane.on{display:block}
+.rl-banner{padding:10px 14px;border-radius:10px;font-size:12.5px;line-height:1.55;margin-bottom:12px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25);color:#fcd34d}
+.rl-banner.ok{background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.25);color:#86efac}
+.rl-banner.ko{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.3);color:#fca5a5}
+.rl-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:14px}
+.rl-card h2{font-size:14px;font-weight:800;margin:0 0 3px}
+.rl-card>small{display:block;font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5}
+.rl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px 14px}
+.rl-f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);font-weight:700}
+.rl-in,.rl-sel,.rl-ta{padding:8px 10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:9px;color:var(--text);font-family:inherit;font-size:13px;outline:0;box-sizing:border-box;width:100%}
+.rl-ta{min-height:82px;resize:vertical;line-height:1.5}
+.rl-in:focus,.rl-sel:focus,.rl-ta:focus{border-color:#6d5efc}
+.rl-checks{display:flex;flex-wrap:wrap;gap:6px}
+.rl-chk{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);font-size:12px;font-weight:600;color:var(--text);cursor:pointer}
+.rl-chk input{margin:0}
+.rl-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.rl-act{padding:9px 14px;border:1px solid var(--border2);border-radius:9px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;background:var(--bg3);color:var(--text);line-height:1.3;white-space:nowrap}
+.rl-act:hover{border-color:#6d5efc}
+.rl-act:disabled{opacity:.5;cursor:default}
+.rl-act.pri{background:#6d5efc;border-color:#6d5efc;color:#fff}
+.rl-act.ok{background:#16a34a;border-color:#16a34a;color:#fff}
+.rl-act.ko{background:rgba(239,68,68,.14);border-color:rgba(239,68,68,.5)}
+.rl-act.mini{padding:5px 9px;font-size:11.5px}
+.rl-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin:10px 0}
+.rl-kpi{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 11px}
+.rl-kpi span{display:block;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700}
+.rl-kpi b{font-family:var(--font-d);font-size:19px;font-weight:800}
+.rl-scroll{overflow-x:auto;max-height:520px;overflow-y:auto}
+.rl-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.rl-table th{text-align:left;color:var(--muted);font-size:11px;font-weight:700;padding:5px 8px;border-bottom:1px solid var(--border2);white-space:nowrap;position:sticky;top:0;background:var(--bg2)}
+.rl-table td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+.rl-table td.n{text-align:right;white-space:nowrap}
+.rl-table a{color:#a5b4fc;text-decoration:none;font-weight:600}
+.rl-table a:hover{text-decoration:underline}
+.rl-vide{text-align:center;padding:26px 16px;color:var(--muted);font-size:13px;line-height:1.7;background:var(--bg2);border:1px dashed var(--border2);border-radius:12px}
+.rl-list{display:flex;flex-direction:column;gap:6px}
+.rl-item{text-align:left;padding:9px 11px;border-radius:10px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-family:inherit;font-size:13px;cursor:pointer}
+.rl-item small{display:block;color:var(--muted);font-size:11.5px;margin-top:2px}
+.rl-item.on{border-color:#6d5efc;background:rgba(109,94,252,.12)}
+.rl-split{display:grid;grid-template-columns:260px minmax(0,1fr);gap:14px}
+.rl-step{border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;background:var(--bg3)}
+.rl-step-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.rl-step-h b{font-size:13px}
+.rl-prev{white-space:pre-wrap;font-size:12.5px;line-height:1.55;background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:9px 11px;margin-top:6px}
+.rl-hint{font-size:11.5px;color:var(--muted);font-weight:600;margin-top:3px}
+.rl-hint.ko{color:#f87171}
+.rl-tag{display:inline-block;padding:2px 7px;border-radius:6px;font-size:10.5px;font-weight:800;border:1px solid var(--border2)}
+.rl-tag.brouillon{color:#a5b4fc}.rl-tag.en_cours{color:#4ade80}.rl-tag.pause{color:#fbbf24}.rl-tag.terminee{color:var(--muted)}
+.rl-locked{text-align:center;padding:90px 20px;color:var(--muted)}
+.rl-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a1a28;border:1px solid var(--border2);color:var(--text);font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none;max-width:90vw}
+.rl-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (max-width:820px){
+  .rl{padding:14px 12px 70px}
+  .rl-split{grid-template-columns:minmax(0,1fr)}
+  .rl-pills{margin-right:0}
+}
+</style>
+</head>
+<body>
+<div id="nav-container"></div>
+
+<main class="rl" id="mainView" style="display:none">
+  <header class="rl-top">
+    <div class="rl-ic">🔁</div>
+    <div>
+      <h1>Relances</h1>
+      <small>Segment de leads → séquence WhatsApp / SMS / e-mail → réponses, RDV, ventes</small>
+    </div>
+    <div class="sp"></div>
+    <div class="rl-pills" id="rlPills"></div>
+  </header>
+
+  <div id="rlBanner"></div>
+
+  <nav class="rl-tabs">
+    <button class="rl-tab on" type="button" data-tab="campagnes">📣 Campagnes</button>
+    <button class="rl-tab" type="button" data-tab="segments">🎯 Segments</button>
+    <button class="rl-tab" type="button" data-tab="suivi">📊 Suivi</button>
+    <button class="rl-tab" type="button" data-tab="modeles">💬 Modèles WhatsApp</button>
+    <button class="rl-tab" type="button" data-tab="reglages">⚙️ Réglages</button>
+  </nav>
+
+  <section class="rl-pane on" id="paneCampagnes"><div class="rl-split"><div id="rlCampList"></div><div id="rlCampEdit"></div></div></section>
+  <section class="rl-pane" id="paneSegments"><div class="rl-split"><div id="rlSegList"></div><div id="rlSegEdit"></div></div></section>
+  <section class="rl-pane" id="paneSuivi"><div id="rlSuivi"></div></section>
+  <section class="rl-pane" id="paneModeles"><div id="rlModeles"></div></section>
+  <section class="rl-pane" id="paneReglages"><div id="rlReglages"></div></section>
+</main>
+
+<div class="rl-locked" id="lockedView" style="display:none"><div style="font-size:48px;margin-bottom:12px">🔒</div><div>Module réservé aux administrateurs.</div></div>
+<div class="rl-toast" id="rlToast"></div>
+
+<script src="nav.js"></script>
+<script src="pipeline-etapes.js"></script>
+<script src="relances-core.js"></script>
+<script>
+(function () {
+'use strict';
+
+var API = '/api/relances';
+var C = window.RelancesCore;
+var S = { etat: null, modeles: null, seg: null, segApercu: null, camp: null, prep: null, stats: null, suiviId: '', occupe: false };
+
+function $(id) { return document.getElementById(id); }
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function toast(msg) {
+  var t = $('rlToast');
+  t.textContent = msg;
+  t.className = 'rl-toast show';
+  clearTimeout(t._tm);
+  t._tm = setTimeout(function () { t.className = 'rl-toast'; }, 4500);
+}
+function appel(corps) {
+  return firebase.auth().currentUser.getIdToken().then(function (t) {
+    var o = { headers: { 'Authorization': 'Bearer ' + t } };
+    if (corps) { o.method = 'POST'; o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(corps); }
+    return fetch(API + (corps ? '' : '?action=etat'), o);
+  }).then(function (r) { return r.json().catch(function () { return { ok: false, error: 'server_error' }; }); });
+}
+function erreurTexte(j) {
+  if (!j) return 'Erreur réseau.';
+  if (j.erreurs && j.erreurs.length) return j.erreurs.join(' · ');
+  if (j.bloquants && j.bloquants.length) return j.bloquants.join(' · ');
+  return j.detail || j.error || j.erreur || 'Une erreur est survenue.';
+}
+function jour(ms) { return ms ? new Date(ms).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' }) : '—'; }
+function jourHeure(ms) { return ms ? new Date(ms).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'; }
+function ymdFr(s) { s = String(s || ''); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4) : '—'; }
+function euros(n) { return (Math.round((+n || 0) * 100) / 100).toFixed(2).replace('.', ',') + ' €'; }
+function occupe(b) { S.occupe = b; document.querySelectorAll('[data-action]').forEach(function (x) { if (x.tagName === 'BUTTON') x.disabled = b; }); }
+function setterNom(slug) {
+  var l = (S.etat && S.etat.setters) || [];
+  for (var i = 0; i < l.length; i++) if (l[i].slug === slug) return l[i].nom;
+  return slug || '—';
+}
+function libCanal(c) { return { whatsapp: '📲 WhatsApp', sms: '💬 SMS', email: '✉️ E-mail' }[c] || c; }
+function libEtat(e) { return { brouillon: 'Brouillon', en_cours: 'En cours', pause: 'En pause', terminee: 'Terminée' }[e] || e; }
+
+/* ── Chargement ──────────────────────────────────────────────────────── */
+function charger() {
+  return appel(null).then(function (j) {
+    if (!j.ok) { toast(erreurTexte(j)); return; }
+    S.etat = j;
+    peindreEntete();
+    peindreCampagnes();
+    peindreSegments();
+    peindreSuivi();
+    peindreReglages();
+  });
+}
+function chargerModeles() {
+  if (S.modeles) return Promise.resolve(S.modeles);
+  return appel({ action: 'modeles' }).then(function (j) {
+    S.modeles = j.ok ? (j.modeles || []) : [];
+    if (!j.ok) toast('Modèles WhatsApp illisibles : ' + erreurTexte(j));
+    return S.modeles;
+  });
+}
+function modele(nom) {
+  var l = S.modeles || [];
+  for (var i = 0; i < l.length; i++) if (l[i].nom === nom) return l[i];
+  return null;
+}
+
+function peindreEntete() {
+  var cfg = S.etat.config, w = S.etat.whatsapp || {}, h = '';
+  h += cfg.modeTest !== false
+    ? '<span class="rl-pill test">🧪 MODE TEST — aucun envoi réel</span>'
+    : '<span class="rl-pill prod">🔴 PRODUCTION — envois réels actifs</span>';
+  if (w.ok) {
+    var q = String(w.qualite || '').toUpperCase(), cls = q === 'GREEN' ? 'vert' : (q === 'RED' ? 'rouge' : 'jaune');
+    h += '<span class="rl-pill ' + cls + '">WhatsApp : qualité ' + esc({ GREEN: 'bonne', YELLOW: 'moyenne', RED: 'basse' }[q] || q)
+      + (w.palier ? ' · ' + esc(w.palier) : '') + '</span>';
+  } else h += '<span class="rl-pill jaune">WhatsApp : état illisible</span>';
+  $('rlPills').innerHTML = h;
+  var b = '';
+  if (!(S.etat.campagnes || []).length) {
+    b = '<div class="rl-banner">Aucune campagne pour l\'instant. La première campagne (Follow-up + Jamais joints Elite, depuis le 13/08) peut être créée en brouillon : rien ne part tant que tu ne l\'as pas testée et lancée.'
+      + '<div class="rl-row"><button class="rl-act pri" type="button" data-action="preconfigurer">Créer la campagne préconfigurée</button></div></div>';
+  }
+  if (w.ok && String(w.qualite).toUpperCase() === 'RED') b += '<div class="rl-banner ko">La qualité du numéro WhatsApp est BASSE : les campagnes sont mises en pause automatiquement. Le numéro sert aussi aux rappels de coaching.</div>';
+  $('rlBanner').innerHTML = b;
+}
+
+/* ── Segments ────────────────────────────────────────────────────────── */
+function segVide() { return { id: '', nom: '', filtres: { statuts: [], etapes: [], provenances: [], setters: [], sansScore: true } }; }
+function peindreSegments() {
+  var l = S.etat.segments || [], h = '<div class="rl-card"><h2>Segments enregistrés</h2><small>Un segment est une liste de filtres : il est recalculé à chaque aperçu et au lancement.</small><div class="rl-list">';
+  l.forEach(function (s) {
+    h += '<button class="rl-item' + (S.seg && S.seg.id === s.id ? ' on' : '') + '" type="button" data-action="seg-ouvrir" data-id="' + esc(s.id) + '">' + esc(s.nom) + '<small>' + esc(resumeFiltres(s.filtres)) + '</small></button>';
+  });
+  h += '</div><div class="rl-row"><button class="rl-act" type="button" data-action="seg-nouveau">+ Nouveau segment</button></div></div>';
+  $('rlSegList').innerHTML = h;
+  if (!S.seg) S.seg = segVide();
+  peindreSegEdit();
+}
+function resumeFiltres(f) {
+  f = f || {};
+  var p = [];
+  if ((f.statuts || []).length) p.push(f.statuts.join(', '));
+  if ((f.etapes || []).length) p.push('étapes ' + f.etapes.join(', '));
+  if ((f.provenances || []).length) p.push('provenance « ' + f.provenances.join(' / ') + ' »');
+  if (f.entreDu) p.push('entrés depuis le ' + ymdFr(f.entreDu));
+  if (f.entreAu) p.push('jusqu\'au ' + ymdFr(f.entreAu));
+  if ((f.setters || []).length) p.push('setters ' + f.setters.join(', '));
+  if (f.scoreMin != null || f.scoreMax != null) p.push('score ' + (f.scoreMin != null ? f.scoreMin : 0) + '–' + (f.scoreMax != null ? f.scoreMax : 100));
+  return p.join(' · ') || 'Aucun filtre';
+}
+function cases(nom, items, choisis) {
+  var h = '<div class="rl-checks">';
+  items.forEach(function (it) {
+    h += '<label class="rl-chk"><input type="checkbox" data-f="' + nom + '" value="' + esc(it.id) + '"' + ((choisis || []).indexOf(it.id) >= 0 ? ' checked' : '') + '>' + esc(it.t) + '</label>';
+  });
+  return h + '</div>';
+}
+function peindreSegEdit() {
+  var s = S.seg, f = s.filtres || {};
+  var cols = (window.PipelineEtapes && window.PipelineEtapes.COLS || []).map(function (c) { return { id: c.id, t: c.t }; });
+  var setters = (S.etat.setters || []).map(function (m) { return { id: m.slug, t: m.nom }; });
+  var h = '<div class="rl-card"><h2>' + (s.id ? 'Segment : ' + esc(s.nom) : 'Nouveau segment') + '</h2>'
+    + '<small>Exclusions automatiques, <b>non désactivables</b> : clients, faux numéros / poubelle, disqualifiés, pas intéressés, STOP, exclus définitifs des relances, contacts bloqués, RDV à venir, fiches fusionnées, leads déjà dans une autre séquence.</small>'
+    + '<div class="rl-grid">'
+    + '<label class="rl-f">Nom<input class="rl-in" id="sgNom" value="' + esc(s.nom) + '" placeholder="ex. Follow-up Elite"></label>'
+    + '<label class="rl-f">Provenance contient (séparer par des virgules)<input class="rl-in" id="sgProv" value="' + esc((f.provenances || []).join(', ')) + '" placeholder="ex. elite"></label>'
+    + '<label class="rl-f">Entrés depuis le<input class="rl-in" type="date" id="sgDu" value="' + esc(f.entreDu || '') + '"></label>'
+    + '<label class="rl-f">Entrés jusqu\'au<input class="rl-in" type="date" id="sgAu" value="' + esc(f.entreAu || '') + '"></label>'
+    + '<label class="rl-f">Dernier contact avant le<input class="rl-in" type="date" id="sgCAv" value="' + esc(f.contactAvant || '') + '"></label>'
+    + '<label class="rl-f">Dernier contact après le<input class="rl-in" type="date" id="sgCAp" value="' + esc(f.contactApres || '') + '"></label>'
+    + '<label class="rl-f">Score IA min (0-100)<input class="rl-in" type="number" min="0" max="100" id="sgSMin" value="' + esc(f.scoreMin != null ? f.scoreMin : '') + '"></label>'
+    + '<label class="rl-f">Score IA max (0-100)<input class="rl-in" type="number" min="0" max="100" id="sgSMax" value="' + esc(f.scoreMax != null ? f.scoreMax : '') + '"></label>'
+    + '</div>'
+    + '<label class="rl-chk" style="margin-top:8px"><input type="checkbox" id="sgSans"' + (f.sansScore !== false ? ' checked' : '') + '>Garder les leads sans score IA (la plupart des leads anciens n\'en ont pas)</label>'
+    + '<div class="rl-f" style="margin-top:10px">Statut Leads Live' + cases('statuts', C.STATUTS, f.statuts) + '</div>'
+    + (cols.length ? '<div class="rl-f" style="margin-top:10px">Étape du Pipeline (même règle que le Pipeline)' + cases('etapes', cols, f.etapes) + '</div>' : '')
+    + '<div class="rl-f" style="margin-top:10px">Setter assigné' + cases('setters', setters, f.setters) + '</div>'
+    + '<div class="rl-row"><button class="rl-act pri" type="button" data-action="seg-apercu">Aperçu</button>'
+    + '<button class="rl-act" type="button" data-action="seg-enregistrer">Enregistrer le segment</button></div></div>'
+    + '<div id="sgApercu"></div>';
+  $('rlSegEdit').innerHTML = h;
+  if (S.segApercu) peindreApercu();
+}
+function lireSegment() {
+  function coches(n) { var o = []; document.querySelectorAll('input[data-f="' + n + '"]:checked').forEach(function (x) { o.push(x.value); }); return o; }
+  return {
+    id: S.seg.id, nom: $('sgNom').value.trim(),
+    filtres: {
+      statuts: coches('statuts'), etapes: coches('etapes'), setters: coches('setters'),
+      provenances: $('sgProv').value.split(',').map(function (x) { return x.trim(); }).filter(Boolean),
+      entreDu: $('sgDu').value, entreAu: $('sgAu').value, contactAvant: $('sgCAv').value, contactApres: $('sgCAp').value,
+      scoreMin: $('sgSMin').value, scoreMax: $('sgSMax').value, sansScore: $('sgSans').checked
+    }
+  };
+}
+function peindreApercu() {
+  var a = S.segApercu, h = '<div class="rl-card"><h2>' + a.total + ' lead' + (a.total > 1 ? 's' : '') + ' à relancer</h2>';
+  var ex = Object.keys(a.exclus || {});
+  h += '<small>' + a.examines + ' correspondent aux filtres' + (ex.length ? ' ; exclus automatiquement : ' + ex.map(function (k) { return esc((S.etat.motifs || {})[k] || k) + ' ' + a.exclus[k]; }).join(' · ') : '') + '.</small>';
+  if (!a.leads.length) h += '<div class="rl-vide">Aucun lead.</div>';
+  else {
+    h += '<div class="rl-scroll"><table class="rl-table"><tr><th>Lead</th><th>Statut</th><th>Provenance</th><th>Setter</th><th>Entré le</th><th>Dernier contact</th><th>Score IA</th><th>Canaux</th></tr>';
+    a.leads.forEach(function (l) {
+      h += '<tr><td><a href="sales-leads.html?leadId=' + encodeURIComponent(l.id) + '" target="_blank" rel="noopener">' + esc(l.nom || l.prenom || l.id) + '</a></td><td>' + esc(l.statut) + '</td><td>' + esc(l.provenance)
+        + '</td><td>' + esc(setterNom(l.setter)) + '</td><td>' + jour(l.entree) + '</td><td>' + jour(l.dernierContact) + '</td><td class="n">' + (l.score != null ? l.score : '—')
+        + '</td><td>' + (l.telephone ? '📱' : '') + (l.email ? ' ✉️' : '') + '</td></tr>';
+    });
+    h += '</table></div>' + (a.tronque ? '<div class="rl-hint">Aperçu limité aux 500 premiers.</div>' : '');
+  }
+  $('sgApercu').innerHTML = h + '</div>';
+}
+
+/* ── Campagnes ───────────────────────────────────────────────────────── */
+function campVide() {
+  return { id: '', nom: '', etat: 'brouillon', dateDebut: C.prochainJourOuvre(C.decaler(C.aujourdhui(), 1)), plafondJour: '', setterRepli: '',
+    vagues: [{ segmentId: '', jours: [1] }], etapes: [{ canal: 'whatsapp', delaiJours: 0, parametres: ['prenom', 'setter'] }] };
+}
+function peindreCampagnes() {
+  var l = S.etat.campagnes || [], h = '<div class="rl-card"><h2>Campagnes</h2><small>Brouillon → test → lancement. Une campagne lancée ne se modifie plus.</small><div class="rl-list">';
+  l.forEach(function (c) {
+    h += '<button class="rl-item' + (S.camp && S.camp.id === c.id ? ' on' : '') + '" type="button" data-action="camp-ouvrir" data-id="' + esc(c.id) + '">' + esc(c.nom)
+      + '<small><span class="rl-tag ' + esc(c.etat) + '">' + esc(libEtat(c.etat)) + '</span> · début ' + ymdFr(c.dateDebut) + (c.inscrits ? ' · ' + c.inscrits + ' inscrits' : '') + '</small></button>';
+  });
+  h += '</div><div class="rl-row"><button class="rl-act" type="button" data-action="camp-nouvelle">+ Nouvelle campagne</button></div></div>';
+  $('rlCampList').innerHTML = h;
+  if (!S.camp) {
+    if (l.length) S.camp = JSON.parse(JSON.stringify(l[0]));
+    else S.camp = campVide();
+  } else {
+    for (var i = 0; i < l.length; i++) if (l[i].id === S.camp.id) S.camp = JSON.parse(JSON.stringify(l[i]));
+  }
+  chargerModeles().then(peindreCampEdit);
+}
+function optionsSegments(sel) {
+  var h = '<option value="">— segment —</option>';
+  (S.etat.segments || []).forEach(function (s) { h += '<option value="' + esc(s.id) + '"' + (s.id === sel ? ' selected' : '') + '>' + esc(s.nom) + '</option>'; });
+  return h;
+}
+function optionsSetters(sel, vide) {
+  var h = '<option value="">' + esc(vide) + '</option>';
+  (S.etat.setters || []).forEach(function (m) { h += '<option value="' + esc(m.slug) + '"' + (m.slug === sel ? ' selected' : '') + '>' + esc(m.nom) + (m.lien ? ' (lien ✓)' : ' (pas de lien)') + '</option>'; });
+  return h;
+}
+function compteurSms(t) {
+  var s = C.segmentsSms(C.smsTypique(t || ''));
+  var p = C.contientPrix(t || '');
+  return '<div class="rl-hint' + (p ? ' ko' : '') + '">' + s.longueur + ' caractères · ' + s.segments + ' SMS' + (s.unicode ? ' · ⚠ caractère spécial (ê, ç, ’…) : 70 caractères par SMS' : '')
+    + (p ? ' · ⛔ élément de prix « ' + esc(p) + ' »' : '') + '</div>';
+}
+function peindreEtape(e, i, fige) {
+  var dis = fige ? ' disabled' : '';
+  var h = '<div class="rl-step"><div class="rl-step-h"><b>Étape ' + (i + 1) + '</b>'
+    + '<select class="rl-sel" style="width:auto" data-e="canal" data-i="' + i + '"' + dis + '>'
+    + ['whatsapp', 'sms', 'email'].map(function (c) { return '<option value="' + c + '"' + (e.canal === c ? ' selected' : '') + '>' + libCanal(c) + '</option>'; }).join('') + '</select>'
+    + (i === 0 ? '<span class="rl-hint">J0 (jour de la vague)</span>' : '<span class="rl-hint">J+</span><input class="rl-in" style="width:70px" type="number" min="1" data-e="delaiJours" data-i="' + i + '" value="' + esc(e.delaiJours || '') + '"' + dis + '>')
+    + '<div class="sp"></div>' + (fige ? '' : '<button class="rl-act mini ko" type="button" data-action="etape-suppr" data-i="' + i + '">Retirer</button>') + '</div>';
+  if (e.canal === 'whatsapp') {
+    var m = modele(e.modele);
+    h += '<label class="rl-f">Modèle approuvé<select class="rl-sel" data-e="modele" data-i="' + i + '"' + dis + '><option value="">— choisir —</option>';
+    (S.modeles || []).forEach(function (x) {
+      if (String(x.statut).toUpperCase() !== 'APPROVED') return;
+      h += '<option value="' + esc(x.nom) + '"' + (x.nom === e.modele ? ' selected' : '') + '>' + esc(x.nom) + ' (' + esc(x.categorie) + (x.enteteFormat === 'VIDEO' ? ', vidéo' : '') + ')' + (x.prix ? ' ⛔ prix' : '') + '</option>';
+    });
+    if (e.modele && !m) h += '<option value="' + esc(e.modele) + '" selected>' + esc(e.modele) + ' — pas encore approuvé</option>';
+    h += '</select></label>';
+    if (m) {
+      h += '<div class="rl-prev">' + (m.enteteFormat === 'VIDEO' ? '🎬 [vidéo]\n' : (m.entete ? esc(m.entete) + '\n' : '')) + esc(m.corps)
+        + (m.pied ? '\n\n' + esc(m.pied) : '') + (m.boutons.length ? '\n\n' + m.boutons.map(function (b) { return '[' + esc(b.texte) + ']' + (b.type === 'URL' ? ' → ' + esc(b.url) : ''); }).join('  ') : '') + '</div>';
+      if (m.prix) h += '<div class="rl-hint ko">⛔ Ce modèle contient un élément de prix (« ' + esc(m.prix) + ' ») : il ne peut pas être utilisé.</div>';
+      var hasUrl = m.boutons.some(function (b) { return b.type === 'URL' && b.dynamique; });
+      if (!hasUrl) h += '<div class="rl-hint ko">Pas de bouton lien dynamique (…/r/{{1}}) : le lien de réservation ne pourra pas être inséré.</div>';
+      for (var k = 0; k < m.variables; k++) {
+        h += '<label class="rl-f" style="margin-top:6px">{{' + (k + 1) + '}} =<select class="rl-sel" data-e="param" data-k="' + k + '" data-i="' + i + '"' + dis + '>'
+          + ['prenom', 'setter'].map(function (v) { return '<option value="' + v + '"' + ((e.parametres || [])[k] === v ? ' selected' : '') + '>' + v + '</option>'; }).join('') + '</select></label>';
+      }
+      if (m.enteteFormat === 'VIDEO' || m.enteteFormat === 'IMAGE') {
+        h += '<label class="rl-f" style="margin-top:6px">URL https de la ' + (m.enteteFormat === 'VIDEO' ? 'vidéo (mp4, 16 Mo max)' : 'image') + '<input class="rl-in" data-e="videoUrl" data-i="' + i + '" value="' + esc(e.videoUrl || '') + '"' + dis + '></label>';
+      }
+    }
+    h += '<label class="rl-f" style="margin-top:6px">SMS de repli (si le numéro n\'est pas sur WhatsApp ou si l\'envoi échoue)<textarea class="rl-ta" data-e="texteRepli" data-i="' + i + '"' + dis + '>' + esc(e.texteRepli || '') + '</textarea></label>' + compteurSms(e.texteRepli);
+  } else if (e.canal === 'sms') {
+    h += '<label class="rl-f">Texte du SMS<textarea class="rl-ta" data-e="texte" data-i="' + i + '"' + dis + '>' + esc(e.texte || '') + '</textarea></label>' + compteurSms(e.texte);
+  } else {
+    h += '<label class="rl-f">Objet<input class="rl-in" data-e="objet" data-i="' + i + '" value="' + esc(e.objet || '') + '"' + dis + '></label>'
+      + '<label class="rl-f" style="margin-top:6px">Texte<textarea class="rl-ta" style="min-height:140px" data-e="texte" data-i="' + i + '"' + dis + '>' + esc(e.texte || '') + '</textarea></label>';
+    var pe = C.contientPrix((e.objet || '') + ' ' + (e.texte || ''));
+    if (pe) h += '<div class="rl-hint ko">⛔ élément de prix « ' + esc(pe) + ' »</div>';
+  }
+  return h + '</div>';
+}
+function peindreCampEdit() {
+  var c = S.camp, fige = c.etat && c.etat !== 'brouillon', dis = fige ? ' disabled' : '';
+  var h = '<div class="rl-card"><h2>' + (c.id ? esc(c.nom) + ' <span class="rl-tag ' + esc(c.etat) + '">' + esc(libEtat(c.etat)) + '</span>' : 'Nouvelle campagne') + '</h2>';
+  if (c.motifPause === 'qualite_whatsapp_rouge') h += '<div class="rl-banner ko">Mise en pause automatiquement : qualité du numéro WhatsApp basse.</div>';
+  h += '<small>Variables : {{prenom}}, {{setter}} (nom du setter assigné), {{lien_rdv}} (lien de réservation personnel du setter, court et suivi), {{lien_stop}} (page « Plus intéressé »). Aucun prix, jamais.</small>'
+    + '<div class="rl-grid">'
+    + '<label class="rl-f">Nom<input class="rl-in" id="cpNom" value="' + esc(c.nom) + '"' + dis + '></label>'
+    + '<label class="rl-f">Jour 1 de la campagne<input class="rl-in" type="date" id="cpDebut" value="' + esc(c.dateDebut || '') + '"' + dis + '></label>'
+    + '<label class="rl-f">Plafond de nouveaux leads / jour<input class="rl-in" type="number" min="1" id="cpPlafond" value="' + esc(c.plafondJour || '') + '" placeholder="' + esc(S.etat.config.plafondJour) + ' (réglage général)"' + dis + '></label>'
+    + '<label class="rl-f">Setter de repli (lead sans lien setter)<select class="rl-sel" id="cpRepli"' + dis + '>' + optionsSetters(c.setterRepli || '', '— réglage général —') + '</select></label>'
+    + '</div><h2 style="margin-top:14px">Vagues</h2><small>Chaque segment part sur un ou plusieurs jours de campagne (ex. « 2,3 » = réparti sur les jours 2 et 3). Dimanches et jours fériés sont sautés. Un lead présent dans deux segments n\'est inscrit qu\'une fois.</small>';
+  (c.vagues || []).forEach(function (v, i) {
+    h += '<div class="rl-row"><select class="rl-sel" style="max-width:340px" data-v="segmentId" data-i="' + i + '"' + dis + '>' + optionsSegments(v.segmentId) + '</select>'
+      + '<span class="rl-hint">jours</span><input class="rl-in" style="width:110px" data-v="jours" data-i="' + i + '" value="' + esc((v.jours || [1]).join(',')) + '"' + dis + '>'
+      + (fige ? '' : '<button class="rl-act mini ko" type="button" data-action="vague-suppr" data-i="' + i + '">Retirer</button>') + '</div>';
+  });
+  if (!fige) h += '<div class="rl-row"><button class="rl-act mini" type="button" data-action="vague-ajout">+ Vague</button></div>';
+  h += '<h2 style="margin-top:14px">Séquence</h2><small>Les délais comptent depuis le jour où le lead a reçu l\'étape 1. La séquence s\'arrête dès que le lead répond, réserve, clique « Plus intéressé » ou répond STOP.</small>';
+  (c.etapes || []).forEach(function (e, i) { h += peindreEtape(e, i, fige); });
+  if (!fige) h += '<div class="rl-row"><button class="rl-act mini" type="button" data-action="etape-ajout">+ Étape</button></div>';
+  h += '<div class="rl-row">';
+  if (!fige) h += '<button class="rl-act" type="button" data-action="camp-enregistrer">Enregistrer</button>';
+  if (c.id && !fige) h += '<button class="rl-act" type="button" data-action="camp-test">📲 M\'envoyer un test</button><button class="rl-act pri" type="button" data-action="camp-preparer">Préparer le lancement</button>';
+  if (c.etat === 'en_cours') h += '<button class="rl-act" type="button" data-action="camp-pause">⏸ Pause</button>';
+  if (c.etat === 'pause') h += '<button class="rl-act ok" type="button" data-action="camp-reprendre">▶ Reprendre</button>';
+  if (c.etat === 'en_cours' || c.etat === 'pause') h += '<button class="rl-act ko" type="button" data-action="camp-arreter">Arrêter définitivement</button><button class="rl-act" type="button" data-action="camp-dry">Prochain passage (simulation)</button>';
+  if (c.id && c.etat !== 'brouillon') h += '<button class="rl-act" type="button" data-action="camp-suivi">📊 Suivi</button>';
+  h += '</div>';
+  if (c.dernierTest) {
+    var t = c.dernierTest, okEmp = c.testOk && c.testOk.empreinte === C.empreinte(c.etapes || []);
+    h += '<div class="rl-banner ' + (t.ok && okEmp ? 'ok' : 'ko') + '" style="margin-top:10px">Dernier test : ' + jourHeure(t.at) + ' — ' + (t.ok ? 'réussi' : 'en échec')
+      + (t.ok && !okEmp ? ' (la séquence a changé depuis : refais un test)' : '') + '<br>'
+      + (t.resultats || []).map(function (r) { return 'Étape ' + (r.n + 1) + ' ' + libCanal(r.canal) + (r.repli ? ' (repli)' : '') + ' : ' + (r.ok ? '✓' : '✗ ' + esc(r.erreur || '')) + (r.bascule ? ' — WhatsApp en échec (' + esc(r.erreurWhatsapp || '') + '), parti en SMS' : ''); }).join('<br>') + '</div>';
+  }
+  h += '<div id="cpPrep"></div></div>';
+  $('rlCampEdit').innerHTML = h;
+  if (S.prep && S.prep.campagneId === c.id) peindrePrep();
+}
+function lireCampagne() {
+  var c = S.camp;
+  if (c.etat && c.etat !== 'brouillon') return c;
+  c.nom = $('cpNom').value.trim();
+  c.dateDebut = $('cpDebut').value;
+  c.plafondJour = $('cpPlafond').value;
+  c.setterRepli = $('cpRepli').value;
+  document.querySelectorAll('[data-v]').forEach(function (x) {
+    var v = c.vagues[+x.getAttribute('data-i')];
+    if (!v) return;
+    if (x.getAttribute('data-v') === 'segmentId') v.segmentId = x.value;
+    else v.jours = x.value.split(/[,; ]+/).map(function (j) { return parseInt(j, 10); }).filter(function (j) { return j > 0; });
+  });
+  document.querySelectorAll('[data-e]').forEach(function (x) {
+    var e = c.etapes[+x.getAttribute('data-i')], k = x.getAttribute('data-e');
+    if (!e) return;
+    if (k === 'param') { e.parametres = e.parametres || []; e.parametres[+x.getAttribute('data-k')] = x.value; }
+    else if (k === 'delaiJours') e.delaiJours = parseInt(x.value, 10) || 0;
+    else e[k] = x.value;
+  });
+  return c;
+}
+function peindrePrep() {
+  var p = S.prep, h = '<div class="rl-card" style="margin-top:12px;background:var(--bg3)"><h2>Lancement : ' + p.total + ' leads · coût estimé ' + euros(p.cout) + '</h2>'
+    + '<small>Plafond : ' + esc(p.plafondJour) + ' nouveaux leads par jour. Envois lissés entre ' + esc(S.etat.config.heureDebut) + ' h et ' + esc(S.etat.config.heureFin) + ' h (Paris), ni dimanche ni jour férié.</small>';
+  (p.vagues || []).forEach(function (v) {
+    h += '<div class="rl-hint" style="font-size:12.5px">' + esc(v.nom || 'Vague') + ' : ' + v.total + ' leads → ' + v.jours.map(function (j) { return 'jour ' + j.jour + ' (' + ymdFr(j.date) + ') : ' + j.nb; }).join(' · ')
+      + (Object.keys(v.exclus || {}).length ? ' — exclus : ' + Object.keys(v.exclus).map(function (k) { return esc((S.etat.motifs || {})[k] || k) + ' ' + v.exclus[k]; }).join(', ') : '') + '</div>';
+  });
+  if (p.bloquants.length) h += '<div class="rl-banner ko" style="margin-top:10px">Lancement impossible :<br>' + p.bloquants.map(esc).join('<br>') + '</div>';
+  else h += '<div class="rl-row"><button class="rl-act ok" type="button" data-action="camp-lancer">🚀 Lancer pour ' + p.total + ' leads</button></div>';
+  $('cpPrep').innerHTML = h + '</div>';
+}
+
+/* ── Suivi ───────────────────────────────────────────────────────────── */
+function peindreSuivi() {
+  var l = (S.etat.campagnes || []).filter(function (c) { return c.etat !== 'brouillon'; });
+  var h = '<div class="rl-card"><h2>Suivi</h2><div class="rl-row"><select class="rl-sel" style="max-width:380px" id="suCamp"><option value="">— campagne —</option>';
+  l.forEach(function (c) { h += '<option value="' + esc(c.id) + '"' + (c.id === S.suiviId ? ' selected' : '') + '>' + esc(c.nom) + ' (' + esc(libEtat(c.etat)) + ')</option>'; });
+  h += '</select><button class="rl-act" type="button" data-action="suivi-charger">Actualiser</button>' + (S.stats ? '<button class="rl-act" type="button" data-action="suivi-csv">⬇ Export CSV</button>' : '') + '</div></div>';
+  if (!l.length) h += '<div class="rl-vide">Aucune campagne lancée.</div>';
+  if (S.stats) {
+    var s = S.stats, t = s.total;
+    var k = function (lbl, v) { return '<div class="rl-kpi"><span>' + lbl + '</span><b>' + v + '</b></div>'; };
+    h += '<div class="rl-card"><h2>' + esc(s.campagne.nom) + '</h2><div class="rl-kpis">' + k('Inscrits', t.inscrits) + k('En cours', t.actives) + k('Terminés', t.terminees)
+      + k('Arrêtés', t.arretees) + k('Réponses', t.reponses) + k('Clics lien', t.clics) + k('RDV posés', t.rdv) + k('RDV honorés', t.honores) + k('Ventes', t.ventes)
+      + k('Plus intéressé', t.plusInteresse) + k('STOP', t.stop) + '</div>'
+      + '<div class="rl-scroll"><table class="rl-table"><tr><th>Étape</th><th>Canal</th><th>Envoyés</th><th>dont repli SMS</th><th>Échecs</th><th>Délivrés</th><th>Lus</th><th>Réponses</th><th>Clics</th><th>RDV posés</th><th>Honorés</th><th>Ventes</th></tr>';
+    s.parEtape.forEach(function (e) {
+      h += '<tr><td>' + (e.n + 1) + '</td><td>' + libCanal(e.canal) + '</td><td class="n">' + e.envoyes + '</td><td class="n">' + e.bascules + '</td><td class="n">' + e.echecs + '</td><td class="n">' + e.delivres
+        + '</td><td class="n">' + (e.canal === 'whatsapp' ? e.lus : '—') + '</td><td class="n">' + e.reponses + '</td><td class="n">' + e.clics + '</td><td class="n">' + e.rdv + '</td><td class="n">' + e.honores + '</td><td class="n">' + e.ventes + '</td></tr>';
+    });
+    h += '</table></div><div class="rl-hint">Réponses, clics, RDV et ventes sont rattachés à la dernière étape reçue avant l\'événement. « Lu » n\'existe que pour WhatsApp.</div>';
+    if (s.parJour.length) {
+      h += '<h2 style="margin-top:14px">Par jour</h2><table class="rl-table"><tr><th>Jour</th><th>Nouveaux leads</th><th>Messages</th><th>dont WhatsApp</th><th>Échecs</th><th>Rattrapages SMS</th></tr>';
+      s.parJour.forEach(function (j) { h += '<tr><td>' + ymdFr(j.jour) + '</td><td class="n">' + (j.debuts || 0) + '</td><td class="n">' + (j.envois || 0) + '</td><td class="n">' + (j.whatsapp || 0) + '</td><td class="n">' + (j.echecs || 0) + '</td><td class="n">' + (j.rattrapages || 0) + '</td></tr>'; });
+      h += '</table>';
+    }
+    h += '</div>';
+  }
+  $('rlSuivi').innerHTML = h;
+}
+function exporterCsv() {
+  var l = S.stats.lignes, cols = ['leadId', 'nom', 'setter', 'segment', 'etat', 'motif', 'etapesEnvoyees', 'canaux', 'jourDepart', 'reponse', 'clics', 'rdv', 'honore', 'vente', 'statutActuel'];
+  var lignes = [cols.join(';')];
+  l.forEach(function (r) { lignes.push(cols.map(function (c) { return '"' + String(r[c] == null ? '' : r[c]).replace(/"/g, '""') + '"'; }).join(';')); });
+  var blob = new Blob(['﻿' + lignes.join('\n')], { type: 'text/csv;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'relances-' + (S.stats.campagne.id || 'campagne') + '-' + C.aujourdhui() + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+/* ── Modèles WhatsApp ───────────────────────────────────────────────── */
+function peindreModeles() {
+  appel({ action: 'modelesProposes' }).then(function (p) {
+    chargerModeles().then(function () {
+      var h = '<div class="rl-card"><h2>Modèles proposés pour la première campagne</h2><small>Catégorie Marketing, sans aucun prix. Bouton lien vers https://team.alteore.com/r/{{1}} (lien court suivi) et bouton « Plus intéressé ». Meta les examine en quelques minutes à 24 h.</small>';
+      (p.modeles || []).forEach(function (m) {
+        var existe = modele(m.nom);
+        h += '<div class="rl-step"><div class="rl-step-h"><b>' + esc(m.nom) + '</b>' + (existe ? '<span class="rl-tag">' + esc(existe.statut) + '</span>' : '<span class="rl-tag">pas encore soumis</span>') + '</div>'
+          + '<div class="rl-prev">' + (m.entete === 'VIDEO' ? '🎬 [vidéo]\n' : '') + esc(m.corps) + '\n\n' + esc(m.pied || '') + '\n\n' + m.boutons.map(function (b) { return '[' + esc(b.texte) + ']'; }).join('  ') + '</div>';
+        if (!existe) {
+          if (m.entete === 'VIDEO') h += '<label class="rl-f" style="margin-top:8px">URL https publique de la vidéo (mp4, 16 Mo max) — sert d\'exemple à Meta<input class="rl-in" id="mdVid_' + esc(m.nom) + '"></label>';
+          h += '<div class="rl-row"><button class="rl-act pri" type="button" data-action="modele-soumettre" data-nom="' + esc(m.nom) + '">Soumettre à Meta</button></div>';
+        }
+        h += '</div>';
+      });
+      h += '</div><div class="rl-card"><h2>Tous les modèles du compte</h2><div class="rl-scroll"><table class="rl-table"><tr><th>Nom</th><th>Statut</th><th>Catégorie</th><th>En-tête</th><th>Boutons</th><th>Prix ?</th></tr>';
+      (S.modeles || []).forEach(function (m) {
+        h += '<tr><td>' + esc(m.nom) + '</td><td>' + esc(m.statut) + '</td><td>' + esc(m.categorie) + '</td><td>' + esc(m.enteteFormat || '—') + '</td><td>' + m.boutons.map(function (b) { return esc(b.type + ' ' + b.texte); }).join(', ') + '</td><td>' + (m.prix ? '⛔ ' + esc(m.prix) : '—') + '</td></tr>';
+      });
+      $('rlModeles').innerHTML = h + '</table></div></div>';
+    });
+  });
+}
+
+/* ── Réglages ────────────────────────────────────────────────────────── */
+function peindreReglages() {
+  var c = S.etat.config;
+  var h = '<div class="rl-card"><h2>Coordonnées de test</h2><small>« M\'envoyer un test » envoie chaque étape de la séquence (et chaque SMS de repli) ici, et nulle part ailleurs.</small><div class="rl-grid">'
+    + '<label class="rl-f">Ton numéro (WhatsApp + SMS)<input class="rl-in" id="rgTel" value="' + esc(c.testTelephone || '') + '" placeholder="+336…"></label>'
+    + '<label class="rl-f">Ton e-mail<input class="rl-in" id="rgMail" value="' + esc(c.testEmail || '') + '"></label></div></div>'
+    + '<div class="rl-card"><h2>Garde-fous d\'envoi</h2><div class="rl-grid">'
+    + '<label class="rl-f">Plafond de nouveaux leads / jour (défaut, par campagne)<input class="rl-in" type="number" min="1" id="rgPlaf" value="' + esc(c.plafondJour) + '"></label>'
+    + '<label class="rl-f">Début de plage (heure de Paris)<input class="rl-in" type="number" min="8" max="19" id="rgDeb" value="' + esc(c.heureDebut) + '"></label>'
+    + '<label class="rl-f">Fin de plage (heure de Paris)<input class="rl-in" type="number" min="10" max="20" id="rgFin" value="' + esc(c.heureFin) + '"></label>'
+    + '<label class="rl-f">Setter de repli (lead sans lien setter)<select class="rl-sel" id="rgRepli">' + optionsSetters(c.setterRepli || '', '— aucun —') + '</select></label>'
+    + '<label class="rl-f">Compte e-mail d\'envoi<select class="rl-sel" id="rgCompte">' + ['strategie', 'contact', 'coaching'].map(function (k) { return '<option' + (c.emailCompte === k ? ' selected' : '') + '>' + k + '</option>'; }).join('') + '</select></label>'
+    + '</div><label class="rl-chk" style="margin-top:10px"><input type="checkbox" id="rgQual"' + (c.pauseSiQualiteRouge !== false ? ' checked' : '') + '>Mettre les campagnes en pause si la qualité du numéro WhatsApp passe au rouge</label>'
+    + '<div class="rl-hint">Le palier Meta (' + esc((S.etat.whatsapp || {}).palier || 'inconnu') + ') est respecté à 80 % : au-delà, les étapes WhatsApp attendent le lendemain.</div></div>'
+    + '<div class="rl-card"><h2>Coûts unitaires (estimation au lancement)</h2><div class="rl-grid">'
+    + '<label class="rl-f">WhatsApp Marketing (€)<input class="rl-in" type="number" step="0.01" id="rgCw" value="' + esc(c.coutWhatsapp) + '"></label>'
+    + '<label class="rl-f">SMS, par segment de 160 car. (€)<input class="rl-in" type="number" step="0.01" id="rgCs" value="' + esc(c.coutSms) + '"></label>'
+    + '<label class="rl-f">E-mail (€)<input class="rl-in" type="number" step="0.01" id="rgCe" value="' + esc(c.coutEmail) + '"></label></div>'
+    + '<div class="rl-row"><button class="rl-act pri" type="button" data-action="reglages-enregistrer">Enregistrer les réglages</button></div></div>'
+    + '<div class="rl-card"><h2>Mode d\'envoi</h2><small>' + (c.modeTest !== false
+      ? 'MODE TEST : le cron n\'envoie rien, aucun lancement n\'est possible. Seuls les tests vers tes coordonnées partent.'
+      : 'PRODUCTION depuis le ' + jourHeure(c.productionA) + ' (' + esc(c.productionPar || '') + ') : les campagnes lancées envoient réellement.') + '</small>'
+    + '<div class="rl-row">' + (c.modeTest !== false
+      ? '<button class="rl-act ko" type="button" data-action="mode-production">Passer en production…</button>'
+      : '<button class="rl-act ok" type="button" data-action="mode-test">Revenir en mode test (coupe tous les envois)</button>') + '</div></div>';
+  $('rlReglages').innerHTML = h;
+}
+
+/* ── Actions ─────────────────────────────────────────────────────────── */
+function setTab(t) {
+  document.querySelectorAll('.rl-tab').forEach(function (x) { x.className = 'rl-tab' + (x.getAttribute('data-tab') === t ? ' on' : ''); });
+  ['campagnes', 'segments', 'suivi', 'modeles', 'reglages'].forEach(function (p) { $('pane' + p.charAt(0).toUpperCase() + p.slice(1)).className = 'rl-pane' + (p === t ? ' on' : ''); });
+  if (t === 'modeles') peindreModeles();
+}
+function action(corps, ok) {
+  if (S.occupe) return;
+  occupe(true);
+  return appel(corps).then(function (j) {
+    occupe(false);
+    if (!j.ok) { toast(erreurTexte(j)); return j; }
+    if (ok) ok(j);
+    return j;
+  }).catch(function (e) { occupe(false); toast('Erreur réseau : ' + (e && e.message)); });
+}
+
+document.addEventListener('click', function (ev) {
+  var t = ev.target.closest('[data-tab],[data-action]');
+  if (!t) return;
+  if (t.hasAttribute('data-tab')) { setTab(t.getAttribute('data-tab')); return; }
+  var a = t.getAttribute('data-action');
+  if (a === 'preconfigurer') {
+    action({ action: 'preconfigurer' }, function () { toast('Campagne préconfigurée créée (brouillon).'); S.camp = null; charger(); });
+  } else if (a === 'seg-nouveau') { S.seg = segVide(); S.segApercu = null; peindreSegments(); }
+  else if (a === 'seg-ouvrir') {
+    (S.etat.segments || []).forEach(function (s) { if (s.id === t.getAttribute('data-id')) S.seg = JSON.parse(JSON.stringify(s)); });
+    S.segApercu = null; peindreSegments();
+  } else if (a === 'seg-apercu') {
+    S.seg = lireSegment();
+    action({ action: 'apercu', filtres: S.seg.filtres }, function (j) { S.segApercu = j; peindreApercu(); });
+  } else if (a === 'seg-enregistrer') {
+    S.seg = lireSegment();
+    if (!S.seg.nom) { toast('Donne un nom au segment.'); return; }
+    action({ action: 'segment', id: S.seg.id || null, nom: S.seg.nom, filtres: S.seg.filtres }, function (j) { S.seg.id = j.id; toast('Segment enregistré.'); charger(); });
+  } else if (a === 'camp-nouvelle') { S.camp = campVide(); S.prep = null; peindreCampEdit(); }
+  else if (a === 'camp-ouvrir') {
+    (S.etat.campagnes || []).forEach(function (c) { if (c.id === t.getAttribute('data-id')) S.camp = JSON.parse(JSON.stringify(c)); });
+    S.prep = null; peindreCampagnes();
+  } else if (a === 'vague-ajout') { lireCampagne(); S.camp.vagues.push({ segmentId: '', jours: [1] }); peindreCampEdit(); }
+  else if (a === 'vague-suppr') { lireCampagne(); S.camp.vagues.splice(+t.getAttribute('data-i'), 1); peindreCampEdit(); }
+  else if (a === 'etape-ajout') {
+    lireCampagne();
+    var last = S.camp.etapes[S.camp.etapes.length - 1];
+    S.camp.etapes.push({ canal: 'sms', delaiJours: (last ? (+last.delaiJours || 0) : 0) + 2, texte: '' });
+    peindreCampEdit();
+  } else if (a === 'etape-suppr') { lireCampagne(); S.camp.etapes.splice(+t.getAttribute('data-i'), 1); peindreCampEdit(); }
+  else if (a === 'camp-enregistrer') {
+    var c = lireCampagne();
+    var errs = [];
+    c.etapes.forEach(function (e, i) { var m = modele(e.modele); var x = C.verifierEtape(Object.assign({}, e, m ? { enteteFormat: m.enteteFormat, corpsModele: m.corps } : {}), i); if (x) errs.push(x); });
+    if (errs.length) toast('Enregistré, mais à corriger avant le test : ' + errs[0]);
+    action({ action: 'campagne', id: c.id || null, nom: c.nom, dateDebut: c.dateDebut, plafondJour: c.plafondJour, setterRepli: c.setterRepli, vagues: c.vagues, etapes: c.etapes },
+      function (j) { S.camp.id = j.id; if (!errs.length) toast('Campagne enregistrée.'); charger(); });
+  } else if (a === 'camp-test') {
+    if (!window.confirm('Envoyer chaque étape de la séquence (et chaque SMS de repli) à tes coordonnées de test ?\n\nAucun lead ne reçoit rien.')) return;
+    action({ action: 'test', campagneId: S.camp.id }, function (j) {
+      toast(j.testReussi ? 'Test envoyé : vérifie ton téléphone et ta boîte mail.' : 'Test en échec : voir le détail.');
+      charger();
+    });
+  } else if (a === 'camp-preparer') {
+    action({ action: 'preparer', campagneId: S.camp.id }, function (j) { S.prep = j; S.prep.campagneId = S.camp.id; peindrePrep(); });
+  } else if (a === 'camp-lancer') {
+    var p = S.prep;
+    var saisie = window.prompt('LANCEMENT RÉEL\n\n' + p.total + ' leads vont recevoir la séquence (coût estimé ' + euros(p.cout) + ').\nLes envois commencent au jour 1 (' + ymdFr(S.camp.dateDebut) + ') à ' + S.etat.config.heureDebut + ' h.\n\nPour confirmer, tape le nombre de leads :');
+    if (saisie === null) return;
+    if (parseInt(saisie, 10) !== p.total) { toast('Nombre différent : lancement annulé.'); return; }
+    action({ action: 'lancer', campagneId: S.camp.id, nb: p.total }, function (j) { toast(j.inscrits + ' leads inscrits. Les envois partiront selon le calendrier.'); S.prep = null; charger(); });
+  } else if (a === 'camp-pause') { action({ action: 'pause', campagneId: S.camp.id }, function () { toast('Campagne en pause.'); charger(); }); }
+  else if (a === 'camp-reprendre') { action({ action: 'reprendre', campagneId: S.camp.id }, function () { toast('Campagne reprise.'); charger(); }); }
+  else if (a === 'camp-arreter') {
+    if (!window.confirm('Arrêter DÉFINITIVEMENT cette campagne ? Aucune étape restante ne partira.')) return;
+    action({ action: 'arreter', campagneId: S.camp.id }, function (j) { toast(j.arretees + ' séquences arrêtées.'); charger(); });
+  } else if (a === 'camp-dry') {
+    if (S.occupe) return;
+    occupe(true);
+    firebase.auth().currentUser.getIdToken().then(function (tk) {
+      return fetch('/api/relances-cron', { method: 'POST', headers: { 'Authorization': 'Bearer ' + tk, 'Content-Type': 'application/json' }, body: JSON.stringify({ dryRun: true }) });
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      occupe(false);
+      window.alert('Simulation du prochain passage (rien n\'est envoyé)\n\nMode test : ' + (j.modeTest ? 'oui' : 'non') + ' · Plage ouverte : ' + (j.ouvert ? 'oui' : 'non')
+        + '\nÉtapes dues : ' + (j.dues || 0) + ' · Ce passage traiterait : ' + ((j.envois || []).length) + ' · Rattrapages SMS : ' + ((j.rattrapages || []).length)
+        + (j.saute ? '\nSauté : ' + j.saute : ''));
+    }).catch(function () { occupe(false); toast('Simulation impossible.'); });
+  } else if (a === 'camp-suivi') { S.suiviId = S.camp.id; setTab('suivi'); chargerSuivi(); }
+  else if (a === 'suivi-charger') { S.suiviId = $('suCamp').value; chargerSuivi(); }
+  else if (a === 'suivi-csv') { exporterCsv(); }
+  else if (a === 'modele-soumettre') {
+    var nom = t.getAttribute('data-nom'), vid = $('mdVid_' + nom);
+    if (!window.confirm('Soumettre le modèle « ' + nom + ' » à l\'examen de Meta ?')) return;
+    action({ action: 'soumettreModele', nom: nom, videoUrl: vid ? vid.value.trim() : '' }, function () { toast('Modèle soumis à Meta : statut visible ici dès son examen.'); S.modeles = null; peindreModeles(); });
+  } else if (a === 'reglages-enregistrer') {
+    action({ action: 'config', patch: {
+      testTelephone: $('rgTel').value.trim(), testEmail: $('rgMail').value.trim(), plafondJour: $('rgPlaf').value,
+      heureDebut: $('rgDeb').value, heureFin: $('rgFin').value, setterRepli: $('rgRepli').value, emailCompte: $('rgCompte').value,
+      pauseSiQualiteRouge: $('rgQual').checked, coutWhatsapp: $('rgCw').value, coutSms: $('rgCs').value, coutEmail: $('rgCe').value
+    } }, function () { toast('Réglages enregistrés.'); charger(); });
+  } else if (a === 'mode-production') {
+    var c2 = window.prompt('PASSER EN PRODUCTION\n\nLes campagnes LANCÉES enverront réellement leurs messages aux leads.\nTape PRODUCTION pour confirmer :');
+    if (c2 !== 'PRODUCTION') { if (c2 !== null) toast('Confirmation incorrecte : rien n\'a changé.'); return; }
+    action({ action: 'config', patch: { modeTest: false }, confirmation: 'PRODUCTION' }, function () { toast('Production activée.'); charger(); });
+  } else if (a === 'mode-test') {
+    action({ action: 'config', patch: { modeTest: true } }, function () { toast('Mode test : plus aucun envoi réel.'); charger(); });
+  }
+});
+document.addEventListener('change', function (ev) {
+  var x = ev.target;
+  if (x && x.getAttribute && (x.getAttribute('data-e') === 'canal' || x.getAttribute('data-e') === 'modele')) {
+    lireCampagne();
+    if (x.getAttribute('data-e') === 'modele') {
+      var e = S.camp.etapes[+x.getAttribute('data-i')], m = modele(x.value);
+      if (e && m) e.parametres = (e.parametres && e.parametres.length >= m.variables) ? e.parametres : ['prenom', 'setter'].slice(0, Math.max(1, m.variables));
+    }
+    peindreCampEdit();
+  }
+});
+document.addEventListener('input', function (ev) {
+  var x = ev.target;
+  if (!x || !x.getAttribute) return;
+  var k = x.getAttribute('data-e');
+  var et = S.camp && S.camp.etapes ? S.camp.etapes[+x.getAttribute('data-i')] : null;
+  if ((k === 'texte' && et && et.canal === 'sms') || k === 'texteRepli') {
+    var h = x.parentNode.nextElementSibling;
+    if (h && h.className.indexOf('rl-hint') >= 0) h.outerHTML = compteurSms(x.value);
+  }
+});
+function chargerSuivi() {
+  if (!S.suiviId) { S.stats = null; peindreSuivi(); return; }
+  action({ action: 'stats', campagneId: S.suiviId }, function (j) { S.stats = j; peindreSuivi(); });
+}
+
+firebase.auth().onAuthStateChanged(function (user) {
+  if (!user) { window.location.href = 'login.html'; return; }
+  if ((localStorage.getItem('ambitio_role') || '') !== 'admin') { $('lockedView').style.display = ''; return; }
+  $('mainView').style.display = '';
+  charger();
+});
+
+})();
+</script>
+</body>
+</html>
