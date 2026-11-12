@@ -363,7 +363,7 @@ module.exports = async function (req, res) {
   catch (e) { marqueur = new RegExp(DEFAULT_MARQUEUR, 'i'); }
 
   const rapport = { ok: true, mode: dry ? 'dry' : 'apply', days: days, compte: compte, marqueur: String(marqueur),
-    source: null, destinations: null, ajoutes: [], dejaFaits: [], aClasser: [], erreurs: [], enAttente: [], aFaire: [] };
+    source: null, destinations: null, ajoutes: [], dejaFaits: [], aClasser: [], erreurs: [], enAttente: [], aFaire: [], ignoresHorsGroupe: 0 };
 
   let drive;
   let etat;
@@ -449,9 +449,12 @@ module.exports = async function (req, res) {
   let faits = 0;
   for (let n = 0; n < videos.length; n++) {
     const f = videos[n];
-    const ligne = { nom: f.name || '', fileId: f.id, cree: jourParis(f.createdTime), depuis: await nomDossier(drive, (f.parents || [])[0]) };
+    const ligne = { nom: f.name || '', fileId: f.id, cree: jourParis(f.createdTime) };
+    // Pas un coaching de groupe (coaching individuel, autre vidéo) : ignoré en
+    // silence — ni liste, ni trace, ni email (les noms de clients n'en sortent pas).
+    if (!marqueur.test(f.name || '')) { rapport.ignoresHorsGroupe += 1; continue; }
     if (Date.now() - new Date(f.createdTime).getTime() < MIN_AGE_MS) { rapport.enAttente.push(ligne); continue; }
-    if (!marqueur.test(f.name || '')) { rapport.aClasser.push(Object.assign(ligne, { raison: 'pas_marque_groupe', detail: 'nom sans la marque d\'un coaching de groupe — jamais publié' })); continue; }
+    ligne.depuis = await nomDossier(drive, (f.parents || [])[0]);
     const c = coachDuFichier(f.name, sousModules);
     if (!c.sub) { rapport.aClasser.push(Object.assign(ligne, { raison: c.raison, detail: c.candidats.join(' / ') })); continue; }
     const dest = dests.parSub[c.sub.id] || dests.global;
