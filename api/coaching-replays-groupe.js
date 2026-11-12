@@ -52,6 +52,8 @@
 //             n'écrit rien, n'envoie rien.
 //   apply=1   exécute même si enabled est faux (premier passage validé).
 //   days=<n>  fenêtre en jours (défaut 14, max 60).
+//   diag=1    lecture seule : contenu de « Meet Recordings », des dossiers des
+//             coachs et des vidéos récentes du Drive (aucune écriture).
 //
 // ─── TEST MANUEL ──────────────────────────────────────────────────────────
 //   curl -H "x-api-key: <REPLAYS_GROUPE_KEY>" \
@@ -372,6 +374,32 @@ module.exports = async function (req, res) {
     "(name = '" + SOURCE_NAME + "' or name = 'Enregistrements Meet') and mimeType = '" + FOLDER_MIME + "' and 'me' in owners and trashed = false",
     'id, name');
   rapport.source = sources.map(function (s) { return s.id; });
+
+  // Diagnostic (lecture seule) : ce que contient vraiment le Drive de coaching@.
+  if (String(q.diag || '') === '1') {
+    const vue = function (f) { return { nom: f.name, cree: f.createdTime, mime: f.mimeType, parents: f.parents || [] }; };
+    const diag = { source: [], dossiers: {}, recents: [] };
+    for (let a = 0; a < sources.length; a++) {
+      const r1 = await drive.files.list({ q: "'" + sources[a].id + "' in parents and trashed = false", orderBy: 'createdTime desc',
+        pageSize: 15, fields: 'files(id, name, mimeType, createdTime, parents)', supportsAllDrives: true, includeItemsFromAllDrives: true });
+      diag.source = diag.source.concat((r1.data.files || []).map(vue));
+    }
+    const ds = Object.keys(dests.infos);
+    for (let b = 0; b < ds.length; b++) {
+      const r2 = await drive.files.list({ q: "'" + ds[b] + "' in parents and trashed = false", orderBy: 'createdTime desc',
+        pageSize: 3, fields: 'files(id, name, mimeType, createdTime)', supportsAllDrives: true, includeItemsFromAllDrives: true });
+      diag.dossiers[(dests.infos[ds[b]] && dests.infos[ds[b]].nom) || ds[b]] = (r2.data.files || []).map(vue);
+    }
+    const r3 = await drive.files.list({ q: "mimeType contains 'video/' and trashed = false and createdTime > '" + new Date(Date.now() - 45 * 86400000).toISOString() + "'",
+      orderBy: 'createdTime desc', pageSize: 25, fields: 'files(id, name, mimeType, createdTime, parents, owners(emailAddress))',
+      supportsAllDrives: true, includeItemsFromAllDrives: true });
+    diag.recents = (r3.data.files || []).map(function (f) {
+      const v = vue(f); v.proprio = ((f.owners || [])[0] || {}).emailAddress || ''; return v;
+    });
+    rapport.diag = diag;
+    res.status(200).json(rapport);
+    return;
+  }
 
   const depuis = new Date(Date.now() - days * 86400000).toISOString();
   let videos = [];
