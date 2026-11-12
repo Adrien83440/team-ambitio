@@ -193,6 +193,10 @@
     // Scoring sociétés (30/10/2026) : solvabilité, données et documents via
     // l'API Societe.com. Données via api/scoring.js.
     { id: 'admin-scoring',     icon: '🔎', label: 'Scoring sociétés',  href: 'admin-scoring.html',     section: 'Administration', perm: '_admin' },
+    // Connexions Google (12/11/2026) : boîtes Gmail de l'équipe et accès Drive /
+    // Meet des tâches automatiques (témoignages, formations, replays closing,
+    // replays des coachings de groupe « Drive Coaching »).
+    { id: 'admin-email-auth',  icon: '🔌', label: 'Connexions Google', href: 'admin-email-auth.html',  section: 'Administration', perm: '_admin' },
     { id: 'nav-donnees', icon: '🗂️', label: 'Données', section: 'Administration', children: [
       { id: 'admin-persons',     icon: '👤', label: 'Persons',           href: 'admin-persons.html',     perm: '_admin' },
       { id: 'admin-numbers',     icon: '📞', label: 'Numéros',           href: 'admin-numbers.html',     perm: '_admin' },
