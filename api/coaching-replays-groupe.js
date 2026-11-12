@@ -53,6 +53,7 @@
 //   dry=1     lecture seule : liste ce qui serait fait. Ne déplace rien,
 //             n'écrit rien, n'envoie rien.
 //   apply=1   exécute même si enabled est faux (premier passage validé).
+//   activer=1|0  allume / éteint la tâche du matin (_config/replays_groupe.enabled).
 //   days=<n>  fenêtre en jours (défaut 14, max 60).
 //   diag=1    lecture seule : contenu de « Meet Recordings », des dossiers des
 //             coachs et des vidéos récentes du Drive (aucune écriture).
@@ -349,6 +350,14 @@ module.exports = async function (req, res) {
   let days = parseInt(q.days, 10);
   if (!Number.isFinite(days) || days <= 0) days = DEFAULT_DAYS;
   if (days > MAX_DAYS) days = MAX_DAYS;
+
+  // Bascule de la tâche du matin : ?activer=1 / ?activer=0 (appel manuel à clé).
+  if (q.activer === '1' || q.activer === '0') {
+    const on = q.activer === '1';
+    await db.doc(CFG_PATH).set({ enabled: on, enabledMaj: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    res.status(200).json({ ok: true, enabled: on });
+    return;
+  }
 
   const cfgSnap = await db.doc(CFG_PATH).get();
   const cfg = cfgSnap.exists ? (cfgSnap.data() || {}) : {};
