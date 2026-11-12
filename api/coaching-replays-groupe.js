@@ -16,8 +16,10 @@
 //
 // ─── DÉROULÉ ──────────────────────────────────────────────────────────────
 //  1. Drive de coaching@ (email_tokens/drive_coaching, scope Drive complet,
-//     connecté depuis admin-email-auth.html) : vidéos du dossier
-//     « Meet Recordings » créées dans la fenêtre (?days, défaut 14).
+//     connecté depuis admin-email-auth.html) : TOUTES les vidéos dont il est
+//     propriétaire, créées dans la fenêtre (?days, défaut 14) et pas encore
+//     dans un dossier de coach. (Constaté au diagnostic du 12/11/2026 : depuis
+//     août, les enregistrements n'arrivent plus dans « Meet Recordings ».)
 //  2. Academy (pont /api/bridge/replay-groupe, action « etat ») : les
 //     sous-modules du module replays, un par coach. Le coach se lit dans le
 //     NOM DU FICHIER Google (« … Thomas … ») : un seul sous-module doit
@@ -205,6 +207,17 @@ async function infoDossier(drive, folderId) {
     if (r.data.mimeType !== FOLDER_MIME || r.data.trashed) return null;
     return { id: r.data.id, nom: r.data.name || '', public: await estPublic(drive, folderId) };
   } catch (e) { return null; }
+}
+
+const NOMS_DOSSIERS = {};
+async function nomDossier(drive, id) {
+  if (!id) return '';
+  if (NOMS_DOSSIERS[id] !== undefined) return NOMS_DOSSIERS[id];
+  try {
+    const r = await drive.files.get({ fileId: id, fields: 'name', supportsAllDrives: true });
+    NOMS_DOSSIERS[id] = r.data.name || '';
+  } catch (e) { NOMS_DOSSIERS[id] = ''; }
+  return NOMS_DOSSIERS[id];
 }
 
 // ─── Pont Academy ─────────────────────────────────────────────────────
@@ -402,13 +415,23 @@ module.exports = async function (req, res) {
   }
 
   const depuis = new Date(Date.now() - days * 86400000).toISOString();
-  let videos = [];
-  for (let i = 0; i < sources.length; i++) {
-    const vs = await listerTout(drive,
-      "'" + sources[i].id + "' in parents and mimeType contains 'video/' and trashed = false and createdTime > '" + depuis + "'",
-      'id, name, mimeType, createdTime, parents, size');
-    videos = videos.concat(vs);
-  }
+  // Depuis l'été 2026, Google ne range plus forcément les enregistrements dans
+  // « Meet Recordings » : on cherche dans TOUT le Drive de coaching@ les vidéos
+  // dont il est propriétaire, créées dans la fenêtre. Celles déjà dans un
+  // dossier de coach sont considérées comme rangées (à la main ou par nous).
+  const dossiersCoachs = {};
+  Object.keys(dests.infos).forEach(function (id) { dossiersCoachs[id] = true; });
+  const toutes = await listerTout(drive,
+    "mimeType contains 'video/' and 'me' in owners and trashed = false and createdTime > '" + depuis + "'",
+    'id, name, mimeType, createdTime, parents, size');
+  let dejaRanges = 0;
+  let videos = toutes.filter(function (f) {
+    const dedans = (f.parents || []).some(function (p) { return dossiersCoachs[p]; });
+    if (dedans) dejaRanges += 1;
+    return !dedans;
+  });
+  rapport.videosVues = toutes.length;
+  rapport.dejaDansUnDossierDeCoach = dejaRanges;
   // Reprise : vidéos déjà déplacées mais pas encore ajoutées (passage interrompu).
   if (!dry) {
     const enSuspens = await db.collection(TRACE).where('etat', 'in', ['en_cours', 'deplace', 'erreur']).limit(30).get();
@@ -426,7 +449,7 @@ module.exports = async function (req, res) {
   let faits = 0;
   for (let n = 0; n < videos.length; n++) {
     const f = videos[n];
-    const ligne = { nom: f.name || '', fileId: f.id, cree: jourParis(f.createdTime) };
+    const ligne = { nom: f.name || '', fileId: f.id, cree: jourParis(f.createdTime), depuis: await nomDossier(drive, (f.parents || [])[0]) };
     if (Date.now() - new Date(f.createdTime).getTime() < MIN_AGE_MS) { rapport.enAttente.push(ligne); continue; }
     if (!marqueur.test(f.name || '')) { rapport.aClasser.push(Object.assign(ligne, { raison: 'pas_marque_groupe', detail: 'nom sans la marque d\'un coaching de groupe — jamais publié' })); continue; }
     const c = coachDuFichier(f.name, sousModules);
