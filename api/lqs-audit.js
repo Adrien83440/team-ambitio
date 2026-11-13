@@ -99,6 +99,22 @@ module.exports = async (req, res) => {
         })
       };
     });
+    /* part=pts : total de points de chaque lead (calibrage des seuils) —
+       [points, rdv, présent, closé], et les points en vigueur par réponse. */
+    if (q.part === 'pts') {
+      const qs = {};
+      Object.keys(grid.questions || {}).forEach(function (k) {
+        const g = grid.questions[k], a = {};
+        Object.keys(g.answers || {}).forEach(function (ak) { const x = g.answers[ak]; if (x.pts || x.ko) a[String(x.label).slice(0, 60)] = x.ko ? 'KO' : x.pts; });
+        if (g.off || Object.keys(a).length) qs[String(g.label).slice(0, 80)] = g.off ? 'ignorée' : a;
+      });
+      res.status(200).json({
+        ok: true, from: from, to: to, leads: rows.length, gridSaved: !!D.gridRaw, updatedBy: (D.gridRaw && D.gridRaw.updatedBy) ? 'oui' : null,
+        thresholds: grid.thresholds, points: qs,
+        rows: M.rows.map(function (r) { return [r.pts, r.booked ? 1 : 0, r.present ? 1 : 0, r.closed ? 1 : 0, r.ko ? 1 : 0]; })
+      });
+      return;
+    }
     /* part=summary : synthèse calculée ici (une ligne par réponse, puis
        les seuls leads présents avec l'analyse de leur visio). */
     if (q.part === 'summary') {
