@@ -33,7 +33,8 @@
     loadedKey: null, loading: false, err: null, bound: false,
     view: 'overview', closer: '', cashMode: 'cohorte', axis: 'campaign',
     crMode: 'period', leadsNote: 'all', leadsQ: '', leadsLimit: 150,
-    openQ: {}, openLead: {}, openDetail: {}, quizVer: '', quizCompare: false, quizLatest: true, formsOpen: false, saving: false
+    openQ: {}, openLead: {}, openDetail: {}, quizVer: '', quizCompare: false, quizLatest: true, formsOpen: false, saving: false,
+    exporting: false, exportBusy: ''
   };
 
   /* ══ FORMATS ══════════════════════════════════════════════════════════ */
@@ -171,6 +172,7 @@
     h += '</select>';
     h += '<div class="fn-seg" title="Base du cash"><button data-lq-cash="cohorte" class="' + (S.cashMode === 'cohorte' ? 'active' : '') + '" title="Signé et encaissé à ce jour par les leads entrés dans la période : juge la qualité des leads">💶 Cash des leads de la période</button>'
       + '<button data-lq-cash="periode" class="' + (S.cashMode === 'periode' ? 'active' : '') + '" title="Signé = closes datés dans la période ; encaissé = prélèvements passés pendant la période, quel que soit le mois d\'entrée du lead">🏦 Signé / encaissé sur la période</button></div>';
+    h += '<button class="fn-btn primary" data-lq-export' + (S.M && !S.exportBusy ? '' : ' disabled') + ' title="Tous les onglets + le dossier nominatif de chaque lead de la période (questionnaire, issue, transcription de la visio de closing)">' + (S.exportBusy ? esc(S.exportBusy) : '📄 Export PDF complet') + '</button>';
     h += '</div></div>';
     if (S.draft) h += '<div class="fn-alert lq-draft">✏️ Barème modifié, non enregistré : tous les chiffres affichés utilisent déjà le barème en cours d\'édition. <a href="#" data-lq-go="grid">Ouvrir le barème</a></div>';
     return h;
@@ -197,6 +199,30 @@
   function cashOf(a) { return S.cashMode === 'periode' ? a.periodCon : a.con; }    // SIGNÉ
   function paidOf(a) { return S.cashMode === 'periode' ? a.periodCash : a.cash; }   // ENCAISSÉ
   function closesOf(a) { return S.cashMode === 'periode' ? a.signers : a.closes; }
+
+  /* Chiffre cliquable → dossiers nominatifs (lqs-dossier.js). kind :
+     leads | booked | present | closed ; note : 0-5 ou 'all'. */
+  function drill(n, note, kind) {
+    if (!n || !window.LqsDossier) return fNum(n);
+    return '<a href="#" class="lq-drill" data-lq-drill="' + kind + '" data-lq-dn="' + note + '" title="Voir les ' + fNum(n) + ' prospects, leurs réponses et leurs visios">' + fNum(n) + '</a>';
+  }
+  var DRILL_LBL = { leads: 'Leads', booked: 'RDV pris', present: 'Présents au RDV', closed: 'Closés' };
+  function drillRows(note, kind) {
+    return rows().filter(function (r) {
+      if (note !== 'all' && String(r.note == null ? 0 : r.note) !== String(note)) return false;
+      if (kind === 'booked') return r.booked;
+      if (kind === 'present') return r.present;
+      if (kind === 'closed') return r.closed;
+      return true;
+    });
+  }
+  function openDrill(note, kind) {
+    window.LqsDossier.open({
+      title: DRILL_LBL[kind] + (note === 'all' ? ' — toutes les notes' : (String(note) === '0' ? ' — non notés' : ' — note LQS ' + note)),
+      sub: S.closer ? 'leads de ' + S.M.memberName(S.closer) : 'toute l\'équipe',
+      periodLabel: S.ctx.periodLabel || '', rows: drillRows(note, kind)
+    });
+  }
 
   function viewOverview() {
     var R = rows();
@@ -238,10 +264,10 @@
       var c = cashOf(a), share = totCash > 0 ? c / totCash * 100 : null;
       var cl = closesOf(a);
       body += '<tr><td class="l">' + noteBadge(k || null) + ' <span class="lq-nl">' + NOTE_LBL[k] + '</span></td>'
-        + '<td>' + fNum(a.leads) + '</td><td>' + fPct(t.leads ? a.leads / t.leads * 100 : null, 0) + '</td>'
-        + '<td>' + fNum(a.booked) + sub(fPct(a.bookRate, 0)) + '</td>'
-        + '<td>' + fNum(a.present) + sub(fPct(a.showRate, 0) + ' des RDV') + '</td>'
-        + '<td><strong>' + fNum(cl) + '</strong></td>'
+        + '<td>' + drill(a.leads, k, 'leads') + '</td><td>' + fPct(t.leads ? a.leads / t.leads * 100 : null, 0) + '</td>'
+        + '<td>' + drill(a.booked, k, 'booked') + sub(fPct(a.bookRate, 0)) + '</td>'
+        + '<td>' + drill(a.present, k, 'present') + sub(fPct(a.showRate, 0) + ' des RDV') + '</td>'
+        + '<td><strong>' + (S.cashMode === 'periode' ? fNum(cl) : drill(cl, k, 'closed')) + '</strong></td>'
         + '<td>' + (a.closes ? fNum(a.closesE) + ' / ' + fNum(a.closesB) + (a.closesU ? sub(fNum(a.closesU) + ' sans offre') : '') : '—') + '</td>'
         + '<td>' + fPct(a.closePresent, 0) + '</td><td>' + fPct(a.closeRdv, 0) + '</td>'
         + '<td>' + money(c, paidOf(a)) + '</td>'
@@ -249,10 +275,11 @@
         + '<td>' + fEur(cl ? c / cl : null) + '</td><td>' + fEur(a.leads ? c / a.leads : null) + '</td>'
         + '<td>' + (a.teamAvg != null ? '★ ' + fDec(a.teamAvg, 1) : '—') + '</td></tr>';
     });
-    body += '<tr class="tot"><td class="l">Total</td><td>' + fNum(t.leads) + '</td><td>100 %</td><td>' + fNum(t.booked) + sub(fPct(t.bookRate, 0)) + '</td><td>' + fNum(t.present) + sub(fPct(t.showRate, 0) + ' des RDV') + '</td>'
-      + '<td>' + fNum(closesOf(t)) + '</td><td>' + (t.closes ? fNum(t.closesE) + ' / ' + fNum(t.closesB) + (t.closesU ? sub(fNum(t.closesU) + ' sans offre') : '') : '—') + '</td><td>' + fPct(t.closePresent, 0) + '</td><td>' + fPct(t.closeRdv, 0) + '</td><td>' + money(totCash, paidOf(t)) + '</td><td class="l"></td>'
+    body += '<tr class="tot"><td class="l">Total</td><td>' + drill(t.leads, 'all', 'leads') + '</td><td>100 %</td><td>' + drill(t.booked, 'all', 'booked') + sub(fPct(t.bookRate, 0)) + '</td><td>' + drill(t.present, 'all', 'present') + sub(fPct(t.showRate, 0) + ' des RDV') + '</td>'
+      + '<td>' + (S.cashMode === 'periode' ? fNum(closesOf(t)) : drill(closesOf(t), 'all', 'closed')) + '</td><td>' + (t.closes ? fNum(t.closesE) + ' / ' + fNum(t.closesB) + (t.closesU ? sub(fNum(t.closesU) + ' sans offre') : '') : '—') + '</td><td>' + fPct(t.closePresent, 0) + '</td><td>' + fPct(t.closeRdv, 0) + '</td><td>' + money(totCash, paidOf(t)) + '</td><td class="l"></td>'
       + '<td>' + fEur(closesOf(t) ? totCash / closesOf(t) : null) + '</td><td>' + fEur(t.leads ? totCash / t.leads : null) + '</td><td>' + (t.teamAvg != null ? '★ ' + fDec(t.teamAvg, 1) : '—') + '</td></tr>';
     body += '</tbody></table></div>';
+    body += '<div class="fn-stage-note" style="margin-top:8px">👆 Clique un chiffre (leads, RDV pris, présents, closes) pour voir les prospects concernés par leur nom, leur questionnaire, leur issue et la transcription de leur visio de closing — et les exporter en PDF.</div>';
     body += '<div class="fn-stage-note" style="margin-top:8px">' + (S.cashMode === 'periode'
       ? 'Mode « signé / encaissé sur la période » : leads / RDV / présents = leads entrés dans la période ; signé = closes datés dans la période (RDV de close, sinon date client) ; encaissé = prélèvements réellement passés pendant la période ; les deux rangés selon la note du lead, quel que soit son mois d\'entrée.'
       : 'Leads entrés dans la période (ré-optins compris) · RDV et closes suivis jusqu\'à aujourd\'hui · signé = contrat HT du close · encaissé = prélèvements réellement passés (HT) · closes annulés exclus.') + '</div>';
@@ -665,7 +692,7 @@
     var gateDone = false;
     view.cards.forEach(function (c) {
       var key = view.versionKey + '|' + (c.q || c.label);
-      var open = !!S.openDetail[key];
+      var open = S.exporting || !!S.openDetail[key];
       h += '<div class="lq-step' + (c.hot ? ' hot' : '') + (c.diag ? ' diag' : '') + '">' + stepHead(c);
       if (cmp) h += compareTable(c, cmp);
       else {
@@ -735,7 +762,7 @@
   function stripStep(v, l, s) { return '<div class="lq-strip-step"><div class="v">' + v + '</div><div class="l">' + l + '</div><div class="s">' + (s || '&nbsp;') + '</div></div>'; }
 
   function questionCard(q, tot) {
-    var open = !!S.openQ[q.q];
+    var open = S.exporting || !!S.openQ[q.q];
     var best = null, worst = null;
     q.answerList.forEach(function (x) {
       if (x.agg.leads < LC.SUGGEST_MIN || x.agg.conPerLead == null) return;
@@ -894,8 +921,9 @@
     [['all', 'Toutes'], ['5', '5'], ['4', '4'], ['3', '3'], ['2', '2'], ['1', '1'], ['0', 'Non notés']].forEach(function (x) {
       h += '<button data-lq-ln="' + x[0] + '" class="' + (S.leadsNote === x[0] ? 'active' : '') + '">' + x[1] + ' <span class="lq-muted">' + counts[x[0]] + '</span></button>';
     });
-    h += '</div><div class="fn-lt-search"><input type="text" data-lq-search placeholder="Nom, email, source, closer…" value="' + esc(S.leadsQ) + '"></div></div>';
-    var shown = list.slice(0, S.leadsLimit);
+    h += '</div><div class="fn-lt-search"><input type="text" data-lq-search placeholder="Nom, email, source, closer…" value="' + esc(S.leadsQ) + '"></div>'
+      + (window.LqsDossier ? '<button class="fn-btn" data-lq-drill="leads" data-lq-dn="' + (S.leadsNote === 'all' ? 'all' : S.leadsNote) + '">📂 Dossiers complets (questionnaires + visios) · PDF</button>' : '') + '</div>';
+    var shown = S.exporting ? list : list.slice(0, S.leadsLimit);
     h += '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr><th class="l">Lead</th><th>Entrée</th><th class="l">Source</th><th>LQS</th><th>Points</th><th title="Curseur ★ de l\'équipe (Leads Live)">★ équipe</th><th class="l">Parcours</th><th class="l">Closer</th><th title="Signé HT, encaissé dessous">Signé · encaissé</th></tr></thead><tbody>';
     shown.forEach(function (r) {
       var l = r.lead, open = !!S.openLead[r.id];
@@ -972,7 +1000,7 @@
     var body = '';
     if (!ba.questions.length) body = '<div class="lq-muted">Aucune réponse sur les leads de la période : élargis la période pour voir les questions à noter.</div>';
     ba.questions.forEach(function (q) {
-      var open = S.openQ['g_' + q.q] !== false;
+      var open = S.exporting || S.openQ['g_' + q.q] !== false;
       body += '<div class="lq-qcard' + (q.off ? ' off' : '') + '"><div class="lq-qhead" data-lq-q="g_' + esc(q.q) + '"><span class="lq-caret">' + (open ? '▾' : '▸') + '</span><span class="lq-qt">' + esc(q.label) + '</span>'
         + '<span class="fn-tbadge ' + (q.origin === 'quiz' ? 'lq-tq' : 'lq-tf') + '">' + (q.origin === 'quiz' ? 'Quiz' : 'Formulaire') + '</span>'
         + '<label class="lq-off" data-lq-stop><input type="checkbox" data-lq-qoff="' + esc(q.q) + '" data-lq-ql="' + esc(q.label) + '"' + (q.off ? '' : ' checked') + '> compter cette question</label>'
@@ -1039,6 +1067,54 @@
     toast(n ? n + ' réponse(s) ajustée(s) selon les résultats — vérifie puis enregistre' : 'Aucune suggestion à appliquer');
   }
 
+  /* ══ EXPORT PDF COMPLET (13/11/2026) ═══════════════════════════════════
+     Tous les onglets tels qu'affichés (tout déplié, toutes les lignes) pour
+     la période et les filtres en cours, puis le dossier nominatif de CHAQUE
+     lead de la période : questionnaire, note, issue, transcription de la
+     visio de closing. Impression du navigateur → « Enregistrer en PDF ». */
+  function section(title, html) { return '<section class="lqp-sec"><h1 class="lqp-h1">' + title + '</h1>' + html + '</section>'; }
+  function exportAll() {
+    if (!S.M || S.exportBusy || !window.LqsDossier) return;
+    var LD = window.LqsDossier;
+    var R = LD.sortRows(rows());
+    S.exportBusy = 'Préparation…'; render();
+    LD.loadTranscripts(R, function (d, n) {
+      S.exportBusy = n ? 'Transcriptions ' + d + ' / ' + n + '…' : 'Préparation…';
+      var b = S.mount.querySelector('[data-lq-export]');
+      if (b) b.textContent = S.exportBusy;
+    }).then(function (nTr) {
+      var keep = { view: S.view, axis: S.axis, closer: S.closer, compare: S.quizCompare };
+      var html = '';
+      S.exporting = true;
+      try {
+        html += LD.coverHtml('Qualité des leads — export complet', [
+          'Période : ' + (S.ctx.periodLabel || '—') + (S.closer ? ' · leads de ' + S.M.memberName(S.closer) : ' · toute l\'équipe')
+            + (S.ctx.tunnelFilter && S.ctx.tunnelFilter !== 'all' ? ' · tunnel ' + S.ctx.tunnelFilter : ''),
+          R.length + ' leads · ' + nTr + ' transcription' + (nTr > 1 ? 's' : '') + ' de visio · exporté le ' + new Date().toLocaleDateString('fr-FR'),
+          'Contenu : vue d\'ensemble, quiz & réponses, marketing (campagne, adset, créa, canal), closers, barème, liste des leads notés, puis un dossier par lead (questionnaire, note, issue, transcription).'
+        ]);
+        html += section('🧭 Vue d\'ensemble', viewOverview());
+        S.quizCompare = false;
+        html += section('📋 Quiz & réponses', viewQuiz());
+        AXES.forEach(function (a) { S.axis = a[0]; html += section('📣 Marketing (MQS) — par ' + a[1].toLowerCase(), viewMarketing()); });
+        S.axis = keep.axis;
+        html += section('🎯 Closers', viewClosers());
+        if (!keep.closer) S.M.closers.forEach(function (c) { S.closer = c.slug; html += section('🎯 Closer — ' + esc(c.name), viewClosers()); });
+        S.closer = keep.closer;
+        html += section('⚙️ Barème', viewGrid());
+        html += section('👥 Leads notés', viewLeads());
+        html += '<section class="lqp-sec"><h1 class="lqp-h1">📂 Dossiers par prospect (' + R.length + ')</h1>' + LD.dossiersHtml(R) + '</section>';
+      } catch (err) {
+        if (window.console) console.error('[lqs] export', err);
+        toast('Export impossible : ' + (err && err.message ? err.message : 'erreur'), true);
+        html = '';
+      }
+      S.exporting = false; S.view = keep.view; S.axis = keep.axis; S.closer = keep.closer; S.quizCompare = keep.compare;
+      S.exportBusy = ''; render();
+      if (html) LD.print('Qualité des leads — ' + (S.ctx.periodLabel || ''), html);
+    });
+  }
+
   /* ══ ÉVÉNEMENTS (délégation sur le conteneur de l'onglet) ══════════════ */
   function closest(el, sel) { return el && el.closest ? el.closest(sel) : null; }
   function bind() {
@@ -1054,6 +1130,8 @@
       if ((el = closest(t, '[data-lq-ver]'))) { S.quizVer = el.getAttribute('data-lq-ver'); if (S.quizVer) S.quizCompare = false; render(); return; }
       if (closest(t, '[data-lq-compare]')) { S.quizCompare = !S.quizCompare; render(); return; }
       if (closest(t, '[data-lq-latest]')) { S.quizLatest = !S.quizLatest; render(); return; }
+      if ((el = closest(t, '[data-lq-drill]'))) { e.preventDefault(); openDrill(el.getAttribute('data-lq-dn'), el.getAttribute('data-lq-drill')); return; }
+      if (closest(t, '[data-lq-export]')) { exportAll(); return; }
       if ((el = closest(t, '[data-lq-det]'))) { var k1 = el.getAttribute('data-lq-det'); S.openDetail[k1] = !S.openDetail[k1]; render(); return; }
       if (closest(t, '[data-lq-forms]')) { e.preventDefault(); S.formsOpen = !S.formsOpen; render(); return; }
       if ((el = closest(t, '[data-lq-q]'))) {

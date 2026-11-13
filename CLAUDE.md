@@ -394,6 +394,15 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   visite `tunnel_visits` (`vid` de session). Une même campagne Meta peut mener à deux quiz : ne
   jamais attribuer une campagne à une page sans les utm de `tunnel_stats_daily.sources`.
 
+  **Dossiers par prospect + export PDF (13/11/2026)** : `lqs-dossier.js`. Dans la vue d'ensemble, les
+  chiffres Leads / RDV pris / Présents / Closes (par note et total) sont cliquables → liste NOMINATIVE,
+  chaque nom se déplie : questionnaire complet (`LqsCore.questionnaireOf`), points LQS, issue (closé,
+  offre, signé, encaissé), appels de vente (`row.calls`) avec résumé, analyse IA et transcription de la
+  visio Meet, lue à la demande par `GET /api/replay-closing?action=get` (admin ; `replay_transcript`
+  n'a pas de règle navigateur). Un appel sans replay importé est signalé, jamais remplacé. Bouton
+  « 📄 Export PDF complet » : tous les onglets dépliés (`S.exporting`) + un dossier par lead de la
+  période, via l'impression du navigateur (`#lqPrint`, CSS `@media print` de `sales-funnel.html`, A4
+  paysage). Admin seul, aucune écriture.
 
 - **Relances (12/11/2026)** : `admin-relances.html` (admin seul, Marketing → 🔁), segment de leads →
   séquence WhatsApp / SMS / e-mail → réponses, RDV, ventes. Règles partagées `relances-core.js`

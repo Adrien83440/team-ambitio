@@ -126,6 +126,52 @@
     return out;
   }
 
+  /* Questionnaire COMPLET d'une fiche, tel que rempli (dossiers + export
+     PDF) : toutes les questions du quiz dans l'ordre, puis ses résultats
+     (score, piliers), puis les réponses de formulaire. Rien n'est filtré
+     par longueur ; seuls les champs de contact sont écartés. */
+  function questionnaireOf(l) {
+    var out = [], seen = {};
+    function push(q, a, kind) {
+      if (a == null) return;
+      if (Array.isArray(a)) a = a.filter(function (x) { return x != null && x !== ''; }).join(' · ');
+      if (typeof a === 'object') return;
+      var v = String(a).replace(/\s+/g, ' ').trim();
+      var qq = String(q == null ? '' : q).replace(/\s+/g, ' ').trim();
+      if (!v || !qq) return;
+      var k = keyOf(qq) + '|' + keyOf(v);
+      if (seen[k]) return;
+      seen[k] = 1;
+      out.push({ q: qq, a: v, kind: kind });
+    }
+    var qz = l && l.quiz;
+    if (qz && typeof qz === 'object') {
+      var vals = {};
+      (Array.isArray(qz.reponses) ? qz.reponses : []).forEach(function (r) {
+        if (!r || !r.question) return;
+        push(r.question, r.reponse, 'quiz');
+        vals[keyOf(Array.isArray(r.reponse) ? r.reponse.join(', ') : r.reponse)] = 1;
+      });
+      QUIZ_NAMED.forEach(function (n) {
+        var v = qz[n.f];
+        if (v == null || v === '' || vals[keyOf(v)]) return;
+        push(n.label, v, n.f === 'pilier_prioritaire' ? 'resultat' : 'quiz');
+      });
+      if (qz.score_global != null && qz.score_global !== '') push('Score du diagnostic', qz.score_global + ' %', 'resultat');
+      if (qz.scores && typeof qz.scores === 'object') Object.keys(qz.scores).forEach(function (k) {
+        if (qz.scores[k] != null && qz.scores[k] !== '') push('Score « ' + k + ' »', qz.scores[k] + ' %', 'resultat');
+      });
+      if (qz.pilier_prioritaire) push('Pilier prioritaire (diagnostic)', qz.pilier_prioritaire, 'resultat');
+    }
+    (Array.isArray(l && l.formAnswers) ? l.formAnswers : []).forEach(function (fa) {
+      if (!fa) return;
+      var lbl = fa.label || fa.fieldId;
+      if (!lbl || CONTACT_RE.test(norm(lbl))) return;
+      push(lbl, fa.value, 'form');
+    });
+    return out;
+  }
+
   /* ══ 2. BARÈME PAR DÉFAUT ══════════════════════════════════════════════
      Points proposés tant qu'un admin n'a pas noté une réponse. Seules les
      questions dont la réponse se LIT sans ambiguïté sont notées d'office :
@@ -585,6 +631,19 @@
       });
       if (!pick && heads.length) pick = terminal(heads[heads.length - 1]);
       if (pick) { r.closer = closerOf(pick); r.rdvDate = pick.date || null; }
+      /* Appels de vente de la fiche (dossiers + export PDF, 13/11/2026) :
+         tous ses RDV de vente, du plus ancien au plus récent, avec l'état du
+         replay Meet (transcription lue à la demande par api/replay-closing). */
+      r.calls = (bkByLead[l._id] || []).slice().sort(function (a, b) {
+        return String(a.date || '').localeCompare(String(b.date || '')) || String(a.time || '').localeCompare(String(b.time || ''));
+      }).map(function (b) {
+        var rp = b.replay || {}, cs = closerOf(b);
+        return { id: b._id, date: b.date || null, time: b.time || null, outcome: ocOf(b), status: b.status || null,
+          present: ocPresent(b), noshow: ocNoShow(b), cancelled: ocCancelled(b),
+          closerName: cs ? memberName(cs) : null,
+          replay: rp.status || null, replayReason: rp.reason || null,
+          summary: rp.summary || '', analysis: rp.analysis || null, durationSec: rp.durationSec || null };
+      });
       var csMs = FC.parseFlexMs(l.clientSince);
       var pays = FC.revPaymentsFor(payIdx, l._id, String(l.email || '').toLowerCase().trim(), l.telephone || l.phone);
       /* 08/11/2026 : un paiement rattaché à UNE fiche (leadId) n'est plus
@@ -1999,7 +2058,7 @@
     DEFAULT_THRESHOLDS: DEFAULT_THRESHOLDS, NOTE_KEYS: NOTE_KEYS,
     SUGGEST_MIN: SUGGEST_MIN, MQS_MIN: MQS_MIN,
     norm: norm, keyOf: keyOf, amounts: amounts, monthlyCa: monthlyCa,
-    extractAnswers: extractAnswers, defaultPoints: defaultPoints,
+    extractAnswers: extractAnswers, questionnaireOf: questionnaireOf, defaultPoints: defaultPoints,
     normalizeGrid: normalizeGrid, ruleFor: ruleFor, noteFromPoints: noteFromPoints, scoreAnswers: scoreAnswers,
     loadAll: loadAll, buildModel: buildModel,
     byNote: byNote, byAnswer: byAnswer, byAxis: byAxis, byCloser: byCloser, closerBoard: closerBoard,
