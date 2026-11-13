@@ -96,6 +96,38 @@ module.exports = async (req, res) => {
         })
       };
     });
+    /* part=summary : synthèse calculée ici (une ligne par réponse, puis
+       les seuls leads présents avec l'analyse de leur visio). */
+    if (q.part === 'summary') {
+      const ba = LC.byAnswer(M.rows, grid);
+      const A = function (a) { return [a.leads, a.booked, a.present, a.closes, Math.round(a.con || 0)]; };
+      const noteAgg = {};
+      M.rows.forEach(function (r) {
+        const k = r.note == null ? 0 : r.note;
+        const x = noteAgg[k] || (noteAgg[k] = { leads: 0, booked: 0, present: 0, closes: 0, con: 0 });
+        x.leads++; if (r.booked) x.booked++; if (r.present) x.present++; if (r.closed) { x.closes++; x.con += Math.round(r.con || 0); }
+      });
+      res.status(200).json({
+        ok: true, from: from, to: to, leads: rows.length, truncated: !!M.leadsTruncated,
+        cols: 'leads, rdv, presents, closes, signe',
+        total: A(ba.total), byNote: noteAgg,
+        thresholds: grid.thresholds, gridSaved: !!D.gridRaw,
+        questions: ba.questions.filter(function (qq) { return qq.agg.leads >= 8; }).map(function (qq) {
+          return { q: qq.q, label: String(qq.label).slice(0, 110), o: qq.origin, off: !!qq.off, t: A(qq.agg),
+            a: qq.answerList.filter(function (x) { return x.agg.leads >= 3; }).slice(0, 14).map(function (x) {
+              return [String(x.label).slice(0, 70), x.pts, x.known ? 1 : 0].concat(A(x.agg));
+            }) };
+        }),
+        presents: rows.filter(function (r) { return r.present; }).map(function (r) {
+          const c = r.calls.filter(function (x) { return x.analysis; }).pop();
+          return { n: r.note, p: r.pts, cl: r.closed ? 1 : 0, of: r.offer, con: r.con,
+            oc: r.calls.map(function (x) { return x.outcome; }).join(','),
+            an: c ? { sc: c.analysis.score, fr: c.analysis.freins.slice(0, 3).map(function (t) { return t.slice(0, 110); }),
+              ob: c.analysis.objections.map(function (o) { return o.category + (o.worked ? '+' : '-'); }).join(' ') } : null };
+        })
+      });
+      return;
+    }
     /* part=calls : seulement les leads présents (analyse des visios) ;
        part=answers : tous les leads, sans les appels (réponses ↔ résultats). */
     let out = rows;
