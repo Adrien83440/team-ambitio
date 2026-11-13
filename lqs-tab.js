@@ -969,6 +969,26 @@
     if (!q.answers[ak]) q.answers[ak] = { label: aLabel, pts: LC.defaultPoints(qk, qLabel, aLabel), ko: false };
     return q.answers[ak];
   }
+  /* Partie « vivante » du barème (répartition + boutons) : mise à jour seule
+     quand on change un point, pour ne pas recharger tout l'onglet — sinon
+     chaque clic sur une flèche faisait perdre la position et le champ. */
+  function gridLive() {
+    var dist = [0, 0, 0, 0, 0, 0];
+    S.M.rows.forEach(function (r) { dist[r.note == null ? 0 : r.note]++; });
+    var st = '<div class="lq-preview">' + distBar(dist) + '<div class="lq-preview-l">';
+    [5, 4, 3, 2, 1, 0].forEach(function (k) { st += '<span>' + noteBadge(k || null) + ' ' + fNum(dist[k]) + '</span>'; });
+    st += '</div></div>';
+    st += '<div class="lq-actions"><button class="fn-btn" data-lq-sugg-all>✨ Appliquer toutes les suggestions</button>'
+      + '<button class="fn-btn" data-lq-reset' + (S.draft ? '' : ' disabled') + '>↺ Annuler les modifications</button>'
+      + '<button class="fn-btn primary" data-lq-save' + (S.draft && !S.saving ? '' : ' disabled') + '>' + (S.saving ? 'Enregistrement…' : '💾 Enregistrer le barème') + '</button>'
+      + '<span class="lq-muted">' + (S.draft ? '✏️ Modifications non enregistrées' : (S.grid && S.grid.updatedBy ? 'Dernier enregistrement : ' + esc(S.grid.updatedBy) : 'Barème jamais enregistré : points par défaut')) + '</span></div>';
+    return st;
+  }
+  function refreshGridLive() {
+    var el = S.mount && S.mount.querySelector('[data-lq-gridlive]');
+    if (el) el.innerHTML = gridLive(); else render();
+  }
+
   function viewGrid() {
     var g = activeGrid();
     var allRows = S.M.rows;   // barème : toute l'équipe, sans filtre closer
@@ -985,16 +1005,10 @@
     [['n5', 5], ['n4', 4], ['n3', 3], ['n2', 2]].forEach(function (x) {
       st += '<label>' + noteBadge(x[1]) + ' si total ≥ <input type="number" step="0.5" data-lq-th="' + x[0] + '" value="' + esc(th[x[0]]) + '"> pts</label>';
     });
-    st += '<label>' + noteBadge(1) + ' sinon</label></div>';
-    st += '<div class="lq-preview">' + distBar(dist) + '<div class="lq-preview-l">';
-    [5, 4, 3, 2, 1, 0].forEach(function (k) { st += '<span>' + noteBadge(k || null) + ' ' + fNum(dist[k]) + '</span>'; });
-    st += '</div></div>';
-    st += '<div class="lq-actions"><button class="fn-btn" data-lq-sugg-all>✨ Appliquer toutes les suggestions</button>'
-      + '<button class="fn-btn" data-lq-reset' + (S.draft ? '' : ' disabled') + '>↺ Annuler les modifications</button>'
-      + '<button class="fn-btn primary" data-lq-save' + (S.draft && !S.saving ? '' : ' disabled') + '>' + (S.saving ? 'Enregistrement…' : '💾 Enregistrer le barème') + '</button>'
-      + '<span class="lq-muted">' + (S.grid && S.grid.updatedBy ? 'Dernier enregistrement : ' + esc(S.grid.updatedBy) : 'Barème jamais enregistré : points par défaut') + '</span></div>';
-    var basis = LC.suggestBasis(ba.total);
-    st += '<div class="fn-stage-note" style="margin-top:8px">Suggestions calculées sur : <strong>' + (basis === 'cash' ? 'le montant signé par lead' : (basis === 'present' ? 'les RDV honorés par lead (pas assez de closes sur la période)' : 'rien — trop peu de données sur la période, élargis-la')) + '</strong>.</div>';
+    st += '<label>' + noteBadge(1) + ' sinon</label>'
+      + '<button class="fn-btn" data-lq-calib title="Recalcule les 4 seuils d\'après les points en cours : 15 % de 5, 25 % de 4, 30 % de 3, 20 % de 2, 10 % de 1">🎯 Recalculer les seuils sur ces points</button></div>';
+    st += '<div data-lq-gridlive>' + gridLive() + '</div>';
+    st += '<div class="fn-stage-note" style="margin-top:8px">Colonne « Suggestion » : <strong>recommandation de l\'audit du 13/11/2026</strong> (tout l\'historique : 362 leads, 54 présents, 7 closes, et les freins entendus en visio) quand elle existe ; sinon le calcul sur la période affichée, seulement s\'il y a au moins 8 closes.</div>';
     h += card('🎚️ Seuils et répartition (aperçu en direct)', 'leads de la période, toute l\'équipe', st);
 
     var body = '';
@@ -1012,7 +1026,7 @@
           var id = esc(q.q) + '" data-lq-a="' + esc(x.a) + '" data-lq-ql="' + esc(q.label) + '" data-lq-al="' + esc(x.label);
           body += '<tr><td class="l">' + esc(x.label) + (x.known ? '' : ' <span class="fn-tbadge lq-tf" title="Réponse jamais revue : points par défaut">nouveau</span>') + '</td>'
             + '<td>' + fNum(x.agg.leads) + '</td><td>' + fPct(x.agg.closeLead, 1) + '</td><td>' + fEur(x.agg.conPerLead) + '</td>'
-            + '<td>' + (x.suggest == null ? '<span class="lq-muted" title="Moins de ' + LC.SUGGEST_MIN + ' leads">—</span>' : '<button class="fn-ig-detbtn" data-lq-sugg="' + id + '" data-lq-v="' + x.suggest + '" title="Appliquer">' + fPts(x.suggest) + '</button>') + '</td>'
+            + '<td>' + (x.suggest == null ? '<span class="lq-muted" title="Pas de recommandation pour cette réponse">—</span>' : '<button class="fn-ig-detbtn" data-lq-sugg="' + id + '" data-lq-v="' + x.suggest + '" title="' + (x.suggestSrc === 'audit' ? 'Recommandation de l\'audit (tout l\'historique) — cliquer pour appliquer' : 'Calcul sur la période — cliquer pour appliquer') + '">' + fPts(x.suggest) + (x.suggestSrc === 'audit' ? ' ★' : '') + '</button>') + '</td>'
             + '<td><input class="lq-in' + (x.known ? '' : ' def') + '" type="number" step="0.5" data-lq-pts="' + id + '" value="' + esc(x.pts) + '"></td>'
             + '<td><input type="checkbox" data-lq-ko="' + id + '"' + (x.ko ? ' checked' : '') + '></td></tr>';
         });
@@ -1153,9 +1167,19 @@
       if ((el = closest(t, '[data-lq-sugg]'))) {
         var a = draftAnswer(el.getAttribute('data-lq-sugg'), el.getAttribute('data-lq-ql'), el.getAttribute('data-lq-a'), el.getAttribute('data-lq-al'));
         a.pts = Number(el.getAttribute('data-lq-v')) || 0;
-        S.stamp++; rebuild(); render(); return;
+        var tr = closest(el, 'tr'), inp = tr ? tr.querySelector('[data-lq-pts]') : null;
+        if (inp) { inp.value = a.pts; inp.classList.remove('def'); }
+        S.stamp++; rebuild(); refreshGridLive(); return;
       }
       if (closest(t, '[data-lq-sugg-all]')) { applyAllSuggestions(); return; }
+      if (closest(t, '[data-lq-calib]')) {
+        var th2 = LC.calibrateThresholds(S.M.rows);
+        if (!th2) { toast('Pas assez de leads notés sur la période pour recalculer (10 minimum)', true); return; }
+        ensureDraft().thresholds = th2;
+        S.stamp++; rebuild(); render();
+        toast('Seuils recalculés : 5 dès ' + th2.n5 + ' · 4 dès ' + th2.n4 + ' · 3 dès ' + th2.n3 + ' · 2 dès ' + th2.n2 + ' — vérifie puis enregistre');
+        return;
+      }
       if (closest(t, '[data-lq-reset]')) { S.draft = null; S.stamp++; rebuild(); render(); toast('Modifications annulées'); return; }
       if (closest(t, '[data-lq-save]')) { saveGrid(); return; }
     });
@@ -1166,12 +1190,13 @@
         var a = draftAnswer(t.getAttribute('data-lq-pts'), t.getAttribute('data-lq-ql'), t.getAttribute('data-lq-a'), t.getAttribute('data-lq-al'));
         var v = parseFloat(String(t.value).replace(',', '.'));
         a.pts = isFinite(v) ? Math.max(-10, Math.min(10, v)) : 0;
-        S.stamp++; rebuild(); render(); return;
+        t.classList.remove('def');
+        S.stamp++; rebuild(); refreshGridLive(); return;
       }
       if (t.hasAttribute('data-lq-ko')) {
         var a2 = draftAnswer(t.getAttribute('data-lq-ko'), t.getAttribute('data-lq-ql'), t.getAttribute('data-lq-a'), t.getAttribute('data-lq-al'));
         a2.ko = !!t.checked;
-        S.stamp++; rebuild(); render(); return;
+        S.stamp++; rebuild(); refreshGridLive(); return;
       }
       if (t.hasAttribute('data-lq-qoff')) {
         var d = ensureDraft(), qk = t.getAttribute('data-lq-qoff');
@@ -1182,7 +1207,7 @@
       if (t.hasAttribute('data-lq-th')) {
         var d2 = ensureDraft(), v2 = parseFloat(String(t.value).replace(',', '.'));
         if (isFinite(v2)) d2.thresholds[t.getAttribute('data-lq-th')] = v2;
-        S.stamp++; rebuild(); render(); return;
+        S.stamp++; rebuild(); refreshGridLive(); return;
       }
     });
     var searchTimer = null;

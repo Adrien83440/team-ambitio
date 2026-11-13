@@ -231,6 +231,9 @@
   function closePrint() {
     if (!PR) return;
     if (PR.bar.parentNode) PR.bar.parentNode.removeChild(PR.bar);
+    /* L'adresse du document reste valable une minute après la fermeture de
+       la barre, le temps que l'onglet ouvert finisse de se charger. */
+    if (PR.url) { var u = PR.url; setTimeout(function () { try { URL.revokeObjectURL(u); } catch (e) {} }, 60000); }
     PR = null;
   }
   function pageCss() {
@@ -264,36 +267,30 @@
       + '<script>document.getElementById("lqpBtn").onclick=function(){window.print();};window.addEventListener("load",function(){setTimeout(function(){try{window.print();}catch(e){}},600);});<\/script>'
       + '</body></html>';
   }
-  function openDoc() {
-    if (!PR) return;
-    var w = null;
-    try { w = window.open('', '_blank'); } catch (e) { w = null; }
-    if (!w) {
-      /* Fenêtres bloquées : le document est proposé en fichier à ouvrir. */
-      try {
-        var blob = new Blob([standaloneDoc(PR.title, PR.html)], { type: 'text/html;charset=utf-8' });
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = PR.title.replace(/[^\w\u00C0-\u017F -]+/g, ' ').replace(/\s+/g, ' ').trim() + '.html';
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      } catch (e2) { if (window.console) console.error('[lqs-dossier] export', e2); }
-      return;
-    }
-    w.document.open();
-    w.document.write(standaloneDoc(PR.title, PR.html));
-    w.document.close();
-  }
+  /* La barre propose de VRAIS LIENS (pas un script) vers le document, posé
+     dans un fichier en mémoire (blob) : un clic sur un lien n'est jamais
+     bloqué par le navigateur, contrairement à une fenêtre ouverte par code
+     (constaté en production le 13/11/2026 : rien ne s'ouvrait). Deux liens :
+     ouvrir dans un nouvel onglet (qui lance l'impression), ou télécharger le
+     fichier pour l'ouvrir et l'imprimer depuis n'importe quel navigateur. */
   function print(title, html) {
     closePrint();
+    var url = null;
+    try { url = URL.createObjectURL(new Blob([standaloneDoc(title, html)], { type: 'text/html;charset=utf-8' })); } catch (e) { url = null; }
+    var file = title.replace(/[^\w\u00C0-\u017F -]+/g, ' ').replace(/\s+/g, ' ').trim() + '.html';
     var bar = document.createElement('div');
     bar.className = 'lqd-ready';
-    bar.innerHTML = '<div class="lqd-ready-in"><div><strong>📄 Document prêt</strong><div class="lqd-muted">Il s\'ouvre dans un nouvel onglet, avec la fenêtre d\'impression : choisis « Enregistrer au format PDF ».</div></div>'
-      + '<div class="lqd-actions"><button class="fn-btn primary" data-lqd-print>📄 Ouvrir et enregistrer en PDF</button><button class="fn-btn" data-lqd-print-close>✕ Fermer</button></div></div>';
+    bar.innerHTML = '<div class="lqd-ready-in"><div><strong>📄 Document prêt</strong><div class="lqd-muted">'
+      + (url ? 'Il s\'ouvre dans un nouvel onglet avec la fenêtre d\'impression : choisis « Enregistrer au format PDF ». Si rien ne s\'ouvre, télécharge le fichier et ouvre-le.'
+        : 'Ce navigateur ne permet pas de préparer le document.') + '</div></div>'
+      + '<div class="lqd-actions">'
+      + (url ? '<a class="fn-btn primary" href="' + url + '" target="_blank" rel="noopener" data-lqd-open>📄 Ouvrir et enregistrer en PDF</a>'
+          + '<a class="fn-btn" href="' + url + '" download="' + esc(file) + '">⬇ Télécharger le fichier</a>' : '')
+      + '<button class="fn-btn" data-lqd-print-close>✕ Fermer</button></div></div>';
     document.body.appendChild(bar);
-    PR = { bar: bar, title: title, html: html };
+    PR = { bar: bar, url: url };
     bar.addEventListener('click', function (e) {
-      if (e.target.closest('[data-lqd-print-close]')) { closePrint(); return; }
-      if (e.target.closest('[data-lqd-print]')) openDoc();
+      if (e.target.closest('[data-lqd-print-close]')) closePrint();
     });
   }
   function coverHtml(title, lines) {
