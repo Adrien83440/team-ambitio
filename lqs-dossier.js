@@ -219,32 +219,41 @@
      Le document à imprimer est posé dans #lqPrint, seul élément visible à
      l'impression (body.lq-printing). Les couleurs d'impression (encre noire
      sur blanc, A4 paysage) sont dans le CSS @media print de la page. */
+  /* Safari refuse window.print() hors d'un geste de l'utilisateur (ici le
+     document n'est prêt qu'après le chargement des transcriptions) : on
+     prépare le document, puis une barre « Document prêt » propose le bouton
+     qui ouvre l'impression — c'est CE clic qui appelle print(), de façon
+     synchrone. Le document reste en place tant que la barre est ouverte
+     (Safari émet afterprint trop tôt pour s'y fier). */
+  var PR = null;
+  function closePrint() {
+    if (!PR) return;
+    document.body.classList.remove('lq-printing');
+    document.title = PR.oldTitle;
+    if (PR.box.parentNode) PR.box.parentNode.removeChild(PR.box);
+    if (PR.bar.parentNode) PR.bar.parentNode.removeChild(PR.bar);
+    PR = null;
+  }
   function print(title, html) {
+    closePrint();
     var old = document.getElementById('lqPrint');
     if (old) old.parentNode.removeChild(old);
     var box = document.createElement('div');
     box.id = 'lqPrint';
     box.innerHTML = html;
     document.body.appendChild(box);
-    var oldTitle = document.title;
+    var bar = document.createElement('div');
+    bar.className = 'lqd-ready';
+    bar.innerHTML = '<div class="lqd-ready-in"><div><strong>📄 Document prêt</strong><div class="lqd-muted">Dans la fenêtre d\'impression, choisis « Enregistrer au format PDF » (sur iPad : Partager → Enregistrer dans Fichiers).</div></div>'
+      + '<div class="lqd-actions"><button class="fn-btn primary" data-lqd-print>📄 Enregistrer en PDF</button><button class="fn-btn" data-lqd-print-close>✕ Fermer</button></div></div>';
+    document.body.appendChild(bar);
+    PR = { box: box, bar: bar, oldTitle: document.title };
     document.body.classList.add('lq-printing');
     document.title = title;
-    var cleaned = false;
-    function cleanup() {
-      if (cleaned) return;
-      cleaned = true;
-      document.body.classList.remove('lq-printing');
-      document.title = oldTitle;
-      if (box.parentNode) box.parentNode.removeChild(box);
-      window.removeEventListener('afterprint', cleanup);
-    }
-    window.addEventListener('afterprint', cleanup);
-    setTimeout(function () {
-      try { window.print(); } catch (e) { cleanup(); }
-      /* Safari iOS ne déclenche pas toujours afterprint : filet de sécurité
-         au prochain retour sur la page. */
-      setTimeout(function () { window.addEventListener('focus', function f() { window.removeEventListener('focus', f); setTimeout(cleanup, 500); }); }, 1000);
-    }, 150);
+    bar.addEventListener('click', function (e) {
+      if (e.target.closest('[data-lqd-print-close]')) { closePrint(); return; }
+      if (e.target.closest('[data-lqd-print]')) { try { window.print(); } catch (err) { if (window.console) console.error('[lqs-dossier] print', err); } }
+    });
   }
   function coverHtml(title, lines) {
     return '<div class="lqd-cover"><div class="lqd-cover-k">Alteore · Qualité des leads</div><h1>' + esc(title) + '</h1>'
@@ -345,7 +354,7 @@
   }
 
   window.LqsDossier = {
-    open: open, close: close, loadTranscripts: loadTranscripts, dossiersHtml: dossiersHtml,
+    open: open, close: close, closePrint: closePrint, loadTranscripts: loadTranscripts, dossiersHtml: dossiersHtml,
     sortRows: sortRows, print: print, coverHtml: coverHtml, nameOf: nameOf, statusOf: statusOf
   };
 })();
