@@ -68,7 +68,10 @@ module.exports = async (req, res) => {
     const typeMap = await FC.loadTypeMap(db);
     const team = await FC.loadTeamMembers(db);
     const D = await LC.loadAll(db, { P: P, typeMap: typeMap });
-    const grid = LC.normalizeGrid(D.gridRaw);
+    /* grid=<JSON base64url> : simule un barème candidat (rien n'est enregistré). */
+    let gridRaw = D.gridRaw, simulated = false;
+    if (q.grid) { gridRaw = JSON.parse(Buffer.from(String(q.grid), 'base64url').toString('utf8')); simulated = true; }
+    const grid = LC.normalizeGrid(gridRaw);
     const M = LC.buildModel(D, { P: P, grid: grid, gridStamp: 1, teamMembers: team, tunnelFilter: 'all', sourceFilter: 'all' });
     const compact = q.compact === '1';
 
@@ -111,14 +114,14 @@ module.exports = async (req, res) => {
         ok: true, from: from, to: to, leads: rows.length, truncated: !!M.leadsTruncated,
         cols: 'leads, rdv, presents, closes, signe',
         total: A(ba.total), byNote: noteAgg,
-        thresholds: grid.thresholds, gridSaved: !!D.gridRaw,
-        questions: ba.questions.filter(function (qq) { return qq.agg.leads >= 8; }).map(function (qq) {
+        thresholds: grid.thresholds, gridSaved: !!D.gridRaw, simulated: simulated,
+        questions: q.lite === '1' ? undefined : ba.questions.filter(function (qq) { return qq.agg.leads >= 8; }).map(function (qq) {
           return { q: qq.q, label: String(qq.label).slice(0, 110), o: qq.origin, off: !!qq.off, t: A(qq.agg),
             a: qq.answerList.filter(function (x) { return x.agg.leads >= 3; }).slice(0, 14).map(function (x) {
               return [String(x.label).slice(0, 70), x.pts, x.known ? 1 : 0].concat(A(x.agg));
             }) };
         }),
-        presents: rows.filter(function (r) { return r.present; }).map(function (r) {
+        presents: q.lite === '1' ? rows.filter(function (r) { return r.present; }).map(function (r) { return [r.note, r.pts, r.closed ? 1 : 0, r.con]; }) : rows.filter(function (r) { return r.present; }).map(function (r) {
           const c = r.calls.filter(function (x) { return x.analysis; }).pop();
           return { n: r.note, p: r.pts, cl: r.closed ? 1 : 0, of: r.offer, con: r.con,
             oc: r.calls.map(function (x) { return x.outcome; }).join(','),

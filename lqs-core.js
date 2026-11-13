@@ -206,6 +206,14 @@
 
   function defaultPoints(qKey, qLabel, aLabel) {
     var qn = norm(qLabel) + ' ' + qKey, an = norm(aLabel);
+    /* Réponse sur une échelle (« 3/5 ») : jamais de points par défaut. Les
+       règles ci-dessous lisent des montants et des effectifs ; appliquées à
+       une échelle, elles donnaient le même bonus ou malus à TOUTES les
+       réponses de la question (audit du 13/11/2026 : +1 partout sur « mes
+       salariés viennent me voir », −2 partout sur « mon CA dépend de moi »
+       et « depuis combien de temps votre CA plafonne »). */
+    if (/^\d+ ?\/ ?\d+$/.test(an)) return 0;
+    if (/depuis combien de temps|depuis quand/.test(qn)) return 0;
     if (/pas (le|les) moyens|pas d.?argent|aucun budget|cherche du gratuit/.test(an)) return -2;
     if (/\bca\b|chiffre d.?affaires|ca_mensuel|fa_ca\b|fa_ca_/.test(qn)) {
       var m = monthlyCa(aLabel, qn);
