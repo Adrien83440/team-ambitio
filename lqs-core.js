@@ -206,6 +206,14 @@
 
   function defaultPoints(qKey, qLabel, aLabel) {
     var qn = norm(qLabel) + ' ' + qKey, an = norm(aLabel);
+    /* Réponse sur une échelle (« 3/5 ») : jamais de points par défaut. Les
+       règles ci-dessous lisent des montants et des effectifs ; appliquées à
+       une échelle, elles donnaient le même bonus ou malus à TOUTES les
+       réponses de la question (audit du 13/11/2026 : +1 partout sur « mes
+       salariés viennent me voir », −2 partout sur « mon CA dépend de moi »
+       et « depuis combien de temps votre CA plafonne »). */
+    if (/^\d+ ?\/ ?\d+$/.test(an)) return 0;
+    if (/depuis combien de temps|depuis quand/.test(qn)) return 0;
     if (/pas (le|les) moyens|pas d.?argent|aucun budget|cherche du gratuit/.test(an)) return -2;
     if (/\bca\b|chiffre d.?affaires|ca_mensuel|fa_ca\b|fa_ca_/.test(qn)) {
       var m = monthlyCa(aLabel, qn);
@@ -832,7 +840,11 @@
         x.ko = !!rule.ko;
         x.known = !!rule.known;
         x.def = defaultPoints(k, q.label, x.label);
-        x.suggest = suggestPoints(x.agg, tot);
+        /* Suggestion : la recommandation d'audit d'abord ; à défaut, le
+           calcul sur la période, seulement s'il y a assez de closes. */
+        x.reco = recoPoints(k, q.label, x.label);
+        x.suggest = x.reco != null ? x.reco : suggestPoints(x.agg, tot);
+        x.suggestSrc = x.reco != null ? 'audit' : (x.suggest != null ? 'periode' : null);
         x.share = q.agg.leads ? x.agg.leads / q.agg.leads * 100 : null;
         return x;
       }).sort(function (a, b) { return b.agg.leads - a.agg.leads; });
@@ -849,10 +861,80 @@
      Rien sous 5 leads : trois closes ne font pas une tendance. */
   var SUGGEST_MIN = 5;
   var SUGGEST_MIN_CLOSES = 8, SUGGEST_MIN_PRESENT = 10, SUGGEST_PRIOR = 10;
+  /* Le repli « RDV honorés » est retiré (13/11/2026) : sur un mois, il
+     proposait l'inverse de ce que montre l'historique. Sans assez de closes
+     sur la période, seule la recommandation d'audit (recoPoints) s'affiche. */
   function suggestBasis(tot) {
     if (tot.closes >= SUGGEST_MIN_CLOSES && tot.con > 0) return 'cash';
-    if (tot.present >= SUGGEST_MIN_PRESENT) return 'present';
     return null;
+  }
+
+  /* ── Recommandation d'audit (13/11/2026) ──────────────────────────────
+     Points recommandés d'après TOUT l'historique du 25/09 au 13/11/2026 :
+     362 leads, 105 RDV, 54 présents, 7 closes, 54 000 € signés, et les
+     freins entendus dans 27 visios de closing. Ce qui ressort : le profil
+     qui close est à 20-100 k€ / mois, travaille 50 h et plus, et son
+     entreprise ne tourne pas sans lui (mauvais score au diagnostic) ; les
+     CA au-delà de 100 k€ prennent des RDV mais viennent peu et n'ont rien
+     signé. 7 closes : une tendance, à revoir quand il y en aura 20.
+     null = pas de recommandation pour cette réponse. */
+  function recoPoints(qKey, qLabel, aLabel) {
+    var qn = norm(qLabel), an = norm(aLabel), k = String(qKey || '');
+    var scale = an.match(/^(\d) ?\/ ?5$/);
+    if (k === 'quiz_ca_mensuel' || /chiffre d.?affaires mensuel actuel/.test(qn)) {
+      var m = monthlyCa(aLabel, qn + ' ' + k);
+      if (m == null) return null;
+      return m < 20000 ? -0.5 : (m < 50000 ? 2 : (m < 100000 ? 1.5 : (m < 200000 ? 0.5 : 0)));
+    }
+    if (k === 'quiz_heures') {
+      var hs = amounts(an);
+      if (!hs.length) return null;
+      var hMax = Math.max.apply(null, hs), hMin = Math.min.apply(null, hs);
+      var h = /plus de/.test(an) ? hMax + 5 : (/moins de/.test(an) ? hMax - 5 : (hMin + hMax) / 2);
+      return h >= 50 ? 1 : (h >= 40 ? -0.5 : -1);
+    }
+    if (k === 'quiz_score_global') {
+      var g = parseInt(an, 10);
+      if (isNaN(g)) return null;
+      return g < 25 ? 1.5 : (g < 50 ? 0.5 : (g < 75 ? -1 : -1.5));
+    }
+    if (k === 'quiz_equipe') {
+      if (/seul|aucune/.test(an)) return -0.5;
+      var n = maxCount(an);
+      if (n == null) return null;
+      return n <= 3 ? 0 : (n <= 10 ? 1 : 0);
+    }
+    var yes = /^oui\b/.test(an), no = /^non\b/.test(an);
+    if (/nouveau salarie.*autonome/.test(qn)) return no ? 1 : (yes ? -1 : null);
+    if (/quelle marge/.test(qn)) return no ? 0.5 : (yes ? -0.5 : null);
+    if (/quel levier actionner/.test(qn) && /augmenter votre chiffre/.test(qn)) return no ? 0.5 : (yes ? 0 : null);
+    if (/absorbe la charge/.test(qn) && scale) return +scale[1] >= 4 ? 0.5 : -0.5;
+    if (/mal dormir/.test(qn) && scale) return +scale[1] === 5 ? 0.5 : (+scale[1] <= 2 ? -0.5 : 0);
+    if (/pese le plus/.test(qn)) {
+      if (/noye dans l.?operationnel/.test(an)) return 1;
+      if (/avale ma vie/.test(an)) return -0.5;
+      return 0;
+    }
+    return null;
+  }
+
+  /* Seuils recalculés sur les points EN COURS : on vise une répartition
+     lisible des leads notés — 15 % de 5, 25 % de 4, 30 % de 3, 20 % de 2,
+     10 % de 1 — en prenant les quantiles du total de points (arrondis au
+     demi-point, strictement décroissants). Les leads éliminés (⛔) et non
+     notés ne comptent pas. */
+  function calibrateThresholds(rows) {
+    var pts = [];
+    (rows || []).forEach(function (r) { if (r.pts != null && !r.ko) pts.push(r.pts); });
+    if (pts.length < 10) return null;
+    pts.sort(function (a, b) { return a - b; });
+    function qt(p) { return pts[Math.min(pts.length - 1, Math.max(0, Math.ceil(p * pts.length) - 1))]; }
+    function up(v) { return Math.ceil(v * 2) / 2; }
+    var t = { n5: up(qt(0.85) + 0.01), n4: up(qt(0.60) + 0.01), n3: up(qt(0.30) + 0.01), n2: up(qt(0.10) + 0.01) };
+    if (t.n4 >= t.n5) t.n4 = t.n5 - 0.5;
+    if (t.n3 >= t.n4) t.n3 = t.n4 - 0.5;
+    if (t.n2 >= t.n3) t.n2 = t.n3 - 0.5;
+    return t;
   }
   function suggestPoints(a, tot) {
     if (!a || a.leads < SUGGEST_MIN) return null;
@@ -2062,7 +2144,7 @@
     normalizeGrid: normalizeGrid, ruleFor: ruleFor, noteFromPoints: noteFromPoints, scoreAnswers: scoreAnswers,
     loadAll: loadAll, buildModel: buildModel,
     byNote: byNote, byAnswer: byAnswer, byAxis: byAxis, byCloser: byCloser, closerBoard: closerBoard,
-    suggestPoints: suggestPoints, suggestBasis: suggestBasis,
+    suggestPoints: suggestPoints, suggestBasis: suggestBasis, recoPoints: recoPoints, calibrateThresholds: calibrateThresholds,
     quizVersions: quizVersions, buildQuizView: buildQuizView, versionMeta: versionMeta, OLD_QUIZ_KEY: OLD_KEY, FAMILY_PREFIX: FAM, familyOfKey: familyOfKey, mqsOf: mqsOf, buildQuizFunnel: buildQuizFunnel, insights: insights,
     newAgg: newAgg, offerOf: offerOf, addLeadRow: addLeadRow, fin: fin, isoDay: isoDay,
     quizOverview: quizOverview, parisIso: parisIso, quizChecks: quizChecks, qualityByPage: qualityByPage
