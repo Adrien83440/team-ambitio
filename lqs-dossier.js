@@ -219,40 +219,81 @@
      Le document à imprimer est posé dans #lqPrint, seul élément visible à
      l'impression (body.lq-printing). Les couleurs d'impression (encre noire
      sur blanc, A4 paysage) sont dans le CSS @media print de la page. */
-  /* Safari refuse window.print() hors d'un geste de l'utilisateur (ici le
-     document n'est prêt qu'après le chargement des transcriptions) : on
-     prépare le document, puis une barre « Document prêt » propose le bouton
-     qui ouvre l'impression — c'est CE clic qui appelle print(), de façon
-     synchrone. Le document reste en place tant que la barre est ouverte
-     (Safari émet afterprint trop tôt pour s'y fier). */
+  /* Le document s'ouvre dans un NOUVEL ONGLET autonome, qui s'imprime
+     lui-même (même procédé que sign-certificate.html). Deux raisons, vues
+     en production le 13/11/2026 sous Safari : window.print() est ignoré
+     hors d'un geste de l'utilisateur, et il est mis en attente tant que la
+     page a un chargement en cours — or cette page garde une connexion
+     Firestore ouverte en permanence. D'où : une barre « Document prêt »
+     (le clic ouvre l'onglet), et un document sans aucune connexion.
+     L'onglet garde aussi un bouton d'impression et se relit à l'écran. */
   var PR = null;
   function closePrint() {
     if (!PR) return;
-    document.body.classList.remove('lq-printing');
-    document.title = PR.oldTitle;
-    if (PR.box.parentNode) PR.box.parentNode.removeChild(PR.box);
     if (PR.bar.parentNode) PR.bar.parentNode.removeChild(PR.bar);
     PR = null;
   }
+  function pageCss() {
+    var css = '', links = '';
+    Array.prototype.forEach.call(document.querySelectorAll('link[rel="stylesheet"]'), function (l) {
+      if (l.href && /sales\.css/.test(l.href)) links += '<link rel="stylesheet" href="' + esc(l.href) + '">';
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('style'), function (st) {
+      var t = st.textContent || '';
+      if (t.indexOf('lqd-doc') >= 0 || t.indexOf('.fn-igt') >= 0) css += t + '\n';
+    });
+    return links + '<style>' + css.replace(/<\/style/gi, '') + '</style>';
+  }
+  /* À l'écran, l'onglet montre le document comme il sortira (encre noire). */
+  var SCREEN_CSS = '@media screen{html,body{background:#fff !important;margin:0;padding:0}'
+    + 'body.lq-printing #lqPrint{display:block !important;padding:64px 28px 40px;color:#111;font-size:12px;font-family:Helvetica,Arial,sans-serif;'
+    + '--text:#111;--muted:#444;--muted2:#6b7280;--bg:#fff;--bg2:#fff;--bg3:#f6f7f9;--bg4:#e9ebf0;--border:#d5d8e0;--border2:#b4b9c6;--blue:#1d4ed8;--green:#047857;--gold:#92400e;--red2:#b91c1c;--red3:#b91c1c}'
+    + '#lqPrint button,#lqPrint .fn-seg,#lqPrint .fn-help,#lqPrint select,#lqPrint input,#lqPrint .lq-head,#lqPrint .fn-lt-toolbar,#lqPrint .lq-actions,#lqPrint .lq-draft{display:none !important}'
+    + '#lqPrint .lqp-sec{margin-top:36px;padding-top:20px;border-top:3px solid #111}#lqPrint .lqp-h1{font-size:22px;margin:0 0 14px}'
+    + '#lqPrint .lqd-doc{margin-top:28px;padding-top:14px;border-top:1px solid #999}#lqPrint .lqd-doc-h{font-size:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 6px}'
+    + '#lqPrint .lqd-cover h1{font-size:30px;margin:8px 0 18px}#lqPrint .lqd-cover p{font-size:13px;margin:6px 0}'
+    + '#lqPrint .fn-table-wrap{overflow:visible}#lqPrint th{position:static !important}'
+    + '.lqp-bar{position:fixed;top:0;left:0;right:0;z-index:10;background:#111;color:#fff;padding:10px 18px;display:flex;gap:14px;align-items:center;font:14px Helvetica,Arial,sans-serif}'
+    + '.lqp-bar button{font:600 14px Helvetica,Arial,sans-serif;padding:8px 16px;border-radius:8px;border:0;background:#3b82f6;color:#fff;cursor:pointer}'
+    + '.lqp-bar span{opacity:.75;font-size:12.5px}}';
+  function standaloneDoc(title, html) {
+    return '<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + esc(title) + '</title>'
+      + pageCss() + '<style>' + SCREEN_CSS + '</style></head><body class="lq-printing">'
+      + '<div class="lqp-bar"><button id="lqpBtn">📄 Imprimer / Enregistrer en PDF</button><span>Dans la fenêtre d\'impression : « Enregistrer au format PDF ». Si elle ne s\'ouvre pas : menu Fichier → Imprimer (⌘P), ou Fichier → Exporter au format PDF.</span></div>'
+      + '<div id="lqPrint">' + html + '</div>'
+      + '<script>document.getElementById("lqpBtn").onclick=function(){window.print();};window.addEventListener("load",function(){setTimeout(function(){try{window.print();}catch(e){}},600);});<\/script>'
+      + '</body></html>';
+  }
+  function openDoc() {
+    if (!PR) return;
+    var w = null;
+    try { w = window.open('', '_blank'); } catch (e) { w = null; }
+    if (!w) {
+      /* Fenêtres bloquées : le document est proposé en fichier à ouvrir. */
+      try {
+        var blob = new Blob([standaloneDoc(PR.title, PR.html)], { type: 'text/html;charset=utf-8' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = PR.title.replace(/[^\w\u00C0-\u017F -]+/g, ' ').replace(/\s+/g, ' ').trim() + '.html';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      } catch (e2) { if (window.console) console.error('[lqs-dossier] export', e2); }
+      return;
+    }
+    w.document.open();
+    w.document.write(standaloneDoc(PR.title, PR.html));
+    w.document.close();
+  }
   function print(title, html) {
     closePrint();
-    var old = document.getElementById('lqPrint');
-    if (old) old.parentNode.removeChild(old);
-    var box = document.createElement('div');
-    box.id = 'lqPrint';
-    box.innerHTML = html;
-    document.body.appendChild(box);
     var bar = document.createElement('div');
     bar.className = 'lqd-ready';
-    bar.innerHTML = '<div class="lqd-ready-in"><div><strong>📄 Document prêt</strong><div class="lqd-muted">Dans la fenêtre d\'impression, choisis « Enregistrer au format PDF » (sur iPad : Partager → Enregistrer dans Fichiers).</div></div>'
-      + '<div class="lqd-actions"><button class="fn-btn primary" data-lqd-print>📄 Enregistrer en PDF</button><button class="fn-btn" data-lqd-print-close>✕ Fermer</button></div></div>';
+    bar.innerHTML = '<div class="lqd-ready-in"><div><strong>📄 Document prêt</strong><div class="lqd-muted">Il s\'ouvre dans un nouvel onglet, avec la fenêtre d\'impression : choisis « Enregistrer au format PDF ».</div></div>'
+      + '<div class="lqd-actions"><button class="fn-btn primary" data-lqd-print>📄 Ouvrir et enregistrer en PDF</button><button class="fn-btn" data-lqd-print-close>✕ Fermer</button></div></div>';
     document.body.appendChild(bar);
-    PR = { box: box, bar: bar, oldTitle: document.title };
-    document.body.classList.add('lq-printing');
-    document.title = title;
+    PR = { bar: bar, title: title, html: html };
     bar.addEventListener('click', function (e) {
       if (e.target.closest('[data-lqd-print-close]')) { closePrint(); return; }
-      if (e.target.closest('[data-lqd-print]')) { try { window.print(); } catch (err) { if (window.console) console.error('[lqs-dossier] print', err); } }
+      if (e.target.closest('[data-lqd-print]')) openDoc();
     });
   }
   function coverHtml(title, lines) {

@@ -401,8 +401,10 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   visio Meet, lue à la demande par `GET /api/replay-closing?action=get` (admin ; `replay_transcript`
   n'a pas de règle navigateur). Un appel sans replay importé est signalé, jamais remplacé. Bouton
   « 📄 Export PDF complet » : tous les onglets dépliés (`S.exporting`) + un dossier par lead de la
-  période, via l'impression du navigateur (`#lqPrint`, CSS `@media print` de `sales-funnel.html`, A4
-  paysage). Admin seul, aucune écriture.
+  période. Le document s'ouvre dans un NOUVEL ONGLET autonome qui s'imprime lui-même (`#lqPrint`, CSS
+  `@media print` de `sales-funnel.html` recopié, A4 paysage) : sous Safari, `window.print()` reste en
+  attente sur une page qui garde une connexion Firestore ouverte — ne jamais imprimer depuis la page.
+  Admin seul, aucune écriture.
 
 - **Relances (12/11/2026)** : `admin-relances.html` (admin seul, Marketing → 🔁), segment de leads →
   séquence WhatsApp / SMS / e-mail → réponses, RDV, ventes. Règles partagées `relances-core.js`
