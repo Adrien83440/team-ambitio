@@ -79,6 +79,17 @@
 .rl-step-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
 .rl-step-h b{font-size:13px}
 .rl-prev{white-space:pre-wrap;font-size:12.5px;line-height:1.55;background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:9px 11px;margin-top:6px}
+.rl-wa{margin-top:10px;padding:14px;border-radius:12px;background:#e9e2d8;display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.rl-wa-t{font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:#6b6257}
+.rl-wa-bulle{background:#fff;color:#111b21;border-radius:10px;box-shadow:0 1px 1px rgba(0,0,0,.12);width:100%;max-width:360px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif}
+.rl-wa-media{display:block;width:100%;max-height:220px;background:#000;object-fit:cover}
+.rl-wa-manque{padding:28px 12px;text-align:center;background:#f3d2d2;color:#9b1c1c;font-size:12.5px;font-weight:700}
+.rl-wa-corps{padding:8px 10px 4px;font-size:14px;line-height:1.42;white-space:pre-wrap;word-wrap:break-word}
+.rl-wa-pied{padding:0 10px 6px;font-size:12px;color:#667781}
+.rl-wa-h{padding:0 10px 6px;text-align:right;font-size:11px;color:#667781}
+.rl-wa-btn{display:block;border-top:1px solid #e9edef;padding:10px;text-align:center;color:#027eb5;font-size:14px;font-weight:600}
+.rl-wa-btn small{display:block;font-size:10.5px;font-weight:500;color:#667781;margin-top:2px;word-break:break-all}
+.rl-wa-sms{background:#e9e9eb;color:#111;border-radius:16px;padding:9px 12px;max-width:360px;font-size:14px;line-height:1.4;white-space:pre-wrap;word-wrap:break-word;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif}
 .rl-hint{font-size:11.5px;color:var(--muted);font-weight:600;margin-top:3px}
 .rl-hint.ko{color:#f87171}
 .rl-tag{display:inline-block;padding:2px 7px;border-radius:6px;font-size:10.5px;font-weight:800;border:1px solid var(--border2)}
@@ -354,6 +365,64 @@ function optionsSetters(sel, vide) {
   (S.etat.setters || []).forEach(function (m) { h += '<option value="' + esc(m.slug) + '"' + (m.slug === sel ? ' selected' : '') + '>' + esc(m.nom) + (m.lien ? ' (lien ✓)' : ' (pas de lien)') + '</option>'; });
   return h;
 }
+/* ── Aperçu « tel que reçu » ─────────────────────────────────────────────
+   Le modèle approuvé chez Meta, rempli avec un exemple (prénom, setter),
+   la vidéo jouable, les boutons et leur destination réelle. Le test
+   « M'envoyer un test » reste la vérification définitive sur un vrai
+   téléphone. */
+function exemple() {
+  if (!S.exemple) S.exemple = { prenom: 'Julie', setter: ((S.etat.setters || [])[0] || {}).nom || 'Anthony' };
+  return S.exemple;
+}
+function formatWa(t) {
+  return esc(t).replace(/\*([^*\n]+)\*/g, '<b>$1</b>').replace(/(^|\s)_([^_\n]+)_/g, '$1<i>$2</i>').replace(/~([^~\n]+)~/g, '<s>$1</s>');
+}
+function destinationRdv() {
+  return S.camp && S.camp.lienRdv === 'setter' ? 'lien de réservation du setter assigné' : 'réservation publique (Self Booking)';
+}
+function apercuWhatsapp(e, m, i) {
+  var ex = exemple(), vals = {};
+  (e.parametres || []).forEach(function (k, j) { vals[j + 1] = ex[k] || ''; });
+  for (var j = 1; j <= m.variables; j++) if (!vals[j]) vals[j] = ex.prenom;
+  var corps = String(m.corps || '').replace(/\{\{(\d+)\}\}/g, function (x, n) { return vals[+n] || x; });
+  var h = '<div class="rl-wa" id="waPrev_' + i + '"><span class="rl-wa-t">Aperçu — tel que ' + esc(ex.prenom) + ' le recevra sur WhatsApp</span><div class="rl-wa-bulle">';
+  if (m.enteteFormat === 'VIDEO') {
+    h += /^https:\/\//.test(String(e.videoUrl || ''))
+      ? '<video class="rl-wa-media" src="' + esc(e.videoUrl) + '" controls preload="metadata" playsinline></video>'
+      : '<div class="rl-wa-manque">🎬 Vidéo manquante : colle l\'URL https de la vidéo ci-dessus.<br>Sans elle, Meta refuse l\'envoi.</div>';
+  } else if (m.enteteFormat === 'IMAGE') {
+    h += /^https:\/\//.test(String(e.videoUrl || '')) ? '<img class="rl-wa-media" alt="" src="' + esc(e.videoUrl) + '">' : '<div class="rl-wa-manque">🖼 Image manquante</div>';
+  } else if (m.entete) h += '<div class="rl-wa-corps" style="font-weight:700;padding-bottom:0">' + formatWa(m.entete) + '</div>';
+  h += '<div class="rl-wa-corps">' + formatWa(corps) + '</div>';
+  if (m.pied) h += '<div class="rl-wa-pied">' + esc(m.pied) + '</div>';
+  h += '<div class="rl-wa-h">' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + '</div>';
+  (m.boutons || []).forEach(function (b) {
+    if (b.type === 'URL') {
+      h += '<span class="rl-wa-btn">↗ ' + esc(b.texte) + '<small>→ ' + (b.dynamique ? 'team.alteore.com/r/… : ' + esc(destinationRdv()) : esc(b.url)) + '</small></span>';
+    } else if (b.type === 'QUICK_REPLY') {
+      h += '<span class="rl-wa-btn">↩ ' + esc(b.texte) + '<small>' + (/int[ée]ress/i.test(b.texte) ? '→ arrête tout : pas_interesse + exclusion définitive' : '→ réponse enregistrée sur la fiche') + '</small></span>';
+    } else h += '<span class="rl-wa-btn">' + esc(b.texte) + '</span>';
+  });
+  return h + '</div></div>';
+}
+function apercuSms(t, i) {
+  var ex = exemple();
+  var txt = String(t || '').trim() ? C.remplir(t, { prenom: ex.prenom, setter: ex.setter, lien_rdv: 'https://team.alteore.com/r/Ab12Cd34Ef', lien_stop: 'https://team.alteore.com/r/Gh56Ij78Kl' }) : '';
+  return '<div class="rl-wa" id="smsPrev_' + i + '" style="background:#f4f4f6"><span class="rl-wa-t" style="color:#6b6b70">Aperçu du SMS de repli (depuis le +33 9 39 24 03 97)</span>'
+    + (txt ? '<div class="rl-wa-sms">' + esc(txt) + '</div>' : '<div class="rl-wa-manque" style="border-radius:10px">SMS de repli vide : il est obligatoire (numéro absent de WhatsApp).</div>') + '</div>';
+}
+/* Met à jour les aperçus SUR PLACE : redessiner toute la fiche pendant un
+   « change » remplacerait le bouton sur lequel on est en train de cliquer
+   (coller l'URL de la vidéo puis cliquer « Enregistrer » perdait le clic). */
+function rafraichirApercus() {
+  ((S.camp && S.camp.etapes) || []).forEach(function (e, i) {
+    var m = e.canal === 'whatsapp' ? modele(e.modele) : null;
+    var w = $('waPrev_' + i);
+    if (w && m) w.outerHTML = apercuWhatsapp(e, m, i);
+    var sp = $('smsPrev_' + i);
+    if (sp) sp.outerHTML = apercuSms(e.canal === 'whatsapp' ? e.texteRepli : e.texte, i);
+  });
+}
 function compteurSms(t) {
   var s = C.segmentsSms(C.smsTypique(t || ''));
   var p = C.contientPrix(t || '');
@@ -377,8 +446,6 @@ function peindreEtape(e, i, fige) {
     if (e.modele && !m) h += '<option value="' + esc(e.modele) + '" selected>' + esc(e.modele) + ' — pas encore approuvé</option>';
     h += '</select></label>';
     if (m) {
-      h += '<div class="rl-prev">' + (m.enteteFormat === 'VIDEO' ? '🎬 [vidéo]\n' : (m.entete ? esc(m.entete) + '\n' : '')) + esc(m.corps)
-        + (m.pied ? '\n\n' + esc(m.pied) : '') + (m.boutons.length ? '\n\n' + m.boutons.map(function (b) { return '[' + esc(b.texte) + ']' + (b.type === 'URL' ? ' → ' + esc(b.url) : ''); }).join('  ') : '') + '</div>';
       if (m.prix) h += '<div class="rl-hint ko">⛔ Ce modèle contient un élément de prix (« ' + esc(m.prix) + ' ») : il ne peut pas être utilisé.</div>';
       var hasUrl = m.boutons.some(function (b) { return b.type === 'URL' && b.dynamique; });
       var fixe = m.boutons.filter(function (b) { return b.type === 'URL' && !b.dynamique; })[0];
@@ -391,10 +458,11 @@ function peindreEtape(e, i, fige) {
       if (m.enteteFormat === 'VIDEO' || m.enteteFormat === 'IMAGE') {
         h += '<label class="rl-f" style="margin-top:6px">URL https de la ' + (m.enteteFormat === 'VIDEO' ? 'vidéo (mp4, 16 Mo max)' : 'image') + '<input class="rl-in" data-e="videoUrl" data-i="' + i + '" value="' + esc(e.videoUrl || '') + '"' + dis + '></label>';
       }
+      h += apercuWhatsapp(e, m, i);
     }
-    h += '<label class="rl-f" style="margin-top:6px">SMS de repli (si le numéro n\'est pas sur WhatsApp ou si l\'envoi échoue)<textarea class="rl-ta" data-e="texteRepli" data-i="' + i + '"' + dis + '>' + esc(e.texteRepli || '') + '</textarea></label>' + compteurSms(e.texteRepli);
+    h += '<label class="rl-f" style="margin-top:6px">SMS de repli (si le numéro n\'est pas sur WhatsApp ou si l\'envoi échoue)<textarea class="rl-ta" data-e="texteRepli" data-i="' + i + '"' + dis + '>' + esc(e.texteRepli || '') + '</textarea></label>' + compteurSms(e.texteRepli) + apercuSms(e.texteRepli, i);
   } else if (e.canal === 'sms') {
-    h += '<label class="rl-f">Texte du SMS<textarea class="rl-ta" data-e="texte" data-i="' + i + '"' + dis + '>' + esc(e.texte || '') + '</textarea></label>' + compteurSms(e.texte);
+    h += '<label class="rl-f">Texte du SMS<textarea class="rl-ta" data-e="texte" data-i="' + i + '"' + dis + '>' + esc(e.texte || '') + '</textarea></label>' + compteurSms(e.texte) + apercuSms(e.texte, i);
   } else {
     h += '<label class="rl-f">Objet<input class="rl-in" data-e="objet" data-i="' + i + '" value="' + esc(e.objet || '') + '"' + dis + '></label>'
       + '<label class="rl-f" style="margin-top:6px">Texte<textarea class="rl-ta" style="min-height:140px" data-e="texte" data-i="' + i + '"' + dis + '>' + esc(e.texte || '') + '</textarea></label>';
@@ -425,6 +493,8 @@ function peindreCampEdit() {
   });
   if (!fige) h += '<div class="rl-row"><button class="rl-act mini" type="button" data-action="vague-ajout">+ Vague</button></div>';
   h += '<h2 style="margin-top:14px">Séquence</h2><small>Les délais comptent depuis le jour où le lead a reçu l\'étape 1. La séquence s\'arrête dès que le lead répond, réserve, clique « Plus intéressé » ou répond STOP.</small>';
+  h += '<div class="rl-row" style="margin:6px 0 10px"><span class="rl-hint" style="margin:0">Aperçus avec le prénom</span><input class="rl-in" style="width:140px" id="apPrenom" value="' + esc(exemple().prenom) + '">'
+    + '<span class="rl-hint" style="margin:0">et le setter</span><input class="rl-in" style="width:140px" id="apSetter" value="' + esc(exemple().setter) + '"></div>';
   (c.etapes || []).forEach(function (e, i) { h += peindreEtape(e, i, fige); });
   if (!fige) h += '<div class="rl-row"><button class="rl-act mini" type="button" data-action="etape-ajout">+ Étape</button></div>';
   h += '<div class="rl-row">';
@@ -728,7 +798,19 @@ document.addEventListener('input', function (ev) {
   if ((k === 'texte' && et && et.canal === 'sms') || k === 'texteRepli') {
     var h = x.parentNode.nextElementSibling;
     if (h && h.className.indexOf('rl-hint') >= 0) h.outerHTML = compteurSms(x.value);
+    var pv = $('smsPrev_' + x.getAttribute('data-i'));
+    if (pv) pv.outerHTML = apercuSms(x.value, x.getAttribute('data-i'));
   }
+});
+document.addEventListener('change', function (ev) {
+  var x = ev.target;
+  if (!x || !x.getAttribute) return;
+  if (x.id === 'apPrenom' || x.id === 'apSetter') {
+    exemple()[x.id === 'apPrenom' ? 'prenom' : 'setter'] = x.value.trim() || (x.id === 'apPrenom' ? 'Julie' : 'Anthony');
+    lireCampagne(); rafraichirApercus(); return;
+  }
+  var k = x.getAttribute('data-e');
+  if (k === 'param' || k === 'videoUrl' || (x.id === 'cpLien')) { lireCampagne(); rafraichirApercus(); }
 });
 function chargerSuivi() {
   if (!S.suiviId) { S.stats = null; peindreSuivi(); return; }
