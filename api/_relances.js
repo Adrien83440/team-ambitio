@@ -319,6 +319,9 @@ async function modelesWhatsapp() {
       nom: m.name, langue: m.language, categorie: m.category, statut: m.status,
       corps: texte, variables: nbVar,
       enteteFormat: entete ? String(entete.format || 'TEXT').toUpperCase() : null,
+      /* Vidéo / image d'exemple déposée dans le Gestionnaire WhatsApp lors de
+         la création du modèle : réutilisée d'office à l'envoi (voir mediaEntete). */
+      exempleEntete: (entete && entete.example && Array.isArray(entete.example.header_handle) && entete.example.header_handle[0]) || null,
       entete: entete && entete.text ? entete.text : null,
       pied: pied ? pied.text || null : null,
       boutons: ((btns && btns.buttons) || []).map(function (b, i) {
@@ -375,6 +378,9 @@ async function envoyerEtape(o) {
     /* Bascule immédiate sur le SMS : numéro invalide, modèle refusé, limite
        Meta par destinataire (131049)… L'échec asynchrone (« pas sur
        WhatsApp », 131026) est rattrapé par le cron via `aVerifier`. */
+    /* Média du modèle indisponible : c'est NOTRE configuration qui manque, pas
+       le numéro du lead — on ne bascule surtout pas tout le monde en SMS. */
+    if (r.pasDeRepli) return Object.assign(r, { bascule: false });
     if (!String(e.texteRepli || '').trim()) return Object.assign(r, { bascule: false });
     const s = await envoyerSms(Core.remplir(e.texteRepli, v), tel, contexte);
     return Object.assign(s, { bascule: true, erreurWhatsapp: r.erreur, codeWhatsapp: r.code || null });
@@ -410,12 +416,55 @@ async function envoyerWhatsapp(e, tel, v, o, contexte) {
         payload: 'RLC_STOP:' + (contexte.inscriptionId || 'test') });
     }
   });
-  const entete = m.enteteFormat === 'VIDEO' ? { type: 'video', lien: e.videoUrl }
-    : (m.enteteFormat === 'IMAGE' && e.videoUrl ? { type: 'image', lien: e.videoUrl } : null);
+  let entete = null;
+  if (m.enteteFormat === 'VIDEO' || m.enteteFormat === 'IMAGE') {
+    const mv = await mediaEntete(m, e);
+    if (mv.erreur) return { ok: false, canal: 'whatsapp', erreur: mv.erreur, pasDeRepli: true };
+    entete = { type: m.enteteFormat === 'VIDEO' ? 'video' : 'image', lien: mv.lien || null, id: mv.id || null };
+  }
   const r = await envoyerModele({ to: tel, template: m.nom, langue: m.langue || 'fr', params: params,
     entete: entete, boutons: boutons, contexte: contexte });
   return { ok: r.ok, canal: 'whatsapp', id: r.wamid || null, erreur: r.erreur || null, code: r.code || null,
     texte: Core.remplir(m.corps.replace(/\{\{(\d+)\}\}/g, function (x, n) { return params[+n - 1] || x; }), {}) };
+}
+
+/* ── Vidéo d'en-tête ──────────────────────────────────────────────────────
+   Par l'API, Meta exige le média à CHAQUE envoi d'un modèle à en-tête vidéo
+   (le Gestionnaire WhatsApp, lui, le fait tout seul). Ordre :
+     1. URL https saisie sur l'étape (facultative) ;
+     2. sinon la vidéo d'exemple du modèle validé : téléchargée une fois,
+        téléversée chez Meta (/media), identifiant gardé 25 jours dans
+        relance_medias/{modèle} (Meta le garde 30) et réutilisé pour tous.
+   Ne lance jamais. */
+async function mediaEntete(m, e) {
+  if (/^https:\/\//.test(String(e.videoUrl || ''))) return { lien: String(e.videoUrl) };
+  if (!m.exempleEntete) return { erreur: 'video_absente_du_modele' };
+  const ref = db.collection('relance_medias').doc(String(m.nom));
+  try {
+    const s = await ref.get();
+    const d = s.exists ? (s.data() || {}) : null;
+    if (d && d.id && Date.now() - (+d.at || 0) < 25 * 864e5) return { id: d.id };
+    const rep = await fetch(m.exempleEntete);
+    if (!rep.ok) return { erreur: 'video_modele_inaccessible (HTTP ' + rep.status + ')' };
+    let mime = String(rep.headers.get('content-type') || '').split(';')[0];
+    if (!/^(video|image)\//.test(mime)) mime = m.enteteFormat === 'VIDEO' ? 'video/mp4' : 'image/jpeg';
+    const buf = Buffer.from(await rep.arrayBuffer());
+    if (buf.length > 16 * 1024 * 1024) return { erreur: 'video_modele_trop_lourde' };
+    const { getWhatsappCreds } = require('./_whatsappClient');
+    const creds = await getWhatsappCreds();
+    const form = new FormData();
+    form.append('messaging_product', 'whatsapp');
+    form.append('type', mime);
+    form.append('file', new Blob([buf], { type: mime }), m.enteteFormat === 'VIDEO' ? 'video.mp4' : 'image.jpg');
+    const up = await fetch('https://graph.facebook.com/' + creds.apiVersion + '/' + creds.phoneNumberId + '/media',
+      { method: 'POST', headers: { Authorization: 'Bearer ' + creds.token }, body: form });
+    const j = await up.json().catch(function () { return null; });
+    if (!up.ok || !j || !j.id) return { erreur: 'televersement_video_refuse' + (j && j.error ? ' : ' + j.error.message : '') };
+    await ref.set({ id: j.id, at: Date.now(), mime: mime, taille: buf.length, modele: m.nom }, { merge: true });
+    return { id: j.id };
+  } catch (err) {
+    return { erreur: 'video_modele : ' + ((err && err.message) || 'echec') };
+  }
 }
 
 async function envoyerSms(texte, tel, contexte) {
@@ -589,5 +638,5 @@ async function notifierSetter(o) {
 module.exports = {
   Core, BASE_URL, etapesPipeline, config, membres, membre, typesRdv, typePourSetter, typePublic, typeReservation, urlReservation,
   creerLien, urlLien, contexteExclusions, calculerSegment, modelesWhatsapp, qualiteWhatsapp,
-  envoyerEtape, envoyerSms, tracerSurLead, arreter, motifArret, notifierSetter, dateFr, creerSuivi,
+  envoyerEtape, envoyerSms, mediaEntete, tracerSurLead, arreter, motifArret, notifierSetter, dateFr, creerSuivi,
 };

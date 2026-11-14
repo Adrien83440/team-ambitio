@@ -387,9 +387,11 @@ function apercuWhatsapp(e, m, i) {
   var corps = String(m.corps || '').replace(/\{\{(\d+)\}\}/g, function (x, n) { return vals[+n] || x; });
   var h = '<div class="rl-wa" id="waPrev_' + i + '"><span class="rl-wa-t">Aperçu — tel que ' + esc(ex.prenom) + ' le recevra sur WhatsApp</span><div class="rl-wa-bulle">';
   if (m.enteteFormat === 'VIDEO') {
-    h += /^https:\/\//.test(String(e.videoUrl || ''))
-      ? '<video class="rl-wa-media" src="' + esc(e.videoUrl) + '" controls preload="metadata" playsinline></video>'
-      : '<div class="rl-wa-manque">🎬 Vidéo manquante : colle l\'URL https de la vidéo ci-dessus.<br>Sans elle, Meta refuse l\'envoi.</div>';
+    var src = /^https:\/\//.test(String(e.videoUrl || '')) ? e.videoUrl : (m.exempleEntete || '');
+    h += src
+      ? '<video class="rl-wa-media" src="' + esc(src) + '" controls preload="metadata" playsinline></video>'
+        + (e.videoUrl ? '' : '<div class="rl-wa-pied" style="padding-top:5px">🎬 Vidéo de ton modèle validé chez Meta — envoyée automatiquement.</div>')
+      : '<div class="rl-wa-manque">🎬 Ce modèle n\'expose pas sa vidéo à l\'API : colle l\'URL https de la vidéo ci-dessus.</div>';
   } else if (m.enteteFormat === 'IMAGE') {
     h += /^https:\/\//.test(String(e.videoUrl || '')) ? '<img class="rl-wa-media" alt="" src="' + esc(e.videoUrl) + '">' : '<div class="rl-wa-manque">🖼 Image manquante</div>';
   } else if (m.entete) h += '<div class="rl-wa-corps" style="font-weight:700;padding-bottom:0">' + formatWa(m.entete) + '</div>';
@@ -456,7 +458,9 @@ function peindreEtape(e, i, fige) {
           + ['prenom', 'setter'].map(function (v) { return '<option value="' + v + '"' + ((e.parametres || [])[k] === v ? ' selected' : '') + '>' + v + '</option>'; }).join('') + '</select></label>';
       }
       if (m.enteteFormat === 'VIDEO' || m.enteteFormat === 'IMAGE') {
-        h += '<label class="rl-f" style="margin-top:6px">URL https de la ' + (m.enteteFormat === 'VIDEO' ? 'vidéo (mp4, 16 Mo max)' : 'image') + '<input class="rl-in" data-e="videoUrl" data-i="' + i + '" value="' + esc(e.videoUrl || '') + '"' + dis + '></label>';
+        h += '<label class="rl-f" style="margin-top:6px">' + (m.exempleEntete
+          ? 'Autre ' + (m.enteteFormat === 'VIDEO' ? 'vidéo' : 'image') + ' (facultatif — par défaut, celle du modèle validé chez Meta)'
+          : 'URL https de la ' + (m.enteteFormat === 'VIDEO' ? 'vidéo (mp4, 16 Mo max)' : 'image')) + '<input class="rl-in" data-e="videoUrl" data-i="' + i + '" value="' + esc(e.videoUrl || '') + '"' + dis + '></label>';
       }
       h += apercuWhatsapp(e, m, i);
     }
@@ -711,7 +715,7 @@ document.addEventListener('click', function (ev) {
   else if (a === 'camp-enregistrer') {
     var c = lireCampagne();
     var errs = [];
-    c.etapes.forEach(function (e, i) { var m = modele(e.modele); var x = C.verifierEtape(Object.assign({}, e, m ? { enteteFormat: m.enteteFormat, corpsModele: m.corps } : {}), i); if (x) errs.push(x); });
+    c.etapes.forEach(function (e, i) { var m = modele(e.modele); var x = C.verifierEtape(Object.assign({}, e, m ? { enteteFormat: m.enteteFormat, corpsModele: m.corps, videoAuto: !!m.exempleEntete } : {}), i); if (x) errs.push(x); });
     if (errs.length) toast('Enregistré, mais à corriger avant le test : ' + errs[0]);
     if (c.vagues.some(function (v) { return !v.jours || !v.jours.length; })) { toast('Indique les jours de campagne de chaque vague (ex. 1, ou 2,3).'); return; }
     action({ action: 'campagne', id: c.id || null, nom: c.nom, dateDebut: c.dateDebut, plafondJour: c.plafondJour, setterRepli: c.setterRepli, lienRdv: c.lienRdv, vagues: c.vagues, etapes: c.etapes },

@@ -139,6 +139,12 @@ async function traiter(insc0, camp, ctx) {
     const vv = await variables(insc, lead, camp, ctx.cfg, ctx.membres, etape, false);
     const r = await R.envoyerEtape({ etape: etape, lead: lead, inscription: insc, campagne: camp, cfg: ctx.cfg,
       modeles: ctx.modeles, vars: vv.vars });
+    if (r.pasDeRepli) {
+      /* Problème de configuration (vidéo), pas du lead : rien n'est compté,
+         l'étape repartira au prochain passage. */
+      await ref.set({ envoiEnCours: null }, { merge: true });
+      return { id: insc.id, reporte: r.erreur };
+    }
     await journalEnvoi(camp, insc, n, r, false);
     await R.tracerSurLead(insc.leadId, r, camp, n);
     if (r.ok && r.canal === 'whatsapp') ctx.waJour++;
@@ -237,7 +243,7 @@ async function passage(dry) {
   const cs = await db.collection('relance_campagnes').where('etat', '==', 'en_cours').get();
   const camps = {};
   cs.forEach(function (d) { camps[d.id] = Object.assign({ id: d.id }, d.data() || {}); });
-  const ids = Object.keys(camps);
+  let ids = Object.keys(camps);
   if (!ids.length) return Object.assign(rapport, { saute: 'aucune_campagne' });
 
   const ctx = { cfg: cfg, dry: !!dry, membres: await R.membres(), modeles: {}, limiteWa: null, waJour: 0 };
@@ -257,11 +263,32 @@ async function passage(dry) {
     if (q.ok && q.limite) ctx.limiteWa = Math.floor(q.limite * 0.8);
     const mw = await R.modelesWhatsapp();
     (mw.modeles || []).forEach(function (m) { if (String(m.statut).toUpperCase() === 'APPROVED') ctx.modeles[m.nom] = m; });
+    /* Vidéo d'en-tête prête AVANT d'envoyer : sinon on mettrait la campagne en
+       pause plutôt que de faire échouer (ou basculer en SMS) chaque lead. */
+    for (let c = 0; c < ids.length; c++) {
+      const camp = camps[ids[c]];
+      const etapesVideo = (camp.etapes || []).filter(function (e) {
+        const m = e.canal === 'whatsapp' ? ctx.modeles[e.modele] : null;
+        return m && (m.enteteFormat === 'VIDEO' || m.enteteFormat === 'IMAGE');
+      });
+      for (let k = 0; k < etapesVideo.length; k++) {
+        const mv = dry ? {} : await R.mediaEntete(ctx.modeles[etapesVideo[k].modele], etapesVideo[k]);
+        if (mv.erreur) {
+          await db.collection('relance_campagnes').doc(camp.id).set({ etat: 'pause', motifPause: 'video_indisponible',
+            detailPause: String(mv.erreur).slice(0, 300), pauseA: now }, { merge: true });
+          rapport.pausees = (rapport.pausees || []).concat([{ id: camp.id, motif: mv.erreur }]);
+          delete camps[ids[c]];
+          break;
+        }
+      }
+    }
   }
   const jour = Core.aujourdhui();
   const cg = await db.collection('relance_compteurs').doc(jour).get();
   ctx.waJour = cg.exists ? (+(cg.data() || {}).whatsapp || 0) : 0;
 
+  ids = Object.keys(camps); // après le contrôle vidéo : sans les campagnes mises en pause
+  if (!ids.length) return Object.assign(rapport, { saute: 'aucune_campagne_envoyable' });
   const is = await db.collection('relance_inscriptions').where('etat', '==', 'active').get();
   const actives = [];
   is.forEach(function (d) {

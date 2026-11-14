@@ -125,7 +125,7 @@ function erreursSequence(etapes, modeles) {
   if (!etapes.length) err.push('La séquence est vide.');
   etapes.forEach(function (e, i) {
     const m = e.canal === 'whatsapp' ? modeles[e.modele] : null;
-    const x = Core.verifierEtape(Object.assign({}, e, m ? { enteteFormat: m.enteteFormat, corpsModele: m.corps } : {}), i);
+    const x = Core.verifierEtape(Object.assign({}, e, m ? { enteteFormat: m.enteteFormat, corpsModele: m.corps, videoAuto: !!m.exempleEntete } : {}), i);
     if (x) err.push(x);
     if (e.canal === 'whatsapp') {
       if (!m) err.push('Étape ' + (i + 1) + ' : modèle « ' + e.modele + ' » introuvable ou pas encore approuvé par Meta.');

@@ -446,6 +446,11 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   **Supprimer = archiver** (boutons 🗑, 14/11/2026) : `archiveeA` / `archiveePar` sur la campagne ou le
   segment, masqués de la page, rien effacé. Refusé pour une campagne en cours / en pause (l'arrêter
   d'abord) et pour un segment utilisé par une campagne visible.
+  **Vidéo d'en-tête (14/11/2026)** : par l'API, Meta exige le média à CHAQUE envoi d'un modèle vidéo
+  (le Gestionnaire WhatsApp le fait seul). `R.mediaEntete` reprend d'office la vidéo d'EXEMPLE du modèle
+  validé (`components HEADER example.header_handle[0]`), la téléverse une fois (`/{phoneNumberId}/media`),
+  garde l'identifiant 25 j dans `relance_medias/{modèle}` ; une URL saisie sur l'étape prime. Vidéo
+  indisponible → campagne en pause `video_indisponible`, AUCUN SMS de repli (problème de config, pas du lead).
 
 - **Qualité par pub + API Conversions Meta (12/11/2026, brief « Outil 2 »)** :
   - **Capture** : à chaque opt-in, bloc `leads/{id}.metaIds` (eventId du Lead navigateur, `fbp`/`fbc`,

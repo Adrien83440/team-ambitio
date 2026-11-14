@@ -360,7 +360,9 @@
     if (!e) return n + 'vide';
     if (e.canal === 'whatsapp') {
       if (!e.modele) return n + 'choisis un modèle WhatsApp approuvé';
-      if (e.enteteFormat === 'VIDEO' && !/^https:\/\//.test(String(e.videoUrl || ''))) return n + 'le modèle a un en-tête vidéo : indique l\'URL https de la vidéo';
+      /* Vidéo : celle du modèle validé chez Meta est reprise d'office ; une URL
+         n'est exigée que si le modèle n'en expose pas. */
+      if (e.enteteFormat === 'VIDEO' && !e.videoAuto && !/^https:\/\//.test(String(e.videoUrl || ''))) return n + 'le modèle a un en-tête vidéo sans vidéo d\'exemple lisible : indique l\'URL https de la vidéo';
       var p = contientPrix(e.corpsModele || '');
       if (p) return n + 'le modèle contient un élément de prix (« ' + p + ' »)';
     } else if (e.canal === 'sms') {

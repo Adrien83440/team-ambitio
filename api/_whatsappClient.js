@@ -744,11 +744,13 @@ async function envoyerModele(opts) {
      appel sans `entete` ni `boutons` produit exactement la même requête
      qu'avant. La vidéo part par LIEN (https public) : Meta la télécharge
      lui-même, rien ne transite par la fonction Vercel. */
-  if (opts.entete && opts.entete.lien) {
+  if (opts.entete && (opts.entete.lien || opts.entete.id)) {
     const genreEntete = ({ video: 'video', image: 'image', document: 'document' })[String(opts.entete.type || 'video')] || 'video';
-    const media = { link: String(opts.entete.lien) };
+    /* Par identifiant de média déjà téléversé chez Meta (réutilisable 30 j),
+       sinon par lien https. */
+    const media = opts.entete.id ? { id: String(opts.entete.id) } : { link: String(opts.entete.lien) };
     composants.unshift({ type: 'header', parameters: [{ type: genreEntete, [genreEntete]: media }] });
-    base.entete = { type: genreEntete, lien: media.link };
+    base.entete = { type: genreEntete, lien: media.link || null, id: media.id || null };
   }
   if (Array.isArray(opts.boutons)) {
     opts.boutons.forEach((b) => {
