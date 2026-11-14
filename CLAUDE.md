@@ -443,6 +443,9 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   réponse reçue sous 14 j est encore rattachée (`reponse` sur l'inscription, sans changer son état), comme
   « Plus intéressé » (`plusInteresseA`) et STOP (`stopA`). Échec WhatsApp tardif : `aVerifierActif` suit
   aussi les séquences terminées, fenêtre 72 h (couvre le dimanche).
+  **Supprimer = archiver** (boutons 🗑, 14/11/2026) : `archiveeA` / `archiveePar` sur la campagne ou le
+  segment, masqués de la page, rien effacé. Refusé pour une campagne en cours / en pause (l'arrêter
+  d'abord) et pour un segment utilisé par une campagne visible.
 
 - **Qualité par pub + API Conversions Meta (12/11/2026, brief « Outil 2 »)** :
   - **Capture** : à chaque opt-in, bloc `leads/{id}.metaIds` (eventId du Lead navigateur, `fbp`/`fbc`,

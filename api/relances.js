@@ -183,8 +183,9 @@ async function etat() {
     R.membres(), R.typesRdv(), R.qualiteWhatsapp(),
   ]);
   const segments = [], campagnes = [];
-  ss.forEach(function (d) { segments.push(Object.assign({ id: d.id }, d.data() || {})); });
-  cs.forEach(function (d) { campagnes.push(Object.assign({ id: d.id }, d.data() || {})); });
+  /* Archivés = « supprimés » à l'écran, conservés en base (rien n'est jamais effacé). */
+  ss.forEach(function (d) { const x = d.data() || {}; if (!x.archiveeA) segments.push(Object.assign({ id: d.id }, x)); });
+  cs.forEach(function (d) { const x = d.data() || {}; if (!x.archiveeA) campagnes.push(Object.assign({ id: d.id }, x)); });
   campagnes.sort(function (a, b) { return (b.creeA || 0) - (a.creeA || 0); });
   const setters = liste.filter(function (m) { return m.actif; }).map(function (m) {
     const t = R.typePourSetter(types, m.slug, null);
@@ -604,6 +605,36 @@ async function televerserExemple(url, creds, graph) {
   return { ok: true, handle: s2.h };
 }
 
+/* ── « Supprimer » = archiver (14/11/2026) ──────────────────────────────────
+   Règle du projet : rien n'est jamais effacé. La campagne ou le segment
+   disparaît de l'écran (archiveeA, archiveePar) ; ses inscriptions, envois et
+   statistiques restent en base. Une campagne qui envoie encore doit d'abord
+   être arrêtée ; un segment utilisé par une campagne visible est refusé. */
+async function archiverCampagne(b, auth) {
+  const camp = await lireCampagne(b.campagneId);
+  if (!camp) return { code: 404, ok: false, error: 'campagne_introuvable' };
+  if (camp.etat === 'en_cours' || camp.etat === 'pause') {
+    return { code: 409, ok: false, error: 'campagne_active', detail: 'Cette campagne envoie encore : arrête-la définitivement avant de la supprimer.' };
+  }
+  await db.collection('relance_campagnes').doc(camp.id).set({ archiveeA: Date.now(), archiveePar: auth.email || auth.uid }, { merge: true });
+  return { ok: true };
+}
+async function archiverSegment(b, auth) {
+  const id = String(b.segmentId || '');
+  const s = await db.collection('relance_segments').doc(id).get();
+  if (!s.exists) return { code: 404, ok: false, error: 'segment_introuvable' };
+  const cs = await db.collection('relance_campagnes').get();
+  const utilisePar = [];
+  cs.forEach(function (d) {
+    const c = d.data() || {};
+    if (c.archiveeA) return;
+    if ((c.vagues || []).some(function (v) { return v && v.segmentId === id; })) utilisePar.push(c.nom || d.id);
+  });
+  if (utilisePar.length) return { code: 409, ok: false, error: 'segment_utilise', detail: 'Segment utilisé par : ' + utilisePar.join(', ') + '. Supprime ou modifie ces campagnes d\'abord.' };
+  await db.collection('relance_segments').doc(id).set({ archiveeA: Date.now(), archiveePar: auth.email || auth.uid }, { merge: true });
+  return { ok: true };
+}
+
 /* ── Routeur ───────────────────────────────────────────────────────────── */
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -630,6 +661,8 @@ module.exports = async (req, res) => {
       else if (a === 'stats') r = await stats(b);
       else if (a === 'config') r = await majConfig(b, auth);
       else if (a === 'preconfigurer') r = await preconfigurer(auth);
+      else if (a === 'supprimerCampagne') r = await archiverCampagne(b, auth);
+      else if (a === 'supprimerSegment') r = await archiverSegment(b, auth);
       else if (a === 'creerSuivi') {
         const c = await lireCampagne(b.campagneId);
         r = !c ? { code: 404, ok: false, error: 'campagne_introuvable' }

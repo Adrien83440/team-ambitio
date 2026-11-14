@@ -285,7 +285,8 @@ function peindreSegEdit() {
     + (cols.length ? '<div class="rl-f" style="margin-top:10px">Étape du Pipeline (même règle que le Pipeline)' + cases('etapes', cols, f.etapes) + '</div>' : '')
     + '<div class="rl-f" style="margin-top:10px">Setter assigné' + cases('setters', setters, f.setters) + '</div>'
     + '<div class="rl-row"><button class="rl-act pri" type="button" data-action="seg-apercu">Aperçu</button>'
-    + '<button class="rl-act" type="button" data-action="seg-enregistrer">Enregistrer le segment</button></div></div>'
+    + '<button class="rl-act" type="button" data-action="seg-enregistrer">Enregistrer le segment</button>'
+    + (s.id ? '<div class="sp"></div><button class="rl-act ko" type="button" data-action="seg-supprimer">🗑 Supprimer le segment</button>' : '') + '</div></div>'
     + '<div id="sgApercu"></div>';
   $('rlSegEdit').innerHTML = h;
   if (S.segApercu) peindreApercu();
@@ -435,6 +436,7 @@ function peindreCampEdit() {
   if (c.id && c.etat !== 'brouillon') h += '<button class="rl-act" type="button" data-action="camp-suivi">📊 Suivi</button>';
   if (c.id && c.etat !== 'brouillon' && !c.suiviId) h += '<button class="rl-act" type="button" data-action="camp-suivi-creer" title="Créée d\'office à la fin de la campagne">↪ Créer la campagne de suivi</button>';
   if (c.suiviId) h += '<button class="rl-act" type="button" data-action="camp-ouvrir" data-id="' + esc(c.suiviId) + '">↪ Campagne de suivi</button>';
+  if (c.id && c.etat !== 'en_cours' && c.etat !== 'pause') h += '<div class="sp"></div><button class="rl-act ko" type="button" data-action="camp-supprimer">🗑 Supprimer la campagne</button>';
   h += '</div>';
   if (c.dernierTest) {
     var t = c.dernierTest, okEmp = c.testOk && c.testOk.empreinte === C.empreinte(c.etapes || []);
@@ -675,6 +677,14 @@ document.addEventListener('click', function (ev) {
         + (j.saute ? '\nSauté : ' + j.saute : ''));
     }).catch(function () { occupe(false); toast('Simulation impossible.'); });
   } else if (a === 'camp-suivi') { S.suiviId = S.camp.id; setTab('suivi'); chargerSuivi(); }
+  else if (a === 'camp-supprimer') {
+    if (!window.confirm('Supprimer la campagne « ' + (S.camp.nom || '') + ' » ?\n\nElle disparaît de la liste. Ses envois et statistiques restent conservés en base.')) return;
+    action({ action: 'supprimerCampagne', campagneId: S.camp.id }, function () { toast('Campagne supprimée.'); S.camp = null; S.prep = null; charger(); });
+  }
+  else if (a === 'seg-supprimer') {
+    if (!window.confirm('Supprimer le segment « ' + (S.seg.nom || '') + ' » ?')) return;
+    action({ action: 'supprimerSegment', segmentId: S.seg.id }, function () { toast('Segment supprimé.'); S.seg = null; S.segApercu = null; charger(); });
+  }
   else if (a === 'camp-suivi-creer') {
     action({ action: 'creerSuivi', campagneId: S.camp.id }, function (j) { toast('Campagne de suivi créée (brouillon).'); S.camp = { id: j.suiviId }; charger(); });
   }
