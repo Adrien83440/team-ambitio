@@ -463,6 +463,8 @@ function peindreEtape(e, i, fige) {
           : 'URL https de la ' + (m.enteteFormat === 'VIDEO' ? 'vidéo (mp4, 16 Mo max)' : 'image')) + '<input class="rl-in" data-e="videoUrl" data-i="' + i + '" value="' + esc(e.videoUrl || '') + '"' + dis + '></label>';
       }
       h += apercuWhatsapp(e, m, i);
+      h += '<div class="rl-row"><button class="rl-act pri" type="button" data-action="etape-tester" data-i="' + i + '">📲 M\'envoyer ce message maintenant</button>'
+        + '<span class="rl-hint" id="testRes_' + i + '" style="margin:0"></span></div>';
     }
     h += '<label class="rl-f" style="margin-top:6px">SMS de repli (si le numéro n\'est pas sur WhatsApp ou si l\'envoi échoue)<textarea class="rl-ta" data-e="texteRepli" data-i="' + i + '"' + dis + '>' + esc(e.texteRepli || '') + '</textarea></label>' + compteurSms(e.texteRepli) + apercuSms(e.texteRepli, i);
   } else if (e.canal === 'sms') {
@@ -751,6 +753,20 @@ document.addEventListener('click', function (ev) {
         + (j.saute ? '\nSauté : ' + j.saute : ''));
     }).catch(function () { occupe(false); toast('Simulation impossible.'); });
   } else if (a === 'camp-suivi') { S.suiviId = S.camp.id; setTab('suivi'); chargerSuivi(); }
+  else if (a === 'etape-tester') {
+    var it = +t.getAttribute('data-i');
+    if (S.camp.etat === 'brouillon' || !S.camp.etat) lireCampagne();
+    var et = S.camp.etapes[it];
+    var tel = window.prompt('Envoyer ce WhatsApp, tel qu\'un client le recevra, au numéro :', (S.etat.config.testTelephone || ''));
+    if (tel === null) return;
+    var res = $('testRes_' + it);
+    res.className = 'rl-hint'; res.textContent = 'Envoi en cours…';
+    action({ action: 'testerEtape', etape: et, telephone: tel.trim(), prenom: exemple().prenom, setter: exemple().setter, campagneId: S.camp.id || null }, function (j) {
+      if (!j.envoye) { res.className = 'rl-hint ko'; res.textContent = '✗ Refusé avant l\'envoi : ' + (j.erreur || 'erreur') + (j.codeMeta ? ' (code Meta ' + j.codeMeta + ')' : ''); return; }
+      res.textContent = '✓ Accepté par Meta, vers ' + j.vers + '. J\'attends l\'accusé de réception…';
+      suivreTest(j.wamid, res, 0);
+    }).then(function (j) { if (j && !j.ok) { res.className = 'rl-hint ko'; res.textContent = '✗ ' + erreurTexte(j); } });
+  }
   else if (a === 'camp-supprimer') {
     if (!window.confirm('Supprimer la campagne « ' + (S.camp.nom || '') + ' » ?\n\nElle disparaît de la liste. Ses envois et statistiques restent conservés en base.')) return;
     action({ action: 'supprimerCampagne', campagneId: S.camp.id }, function () { toast('Campagne supprimée.'); S.camp = null; S.prep = null; charger(); });
@@ -816,6 +832,26 @@ document.addEventListener('change', function (ev) {
   var k = x.getAttribute('data-e');
   if (k === 'param' || k === 'videoUrl' || (x.id === 'cpLien')) { lireCampagne(); rafraichirApercus(); }
 });
+/* Suit l'accusé Meta du message de test : délivré / lu = tout est bon ;
+   failed = la raison exacte de Meta s'affiche. 2 minutes au plus. */
+function suivreTest(wamid, res, n) {
+  setTimeout(function () {
+    appel({ action: 'statutTest', wamid: wamid }).then(function (j) {
+      var st = j && j.statut;
+      if (st === 'read') { res.className = 'rl-hint'; res.innerHTML = '<b style="color:#16a34a">✓ Reçu et lu sur ton téléphone.</b> Vérifie la vidéo, le texte et clique les deux boutons.'; return; }
+      if (st === 'delivered') { res.className = 'rl-hint'; res.innerHTML = '<b style="color:#16a34a">✓ Délivré sur ton téléphone.</b> Ouvre-le : vidéo, texte, boutons.'; if (n < 40) suivreTest(wamid, res, n + 1); return; }
+      if (st === 'failed') {
+        var em = (j && j.erreurMeta) || {};
+        res.className = 'rl-hint ko';
+        res.textContent = '✗ Refusé par Meta' + (em.code ? ' (code ' + em.code + ')' : '') + ' : ' + (em.detail || em.titre || 'raison inconnue');
+        return;
+      }
+      if (n >= 40) { res.className = 'rl-hint'; res.textContent = 'Pas encore d\'accusé de Meta après 2 minutes : regarde ton téléphone.'; return; }
+      if (st === 'sent') res.textContent = '… Envoyé par Meta, en cours de livraison.';
+      suivreTest(wamid, res, n + 1);
+    });
+  }, 3000);
+}
 function chargerSuivi() {
   if (!S.suiviId) { S.stats = null; peindreSuivi(); return; }
   action({ action: 'stats', campagneId: S.suiviId }, function (j) { S.stats = j; peindreSuivi(); });

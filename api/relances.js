@@ -248,6 +248,41 @@ async function lireCampagne(id) {
   return s.exists ? Object.assign({ id: s.id }, s.data() || {}) : null;
 }
 
+/* ── « M'envoyer ce message » (14/11/2026) ──────────────────────────────────
+   Envoie UNE étape WhatsApp, telle qu'elle est à l'écran (même non
+   enregistrée), au numéro de test, exactement comme un lead la recevra :
+   vidéo du modèle, prénom, boutons. Pas de SMS de repli : si WhatsApp
+   échoue, on veut le voir, pas le masquer. Puis statutTest lit ce que Meta
+   en a fait (délivré, lu, ou refusé avec son code). Aucune écriture sur un
+   lead, rien ne compte dans une campagne. */
+async function testerEtape(b, auth) {
+  const cfg = await R.config();
+  const tel = Core.telephoneE164(b.telephone) || Core.telephoneE164(cfg.testTelephone);
+  if (!tel) return { code: 400, ok: false, error: 'telephone_requis', detail: 'Indique ton numéro de portable.' };
+  const e = nettoyerEtapes([b.etape])[0];
+  if (!e || e.canal !== 'whatsapp' || !e.modele) return { code: 400, ok: false, error: 'etape_whatsapp_requise', detail: 'Choisis d\'abord un modèle WhatsApp.' };
+  const m = await modelesApprouves();
+  if (!m.map[e.modele]) return { code: 409, ok: false, error: 'modele_non_approuve', detail: 'Le modèle « ' + e.modele + ' » n\'est pas (encore) approuvé chez Meta.' };
+  const liste = await R.membres();
+  const setterSlug = cfg.setterRepli || (liste[0] && liste[0].slug) || null;
+  const mb = setterSlug ? R.membre(liste, setterSlug) : null;
+  const jr = await R.creerLien({ type: 'rdv', test: true, campagneId: b.campagneId || null });
+  const vars = { prenom: String(b.prenom || 'Adrien').trim().slice(0, 40) || 'Adrien', setter: String(b.setter || (mb ? mb.nom : '')).trim() || 'notre équipe',
+    lien_rdv: R.urlLien(jr) };
+  const r = await R.envoyerEtape({ etape: Object.assign({}, e, { texteRepli: '' }), lead: { id: null }, inscription: null,
+    campagne: { id: b.campagneId || 'test' }, cfg: Object.assign({}, cfg, { testTelephone: tel }), test: true, modeles: m.map, vars: vars });
+  /* codeMeta, jamais `code` : le routeur lit `code` comme statut HTTP. */
+  return { ok: true, envoye: !!r.ok, wamid: r.id || null, erreur: r.erreur || null, codeMeta: r.code || null, vers: tel, par: auth.email || auth.uid };
+}
+/* Ce que Meta a fait du message de test (webhook → whatsapp_messages). */
+async function statutTest(b) {
+  const w = String(b.wamid || '');
+  if (!w) return { code: 400, ok: false, error: 'wamid_requis' };
+  const s = await db.collection('whatsapp_messages').doc(w).get();
+  const d = s.exists ? (s.data() || {}) : {};
+  return { ok: true, statut: d.statut || 'accepte', erreurMeta: d.erreurMeta || null };
+}
+
 async function tester(b, auth) {
   const cfg = await R.config();
   const camp = await lireCampagne(b.campagneId);
@@ -655,6 +690,8 @@ module.exports = async (req, res) => {
       else if (a === 'modelesProposes') r = { ok: true, modeles: MODELES_PROPOSES };
       else if (a === 'soumettreModele') r = await soumettreModele(b);
       else if (a === 'test') r = await tester(b, auth);
+      else if (a === 'testerEtape') r = await testerEtape(b, auth);
+      else if (a === 'statutTest') r = await statutTest(b);
       else if (a === 'preparer') r = await preparer(b);
       else if (a === 'lancer') r = await lancer(b, auth);
       else if (a === 'pause' || a === 'reprendre' || a === 'arreter') r = await changerEtat(b, auth, a);
