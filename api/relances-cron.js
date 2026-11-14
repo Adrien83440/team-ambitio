@@ -153,6 +153,9 @@ async function traiter(insc0, camp, ctx) {
       envois: FV.arrayUnion({ n: n, canal: r.canal || null, id: r.id || null, ok: !!r.ok, bascule: !!r.bascule,
         erreur: r.erreur || null, at: now }),
       aVerifier: (r.ok && r.canal === 'whatsapp') ? { wamid: r.id, n: n, at: now } : null,
+      /* Interrogeable même une fois la séquence terminée : un « pas sur
+         WhatsApp » arrive APRÈS l'envoi, souvent après la dernière étape. */
+      aVerifierActif: !!(r.ok && r.canal === 'whatsapp'),
     };
     if (n === 0) { patch.debutA = now; patch.jourDepart = jourDepart; }
     if (!r.ok && echecs >= 2) {
@@ -184,19 +187,21 @@ async function rattraper(insc, camp, ctx) {
   const av = insc.aVerifier;
   const now = Date.now();
   const ref = db.collection('relance_inscriptions').doc(insc.id);
-  if (now - av.at > 36 * 3600000) { if (!ctx.dry) await ref.set({ aVerifier: null }, { merge: true }); return null; }
+  /* 72 h : un échec signalé samedi soir n'est rattrapable que lundi matin
+     (rien ne part le dimanche). À 36 h, le SMS de repli était perdu. */
+  if (now - av.at > 72 * 3600000) { if (!ctx.dry) await ref.set({ aVerifier: null, aVerifierActif: false }, { merge: true }); return null; }
   const s = await db.collection('whatsapp_messages').doc(String(av.wamid)).get();
   const statut = s.exists ? (s.data() || {}).statut : null;
-  if (statut === 'delivered' || statut === 'read') { if (!ctx.dry) await ref.set({ aVerifier: null }, { merge: true }); return null; }
+  if (statut === 'delivered' || statut === 'read') { if (!ctx.dry) await ref.set({ aVerifier: null, aVerifierActif: false }, { merge: true }); return null; }
   if (statut !== 'failed') return null;
   const etape = camp.etapes[av.n] || {};
   if (ctx.dry) return { id: insc.id, rattrapage: 'sms', etape: av.n };
-  if (!String(etape.texteRepli || '').trim()) { await ref.set({ aVerifier: null }, { merge: true }); return { id: insc.id, rattrapage: 'aucun_texte_repli' }; }
+  if (!String(etape.texteRepli || '').trim()) { await ref.set({ aVerifier: null, aVerifierActif: false }, { merge: true }); return { id: insc.id, rattrapage: 'aucun_texte_repli' }; }
   const ok = await db.runTransaction(async function (tx) {
     const x = await tx.get(ref);
     const d = x.data() || {};
     if (!d.aVerifier || d.aVerifier.wamid !== av.wamid) return false;
-    tx.set(ref, { aVerifier: null }, { merge: true });
+    tx.set(ref, { aVerifier: null, aVerifierActif: false }, { merge: true });
     return true;
   });
   if (!ok) return null;
@@ -264,10 +269,17 @@ async function passage(dry) {
     if (camps[x.campagneId]) actives.push(x);
   });
 
-  /* 3. Rattrapages */
+  /* 3. Rattrapages — sur TOUTE inscription en attente de vérification, y
+     compris terminée (campagne d'un seul message). */
+  const av = await db.collection('relance_inscriptions').where('aVerifierActif', '==', true).get();
+  const enAttente = [];
+  av.forEach(function (d) {
+    const x = Object.assign({ id: d.id }, d.data() || {});
+    if (camps[x.campagneId]) enAttente.push(x);
+  });
   const rattrapages = [];
-  for (let i = 0; i < actives.length; i++) {
-    const x = actives[i];
+  for (let i = 0; i < enAttente.length; i++) {
+    const x = enAttente[i];
     if (x.aVerifier && x.aVerifier.wamid && now - x.aVerifier.at > 10 * 60000) {
       const r = await rattraper(x, camps[x.campagneId], ctx);
       if (r) rattrapages.push(r);
@@ -300,8 +312,13 @@ async function passage(dry) {
   /* Campagne vide → terminée */
   if (!dry) {
     for (let c = 0; c < ids.length; c++) {
-      const reste = actives.filter(function (x) { return x.campagneId === ids[c]; }).length;
-      if (!reste) await db.collection('relance_campagnes').doc(ids[c]).set({ etat: 'terminee', termineeA: now }, { merge: true });
+      const reste = actives.filter(function (x) { return x.campagneId === ids[c]; }).length
+        + enAttente.filter(function (x) { return x.campagneId === ids[c]; }).length;
+      if (!reste) {
+        await db.collection('relance_campagnes').doc(ids[c]).set({ etat: 'terminee', termineeA: now }, { merge: true });
+        /* Campagne de suivi créée d'office, en BROUILLON (Adrien, 14/11/2026). */
+        await R.creerSuivi(Object.assign({}, camps[ids[c]], { etat: 'terminee' })).catch(function (e) { console.error('[relances-cron] suivi', ids[c], e && e.message); });
+      }
     }
   }
   return rapport;

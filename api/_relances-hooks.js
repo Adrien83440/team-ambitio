@@ -35,10 +35,18 @@ function nettoyer(t) {
   return R.Core.norm(t).replace(/[«»"'.,!?;:()\-–—]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-async function verrouDe(leadId) {
+/* Une réponse reçue jusqu'à 14 jours APRÈS le dernier message d'une
+   séquence terminée lui est encore rattachée (14/11/2026). Indispensable pour
+   une campagne d'UN seul message : la séquence est « terminée » dès l'envoi,
+   et c'est après qu'arrivent les réponses. */
+const FENETRE_REPONSE = 14 * 864e5;
+async function verrouRecent(leadId) {
   const s = await db.collection('relance_verrous').doc(String(leadId)).get();
   const v = s.exists ? (s.data() || {}) : null;
-  return v && v.actif === true ? v : null;
+  if (!v || !v.inscriptionId) return null;
+  if (v.actif === true) return v;
+  if (v.motif === 'terminee' && Date.now() - (+v.libereA || 0) < FENETRE_REPONSE) return Object.assign({ termine: true }, v);
+  return null;
 }
 
 async function exclure(leadId, motif, o) {
@@ -48,12 +56,23 @@ async function exclure(leadId, motif, o) {
   }, { merge: true });
 }
 
+/* Séquence déjà terminée : on garde son état, on note l'événement pour le
+   suivi de la campagne (sinon un « Plus intéressé » cliqué après l'unique
+   message n'apparaîtrait nulle part dans les chiffres). */
+async function marquerTerminee(v, champ) {
+  const patch = {};
+  patch[champ] = Date.now();
+  await db.collection('relance_inscriptions').doc(String(v.inscriptionId)).set(patch, { merge: true });
+}
 async function plusInteresse(leadId, o) {
   o = o || {};
-  const v = await verrouDe(leadId);
+  const v = await verrouRecent(leadId);
   const campagneId = (v && v.campagneId) || o.campagneId || null;
   await exclure(leadId, 'plus_interesse', { canal: o.canal, campagneId: campagneId });
-  if (v && v.inscriptionId) await R.arreter(v.inscriptionId, 'plus_interesse');
+  if (v && v.inscriptionId) {
+    if (v.termine) await marquerTerminee(v, 'plusInteresseA');
+    else await R.arreter(v.inscriptionId, 'plus_interesse');
+  }
 
   const ref = db.collection('leads').doc(String(leadId));
   const s = await ref.get();
@@ -106,16 +125,29 @@ async function surEntrant(o) {
       return;
     }
     if ((o.canal === 'sms' || o.canal === 'whatsapp') && STOP[t]) {
-      const v = await verrouDe(o.leadId);
+      const v = await verrouRecent(o.leadId);
       await exclure(o.leadId, 'stop', { canal: o.canal, campagneId: v && v.campagneId });
-      if (v && v.inscriptionId) await R.arreter(v.inscriptionId, 'stop');
+      if (v && v.inscriptionId) {
+        if (v.termine) await marquerTerminee(v, 'stopA');
+        else await R.arreter(v.inscriptionId, 'stop');
+      }
       return;
     }
 
-    const v = await verrouDe(o.leadId);
+    const v = await verrouRecent(o.leadId);
     if (!v || !v.inscriptionId) return;
     const extrait = String(o.texte || '').replace(/\s+/g, ' ').slice(0, 200);
-    await R.arreter(v.inscriptionId, 'a_repondu', { reponse: { canal: o.canal, extrait: extrait, at: Date.now() } });
+    const reponse = { canal: o.canal, extrait: extrait, at: Date.now() };
+    if (v.termine) {
+      /* Séquence déjà terminée : on garde son état, on note la réponse (une
+         seule fois — la première réponse fait foi). */
+      const iref = db.collection('relance_inscriptions').doc(String(v.inscriptionId));
+      const deja = await iref.get();
+      if (deja.exists && (deja.data() || {}).reponse) return;
+      await iref.set({ reponse: reponse }, { merge: true });
+    } else {
+      await R.arreter(v.inscriptionId, 'a_repondu', { reponse: reponse });
+    }
 
     const camp = v.campagneId ? await db.collection('relance_campagnes').doc(String(v.campagneId)).get() : null;
     const campNom = camp && camp.exists ? (camp.data() || {}).nom || '' : '';

@@ -94,6 +94,8 @@ function nettoyerFiltres(f) {
     scoreMin: num(f.scoreMin), scoreMax: num(f.scoreMax), sansScore: f.sansScore !== false,
     /* null = réglage général (21 j d'ancienneté, 10 j de silence) ; 0 = désactivé. */
     ancienneteMin: seuilJours(f.ancienneteMin), silenceMin: seuilJours(f.silenceMin),
+    /* Segment « sans réaction » d'une campagne précédente (campagne de suivi). */
+    campagneSource: f.campagneSource ? String(f.campagneSource).slice(0, 120) : null,
   };
 }
 function nettoyerEtapes(etapes) {
@@ -318,6 +320,10 @@ async function preparer(b) {
     : 'Le lien public de réservation « ' + (cfg.typePublic || Core.DEFAUTS.typePublic) + ' » est introuvable dans Booking admin.');
   (vagues || []).forEach(function (v) { if (!v.jours.length || v.jours.some(function (j) { return !j.date; })) bloquants.push('Vague « ' + (v.nom || v.segmentId) + ' » : jours de campagne manquants.'); });
   if (!total) bloquants.push('Aucun lead à relancer.');
+  if (camp.campagneSource) {
+    const src = await lireCampagne(camp.campagneSource);
+    if (src && src.etat !== 'terminee') bloquants.push('Campagne de suivi : la campagne « ' + (src.nom || src.id) + ' » n\'est pas terminée — attends que tous ses messages soient partis.');
+  }
   return {
     ok: true, total: total, cout: Core.coutEstime(total, camp.etapes || [], cfg), bloquants: bloquants, sansLien: sansLien,
     vagues: vagues.map(function (v) { return { nom: v.nom, total: v.total, exclus: v.exclus,
@@ -457,9 +463,11 @@ async function stats(b) {
     if (x.etat === 'active') total.actives++;
     else if (x.etat === 'terminee') total.terminees++;
     else total.arretees++;
-    if (x.motifArret === 'a_repondu') { total.reponses++; if (p) p.reponses++; }
-    if (x.motifArret === 'plus_interesse') total.plusInteresse++;
-    if (x.motifArret === 'stop' || x.motifArret === 'exclu_stop') total.stop++;
+    /* Réponse = notée sur l'inscription, y compris APRÈS la fin de la séquence
+       (campagne d'un seul message : c'est le cas normal). */
+    if (x.reponse || x.motifArret === 'a_repondu') { total.reponses++; if (p) p.reponses++; }
+    if (x.motifArret === 'plus_interesse' || x.plusInteresseA) total.plusInteresse++;
+    if (x.motifArret === 'stop' || x.motifArret === 'exclu_stop' || x.stopA) total.stop++;
     if (rdvs.length) { total.rdv++; if (p) p.rdv++; }
     if (honore) { total.honores++; if (p) p.honores++; }
     if (vente) { total.ventes++; if (p) p.ventes++; }
@@ -622,6 +630,11 @@ module.exports = async (req, res) => {
       else if (a === 'stats') r = await stats(b);
       else if (a === 'config') r = await majConfig(b, auth);
       else if (a === 'preconfigurer') r = await preconfigurer(auth);
+      else if (a === 'creerSuivi') {
+        const c = await lireCampagne(b.campagneId);
+        r = !c ? { code: 404, ok: false, error: 'campagne_introuvable' }
+          : (c.etat === 'brouillon' ? { code: 409, ok: false, error: 'campagne_non_lancee' } : { ok: true, suiviId: await R.creerSuivi(c) });
+      }
       else r = { code: 400, ok: false, error: 'action_inconnue' };
     } else {
       r = { code: 405, ok: false, error: 'method_not_allowed' };

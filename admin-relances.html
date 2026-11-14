@@ -168,6 +168,11 @@ function jourHeure(ms) { return ms ? new Date(ms).toLocaleString('fr-FR', { time
 function ymdFr(s) { s = String(s || ''); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4) : '—'; }
 function euros(n) { return (Math.round((+n || 0) * 100) / 100).toFixed(2).replace('.', ',') + ' €'; }
 function occupe(b) { S.occupe = b; document.querySelectorAll('[data-action]').forEach(function (x) { if (x.tagName === 'BUTTON') x.disabled = b; }); }
+function campNom(id) {
+  var l = (S.etat && S.etat.campagnes) || [];
+  for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i].nom;
+  return id;
+}
 function setterNom(slug) {
   var l = (S.etat && S.etat.setters) || [];
   for (var i = 0; i < l.length; i++) if (l[i].slug === slug) return l[i].nom;
@@ -237,6 +242,7 @@ function peindreSegments() {
 function resumeFiltres(f) {
   f = f || {};
   var p = [];
+  if (f.campagneSource) p.push('sans réaction (ni réponse, ni clic, ni RDV) à « ' + campNom(f.campagneSource) + ' »');
   if ((f.statuts || []).length) p.push(f.statuts.join(', '));
   if ((f.etapes || []).length) p.push('étapes ' + f.etapes.join(', '));
   if ((f.provenances || []).length) p.push('provenance « ' + f.provenances.join(' / ') + ' »');
@@ -293,7 +299,8 @@ function lireSegment() {
       provenances: $('sgProv').value.split(',').map(function (x) { return x.trim(); }).filter(Boolean),
       entreDu: $('sgDu').value, entreAu: $('sgAu').value, contactAvant: $('sgCAv').value, contactApres: $('sgCAp').value,
       scoreMin: $('sgSMin').value, scoreMax: $('sgSMax').value, sansScore: $('sgSans').checked,
-      ancienneteMin: $('sgAnc').value, silenceMin: $('sgSil').value
+      ancienneteMin: $('sgAnc').value, silenceMin: $('sgSil').value,
+      campagneSource: (S.seg.filtres && S.seg.filtres.campagneSource) || null
     }
   };
 }
@@ -399,6 +406,7 @@ function peindreCampEdit() {
   var c = S.camp, fige = c.etat && c.etat !== 'brouillon', dis = fige ? ' disabled' : '';
   var h = '<div class="rl-card"><h2>' + (c.id ? esc(c.nom) + ' <span class="rl-tag ' + esc(c.etat) + '">' + esc(libEtat(c.etat)) + '</span>' : 'Nouvelle campagne') + '</h2>';
   if (c.motifPause === 'qualite_whatsapp_rouge') h += '<div class="rl-banner ko">Mise en pause automatiquement : qualité du numéro WhatsApp basse.</div>';
+  if (c.campagneSource) h += '<div class="rl-banner">Campagne de suivi de « ' + esc(campNom(c.campagneSource)) + ' » : elle vise les leads qui n\'ont ni répondu, ni cliqué, ni pris RDV. « Plus intéressé » et STOP restent exclus définitivement. La liste est recalculée au lancement. Choisis le modèle WhatsApp une fois validé par Meta.</div>';
   h += '<small>Variables : {{prenom}}, {{setter}} (nom du setter assigné), {{lien_rdv}} (lien de réservation personnel du setter, court et suivi), {{lien_stop}} (page « Plus intéressé »). Aucun prix, jamais.</small>'
     + '<div class="rl-grid">'
     + '<label class="rl-f">Nom<input class="rl-in" id="cpNom" value="' + esc(c.nom) + '"' + dis + '></label>'
@@ -425,6 +433,8 @@ function peindreCampEdit() {
   if (c.etat === 'pause') h += '<button class="rl-act ok" type="button" data-action="camp-reprendre">▶ Reprendre</button>';
   if (c.etat === 'en_cours' || c.etat === 'pause') h += '<button class="rl-act ko" type="button" data-action="camp-arreter">Arrêter définitivement</button><button class="rl-act" type="button" data-action="camp-dry">Prochain passage (simulation)</button>';
   if (c.id && c.etat !== 'brouillon') h += '<button class="rl-act" type="button" data-action="camp-suivi">📊 Suivi</button>';
+  if (c.id && c.etat !== 'brouillon' && !c.suiviId) h += '<button class="rl-act" type="button" data-action="camp-suivi-creer" title="Créée d\'office à la fin de la campagne">↪ Créer la campagne de suivi</button>';
+  if (c.suiviId) h += '<button class="rl-act" type="button" data-action="camp-ouvrir" data-id="' + esc(c.suiviId) + '">↪ Campagne de suivi</button>';
   h += '</div>';
   if (c.dernierTest) {
     var t = c.dernierTest, okEmp = c.testOk && c.testOk.empreinte === C.empreinte(c.etapes || []);
@@ -665,6 +675,9 @@ document.addEventListener('click', function (ev) {
         + (j.saute ? '\nSauté : ' + j.saute : ''));
     }).catch(function () { occupe(false); toast('Simulation impossible.'); });
   } else if (a === 'camp-suivi') { S.suiviId = S.camp.id; setTab('suivi'); chargerSuivi(); }
+  else if (a === 'camp-suivi-creer') {
+    action({ action: 'creerSuivi', campagneId: S.camp.id }, function (j) { toast('Campagne de suivi créée (brouillon).'); S.camp = { id: j.suiviId }; charger(); });
+  }
   else if (a === 'suivi-charger') { S.suiviId = $('suCamp').value; chargerSuivi(); }
   else if (a === 'suivi-csv') { exporterCsv(); }
   else if (a === 'seg-csv') { if (S.segApercu) exporterSegment(); }

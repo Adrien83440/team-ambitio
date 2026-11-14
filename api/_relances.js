@@ -203,14 +203,49 @@ async function calculerSegment(filtres, ctx, cfg) {
   if (filtres.entreDu && /^\d{4}-\d{2}-\d{2}$/.test(filtres.entreDu)) {
     q = q.where('createdAt', '>=', new Date(Core.instantParis(filtres.entreDu, 0)));
   }
-  const snap = await q.select.apply(q, champs).get();
-  const E = (filtres.etapes && filtres.etapes.length) ? etapesPipeline() : null;
   const out = [], exclus = {};
   let examines = 0;
-  snap.forEach(function (d) {
+  let docs;
+  /* Segment « sans réaction » d'une campagne précédente (14/11/2026) : les
+     leads dont la séquence s'est TERMINÉE sans réponse, sans clic, sans RDV.
+     Recalculé au lancement : une réponse arrivée entre-temps l'en retire. */
+  let source = null;
+  if (filtres.campagneSource) {
+    source = {};
+    const is = await db.collection('relance_inscriptions').where('campagneId', '==', String(filtres.campagneSource)).get();
+    const refs = [];
+    is.forEach(function (d) {
+      const x = d.data() || {};
+      let m = null;
+      if (x.reponse || x.motifArret === 'a_repondu') m = 'a_repondu';
+      else if (+x.clics > 0) m = 'a_clique';
+      else if (x.motifArret === 'a_reserve' || x.motifArret === 'rdv') m = 'a_reserve';
+      else if (x.etat !== 'terminee') m = x.etat === 'active' ? 'encore_en_cours' : 'sequence_arretee';
+      if (m) { exclus[m] = (exclus[m] || 0) + 1; return; }
+      source[x.leadId] = x;
+      refs.push(db.collection('leads').doc(String(x.leadId)));
+    });
+    docs = [];
+    for (let i = 0; i < refs.length; i += 300) {
+      const lot = refs.slice(i, i + 300);
+      const snaps = lot.length ? await db.getAll.apply(db, lot) : [];
+      snaps.forEach(function (d) { if (d.exists) docs.push(d); });
+    }
+  } else {
+    const snap = await q.select.apply(q, champs).get();
+    docs = snap.docs;
+  }
+  const E = (filtres.etapes && filtres.etapes.length) ? etapesPipeline() : null;
+  docs.forEach(function (d) {
     const l = Object.assign({ id: d.id }, d.data() || {});
     if (!Core.filtrer(l, filtres, { E: E, rdvs: ctx.rdvs })) return;
     examines++;
+    if (source) {
+      const x = source[l.id] || {};
+      const depuis = x.debutA || x.creeA || 0;
+      if (Core.msDe(l.lastBookingAt) > depuis) { exclus.a_reserve = (exclus.a_reserve || 0) + 1; return; }
+      if (l.relanceRepondu && Core.msDe(l.relanceRepondu.at) > depuis) { exclus.a_repondu = (exclus.a_repondu || 0) + 1; return; }
+    }
     const bloque = estBloqueCtx(l, ctx);
     const motif = Core.exclusion(l, {
       rdvAVenir: ctx.rdvAVenir, exclus: ctx.exclus, enSequence: ctx.enSequence, now: now,
@@ -235,6 +270,35 @@ async function calculerSegment(filtres, ctx, cfg) {
   });
   out.sort(function (a, b) { return (b.entree || 0) - (a.entree || 0); });
   return { leads: out, exclus: exclus, examines: examines };
+}
+
+/* ── Campagne de suivi : créée d'office en BROUILLON quand une campagne se
+   termine (ou à la main). Segment = les leads sans réaction ; séquence = un
+   message WhatsApp dont le MODÈLE reste à choisir (celui qu'Adrien fera
+   valider). Rien ne part sans test ni lancement confirmé. Idempotent. ── */
+async function creerSuivi(camp) {
+  if (!camp || !camp.id || camp.suiviAuto === false) return null;
+  const cref = db.collection('relance_campagnes').doc(String(camp.id));
+  const actuel = await cref.get();
+  if (actuel.exists && (actuel.data() || {}).suiviId) return (actuel.data() || {}).suiviId;
+  const segId = 'seg_suivi_' + camp.id;
+  const suiviId = camp.id + '_suivi';
+  const e0 = (camp.etapes || [])[0] || {};
+  await db.collection('relance_segments').doc(segId).set({
+    nom: 'Sans réaction — ' + (camp.nom || camp.id), filtres: { campagneSource: camp.id }, auto: true,
+    creeA: Date.now(), majA: Date.now(), majPar: 'auto',
+  }, { merge: true });
+  const etapes = [{ canal: 'whatsapp', delaiJours: 0, modele: '', langue: e0.langue || 'fr',
+    parametres: e0.parametres || ['prenom'], videoUrl: '', texteRepli: e0.texteRepli || '' }];
+  await db.collection('relance_campagnes').doc(suiviId).set({
+    nom: 'Suivi — ' + (camp.nom || camp.id), etat: 'brouillon', etapes: etapes,
+    vagues: [{ segmentId: segId, jours: [1] }],
+    dateDebut: Core.prochainJourOuvre(Core.decaler(Core.aujourdhui(), 1)),
+    plafondJour: camp.plafondJour || null, setterRepli: camp.setterRepli || null, lienRdv: camp.lienRdv || 'public',
+    campagneSource: camp.id, empreinte: Core.empreinte(etapes), creeA: Date.now(), majA: Date.now(), majPar: 'auto',
+  }, { merge: true });
+  await cref.set({ suiviId: suiviId, suiviCreeA: Date.now() }, { merge: true });
+  return suiviId;
 }
 
 /* ── Modèles WhatsApp approuvés, en détail ─────────────────────────────── */
@@ -525,5 +589,5 @@ async function notifierSetter(o) {
 module.exports = {
   Core, BASE_URL, etapesPipeline, config, membres, membre, typesRdv, typePourSetter, typePublic, typeReservation, urlReservation,
   creerLien, urlLien, contexteExclusions, calculerSegment, modelesWhatsapp, qualiteWhatsapp,
-  envoyerEtape, envoyerSms, tracerSurLead, arreter, motifArret, notifierSetter, dateFr,
+  envoyerEtape, envoyerSms, tracerSurLead, arreter, motifArret, notifierSetter, dateFr, creerSuivi,
 };

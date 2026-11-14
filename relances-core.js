@@ -238,7 +238,10 @@
     relance_exclu: 'Exclu définitivement des relances', rdv: 'RDV à venir', bloque: 'Contact bloqué',
     en_sequence: 'Déjà dans une autre séquence', sans_coordonnees: 'Ni téléphone ni e-mail exploitable',
     rappel_prevu: 'Rappel déjà programmé par le setter', optin_recent: 'Revenu récemment (nouvel opt-in)',
-    trop_recent: 'Arrivé trop récemment', contact_recent: 'Contacté récemment'
+    trop_recent: 'Arrivé trop récemment', contact_recent: 'Contacté récemment',
+    a_repondu: 'A répondu à la campagne précédente', a_clique: 'A cliqué le lien de réservation',
+    a_reserve: 'A pris RDV depuis', sequence_arretee: 'Séquence arrêtée (STOP, plus intéressé, injoignable…)',
+    encore_en_cours: 'Campagne précédente encore en cours pour ce lead'
   };
   function exclusion(l, ctx) {
     ctx = ctx || {};
