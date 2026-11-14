@@ -425,6 +425,25 @@ function rafraichirApercus() {
     if (sp) sp.outerHTML = apercuSms(e.canal === 'whatsapp' ? e.texteRepli : e.texte, i);
   });
 }
+/* Boutons d'insertion au-dessus d'un champ SMS : on n'a plus à connaître les
+   {{variables}} par cœur. Insertion à l'endroit du curseur. */
+var SMS_CONSEILLE = 'Bonjour {{prenom}}, c\'est Adrien. Nous n\'avons pas réussi à nous parler : j\'ai enregistré une courte vidéo pour vous {{lien_video}} '
+  + 'Pour réserver directement votre appel : {{lien_rdv}} Répondez STOP pour ne plus recevoir de messages.';
+function boutonsSms(champ, i, fige) {
+  if (fige) return '';
+  var b = function (v, lib) { return '<button class="rl-act mini" type="button" data-action="inserer" data-champ="' + champ + '" data-i="' + i + '" data-v="' + esc(v) + '">+ ' + lib + '</button>'; };
+  return '<div class="rl-row" style="margin:8px 0 0;gap:6px"><span class="rl-hint" style="margin:0">Insérer dans le SMS :</span>'
+    + b('{{prenom}}', 'Prénom') + b('{{lien_video}}', '🎬 Lien vers la vidéo') + b('{{lien_rdv}}', '📅 Lien de réservation')
+    + '<button class="rl-act mini pri" type="button" data-action="sms-conseille" data-champ="' + champ + '" data-i="' + i + '">Utiliser le texte conseillé</button></div>';
+}
+function remplirChamp(champ, i, transforme) {
+  var ta = document.querySelector('textarea[data-e="' + champ + '"][data-i="' + i + '"]');
+  if (!ta) return;
+  transforme(ta);
+  ta.focus();
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+  lireCampagne();
+}
 function compteurSms(t) {
   var s = C.segmentsSms(C.smsTypique(t || ''));
   var p = C.contientPrix(t || '');
@@ -466,8 +485,10 @@ function peindreEtape(e, i, fige) {
       h += '<div class="rl-row"><button class="rl-act pri" type="button" data-action="etape-tester" data-i="' + i + '">📲 M\'envoyer ce message maintenant</button>'
         + '<span class="rl-hint" id="testRes_' + i + '" style="margin:0"></span></div>';
     }
+    h += boutonsSms('texteRepli', i, fige);
     h += '<label class="rl-f" style="margin-top:6px">SMS de repli (si le numéro n\'est pas sur WhatsApp ou si l\'envoi échoue)<textarea class="rl-ta" data-e="texteRepli" data-i="' + i + '"' + dis + '>' + esc(e.texteRepli || '') + '</textarea></label>' + compteurSms(e.texteRepli) + apercuSms(e.texteRepli, i);
   } else if (e.canal === 'sms') {
+    h += boutonsSms('texte', i, fige);
     h += '<label class="rl-f">Texte du SMS<textarea class="rl-ta" data-e="texte" data-i="' + i + '"' + dis + '>' + esc(e.texte || '') + '</textarea></label>' + compteurSms(e.texte) + apercuSms(e.texte, i);
   } else {
     h += '<label class="rl-f">Objet<input class="rl-in" data-e="objet" data-i="' + i + '" value="' + esc(e.objet || '') + '"' + dis + '></label>'
@@ -767,6 +788,22 @@ document.addEventListener('click', function (ev) {
       res.textContent = '✓ Accepté par Meta, vers ' + j.vers + '. J\'attends l\'accusé de réception…';
       suivreTest(j.wamid, res, 0);
     }).then(function (j) { if (j && !j.ok) { res.className = 'rl-hint ko'; res.textContent = '✗ ' + erreurTexte(j); } });
+  }
+  else if (a === 'inserer') {
+    var v = t.getAttribute('data-v');
+    remplirChamp(t.getAttribute('data-champ'), t.getAttribute('data-i'), function (ta) {
+      var d = ta.selectionStart != null ? ta.selectionStart : ta.value.length, f = ta.selectionEnd != null ? ta.selectionEnd : d;
+      var avant = ta.value.slice(0, d), apres = ta.value.slice(f);
+      var ins = (avant && !/\s$/.test(avant) ? ' ' : '') + v + (apres && !/^\s/.test(apres) ? ' ' : '');
+      ta.value = avant + ins + apres;
+      ta.selectionStart = ta.selectionEnd = (avant + ins).length;
+    });
+  }
+  else if (a === 'sms-conseille') {
+    remplirChamp(t.getAttribute('data-champ'), t.getAttribute('data-i'), function (ta) {
+      if (ta.value.trim() && !window.confirm('Remplacer le texte actuel par le texte conseillé ?')) return;
+      ta.value = SMS_CONSEILLE;
+    });
   }
   else if (a === 'camp-supprimer') {
     if (!window.confirm('Supprimer la campagne « ' + (S.camp.nom || '') + ' » ?\n\nElle disparaît de la liste. Ses envois et statistiques restent conservés en base.')) return;
