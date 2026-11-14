@@ -435,6 +435,14 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   (`lienRdv: 'public'`, type `_config/relances.typePublic` = `call_strat_phenix_all` → Self Booking, pas
   de commission de setting — choix d'Adrien) ; `lienRdv: 'setter'` possible. Modèles à bouton lien FIXE
   acceptés. Première campagne = **un seul message** (pas de relance de relance). Vague sans jours refusée.
+  **Campagne de suivi (14/11/2026)** : à la fin d'une campagne (plus aucune inscription active NI accusé
+  WhatsApp en attente), `R.creerSuivi` crée d'office en BROUILLON `{camp}_suivi` + segment
+  `seg_suivi_{camp}` (`filtres.campagneSource`) = inscriptions terminées sans réponse, sans clic, sans RDV
+  depuis le 1er envoi ; « Plus intéressé » / STOP exclus par `relance_exclusions`. Recalculé au lancement ;
+  modèle WhatsApp à choisir. Bouton manuel « Créer la campagne de suivi ». Après la fin d'une séquence, une
+  réponse reçue sous 14 j est encore rattachée (`reponse` sur l'inscription, sans changer son état), comme
+  « Plus intéressé » (`plusInteresseA`) et STOP (`stopA`). Échec WhatsApp tardif : `aVerifierActif` suit
+  aussi les séquences terminées, fenêtre 72 h (couvre le dimanche).
 
 - **Qualité par pub + API Conversions Meta (12/11/2026, brief « Outil 2 »)** :
   - **Capture** : à chaque opt-in, bloc `leads/{id}.metaIds` (eventId du Lead navigateur, `fbp`/`fbc`,
