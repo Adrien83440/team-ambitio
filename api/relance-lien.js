@@ -165,21 +165,35 @@ function videoDe(camp, cfg) {
   if (v.charAt(0) === '/') v = R.BASE_URL + v;
   return v;
 }
+/* Page vidéo du SMS de repli : la vidéo, et le calendrier de réservation
+   INTÉGRÉ à côté (ordinateur) ou juste en dessous (téléphone). booking.html
+   en ?embed=1 envoie sa hauteur (bk_height) et, une fois le RDV confirmé,
+   redirige toute la page vers la confirmation. */
 function pageVideo(res, prenom, video, resa, compte) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Robots-Tag', 'noindex');
+  const cadre = resa ? resa + (resa.indexOf('?') >= 0 ? '&' : '?') + 'embed=1' : null;
   res.status(200).send('<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">'
     + '<meta name="viewport" content="width=device-width,initial-scale=1"><title>Une vidéo pour vous</title>'
     + '<style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:#f6f5fb;color:#1f2937}'
-    + '.c{max-width:520px;margin:0 auto;padding:22px 16px 40px}h1{font-size:21px;margin:6px 0 4px}p{font-size:15px;line-height:1.55;color:#4b5563;margin:0 0 14px}'
+    + '.c{max-width:1180px;margin:0 auto;padding:22px 16px 40px}h1{font-size:21px;margin:6px 0 4px}p{font-size:15px;line-height:1.55;color:#4b5563;margin:0 0 14px}'
+    + '.g{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;align-items:start}'
+    + '@media (min-width:900px){.g{grid-template-columns:minmax(0,1fr) minmax(0,1.15fr)}.v{position:sticky;top:16px}}'
     + 'video{width:100%;border-radius:14px;background:#000;display:block;box-shadow:0 6px 30px rgba(0,0,0,.12)}'
-    + '.b{display:block;margin:18px 0 10px;padding:15px;border-radius:12px;background:#6d5efc;color:#fff;text-align:center;font-size:17px;font-weight:700;text-decoration:none}'
+    + '.r{background:#fff;border-radius:14px;box-shadow:0 6px 30px rgba(0,0,0,.07);overflow:hidden}'
+    + '.r h2{font-size:16px;margin:0;padding:14px 16px 4px}.r iframe{display:block;width:100%;height:760px;border:0}'
+    + '.b{display:block;margin:14px 0 0;padding:15px;border-radius:12px;background:#6d5efc;color:#fff;text-align:center;font-size:17px;font-weight:700;text-decoration:none}'
     + '.s{background:none;border:0;color:#9ca3af;font-size:13px;text-decoration:underline;cursor:pointer;display:block;margin:18px auto 0}</style></head>'
     + '<body><div class="c"><h1>' + (prenom ? 'Bonjour ' + echap(prenom) + ',' : 'Bonjour,') + '</h1>'
-    + '<p>J\'ai enregistré cette courte vidéo pour vous. Regardez-la, puis réservez votre créneau juste en dessous.</p>'
-    + '<video src="' + echap(video) + '" controls playsinline preload="metadata"></video>'
-    + (resa ? '<a class="b" href="' + echap(resa) + '">Réserver mon appel</a>' : '')
+    + '<p>J\'ai enregistré cette courte vidéo pour vous. Regardez-la, puis choisissez votre créneau' + (cadre ? ' juste à côté.' : ' juste en dessous.') + '</p>'
+    + '<div class="g"><div class="v"><video src="' + echap(video) + '" controls playsinline preload="metadata"></video>'
+    + (resa ? '<a class="b" href="' + echap(cadre ? '#resa' : resa) + '">Réserver mon appel</a>' : '') + '</div>'
+    + (cadre ? '<div class="r" id="resa"><h2>Choisissez votre créneau</h2><iframe id="bk" src="' + echap(cadre) + '" title="Réservation" loading="lazy"></iframe></div>' : '')
+    + '</div>'
     + '<form method="POST"><input type="hidden" name="action" value="stop"><button class="s" type="submit">Je ne suis plus intéressé(e)</button></form>'
-    + '<p style="text-align:center;font-size:13px;margin-top:22px">Adrien &amp; Emily</p></div>' + compte + '</body></html>');
+    + '<p style="text-align:center;font-size:13px;margin-top:22px">Adrien &amp; Emily</p></div>'
+    + "<script>(function(){var f=document.getElementById('bk');if(!f)return;window.addEventListener('message',function(e){"
+    + "if(e.origin!==location.origin||!e.data||e.data.type!=='bk_height')return;var h=+e.data.h;if(h>200)f.style.height=Math.min(h+20,2400)+'px';});})();</script>"
+    + compte + '</body></html>');
 }

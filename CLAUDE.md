@@ -460,7 +460,8 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   WhatsApp, sinon `DEFAUTS.videoPage` = `media/relances/RET_DEJA_VU_whatsapp.mp4` (compressée 13,8 Mo, servie
   en statique). Clics et vues comptés par un POST du NAVIGATEUR (`action=clic|vue`), jamais à la lecture du lien :
   iMessage / WhatsApp / antivirus ouvrent les liens pour l'aperçu. Le lien de réservation passe donc par une
-  page relais (plus de 302 direct).
+  page relais (plus de 302 direct). La page vidéo intègre le calendrier (`booking.html?…&embed=1`, hauteur par le message
+  `bk_height`, redirection de toute la page à la confirmation) : à côté de la vidéo sur ordinateur, dessous sur téléphone.
 
 - **Qualité par pub + API Conversions Meta (12/11/2026, brief « Outil 2 »)** :
   - **Capture** : à chaque opt-in, bloc `leads/{id}.metaIds` (eventId du Lead navigateur, `fbp`/`fbc`,
