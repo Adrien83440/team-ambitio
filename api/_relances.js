@@ -394,7 +394,8 @@ async function envoyerWhatsapp(e, tel, v, o, contexte) {
   const { envoyerModele } = require('./_whatsappClient');
   if (!tel) return { ok: false, canal: 'whatsapp', erreur: 'numero_invalide' };
   const m = (o.modeles || {})[e.modele];
-  if (!m) return { ok: false, canal: 'whatsapp', erreur: 'modele_introuvable_ou_non_approuve' };
+  /* pasDeRepli : un modèle absent est NOTRE problème, pas celui du lead. */
+  if (!m) return { ok: false, canal: 'whatsapp', erreur: 'modele_introuvable_ou_non_approuve', pasDeRepli: true };
   if (m.prix) return { ok: false, canal: 'whatsapp', erreur: 'modele_contient_un_prix' };
   const noms = Array.isArray(e.parametres) ? e.parametres : [];
   const params = [];

@@ -481,6 +481,7 @@ function peindreCampEdit() {
   var c = S.camp, fige = c.etat && c.etat !== 'brouillon', dis = fige ? ' disabled' : '';
   var h = '<div class="rl-card"><h2>' + (c.id ? esc(c.nom) + ' <span class="rl-tag ' + esc(c.etat) + '">' + esc(libEtat(c.etat)) + '</span>' : 'Nouvelle campagne') + '</h2>';
   if (c.motifPause === 'qualite_whatsapp_rouge') h += '<div class="rl-banner ko">Mise en pause automatiquement : qualité du numéro WhatsApp basse.</div>';
+  if (c.etat === 'pause' && c.detailPause) h += '<div class="rl-banner ko">Mise en pause automatiquement : ' + esc(c.detailPause) + '</div>';
   if (c.campagneSource) h += '<div class="rl-banner">Campagne de suivi de « ' + esc(campNom(c.campagneSource)) + ' » : elle vise les leads qui n\'ont ni répondu, ni cliqué, ni pris RDV. « Plus intéressé » et STOP restent exclus définitivement. La liste est recalculée au lancement. Choisis le modèle WhatsApp une fois validé par Meta.</div>';
   h += '<small>Variables : {{prenom}}, {{setter}} (nom du setter assigné), {{lien_rdv}} (lien de réservation personnel du setter, court et suivi), {{lien_stop}} (page « Plus intéressé »). Aucun prix, jamais.</small>'
     + '<div class="rl-grid">'

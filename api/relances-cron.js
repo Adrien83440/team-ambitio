@@ -262,7 +262,25 @@ async function passage(dry) {
     }
     if (q.ok && q.limite) ctx.limiteWa = Math.floor(q.limite * 0.8);
     const mw = await R.modelesWhatsapp();
+    /* Liste des modèles illisible (panne Meta passagère) : on ne décide rien,
+       on réessaie au prochain passage — surtout pas de pause ni de SMS. */
+    if (!mw.ok) return Object.assign(rapport, { saute: 'modeles_illisibles', detail: mw.erreur || null });
     (mw.modeles || []).forEach(function (m) { if (String(m.statut).toUpperCase() === 'APPROVED') ctx.modeles[m.nom] = m; });
+    /* Modèle repassé en relecture chez Meta (modifié, mis en pause…) pendant
+       une campagne : PAUSE, jamais une bascule de tous les leads en SMS. */
+    for (let c = 0; c < ids.length; c++) {
+      const camp = camps[ids[c]];
+      const absent = (camp.etapes || []).filter(function (e) { return e.canal === 'whatsapp' && !ctx.modeles[e.modele]; })[0];
+      if (absent) {
+        if (!dry) {
+          await db.collection('relance_campagnes').doc(camp.id).set({ etat: 'pause', motifPause: 'modele_non_approuve',
+            detailPause: 'Le modèle « ' + absent.modele + ' » n\'est plus approuvé chez Meta (en relecture ?). Reprends la campagne une fois validé.', pauseA: now }, { merge: true });
+        }
+        rapport.pausees = (rapport.pausees || []).concat([{ id: camp.id, motif: 'modele_non_approuve' }]);
+        delete camps[ids[c]];
+      }
+    }
+    ids = Object.keys(camps);
     /* Vidéo d'en-tête prête AVANT d'envoyer : sinon on mettrait la campagne en
        pause plutôt que de faire échouer (ou basculer en SMS) chaque lead. */
     for (let c = 0; c < ids.length; c++) {

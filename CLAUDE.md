@@ -451,6 +451,10 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   validé (`components HEADER example.header_handle[0]`), la téléverse une fois (`/{phoneNumberId}/media`),
   garde l'identifiant 25 j dans `relance_medias/{modèle}` ; une URL saisie sur l'étape prime. Vidéo
   indisponible → campagne en pause `video_indisponible`, AUCUN SMS de repli (problème de config, pas du lead).
+  Vidéo > 16 Mo (limite WhatsApp par l'API) : refus avant envoi, taille affichée. Modèle repassé en relecture chez
+  Meta pendant une campagne → pause `modele_non_approuve` (`detailPause` affiché), jamais de bascule SMS ;
+  liste des modèles illisible → passage sauté. Bouton « 📲 M'envoyer ce message maintenant » (`testerEtape` +
+  `statutTest`, champ `codeMeta` — jamais `code`, lu comme statut HTTP par le routeur).
 
 - **Qualité par pub + API Conversions Meta (12/11/2026, brief « Outil 2 »)** :
   - **Capture** : à chaque opt-in, bloc `leads/{id}.metaIds` (eventId du Lead navigateur, `fbp`/`fbc`,
