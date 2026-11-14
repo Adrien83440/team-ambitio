@@ -449,7 +449,10 @@ async function mediaEntete(m, e) {
     let mime = String(rep.headers.get('content-type') || '').split(';')[0];
     if (!/^(video|image)\//.test(mime)) mime = m.enteteFormat === 'VIDEO' ? 'video/mp4' : 'image/jpeg';
     const buf = Buffer.from(await rep.arrayBuffer());
-    if (buf.length > 16 * 1024 * 1024) return { erreur: 'video_modele_trop_lourde' };
+    if (buf.length > 16 * 1024 * 1024) {
+      return { erreur: 'La vidéo du modèle fait ' + (Math.round(buf.length / 104857.6) / 10).toString().replace('.', ',')
+        + ' Mo : WhatsApp limite l\'envoi par l\'API à 16 Mo. Colle l\'URL d\'une version compressée dans « Autre vidéo ».' };
+    }
     const { getWhatsappCreds } = require('./_whatsappClient');
     const creds = await getWhatsappCreds();
     const form = new FormData();
