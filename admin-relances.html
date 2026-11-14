@@ -409,7 +409,7 @@ function apercuWhatsapp(e, m, i) {
 }
 function apercuSms(t, i) {
   var ex = exemple();
-  var txt = String(t || '').trim() ? C.remplir(t, { prenom: ex.prenom, setter: ex.setter, lien_rdv: 'https://team.alteore.com/r/Ab12Cd34Ef', lien_stop: 'https://team.alteore.com/r/Gh56Ij78Kl' }) : '';
+  var txt = String(t || '').trim() ? C.remplir(t, { prenom: ex.prenom, setter: ex.setter, lien_rdv: 'https://team.alteore.com/r/Ab12Cd34Ef', lien_stop: 'https://team.alteore.com/r/Gh56Ij78Kl', lien_video: 'https://team.alteore.com/r/Mn90Op12Qr' }) : '';
   return '<div class="rl-wa" id="smsPrev_' + i + '" style="background:#f4f4f6"><span class="rl-wa-t" style="color:#6b6b70">Aperçu du SMS de repli (depuis le +33 9 39 24 03 97)</span>'
     + (txt ? '<div class="rl-wa-sms">' + esc(txt) + '</div>' : '<div class="rl-wa-manque" style="border-radius:10px">SMS de repli vide : il est obligatoire (numéro absent de WhatsApp).</div>') + '</div>';
 }
@@ -483,7 +483,7 @@ function peindreCampEdit() {
   if (c.motifPause === 'qualite_whatsapp_rouge') h += '<div class="rl-banner ko">Mise en pause automatiquement : qualité du numéro WhatsApp basse.</div>';
   if (c.etat === 'pause' && c.detailPause) h += '<div class="rl-banner ko">Mise en pause automatiquement : ' + esc(c.detailPause) + '</div>';
   if (c.campagneSource) h += '<div class="rl-banner">Campagne de suivi de « ' + esc(campNom(c.campagneSource)) + ' » : elle vise les leads qui n\'ont ni répondu, ni cliqué, ni pris RDV. « Plus intéressé » et STOP restent exclus définitivement. La liste est recalculée au lancement. Choisis le modèle WhatsApp une fois validé par Meta.</div>';
-  h += '<small>Variables : {{prenom}}, {{setter}} (nom du setter assigné), {{lien_rdv}} (lien de réservation personnel du setter, court et suivi), {{lien_stop}} (page « Plus intéressé »). Aucun prix, jamais.</small>'
+  h += '<small>Variables : {{prenom}}, {{setter}} (nom du setter assigné), {{lien_rdv}} (lien de réservation, court et suivi : public par défaut, ou celui du setter selon le réglage de la campagne), {{lien_stop}} (page « Plus intéressé »), {{lien_video}} (SMS seulement : page avec ta vidéo, le bouton Réserver et « Plus intéressé » — le WhatsApp, lui, porte la vidéo du modèle). Aucun prix, jamais.</small>'
     + '<div class="rl-grid">'
     + '<label class="rl-f">Nom<input class="rl-in" id="cpNom" value="' + esc(c.nom) + '"' + dis + '></label>'
     + '<label class="rl-f">Jour 1 de la campagne<input class="rl-in" type="date" id="cpDebut" value="' + esc(c.dateDebut || '') + '"' + dis + '></label>'

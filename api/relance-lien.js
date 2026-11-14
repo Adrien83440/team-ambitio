@@ -76,14 +76,29 @@ module.exports = async (req, res) => {
     return;
   }
 
-  /* ── Lien de réservation ────────────────────────────────────────────── */
+  /* ── Lien de réservation et page vidéo ─────────────────────────────────
+     LE CLIC EST COMPTÉ PAR LE NAVIGATEUR DU LEAD, PAS À LA LECTURE DU LIEN :
+     iMessage, WhatsApp et les antivirus de messagerie ouvrent le lien eux-
+     mêmes pour fabriquer l'aperçu. Compté côté serveur, presque chaque lead
+     passerait pour « a cliqué » et sortirait à tort de la campagne de suivi.
+     La page envoie donc un POST (action=clic / vue) depuis le navigateur ;
+     les robots d'aperçu n'exécutent pas ce JavaScript. */
   try {
-    await ref.set({ clics: admin.firestore.FieldValue.increment(1), dernierClicA: Date.now(),
-      premierClicA: lien.premierClicA || Date.now() }, { merge: true });
-    if (lien.inscriptionId && !lien.test) {
-      await db.collection('relance_inscriptions').doc(String(lien.inscriptionId))
-        .set({ clics: admin.firestore.FieldValue.increment(1), dernierClicA: Date.now() }, { merge: true });
+    if (req.method === 'POST') {
+      const b = (req.body && typeof req.body === 'object') ? req.body : {};
+      const act = String(b.action || '');
+      if (lien.type === 'video' && act === 'stop') {
+        if (!lien.test && lien.leadId) await require('./_relances-hooks').plusInteresse(lien.leadId, { canal: 'lien', campagneId: lien.campagneId });
+        await ref.set({ stopA: Date.now() }, { merge: true });
+        page(res, 200, 'C\'est noté', '<h1>C\'est noté.</h1><p>Nous ne vous relancerons plus. Merci de nous avoir répondu, et belle continuation.</p>');
+        return;
+      }
+      if (act === 'clic' || act === 'vue') await compterClic(ref, lien);
+      res.setHeader('Cache-Control', 'no-store');
+      res.status(204).end();
+      return;
     }
+
     const cfg = await R.config();
     const types = await R.typesRdv();
     let lead = null;
@@ -99,15 +114,72 @@ module.exports = async (req, res) => {
       if (cs.exists) camp = cs.data() || {};
     }
     const choix = R.typeReservation(types, camp, cfg, lead ? lead.assignedTo : (lien.setter || null));
-    if (!choix) {
+    const resa = choix ? R.urlReservation(choix.type, lead) : null;
+    const compte = "<script>(function(){try{var x=new XMLHttpRequest();x.open('POST',location.href,true);"
+      + "x.setRequestHeader('Content-Type','application/x-www-form-urlencoded');x.send('action=ACT');}catch(e){}})();</script>";
+
+    if (lien.type === 'video') {
+      const video = videoDe(camp, cfg);
+      const prenom = lead ? R.Core.prenom(lead) : '';
+      pageVideo(res, prenom, video, resa, compte.replace('ACT', 'vue'));
+      return;
+    }
+
+    if (!resa) {
       page(res, 200, 'Réservation', '<h1>Merci !</h1><p>Répondez simplement au message reçu : nous vous proposons un créneau dans la journée.</p>');
       return;
     }
+    /* Page relais : compte le clic depuis le navigateur, puis ouvre la
+       réservation aussitôt (lien de secours sans JavaScript). */
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
-    res.writeHead(302, { Location: R.urlReservation(choix.type, lead) });
-    res.end();
+    res.setHeader('X-Robots-Tag', 'noindex');
+    res.status(200).send('<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+      + '<title>Réservation</title></head><body style="font-family:Arial,sans-serif;text-align:center;padding:40px 16px;color:#374151">'
+      + '<p>Ouverture de la page de réservation…</p><p><a href="' + echap(resa) + '">Continuer</a></p>'
+      + "<script>(function(){var d='" + resa.replace(/\\/g, '').replace(/'/g, '%27') + "',f=false;function go(){if(f)return;f=true;location.replace(d);}"
+      + "try{var x=new XMLHttpRequest();x.open('POST',location.href,true);x.setRequestHeader('Content-Type','application/x-www-form-urlencoded');"
+      + "x.onloadend=go;x.send('action=clic');}catch(e){go();}setTimeout(go,900);})();</script></body></html>");
   } catch (e) {
     console.error('[relance-lien] rdv', e && e.message);
     page(res, 500, 'Erreur', '<h1>Un instant…</h1><p>Le lien n\'a pas pu s\'ouvrir. Réessayez dans quelques minutes.</p>');
   }
 };
+
+function echap(t) {
+  return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+async function compterClic(ref, lien) {
+  await ref.set({ clics: admin.firestore.FieldValue.increment(1), dernierClicA: Date.now(),
+    premierClicA: lien.premierClicA || Date.now() }, { merge: true });
+  if (lien.inscriptionId && !lien.test) {
+    await db.collection('relance_inscriptions').doc(String(lien.inscriptionId))
+      .set({ clics: admin.firestore.FieldValue.increment(1), dernierClicA: Date.now() }, { merge: true });
+  }
+}
+/* Vidéo de la page : URL saisie sur la 1re étape WhatsApp de la campagne,
+   sinon la vidéo par défaut servie par team.alteore.com. */
+function videoDe(camp, cfg) {
+  const e = ((camp && camp.etapes) || []).filter(function (x) { return x && x.canal === 'whatsapp' && /^https:\/\//.test(String(x.videoUrl || '')); })[0];
+  let v = (e && e.videoUrl) || cfg.videoPage || R.Core.DEFAUTS.videoPage;
+  if (v.charAt(0) === '/') v = R.BASE_URL + v;
+  return v;
+}
+function pageVideo(res, prenom, video, resa, compte) {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Robots-Tag', 'noindex');
+  res.status(200).send('<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">'
+    + '<meta name="viewport" content="width=device-width,initial-scale=1"><title>Une vidéo pour vous</title>'
+    + '<style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:#f6f5fb;color:#1f2937}'
+    + '.c{max-width:520px;margin:0 auto;padding:22px 16px 40px}h1{font-size:21px;margin:6px 0 4px}p{font-size:15px;line-height:1.55;color:#4b5563;margin:0 0 14px}'
+    + 'video{width:100%;border-radius:14px;background:#000;display:block;box-shadow:0 6px 30px rgba(0,0,0,.12)}'
+    + '.b{display:block;margin:18px 0 10px;padding:15px;border-radius:12px;background:#6d5efc;color:#fff;text-align:center;font-size:17px;font-weight:700;text-decoration:none}'
+    + '.s{background:none;border:0;color:#9ca3af;font-size:13px;text-decoration:underline;cursor:pointer;display:block;margin:18px auto 0}</style></head>'
+    + '<body><div class="c"><h1>' + (prenom ? 'Bonjour ' + echap(prenom) + ',' : 'Bonjour,') + '</h1>'
+    + '<p>J\'ai enregistré cette courte vidéo pour vous. Regardez-la, puis réservez votre créneau juste en dessous.</p>'
+    + '<video src="' + echap(video) + '" controls playsinline preload="metadata"></video>'
+    + (resa ? '<a class="b" href="' + echap(resa) + '">Réserver mon appel</a>' : '')
+    + '<form method="POST"><input type="hidden" name="action" value="stop"><button class="s" type="submit">Je ne suis plus intéressé(e)</button></form>'
+    + '<p style="text-align:center;font-size:13px;margin-top:22px">Adrien &amp; Emily</p></div>' + compte + '</body></html>');
+}

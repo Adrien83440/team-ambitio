@@ -62,6 +62,10 @@ async function variables(insc, lead, camp, cfg, liste, etape, dry) {
     if (!liens.rdv && !dry) liens.rdv = await R.creerLien({ type: 'rdv', campagneId: camp.id, inscriptionId: insc.id, leadId: insc.leadId });
     v.lien_rdv = R.urlLien(liens.rdv || 'apercu');
   }
+  if (/lien_video/.test(besoins)) {
+    if (!liens.video && !dry) liens.video = await R.creerLien({ type: 'video', campagneId: camp.id, inscriptionId: insc.id, leadId: insc.leadId });
+    v.lien_video = R.urlLien(liens.video || 'apercu');
+  }
   if (/lien_stop/.test(besoins)) {
     if (!liens.stop && !dry) liens.stop = await R.creerLien({ type: 'stop', campagneId: camp.id, inscriptionId: insc.id, leadId: insc.leadId });
     v.lien_stop = R.urlLien(liens.stop || 'apercu');

@@ -455,6 +455,12 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   Meta pendant une campagne → pause `modele_non_approuve` (`detailPause` affiché), jamais de bascule SMS ;
   liste des modèles illisible → passage sauté. Bouton « 📲 M'envoyer ce message maintenant » (`testerEtape` +
   `statutTest`, champ `codeMeta` — jamais `code`, lu comme statut HTTP par le routeur).
+  **`{{lien_video}}` (SMS de repli seulement, 14/11/2026)** : lien court `type: 'video'` → page servie par
+  `relance-lien.js` (prénom, vidéo, « Réserver mon appel », « Plus intéressé »). Vidéo = URL de la 1re étape
+  WhatsApp, sinon `DEFAUTS.videoPage` = `media/relances/RET_DEJA_VU_whatsapp.mp4` (compressée 13,8 Mo, servie
+  en statique). Clics et vues comptés par un POST du NAVIGATEUR (`action=clic|vue`), jamais à la lecture du lien :
+  iMessage / WhatsApp / antivirus ouvrent les liens pour l'aperçu. Le lien de réservation passe donc par une
+  page relais (plus de 302 direct).
 
 - **Qualité par pub + API Conversions Meta (12/11/2026, brief « Outil 2 »)** :
   - **Capture** : à chaque opt-in, bloc `leads/{id}.metaIds` (eventId du Lead navigateur, `fbp`/`fbc`,

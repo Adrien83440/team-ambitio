@@ -47,7 +47,11 @@
     ancienneteMinJours: 21,  // entré il y a au moins N jours
     silenceMinJours: 10,     // aucun contact (appel, SMS, WhatsApp, e-mail, RDV) depuis N jours
     optinRecentJours: 21,    // ré-opt-in de moins de N jours = lead chaud, jamais relancé
-    typePublic: 'call_strat_phenix_all' // lien public de réservation (Self Booking)
+    typePublic: 'call_strat_phenix_all', // lien public de réservation (Self Booking)
+    /* Vidéo de la page {{lien_video}} (SMS de repli) quand l'étape n'en
+       indique pas : version compressée de la vidéo de réactivation, servie
+       en statique par team.alteore.com (14/11/2026). */
+    videoPage: '/media/relances/RET_DEJA_VU_whatsapp.mp4'
   };
 
   /* ── Statuts / étapes ───────────────────────────────────────────────── */
@@ -341,7 +345,7 @@
   }
 
   /* ── Variables ──────────────────────────────────────────────────────── */
-  var VARIABLES = ['prenom', 'setter', 'lien_rdv', 'lien_stop'];
+  var VARIABLES = ['prenom', 'setter', 'lien_rdv', 'lien_stop', 'lien_video'];
   function remplir(texte, v) {
     v = v || {};
     return String(texte || '').replace(/\{\{\s*([a-z_]+)\s*\}\}/g, function (m, k) {
@@ -409,7 +413,7 @@
      (un lien court fait 37 caractères), pour estimer les segments. */
   function smsTypique(texte) {
     return remplir(texte, { prenom: 'Stephanie', setter: 'Valentin', lien_rdv: 'https://team.alteore.com/r/AbCdEfGhIj',
-      lien_stop: 'https://team.alteore.com/r/AbCdEfGhIk' });
+      lien_stop: 'https://team.alteore.com/r/AbCdEfGhIk', lien_video: 'https://team.alteore.com/r/AbCdEfGhIl' });
   }
 
   /* ── Coût estimé ────────────────────────────────────────────────────── */

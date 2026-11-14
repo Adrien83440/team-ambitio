@@ -314,6 +314,9 @@ async function tester(b, auth) {
   const js = await R.creerLien({ type: 'stop', test: true, campagneId: camp.id });
   const vars = { prenom: (exemple && exemple.prenom) || 'Adrien', setter: mb ? mb.nom : 'notre équipe',
     lien_rdv: R.urlLien(jr), lien_stop: R.urlLien(js) };
+  /* {{lien_video}} : page vidéo du SMS de repli (lien de test : rien n'est compté). */
+  const jv = await R.creerLien({ type: 'video', test: true, campagneId: camp.id });
+  vars.lien_video = R.urlLien(jv);
   const resultats = [];
   const etapes = camp.etapes || [];
   for (let i = 0; i < etapes.length; i++) {
