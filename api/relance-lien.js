@@ -91,13 +91,14 @@ module.exports = async (req, res) => {
       const ls = await db.collection('leads').doc(String(lien.leadId)).get();
       if (ls.exists) lead = Object.assign({ id: ls.id }, ls.data() || {});
     }
-    /* Setter de repli : celui de la campagne d'abord, sinon le réglage général. */
-    let repli = cfg.setterRepli;
+    /* Lien PUBLIC par défaut (Self Booking, choix d'Adrien du 14/11/2026) ;
+       lien du setter seulement si la campagne porte lienRdv: 'setter'. */
+    let camp = null;
     if (lien.campagneId) {
       const cs = await db.collection('relance_campagnes').doc(String(lien.campagneId)).get();
-      if (cs.exists && (cs.data() || {}).setterRepli) repli = (cs.data() || {}).setterRepli;
+      if (cs.exists) camp = cs.data() || {};
     }
-    const choix = R.typePourSetter(types, lead ? lead.assignedTo : (lien.setter || null), repli);
+    const choix = R.typeReservation(types, camp, cfg, lead ? lead.assignedTo : (lien.setter || null));
     if (!choix) {
       page(res, 200, 'Réservation', '<h1>Merci !</h1><p>Répondez simplement au message reçu : nous vous proposons un créneau dans la journée.</p>');
       return;

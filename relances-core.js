@@ -40,7 +40,14 @@
     coutEmail: 0,
     emailCompte: 'strategie',
     setterRepli: '',         // slug du setter dont on prend le lien si besoin
-    pauseSiQualiteRouge: true
+    pauseSiQualiteRouge: true,
+    /* Précision des segments (Adrien, 14/11/2026 : « que ça ne prenne pas des
+       gens arrivés récemment »). Appliqués à TOUT segment qui ne fixe pas sa
+       propre valeur — 0 dans le segment = désactivé explicitement. */
+    ancienneteMinJours: 21,  // entré il y a au moins N jours
+    silenceMinJours: 10,     // aucun contact (appel, SMS, WhatsApp, e-mail, RDV) depuis N jours
+    optinRecentJours: 21,    // ré-opt-in de moins de N jours = lead chaud, jamais relancé
+    typePublic: 'call_strat_phenix_all' // lien public de réservation (Self Booking)
   };
 
   /* ── Statuts / étapes ───────────────────────────────────────────────── */
@@ -188,6 +195,35 @@
     if (/^\+330\d{9}$/.test(e)) e = '+33' + e.slice(4);
     return /^\+\d{10,15}$/.test(e) ? e : null;
   }
+  /* Dernier contact RÉEL, toutes traces confondues, entrant comme sortant :
+     lastContactAt n'est pas tenu à jour par tous les canaux, on prend donc le
+     plus récent de lastContactAt, des communications (hors relances
+     automatiques), du dernier opt-in et du dernier RDV pris. 0 = jamais. */
+  /* Un échange RÉEL avec le lead : SMS / WhatsApp / e-mail dans un sens ou
+     dans l'autre (hors envois automatiques), ou appel DÉCROCHÉ (même règle
+     que pipeline-etapes traces : marqué répondu ou ≥ 30 s). Un appel sans
+     réponse n'en est pas un : sinon chaque tentative du dialer sur un « jamais
+     joint » l'écarterait des relances. lastContactAt n'est PAS utilisé : il
+     est posé aussi par les appels manqués. */
+  function contactReel(c) {
+    if (!c || c.source === 'relance' || c.auto === true) return false;
+    if (c.type === 'call') return c.answered === true || (+c.duration || 0) >= 30;
+    return c.type === 'sms' || c.type === 'whatsapp' || c.type === 'email';
+  }
+  function dernierContactReel(l) {
+    var m = Math.max(msDe(l.lastOptinAt), msDe(l.lastBookingAt),
+      msDe(l.whatsappEnvoye && l.whatsappEnvoye.at),
+      l.whatsappFenetre ? msDe(l.whatsappFenetre) - JOUR_MS : 0);
+    (l.communications || []).forEach(function (c) {
+      if (contactReel(c)) m = Math.max(m, msDe(c.date || c.createdAt));
+    });
+    return m;
+  }
+  /* Rappel convenu par le setter et encore à venir (followUps non fait). */
+  function rappelPrevu(l, now) {
+    var n = now == null ? Date.now() : now;
+    return (l.followUps || []).some(function (f) { return f && !f.done && msDe(f.dateTime || f.date) > n; });
+  }
   function estClient(l) {
     return l.isClient === true || l.status === 'client' || l.stage === 'closed_won_setting' || l.stage === 'closed_won_self';
   }
@@ -200,7 +236,9 @@
     fusionne: 'Fiche fusionnée', client: 'Client', faux_numero: 'Faux numéro / poubelle',
     disqualifie: 'Disqualifié', pas_interesse: 'Pas intéressé', stop: 'A répondu STOP',
     relance_exclu: 'Exclu définitivement des relances', rdv: 'RDV à venir', bloque: 'Contact bloqué',
-    en_sequence: 'Déjà dans une autre séquence', sans_coordonnees: 'Ni téléphone ni e-mail exploitable'
+    en_sequence: 'Déjà dans une autre séquence', sans_coordonnees: 'Ni téléphone ni e-mail exploitable',
+    rappel_prevu: 'Rappel déjà programmé par le setter', optin_recent: 'Revenu récemment (nouvel opt-in)',
+    trop_recent: 'Arrivé trop récemment', contact_recent: 'Contacté récemment'
   };
   function exclusion(l, ctx) {
     ctx = ctx || {};
@@ -215,6 +253,10 @@
     if (ctx.bloques && ctx.bloques[id]) return 'bloque';
     if (ctx.rdvAVenir && ctx.rdvAVenir[id]) return 'rdv';
     if (ctx.enSequence && ctx.enSequence[id]) return 'en_sequence';
+    if (rappelPrevu(l, ctx.now)) return 'rappel_prevu';
+    var jOptin = ctx.optinRecentJours != null ? +ctx.optinRecentJours : DEFAUTS.optinRecentJours;
+    var opt = msDe(l.lastOptinAt);
+    if (jOptin > 0 && opt && opt > (ctx.now || Date.now()) - jOptin * JOUR_MS) return 'optin_recent';
     if (!telephoneE164(l.telephone) && !String(l.email || '').trim()) return 'sans_coordonnees';
     return null;
   }
@@ -229,6 +271,21 @@
   function ymdMs(ymd, finDeJour) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(ymd || ''))) return 0;
     return instantParis(ymd, 0) + (finDeJour ? JOUR_MS : 0);
+  }
+  /* Ancienneté et silence minimum : valeur du segment, sinon réglage général.
+     Renvoie 'trop_recent', 'contact_recent' ou null — comptés à part dans
+     l'aperçu pour qu'on voie combien de leads ils écartent. */
+  function seuil(v, d) { return (v === '' || v == null || !isFinite(+v)) ? d : +v; }
+  function raisonRecence(l, f, cfg, now) {
+    f = f || {}; cfg = cfg || DEFAUTS;
+    var n = now == null ? Date.now() : now;
+    var a = seuil(f.ancienneteMin, seuil(cfg.ancienneteMinJours, DEFAUTS.ancienneteMinJours));
+    var e = dateEntree(l);
+    if (a > 0 && (!e || e > n - a * JOUR_MS)) return 'trop_recent';
+    var sl = seuil(f.silenceMin, seuil(cfg.silenceMinJours, DEFAUTS.silenceMinJours));
+    var c = dernierContactReel(l);
+    if (sl > 0 && c && c > n - sl * JOUR_MS) return 'contact_recent';
+    return null;
   }
   function filtrer(l, f, ctx) {
     f = f || {};
@@ -368,7 +425,8 @@
     estFerie: estFerie, jourOuvre: jourOuvre, prochainJourOuvre: prochainJourOuvre, jourEtape: jourEtape,
     jourCampagne: jourCampagne, ouvert: ouvert, instantParis: instantParis, minutesRestantes: minutesRestantes,
     provenance: provenance, dateEntree: dateEntree, prenom: prenom, telephoneE164: telephoneE164, estClient: estClient,
-    exclusion: exclusion, filtrer: filtrer, repartir: repartir, contientPrix: contientPrix,
+    exclusion: exclusion, filtrer: filtrer, raisonRecence: raisonRecence,
+    dernierContactReel: dernierContactReel, rappelPrevu: rappelPrevu, contactReel: contactReel, repartir: repartir, contientPrix: contientPrix,
     remplir: remplir, variablesInconnues: variablesInconnues, verifierEtape: verifierEtape, empreinte: empreinte,
     coutEstime: coutEstime, segmentsSms: segmentsSms, smsTypique: smsTypique
   };

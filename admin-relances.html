@@ -209,7 +209,7 @@ function peindreEntete() {
     : '<span class="rl-pill prod">🔴 PRODUCTION — envois réels actifs</span>';
   if (w.ok) {
     var q = String(w.qualite || '').toUpperCase(), cls = q === 'GREEN' ? 'vert' : (q === 'RED' ? 'rouge' : 'jaune');
-    h += '<span class="rl-pill ' + cls + '">WhatsApp : qualité ' + esc({ GREEN: 'bonne', YELLOW: 'moyenne', RED: 'basse' }[q] || q)
+    h += '<span class="rl-pill ' + cls + '" title="Note attribuée par Meta au compte de l\'API WhatsApp (le même que Leads Live)">API WhatsApp : qualité ' + esc({ GREEN: 'bonne', YELLOW: 'moyenne', RED: 'basse' }[q] || q)
       + (w.palier ? ' · ' + esc(w.palier) : '') + '</span>';
   } else h += '<span class="rl-pill jaune">WhatsApp : état illisible</span>';
   $('rlPills').innerHTML = h;
@@ -218,7 +218,7 @@ function peindreEntete() {
     b = '<div class="rl-banner">Aucune campagne pour l\'instant. La première campagne (Follow-up + Jamais joints Elite, depuis le 13/08) peut être créée en brouillon : rien ne part tant que tu ne l\'as pas testée et lancée.'
       + '<div class="rl-row"><button class="rl-act pri" type="button" data-action="preconfigurer">Créer la campagne préconfigurée</button></div></div>';
   }
-  if (w.ok && String(w.qualite).toUpperCase() === 'RED') b += '<div class="rl-banner ko">La qualité du numéro WhatsApp est BASSE : les campagnes sont mises en pause automatiquement. Le numéro sert aussi aux rappels de coaching.</div>';
+  if (w.ok && String(w.qualite).toUpperCase() === 'RED') b += '<div class="rl-banner ko">La qualité du compte de l\'API WhatsApp est BASSE : les campagnes sont mises en pause automatiquement. Ce compte sert aussi à Leads Live et aux rappels de coaching.</div>';
   $('rlBanner').innerHTML = b;
 }
 
@@ -241,6 +241,8 @@ function resumeFiltres(f) {
   if ((f.etapes || []).length) p.push('étapes ' + f.etapes.join(', '));
   if ((f.provenances || []).length) p.push('provenance « ' + f.provenances.join(' / ') + ' »');
   if (f.entreDu) p.push('entrés depuis le ' + ymdFr(f.entreDu));
+  p.push('ancienneté ≥ ' + (f.ancienneteMin != null ? f.ancienneteMin : S.etat.config.ancienneteMinJours) + ' j');
+  p.push('silence ≥ ' + (f.silenceMin != null ? f.silenceMin : S.etat.config.silenceMinJours) + ' j');
   if (f.entreAu) p.push('jusqu\'au ' + ymdFr(f.entreAu));
   if ((f.setters || []).length) p.push('setters ' + f.setters.join(', '));
   if (f.scoreMin != null || f.scoreMax != null) p.push('score ' + (f.scoreMin != null ? f.scoreMin : 0) + '–' + (f.scoreMax != null ? f.scoreMax : 100));
@@ -258,7 +260,8 @@ function peindreSegEdit() {
   var cols = (window.PipelineEtapes && window.PipelineEtapes.COLS || []).map(function (c) { return { id: c.id, t: c.t }; });
   var setters = (S.etat.setters || []).map(function (m) { return { id: m.slug, t: m.nom }; });
   var h = '<div class="rl-card"><h2>' + (s.id ? 'Segment : ' + esc(s.nom) : 'Nouveau segment') + '</h2>'
-    + '<small>Exclusions automatiques, <b>non désactivables</b> : clients, faux numéros / poubelle, disqualifiés, pas intéressés, STOP, exclus définitifs des relances, contacts bloqués, RDV à venir, fiches fusionnées, leads déjà dans une autre séquence.</small>'
+    + '<small>Exclusions automatiques, <b>non désactivables</b> : clients, faux numéros / poubelle, disqualifiés, pas intéressés, STOP, exclus définitifs des relances, contacts bloqués, RDV à venir, rappel déjà programmé par le setter, nouvel opt-in de moins de ' + esc(S.etat.config.optinRecentJours) + ' jours, fiches fusionnées, leads déjà dans une autre séquence.<br>'
+      + 'Par défaut, un segment écarte aussi les leads entrés il y a moins de ' + esc(S.etat.config.ancienneteMinJours) + ' jours et ceux contactés depuis moins de ' + esc(S.etat.config.silenceMinJours) + ' jours (appel décroché, SMS, WhatsApp, e-mail, RDV — un appel sans réponse ne compte pas). Mets 0 pour désactiver sur un segment.</small>'
     + '<div class="rl-grid">'
     + '<label class="rl-f">Nom<input class="rl-in" id="sgNom" value="' + esc(s.nom) + '" placeholder="ex. Follow-up Elite"></label>'
     + '<label class="rl-f">Provenance contient (séparer par des virgules)<input class="rl-in" id="sgProv" value="' + esc((f.provenances || []).join(', ')) + '" placeholder="ex. elite"></label>'
@@ -266,6 +269,8 @@ function peindreSegEdit() {
     + '<label class="rl-f">Entrés jusqu\'au<input class="rl-in" type="date" id="sgAu" value="' + esc(f.entreAu || '') + '"></label>'
     + '<label class="rl-f">Dernier contact avant le<input class="rl-in" type="date" id="sgCAv" value="' + esc(f.contactAvant || '') + '"></label>'
     + '<label class="rl-f">Dernier contact après le<input class="rl-in" type="date" id="sgCAp" value="' + esc(f.contactApres || '') + '"></label>'
+    + '<label class="rl-f">Entré il y a au moins (jours)<input class="rl-in" type="number" min="0" id="sgAnc" value="' + esc(f.ancienneteMin != null ? f.ancienneteMin : '') + '" placeholder="' + esc(S.etat.config.ancienneteMinJours) + ' (réglage général)"></label>'
+    + '<label class="rl-f">Aucun contact réel depuis au moins (jours)<input class="rl-in" type="number" min="0" id="sgSil" value="' + esc(f.silenceMin != null ? f.silenceMin : '') + '" placeholder="' + esc(S.etat.config.silenceMinJours) + ' (réglage général)"></label>'
     + '<label class="rl-f">Score IA min (0-100)<input class="rl-in" type="number" min="0" max="100" id="sgSMin" value="' + esc(f.scoreMin != null ? f.scoreMin : '') + '"></label>'
     + '<label class="rl-f">Score IA max (0-100)<input class="rl-in" type="number" min="0" max="100" id="sgSMax" value="' + esc(f.scoreMax != null ? f.scoreMax : '') + '"></label>'
     + '</div>'
@@ -287,7 +292,8 @@ function lireSegment() {
       statuts: coches('statuts'), etapes: coches('etapes'), setters: coches('setters'),
       provenances: $('sgProv').value.split(',').map(function (x) { return x.trim(); }).filter(Boolean),
       entreDu: $('sgDu').value, entreAu: $('sgAu').value, contactAvant: $('sgCAv').value, contactApres: $('sgCAp').value,
-      scoreMin: $('sgSMin').value, scoreMax: $('sgSMax').value, sansScore: $('sgSans').checked
+      scoreMin: $('sgSMin').value, scoreMax: $('sgSMax').value, sansScore: $('sgSans').checked,
+      ancienneteMin: $('sgAnc').value, silenceMin: $('sgSil').value
     }
   };
 }
@@ -297,13 +303,14 @@ function peindreApercu() {
   h += '<small>' + a.examines + ' correspondent aux filtres' + (ex.length ? ' ; exclus automatiquement : ' + ex.map(function (k) { return esc((S.etat.motifs || {})[k] || k) + ' ' + a.exclus[k]; }).join(' · ') : '') + '.</small>';
   if (!a.leads.length) h += '<div class="rl-vide">Aucun lead.</div>';
   else {
-    h += '<div class="rl-scroll"><table class="rl-table"><tr><th>Lead</th><th>Statut</th><th>Provenance</th><th>Setter</th><th>Entré le</th><th>Dernier contact</th><th>Score IA</th><th>Canaux</th></tr>';
-    a.leads.forEach(function (l) {
+    h += '<div class="rl-row" style="margin:0 0 8px"><button class="rl-act" type="button" data-action="seg-csv">⬇ Exporter la liste exacte (CSV)</button></div>';
+    h += '<div class="rl-scroll"><table class="rl-table"><tr><th>Lead</th><th>Statut</th><th>Provenance</th><th>Setter</th><th>Entré le</th><th>Ancienneté</th><th>Dernier contact réel</th><th>Score IA</th><th>Canaux</th></tr>';
+    a.leads.slice(0, 500).forEach(function (l) {
       h += '<tr><td><a href="sales-leads.html?leadId=' + encodeURIComponent(l.id) + '" target="_blank" rel="noopener">' + esc(l.nom || l.prenom || l.id) + '</a></td><td>' + esc(l.statut) + '</td><td>' + esc(l.provenance)
-        + '</td><td>' + esc(setterNom(l.setter)) + '</td><td>' + jour(l.entree) + '</td><td>' + jour(l.dernierContact) + '</td><td class="n">' + (l.score != null ? l.score : '—')
+        + '</td><td>' + esc(setterNom(l.setter)) + '</td><td>' + jour(l.entree) + '</td><td class="n">' + (l.anciennete != null ? l.anciennete + ' j' : '—') + '</td><td>' + (l.dernierContact ? jour(l.dernierContact) : 'jamais') + '</td><td class="n">' + (l.score != null ? l.score : '—')
         + '</td><td>' + (l.telephone ? '📱' : '') + (l.email ? ' ✉️' : '') + '</td></tr>';
     });
-    h += '</table></div>' + (a.tronque ? '<div class="rl-hint">Aperçu limité aux 500 premiers.</div>' : '');
+    h += '</table></div>' + (a.leads.length > 500 ? '<div class="rl-hint">Tableau limité aux 500 premiers ; l\'export CSV contient les ' + a.leads.length + '.</div>' : '');
   }
   $('sgApercu').innerHTML = h + '</div>';
 }
@@ -311,7 +318,7 @@ function peindreApercu() {
 /* ── Campagnes ───────────────────────────────────────────────────────── */
 function campVide() {
   return { id: '', nom: '', etat: 'brouillon', dateDebut: C.prochainJourOuvre(C.decaler(C.aujourdhui(), 1)), plafondJour: '', setterRepli: '',
-    vagues: [{ segmentId: '', jours: [1] }], etapes: [{ canal: 'whatsapp', delaiJours: 0, parametres: ['prenom', 'setter'] }] };
+    lienRdv: 'public', vagues: [{ segmentId: '', jours: [1] }], etapes: [{ canal: 'whatsapp', delaiJours: 0, parametres: ['prenom', 'setter'] }] };
 }
 function peindreCampagnes() {
   var l = S.etat.campagnes || [], h = '<div class="rl-card"><h2>Campagnes</h2><small>Brouillon → test → lancement. Une campagne lancée ne se modifie plus.</small><div class="rl-list">';
@@ -366,7 +373,9 @@ function peindreEtape(e, i, fige) {
         + (m.pied ? '\n\n' + esc(m.pied) : '') + (m.boutons.length ? '\n\n' + m.boutons.map(function (b) { return '[' + esc(b.texte) + ']' + (b.type === 'URL' ? ' → ' + esc(b.url) : ''); }).join('  ') : '') + '</div>';
       if (m.prix) h += '<div class="rl-hint ko">⛔ Ce modèle contient un élément de prix (« ' + esc(m.prix) + ' ») : il ne peut pas être utilisé.</div>';
       var hasUrl = m.boutons.some(function (b) { return b.type === 'URL' && b.dynamique; });
-      if (!hasUrl) h += '<div class="rl-hint ko">Pas de bouton lien dynamique (…/r/{{1}}) : le lien de réservation ne pourra pas être inséré.</div>';
+      var fixe = m.boutons.filter(function (b) { return b.type === 'URL' && !b.dynamique; })[0];
+      if (!hasUrl && fixe) h += '<div class="rl-hint">Bouton à lien fixe (' + esc(fixe.url) + ') : le RDV pris par ce bouton est un Self Booking, rattaché à la fiche par e-mail / téléphone ; la séquence s\'arrête dès la réservation. Pas de comptage des clics sur ce bouton.</div>';
+      else if (!hasUrl) h += '<div class="rl-hint">Pas de bouton lien : seul le SMS de repli portera {{lien_rdv}}.</div>';
       for (var k = 0; k < m.variables; k++) {
         h += '<label class="rl-f" style="margin-top:6px">{{' + (k + 1) + '}} =<select class="rl-sel" data-e="param" data-k="' + k + '" data-i="' + i + '"' + dis + '>'
           + ['prenom', 'setter'].map(function (v) { return '<option value="' + v + '"' + ((e.parametres || [])[k] === v ? ' selected' : '') + '>' + v + '</option>'; }).join('') + '</select></label>';
@@ -395,7 +404,10 @@ function peindreCampEdit() {
     + '<label class="rl-f">Nom<input class="rl-in" id="cpNom" value="' + esc(c.nom) + '"' + dis + '></label>'
     + '<label class="rl-f">Jour 1 de la campagne<input class="rl-in" type="date" id="cpDebut" value="' + esc(c.dateDebut || '') + '"' + dis + '></label>'
     + '<label class="rl-f">Plafond de nouveaux leads / jour<input class="rl-in" type="number" min="1" id="cpPlafond" value="' + esc(c.plafondJour || '') + '" placeholder="' + esc(S.etat.config.plafondJour) + ' (réglage général)"' + dis + '></label>'
-    + '<label class="rl-f">Setter de repli (lead sans lien setter)<select class="rl-sel" id="cpRepli"' + dis + '>' + optionsSetters(c.setterRepli || '', '— réglage général —') + '</select></label>'
+    + '<label class="rl-f">Lien de réservation ({{lien_rdv}})<select class="rl-sel" id="cpLien"' + dis + '>'
+    + '<option value="public"' + (c.lienRdv !== 'setter' ? ' selected' : '') + '>Lien public — Self Booking, sans commission de setting</option>'
+    + '<option value="setter"' + (c.lienRdv === 'setter' ? ' selected' : '') + '>Lien du setter assigné — No Booking</option></select></label>'
+    + '<label class="rl-f">Setter de repli (lien setter uniquement)<select class="rl-sel" id="cpRepli"' + dis + '>' + optionsSetters(c.setterRepli || '', '— réglage général —') + '</select></label>'
     + '</div><h2 style="margin-top:14px">Vagues</h2><small>Chaque segment part sur un ou plusieurs jours de campagne (ex. « 2,3 » = réparti sur les jours 2 et 3). Dimanches et jours fériés sont sautés. Un lead présent dans deux segments n\'est inscrit qu\'une fois.</small>';
   (c.vagues || []).forEach(function (v, i) {
     h += '<div class="rl-row"><select class="rl-sel" style="max-width:340px" data-v="segmentId" data-i="' + i + '"' + dis + '>' + optionsSegments(v.segmentId) + '</select>'
@@ -431,6 +443,7 @@ function lireCampagne() {
   c.dateDebut = $('cpDebut').value;
   c.plafondJour = $('cpPlafond').value;
   c.setterRepli = $('cpRepli').value;
+  c.lienRdv = $('cpLien').value;
   document.querySelectorAll('[data-v]').forEach(function (x) {
     var v = c.vagues[+x.getAttribute('data-i')];
     if (!v) return;
@@ -486,6 +499,23 @@ function peindreSuivi() {
   }
   $('rlSuivi').innerHTML = h;
 }
+function telechargerCsv(nom, cols, lignesObj) {
+  var lignes = [cols.join(';')];
+  lignesObj.forEach(function (r) { lignes.push(cols.map(function (c) { return '"' + String(r[c] == null ? '' : r[c]).replace(/"/g, '""') + '"'; }).join(';')); });
+  var blob = new Blob(['\ufeff' + lignes.join('\n')], { type: 'text/csv;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = nom;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+function exporterSegment() {
+  var a = S.segApercu;
+  telechargerCsv('segment-' + (S.seg.nom || 'apercu').replace(/[^A-Za-z0-9]+/g, '-') + '-' + C.aujourdhui() + '.csv',
+    ['id', 'nom', 'telephone', 'email', 'statut', 'provenance', 'setter', 'entree', 'anciennete_jours', 'dernier_contact_reel', 'score_ia'],
+    a.leads.map(function (l) { return { id: l.id, nom: l.nom, telephone: l.telephone, email: l.email, statut: l.statut, provenance: l.provenance,
+      setter: setterNom(l.setter), entree: l.entree ? C.aujourdhui(l.entree) : '', anciennete_jours: l.anciennete,
+      dernier_contact_reel: l.dernierContact ? C.aujourdhui(l.dernierContact) : 'jamais', score_ia: l.score }; }));
+}
 function exporterCsv() {
   var l = S.stats.lignes, cols = ['leadId', 'nom', 'setter', 'segment', 'etat', 'motif', 'etapesEnvoyees', 'canaux', 'jourDepart', 'reponse', 'clics', 'rdv', 'honore', 'vente', 'statutActuel'];
   var lignes = [cols.join(';')];
@@ -524,8 +554,8 @@ function peindreModeles() {
 /* ── Réglages ────────────────────────────────────────────────────────── */
 function peindreReglages() {
   var c = S.etat.config;
-  var h = '<div class="rl-card"><h2>Coordonnées de test</h2><small>« M\'envoyer un test » envoie chaque étape de la séquence (et chaque SMS de repli) ici, et nulle part ailleurs.</small><div class="rl-grid">'
-    + '<label class="rl-f">Ton numéro (WhatsApp + SMS)<input class="rl-in" id="rgTel" value="' + esc(c.testTelephone || '') + '" placeholder="+336…"></label>'
+  var h = '<div class="rl-card"><h2>Coordonnées de test</h2><small>« M\'envoyer un test » envoie chaque étape de la séquence (et chaque SMS de repli) ici, et nulle part ailleurs. L\'envoi WhatsApp passe par l\'API déjà branchée (la même que Leads Live) : rien à configurer.</small><div class="rl-grid">'
+    + '<label class="rl-f">Ton portable — reçoit les messages de test<input class="rl-in" id="rgTel" value="' + esc(c.testTelephone || '') + '" placeholder="+336…"></label>'
     + '<label class="rl-f">Ton e-mail<input class="rl-in" id="rgMail" value="' + esc(c.testEmail || '') + '"></label></div></div>'
     + '<div class="rl-card"><h2>Garde-fous d\'envoi</h2><div class="rl-grid">'
     + '<label class="rl-f">Plafond de nouveaux leads / jour (défaut, par campagne)<input class="rl-in" type="number" min="1" id="rgPlaf" value="' + esc(c.plafondJour) + '"></label>'
@@ -601,7 +631,8 @@ document.addEventListener('click', function (ev) {
     var errs = [];
     c.etapes.forEach(function (e, i) { var m = modele(e.modele); var x = C.verifierEtape(Object.assign({}, e, m ? { enteteFormat: m.enteteFormat, corpsModele: m.corps } : {}), i); if (x) errs.push(x); });
     if (errs.length) toast('Enregistré, mais à corriger avant le test : ' + errs[0]);
-    action({ action: 'campagne', id: c.id || null, nom: c.nom, dateDebut: c.dateDebut, plafondJour: c.plafondJour, setterRepli: c.setterRepli, vagues: c.vagues, etapes: c.etapes },
+    if (c.vagues.some(function (v) { return !v.jours || !v.jours.length; })) { toast('Indique les jours de campagne de chaque vague (ex. 1, ou 2,3).'); return; }
+    action({ action: 'campagne', id: c.id || null, nom: c.nom, dateDebut: c.dateDebut, plafondJour: c.plafondJour, setterRepli: c.setterRepli, lienRdv: c.lienRdv, vagues: c.vagues, etapes: c.etapes },
       function (j) { S.camp.id = j.id; if (!errs.length) toast('Campagne enregistrée.'); charger(); });
   } else if (a === 'camp-test') {
     if (!window.confirm('Envoyer chaque étape de la séquence (et chaque SMS de repli) à tes coordonnées de test ?\n\nAucun lead ne reçoit rien.')) return;
@@ -636,6 +667,7 @@ document.addEventListener('click', function (ev) {
   } else if (a === 'camp-suivi') { S.suiviId = S.camp.id; setTab('suivi'); chargerSuivi(); }
   else if (a === 'suivi-charger') { S.suiviId = $('suCamp').value; chargerSuivi(); }
   else if (a === 'suivi-csv') { exporterCsv(); }
+  else if (a === 'seg-csv') { if (S.segApercu) exporterSegment(); }
   else if (a === 'modele-soumettre') {
     var nom = t.getAttribute('data-nom'), vid = $('mdVid_' + nom);
     if (!window.confirm('Soumettre le modèle « ' + nom + ' » à l\'examen de Meta ?')) return;

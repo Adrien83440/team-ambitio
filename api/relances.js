@@ -74,15 +74,15 @@ const PRECONFIG = {
     etapes: [
       { canal: 'whatsapp', delaiJours: 0, modele: 'relance_reactivation_video', langue: 'fr', parametres: ['prenom', 'setter'], videoUrl: '',
         texteRepli: 'Bonjour {{prenom}}, {{setter}} de l\'équipe Adrien & Emily. Vous vous étiez intéressé(e) à l\'accompagnement Élite Phénix : si vous voulez en parler, choisissez un créneau ici {{lien_rdv}} Répondez STOP pour ne plus recevoir de messages.' },
-      { canal: 'sms', delaiJours: 2,
-        texte: 'Bonjour {{prenom}}, c\'est {{setter}} de l\'équipe Adrien & Emily. Je reviens vers vous suite à mon dernier message : si le sujet vous parle toujours, un court échange suffit pour faire le point. {{lien_rdv}} Répondez STOP pour ne plus recevoir de messages.' },
-      { canal: 'whatsapp', delaiJours: 5, modele: 'relance_dernier_message', langue: 'fr', parametres: ['prenom', 'setter'],
-        texteRepli: 'Bonjour {{prenom}}, dernier message de ma part : si votre développement reste une priorité, je garde un créneau pour vous cette semaine {{lien_rdv}} Sinon, répondez simplement "plus intéressé". Répondez STOP pour ne plus recevoir de messages.' },
+      /* UN SEUL message (Adrien, 14/11/2026) : sans réponse, on ne relance
+         pas — insister, ce serait du harcèlement. Le SMS de repli ne part que
+         si le numéro n'est pas sur WhatsApp. */
     ],
   },
 };
 
 function ymdOk(s) { return /^\d{4}-\d{2}-\d{2}$/.test(String(s || '')); }
+function seuilJours(v) { return v === '' || v == null || !isFinite(+v) ? null : Math.max(0, Math.min(365, Math.round(+v))); }
 function nettoyerFiltres(f) {
   f = f || {};
   const liste = function (v) { return (Array.isArray(v) ? v : []).map(function (x) { return String(x).trim(); }).filter(Boolean).slice(0, 30); };
@@ -92,6 +92,8 @@ function nettoyerFiltres(f) {
     entreDu: ymdOk(f.entreDu) ? f.entreDu : null, entreAu: ymdOk(f.entreAu) ? f.entreAu : null,
     contactAvant: ymdOk(f.contactAvant) ? f.contactAvant : null, contactApres: ymdOk(f.contactApres) ? f.contactApres : null,
     scoreMin: num(f.scoreMin), scoreMax: num(f.scoreMax), sansScore: f.sansScore !== false,
+    /* null = réglage général (21 j d'ancienneté, 10 j de silence) ; 0 = désactivé. */
+    ancienneteMin: seuilJours(f.ancienneteMin), silenceMin: seuilJours(f.silenceMin),
   };
 }
 function nettoyerEtapes(etapes) {
@@ -154,14 +156,16 @@ async function leadsCampagne(camp) {
     const seg = sg.data() || {};
     const r = await R.calculerSegment(seg.filtres || {}, ctx);
     const leads = r.leads.filter(function (l) { if (vus[l.id]) return false; vus[l.id] = 1; return true; });
-    vagues.push({ segmentId: v.segmentId, nom: seg.nom, jours: v.jours || [1], leads: leads, exclus: r.exclus });
+    vagues.push({ segmentId: v.segmentId, nom: seg.nom, jours: v.jours || [], leads: leads, exclus: r.exclus });
   }
   return vagues;
 }
 function planVagues(camp, vagues) {
   return vagues.map(function (v) {
     let k = 0;
-    const rep = Core.repartir(v.leads.length, v.jours).map(function (x) {
+    /* Vague sans jours (campagne enregistrée avant le contrôle du 14/11) : aucun
+       jour, donc aucun lead inscrit — preparer() le signale comme bloquant. */
+    const rep = (v.jours && v.jours.length ? Core.repartir(v.leads.length, v.jours) : []).map(function (x) {
       const r = { jour: x.jour, date: Core.jourCampagne(camp.dateDebut, x.jour), nb: x.nb, leads: v.leads.slice(k, k + x.nb) };
       k += x.nb;
       return r;
@@ -192,7 +196,7 @@ async function apercu(b) {
   const f = nettoyerFiltres(b.filtres);
   const r = await R.calculerSegment(f);
   return { ok: true, filtres: f, total: r.leads.length, exclus: r.exclus, examines: r.examines,
-    leads: r.leads.slice(0, 500), tronque: r.leads.length > 500 };
+    leads: r.leads.slice(0, 3000), tronque: r.leads.length > 3000 };
 }
 
 async function enregistrerSegment(b, auth) {
@@ -213,14 +217,22 @@ async function enregistrerCampagne(b, auth) {
   }
   const etapes = nettoyerEtapes(b.etapes);
   const vagues = (Array.isArray(b.vagues) ? b.vagues : []).slice(0, 6).map(function (v) {
-    return { segmentId: String(v && v.segmentId || ''), jours: (Array.isArray(v && v.jours) ? v.jours : [1])
-      .map(function (j) { return Math.max(1, Math.min(30, Math.round(+j || 1))); }).slice(0, 10) };
+    return { segmentId: String(v && v.segmentId || ''), jours: (Array.isArray(v && v.jours) ? v.jours : [])
+      .map(function (j) { return Math.round(+j); }).filter(function (j) { return j >= 1 && j <= 30; }).slice(0, 10) };
   }).filter(function (v) { return v.segmentId; });
+  /* Un champ « jours » vide ne vaut JAMAIS « jour 1 » : la vague B partirait
+     en même temps que A sans que personne l'ait voulu. */
+  const sansJour = vagues.filter(function (v) { return !v.jours.length; });
+  if (sansJour.length) return { code: 400, ok: false, error: 'jours_manquants', detail: 'Indique les jours de campagne de chaque vague (ex. 1, ou 2,3).' };
   const doc = {
     nom: String(b.nom || 'Campagne').trim().slice(0, 120), etat: 'brouillon', etapes: etapes, vagues: vagues,
     dateDebut: ymdOk(b.dateDebut) ? b.dateDebut : Core.prochainJourOuvre(Core.decaler(Core.aujourdhui(), 1)),
-    plafondJour: Math.max(1, Math.min(1000, Math.round(+b.plafondJour || 0))) || null,
+    /* Champ vide = réglage général (null). Avant le 14/11 : Math.max(1, 0)
+       enregistrait 1 → un seul lead par jour sans que personne l'ait voulu. */
+    plafondJour: (b.plafondJour === '' || b.plafondJour == null || !(+b.plafondJour > 0)) ? null
+      : Math.max(1, Math.min(1000, Math.round(+b.plafondJour))),
     setterRepli: String(b.setterRepli || '').trim() || null,
+    lienRdv: b.lienRdv === 'setter' ? 'setter' : 'public',
     empreinte: Core.empreinte(etapes), majA: Date.now(), majPar: auth.email || auth.uid,
   };
   if (!s.exists) doc.creeA = Date.now();
@@ -256,8 +268,8 @@ async function tester(b, auth) {
     exemple = v[0] && v[0].leads[0] || null;
   } catch (e) { exemple = null; }
   const liste = await R.membres();
-  const choix = R.typePourSetter(await R.typesRdv(), exemple && exemple.setter, camp.setterRepli || cfg.setterRepli);
-  const setterSlug = choix ? choix.setter : ((exemple && exemple.setter) || null);
+  const choix = R.typeReservation(await R.typesRdv(), camp, cfg, exemple && exemple.setter);
+  const setterSlug = (choix && choix.setter) || (exemple && exemple.setter) || camp.setterRepli || cfg.setterRepli || null;
   const mb = setterSlug ? R.membre(liste, setterSlug) : null;
   const jr = await R.creerLien({ type: 'rdv', test: true, campagneId: camp.id });
   await db.collection('relance_liens').doc(jr).set({ setter: setterSlug }, { merge: true });
@@ -295,13 +307,16 @@ async function preparer(b) {
   const types = await R.typesRdv();
   const sansLien = {};
   vagues.forEach(function (v) { v.jours.forEach(function (j) { j.leads.forEach(function (l) {
-    if (!R.typePourSetter(types, l.setter, camp.setterRepli || cfg.setterRepli)) sansLien[l.setter || '(aucun)'] = (sansLien[l.setter || '(aucun)'] || 0) + 1;
+    if (!R.typeReservation(types, camp, cfg, l.setter)) sansLien[l.setter || '(aucun)'] = (sansLien[l.setter || '(aucun)'] || 0) + 1;
   }); }); });
   const bloquants = erreurs.slice();
   if (cfg.modeTest !== false) bloquants.push('Le mode test est actif : aucun envoi réel n\'est possible (Réglages → passer en production).');
   if (!camp.testOk || camp.testOk.empreinte !== Core.empreinte(camp.etapes || [])) bloquants.push('« M\'envoyer un test » doit avoir réussi sur cette séquence exacte.');
   if (camp.dateDebut < Core.aujourdhui()) bloquants.push('La date de début est passée.');
-  if (Object.keys(sansLien).length) bloquants.push('Aucun lien de réservation setter (ni setter de repli) pour : ' + Object.keys(sansLien).join(', ') + '.');
+  if (Object.keys(sansLien).length) bloquants.push(camp.lienRdv === 'setter'
+    ? 'Aucun lien de réservation setter (ni setter de repli) pour : ' + Object.keys(sansLien).join(', ') + '.'
+    : 'Le lien public de réservation « ' + (cfg.typePublic || Core.DEFAUTS.typePublic) + ' » est introuvable dans Booking admin.');
+  (vagues || []).forEach(function (v) { if (!v.jours.length || v.jours.some(function (j) { return !j.date; })) bloquants.push('Vague « ' + (v.nom || v.segmentId) + ' » : jours de campagne manquants.'); });
   if (!total) bloquants.push('Aucun lead à relancer.');
   return {
     ok: true, total: total, cout: Core.coutEstime(total, camp.etapes || [], cfg), bloquants: bloquants, sansLien: sansLien,
@@ -518,7 +533,7 @@ async function preconfigurer(auth) {
       nom: PRECONFIG.camp.nom, etat: 'brouillon', etapes: etapes,
       vagues: [{ segmentId: PRECONFIG.segA.id, jours: [1] }, { segmentId: PRECONFIG.segB.id, jours: [2, 3] }],
       dateDebut: Core.prochainJourOuvre(Core.decaler(Core.aujourdhui(), 1)), plafondJour: PRECONFIG.camp.plafondJour,
-      setterRepli: null, empreinte: Core.empreinte(etapes), creeA: Date.now(), majA: Date.now(), majPar: auth.email || auth.uid,
+      setterRepli: null, lienRdv: 'public', empreinte: Core.empreinte(etapes), creeA: Date.now(), majA: Date.now(), majPar: auth.email || auth.uid,
     });
   }
   out[PRECONFIG.camp.id] = s.exists ? 'existait' : 'cree';

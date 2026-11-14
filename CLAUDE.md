@@ -425,6 +425,16 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   `timeline_history`, `relanceRepondu` → badge Leads Live) ; seul « Plus intéressé » change l'étape
   (`disqualification` + `pas_interesse`). STOP : les deux champs historiques `smsOptedOut` (Twilio) et
   `smsOptOut` (Ringover) sont lus.
+  **Précision des segments (14/11/2026)** : par défaut (`_config/relances`, 0 dans un segment = désactivé)
+  ancienneté ≥ 21 j (`ancienneteMinJours`) et aucun contact RÉEL depuis 10 j (`silenceMinJours`) — contact
+  réel = `Core.contactReel` : SMS / WhatsApp / e-mail dans les deux sens ou appel DÉCROCHÉ ; un appel
+  sans réponse ne compte pas, `lastContactAt` n'est pas utilisé (posé aussi par les appels manqués).
+  Exclusions ajoutées : rappel `followUps` à venir, ré-opt-in < 21 j. Avant CHAQUE envoi : RDV
+  (`leadId`, `lastBookingAt`, ou `bookings.prospect.telephone/email`), contact décroché par l'équipe
+  (`contact_equipe`), rappel programmé entre-temps. **Lien de réservation PUBLIC par défaut**
+  (`lienRdv: 'public'`, type `_config/relances.typePublic` = `call_strat_phenix_all` → Self Booking, pas
+  de commission de setting — choix d'Adrien) ; `lienRdv: 'setter'` possible. Modèles à bouton lien FIXE
+  acceptés. Première campagne = **un seul message** (pas de relance de relance). Vague sans jours refusée.
 
 - **Qualité par pub + API Conversions Meta (12/11/2026, brief « Outil 2 »)** :
   - **Capture** : à chaque opt-in, bloc `leads/{id}.metaIds` (eventId du Lead navigateur, `fbp`/`fbc`,

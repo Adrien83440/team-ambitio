@@ -102,6 +102,20 @@ function typePourSetter(types, slug, repli) {
   const r = de(repli);
   return r ? { type: r, setter: repli, repli: true } : null;
 }
+/* Lien PUBLIC de réservation (Self Booking) : choix d'Adrien du 14/11/2026 —
+   un RDV pris depuis une relance n'ouvre pas de commission de setting. */
+function typePublic(types, cfg) {
+  const cle = String((cfg && cfg.typePublic) || Core.DEFAUTS.typePublic);
+  for (let i = 0; i < types.length; i++) if (types[i].id === cle || (types[i].slug && types[i].slug === cle)) return types[i];
+  return null;
+}
+/* Type de RDV derrière {{lien_rdv}} et le bouton : public par défaut, lien du
+   setter seulement si la campagne le demande (lienRdv: 'setter'). */
+function typeReservation(types, camp, cfg, setterSlug) {
+  if (camp && camp.lienRdv === 'setter') return typePourSetter(types, setterSlug, (camp && camp.setterRepli) || cfg.setterRepli);
+  const t = typePublic(types, cfg);
+  return t ? { type: t, setter: null, repli: false, public: true } : null;
+}
 function urlReservation(type, lead) {
   const nom = String(lead && (lead.nom || lead.fullName) || '').trim().split(/\s+/);
   let u = BASE_URL + '/booking.html?type=' + encodeURIComponent(type.slug || type.id);
@@ -134,7 +148,10 @@ function urlLien(t) { return BASE_URL + '/r/' + t; }
 /* ── Segment ───────────────────────────────────────────────────────────── */
 const CHAMPS = ['nom', 'prenom', 'fullName', 'telephone', 'email', 'stage', 'status', 'isClient', 'assignedTo',
   'landingFirst', 'sourceDetail', 'type', 'source', 'createdAt', 'importedCreatedAt', 'dateWebinaire',
-  'lastContactAt', 'aiLead', 'smsOptedOut', 'smsOptOut', '_merged', 'lastOptinAt', 'lastBookingAt'];
+  'lastContactAt', 'aiLead', 'smsOptedOut', 'smsOptOut', '_merged', 'lastOptinAt', 'lastBookingAt',
+  /* Dernier contact RÉEL et rappels programmés (Core.dernierContactReel,
+     Core.rappelPrevu) : toujours lus, c'est ce qui écarte les leads récents. */
+  'communications', 'followUps', 'whatsappEnvoye', 'whatsappFenetre'];
 
 /* Contexte des exclusions : RDV à venir, blacklist, exclus définitifs, leads
    déjà dans une séquence active. Lu une fois, pour tout le segment. */
@@ -173,11 +190,12 @@ function estBloqueCtx(l, ctx) {
  * `communications` que si le filtre « étape Pipeline » est demandé.
  * @returns {{ leads:Array, exclus:Object, examines:number }}
  */
-async function calculerSegment(filtres, ctx) {
+async function calculerSegment(filtres, ctx, cfg) {
   filtres = filtres || {};
   ctx = ctx || await contexteExclusions();
+  cfg = cfg || await config();
+  const now = Date.now();
   const champs = CHAMPS.slice();
-  if (filtres.etapes && filtres.etapes.length) champs.push('communications', 'followUps');
   let q = db.collection('leads');
   /* Date d'entrée = la plus ANCIENNE de dateWebinaire / importedCreatedAt /
      createdAt : elle est toujours ≤ createdAt, donc « createdAt ≥ début »
@@ -195,9 +213,10 @@ async function calculerSegment(filtres, ctx) {
     examines++;
     const bloque = estBloqueCtx(l, ctx);
     const motif = Core.exclusion(l, {
-      rdvAVenir: ctx.rdvAVenir, exclus: ctx.exclus, enSequence: ctx.enSequence,
+      rdvAVenir: ctx.rdvAVenir, exclus: ctx.exclus, enSequence: ctx.enSequence, now: now,
+      optinRecentJours: cfg.optinRecentJours,
       bloques: bloque ? (function () { const o = {}; o[l.id] = 1; return o; })() : null,
-    });
+    }) || Core.raisonRecence(l, filtres, cfg, now);
     if (motif) { exclus[motif] = (exclus[motif] || 0) + 1; return; }
     out.push({
       id: l.id,
@@ -209,7 +228,8 @@ async function calculerSegment(filtres, ctx) {
       statut: l.status || 'nouveau',
       provenance: Core.provenance(l),
       entree: Core.dateEntree(l) || null,
-      dernierContact: Core.msDe(l.lastContactAt) || null,
+      dernierContact: Core.dernierContactReel(l) || null,
+      anciennete: Core.dateEntree(l) ? Math.floor((now - Core.dateEntree(l)) / 864e5) : null,
       score: l.aiLead && typeof l.aiLead.proba === 'number' ? l.aiLead.proba : null,
     });
   });
@@ -413,14 +433,27 @@ async function arreter(inscriptionId, motif, extra) {
 }
 
 /* Faut-il arrêter avant d'envoyer ? Relit la fiche et les RDV. */
-async function motifArret(insc, lead) {
+async function motifArret(insc, lead, cfg) {
   if (!lead) return 'lead_introuvable';
   const ex = await db.collection('relance_exclusions').doc(String(insc.leadId)).get();
   if (ex.exists) return 'exclu_' + ((ex.data() || {}).motif || 'definitif');
-  const m = Core.exclusion(Object.assign({ id: insc.leadId }, lead), {});
+  /* Revérifié avant CHAQUE message (14/11/2026) : rappel programmé entre-temps,
+     nouvel opt-in, RDV, client, STOP… La liste figée au lancement ne suffit
+     pas : la vague B part plusieurs jours après. */
+  const m = Core.exclusion(Object.assign({ id: insc.leadId }, lead),
+    { optinRecentJours: cfg ? cfg.optinRecentJours : undefined });
   if (m && m !== 'sans_coordonnees') return m;
   const depuis = insc.debutA || insc.creeA || 0;
   if (lead.relanceRepondu && Core.msDe(lead.relanceRepondu.at) > depuis) return 'a_repondu';
+  if (Core.msDe(lead.lastBookingAt) > depuis) return 'a_reserve';
+  /* L'équipe a repris la main : message envoyé à la main, ou appel DÉCROCHÉ
+     (un appel sans réponse du dialer ne compte pas). */
+  const equipe = (lead.communications || []).some(function (c) {
+    const dir = String(c && c.direction || '').toLowerCase();
+    return (dir === 'outbound' || dir === 'out' || dir === 'sortant') && Core.contactReel(c)
+      && Core.msDe(c.date || c.createdAt) > depuis;
+  });
+  if (equipe) return 'contact_equipe';
   const entrant = (lead.communications || []).some(function (c) {
     const dir = String(c && c.direction || '').toLowerCase();
     return (dir === 'inbound' || dir === 'in' || dir === 'entrant') && Core.msDe(c.date || c.createdAt) > depuis;
@@ -441,7 +474,25 @@ async function motifArret(insc, lead) {
     if (Core.msDe(b.createdAt) > depuis) rdv = 'a_reserve';
     else if (!b.outcome && String(b.date || '') >= today && !rdv) rdv = 'rdv';
   });
-  return rdv;
+  if (rdv) return rdv;
+  /* RDV pris sur le lien public avec un autre e-mail ET un autre téléphone
+     que la fiche… sauf l'un des deux : onBookingCreated l'aurait rattaché à
+     une autre fiche. On le rattrape par le contact du prospect. */
+  const cles = [];
+  if (tel) cles.push(['prospect.telephone', tel]);
+  const em = String(lead.email || '').trim().toLowerCase();
+  if (em) cles.push(['prospect.email', em]);
+  for (let i = 0; i < cles.length; i++) {
+    const s = await db.collection('bookings').where(cles[i][0], '==', cles[i][1]).limit(10).get().catch(function () { return null; });
+    if (!s) continue;
+    let trouve = false;
+    s.forEach(function (d) {
+      const b = d.data() || {};
+      if (b.isCoaching !== true && b.status !== 'cancelled' && Core.msDe(b.createdAt) > depuis) trouve = true;
+    });
+    if (trouve) return 'a_reserve';
+  }
+  return null;
 }
 
 /* ── Notification « a répondu » au setter ──────────────────────────────── */
@@ -472,7 +523,7 @@ async function notifierSetter(o) {
 }
 
 module.exports = {
-  Core, BASE_URL, etapesPipeline, config, membres, membre, typesRdv, typePourSetter, urlReservation,
+  Core, BASE_URL, etapesPipeline, config, membres, membre, typesRdv, typePourSetter, typePublic, typeReservation, urlReservation,
   creerLien, urlLien, contexteExclusions, calculerSegment, modelesWhatsapp, qualiteWhatsapp,
   envoyerEtape, envoyerSms, tracerSurLead, arreter, motifArret, notifierSetter, dateFr,
 };

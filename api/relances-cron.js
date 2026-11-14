@@ -49,11 +49,11 @@ function checkCron(req) {
 
 /* ── Variables d'un message pour un lead ───────────────────────────────── */
 async function variables(insc, lead, camp, cfg, liste, etape, dry) {
-  /* {{setter}} = la personne dont le lien de réservation sera ouvert : le
-     setter assigné s'il a son lien, sinon le setter de repli. Le message et
-     le calendrier nomment donc toujours la même personne. */
-  const choix = R.typePourSetter(ctxTypes(), lead.assignedTo, camp.setterRepli || cfg.setterRepli);
-  const setterSlug = choix ? choix.setter : (lead.assignedTo || null);
+  /* {{setter}} = le setter assigné. Avec lienRdv 'setter', c'est la personne
+     dont le lien sera ouvert (le setter de repli si l'assigné n'en a pas) :
+     le message et le calendrier nomment alors la même personne. */
+  const choix = R.typeReservation(ctxTypes(), camp, cfg, lead.assignedTo);
+  const setterSlug = (choix && choix.setter) || lead.assignedTo || camp.setterRepli || cfg.setterRepli || null;
   const m = setterSlug ? R.membre(liste, setterSlug) : null;
   const v = { prenom: Core.prenom(lead), setter: m ? m.nom : '' };
   const besoins = JSON.stringify([etape.texte, etape.texteRepli, etape.objet]) + (etape.canal === 'whatsapp' ? '{{lien_rdv}}' : '');
@@ -124,7 +124,7 @@ async function traiter(insc0, camp, ctx) {
   try {
     const ls = await db.collection('leads').doc(String(insc.leadId)).get();
     const lead = ls.exists ? Object.assign({ id: ls.id }, ls.data() || {}) : null;
-    const motif = await R.motifArret(insc, lead);
+    const motif = await R.motifArret(insc, lead, ctx.cfg);
     if (motif) {
       await R.arreter(insc.id, motif);
       return { id: insc.id, arret: motif };
@@ -202,7 +202,7 @@ async function rattraper(insc, camp, ctx) {
   if (!ok) return null;
   const ls = await db.collection('leads').doc(String(insc.leadId)).get();
   const lead = ls.exists ? Object.assign({ id: ls.id }, ls.data() || {}) : null;
-  const motif = await R.motifArret(insc, lead);
+  const motif = await R.motifArret(insc, lead, ctx.cfg);
   if (motif) { await R.arreter(insc.id, motif); return { id: insc.id, arret: motif }; }
   const vv = await variables(insc, lead, camp, ctx.cfg, ctx.membres, etape, false);
   const texte = Core.remplir(etape.texteRepli, vv.vars);
