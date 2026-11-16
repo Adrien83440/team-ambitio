@@ -440,7 +440,7 @@ var SMS_CONSEILLE = 'Bonjour {{prenom}}, c\'est Adrien. Nous n\'avons pas réuss
   + 'Pour réserver directement votre appel : {{lien_rdv}} Répondez STOP pour ne plus recevoir de messages.';
 function boutonsSms(champ, i, fige) {
   if (fige) return '';
-  var b = function (v, lib) { return '<button class="rl-act mini" type="button" data-action="inserer" data-champ="' + champ + '" data-i="' + i + '" data-v="' + esc(v) + '">+ ' + lib + '</button>'; };
+  var b = function (v, lib) { return '<button class="rl-act mini" type="button" data-action="inserer" data-champ="' + champ + '" data-i="' + i + '" data-ins="' + esc(v) + '">+ ' + lib + '</button>'; };
   return '<div class="rl-row" style="margin:8px 0 0;gap:6px"><span class="rl-hint" style="margin:0">Insérer dans le SMS :</span>'
     + b('{{prenom}}', 'Prénom') + b('{{lien_video}}', '🎬 Lien vers la vidéo') + b('{{lien_rdv}}', '📅 Lien de réservation')
     + '<button class="rl-act mini pri" type="button" data-action="sms-conseille" data-champ="' + champ + '" data-i="' + i + '">Utiliser le texte conseillé</button></div>';
@@ -464,7 +464,10 @@ function compteurSms(t, champ, i) {
   var s = C.segmentsSms(C.smsTypique(t || ''));
   var p = C.contientPrix(t || '');
   var sp = s.unicode ? caracteresSpeciaux(t) : [];
-  return '<div class="rl-hint' + (p ? ' ko' : '') + '">' + s.longueur + ' caractères · <b>' + s.segments + ' SMS</b>'
+  var pd = C.prenomEnDur(t || '');
+  return '<div class="rl-hint' + (p || pd ? ' ko' : '') + '">'
+    + (pd ? '⛔ Prénom « ' + esc(pd) + ' » écrit en dur : tous les leads le recevraient. Remplace-le par {{prenom}} (bouton « + Prénom »).<br>' : '')
+    + s.longueur + ' caractères · <b>' + s.segments + ' SMS</b>'
     + (s.unicode ? ' · ⚠ caractères spéciaux ' + sp.map(function (c) { return '« ' + esc(c) + ' »'; }).join(' ')
       + ' : 67 caractères par SMS au lieu de 153'
       + (champ ? ' <button class="rl-act mini" type="button" data-action="sms-corriger" data-champ="' + champ + '" data-i="' + i + '">Corriger les apostrophes et emojis</button>' : '') : '')
@@ -574,7 +577,8 @@ function lireCampagne() {
   c.plafondJour = $('cpPlafond').value;
   c.setterRepli = $('cpRepli').value;
   c.lienRdv = $('cpLien').value;
-  document.querySelectorAll('[data-v]').forEach(function (x) {
+  /* Seuls les champs de vague (segment, jours) : jamais un bouton. */
+  document.querySelectorAll('select[data-v], input[data-v]').forEach(function (x) {
     var v = c.vagues[+x.getAttribute('data-i')];
     if (!v) return;
     if (x.getAttribute('data-v') === 'segmentId') v.segmentId = x.value;
@@ -814,7 +818,7 @@ document.addEventListener('click', function (ev) {
     }).then(function (j) { if (j && !j.ok) { res.className = 'rl-hint ko'; res.textContent = '✗ ' + erreurTexte(j); } });
   }
   else if (a === 'inserer') {
-    var v = t.getAttribute('data-v');
+    var v = t.getAttribute('data-ins');
     remplirChamp(t.getAttribute('data-champ'), t.getAttribute('data-i'), function (ta) {
       var d = ta.selectionStart != null ? ta.selectionStart : ta.value.length, f = ta.selectionEnd != null ? ta.selectionEnd : d;
       var avant = ta.value.slice(0, d), apres = ta.value.slice(f);

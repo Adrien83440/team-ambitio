@@ -323,7 +323,9 @@ async function tester(b, auth) {
     const e = etapes[i];
     const r = await R.envoyerEtape({ etape: e, lead: { id: null }, inscription: null, campagne: camp, cfg: cfg,
       test: true, modeles: m.map, vars: vars });
-    resultats.push({ n: i, canal: r.canal, ok: r.ok, bascule: !!r.bascule, erreur: r.erreur || null, code: r.code || null, erreurWhatsapp: r.erreurWhatsapp || null });
+    /* Un WhatsApp refusé puis rattrapé par SMS n'est PAS un test réussi :
+       en production, tous les leads recevraient le SMS au lieu du WhatsApp. */
+    resultats.push({ n: i, canal: r.canal, ok: r.ok && !(e.canal === 'whatsapp' && r.bascule), bascule: !!r.bascule, erreur: r.erreur || null, code: r.code || null, erreurWhatsapp: r.erreurWhatsapp || null });
     if (e.canal === 'whatsapp' && e.texteRepli) {
       const s = await R.envoyerSms('[TEST repli] ' + Core.remplir(e.texteRepli, vars), Core.telephoneE164(cfg.testTelephone), { module: 'relances', test: true });
       resultats.push({ n: i, canal: 'sms', repli: true, ok: s.ok, erreur: s.erreur || null });

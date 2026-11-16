@@ -782,7 +782,11 @@ async function envoyerModele(opts) {
   });
 
   if (!rep.ok) {
-    console.error('[whatsapp] envoi', modele, '→', to, ':', rep.erreur, 'code=' + rep.code);
+    /* Détail Meta (error_data.details) : « Invalid parameter » seul ne dit pas
+       quel paramètre est refusé. */
+    const detailMeta = (rep.data && rep.data.error && rep.data.error.error_data && rep.data.error.error_data.details) || '';
+    if (detailMeta) rep.erreur = rep.erreur + ' — ' + detailMeta;
+    console.error('[whatsapp] envoi', modele, '→', to, ':', rep.erreur, 'code=' + rep.code, 'composants=' + JSON.stringify(composants.map(function (c) { return c.type + (c.sub_type ? ':' + c.sub_type : ''); })));
     await journaliser(null, Object.assign({}, base, {
       statut: 'echec',
       to: to,

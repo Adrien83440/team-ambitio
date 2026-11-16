@@ -370,6 +370,22 @@
   }
 
   /* ── Une étape est-elle complète ? (message d'erreur ou null) ───────── */
+  /* Contrôles communs à tout texte écrit à la main (SMS, SMS de repli, e-mail) :
+     prix, variable inconnue, prénom écrit en dur (« Bonjour Julie » partirait
+     tel quel à TOUS les leads : il faut {{prenom}}). */
+  var FORMULES = /(^|[\n.!?]\s*)([Bb]onjour|[Bb]onsoir|[Ss]alut|[Hh]ello|[Cc]oucou|[Cc]her|[Cc]hère)\s+([A-ZÀ-Ý][a-zà-ÿ'\-]+)/;
+  var CIVILITES = /^(madame|monsieur|mme|mlle|mr|à|a|vous|tous|toutes|et|encore|de|du|la|le)$/i;
+  function prenomEnDur(t) {
+    var m = FORMULES.exec(String(t || '').trim());
+    return m && !CIVILITES.test(m[3]) ? m[3] : null;
+  }
+  function verifierTexte(t, quoi) {
+    if (contientPrix(t)) return quoi + ' contient un élément de prix (« ' + contientPrix(t) + ' »)';
+    if (variablesInconnues(t).length) return 'variable inconnue {{' + variablesInconnues(t)[0] + '}} dans ' + quoi;
+    var pd = prenomEnDur(t);
+    if (pd) return quoi + ' contient le prénom « ' + pd + ' » écrit en dur : remplace-le par {{prenom}} (sinon tous les leads le reçoivent)';
+    return null;
+  }
   function verifierEtape(e, i) {
     var n = 'Étape ' + (i + 1) + ' : ';
     if (!e) return n + 'vide';
@@ -380,15 +396,18 @@
       if (e.enteteFormat === 'VIDEO' && !e.videoAuto && !/^https:\/\//.test(String(e.videoUrl || ''))) return n + 'le modèle a un en-tête vidéo sans vidéo d\'exemple lisible : indique l\'URL https de la vidéo';
       var p = contientPrix(e.corpsModele || '');
       if (p) return n + 'le modèle contient un élément de prix (« ' + p + ' »)';
+      if (String(e.texteRepli || '').trim()) {
+        var kr = verifierTexte(e.texteRepli, 'le SMS de repli');
+        if (kr) return n + kr;
+      }
     } else if (e.canal === 'sms') {
       if (!String(e.texte || '').trim()) return n + 'texte du SMS vide';
-      if (contientPrix(e.texte)) return n + 'le SMS contient un élément de prix (« ' + contientPrix(e.texte) + ' »)';
-      if (variablesInconnues(e.texte).length) return n + 'variable inconnue {{' + variablesInconnues(e.texte)[0] + '}}';
+      var ks = verifierTexte(e.texte, 'le SMS');
+      if (ks) return n + ks;
     } else if (e.canal === 'email') {
       if (!String(e.objet || '').trim() || !String(e.texte || '').trim()) return n + 'objet et texte de l\'e-mail requis';
-      var pe = contientPrix(e.objet + ' ' + e.texte);
-      if (pe) return n + 'l\'e-mail contient un élément de prix (« ' + pe + ' »)';
-      if (variablesInconnues(e.objet + ' ' + e.texte).length) return n + 'variable inconnue {{' + variablesInconnues(e.objet + ' ' + e.texte)[0] + '}}';
+      var ke = verifierTexte(e.objet + '\n' + e.texte, 'l\'e-mail');
+      if (ke) return n + ke;
     } else return n + 'canal inconnu';
     if (i > 0 && !(+e.delaiJours > 0)) return n + 'délai depuis J0 requis (en jours)';
     return null;
@@ -397,7 +416,7 @@
      séquence exacte. Modifier un texte, un délai ou un modèle l'invalide. */
   function empreinte(etapes) {
     var s = JSON.stringify((etapes || []).map(function (e) {
-      return [e.canal, +e.delaiJours || 0, e.modele || '', e.langue || '', e.videoUrl || '', e.texte || '', e.objet || '', (e.parametres || []).join('|')];
+      return [e.canal, +e.delaiJours || 0, e.modele || '', e.langue || '', e.videoUrl || '', e.texte || '', e.objet || '', (e.parametres || []).join('|'), e.texteRepli || ''];
     }));
     var h = 5381;
     for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
@@ -447,7 +466,7 @@
     provenance: provenance, dateEntree: dateEntree, prenom: prenom, telephoneE164: telephoneE164, estClient: estClient,
     exclusion: exclusion, filtrer: filtrer, raisonRecence: raisonRecence,
     dernierContactReel: dernierContactReel, rappelPrevu: rappelPrevu, contactReel: contactReel, repartir: repartir, contientPrix: contientPrix,
-    remplir: remplir, variablesInconnues: variablesInconnues, verifierEtape: verifierEtape, empreinte: empreinte,
+    remplir: remplir, variablesInconnues: variablesInconnues, verifierEtape: verifierEtape, prenomEnDur: prenomEnDur, empreinte: empreinte,
     coutEstime: coutEstime, segmentsSms: segmentsSms, smsTypique: smsTypique
   };
 }));
