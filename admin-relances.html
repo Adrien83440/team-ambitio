@@ -374,6 +374,14 @@ function exemple() {
   if (!S.exemple) S.exemple = { prenom: 'Julie', setter: ((S.etat.setters || [])[0] || {}).nom || 'Anthony' };
   return S.exemple;
 }
+/* Prénom de l'admin connecté (fiche équipe reliée par firebaseUid, sinon
+   nom du compte), pour le test envoyé à soi-même. */
+function monPrenom() {
+  var u = firebase.auth().currentUser || {}, m = null;
+  (window.TEAM_MEMBERS_LIST || []).forEach(function (x) { if (x && u.uid && x.firebaseUid === u.uid) m = x; });
+  var n = String((m && (m.prenom || m.nom || m.name)) || u.displayName || '').trim().split(/\s+/)[0] || '';
+  return n || 'Adrien';
+}
 function formatWa(t) {
   return esc(t).replace(/\*([^*\n]+)\*/g, '<b>$1</b>').replace(/(^|\s)_([^_\n]+)_/g, '$1<i>$2</i>').replace(/~([^~\n]+)~/g, '<s>$1</s>');
 }
@@ -533,7 +541,7 @@ function peindreCampEdit() {
   });
   if (!fige) h += '<div class="rl-row"><button class="rl-act mini" type="button" data-action="vague-ajout">+ Vague</button></div>';
   h += '<h2 style="margin-top:14px">Séquence</h2><small>Les délais comptent depuis le jour où le lead a reçu l\'étape 1. La séquence s\'arrête dès que le lead répond, réserve, clique « Plus intéressé » ou répond STOP.</small>';
-  h += '<div class="rl-row" style="margin:6px 0 10px"><span class="rl-hint" style="margin:0">Aperçus avec le prénom</span><input class="rl-in" style="width:140px" id="apPrenom" value="' + esc(exemple().prenom) + '">'
+  h += '<div class="rl-row" style="margin:6px 0 10px"><span class="rl-hint" style="margin:0">Aperçus avec le prénom d\'exemple</span><input class="rl-in" style="width:140px" id="apPrenom" value="' + esc(exemple().prenom) + '">'
     + '<span class="rl-hint" style="margin:0">et le setter</span><input class="rl-in" style="width:140px" id="apSetter" value="' + esc(exemple().setter) + '"></div>';
   (c.etapes || []).forEach(function (e, i) { h += peindreEtape(e, i, fige); });
   if (!fige) h += '<div class="rl-row"><button class="rl-act mini" type="button" data-action="etape-ajout">+ Étape</button></div>';
@@ -793,9 +801,13 @@ document.addEventListener('click', function (ev) {
     var et = S.camp.etapes[it];
     var tel = window.prompt('Envoyer ce WhatsApp, tel qu\'un client le recevra, au numéro :', (S.etat.config.testTelephone || ''));
     if (tel === null) return;
+    /* Le test part avec TON prénom (pas l'exemple « Julie » de l'aperçu) :
+       c'est la preuve que {{1}} est bien remplacé à l'envoi. */
+    var pr = window.prompt('Prénom à mettre dans le message (à l\'envoi réel : le prénom de chaque lead) :', monPrenom());
+    if (pr === null) return;
     var res = $('testRes_' + it);
     res.className = 'rl-hint'; res.textContent = 'Envoi en cours…';
-    action({ action: 'testerEtape', etape: et, telephone: tel.trim(), prenom: exemple().prenom, setter: exemple().setter, campagneId: S.camp.id || null }, function (j) {
+    action({ action: 'testerEtape', etape: et, telephone: tel.trim(), prenom: pr.trim() || monPrenom(), setter: exemple().setter, campagneId: S.camp.id || null }, function (j) {
       if (!j.envoye) { res.className = 'rl-hint ko'; res.textContent = '✗ Refusé avant l\'envoi : ' + (j.erreur || 'erreur') + (j.codeMeta ? ' (code Meta ' + j.codeMeta + ')' : ''); return; }
       res.textContent = '✓ Accepté par Meta, vers ' + j.vers + '. J\'attends l\'accusé de réception…';
       suivreTest(j.wamid, res, 0);
