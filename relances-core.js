@@ -182,11 +182,22 @@
     var c = [msDe(l.dateWebinaire), msDe(l.importedCreatedAt), msDe(l.createdAt)].filter(function (x) { return x > 0; });
     return c.length ? Math.min.apply(null, c) : 0;
   }
+  /* Prénom affiché au lead. `nom` vaut « Prénom Nom » (lead-optin), mais peut
+     aussi valoir l'e-mail, le téléphone ou « Sans nom » faute de mieux : dans
+     ce cas, aucun prénom (le message dit alors « Bonjour à vous »). */
   function prenom(l) {
-    var p = String(l.prenom || '').trim();
-    if (!p) p = String(l.nom || l.fullName || '').trim().split(/\s+/)[0] || '';
-    if (!p) return '';
-    return p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
+    var mot = /^[A-Za-zÀ-ɏ][A-Za-zÀ-ɏ'\-]*$/;
+    var maj = function (w) {
+      return w.toLowerCase().replace(/(^|[\-'])([a-zà-ɏ])/g, function (x, a, b) { return a + b.toUpperCase(); });
+    };
+    /* Champ prénom renseigné : gardé entier (« Marie Claire »), 2 mots au plus. */
+    var ps = String(l.prenom || '').trim().split(/\s+/).filter(Boolean);
+    if (ps.length && ps.length <= 2 && ps.every(function (w) { return mot.test(w); }) && ps[0].length >= 2) {
+      return ps.map(maj).join(' ');
+    }
+    var p = String(l.nom || l.fullName || '').trim().split(/\s+/)[0] || '';
+    if (!mot.test(p) || p.length < 2 || /^sans$/i.test(p)) return '';
+    return maj(p);
   }
   function telephoneE164(raw) {
     if (!raw) return null;
