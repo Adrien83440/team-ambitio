@@ -19,6 +19,7 @@
 //   apply=1      exécute même si enabled est faux (premier passage validé).
 //   activer=1|0  allume / éteint la tâche (_config/coaching_auto_sync.enabled).
 //   days=<n>     fenêtre en jours (défaut 16, max 90 — rattrapage).
+//   partageVideo=lien|aucun, mailMaxJours=<n>   réglages (_config/coaching_auto_sync).
 //
 // ─── TEST MANUEL ──────────────────────────────────────────────────────────
 //   curl -H "x-api-key: <COACHING_AUTO_SYNC_KEY>" \
@@ -53,6 +54,17 @@ module.exports = async function (req, res) {
     const on = q.activer === '1';
     await db.doc(Sync.CFG_PATH).set({ enabled: on, enabledMaj: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
     res.status(200).json({ ok: true, enabled: on });
+    return;
+  }
+
+  // Réglages manuels : ?partageVideo=lien|aucun, ?mailMaxJours=<n>.
+  if (qui === 'manuel' && (q.partageVideo || q.mailMaxJours)) {
+    const patch = { reglagesMaj: admin.firestore.FieldValue.serverTimestamp() };
+    if (q.partageVideo === 'lien' || q.partageVideo === 'aucun') patch.partageVideo = q.partageVideo;
+    const mj = parseInt(q.mailMaxJours, 10);
+    if (Number.isFinite(mj) && mj >= 0 && mj <= 365) patch.mailMaxJours = mj;
+    await db.doc(Sync.CFG_PATH).set(patch, { merge: true });
+    res.status(200).json({ ok: true, reglages: { partageVideo: patch.partageVideo, mailMaxJours: patch.mailMaxJours } });
     return;
   }
 

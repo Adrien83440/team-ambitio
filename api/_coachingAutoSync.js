@@ -46,6 +46,7 @@
 //  puis, pour une NOUVELLE synthèse : proposition de parcours (academy-path,
 //  rangée en attente de validation) et workbooks (academy-workbook).
 //  Au plus maxAval séances par passage ; le reste au passage suivant.
+//  Pas d'email pour une séance de plus de mailMaxJours (14) jours.
 //
 // ─── TRACES (Admin SDK seul, aucune règle Firestore) ─────────────────────
 //  coaching_autosync/{fileId Drive} : statut ('lie' | 'non_lie' | 'ambigu'
@@ -78,6 +79,7 @@ const DEFAUTS = {
   ecartMaxMin: 90,          // écart toléré entre l'heure du titre Meet et la réservation
   maxAval: 12,              // séances traitées en aval (email, Academy, IA) par passage
   partageVideo: 'aucun',    // 'lien' = rendre la vidéo lisible par lien si elle ne l'est pas
+  mailMaxJours: 14,         // pas d'email client pour une séance plus ancienne (rattrapage : fiche seule)
 };
 
 const BUDGET_DOCS_MS = 170000;
@@ -494,7 +496,7 @@ async function avalIA(clientId, c) {
   return res;
 }
 
-async function traiterAval(traceRef, t) {
+async function traiterAval(traceRef, t, cfg) {
   const aval = Object.assign({ academy: false, mail: false, ia: true }, t.aval || {});
   const tentatives = (t.avalTentatives || 0) + 1;
   const journal = {};
@@ -519,6 +521,13 @@ async function traiterAval(traceRef, t) {
     const j = r.body || {};
     journal.academy = j.ok === true ? (j.found === false ? 'pas_de_compte' : 'ok') : (j.error || 'erreur');
     if (j.ok === true || j.error === 'email_client_absent') aval.academy = true;
+  }
+  // Séance trop ancienne (rattrapage, décision Adrien du 16/11/2026) : la
+  // fiche est remplie, mais aucun email ne part au client des mois après.
+  const maxJ = Number(cfg && cfg.mailMaxJours);
+  if (!aval.mail && maxJ > 0 && x.s.date && joursEntre(x.s.date, parisIso()) > maxJ) {
+    aval.mail = true;
+    journal.mail = 'trop_ancienne_pas_d_email';
   }
   if (!aval.mail) {
     const r2 = await appeler(require('./coaching-send-replay'), { clientId: t.clientId, sessionNumero: x.s.numero, yearIndex: x.yi, sessionDate: x.s.date || null, auto: true }, { par: PAR });
@@ -758,7 +767,7 @@ async function executer(opts) {
       const d = snapA.docs[q];
       const t = d.data() || {};
       try {
-        const r = await traiterAval(d.ref, t);
+        const r = await traiterAval(d.ref, t, cfg);
         rapport.aval.push({ client: t.clientNom, seance: t.numero, resultat: r });
       } catch (e) {
         rapport.erreurs.push({ fichier: t.titre, erreur: 'aval: ' + e.message });

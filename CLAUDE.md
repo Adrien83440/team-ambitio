@@ -356,7 +356,8 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   Traces Admin SDK seul : `coaching_autosync/{fileId}` (sert aussi à reposer un lien effacé par une
   sauvegarde de la page), `bookings/{id}.coachingSync` (`lie` / `aucun_enregistrement` après 14 j /
   `deja_dans_la_fiche`), badge dans « RDV coaching du mois ». `_config/coaching_auto_sync.partageVideo:
-  'lien'` rend une vidéo non partagée lisible par lien (défaut `'aucun'` : seulement signalée au rapport).
+  'lien'` rend une vidéo non partagée lisible par lien (choisi par Adrien le 16/11/2026 ; `?partageVideo=`).
+  Pas d'email client pour une séance de plus de `mailMaxJours` (14) jours : le rattrapage remplit la fiche seule.
 - **Scoring sociétés (30/10/2026)** : `admin-scoring.html` (admin : solvabilité, tout le
   catalogue Societe.com en boutons, documents officiels), `alteore-scoring.js` (bouton sur
   la fiche en phase de closing, pop-ups), `api/scoring.js`, client `api/_societeCom.js`
