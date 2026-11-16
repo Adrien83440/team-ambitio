@@ -292,8 +292,19 @@ function rapprocher(info, reservations, clients, cfg) {
     });
     cands.sort(function (a, z) { return (z.score - a.score) || (a.ecart - z.ecart); });
     if (cands.length && cands[0].client) return { ok: true, via: 'reservation', booking: cands[0].b, client: cands[0].client };
-    if (cands.length && !cands[0].client) return { ok: false, raison: 'reservation_sans_fiche', booking: cands[0].b };
+    // Réservation trouvée mais non reliée à une fiche (ni clientId, ni même
+    // email) : la fiche se cherche par le nom, la réservation garde l'heure
+    // et le coach (via « reservation_nom »).
+    if (cands.length && !cands[0].client) {
+      const parNom = rapprocherParNom(info, clients);
+      if (parNom.ok) return { ok: true, via: 'reservation_nom', booking: cands[0].b, client: parNom.client };
+      return Object.assign({}, parNom, { raison: 'reservation_sans_fiche', booking: cands[0].b });
+    }
   }
+  return rapprocherParNom(info, clients);
+}
+
+function rapprocherParNom(info, clients) {
   const scores = clients.list.filter(function (c) { return c.actif; }).map(function (c) {
     return { client: c, score: Gem.scoreNom(info.nomClient, c.nom) };
   }).filter(function (x) { return x.score >= 5; }).sort(function (a, z) { return z.score - a.score; });
@@ -623,7 +634,7 @@ async function executer(opts) {
       if (!rap.ok) {
         ligne.raison = rap.raison;
         if (rap.candidats) ligne.candidats = rap.candidats;
-        if (rap.booking) ligne.reservation = rap.booking._id;
+        if (rap.booking) { ligne.reservation = rap.booking._id; reservationsLiees[rap.booking._id] = true; }
         rapport.aVerifier.push(ligne);
         if (!dry) await db.collection(TRACE).doc(it.fileId).set({ statut: rap.raison, nom: info.nomClient, date: info.date, heure: info.heure, titre: ligne.fichier, vuA: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
         continue;
