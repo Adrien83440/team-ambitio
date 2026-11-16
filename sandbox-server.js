@@ -4108,6 +4108,16 @@ const { admin, db } = require('./_firebaseAdmin');
  * Lance une erreur avec .statusCode 401 ou 403 sinon.
  */
 async function verifyFirebaseAuth(req) {
+  // 0. Appel INTERNE (même processus) — api/_internalCall.js. Une tâche
+  //    planifiée réutilise une route existante sans jeton navigateur : elle
+  //    pose req._internalAuth sur un objet requête qu'elle construit elle-même.
+  //    Une requête réseau ne peut pas porter cette propriété JavaScript (seuls
+  //    en-têtes, corps et URL viennent de l'extérieur) : pas de contournement
+  //    possible depuis Internet. uid null = tâche automatique pour _ai.js.
+  if (req && req._internalAuth && typeof req._internalAuth === 'object' && req._internalAuth.internal === true) {
+    return req._internalAuth;
+  }
+
   // 1. Extraire le token du header Authorization
   const authHeader = req.headers['authorization'] || req.headers['Authorization'];
   if (!authHeader || typeof authHeader !== 'string' || !authHeader.startsWith('Bearer ')) {

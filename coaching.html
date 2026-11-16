@@ -1490,6 +1490,8 @@
 
 <!-- Business Phénix nouveau format : compteur de séances partagé (14/10/2026) -->
 <script src="bp-credits.js"></script>
+<!-- Lecture des fichiers Meet (titres, résumé + détails Gemini) — partagée avec api/_coachingAutoSync.js -->
+<script src="coaching-gemini-core.js"></script>
 <script src="demarrage-core.js"></script>
 <script src="demarrage-widget.js"></script>
 <!-- Firebase -->
@@ -3409,6 +3411,15 @@ async function loadBookingsOfMonth(c, monthKey, clientId){
       const isCancelled = b.status === 'cancelled';
       const dateLabel = formatDate(b.date) + (b.time ? ' à ' + b.time : '');
       const personLabel = escHtml(b.personName || '—');
+      /* Synchro automatique (api/coaching-auto-sync) : la réservation dit si
+         l'enregistrement de la séance a été retrouvé dans le Drive de coaching@. */
+      const cs = b.coachingSync || null;
+      const syncBadge = isCancelled || !cs ? ''
+        : cs.statut === 'lie'
+          ? '<span title="Enregistrement retrouvé et rangé dans la séance" style="font-size:10px;padding:2px 7px;border-radius:5px;background:#ede9fe;color:#5b21b6;font-weight:600">🎥 Synchronisé</span>'
+          : cs.statut === 'aucun_enregistrement'
+            ? '<span title="Aucun enregistrement Meet trouvé 14 jours après le RDV (séance non tenue ou non enregistrée)" style="font-size:10px;padding:2px 7px;border-radius:5px;background:#f1f5f9;color:#475569;font-weight:600">🚫 Aucun enregistrement</span>'
+            : '';
       const statusBadge = isCancelled
         ? '<span style="font-size:10px;padding:2px 7px;border-radius:5px;background:#fee2e2;color:#991b1b;font-weight:600">Annulé</span>'
         : (isExcluded
@@ -3425,6 +3436,7 @@ async function loadBookingsOfMonth(c, monthKey, clientId){
           <div style="font-size:11px;color:var(--muted)">avec ${personLabel}</div>
         </div>
         ${statusBadge}
+        ${syncBadge}
         ${actionBtn}
       </div>`;
     });
@@ -4480,11 +4492,19 @@ async function fetchDocText(docId){
       {headers:{'Authorization':'Bearer '+_driveToken}}
     );
     if(!res.ok) return '';
-    return (await res.text()).substring(0, 9000); // Vague C : l'IA du copilote lit la synthèse — on garde bien plus que l'aperçu
+    return (await res.text()).substring(0, 80000); // résumé + détails : la coupe se fait dans CoachingGemini.extraireNotes (transcription exclue)
   }catch(e){ return ''; }
 }
 
-// Extract summary from Gemini doc text
+// Notes Gemini → { resume, synthese } (Résumé + Détails + Étapes suivantes,
+// jamais la transcription). Règle partagée avec la synchro automatique
+// (coaching-gemini-core.js) : le bouton et le cron remplissent la fiche pareil.
+function extractNotes(text){
+  if(window.CoachingGemini) return CoachingGemini.extraireNotes(text);
+  const r = extractSummary(text);
+  return { resume: r, synthese: r };
+}
+// Ancienne extraction (repli si coaching-gemini-core.js n'a pas chargé)
 function extractSummary(text){
   if(!text) return '';
   const lines = text.split('\n').map(l=>l.trim()).filter(l=>l);
@@ -4692,13 +4712,17 @@ async function scanDriveForClient(clientId){
 
     // Fetch summary (use cached from driveDocs if available)
     let summary = '';
+    let resumeCourt = '';
     if(wasPrevUnlinked && c.driveDocs[prevIdx].summary){
       summary = c.driveDocs[prevIdx].summary;
+      resumeCourt = summary;
       log(`📝 Résumé en cache pour ${doc.date}`);
     } else {
-      log(`📝 Récupération résumé ${doc.date}...`);
+      log(`📝 Récupération résumé + détails ${doc.date}...`);
       const text = await fetchDocText(doc.id);
-      summary = extractSummary(text);
+      const notes = extractNotes(text);
+      summary = notes.synthese;
+      resumeCourt = notes.resume || notes.synthese;
     }
 
     // Try to match to a session by date (±2 days)
@@ -4718,7 +4742,7 @@ async function scanDriveForClient(clientId){
       matchedSession.driveTitle = doc.title;
       matchedSession.driveSummary = summary;
       if(!matchedSession.resume || matchedSession.resume.length<20){
-        matchedSession.resume = summary;
+        matchedSession.resume = resumeCourt;
       }
       /* Lien de l'enregistrement vidéo : on ne l'écrit QUE si la session
          n'a pas déjà un visioUrl. Une valeur saisie à la main par le coach
@@ -5346,7 +5370,8 @@ function renderYearTabs(c,id){
       h+='<div class="si-left"><div class="si-num '+numC+'">'+numL+'</div>';
       h+='<div class="si-info"><div class="si-title">'+escHtml(s.titre||'')+'</div>';
       h+='<div class="si-meta">';
-      h+=s.date?'<span>📅 '+formatDate(s.date)+'</span>':'<span style="color:#94a3b8;font-style:italic">📅 À planifier</span>';
+      h+=s.date?'<span>📅 '+formatDate(s.date)+(s.heure?' à '+escHtml(s.heure):'')+'</span>':'<span style="color:#94a3b8;font-style:italic">📅 À planifier</span>';
+      if(s.autoSync&&s.autoSync.at)h+='<span title="Rempli automatiquement depuis le Drive de coaching@ le '+escHtml(formatDate(String(s.autoSync.at).slice(0,10)))+(s.autoSync.passeEnFait?' — séance passée en « fait » à la découverte de l\'enregistrement':'')+'" style="color:#7c3aed">🤖 synchro auto</span>';
       h+=s.coach?'<span>👤 '+escHtml(s.coach)+'</span>':'<span style="color:#94a3b8;font-style:italic">👤 À assigner</span>';
       if(s.visioUrl||s.driveUrl)h+='<span style="color:var(--blue-main)">🔗</span>';
       if(s.notes)h+='<span style="color:var(--orange)">📝</span>';

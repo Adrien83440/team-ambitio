@@ -44,6 +44,12 @@
 //   Rattrapage : les RDV coaching déjà découverts (meetRecordingUrl posé par
 //   la v1) mais jamais livrés au client sont traités aussi.
 //
+// ─── DEPUIS LE 16/11/2026 ─────────────────────────────────────────────────
+// Quand _config/coaching_auto_sync.enabled est vrai, la livraison CLIENT
+// coaching (email + fiche) est faite par api/coaching-auto-sync (6 h / 19 h)
+// à partir du Drive de coaching@ : un seul email replay + synthèse. Cette
+// route ne fait plus alors que repérer la vidéo sur la réservation.
+//
 // ─── PARAMÈTRES (query string) ────────────────────────────────────────────
 //   days=<n>   fenêtre de scan en jours (défaut 7, cap 30)
 //   dry=1      dry-run : liste ce qui serait fait, n'écrit RIEN, n'envoie RIEN
@@ -379,6 +385,18 @@ module.exports = async (req, res) => {
     } catch (_) { /* emailReady reste false */ }
     if (!emailReady) out.coachingAccountConnected = false;
 
+    // Synchro automatique des coachings (api/coaching-auto-sync, 16/11/2026) :
+    // une fois allumée, c'est ELLE qui remplit la fiche coaching et envoie le
+    // replay + la synthèse au client, en un seul email (registre de
+    // coaching-send-replay). Ici on continue seulement à repérer la vidéo sur
+    // la réservation — plus d'email coaching, plus d'écriture dans la fiche.
+    let coachingParAutoSync = false;
+    try {
+      const cfgAuto = await db.collection('_config').doc('coaching_auto_sync').get();
+      coachingParAutoSync = cfgAuto.exists && (cfgAuto.data() || {}).enabled === true;
+    } catch (_) { /* reste false : comportement historique */ }
+    if (coachingParAutoSync) out.coachingDeliveredBy = 'coaching-auto-sync';
+
     // 3. Bookings de la fenêtre (range sur un seul champ → pas d'index composite)
     const snap = await db.collection('bookings')
       .where('date', '>=', startIso)
@@ -401,7 +419,7 @@ module.exports = async (req, res) => {
 
       const coaching = isCoachingBooking(b, typeMap);
       if (b.meetRecordingUrl) {
-        if (coaching && !b.meetClientEmailSentAt && !b.meetClientEmailSkipped) {
+        if (coaching && !coachingParAutoSync && !b.meetClientEmailSentAt && !b.meetClientEmailSkipped) {
           deliverLate.push({ id: doc.id, b });
         }
         return;
@@ -500,7 +518,7 @@ module.exports = async (req, res) => {
             await ref.set(patch, { merge: true });
           }
           // Livraison CLIENT coaching (email + fiche)
-          if (item.coaching) {
+          if (item.coaching && !coachingParAutoSync) {
             if (!emailReady) { out.clientEmailsPending++; }
             else {
               try {

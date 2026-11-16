@@ -336,6 +336,28 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   Business Phénix historique (`f-bp`, module « Replay Coaching GR (<année>) », sous-module du même coach).
   Source : TOUT le Drive de coaching@ (plus « Meet Recordings » depuis août 2026). Trace `replays_groupe/{fileId}`,
   récap email. Accès manuel : clé Vercel `REPLAYS_GROUPE_KEY`, `?dry=1` d'abord.
+- **Synchro automatique des coachings 1:1 (16/11/2026)** : `api/coaching-auto-sync.js` (moteur
+  `api/_coachingAutoSync.js`), cron 6 h et 19 h Paris (4 entrées UTC 4/5/17/18 h, la route ne travaille
+  qu'à 6 h / 19 h Paris), derrière `_config/coaching_auto_sync.enabled` (`?activer=1|0`, `?dry=1`,
+  `?apply=1`, `?days=` ≤ 90 ; clé manuelle Vercel `COACHING_AUTO_SYNC_KEY` ou `CRON_SECRET`). Fait seul ce
+  que fait le bouton « 🔍 Chercher les résumés » de `coaching.html`. Source : Drive de coaching@
+  (`email_tokens/drive_coaching`) — TOUS les coachings 1:1 y sont enregistrés, jamais le compte d'un coach.
+  L'heure et le coach viennent de la RÉSERVATION Booking (`isCoaching`, même jour, heure du titre Meet ±90 min,
+  nom ressemblant) ; à défaut, nom du titre unique parmi les clients actifs, sinon rien (ambigu → rapport).
+  Séance cible : même jour → ±2 j → première séance planifiée sans date de la dernière année (72 h pour
+  « RDV urgent / post inscription »). Séance « planifiée » + enregistrement = passée en **« fait »** (décision
+  Adrien), trace `s.autoSync`, `s.heure`, `s.bookingId`. Contenu : RÉSUMÉ + DÉTAILS (+ étapes suivantes) des
+  notes Gemini dans `driveSummary`, jamais la transcription — règle partagée navigateur ↔ serveur
+  `coaching-gemini-core.js` (le bouton manuel l'utilise aussi). Vidéo seule liée après 24 h. Aval par appel
+  INTERNE des mêmes routes que la page (`api/_internalCall.js` → `req._internalAuth`, reconnu par
+  `_verifyFirebaseAuth`, impossible à poser depuis le réseau) : `academy-seance`, `coaching-send-replay`
+  (auto, registre anti-doublon), puis pour une nouvelle synthèse `academy-path` (proposition en attente) et
+  `academy-workbook`. Allumée, elle remplace la livraison coaching de `meet-recordings-sync` (un seul email).
+  Traces Admin SDK seul : `coaching_autosync/{fileId}` (sert aussi à reposer un lien effacé par une
+  sauvegarde de la page), `bookings/{id}.coachingSync` (`lie` / `aucun_enregistrement` après 14 j /
+  `deja_dans_la_fiche`), badge dans « RDV coaching du mois ». `_config/coaching_auto_sync.partageVideo:
+  'lien'` rend une vidéo non partagée lisible par lien (choisi par Adrien le 16/11/2026 ; `?partageVideo=`).
+  Pas d'email client pour une séance de plus de `mailMaxJours` (14) jours : le rattrapage remplit la fiche seule.
 - **Scoring sociétés (30/10/2026)** : `admin-scoring.html` (admin : solvabilité, tout le
   catalogue Societe.com en boutons, documents officiels), `alteore-scoring.js` (bouton sur
   la fiche en phase de closing, pop-ups), `api/scoring.js`, client `api/_societeCom.js`
