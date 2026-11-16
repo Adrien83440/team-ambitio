@@ -44,6 +44,19 @@ module.exports = async (req, res) => {
   const t = String((req.query && req.query.t) || '').trim();
   if (!/^[A-Za-z0-9]{6,32}$/.test(t)) { page(res, 404, 'Lien introuvable', '<h1>Lien introuvable</h1><p>Ce lien n\'est pas valide.</p>'); return; }
 
+  /* Liens de DÉMONSTRATION de l'aperçu (admin-relances) : la vraie page,
+     sans lead, sans rien compter. Les vrais liens naissent à l'envoi. */
+  if (t === 'ApercuVideo' || t === 'ApercuRdv') {
+    try {
+      const cfg = await R.config();
+      const choix = R.typeReservation(await R.typesRdv(), null, cfg, null);
+      const resa = choix ? R.urlReservation(choix.type, null) : null;
+      if (t === 'ApercuVideo') { pageVideo(res, 'Julie', videoDe(null, cfg), resa, ''); return; }
+      if (resa) { res.setHeader('Cache-Control', 'no-store'); res.writeHead(302, { Location: resa }); res.end(); return; }
+    } catch (e) { console.error('[relance-lien] apercu', e && e.message); }
+    page(res, 200, 'Aperçu', '<h1>Aperçu</h1><p>Lien de démonstration.</p>');
+    return;
+  }
   const ref = db.collection('relance_liens').doc(t);
   let lien;
   try {

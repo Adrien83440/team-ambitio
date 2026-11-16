@@ -409,9 +409,10 @@ function apercuWhatsapp(e, m, i) {
 }
 function apercuSms(t, i) {
   var ex = exemple();
-  var txt = String(t || '').trim() ? C.remplir(t, { prenom: ex.prenom, setter: ex.setter, lien_rdv: 'https://team.alteore.com/r/Ab12Cd34Ef', lien_stop: 'https://team.alteore.com/r/Gh56Ij78Kl', lien_video: 'https://team.alteore.com/r/Mn90Op12Qr' }) : '';
+  var txt = String(t || '').trim() ? C.remplir(t, { prenom: ex.prenom, setter: ex.setter, lien_rdv: 'https://team.alteore.com/r/ApercuRdv', lien_stop: 'https://team.alteore.com/r/Gh56Ij78Kl', lien_video: 'https://team.alteore.com/r/ApercuVideo' }) : '';
   return '<div class="rl-wa" id="smsPrev_' + i + '" style="background:#f4f4f6"><span class="rl-wa-t" style="color:#6b6b70">Aperçu du SMS de repli (depuis le +33 9 39 24 03 97)</span>'
-    + (txt ? '<div class="rl-wa-sms">' + esc(txt) + '</div>' : '<div class="rl-wa-manque" style="border-radius:10px">SMS de repli vide : il est obligatoire (numéro absent de WhatsApp).</div>') + '</div>';
+    + (txt ? '<div class="rl-wa-sms">' + esc(txt).replace(/(https:\/\/team\.alteore\.com\/r\/Apercu(?:Video|Rdv))/g, '<a href="$1" target="_blank" rel="noopener">$1</a>') + '</div>'
+      + '<div class="rl-hint" style="margin:0">Liens de démonstration : chaque lead reçoit ses propres liens, créés à l\'envoi.</div>' : '<div class="rl-wa-manque" style="border-radius:10px">SMS de repli vide : il est obligatoire (numéro absent de WhatsApp).</div>') + '</div>';
 }
 /* Met à jour les aperçus SUR PLACE : redessiner toute la fiche pendant un
    « change » remplacerait le bouton sur lequel on est en train de cliquer
@@ -444,10 +445,21 @@ function remplirChamp(champ, i, transforme) {
   ta.dispatchEvent(new Event('input', { bubbles: true }));
   lireCampagne();
 }
-function compteurSms(t) {
+/* Caractères hors alphabet SMS standard : un seul fait passer tout le SMS à
+   67 caractères par segment (le coût double ou triple). */
+function caracteresSpeciaux(t) {
+  var vus = [];
+  (String(t || '').match(/[\uD800-\uDBFF][\uDC00-\uDFFF]|[\s\S]/g) || []).forEach(function (ch) { if (C.segmentsSms(ch).unicode && vus.indexOf(ch) < 0) vus.push(ch); });
+  return vus;
+}
+function compteurSms(t, champ, i) {
   var s = C.segmentsSms(C.smsTypique(t || ''));
   var p = C.contientPrix(t || '');
-  return '<div class="rl-hint' + (p ? ' ko' : '') + '">' + s.longueur + ' caractères · ' + s.segments + ' SMS' + (s.unicode ? ' · ⚠ caractère spécial (ê, ç, ’…) : 70 caractères par SMS' : '')
+  var sp = s.unicode ? caracteresSpeciaux(t) : [];
+  return '<div class="rl-hint' + (p ? ' ko' : '') + '">' + s.longueur + ' caractères · <b>' + s.segments + ' SMS</b>'
+    + (s.unicode ? ' · ⚠ caractères spéciaux ' + sp.map(function (c) { return '« ' + esc(c) + ' »'; }).join(' ')
+      + ' : 67 caractères par SMS au lieu de 153'
+      + (champ ? ' <button class="rl-act mini" type="button" data-action="sms-corriger" data-champ="' + champ + '" data-i="' + i + '">Corriger les apostrophes et emojis</button>' : '') : '')
     + (p ? ' · ⛔ élément de prix « ' + esc(p) + ' »' : '') + '</div>';
 }
 function peindreEtape(e, i, fige) {
@@ -486,10 +498,10 @@ function peindreEtape(e, i, fige) {
         + '<span class="rl-hint" id="testRes_' + i + '" style="margin:0"></span></div>';
     }
     h += boutonsSms('texteRepli', i, fige);
-    h += '<label class="rl-f" style="margin-top:6px">SMS de repli (si le numéro n\'est pas sur WhatsApp ou si l\'envoi échoue)<textarea class="rl-ta" data-e="texteRepli" data-i="' + i + '"' + dis + '>' + esc(e.texteRepli || '') + '</textarea></label>' + compteurSms(e.texteRepli) + apercuSms(e.texteRepli, i);
+    h += '<label class="rl-f" style="margin-top:6px">SMS de repli (si le numéro n\'est pas sur WhatsApp ou si l\'envoi échoue)<textarea class="rl-ta" data-e="texteRepli" data-i="' + i + '"' + dis + '>' + esc(e.texteRepli || '') + '</textarea></label>' + compteurSms(e.texteRepli, 'texteRepli', i) + apercuSms(e.texteRepli, i);
   } else if (e.canal === 'sms') {
     h += boutonsSms('texte', i, fige);
-    h += '<label class="rl-f">Texte du SMS<textarea class="rl-ta" data-e="texte" data-i="' + i + '"' + dis + '>' + esc(e.texte || '') + '</textarea></label>' + compteurSms(e.texte) + apercuSms(e.texte, i);
+    h += '<label class="rl-f">Texte du SMS<textarea class="rl-ta" data-e="texte" data-i="' + i + '"' + dis + '>' + esc(e.texte || '') + '</textarea></label>' + compteurSms(e.texte, 'texte', i) + apercuSms(e.texte, i);
   } else {
     h += '<label class="rl-f">Objet<input class="rl-in" data-e="objet" data-i="' + i + '" value="' + esc(e.objet || '') + '"' + dis + '></label>'
       + '<label class="rl-f" style="margin-top:6px">Texte<textarea class="rl-ta" style="min-height:140px" data-e="texte" data-i="' + i + '"' + dis + '>' + esc(e.texte || '') + '</textarea></label>';
@@ -799,6 +811,17 @@ document.addEventListener('click', function (ev) {
       ta.selectionStart = ta.selectionEnd = (avant + ins).length;
     });
   }
+  else if (a === 'sms-corriger') {
+    /* Apostrophes et guillemets courbes → droits, tirets longs → courts,
+       emojis retirés. Les accents ne sont PAS touchés (ô, ê, ç…) : le mot
+       de remplacement est un choix de rédaction. */
+    remplirChamp(t.getAttribute('data-champ'), t.getAttribute('data-i'), function (ta) {
+      ta.value = ta.value.replace(/[\u2018\u2019\u02BC]/g, "'").replace(/[\u201C\u201D\u00AB\u00BB]/g, '"')
+        .replace(/[\u2013\u2014]/g, '-').replace(/\u2026/g, '...').replace(/[\u00A0\u202F]/g, ' ')
+        .replace(/(?:[\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF\uFE0F\u200D])/g, '')
+        .replace(/[ \t]+\n/g, '\n').replace(/ {2,}/g, ' ');
+    });
+  }
   else if (a === 'sms-conseille') {
     remplirChamp(t.getAttribute('data-champ'), t.getAttribute('data-i'), function (ta) {
       if (ta.value.trim() && !window.confirm('Remplacer le texte actuel par le texte conseillé ?')) return;
@@ -855,7 +878,7 @@ document.addEventListener('input', function (ev) {
   var et = S.camp && S.camp.etapes ? S.camp.etapes[+x.getAttribute('data-i')] : null;
   if ((k === 'texte' && et && et.canal === 'sms') || k === 'texteRepli') {
     var h = x.parentNode.nextElementSibling;
-    if (h && h.className.indexOf('rl-hint') >= 0) h.outerHTML = compteurSms(x.value);
+    if (h && h.className.indexOf('rl-hint') >= 0) h.outerHTML = compteurSms(x.value, k, x.getAttribute('data-i'));
     var pv = $('smsPrev_' + x.getAttribute('data-i'));
     if (pv) pv.outerHTML = apercuSms(x.value, x.getAttribute('data-i'));
   }
