@@ -82,8 +82,12 @@ const DEFAUTS = {
   mailMaxJours: 14,         // pas d'email client pour une séance plus ancienne (rattrapage : fiche seule)
 };
 
-const BUDGET_DOCS_MS = 170000;
-const BUDGET_TOTAL_MS = 250000;
+// Vercel coupe la fonction à 300 s (maxDuration) : chaque phase s'arrête
+// assez tôt pour que la dernière étape commencée ait le temps de finir.
+// Tout est rejouable : le passage suivant reprend où celui-ci s'est arrêté.
+const BUDGET_DOCS_MS = 140000;   // fichiers Meet → fiches
+const BUDGET_TOTAL_MS = 190000;  // plus de nouvelle séance en aval au-delà
+const BUDGET_IA_MS = 160000;     // plus de copilote / workbooks (le plus long) au-delà
 const MAX_TENTATIVES_AVAL = 3;
 
 // ─── Dates (Europe/Paris) ────────────────────────────────────────────────
@@ -496,7 +500,7 @@ async function avalIA(clientId, c) {
   return res;
 }
 
-async function traiterAval(traceRef, t, cfg) {
+async function traiterAval(traceRef, t, cfg, t0) {
   const aval = Object.assign({ academy: false, mail: false, ia: true }, t.aval || {});
   const tentatives = (t.avalTentatives || 0) + 1;
   const journal = {};
@@ -535,7 +539,8 @@ async function traiterAval(traceRef, t, cfg) {
     journal.mail = j2.ok === true ? (j2.skipped || ('envoye:' + (j2.to || ''))) : (j2.error || 'erreur');
     if (j2.ok === true) aval.mail = true;
   }
-  if (!aval.ia) {
+  if (!aval.ia && t0 && Date.now() - t0 > BUDGET_IA_MS) journal.ia = 'reporte_passage_suivant';
+  else if (!aval.ia) {
     try {
       const r3 = await avalIA(t.clientId, c);
       journal.ia = r3;
@@ -767,7 +772,7 @@ async function executer(opts) {
       const d = snapA.docs[q];
       const t = d.data() || {};
       try {
-        const r = await traiterAval(d.ref, t, cfg);
+        const r = await traiterAval(d.ref, t, cfg, t0);
         rapport.aval.push({ client: t.clientNom, seance: t.numero, resultat: r });
       } catch (e) {
         rapport.erreurs.push({ fichier: t.titre, erreur: 'aval: ' + e.message });
