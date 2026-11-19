@@ -5,7 +5,8 @@
 // La Console Firebase est la source de vérité des règles (CLAUDE.md) : cette
 // route ne publie JAMAIS le fichier firestore.rules du dépôt. Elle LIT les
 // règles actuellement publiées, y AJOUTE seulement le bloc autonome
-// « LECTEUR FUNNEL » (copié du dépôt, entre ses deux marqueurs), et publie.
+// « LECTEUR FUNNEL » (copie embarquée api/_rulesLecteurFunnelBlock.js du bloc
+// de firestore.rules, entre ses deux marqueurs), et publie.
 // Si le bloc est déjà là (ancienne version), il est remplacé, rien d'autre.
 //
 //   GET ?key=<RULES_LECTEUR_KEY>              → dry-run : ce qui changerait
@@ -19,9 +20,8 @@
 // ============================================================================
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
 const crypto = require('crypto');
+const BLOCK = require('./_rulesLecteurFunnelBlock');
 const { admin, db } = require('./_firebaseAdmin');
 
 const START = '    // ═══ LECTEUR FUNNEL';
@@ -70,9 +70,9 @@ module.exports = async function (req, res) {
       res.status(200).json({ ok: true, rollback: true, released: r && r.name ? r.name : name, previous: live.name });
       return;
     }
-    const repo = fs.readFileSync(path.join(__dirname, '..', 'firestore.rules'), 'utf8');
-    const blk = blockOf(repo);
-    if (!blk) { res.status(500).json({ ok: false, error: 'bloc LECTEUR FUNNEL introuvable dans firestore.rules' }); return; }
+    /* Bloc embarqué (firestore.rules n'est pas déployé, voir .vercelignore). */
+    const blk = blockOf(BLOCK);
+    if (!blk) { res.status(500).json({ ok: false, error: 'bloc LECTEUR FUNNEL embarqué illisible' }); return; }
     const m = merged(liveSrc, blk.text);
     const out = {
       ok: true, liveRuleset: live.name, liveCreated: live.createTime || null,
