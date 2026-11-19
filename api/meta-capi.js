@@ -13,8 +13,9 @@
 //                                          → dernières lignes du journal, avec
 //                                            le nom de la fiche (admin)
 //   POST { action: 'probe' }               → envoie UN exemplaire de chacun
-//                                            des 9 événements (dont les 3 LQS,
-//                                            contact fictif noté 5) pour un contact
+//                                            des 10 événements (dont les 3 LQS,
+//                                            contact fictif noté 5, et
+//                                            LeadDisqualifie) pour un contact
 //                                            fictif, AVEC le code de test
 //                                            uniquement (refusé sans code) :
 //                                            c'est la vérification dans
@@ -84,7 +85,7 @@ async function probe(auth) {
   if (!cfg.testEventCode) return { ok: false, error: 'Saisis d\'abord le code de test du Gestionnaire d\'événements.' };
   const stamp = Date.now();
   const fake = {
-    _id: 'probe-' + stamp, email: 'test-capi@alteore.invalid', telephone: '+33612345678',
+    _id: 'probe-' + stamp, nom: 'Test Capi', email: 'test-capi@alteore.invalid', telephone: '+33612345678',
     stage: 'lead', quiz: { ca_mensuel: 'Entre 20 000 € et 50 000 € par mois' },
     landingLast: { label: 'Test API Conversions', pageUrl: 'https://www.adrienemily.com/optin-a' },
     metaIds: { eventId: 'probe-ld-' + stamp, ua: 'Mozilla/5.0 (Test API Conversions Alteore)', pageUrl: 'https://www.adrienemily.com/optin-a', at: new Date(stamp), allowed: true }
@@ -95,6 +96,8 @@ async function probe(auth) {
     /* LQS : note 5 imposée (le contact fictif n'a pas de questionnaire) →
        LeadLQS3plus, LeadLQS4plus, LeadLQS5. */
     .concat(Capi.lqsEventsFor(fake, { note: 5, pts: 5 }, stamp, fake.landingLast.label))
+    /* LeadDisqualifie : réponse éliminatoire imposée (même contact fictif). */
+    .concat(Capi.disqualEventsFor(fake, { note: 1, pts: 0, ko: true }, stamp, fake.landingLast.label))
     .concat(Capi.bookingCreatedEvents(bk, fake))
     .concat(Capi.bookingOutcomeEvents(bk, fake));
   const resp = await Capi.postEvents(cfg, items.map(function (it) { return it.ev; }), cfg.testEventCode);

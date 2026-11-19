@@ -19,6 +19,12 @@
 //                 UNE fois, au passage qui suit l'opt-in, avec le barème du
 //                 moment ; jamais renvoyée si le barème change ensuite, et
 //                 jamais écrite sur la fiche (règle LQS).
+//   LeadDisqualifie opt-in dont une réponse est ÉLIMINATOIRE (⛔) dans le
+//                 barème LQS (sc.ko) — et SEULEMENT celles-là : une note 1-2
+//                 obtenue par cumul de points n'est pas envoyée (le lead peut
+//                 évoluer). Sert aux audiences d'exclusion de la média
+//                 buyeuse (19/11/2026). Pas d'exigence de téléphone : l'e-mail
+//                 suffit à exclure.
 //   Schedule      jumeau serveur du Schedule de booking.html (event_id = id
 //                 du RDV, déjà posé côté navigateur depuis septembre)
 //   RdvPose       RDV commercial créé (self ou setter, hors coaching, hors
@@ -37,7 +43,8 @@
 //
 // IDENTIFIANTS (user_data) — hachés SHA-256 comme l'exige Meta : email
 // (minuscules), téléphone (E.164 sans « + »), external_id (id de la fiche),
-// pays ; en clair : fbp, fbc (reconstruit depuis fbclid si le cookie manque),
+// pays, prénom et nom (19/11/2026 : minuscules, sans ponctuation ; champ
+// prenom de la fiche s'il existe, sinon premier mot du nom complet `nom`) ; en clair : fbp, fbc (reconstruit depuis fbclid si le cookie manque),
 // user-agent et IP du visiteur quand ils sont connus.
 //
 // JOURNAL : meta_capi_events/{clé} — une ligne par événement : nom, fiche,
@@ -153,6 +160,33 @@ async function ineligibility(lead) {
 }
 
 /* ── user_data ────────────────────────────────────────────────────────── */
+/* Prénom / nom pour Meta : minuscules, lettres seulement (accents gardés,
+   UTF-8), sans ponctuation ni espace. Un « nom » qui est en fait un e-mail,
+   un numéro ou « Sans nom » n'est pas envoyé. */
+function nameKey(v) {
+  let t = String(v == null ? '' : v).toLowerCase().trim();
+  if (!t || /@|\d/.test(t) || t === 'sans nom') return '';
+  t = t.replace(/[^a-zà-öø-ÿœæ]/g, '');
+  return t.length >= 1 ? t : '';
+}
+function namesOf(lead, extra) {
+  const src = lead || {};
+  const ex = extra || {};
+  let full = String(src.nom || ex.nom || ex.name || '').replace(/\s+/g, ' ').trim();
+  if (/@|\d/.test(full) || full.toLowerCase() === 'sans nom') full = '';
+  let fn = String(src.prenom || src.firstName || ex.prenom || ex.firstName || '').trim();
+  let ln = String(src.lastName || ex.lastName || '').trim();
+  if (!fn) {
+    /* Nom complet « Prénom Nom » : premier mot = prénom, le reste = nom. */
+    const w = full ? full.split(' ') : [];
+    fn = w[0] || '';
+    if (!ln) ln = w.slice(1).join(' ');
+  } else if (!ln && full) {
+    /* Prénom connu : le nom = le nom complet sans le prénom en tête. */
+    ln = full.toLowerCase().indexOf(fn.toLowerCase() + ' ') === 0 ? full.slice(fn.length + 1) : (full.toLowerCase() === fn.toLowerCase() ? '' : full);
+  }
+  return { fn: nameKey(fn), ln: nameKey(ln) };
+}
 function userData(lead, extra) {
   const mi = (lead && lead.metaIds) || {};
   const u = {};
@@ -163,6 +197,9 @@ function userData(lead, extra) {
     u.ph = [sha(ph.slice(1))];
     if (/^\+33/.test(ph)) u.country = [sha('fr')];
   }
+  const nm = namesOf(lead, extra);
+  if (nm.fn) u.fn = [sha(nm.fn)];
+  if (nm.ln) u.ln = [sha(nm.ln)];
   if (lead && lead._id) u.external_id = [sha(lead._id)];
   if (mi.fbp) u.fbp = mi.fbp;
   if (mi.fbc) u.fbc = mi.fbc;
@@ -225,6 +262,14 @@ function lqsEventsFor(lead, sc, at, label) {
   return out;
 }
 
+/* Lead disqualifié : réponse éliminatoire (⛔) du barème, rien d'autre. */
+function disqualEventsFor(lead, sc, at, label) {
+  if (!sc || sc.ko !== true) return [];
+  const e = baseEvent('LeadDisqualifie', 'ldq_' + lead._id, at, 'website', lead);
+  e.custom_data = { content_name: label || '', lqs: sc.note, motif: 'reponse_eliminatoire' };
+  return [{ ev: e, kind: 'LeadDisqualifie', leadId: lead._id, at: at, lqs: sc.note }];
+}
+
 /* Événements d'un opt-in (fiche dont metaIds.at est dans la fenêtre).
    lqsGrid : barème LQS (loadLqsGrid) ; absent → pas d'événement LQS. */
 function optinEvents(lead, lqsGrid) {
@@ -243,7 +288,11 @@ function optinEvents(lead, lqsGrid) {
     e2.custom_data = { content_name: label, ca_declare: Core.caDeclaredOf(lead).slice(0, 80) };
     out.push({ ev: e2, kind: 'LeadQualifie', leadId: lead._id, at: at, needsPhone: true });
   }
-  if (lqsGrid) lqsEventsFor(lead, lqsOf(lead, lqsGrid), at, label).forEach(function (x) { out.push(x); });
+  if (lqsGrid) {
+    const sc = lqsOf(lead, lqsGrid);
+    lqsEventsFor(lead, sc, at, label).forEach(function (x) { out.push(x); });
+    disqualEventsFor(lead, sc, at, label).forEach(function (x) { out.push(x); });
+  }
   return out;
 }
 function bookingIsCommercial(b) {
@@ -367,7 +416,7 @@ async function sendBatch(cfg, toSend) {
 module.exports = {
   JOURNAL, DEFAULT_PIXEL, loadConfig, sinceOf, ms, sha, leadRef,
   phoneE164, phonePlausible, ineligibility, userData, matchKeys,
-  LQS_EVENTS, loadLqsGrid, lqsOf, lqsEventsFor,
+  LQS_EVENTS, loadLqsGrid, lqsOf, lqsEventsFor, disqualEventsFor, namesOf,
   optinEvents, bookingCreatedEvents, bookingOutcomeEvents, bookingIsCommercial,
   postEvents, prepare, sendBatch, journalKey
 };

@@ -5,7 +5,8 @@
 // qui s'est passé depuis le dernier passage et l'envoie au pixel :
 //   · fiches dont l'opt-in porte des identifiants Meta (metaIds.at)
 //       → Lead (jumeau du navigateur) + LeadQualifie (CA ≥ 20 k€/mois)
-//         + LeadLQS3plus / LeadLQS4plus / LeadLQS5 (note LQS, cumulatifs) ;
+//         + LeadLQS3plus / LeadLQS4plus / LeadLQS5 (note LQS, cumulatifs)
+//         + LeadDisqualifie (réponse éliminatoire du barème) ;
 //   · RDV créés (createdAt)    → Schedule (jumeau de booking.html) + RdvPose ;
 //   · issues saisies (outcomeAt) → RdvHonore (close / non close / offre)
 //                                  + Vente (close, montant contracté HT).
