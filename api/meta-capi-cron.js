@@ -4,7 +4,8 @@
 // Brief « Outil 2 », partie C. Toutes les 10 minutes (vercel.json), relit ce
 // qui s'est passé depuis le dernier passage et l'envoie au pixel :
 //   · fiches dont l'opt-in porte des identifiants Meta (metaIds.at)
-//       → Lead (jumeau du navigateur) + LeadQualifie (CA ≥ 20 k€/mois) ;
+//       → Lead (jumeau du navigateur) + LeadQualifie (CA ≥ 20 k€/mois)
+//         + LeadLQS3plus / LeadLQS4plus / LeadLQS5 (note LQS, cumulatifs) ;
 //   · RDV créés (createdAt)    → Schedule (jumeau de booking.html) + RdvPose ;
 //   · issues saisies (outcomeAt) → RdvHonore (close / non close / offre)
 //                                  + Vente (close, montant contracté HT).
@@ -88,7 +89,8 @@ async function run(opts) {
   try { const s = await STATE.get(); if (s.exists) last = Capi.ms(s.data().lastRunAt); } catch (e) { last = null; }
   const from = Math.max(since, (last || now - FIRST_LOOKBACK_MS) - OVERLAP_MS);
 
-  const [leadsQ, createdQ, outcomeQ] = await Promise.all([
+  const [lqsGrid, leadsQ, createdQ, outcomeQ] = await Promise.all([
+    Capi.loadLqsGrid(),
     docsSince('leads', 'metaIds.at', from),
     docsSince('bookings', 'createdAt', from),
     docsSince('bookings', 'outcomeAt', from)
@@ -99,7 +101,7 @@ async function run(opts) {
   leadsQ.list.forEach(function (l) {
     if (l._merged === true) return;
     leadsById[l._id] = l;
-    Capi.optinEvents(l).forEach(function (it) { items.push(it); });
+    Capi.optinEvents(l, lqsGrid).forEach(function (it) { items.push(it); });
   });
   const cache = {};
   for (const b of createdQ.list) {
@@ -127,7 +129,7 @@ async function run(opts) {
     summary.dry = true;
     summary.events = fresh.slice(0, 200).map(function (it) {
       return { event: it.kind, eventId: it.ev.event_id, leadRef: Capi.leadRef(it.leadId), bookingId: it.bookingId || null,
-        at: new Date(it.at).toISOString(), actionSource: it.ev.action_source, matchKeys: Capi.matchKeys(it.ev.user_data), value: it.value != null ? it.value : null };
+        at: new Date(it.at).toISOString(), actionSource: it.ev.action_source, matchKeys: Capi.matchKeys(it.ev.user_data), value: it.value != null ? it.value : null, lqs: it.lqs != null ? it.lqs : null };
     });
     return summary;
   }

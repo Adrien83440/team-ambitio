@@ -318,7 +318,7 @@
   function capiPanelHtml() {
     var c = admin.capi;
     var h = '<div class="aq-panel" id="aqCapiPanel"><h4>📡 Événements renvoyés à Meta (API Conversions)</h4>'
-      + '<div class="aq-sub">LeadQualifie (CA ≥ 20 k€/mois) · RdvPose · RdvHonore (close, non close, offre) · Vente (montant contracté) — plus les jumeaux serveur de Lead et Schedule, avec le même identifiant que le pixel navigateur (Meta n\'en garde qu\'un). Jamais pour un faux numéro, un visiteur YouTube ou un pixel non autorisé. Envoi toutes les 10 min ; rien d\'antérieur à l\'activation.</div>';
+      + '<div class="aq-sub">LeadQualifie (CA ≥ 20 k€/mois) · LeadLQS3plus / LeadLQS4plus / LeadLQS5 (note LQS ≥ 3, ≥ 4, = 5 à l\'opt-in, cumulatifs : un lead noté 5 envoie les trois) · RdvPose · RdvHonore (close, non close, offre) · Vente (montant contracté) — plus les jumeaux serveur de Lead et Schedule, avec le même identifiant que le pixel navigateur (Meta n\'en garde qu\'un). Jamais pour un faux numéro, un visiteur YouTube ou un pixel non autorisé. Envoi toutes les 10 min ; rien d\'antérieur à l\'activation.</div>';
     if (!c) return h + '<div class="aq-row aq-sub">Chargement…</div></div>';
     if (c.error) return h + '<div class="aq-row aq-note warn">' + esc(c.error) + '</div></div>';
     var mode = !c.enabled ? '<span class="aq-pill off">désactivé</span>'
@@ -328,7 +328,7 @@
       + ' <span class="aq-sub">pixel ' + esc(c.pixelId) + ' · API ' + esc(c.apiVersion) + (c.lastRunAt ? ' · dernier passage ' + esc(new Date(c.lastRunAt).toLocaleString('fr-FR')) : '') + '</span></div>';
     h += '<div class="aq-row"><label class="aq-sub" for="aqTestCode">Code de test Meta</label><input class="aq-in" id="aqTestCode" placeholder="TEST12345" value="' + esc(c.testEventCode || '') + '">'
       + '<button type="button" class="aq-btn" data-aq-act="capi-save-code">Enregistrer</button>'
-      + '<button type="button" class="aq-btn" data-aq-act="capi-probe" title="Envoie un exemplaire de chaque événement pour un contact fictif, avec le code de test">🧪 Envoyer les 6 événements de test</button></div>';
+      + '<button type="button" class="aq-btn" data-aq-act="capi-probe" title="Envoie un exemplaire de chaque événement pour un contact fictif, avec le code de test">🧪 Envoyer les 9 événements de test</button></div>';
     h += '<div class="aq-row">';
     if (!c.enabled) h += '<button type="button" class="aq-btn primary" data-aq-act="capi-enable-test">Activer en mode test</button>';
     else {
@@ -354,7 +354,7 @@
           : (r.response && r.response.ok ? 'reçu (' + (r.response.events_received != null ? r.response.events_received : '?') + ')' + (r.response.fbtrace_id ? ' · ' + esc(r.response.fbtrace_id) : '')
             : esc((r.response && r.response.error) || '') + (r.attempts ? ' · essai ' + r.attempts : ''));
         h += '<tr><td>' + esc(r.sentAt ? new Date(r.sentAt).toLocaleString('fr-FR') : '') + '</td>'
-          + '<td><b>' + esc(r.event) + '</b>' + (r.value != null ? ' · ' + eur(r.value) : '') + (r.test ? ' <span class="aq-pill wait">test</span>' : '') + '</td>'
+          + '<td><b>' + esc(r.event) + '</b>' + (r.value != null ? ' · ' + eur(r.value) : '') + (r.lqs != null ? ' · LQS ' + esc(r.lqs) : '') + (r.test ? ' <span class="aq-pill wait">test</span>' : '') + '</td>'
           + '<td>' + (r.leadId ? '<a href="sales-leads.html?lead=' + encodeURIComponent(r.leadId) + '" target="_blank" rel="noopener">' + esc(r.leadName || r.leadId) + '</a>' : '<span class="aq-z">' + esc(r.reason || '—') + '</span>') + '</td>'
           + '<td><span class="aq-pill ' + p[0] + '">' + esc(p[1]) + '</span></td>'
           + '<td>' + resp + '</td>'
@@ -449,7 +449,7 @@
       return;
     }
     if (act === 'capi-probe') {
-      if (!confirm('Envoyer à Meta un exemplaire de chacun des 6 événements, pour un contact fictif, avec le code de test (rien ne compte dans les pubs) ?')) return;
+      if (!confirm('Envoyer à Meta un exemplaire de chacun des 9 événements, pour un contact fictif, avec le code de test (rien ne compte dans les pubs) ?')) return;
       apiCall(ctx, 'POST', '/api/meta-capi', { action: 'probe' }).then(function (j) {
         if (j && j.ok) { toast('Envoyé — regarde « Tester les événements » dans Meta'); admin.dry = 'Test envoyé : ' + (j.events || []).join(', ') + ' — Meta a reçu ' + (j.response && j.response.events_received) + ' événement(s).'; }
         else { toast('Erreur : ' + ((j && (j.error || (j.response && j.response.error))) || 'inconnue'), true); admin.dry = 'Test refusé : ' + ((j && (j.error || (j.response && j.response.error))) || 'inconnue'); }

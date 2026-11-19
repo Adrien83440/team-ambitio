@@ -9,6 +9,16 @@
 //                 → Meta n'en garde qu'un) — opt-in, action_source website
 //   LeadQualifie  opt-in dont le CA déclaré ≥ 20 000 €/mois
 //                 (FunnelCore.caQualifOf — même règle que l'onglet)
+//   LeadLQS3plus  opt-in dont la note LQS (lqs-core.js, barème
+//   LeadLQS4plus  _config/lqs_grid — exactement la note de l'onglet
+//   LeadLQS5      « ⭐ Qualité leads ») est ≥ 3, ≥ 4, = 5. CUMULATIFS :
+//                 un lead noté 5 envoie les trois, un 4 les deux premiers.
+//                 custom_data.lqs = la note, lqs_points = le total.
+//                 (19/11/2026, demande de la média buyeuse : optimiser et
+//                 bâtir des audiences sur les bons profils.) Note calculée
+//                 UNE fois, au passage qui suit l'opt-in, avec le barème du
+//                 moment ; jamais renvoyée si le barème change ensuite, et
+//                 jamais écrite sur la fiche (règle LQS).
 //   Schedule      jumeau serveur du Schedule de booking.html (event_id = id
 //                 du RDV, déjà posé côté navigateur depuis septembre)
 //   RdvPose       RDV commercial créé (self ou setter, hors coaching, hors
@@ -23,7 +33,7 @@
 //   · une fiche venue de YouTube (utm_source) ;
 //   · une fiche sans metaIds ET sans attribution publicitaire (organique :
 //     son consentement n'est pas connu) ;
-//   · LeadQualifie avec un téléphone invalide.
+//   · LeadQualifie et LeadLQS* avec un téléphone invalide.
 //
 // IDENTIFIANTS (user_data) — hachés SHA-256 comme l'exige Meta : email
 // (minuscules), téléphone (E.164 sans « + »), external_id (id de la fiche),
@@ -53,6 +63,7 @@ const { db, admin } = require('./_firebaseAdmin');
 const Core = require('../funnel-core.js');
 const Lookup = require('./_leadLookup');
 const MetaIds = require('./_metaIds');
+const Lqs = require('../lqs-core.js');
 
 const DEFAULT_PIXEL = '1341581597802071';
 const DEFAULT_API_VERSION = 'v23.0';
@@ -61,6 +72,12 @@ const JOURNAL = 'meta_capi_events';
 const HONORED = { close: 1, non_close: 1, offre: 1 };
 const BOOKING_HTML_SOURCES = { self_booking: 1, setter_booking: 1 };
 const MAX_ATTEMPTS = 3;
+/* Événements LQS cumulatifs : seuil de note → nom, préfixe d'event_id. */
+const LQS_EVENTS = [
+  { min: 3, name: 'LeadLQS3plus', pre: 'lqs3_' },
+  { min: 4, name: 'LeadLQS4plus', pre: 'lqs4_' },
+  { min: 5, name: 'LeadLQS5', pre: 'lqs5_' }
+];
 
 function sha(v) { return crypto.createHash('sha256').update(String(v), 'utf8').digest('hex'); }
 function ms(v) {
@@ -183,8 +200,34 @@ function crmData(extra) {
   return Object.assign({ event_source: 'crm', lead_event_source: 'Team Alteore' }, extra || {});
 }
 
-/* Événements d'un opt-in (fiche dont metaIds.at est dans la fenêtre). */
-function optinEvents(lead) {
+/* Barème LQS (_config/lqs_grid), normalisé comme dans l'onglet. Une erreur
+   de lecture REMONTE : le passage échoue sans avancer le curseur, plutôt
+   que de laisser filer des opt-ins sans leur événement LQS. */
+async function loadLqsGrid() {
+  const s = await db.collection('_config').doc('lqs_grid').get();
+  return Lqs.normalizeGrid(s.exists ? s.data() : null);
+}
+/* Note LQS d'une fiche → { note: 1..5 | null, pts, ko }. */
+function lqsOf(lead, grid) {
+  const sc = Lqs.scoreAnswers(Lqs.extractAnswers(lead), grid);
+  return { note: sc.note, pts: sc.pts, ko: sc.ko };
+}
+/* Événements LQS d'une note donnée (cumulatifs). */
+function lqsEventsFor(lead, sc, at, label) {
+  const out = [];
+  if (!sc || !(sc.note >= 3)) return out;
+  LQS_EVENTS.forEach(function (d) {
+    if (sc.note < d.min) return;
+    const e = baseEvent(d.name, d.pre + lead._id, at, 'website', lead);
+    e.custom_data = { content_name: label || '', lqs: sc.note, lqs_points: sc.pts };
+    out.push({ ev: e, kind: d.name, leadId: lead._id, at: at, needsPhone: true, lqs: sc.note });
+  });
+  return out;
+}
+
+/* Événements d'un opt-in (fiche dont metaIds.at est dans la fenêtre).
+   lqsGrid : barème LQS (loadLqsGrid) ; absent → pas d'événement LQS. */
+function optinEvents(lead, lqsGrid) {
   const mi = lead.metaIds || {};
   const at = ms(mi.at);
   if (!at) return [];
@@ -200,6 +243,7 @@ function optinEvents(lead) {
     e2.custom_data = { content_name: label, ca_declare: Core.caDeclaredOf(lead).slice(0, 80) };
     out.push({ ev: e2, kind: 'LeadQualifie', leadId: lead._id, at: at, needsPhone: true });
   }
+  if (lqsGrid) lqsEventsFor(lead, lqsOf(lead, lqsGrid), at, label).forEach(function (x) { out.push(x); });
   return out;
 }
 function bookingIsCommercial(b) {
@@ -285,7 +329,7 @@ async function prepare(cfg, items, leadsById) {
     const base = {
       key: key, event: it.kind, eventId: it.ev.event_id, leadId: it.leadId || null, leadRef: leadRef(it.leadId),
       bookingId: it.bookingId || null, eventTime: new Date(it.at), test: cfg.testMode,
-      value: it.value != null ? it.value : null, actionSource: it.ev.action_source,
+      value: it.value != null ? it.value : null, lqs: it.lqs != null ? it.lqs : null, actionSource: it.ev.action_source,
       matchKeys: matchKeys(it.ev.user_data), updatedAt: FV.serverTimestamp()
     };
     if (reason) {
@@ -323,6 +367,7 @@ async function sendBatch(cfg, toSend) {
 module.exports = {
   JOURNAL, DEFAULT_PIXEL, loadConfig, sinceOf, ms, sha, leadRef,
   phoneE164, phonePlausible, ineligibility, userData, matchKeys,
+  LQS_EVENTS, loadLqsGrid, lqsOf, lqsEventsFor,
   optinEvents, bookingCreatedEvents, bookingOutcomeEvents, bookingIsCommercial,
   postEvents, prepare, sendBatch, journalKey
 };

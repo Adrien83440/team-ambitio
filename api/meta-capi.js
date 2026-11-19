@@ -12,7 +12,8 @@
 //                                          → dernières lignes du journal, avec
 //                                            le nom de la fiche (admin)
 //   POST { action: 'probe' }               → envoie UN exemplaire de chacun
-//                                            des 6 événements pour un contact
+//                                            des 9 événements (dont les 3 LQS,
+//                                            contact fictif noté 5) pour un contact
 //                                            fictif, AVEC le code de test
 //                                            uniquement (refusé sans code) :
 //                                            c'est la vérification dans
@@ -56,7 +57,7 @@ async function journal(q) {
       key: d.id, event: x.event, eventId: x.eventId, status: x.status, reason: x.reason || null,
       test: !!x.test, leadId: x.leadId || null, bookingId: x.bookingId || null,
       eventTime: tsIso(x.eventTime), sentAt: tsIso(x.sentAt) || tsIso(x.updatedAt),
-      value: x.value != null ? x.value : null, actionSource: x.actionSource || null,
+      value: x.value != null ? x.value : null, lqs: x.lqs != null ? x.lqs : null, actionSource: x.actionSource || null,
       matchKeys: x.matchKeys || [], attempts: x.attempts || 0,
       response: { ok: !!r.ok, events_received: r.events_received != null ? r.events_received : null, error: r.error || null, fbtrace_id: r.fbtrace_id || null }
     });
@@ -90,6 +91,9 @@ async function probe(auth) {
   const bk = { _id: 'probe-bk-' + stamp, source: 'self_booking', typeLabel: 'Test RDV', createdAt: new Date(stamp), outcomeAt: new Date(stamp), outcome: 'close', closeData: { contracte: 1, offre: 'Test' }, prospect: { email: fake.email } };
   const items = []
     .concat(Capi.optinEvents(fake))
+    /* LQS : note 5 imposée (le contact fictif n'a pas de questionnaire) →
+       LeadLQS3plus, LeadLQS4plus, LeadLQS5. */
+    .concat(Capi.lqsEventsFor(fake, { note: 5, pts: 5 }, stamp, fake.landingLast.label))
     .concat(Capi.bookingCreatedEvents(bk, fake))
     .concat(Capi.bookingOutcomeEvents(bk, fake));
   const resp = await Capi.postEvents(cfg, items.map(function (it) { return it.ev; }), cfg.testEventCode);
@@ -99,7 +103,7 @@ async function probe(auth) {
     batch.set(db.collection(Capi.JOURNAL).doc('probe_' + stamp + '_' + it.kind), {
       event: it.kind, eventId: it.ev.event_id, status: resp.ok ? 'sent' : 'error', reason: 'test manuel (contact fictif)',
       test: true, testEventCode: cfg.testEventCode, leadId: null, bookingId: null, eventTime: new Date(it.at),
-      value: it.value != null ? it.value : null, actionSource: it.ev.action_source, matchKeys: Capi.matchKeys(it.ev.user_data),
+      value: it.value != null ? it.value : null, lqs: it.lqs != null ? it.lqs : null, actionSource: it.ev.action_source, matchKeys: Capi.matchKeys(it.ev.user_data),
       response: resp, attempts: 1, probeBy: auth.uid, sentAt: FV.serverTimestamp(), createdAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp()
     });
   });

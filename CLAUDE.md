@@ -500,12 +500,15 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
     (liste blanche de champs, jeton `_config/ads_quality_access`, distinct du lien Agence, audit_log).
   - **API Conversions** : `api/meta-capi-cron.js` (*/10) + règles `api/_metaCapi.js` → pixel
     `1341581597802071` : Lead et Schedule (jumeaux, même event_id que le navigateur), LeadQualifie, RdvPose,
-    RdvHonore, Vente (contracté HT). Exclus : faux numéro / poubelle, contact bloqué, YouTube, pixel non
+    RdvHonore, Vente (contracté HT), et (19/11/2026, demande média buyeuse) **LeadLQS3plus / LeadLQS4plus /
+    LeadLQS5** = note LQS ≥ 3 / ≥ 4 / = 5, CUMULATIFS (un 5 envoie les trois), `custom_data.lqs` ; note calculée
+    côté serveur par `lqs-core.js` + `_config/lqs_grid` au passage qui suit l'opt-in, jamais renvoyée si le barème
+    change, jamais écrite sur la fiche ; téléphone plausible exigé comme LeadQualifie. Exclus : faux numéro / poubelle, contact bloqué, YouTube, pixel non
     autorisé, organique sans metaIds, téléphone invalide (LeadQualifie). Réglages `_config/meta_capi`
     (`enabled`, `testMode` VRAI par défaut, `testEventCode`, `testSince` / `productionSince` — jamais de
     rattrapage du passé ; réel = « PRODUCTION » tapé). Jeton : variable Vercel `META_CAPI_TOKEN`. Journal
     `meta_capi_events` (Admin SDK seul, lu par `api/meta-capi.js`, aucune donnée personnelle en clair) ;
-    bouton « 🧪 6 événements de test » = contact fictif, code de test obligatoire.
+    bouton « 🧪 9 événements de test » = contact fictif, code de test obligatoire.
   - **Paramètres d'URL des pubs** (média buyeuse) : `utm_source={{site_source_name}}&utm_medium={{placement}}&utm_campaign={{campaign.name}}&utm_content={{ad.name}}&Audience={{adset.name}}&campaign_id={{campaign.id}}&adset_id={{adset.id}}&ad_id={{ad.id}}`.
 
 Spécification de référence du flux commercial : `REFONTE-SPEC.md`.
