@@ -77,6 +77,21 @@ module.exports = async function (req, res) {
   }
   if (!j.found) { res.status(200).json({ ok: true, found: false }); return; }
 
+  // ?brut=1 : la réponse du pont telle quelle, sans retraitement, horodatée
+  // par le serveur — pour conserver un état figé de la fiche à un instant donné.
+  if (String((req.query && req.query.brut) || '') === '1') {
+    const now = Date.now();
+    res.status(200).json({
+      extraitLe: new Date(now).toISOString(),
+      extraitLeParis: paris(now),
+      source: ACADEMY_URL + '/api/bridge/progress',
+      emailDemande: email,
+      httpStatus: status,
+      reponse: j
+    });
+    return;
+  }
+
   const d = j.dossier || {};
   const events = [];
   function push(at, type, formation, label) {
