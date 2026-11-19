@@ -151,7 +151,9 @@ async function requirePaymentsTrigger(req, res) {
  * seule du module Stats funnel (sales-funnel.html), créé pour la média
  * buyeuse. Autorise les admins ET ce rôle, pour les seules routes de LECTURE
  * du module (statut / journal de l'API Conversions, dry-run du cron, coût de
- * setting agrégé). Un compte au statut « disabled » est refusé.
+ * setting agrégé). Un compte au statut « disabled » ou dont l'échéance
+ * (users/{uid}.expiresAt, liens d'accès api/funnel-acces.js) est passée est
+ * refusé.
  * Pose auth.readOnly = true pour le lecteur : l'endpoint refuse alors toute
  * écriture.
  */
@@ -161,7 +163,11 @@ async function requireFunnelReader(req, res) {
   if (!auth) return null; // requireAuth a déjà répondu 401/403
 
   if (auth.role === 'admin') { auth.readOnly = false; return auth; }
-  if (auth.role === FUNNEL_VIEWER_ROLE && auth.userData.status !== 'disabled') {
+  /* Lien d'accès (api/funnel-acces.js) : échéance portée par users/{uid}. */
+  const exp = auth.userData.expiresAt;
+  const expMs = exp && typeof exp.toMillis === 'function' ? exp.toMillis() : (exp ? Date.parse(exp) : null);
+  const notExpired = !expMs || expMs > Date.now();
+  if (auth.role === FUNNEL_VIEWER_ROLE && auth.userData.status !== 'disabled' && notExpired) {
     auth.readOnly = true;
     return auth;
   }

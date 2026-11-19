@@ -69,7 +69,7 @@ facturation, réservation, formulaires, signatures électroniques, paiements, t�
 | Guillaume Bilcke | **parti** — exclu en dur (`DEPARTED`) de tous les affichages, historique conservé en base |
 
 Rôles techniques : `admin`, `sales` (setter / closer / closer_setter), `coach`, `csm`,
-`funnel_viewer` (lecteur du module Stats funnel, compte de la média buyeuse — voir plus bas).
+`funnel_viewer` (utilisateur technique d'un lien d'accès en lecture au Stats funnel — voir plus bas).
 
 ---
 
@@ -515,19 +515,27 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
     bouton « 🧪 10 événements de test » = contact fictif, code de test obligatoire.
   - **Paramètres d'URL des pubs** (média buyeuse) : `utm_source={{site_source_name}}&utm_medium={{placement}}&utm_campaign={{campaign.name}}&utm_content={{ad.name}}&Audience={{adset.name}}&campaign_id={{campaign.id}}&adset_id={{adset.id}}&ad_id={{ad.id}}`.
 
-- **Lecteur funnel (19/11/2026, média buyeuse)** : rôle `funnel_viewer`, créé dans Admin →
-  Utilisateurs (« 👁 Lecteur funnel »). Mêmes vues que l'admin dans `sales-funnel.html` (tous les
-  onglets, noms des leads, questionnaires, export PDF), **lecture seule**. La barrière, ce sont les
-  règles : bloc autonome « LECTEUR FUNNEL » à la fin de `firestore.rules` (lecture seule des
-  collections du module, aucune écriture, compte `disabled` coupé). Exclus : `commissions/*` (le
-  coût de setting arrive agrégé par `api/funnel-lecture.js`, montants seuls, via
-  `FunnelCore.loadSettingDeals` → `window.FUNNEL_READONLY`), transcriptions / résumés / analyses IA
-  des visios (`lqs-dossier.js` ; `replay-closing` reste admin), les `_config` hors des 6 documents
-  du module (jamais les jetons de lien). API ouvertes au lecteur par `requireFunnelReader`
-  (`_verifyFirebaseAuth.js`) : `GET /api/meta-capi`, `meta-capi-cron?dry=1`, `funnel-lecture`.
-  `nav.js` : une seule entrée de menu, toute autre page renvoie au funnel, aucun widget d'équipe.
-  Limite connue : `bookings.replay.summary/analysis` sont des champs du RDV, masqués à l'écran
-  mais lisibles par le SDK (les règles ne filtrent pas les champs).
+- **Accès lecture au Stats funnel — liens par personne (19/11/2026, média buyeuse)** : Stats funnel →
+  « 👁 Accès lecture » (admin) : un lien par personne, durée 24 h / 7 / 30 / 90 j / date (≤ 1 an),
+  prolonger, désactiver / réactiver, journal des connexions (une session par ouverture de page : date,
+  durée via signe de vie 5 min, ville Vercel, appareil). API `api/funnel-acces.js` ; données Admin SDK
+  seul, AUCUNE règle : `funnel_links/{id}` (secret, échéance, historique des actions, rien supprimé) et
+  `funnel_links/{id}/sessions`. Lien `funnel-acces.html#t=<id>.<secret>` (secret dans le fragment) →
+  `login` → jeton personnalisé (`createCustomToken`) pour l'utilisateur technique `fl_<id>`, doc
+  `users/fl_<id>` { role `funnel_viewer`, status, expiresAt, funnelLink } (masqué d'Admin → Utilisateurs,
+  le rôle n'y est plus proposé ni dans `user-invite`). Mêmes vues que l'admin dans `sales-funnel.html`
+  (tous les onglets, noms des leads, questionnaires, export PDF), **lecture seule**. La barrière, ce sont les
+  règles : bloc autonome « LECTEUR FUNNEL » à la fin de `firestore.rules` (lecture seule des collections
+  du module, aucune écriture ; status `disabled` ou `expiresAt` passé → plus rien, page ouverte comprise).
+  Exclus : `commissions/*` (coût de setting agrégé par `api/funnel-lecture.js`, montants seuls, via
+  `FunnelCore.loadSettingDeals` → `window.FUNNEL_READONLY`), transcriptions / résumés / analyses IA des
+  visios (`lqs-dossier.js` ; `replay-closing` reste admin), les `_config` hors des 6 documents du module.
+  API ouvertes au lecteur par `requireFunnelReader` (`_verifyFirebaseAuth.js`, contrôle aussi l'échéance) :
+  `GET /api/meta-capi`, `meta-capi-cron?dry=1`, `funnel-lecture`, `funnel-acces` open / ping.
+  `nav.js` : une seule entrée de menu, toute autre page renvoie au funnel, aucun widget d'équipe. Ouvrir un
+  lien dans un navigateur déjà connecté à l'équipe déconnecte ce compte (la page prévient avant).
+  Limite connue : `bookings.replay.summary/analysis` sont des champs du RDV, masqués à l'écran mais lisibles
+  par le SDK (les règles ne filtrent pas les champs).
 
 Spécification de référence du flux commercial : `REFONTE-SPEC.md`.
 

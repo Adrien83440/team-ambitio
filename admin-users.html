@@ -642,7 +642,9 @@ onAuthStateChanged(auth,async user=>{
 async function loadUsers(){
   const snap=await getDocs(collection(db,'users'));
   USERS=[];
-  snap.forEach(d=>{USERS.push(Object.assign({uid:d.id},d.data()));});
+  // Comptes techniques des liens d'accès Stats funnel (api/funnel-acces.js) :
+  // gérés dans Stats funnel → « 👁 Accès lecture », jamais ici.
+  snap.forEach(d=>{var u=d.data()||{}; if(u.funnelLink) return; USERS.push(Object.assign({uid:d.id},u));});
   USERS.sort((a,b)=>(a.displayName||a.email||'').localeCompare(b.displayName||b.email||''));
   renderStats();
   renderList();
@@ -1543,7 +1545,6 @@ function openCreateModal(){
   h+='<div class="role-opt" data-role="sales" onclick="selectRole(this)"><div class="role-opt-icon">📈</div><div class="role-opt-label">Sales</div><div class="role-opt-sub">Espace commercial</div></div>';
   h+='<div class="role-opt" data-role="csm" onclick="selectRole(this)"><div class="role-opt-icon">💎</div><div class="role-opt-label">CSM</div><div class="role-opt-sub">Customer Success</div></div>';
   h+='<div class="role-opt" data-role="admin" onclick="selectRole(this)"><div class="role-opt-icon">👑</div><div class="role-opt-label">Admin</div><div class="role-opt-sub">Accès complet</div></div>';
-  h+='<div class="role-opt" data-role="funnel_viewer" onclick="selectRole(this)"><div class="role-opt-icon">👁</div><div class="role-opt-label">Lecteur funnel</div><div class="role-opt-sub">Stats funnel, lecture seule</div></div>';
   h+='</div>';
   // Method
   h+='<div class="mf"><label>Méthode de création</label></div>';
@@ -1684,7 +1685,7 @@ function openEditModal(u){
   h+='<option value="coach"'+(role==='coach'?' selected':'')+'>🎓 Coach</option>';
   h+='<option value="sales"'+(role==='sales'?' selected':'')+'>📈 Sales</option>';
   h+='<option value="csm"'+(role==='csm'?' selected':'')+'>💎 Customer Success</option>';
-  h+='<option value="funnel_viewer"'+(role==='funnel_viewer'?' selected':'')+'>👁 Lecteur funnel (lecture seule)</option>';
+  if(role==='funnel_viewer')h+='<option value="funnel_viewer" selected>👁 Lecteur funnel (lecture seule)</option>';
   h+='</select></div>';
   // Status
   h+='<div class="mf"><label>Statut</label>';

@@ -1309,8 +1309,10 @@ service cloud.firestore {
     // (sales-funnel.html) en LECTURE SEULE. Bloc AUTONOME et purement additif :
     // une règle Firestore autorise dès qu'UN match l'autorise, donc ces
     // lignes ajoutent une lecture sans rien retirer ni modifier ailleurs.
-    // Elles ne donnent JAMAIS d'écriture. Compte au statut « disabled » :
-    // plus rien. Volontairement exclus :
+    // Elles ne donnent JAMAIS d'écriture. Compte au statut « disabled » ou
+    // échéance passée (users/{uid}.expiresAt, posée par les LIENS d'accès
+    // api/funnel-acces.js) : plus rien, en quelques secondes, page ouverte
+    // comprise. Volontairement exclus :
     //   · commissions/* (paie de chaque membre) → le coût de setting arrive
     //     agrégé par api/funnel-lecture.js ;
     //   · bookings/{id}/replay_transcript (transcriptions, aucune règle :
@@ -1322,7 +1324,9 @@ service cloud.firestore {
     function isFunnelViewer() {
       return request.auth != null
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'funnel_viewer'
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('status', 'active') != 'disabled';
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('status', 'active') != 'disabled'
+        && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('expiresAt', null) == null
+            || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.expiresAt > request.time);
     }
     match /leads/{fvId}               { allow read: if isFunnelViewer(); }
     match /bookings/{fvId}            { allow read: if isFunnelViewer(); }

@@ -469,7 +469,20 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
 body.fn-ro #fnAgencyBtn, body.fn-ro #fnAdsSave, body.fn-ro .fn-jform,
 body.fn-ro button[data-jdel], body.fn-ro button[data-restore],
 body.fn-ro #fnTargetsSave, body.fn-ro #fnCostsSave,
-body.fn-ro #igDiagBtn, body.fn-ro #fbDiagBtn, body.fn-ro [data-lq-save] { display:none !important; }
+body.fn-ro #igDiagBtn, body.fn-ro #fbDiagBtn, body.fn-ro [data-lq-save], body.fn-ro #fnLinksBtn { display:none !important; }
+/* Liens d'accès en lecture (19/11/2026) */
+#fnLinksModal .fn-modal { max-width:860px; }
+.fl-form { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:10px 0 14px; }
+.fl-form input, .fl-form select { background:var(--bg3); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:7px 9px; font-size:12.5px; }
+.fl-tw { overflow-x:auto; }
+.fl-t { width:100%; border-collapse:collapse; font-size:12px; }
+.fl-t th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.4px; color:var(--muted); padding:6px 8px; border-bottom:1px solid var(--border); }
+.fl-t td { padding:8px; border-bottom:1px solid var(--border); vertical-align:top; }
+.fl-acts { display:flex; gap:6px; flex-wrap:wrap; }
+.fl-acts .fn-btn { padding:4px 8px; font-size:11px; }
+.fl-sess { background:var(--bg3); border-radius:8px; padding:8px 10px; margin-top:6px; font-size:11.5px; color:var(--muted); }
+.fl-sess div { padding:2px 0; }
+.fn-ro-gone { position:fixed; inset:0; z-index:400; background:rgba(5,8,16,0.92); display:flex; align-items:center; justify-content:center; text-align:center; padding:20px; font-size:15px; color:#e5e7eb; }
 body.fn-ro #fnTabAds input[data-doc], body.fn-ro #fnTargetsModal input,
 body.fn-ro #fnTargetsModal select, body.fn-ro #fnCostsModal input,
 body.fn-ro #fnCostsModal select { pointer-events:none; }
@@ -538,6 +551,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       <option value="other">Hors YouTube (Meta &amp; autres)</option>
     </select>
     <div style="flex:1"></div>
+    <button class="fn-btn" id="fnLinksBtn" title="Liens d'accès à ce module en lecture seule, un par personne, avec durée et journal des connexions">👁 Accès lecture</button>
     <button class="fn-btn" id="fnAgencyBtn" title="Lien de consultation en lecture seule pour l'agence pub">🔗 Agence</button>
     <button class="fn-btn" id="fnCostsBtn">💶 Coûts</button>
     <button class="fn-btn" id="fnTargetsBtn">🎯 Cibles</button>
@@ -600,6 +614,30 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     <div id="fnAgencyBody"></div>
     <div class="fn-modal-actions">
       <button class="fn-btn" id="fnAgencyCloseBtn">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal liens d'accès en lecture (api/funnel-acces.js, 19/11/2026) -->
+<div class="fn-modal-bg" id="fnLinksModal">
+  <div class="fn-modal">
+    <h3>👁 Accès lecture — liens par personne</h3>
+    <div class="hint">Un lien par personne : il ouvre CE module en lecture seule (tous les onglets, noms des leads, questionnaires), sans compte ni mot de passe. <strong>Jamais</strong> les transcriptions / résumés / analyses des visios, ni le détail des commissions, ni aucune écriture. Désactiver ou laisser expirer coupe l'accès en quelques secondes, page ouverte comprise. Chaque ouverture de page est journalisée (date, durée, ville, appareil).</div>
+    <div class="fl-form">
+      <input type="text" id="flName" placeholder="Nom de la personne" maxlength="80" style="min-width:200px">
+      <select id="flDur">
+        <option value="1">24 heures</option>
+        <option value="7">7 jours</option>
+        <option value="30" selected>30 jours</option>
+        <option value="90">90 jours</option>
+        <option value="date">Jusqu'au…</option>
+      </select>
+      <input type="date" id="flUntil" style="display:none">
+      <button class="fn-btn primary" id="flCreate">➕ Créer le lien</button>
+    </div>
+    <div id="flBody"></div>
+    <div class="fn-modal-actions">
+      <button class="fn-btn" id="fnLinksCloseBtn">Fermer</button>
     </div>
   </div>
 </div>
@@ -3339,6 +3377,150 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     });
   }
 
+  /* ════════════════════════════════════════════════════════════════
+     LIENS D'ACCÈS EN LECTURE (api/funnel-acces.js, 19/11/2026)
+     ════════════════════════════════════════════════════════════════ */
+  var FL = { links: [], open: {}, sess: {} };
+  function flApi(method, url, body) {
+    return currentUser.getIdToken().then(function (tok) {
+      var o = { method: method, headers: { Authorization: 'Bearer ' + tok } };
+      if (body) { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(body); }
+      return fetch(url, o).then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok || !j.ok) throw new Error(j.error || ('HTTP ' + r.status)); return j; }); });
+    });
+  }
+  function flMs(v) { var t = v ? Date.parse(v) : NaN; return isFinite(t) ? t : null; }
+  function flDur(a, b) {
+    var m = Math.round(((flMs(b) || 0) - (flMs(a) || 0)) / 60000);
+    if (!(m > 0)) return 'moins de 5 min';
+    return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + pad2(m % 60);
+  }
+  function flExpiry() {
+    var v = $('#flDur').value;
+    if (v === 'date') return $('#flUntil').value ? { until: $('#flUntil').value } : null;
+    return { days: Number(v) };
+  }
+  function openLinksModal() {
+    if (roBlocked()) return;
+    $('#fnLinksModal').classList.add('show');
+    flLoad();
+  }
+  function flLoad() {
+    $('#flBody').innerHTML = '<div class="fn-empty" style="padding:16px">Chargement…</div>';
+    flApi('GET', '/api/funnel-acces?action=list').then(function (j) { FL.links = j.links || []; flRender(); })
+      .catch(function (e) { $('#flBody').innerHTML = '<div class="fn-empty" style="padding:16px">Erreur : ' + esc(e.message) + '</div>'; });
+  }
+  var FL_STATE = { actif: ['ok', '● actif'], expire: ['warn', '● expiré'], desactive: ['bad', '● désactivé'] };
+  function flRender() {
+    var rows = FL.links;
+    if (!rows.length) { $('#flBody').innerHTML = '<div class="fn-empty" style="padding:16px">Aucun lien pour l\'instant.</div>'; return; }
+    var h = '<div class="fl-tw"><table class="fl-t"><thead><tr><th>Personne</th><th>Statut</th><th>Expire le</th><th>Connexions</th><th>Dernière activité</th><th></th></tr></thead><tbody>';
+    rows.forEach(function (r) {
+      var st = FL_STATE[r.state] || ['warn', r.state];
+      h += '<tr><td><b>' + esc(r.name) + '</b><div class="hint" style="margin:2px 0 0">créé le ' + esc(frDate(flMs(r.createdAt))) + '</div></td>'
+        + '<td><span class="fn-badge ' + st[0] + '" style="margin-top:0">' + st[1] + '</span></td>'
+        + '<td>' + esc(frDate(flMs(r.expiresAt))) + '</td>'
+        + '<td>' + r.sessions + (r.linkOpens ? ' <span class="hint">(lien ouvert ' + r.linkOpens + '×)</span>' : '') + '</td>'
+        + '<td>' + (r.lastSeenAt ? esc(frDate(flMs(r.lastSeenAt))) + (r.lastCity ? ' · ' + esc(r.lastCity) : '') : '<span class="hint">jamais</span>') + '</td>'
+        + '<td><div class="fl-acts">'
+        + (r.state !== 'desactive' && r.url ? '<button class="fn-btn" data-fl-copy="' + escAttr(r.id) + '">📋 Copier</button>' : '')
+        + '<button class="fn-btn" data-fl-extend="' + escAttr(r.id) + '" title="Nouvelle échéance = durée choisie dans le formulaire ci-dessus, à partir de maintenant">⏱ Prolonger</button>'
+        + (r.state === 'desactive' ? '<button class="fn-btn" data-fl-enable="' + escAttr(r.id) + '">✅ Réactiver</button>' : '<button class="fn-btn danger" data-fl-disable="' + escAttr(r.id) + '">⛔ Désactiver</button>')
+        + '<button class="fn-btn" data-fl-sess="' + escAttr(r.id) + '">📜 Journal</button>'
+        + '</div>' + (FL.open[r.id] ? flSessHtml(r.id) : '') + '</td></tr>';
+    });
+    $('#flBody').innerHTML = h + '</tbody></table></div>';
+  }
+  function flSessHtml(id) {
+    var s = FL.sess[id];
+    if (!s) return '<div class="fl-sess">Chargement…</div>';
+    if (s.error) return '<div class="fl-sess">Erreur : ' + esc(s.error) + '</div>';
+    if (!s.length) return '<div class="fl-sess">Aucune connexion pour l\'instant.</div>';
+    return '<div class="fl-sess">' + s.map(function (x) {
+      var where = [x.city, x.country].filter(function (v) { return v; }).join(', ');
+      return '<div>' + esc(frDate(flMs(x.startedAt))) + ' · ' + esc(flDur(x.startedAt, x.lastSeenAt)) + (where ? ' · ' + esc(where) : '') + ' · ' + esc(x.device || '') + '</div>';
+    }).join('') + '</div>';
+  }
+  function flFind(id) { for (var i = 0; i < FL.links.length; i++) if (FL.links[i].id === id) return FL.links[i]; return null; }
+  function flCopy(url) {
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(function () { toast('📋 Lien copié'); }, function () { window.prompt('Copie le lien :', url); });
+    else window.prompt('Copie le lien :', url);
+  }
+  function bindLinksModal() {
+    $('#fnLinksBtn').onclick = openLinksModal;
+    $('#fnLinksCloseBtn').onclick = function () { $('#fnLinksModal').classList.remove('show'); };
+    $('#fnLinksModal').addEventListener('click', function (e) {
+      if (e.target === this) { this.classList.remove('show'); return; }
+      var b = e.target.closest ? e.target.closest('button') : null;
+      if (!b) return;
+      var id;
+      if ((id = b.getAttribute('data-fl-copy'))) { var r = flFind(id); if (r && r.url) flCopy(r.url); return; }
+      if ((id = b.getAttribute('data-fl-sess'))) {
+        FL.open[id] = !FL.open[id];
+        if (FL.open[id]) {
+          FL.sess[id] = null;
+          flApi('GET', '/api/funnel-acces?action=sessions&id=' + encodeURIComponent(id)).then(function (j) { FL.sess[id] = j.sessions || []; flRender(); })
+            .catch(function (er) { FL.sess[id] = { error: er.message }; flRender(); });
+        }
+        flRender(); return;
+      }
+      if ((id = b.getAttribute('data-fl-extend'))) {
+        var ex = flExpiry();
+        if (!ex) { toast('Choisis une date', true); return; }
+        var lbl = ex.until ? 'jusqu\'au ' + ex.until : (ex.days === 1 ? '24 heures' : ex.days + ' jours') + ' à partir de maintenant';
+        if (!confirm('Nouvelle échéance : ' + lbl + ' ?')) return;
+        flApi('POST', '/api/funnel-acces', Object.assign({ action: 'extend', id: id }, ex)).then(function () { toast('⏱ Échéance mise à jour'); flLoad(); }).catch(function (er) { toast('Erreur : ' + er.message, true); });
+        return;
+      }
+      if ((id = b.getAttribute('data-fl-disable'))) {
+        if (!confirm('Désactiver ce lien ? L\'accès est coupé en quelques secondes, page ouverte comprise. Tu pourras le réactiver.')) return;
+        flApi('POST', '/api/funnel-acces', { action: 'disable', id: id }).then(function () { toast('⛔ Lien désactivé'); flLoad(); }).catch(function (er) { toast('Erreur : ' + er.message, true); });
+        return;
+      }
+      if ((id = b.getAttribute('data-fl-enable'))) {
+        flApi('POST', '/api/funnel-acces', { action: 'enable', id: id }).then(function () { toast('✅ Lien réactivé'); flLoad(); }).catch(function (er) { toast('Erreur : ' + er.message, true); });
+        return;
+      }
+    });
+    $('#flDur').onchange = function () { $('#flUntil').style.display = this.value === 'date' ? '' : 'none'; };
+    $('#flCreate').onclick = function () {
+      var name = $('#flName').value.trim();
+      var ex = flExpiry();
+      if (!name) { toast('Nom de la personne requis', true); return; }
+      if (!ex) { toast('Choisis une date', true); return; }
+      var btn = this; btn.disabled = true;
+      flApi('POST', '/api/funnel-acces', Object.assign({ action: 'create', name: name }, ex)).then(function (j) {
+        $('#flName').value = '';
+        flCopy(j.url);
+        toast('🔗 Lien créé et copié');
+        flLoad();
+      }).catch(function (er) { toast('Erreur : ' + er.message, true); }).then(function () { btn.disabled = false; });
+    };
+  }
+
+  /* Lecteur venu d'un lien : une session par ouverture de page, signe de vie
+     toutes les 5 min. Lien coupé ou expiré → écran d'accès fermé. */
+  function roGone(msg) {
+    if ($('#fnRoGone')) return;
+    var d = document.createElement('div');
+    d.id = 'fnRoGone'; d.className = 'fn-ro-gone';
+    d.textContent = msg || 'Votre accès en lecture a expiré ou a été désactivé.';
+    document.body.appendChild(d);
+    try { firebase.auth().signOut(); } catch (e) {}
+  }
+  function roSession() {
+    var sid = null;
+    function call(body) {
+      return currentUser.getIdToken().then(function (tok) {
+        return fetch('/api/funnel-acces', { method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      }).then(function (r) {
+        if (r.status === 401 || r.status === 403) { roGone(); return null; }
+        return r.json().catch(function () { return null; });
+      }).catch(function () { return null; });
+    }
+    call({ action: 'open' }).then(function (j) { if (j && j.sid) sid = j.sid; });
+    setInterval(function () { if (!$('#fnRoGone')) call({ action: 'ping', sid: sid }); }, 5 * 60000);
+  }
+
   function openAgencyModal() {
     if (roBlocked()) return;
     var body = $('#fnAgencyBody');
@@ -3588,6 +3770,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     $('#fnTargetsSave').onclick = saveTargets;
     $('#fnTargetsModal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('show'); });
     $('#fnAgencyBtn').onclick = openAgencyModal;
+    bindLinksModal();
     $('#fnAgencyCloseBtn').onclick = function () { $('#fnAgencyModal').classList.remove('show'); };
     $('#fnAgencyModal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('show'); });
     $$('#fnTabs .fn-tab').forEach(function (t) { t.onclick = function () { switchTab(t.getAttribute('data-tab')); }; });
@@ -3606,11 +3789,18 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       currentUser = user;
       db.collection('users').doc(user.uid).get().then(function (snap) {
         var data = snap.exists ? snap.data() : {};
-        if (data.role === 'funnel_viewer' && data.status !== 'disabled') {
+        var roExp = data.expiresAt && typeof data.expiresAt.toMillis === 'function' ? data.expiresAt.toMillis() : null;
+        if (data.role === 'funnel_viewer' && (data.status === 'disabled' || (roExp && roExp <= Date.now()))) {
+          $('#fnApp').style.display = '';
+          roGone();
+          return;
+        }
+        if (data.role === 'funnel_viewer') {
           RO = true;
           window.FUNNEL_READONLY = true;
           document.body.classList.add('fn-ro');
-          $('#fnRoleBadge').textContent = 'Média buyeuse';
+          $('#fnRoleBadge').textContent = data.displayName || 'Lecture';
+          roSession();
         } else if (data.role !== 'admin') {
           toast('Accès réservé aux administrateurs', true);
           setTimeout(function () { window.location.href = 'sales-dashboard.html'; }, 1500);
