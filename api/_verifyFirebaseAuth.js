@@ -146,9 +146,34 @@ async function requirePaymentsTrigger(req, res) {
   return auth;
 }
 
+/**
+ * LECTEUR FUNNEL (19/11/2026) — rôle `funnel_viewer` : compte en lecture
+ * seule du module Stats funnel (sales-funnel.html), créé pour la média
+ * buyeuse. Autorise les admins ET ce rôle, pour les seules routes de LECTURE
+ * du module (statut / journal de l'API Conversions, dry-run du cron, coût de
+ * setting agrégé). Un compte au statut « disabled » est refusé.
+ * Pose auth.readOnly = true pour le lecteur : l'endpoint refuse alors toute
+ * écriture.
+ */
+const FUNNEL_VIEWER_ROLE = 'funnel_viewer';
+async function requireFunnelReader(req, res) {
+  const auth = await requireAuth(req, res);
+  if (!auth) return null; // requireAuth a déjà répondu 401/403
+
+  if (auth.role === 'admin') { auth.readOnly = false; return auth; }
+  if (auth.role === FUNNEL_VIEWER_ROLE && auth.userData.status !== 'disabled') {
+    auth.readOnly = true;
+    return auth;
+  }
+  res.status(403).json({ error: 'Accès Stats funnel requis' });
+  return null;
+}
+
 module.exports = {
   verifyFirebaseAuth,
   requireAuth,
   requireAdmin,
   requirePaymentsTrigger,
+  requireFunnelReader,
+  FUNNEL_VIEWER_ROLE,
 };

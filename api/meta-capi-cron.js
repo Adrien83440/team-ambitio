@@ -30,11 +30,13 @@
 //                                          maintenant » de l'onglet) ;
 //                                          ?dry=1 : liste ce qui partirait,
 //                                          sans rien envoyer ni écrire.
+//   GET ?dry=1 Bearer <ID token lecteur funnel> → dry-run seulement
+//                                          (rôle funnel_viewer, 19/11/2026).
 // ============================================================================
 'use strict';
 
 const { db, admin } = require('./_firebaseAdmin');
-const { requireAdmin } = require('./_verifyFirebaseAuth');
+const { requireAdmin, requireFunnelReader } = require('./_verifyFirebaseAuth');
 const Lookup = require('./_leadLookup');
 const Capi = require('./_metaCapi');
 
@@ -150,11 +152,13 @@ async function run(opts) {
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const isCron = checkCron(req);
+  const dry = String((req.query && req.query.dry) || '') === '1';
   if (!isCron) {
-    const auth = await requireAdmin(req, res);
+    /* Dry-run (rien n'est envoyé ni écrit) : admin ou lecteur funnel.
+       Passage réel : admin seulement. */
+    const auth = dry ? await requireFunnelReader(req, res) : await requireAdmin(req, res);
     if (!auth) return;
   }
-  const dry = String((req.query && req.query.dry) || '') === '1';
   try {
     const out = await run({ dry: dry });
     res.status(200).json(Object.assign({ ok: true }, out));

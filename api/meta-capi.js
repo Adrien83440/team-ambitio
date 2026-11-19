@@ -1,7 +1,8 @@
 // ============================================================================
 // api/meta-capi.js — JOURNAL ET DIAGNOSTIC DE L'API CONVERSIONS (12/11/2026)
 // ----------------------------------------------------------------------------
-// Admin seulement (Bearer ID token Firebase, rôle admin). Sert l'encart
+// Admin (Bearer ID token Firebase). Le lecteur funnel (rôle funnel_viewer,
+// 19/11/2026) a les deux GET, jamais le POST. Sert l'encart
 // « 📡 Événements renvoyés à Meta » de l'onglet Qualité par pub
 // (ads-quality-tab.js). Le journal meta_capi_events n'a aucune règle
 // Firestore : il ne se lit que par ici.
@@ -24,7 +25,7 @@
 'use strict';
 
 const { db, admin } = require('./_firebaseAdmin');
-const { requireAdmin } = require('./_verifyFirebaseAuth');
+const { requireFunnelReader } = require('./_verifyFirebaseAuth');
 const parseBody = require('./_parseBody');
 const Capi = require('./_metaCapi');
 
@@ -113,16 +114,19 @@ async function probe(auth) {
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  const auth = await requireAdmin(req, res);
+  const auth = await requireFunnelReader(req, res);
   if (!auth) return;
   try {
     if (req.method === 'GET') {
       const q = req.query || {};
       if (q.part === 'journal') { res.status(200).json({ ok: true, rows: await journal(q) }); return; }
-      res.status(200).json(Object.assign({ ok: true }, await status()));
+      const st = await status();
+      if (auth.readOnly) delete st.testEventCode;   // lecteur funnel : pas de réglage
+      res.status(200).json(Object.assign({ ok: true }, st));
       return;
     }
     if (req.method === 'POST') {
+      if (auth.readOnly) { res.status(403).json({ ok: false, error: 'Accès en lecture seule' }); return; }
       const body = parseBody(req) || {};
       if (body.action === 'probe') { res.status(200).json(await probe(auth)); return; }
       res.status(400).json({ ok: false, error: 'action inconnue' });

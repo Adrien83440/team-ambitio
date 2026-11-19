@@ -1218,8 +1218,32 @@
      dans la fenêtre. Comm + bonus ; deals validés (ok) comme en attente
      d'encaissement — la commission est due dès le close. Membres partis
      inclus (l'historique reste un coût réel). */
+  /* LECTEUR FUNNEL (19/11/2026) : le rôle funnel_viewer n'a pas accès aux
+     documents commissions/* (paie de chaque membre). Il reçoit les seuls
+     montants des deals Setting de la période, calculés côté serveur par CE
+     MÊME code (api/funnel-lecture.js). Échec → coût de setting marqué
+     indisponible (DATA.settingDealsUnavailable), jamais un 0 silencieux. */
+  function loadSettingDealsReader(P, DATA) {
+    var u = window.firebase && firebase.auth && firebase.auth().currentUser;
+    if (!u) { DATA.settingDealsUnavailable = true; return Promise.resolve(); }
+    return u.getIdToken().then(function (tok) {
+      return fetch('/api/funnel-lecture?part=setting&start=' + P.start.getTime() + '&end=' + P.end.getTime(),
+        { headers: { Authorization: 'Bearer ' + tok } });
+    }).then(function (r) {
+      return r.json().then(function (j) {
+        if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
+        (j.deals || []).forEach(function (d) { DATA.settingDeals.push({ slug: null, comm: Number(d.comm) || 0, ok: d.ok === true, client: '' }); });
+      });
+    }).catch(function (e) {
+      console.warn('[funnel-core] coût setting (lecteur)', e && e.message);
+      DATA.settingDealsUnavailable = true;
+    });
+  }
+
   function loadSettingDeals(db, P, DATA, TEAM) {
     DATA.settingDeals = [];
+    DATA.settingDealsUnavailable = false;
+    if (typeof window !== 'undefined' && window.FUNNEL_READONLY === true) return loadSettingDealsReader(P, DATA);
     return Promise.resolve().then(function () {
       var slugs = { elodie: 1, guillaume: 1 };
       TEAM.forEach(function (m) {

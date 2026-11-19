@@ -10,6 +10,18 @@
   // surcharges de theme-light-pages.css) posés au plus tôt pour éviter tout
   // flash. nav.js peut être chargé dans <head> (defer) : body absent → DOMReady.
   const AL_PAGE_NAME = (window.location.pathname.split('/').pop() || 'index.html').replace(/\.html$/, '');
+
+  /* LECTEUR FUNNEL (19/11/2026) — rôle `funnel_viewer` (média buyeuse) :
+     Stats funnel en lecture seule, RIEN d'autre. Toute autre page interne le
+     renvoie au funnel. La vraie barrière reste les règles Firestore (lecture
+     des seules collections du module, aucune écriture) ; ceci évite juste
+     qu'il tombe sur une page cassée. */
+  (function funnelViewerGuard() {
+    if (localStorage.getItem('ambitio_role') !== 'funnel_viewer') return;
+    if (AL_PAGE_NAME !== 'sales-funnel' && AL_PAGE_NAME !== 'login' && AL_PAGE_NAME !== 'set-password') {
+      window.location.replace('sales-funnel.html');
+    }
+  })();
   function applyBodyThemeMarkers() {
     document.body.setAttribute('data-al-page', AL_PAGE_NAME);
     if (localStorage.getItem('ambitio_theme') === 'light') document.body.classList.add('light-theme');
@@ -46,6 +58,11 @@
              sales_crm:'none',sales_dashboard:'none',sales_saisie:'none',sales_dialer:'none',sales_whatsapp:'none',
              sales_equipe:'none',sales_commissions:'none',sales_projections:'none',booking:'none',
              csm_dashboard:'edit',csm_clients:'edit' },
+    // ─── Lecteur funnel (19/11/2026) : Stats funnel seulement, voir canSee() ───
+    funnel_viewer: { coaching_clients:'none',coaching_dashboard:'none',coaching_communication:'none',
+             sales_crm:'none',sales_dashboard:'none',sales_saisie:'none',sales_dialer:'none',sales_whatsapp:'none',
+             sales_equipe:'none',sales_commissions:'none',sales_projections:'none',booking:'none',
+             csm_dashboard:'none',csm_clients:'none' },
   };
 
   const PERM_LABELS = {
@@ -250,6 +267,8 @@
                roleBg: 'rgba(13,148,136,0.10)', roleBorder: 'rgba(13,148,136,0.30)' },
     },
   };
+  // Lecteur funnel : habillage admin, libellé à part.
+  THEMES.funnel_viewer = Object.assign({}, THEMES.admin, { label: 'Stats funnel · lecture', emoji: '👁' });
 
   function isLightTheme() { return localStorage.getItem('ambitio_theme') === 'light'; }
 
@@ -683,6 +702,8 @@
     const perms   = getUserModules();
     // Visibilité d'une entrée (lien direct ou enfant d'un sous-menu).
     const canSee = m => {
+      // Lecteur funnel : une seule entrée, Stats funnel (lecture seule).
+      if (role === 'funnel_viewer') return m.id === 'sales-funnel';
       if (m.adminAlways && role === 'admin') return true;
       if (m.perm === '_admin') return role === 'admin';
       // '_sales' : équipe commerciale + admins, jamais coach ni CSM.
@@ -2018,6 +2039,9 @@
     }, 500);
   }
 
+  /* Lecteur funnel : aucun widget d'équipe (boîte de réception, annonces,
+     comptes à activer…) — il n'en a ni l'usage ni les droits. */
+  if (localStorage.getItem('ambitio_role') === 'funnel_viewer') return;
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () { injectInboxWidget(); injectInfosWidget(); injectCelebrationWidget(); injectPendingUsersWidget(); injectAiFollowupWidget(); injectAideWidget(); initActivityTracker(); initCsmNotesBadge(); });
   } else {

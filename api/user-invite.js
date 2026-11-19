@@ -25,7 +25,8 @@ const { requireAdmin } = require('./_verifyFirebaseAuth');
 const parseBody = require('./_parseBody');
 const inv = require('./_userInvite');
 
-const ROLES = ['coach', 'sales', 'csm', 'admin'];
+// funnel_viewer (19/11/2026) : lecteur du module Stats funnel, lecture seule.
+const ROLES = ['coach', 'sales', 'csm', 'admin', 'funnel_viewer'];
 const MIN_PASSWORD_LENGTH = 8;
 
 function normalizeEmail(e) {

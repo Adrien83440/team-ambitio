@@ -72,12 +72,17 @@
     return { k: 'none', t: 'Pas de RDV' };
   }
 
-  /* ══ TRANSCRIPTIONS ═══════════════════════════════════════════════════ */
+  /* ══ TRANSCRIPTIONS ═══════════════════════════════════════════════════
+     Lecteur funnel (rôle funnel_viewer, 19/11/2026) : ni transcription, ni
+     résumé, ni analyse IA des appels — l'API replay-closing les lui refuse
+     de toute façon (admin seul) ; ici on n'essaie même pas. */
+  function readOnly() { return typeof window !== 'undefined' && window.FUNNEL_READONLY === true; }
   function token() {
     var u = window.firebase && firebase.auth && firebase.auth().currentUser;
     return u ? u.getIdToken() : Promise.reject(new Error('session expirée'));
   }
   function fetchTranscript(id) {
+    if (readOnly()) return Promise.resolve({ state: 'err', error: 'réservé à la direction' });
     if (T[id] && T[id].state !== 'err') return T[id].promise || Promise.resolve(T[id]);
     var rec = T[id] = { state: 'loading' };
     rec.promise = token().then(function (tk) {
@@ -99,6 +104,7 @@
   function readyCalls(r) { return (r.calls || []).filter(function (c) { return c.replay === 'ready'; }); }
   /* Charge les transcriptions de toutes les fiches (3 appels en parallèle). */
   function loadTranscripts(rows, onProgress) {
+    if (readOnly()) { if (onProgress) onProgress(0, 0); return Promise.resolve(0); }
     var ids = [];
     rows.forEach(function (r) { readyCalls(r).forEach(function (c) { if (ids.indexOf(c.id) < 0) ids.push(c.id); }); });
     var done = 0, i = 0;
@@ -153,7 +159,9 @@
   function callHtml(c) {
     var h = '<div class="lqd-call"><div class="lqd-h4">📞 Appel du ' + fDate(c.date) + (c.time ? ' à ' + esc(c.time) : '') + ' — ' + callOutcome(c)
       + (c.closerName ? ' · closer : ' + esc(c.closerName) : '') + (c.durationSec ? ' · ' + fDur(c.durationSec) : '') + '</div>';
-    if (c.replay === 'ready') {
+    if (c.replay === 'ready' && readOnly()) {
+      h += '<div class="lqd-muted">Visio enregistrée — résumé, analyse et transcription réservés à la direction.</div>';
+    } else if (c.replay === 'ready') {
       if (c.summary) h += '<p class="lqd-sum"><strong>Résumé :</strong> ' + esc(c.summary) + '</p>';
       h += analysisHtml(c.analysis);
       h += '<div class="lqd-h4">Transcription de la visio</div><div class="lqd-tr">' + transcriptHtml(T[c.id]) + '</div>';
@@ -353,7 +361,7 @@
     el.className = 'lqd-overlay';
     O = { el: el, opts: opts, rows: rows, open: {}, busy: false };
     var nTr = 0;
-    rows.forEach(function (r) { nTr += readyCalls(r).length; });
+    if (!readOnly()) rows.forEach(function (r) { nTr += readyCalls(r).length; });
     var h = '<div class="lqd-panel"><div class="lqd-top"><div><div class="lqd-title">' + esc(opts.title) + '</div>'
       + '<div class="lqd-sub">' + rows.length + ' prospect' + (rows.length > 1 ? 's' : '') + ' · ' + nTr + ' transcription' + (nTr > 1 ? 's' : '') + ' de visio disponible' + (nTr > 1 ? 's' : '')
       + (opts.periodLabel ? ' · ' + esc(opts.periodLabel) : '') + (opts.sub ? ' · ' + esc(opts.sub) : '') + '</div></div>'
@@ -361,7 +369,8 @@
       + '<button class="fn-btn" data-lqd-all>▾ Tout déplier</button>'
       + '<button class="fn-btn primary" data-lqd-pdf>📄 Exporter en PDF</button>'
       + '<button class="fn-btn" data-lqd-close>✕ Fermer</button></div></div>'
-      + '<div class="lqd-hint">Clique un nom pour voir son questionnaire, son issue et la transcription de sa visio de closing. « Exporter en PDF » prend tous les prospects de cette liste, transcriptions comprises.</div>'
+      + (readOnly() ? '<div class="lqd-hint">Clique un nom pour voir son questionnaire et son issue. « Exporter en PDF » prend tous les prospects de cette liste.</div>'
+        : '<div class="lqd-hint">Clique un nom pour voir son questionnaire, son issue et la transcription de sa visio de closing. « Exporter en PDF » prend tous les prospects de cette liste, transcriptions comprises.</div>')
       + '<div class="lqd-list">';
     if (!rows.length) h += '<div class="lqd-muted" style="padding:20px">Aucun prospect dans cette case.</div>';
     rows.forEach(function (r, i) { h += renderLead(r, i); });

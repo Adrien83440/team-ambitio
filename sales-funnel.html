@@ -464,6 +464,17 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
   .lq-step { padding:10px; }
 }
 .lq-ob { color:#38bdf8; font-weight:700; }
+/* LECTEUR FUNNEL (19/11/2026) — rôle funnel_viewer : tout ce qui écrit est
+   masqué. Les règles Firestore et les API le refusent de toute façon. */
+body.fn-ro #fnAgencyBtn, body.fn-ro #fnAdsSave, body.fn-ro .fn-jform,
+body.fn-ro button[data-jdel], body.fn-ro button[data-restore],
+body.fn-ro #fnTargetsSave, body.fn-ro #fnCostsSave,
+body.fn-ro #igDiagBtn, body.fn-ro #fbDiagBtn, body.fn-ro [data-lq-save] { display:none !important; }
+body.fn-ro #fnTabAds input[data-doc], body.fn-ro #fnTargetsModal input,
+body.fn-ro #fnTargetsModal select, body.fn-ro #fnCostsModal input,
+body.fn-ro #fnCostsModal select { pointer-events:none; }
+.fn-ro-badge { display:none; }
+body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
 </style>
 </head>
 <body>
@@ -485,7 +496,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
 
   <div class="fn-head">
     <div>
-      <div class="fn-title">🎯 Funnel Sales <span class="fn-title-badge">Admin</span></div>
+      <div class="fn-title">🎯 Funnel Sales <span class="fn-title-badge" id="fnRoleBadge">Admin</span><span class="fn-title-badge fn-ro-badge">👁 Lecture seule</span></div>
       <!-- Marqueur de build : incrémenté à chaque livraison pour vérifier
            d'un coup d'œil quelle version est réellement déployée/chargée. -->
       <div class="fn-sub">Lecture complète du tunnel — Pub → Opt-in → Leads → RDV → Closing · 100 % données logiciel (RDV statués · journal · Paiements) — zéro saisie manuelle · coaching &amp; CSM exclus · <span style="color:var(--muted2);font-family:var(--font-m)">build 06.11-a</span></div>
@@ -617,6 +628,15 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
   function escAttr(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
   var db, currentUser;
+  /* Lecteur funnel (rôle funnel_viewer, 19/11/2026) : mêmes vues, aucune
+     écriture. Posé dans init(), avant tout chargement (funnel-core.js lit
+     window.FUNNEL_READONLY pour le coût de setting). */
+  var RO = false;
+  function roBlocked() {
+    if (!RO) return false;
+    toast('Accès en lecture seule', true);
+    return true;
+  }
   /* Marqueur de build — DOIT rester identique au texte affiché dans le
      header (.fn-sub). */
   var FN_BUILD = '06.11-a';
@@ -1763,7 +1783,8 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     h += kpiCard(fmtNum(k.wonSetting), 'Closes NB', fmtEuro(k.wonCollecteNB) + ' collecté HT · contracté ' + fmtEuro(k.wonContracteNB));
     var csSub;
     var csRep = (k.costSetting != null && !k.costOwnEntry && k.costSrcMonth) ? ' · <span style="color:var(--orange,#e8a13c)">⚠ fixe/outils reportés de ' + esc(k.costSrcMonth) + ' — ajuste via 💶 (outils variables)</span>' : '';
-    if (k.costPerRdvNB != null) csSub = '(fixe ' + fmtEuro(k.costFixe) + ' + comm ' + fmtEuro(k.commSetting) + (k.commSettingN ? ' — ' + k.commSettingN + ' deal(s)' : '') + ' + outils ' + fmtEuro(k.costOutils) + ') ÷ ' + fmtNum(k.chNB.n) + ' RDV NB' + csRep;
+    var csNa = DATA && DATA.settingDealsUnavailable ? '<span style="color:var(--orange,#e8a13c)">⚠ commissions indisponibles</span> · ' : '';
+    if (k.costPerRdvNB != null) csSub = csNa + '(fixe ' + fmtEuro(k.costFixe) + ' + comm ' + fmtEuro(k.commSetting) + (k.commSettingN ? ' — ' + k.commSettingN + ' deal(s)' : '') + ' + outils ' + fmtEuro(k.costOutils) + ') ÷ ' + fmtNum(k.chNB.n) + ' RDV NB' + csRep;
     else if (k.costSetting != null) csSub = 'coût setting ' + fmtEuro(k.costSetting) + ' — aucun RDV NB créé sur la période' + csRep;
     else csSub = 'salaire fixe setter + outils non renseignés — bouton 💶 Coûts (les commissions, elles, remontent toutes seules du module Commissions)';
     h += kpiCard(k.costPerRdvNB != null ? fmtEuro2(k.costPerRdvNB) : '—', 'Coût / RDV NB (réel)', csSub, null, k.costPerRdvNB == null);
@@ -1879,7 +1900,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     }
     h += kpiCard(k.aovAll != null ? fmtEuro2(k.aovAll) : '—', 'AOV', aovHint, null, k.aovAll == null);
     var cs2;
-    if (k.costSetting != null) cs2 = 'fixe ' + fmtEuro(k.costFixe) + ' + commissions ' + fmtEuro(k.commSetting) + ' + outils ' + fmtEuro(k.costOutils) + (!k.costOwnEntry && k.costSrcMonth ? ' · <span style="color:var(--orange,#e8a13c)">⚠ reporté de ' + esc(k.costSrcMonth) + '</span>' : '');
+    if (k.costSetting != null) cs2 = (DATA && DATA.settingDealsUnavailable ? '<span style="color:var(--orange,#e8a13c)">⚠ commissions indisponibles</span> · ' : '') + 'fixe ' + fmtEuro(k.costFixe) + ' + commissions ' + fmtEuro(k.commSetting) + ' + outils ' + fmtEuro(k.costOutils) + (!k.costOwnEntry && k.costSrcMonth ? ' · <span style="color:var(--orange,#e8a13c)">⚠ reporté de ' + esc(k.costSrcMonth) + '</span>' : '');
     else cs2 = 'fixe &amp; outils non renseignés — bouton 💶 Coûts';
     h += kpiCard(k.costSetting != null ? fmtEuro2(k.costSetting) : '—', 'Coût setting (période)', cs2, null, k.costSetting == null);
     h += '</div>';
@@ -2188,6 +2209,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
   }
 
   function saveAdsDraft() {
+    if (roBlocked()) return;
     var ids = Object.keys(adsDraft);
     if (!ids.length) return;
     var batch = db.batch();
@@ -2210,6 +2232,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
   }
 
   function restoreMakeValues(docId) {
+    if (roBlocked()) return;
     var map = adsDocMap();
     var doc = map[docId];
     if (!doc || !doc.makeSuggested) return;
@@ -3161,6 +3184,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     el.innerHTML = h;
     $$('button[data-jdel]', el).forEach(function (btn) {
       btn.onclick = function () {
+        if (roBlocked()) return;
         if (!confirm('Supprimer cette entrée du journal ?')) return;
         db.collection('marketing_journal').doc(btn.getAttribute('data-jdel')).delete().then(function () {
           toast('🗑 Entrée supprimée');
@@ -3171,6 +3195,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
   }
 
   function addJournalEntry() {
+    if (roBlocked()) return;
     var date = $('#fnJDate').value;
     var cat = $('#fnJCat').value;
     var text = $('#fnJText').value.trim();
@@ -3213,6 +3238,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
   }
 
   function saveTargets() {
+    if (roBlocked()) return;
     var out = {};
     $$('#fnTargetsBody input[data-tkey]').forEach(function (inp) {
       var kk = inp.getAttribute('data-tkey'), bound = inp.getAttribute('data-bound');
@@ -3260,6 +3286,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
   }
 
   function saveCosts() {
+    if (roBlocked()) return;
     var mk = ($('#fnCostMonth') && $('#fnCostMonth').value) || '';
     if (!/^\d{4}-\d{2}$/.test(mk)) { toast('Mois invalide', true); return; }
     var fx = $('#fnCostFixe').value, ot = $('#fnCostOutils').value;
@@ -3313,6 +3340,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
   }
 
   function openAgencyModal() {
+    if (roBlocked()) return;
     var body = $('#fnAgencyBody');
     body.innerHTML = '<div class="fn-empty" style="padding:20px">Chargement…</div>';
     $('#fnAgencyModal').classList.add('show');
@@ -3444,7 +3472,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     if (!window.AdsQualityTab) { $('#fnTabAdq').innerHTML = '<div class="fn-ig-alert">Module Qualité par pub non chargé (ads-quality-tab.js).</div>'; return; }
     if (!K) { $('#fnTabAdq').innerHTML = '<div class="fn-loading">Chargement…</div>'; return; }
     window.AdsQualityTab.render($('#fnTabAdq'), window.AdsQualityTab.fromKpis(K, periodLabel()), {
-      admin: true, adminCtx: { db: db, user: currentUser, toast: toast }
+      admin: true, readonly: RO, adminCtx: { db: db, user: currentUser, toast: toast }
     });
   }
 
@@ -3578,7 +3606,12 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
       currentUser = user;
       db.collection('users').doc(user.uid).get().then(function (snap) {
         var data = snap.exists ? snap.data() : {};
-        if (data.role !== 'admin') {
+        if (data.role === 'funnel_viewer' && data.status !== 'disabled') {
+          RO = true;
+          window.FUNNEL_READONLY = true;
+          document.body.classList.add('fn-ro');
+          $('#fnRoleBadge').textContent = 'Média buyeuse';
+        } else if (data.role !== 'admin') {
           toast('Accès réservé aux administrateurs', true);
           setTimeout(function () { window.location.href = 'sales-dashboard.html'; }, 1500);
           return;

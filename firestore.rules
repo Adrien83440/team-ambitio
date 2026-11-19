@@ -1303,5 +1303,54 @@ service cloud.firestore {
       allow create, update: if isAuth() && request.auth.uid == userId;
       allow delete: if false;
     }
+
+    // ═══ LECTEUR FUNNEL (19/11/2026) ═══════════════════════════════════════
+    // Rôle `funnel_viewer` (compte de la média buyeuse) : module Stats funnel
+    // (sales-funnel.html) en LECTURE SEULE. Bloc AUTONOME et purement additif :
+    // une règle Firestore autorise dès qu'UN match l'autorise, donc ces
+    // lignes ajoutent une lecture sans rien retirer ni modifier ailleurs.
+    // Elles ne donnent JAMAIS d'écriture. Compte au statut « disabled » :
+    // plus rien. Volontairement exclus :
+    //   · commissions/* (paie de chaque membre) → le coût de setting arrive
+    //     agrégé par api/funnel-lecture.js ;
+    //   · bookings/{id}/replay_transcript (transcriptions, aucune règle :
+    //     les règles ne cascadent pas) ;
+    //   · _config/* sauf les 6 documents lus par le module (pas les jetons
+    //     agency_access / ads_quality_access, ni meta_capi).
+    // Fonction autonome (n'appelle pas isAuth/getRole) pour pouvoir être
+    // collée telle quelle à la fin des règles de la Console.
+    function isFunnelViewer() {
+      return request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'funnel_viewer'
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('status', 'active') != 'disabled';
+    }
+    match /leads/{fvId}               { allow read: if isFunnelViewer(); }
+    match /bookings/{fvId}            { allow read: if isFunnelViewer(); }
+    match /booking_config/{fvId}      { allow read: if isFunnelViewer(); }
+    match /payments/{fvId}            { allow read: if isFunnelViewer(); }
+    match /call_logs/{fvId}           { allow read: if isFunnelViewer(); }
+    match /lead_actions/{fvSlug}/items/{fvId} { allow read: if isFunnelViewer(); }
+    match /marketing_journal/{fvId}   { allow read: if isFunnelViewer(); }
+    match /ads_insights/{fvId}        { allow read: if isFunnelViewer(); }
+    match /ads_insights_ad/{fvId}     { allow read: if isFunnelViewer(); }
+    match /ads_creatives/{fvId}       { allow read: if isFunnelViewer(); }
+    match /page_views_daily/{fvId}    { allow read: if isFunnelViewer(); }
+    match /tunnels/{fvId}             { allow read: if isFunnelViewer(); }
+    match /tunnel_stats_daily/{fvId}  { allow read: if isFunnelViewer(); }
+    match /quiz_funnel_daily/{fvId}   { allow read: if isFunnelViewer(); }
+    match /availability_daily/{fvId}  { allow read: if isFunnelViewer(); }
+    match /ig_media/{fvId}            { allow read: if isFunnelViewer(); }
+    match /ig_comments/{fvId}         { allow read: if isFunnelViewer(); }
+    match /ig_dm_threads/{fvId}       { allow read: if isFunnelViewer(); }
+    match /ig_account_daily/{fvId}    { allow read: if isFunnelViewer(); }
+    match /fb_posts/{fvId}            { allow read: if isFunnelViewer(); }
+    match /fb_page_daily/{fvId}       { allow read: if isFunnelViewer(); }
+    match /fb_comments/{fvId}         { allow read: if isFunnelViewer(); }
+    match /fb_dm_threads/{fvId}       { allow read: if isFunnelViewer(); }
+    match /_config/{fvDoc} {
+      allow read: if isFunnelViewer()
+        && fvDoc in ['_types', 'funnel_targets', 'funnel_costs', 'lqs_grid', 'instagram_sync_state', 'facebook_sync_state'];
+    }
+    // ═══ FIN LECTEUR FUNNEL ════════════════════════════════════════════════
   }
 }

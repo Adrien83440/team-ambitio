@@ -1040,6 +1040,9 @@
   }
 
   function saveGrid() {
+    /* Lecteur funnel (19/11/2026) : il peut SIMULER un barème, jamais
+       l'enregistrer (bouton masqué, règle Firestore admin seule). */
+    if (window.FUNNEL_READONLY === true) { toast('Accès en lecture seule : barème non enregistré', true); return; }
     if (!S.draft || S.saving) return;
     S.saving = true; render();
     var d = S.draft;

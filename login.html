@@ -185,7 +185,7 @@
         const snap=await getDoc(doc(db,'users',user.uid));
         const data=snap.exists()?snap.data():{};
         const role=data.role||'';
-        if(!['coach','sales','admin','csm'].includes(role)){
+        if(!['coach','sales','admin','csm','funnel_viewer'].includes(role)){
           document.getElementById('errorMsg').textContent="⛔ Votre compte n'a pas accès à l'espace équipe.";
           document.getElementById('errorMsg').classList.add('show');
           await signOut(auth);
@@ -196,7 +196,7 @@
         console.error(e);
         // Firestore error: use role from localStorage if available, else show error
         const cachedRole=localStorage.getItem('ambitio_role');
-        if(cachedRole&&['coach','sales','admin','csm'].includes(cachedRole)){
+        if(cachedRole&&['coach','sales','admin','csm','funnel_viewer'].includes(cachedRole)){
           window.showConnected(user,cachedRole,null);
         } else {
           console.error('Impossible de lire le rôle Firestore:',e);
@@ -216,7 +216,8 @@
       admin:['👑 Administrateur','role-admin'],
       coach:['🎓 Coach','role-coach'],
       sales:['📈 Commercial','role-sales'],
-      csm:['💎 Customer Success','role-csm']
+      csm:['💎 Customer Success','role-csm'],
+      funnel_viewer:['👁 Stats funnel — lecture seule','role-admin']
     };
     const [label,cls]=labels[role]||['Équipe','role-coach'];
     document.getElementById('welcomeName').textContent='Bienvenue, '+name+' !';
@@ -230,7 +231,7 @@
     if(modules) localStorage.setItem('ambitio_modules',JSON.stringify(modules));
     else localStorage.removeItem('ambitio_modules');
     // Redirect button based on role
-    const dest={coach:'coaching.html',sales:'sales-dashboard.html',admin:'coaching.html',csm:'csm-cockpit.html'};
+    const dest={coach:'coaching.html',sales:'sales-dashboard.html',admin:'coaching.html',csm:'csm-cockpit.html',funnel_viewer:'sales-funnel.html'};
     const goBtn=document.getElementById('goBtn');
     if(goBtn) goBtn.href=dest[role]||'coaching.html';
   };

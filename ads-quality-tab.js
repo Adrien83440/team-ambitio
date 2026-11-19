@@ -227,7 +227,7 @@
       + '<div style="flex:1"></div><div class="aq-seg">';
     AXES.forEach(function (a) { h += '<button type="button" data-aq-axis="' + a.id + '" class="' + (state.axis === a.id ? 'on' : '') + '">' + esc(a.label) + '</button>'; });
     h += '</div><button type="button" class="aq-btn" data-aq-csv="1">⬇ Export CSV</button>';
-    if (opts.admin) h += '<button type="button" class="aq-btn primary" data-aq-share="1">🔗 Lien média buyeuse</button>';
+    if (opts.admin && !opts.readonly) h += '<button type="button" class="aq-btn primary" data-aq-share="1">🔗 Lien média buyeuse</button>';
     h += '</div>';
     var att = cov.attributedPct != null ? Math.round(cov.attributedPct) + ' %' : '—';
     h += '<div class="aq-note">Lecture : chaque lead est rattaché à la pub qui l\'a amené (premier passage), puis suivi jusqu\'au RDV et à la vente. '
@@ -326,6 +326,11 @@
     h += '<div class="aq-row">' + mode
       + ' <span class="aq-pill ' + (c.tokenSet ? 'ok' : 'ko') + '">jeton Meta ' + (c.tokenSet ? 'posé' : 'absent (variable Vercel META_CAPI_TOKEN)') + '</span>'
       + ' <span class="aq-sub">pixel ' + esc(c.pixelId) + ' · API ' + esc(c.apiVersion) + (c.lastRunAt ? ' · dernier passage ' + esc(new Date(c.lastRunAt).toLocaleString('fr-FR')) : '') + '</span></div>';
+    if (_opts.readonly) {
+      /* Lecteur funnel (19/11/2026) : statut, « Ce qui partirait » et journal
+         seulement — aucun réglage, aucun envoi. */
+      h += '<div class="aq-row"><button type="button" class="aq-btn" data-aq-act="capi-dry">👁 Ce qui partirait (sans envoyer)</button></div>';
+    } else {
     h += '<div class="aq-row"><label class="aq-sub" for="aqTestCode">Code de test Meta</label><input class="aq-in" id="aqTestCode" placeholder="TEST12345" value="' + esc(c.testEventCode || '') + '">'
       + '<button type="button" class="aq-btn" data-aq-act="capi-save-code">Enregistrer</button>'
       + '<button type="button" class="aq-btn" data-aq-act="capi-probe" title="Envoie un exemplaire de chaque événement pour un contact fictif, avec le code de test">🧪 Envoyer les 9 événements de test</button></div>';
@@ -338,6 +343,7 @@
     }
     h += '<button type="button" class="aq-btn" data-aq-act="capi-run">⟳ Lancer un passage maintenant</button>'
       + '<button type="button" class="aq-btn" data-aq-act="capi-dry">👁 Ce qui partirait (sans envoyer)</button></div>';
+    }
     if (admin.dry) {
       h += '<div class="aq-note">' + esc(admin.dry) + '</div>';
     }
@@ -367,6 +373,7 @@
 
   function adminLoad(ctx, repaint) {
     var db = ctx.db;
+    if (_opts.readonly) { capiReload(ctx, repaint); return; }   // pas de lien média buyeuse pour le lecteur
     db.collection('_config').doc('ads_quality_access').get().then(function (s) {
       admin.share = s.exists ? (s.data() || {}) : {};
       repaint();
@@ -461,12 +468,14 @@
   }
 
   /* ── Montage ──────────────────────────────────────────────────────────── */
+  /* Actions permises au lecteur funnel : lecture seule (dry-run, journal). */
+  var RO_ACTS = { 'capi-dry': 1, 'capi-journal': 1 };
   var _el = null, _data = null, _opts = {}, _loaded = false;
   function repaint() {
     if (!_el || !_data) return;
     var sx = _el.querySelector('.aq-tw') ? _el.querySelector('.aq-tw').scrollLeft : 0;
     var h = '<div class="aq-wrap">' + headHtml(_data, _opts) + tableHtml(_data);
-    if (_opts.admin) h += (admin.open ? sharePanelHtml() : '') + capiPanelHtml();
+    if (_opts.admin) h += (admin.open && !_opts.readonly ? sharePanelHtml() : '') + capiPanelHtml();
     h += '</div>';
     _el.innerHTML = h;
     var tw = _el.querySelector('.aq-tw');
@@ -489,8 +498,9 @@
       }
       if (t.closest && t.closest('[data-aq-out]')) { state.showOut = !state.showOut; repaint(); return; }
       if (t.closest && t.closest('[data-aq-csv]')) { csv(_data); return; }
-      if (t.closest && t.closest('[data-aq-share]')) { admin.open = !admin.open; repaint(); return; }
+      if (t.closest && t.closest('[data-aq-share]')) { if (!_opts.readonly) { admin.open = !admin.open; repaint(); } return; }
       var a = t.closest ? t.closest('[data-aq-act]') : null;
+      if (a && _opts.readonly && !RO_ACTS[a.getAttribute('data-aq-act')]) return;
       if (a && _opts.admin && _opts.adminCtx) adminAction(a.getAttribute('data-aq-act'), a, _opts.adminCtx, repaint);
     });
     el.addEventListener('change', function (e) {

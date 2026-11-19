@@ -609,8 +609,8 @@ const PRESET_SETTER={
   csm_dashboard:'none',csm_clients:'none'
 };
 
-const ROLE_COLORS={admin:'#f59e0b',coach:'#8b5cf6',sales:'#10b981',csm:'#5eead4'};
-const ROLE_EMOJIS={admin:'👑',coach:'🎓',sales:'📈',csm:'💎'};
+const ROLE_COLORS={admin:'#f59e0b',coach:'#8b5cf6',sales:'#10b981',csm:'#5eead4',funnel_viewer:'#94a3b8'};
+const ROLE_EMOJIS={admin:'👑',coach:'🎓',sales:'📈',csm:'💎',funnel_viewer:'👁'};
 const STATUS_LABELS={active:'✅ Actif',invited:'📩 Invité',pending_activation:'⏳ À activer',disabled:'🚫 Désactivé',archived:'🗄 Archivé'};
 const STATUS_CLS={active:'u-b-active',invited:'u-b-invited',pending_activation:'u-b-pending',disabled:'u-b-disabled',archived:'u-b-archived'};
 
@@ -758,6 +758,8 @@ function _findExistingExpert(experts, user){
 // Renvoie { created, linked, id, reason }
 async function ensureBookingExpert(user, opts){
   opts = opts || {};
+  // Lecteur funnel (19/11/2026) : compte de consultation, jamais un expert Booking.
+  if(user && user.role==='funnel_viewer') return { created:false, linked:false, reason:'not-expert' };
   var experts = opts.experts || await loadBookingExperts();
   var found = _findExistingExpert(experts, user);
   if(found.matched && found.byUid){
@@ -791,7 +793,8 @@ async function openBookingSyncModal(){
   body.innerHTML='<div style="padding:24px;text-align:center;color:rgba(255,255,255,.5)">⏳ Analyse en cours…</div>';
   try{
     var experts=await loadBookingExperts();
-    var members=USERS.filter(function(u){return (u.status||'active')!=='archived';});
+    // Lecteur funnel (19/11/2026) : pas un expert Booking.
+    var members=USERS.filter(function(u){return (u.status||'active')!=='archived' && u.role!=='funnel_viewer';});
     var toCreate=[], unlinked=[], linked=[];
     members.forEach(function(u){
       var f=_findExistingExpert(experts,u);
@@ -1540,6 +1543,7 @@ function openCreateModal(){
   h+='<div class="role-opt" data-role="sales" onclick="selectRole(this)"><div class="role-opt-icon">📈</div><div class="role-opt-label">Sales</div><div class="role-opt-sub">Espace commercial</div></div>';
   h+='<div class="role-opt" data-role="csm" onclick="selectRole(this)"><div class="role-opt-icon">💎</div><div class="role-opt-label">CSM</div><div class="role-opt-sub">Customer Success</div></div>';
   h+='<div class="role-opt" data-role="admin" onclick="selectRole(this)"><div class="role-opt-icon">👑</div><div class="role-opt-label">Admin</div><div class="role-opt-sub">Accès complet</div></div>';
+  h+='<div class="role-opt" data-role="funnel_viewer" onclick="selectRole(this)"><div class="role-opt-icon">👁</div><div class="role-opt-label">Lecteur funnel</div><div class="role-opt-sub">Stats funnel, lecture seule</div></div>';
   h+='</div>';
   // Method
   h+='<div class="mf"><label>Méthode de création</label></div>';
@@ -1680,6 +1684,7 @@ function openEditModal(u){
   h+='<option value="coach"'+(role==='coach'?' selected':'')+'>🎓 Coach</option>';
   h+='<option value="sales"'+(role==='sales'?' selected':'')+'>📈 Sales</option>';
   h+='<option value="csm"'+(role==='csm'?' selected':'')+'>💎 Customer Success</option>';
+  h+='<option value="funnel_viewer"'+(role==='funnel_viewer'?' selected':'')+'>👁 Lecteur funnel (lecture seule)</option>';
   h+='</select></div>';
   // Status
   h+='<div class="mf"><label>Statut</label>';
