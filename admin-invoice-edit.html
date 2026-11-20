@@ -211,6 +211,67 @@ html{scroll-padding-top:180px;scroll-behavior:auto}  /* nav 56px + topbar (poten
 .inv-spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--inv-green);border-radius:50%;animation:isp 0.7s linear infinite;margin-right:10px}
 @keyframes isp{to{transform:rotate(360deg)}}
 
+/* ═══ RESPONSIVE (refonte 20/11/2026) — INV-RESPONSIVE-V2 ═══════════════
+   ≤640 : téléphone (et pliant fermé) · ≤380 : très étroit · écrans tactiles. */
+.pdf-table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;margin-bottom:18px}
+.pdf-table-scroll .pdf-table{margin-bottom:0}
+@media(max-width:1100px){
+  .inv-form{max-width:none;padding:24px 20px 60px}
+}
+@media(max-width:640px){
+  /* Barre du haut : titre sur une ligne, actions sur une ligne qui glisse. */
+  .inv-topbar{padding:10px 12px;gap:8px 10px}
+  .inv-back{padding:8px 10px}
+  .inv-title{flex:1;min-width:0}
+  .inv-title-h{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .inv-actions{margin-left:0;width:100%;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;scrollbar-width:none;gap:6px;padding-bottom:2px}
+  .inv-actions::-webkit-scrollbar{display:none}
+  .inv-actions .inv-btn{flex-shrink:0}
+  .inv-save-state{flex-shrink:0;margin-right:2px;white-space:nowrap;order:9}
+  .inv-form{padding:14px 12px 60px}
+  .inv-section{padding:14px}
+  .inv-section-h{flex-wrap:wrap}
+  .inv-grid,.inv-grid.three{grid-template-columns:minmax(0,1fr)}
+  .inv-row.span2,.inv-row.span3{grid-column:span 1}
+  .inv-client-selected{flex-wrap:wrap}
+  .inv-client-selected-meta{overflow-wrap:anywhere}
+  /* Ligne de facture : unité sous la description, puis 3 champs par rangée. */
+  .inv-line-r1{grid-template-columns:minmax(0,1fr)}
+  .inv-line-r2{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .inv-line-rm{justify-self:end;width:44px;height:40px;font-size:16px}
+  .inv-line-totals{flex-wrap:wrap;gap:4px 12px}
+  /* Aperçu : marges de page réduites, le tableau des lignes glisse. */
+  .inv-preview-wrap{padding:12px}
+  .pdf-page{padding:26px 18px;min-height:0}
+  .pdf-header{flex-wrap:wrap;gap:12px;margin-bottom:20px}
+  .pdf-blocks{gap:16px}
+  .pdf-block-content{overflow-wrap:anywhere}
+  .pdf-totals{width:100%}
+  /* Fenêtres (envoi, paiement) : presque plein écran. */
+  .inv-modal-overlay{padding:10px}
+  .inv-modal{max-height:calc(var(--al-vh,100vh) - 20px)}
+  .inv-modal-header{padding:14px 16px}
+  .inv-modal-body{padding:16px;-webkit-overflow-scrolling:touch}
+  .inv-modal-footer{padding:12px 16px;flex-wrap:wrap}
+  .inv-modal-footer .inv-btn{flex:1 1 auto;justify-content:center}
+  .inv-modal-row-2{grid-template-columns:minmax(0,1fr)}
+  .inv-toast{left:12px;right:12px;bottom:16px;max-width:none;transform:translateY(80px)}
+  .inv-toast.show{transform:translateY(0)}
+}
+@media(max-width:380px){
+  .inv-line-r2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .pdf-blocks{grid-template-columns:minmax(0,1fr)}
+  .pdf-page{padding:20px 14px}
+}
+/* Écrans tactiles : 16 px dans les champs (sinon Safari iOS zoome à la saisie)
+   et boutons faciles à toucher. */
+@media(hover:none) and (pointer:coarse){
+  .inv-input,.inv-select,.inv-textarea,.inv-modal-row .inv-textarea{font-size:16px}
+  .inv-btn,.inv-back{min-height:40px}
+  .inv-modal-close{min-width:40px;min-height:40px}
+  .inv-client-result{padding:12px}
+}
+
 /* ═══ READONLY OVERLAY ═══ */
 .inv-readonly-banner{background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);color:var(--inv-blue);padding:10px 16px;border-radius:8px;font-size:12px;font-weight:600;margin-bottom:14px;line-height:1.5}
 </style>
@@ -1375,7 +1436,7 @@ function refreshPreview() {
   html += '</div>';
 
   /* TABLE LIGNES */
-  html += '<table class="pdf-table">';
+  html += '<div class="pdf-table-scroll"><table class="pdf-table">';
   html += '<thead><tr>';
   html += '<th style="width:44%">Description</th>';
   html += '<th class="right" style="width:6%">Qté</th>';
@@ -1408,7 +1469,7 @@ function refreshPreview() {
       html += '</tr>';
     }
   }
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
 
   /* TOTAUX */
   html += '<div class="pdf-totals-wrap"><div class="pdf-totals">';
