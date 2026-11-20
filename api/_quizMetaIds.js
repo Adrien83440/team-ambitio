@@ -31,7 +31,11 @@ const LEAD_RE = /window\.fbq\('track',\s*'Lead',\s*(\{[^{}]*\})\s*\)/;
 const INJECT = ANCHOR + '\n'
   + '    /* ' + MARK + ' — identifiants Meta (API Conversions, api/_quizMetaIds.js, 12/11/2026) */\n'
   + '    try{ if(window.ALTEO && window.ALTEO.meta){ var epqM = window.ALTEO.meta(d.event_id || \'\');'
-  + ' Object.keys(epqM).forEach(function(k){ if(d[k]==null || d[k]===\'\') d[k]=epqM[k]; }); } }catch(e){}';
+  + ' Object.keys(epqM).forEach(function(k){ if(d[k]==null || d[k]===\'\') d[k]=epqM[k]; });'
+  /* IP du visiteur pour l'API Conversions (api/meta-ip.js, 20/11/2026) : Make
+     appelle lead-optin depuis SES serveurs, seule la page voit le visiteur. */
+  + ' if(epqM.meta_allowed===\'1\' && d.event_id && navigator.sendBeacon){ try{ navigator.sendBeacon(\'/api/meta-ip\', new Blob([JSON.stringify({e:String(d.event_id)})],{type:\'application/json\'})); }catch(e2){} }'
+  + ' } }catch(e){}';
 
 /* Retourne { html, changed, note }. */
 function patch(html) {

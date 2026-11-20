@@ -836,6 +836,12 @@ function bkPixelSchedule(booking, bookingId) {
     }
     if (bookingId) window.fbq('track', 'Schedule', data, { eventID: String(bookingId) });
     else window.fbq('track', 'Schedule', data);
+    /* IP du visiteur pour l'API Conversions (api/meta-ip.js, 20/11/2026) : le
+       RDV est écrit directement dans Firestore, aucun serveur ne voit le
+       visiteur. Même condition que le pixel (public, hors YouTube). */
+    if (bookingId && navigator.sendBeacon) {
+      try { navigator.sendBeacon('/api/meta-ip', new Blob([JSON.stringify({ e: String(bookingId) })], { type: 'application/json' })); } catch (e2) {}
+    }
   } catch (e) { if (window.console) console.warn('[booking] pixel Schedule:', e && e.message); }
 }
 

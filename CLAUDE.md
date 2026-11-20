@@ -167,6 +167,9 @@ facture en production (incident du 22/07/2026 sur `_config/billing/cgv`).
   trace d'audit. **Seule exception** (validée par Adrien le 10/11/2026) : le journal
   anonyme par visite `tunnel_visits` (mesure des tunnels, aucune personne derrière),
   conservé 90 jours (`expireAt`) et purgé par le cron `api/tunnel-visits-purge.js`.
+  **Deuxième exception** (validée par Adrien le 20/11/2026) : `meta_ip/{event_id}` (IP +
+  navigateur d'un visiteur pour l'API Conversions, `api/meta-ip.js`), effacé après 8 jours
+  (`expireAt`, purge dans `api/meta-capi-cron.js`) — Meta refuse tout événement de plus de 7 jours.
 - Téléphone canonique des leads : champ **`telephone`**, format E.164 strict `+33XXXXXXXXX`.
   Le champ legacy `phone` n'est plus utilisé.
 - Les documents portant `_merged: true` doivent être ignorés dans toute recherche de lead
@@ -507,7 +510,12 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
     change, jamais écrite sur la fiche ; téléphone plausible exigé comme LeadQualifie. « Prospect qualifié » de la
     média buyeuse = `LeadLQS3plus`. **LeadDisqualifie** (19/11/2026) = réponse ÉLIMINATOIRE (⛔, `sc.ko`) du barème
     SEULEMENT, jamais une note 1-2 par cumul (le lead peut évoluer) → audiences d'exclusion. `user_data` porte aussi
-    prénom / nom hachés (`fn` / `ln` : champ `prenom` sinon premier mot de `nom`) ; pas de ville (jamais demandée). Exclus : faux numéro / poubelle, contact bloqué, YouTube, pixel non
+    prénom / nom hachés (`fn` / `ln` : champ `prenom` sinon premier mot de `nom`) ; pas de ville (jamais demandée).
+    **IP du visiteur (20/11/2026, diagnostic Meta « IP manquante »)** : quiz via Make et RDV n'avaient que le
+    navigateur. Le navigateur appelle `POST /api/meta-ip {e: event_id}` (quiz : injecté par `_quizMetaIds.js` à
+    l'envoi ; `booking.html` : dans `bkPixelSchedule`, id du RDV) seulement si le pixel est autorisé →
+    `meta_ip/{event_id}` (premier appel fait foi, Admin SDK seul, 8 jours) ; `Capi.attachNet` joint IP ET
+    navigateur du même appel (toujours en paire) aux événements de la fiche / du RDV. Exclus : faux numéro / poubelle, contact bloqué, YouTube, pixel non
     autorisé, organique sans metaIds, téléphone invalide (LeadQualifie). Réglages `_config/meta_capi`
     (`enabled`, `testMode` VRAI par défaut, `testEventCode`, `testSince` / `productionSince` — jamais de
     rattrapage du passé ; réel = « PRODUCTION » tapé). Jeton : variable Vercel `META_CAPI_TOKEN`. Journal

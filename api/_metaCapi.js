@@ -44,7 +44,10 @@
 // IDENTIFIANTS (user_data) — hachés SHA-256 comme l'exige Meta : email
 // (minuscules), téléphone (E.164 sans « + »), external_id (id de la fiche),
 // pays, prénom et nom (19/11/2026 : minuscules, sans ponctuation ; champ
-// prenom de la fiche s'il existe, sinon premier mot du nom complet `nom`) ; en clair : fbp, fbc (reconstruit depuis fbclid si le cookie manque),
+// prenom de la fiche s'il existe, sinon premier mot du nom complet `nom`) ;
+// IP + navigateur : metaIds.ip (opt-in direct) sinon meta_ip/{event_id}
+// (api/meta-ip.js, 20/11/2026 : quiz via Make et RDV — appel du navigateur
+// au moment de l'événement pixel ; jointure par attachNet, toujours en PAIRE) ; en clair : fbp, fbc (reconstruit depuis fbclid si le cookie manque),
 // user-agent et IP du visiteur quand ils sont connus.
 //
 // JOURNAL : meta_capi_events/{clé} — une ligne par événement : nom, fiche,
@@ -210,9 +213,58 @@ function userData(lead, extra) {
   }
   if (mi.ua) u.client_user_agent = mi.ua;
   if (mi.ip) u.client_ip_address = mi.ip;
+  else if (lead && lead._capiNet && lead._capiNet.ip) {
+    /* IP vue par api/meta-ip.js : jointe avec le navigateur du MÊME appel. */
+    u.client_ip_address = lead._capiNet.ip;
+    if (lead._capiNet.ua) u.client_user_agent = lead._capiNet.ua;
+  }
   return u;
 }
 function matchKeys(u) { return Object.keys(u).filter(function (k) { return u[k] && (!Array.isArray(u[k]) || u[k].length); }); }
+
+/* ── IP des visiteurs (meta_ip, api/meta-ip.js) ─────────────────────────── */
+const NET_COL = 'meta_ip';
+function netKey(e) { return String(e || '').replace(/[/.]/g, '_').slice(0, 100); }
+/* Pose lead._capiNet (event_id de l'opt-in, si la fiche n'a pas d'IP) et
+   b._capiNet (id du RDV) depuis meta_ip. Lecture groupée, jamais d'erreur
+   bloquante : sans IP, l'événement part comme avant. */
+async function attachNet(leads, bookings) {
+  const want = {};
+  (leads || []).forEach(function (l) {
+    const mi = (l && l.metaIds) || {};
+    if (mi.eventId && !mi.ip) (want[netKey(mi.eventId)] = want[netKey(mi.eventId)] || []).push(l);
+  });
+  (bookings || []).forEach(function (b) { if (b && b._id) (want[netKey(b._id)] = want[netKey(b._id)] || []).push(b); });
+  const keys = Object.keys(want);
+  for (let i = 0; i < keys.length; i += 100) {
+    const refs = keys.slice(i, i + 100).map(function (k) { return db.collection(NET_COL).doc(k); });
+    let snaps = [];
+    try { snaps = await db.getAll.apply(db, refs); } catch (e) { snaps = []; }
+    snaps.forEach(function (s) {
+      if (!s || !s.exists) return;
+      const x = s.data() || {};
+      if (!x.ip) return;
+      (want[s.id] || []).forEach(function (o) { o._capiNet = { ip: String(x.ip), ua: String(x.ua || '') }; });
+    });
+  }
+}
+/* RDV : l'IP de la confirmation prime sur celle de l'opt-in (même paire). */
+function applyBookingNet(ev, b) {
+  if (b && b._capiNet && b._capiNet.ip) {
+    ev.user_data.client_ip_address = b._capiNet.ip;
+    if (b._capiNet.ua) ev.user_data.client_user_agent = b._capiNet.ua;
+  }
+  return ev;
+}
+/* Purge des IP de plus de 8 jours (exception validée le 20/11/2026). */
+async function purgeNet(limit) {
+  const snap = await db.collection(NET_COL).where('expireAt', '<', admin.firestore.Timestamp.fromMillis(Date.now())).limit(limit || 300).get();
+  if (snap.empty) return 0;
+  const batch = db.batch();
+  snap.forEach(function (d) { batch.delete(d.ref); });
+  await batch.commit();
+  return snap.size;
+}
 
 /* ── Construction des événements ──────────────────────────────────────── */
 function baseEvent(name, eventId, timeMs, actionSource, lead, extra) {
@@ -307,11 +359,11 @@ function bookingCreatedEvents(b, lead) {
   const out = [];
   const name = b.typeLabel || b.type || '';
   if (BOOKING_HTML_SOURCES[b.source]) {
-    const s = baseEvent('Schedule', String(b._id), at, 'website', lead, b.prospect);
+    const s = applyBookingNet(baseEvent('Schedule', String(b._id), at, 'website', lead, b.prospect), b);
     s.custom_data = { content_name: name };
     out.push({ ev: s, kind: 'Schedule', leadId: lead._id, bookingId: b._id, at: at });
   }
-  const r = baseEvent('RdvPose', 'rp_' + b._id, at, 'system_generated', lead, b.prospect);
+  const r = applyBookingNet(baseEvent('RdvPose', 'rp_' + b._id, at, 'system_generated', lead, b.prospect), b);
   r.custom_data = crmData({ content_name: name, rdv_source: String(b.source || '') });
   out.push({ ev: r, kind: 'RdvPose', leadId: lead._id, bookingId: b._id, at: at });
   return out;
@@ -321,13 +373,13 @@ function bookingOutcomeEvents(b, lead) {
   const at = ms(b.outcomeAt);
   if (!at || !bookingIsCommercial(b) || !HONORED[b.outcome]) return [];
   const out = [];
-  const h = baseEvent('RdvHonore', 'rh_' + b._id, at, 'system_generated', lead, b.prospect);
+  const h = applyBookingNet(baseEvent('RdvHonore', 'rh_' + b._id, at, 'system_generated', lead, b.prospect), b);
   h.custom_data = crmData({ issue: b.outcome });
   out.push({ ev: h, kind: 'RdvHonore', leadId: lead._id, bookingId: b._id, at: at });
   if (b.outcome === 'close') {
     const cd = b.closeData || lead.closedData || {};
     const value = Math.round((Number(cd.contracte) || 0) * 100) / 100;
-    const v = baseEvent('Vente', 'v_' + b._id, at, 'system_generated', lead, b.prospect);
+    const v = applyBookingNet(baseEvent('Vente', 'v_' + b._id, at, 'system_generated', lead, b.prospect), b);
     v.custom_data = crmData({ currency: 'EUR', value: value, content_name: String(cd.offre || '') });
     out.push({ ev: v, kind: 'Vente', leadId: lead._id, bookingId: b._id, at: at, value: value });
   }
@@ -416,6 +468,7 @@ async function sendBatch(cfg, toSend) {
 module.exports = {
   JOURNAL, DEFAULT_PIXEL, loadConfig, sinceOf, ms, sha, leadRef,
   phoneE164, phonePlausible, ineligibility, userData, matchKeys,
+  attachNet, purgeNet, NET_COL,
   LQS_EVENTS, loadLqsGrid, lqsOf, lqsEventsFor, disqualEventsFor, namesOf,
   optinEvents, bookingCreatedEvents, bookingOutcomeEvents, bookingIsCommercial,
   postEvents, prepare, sendBatch, journalKey

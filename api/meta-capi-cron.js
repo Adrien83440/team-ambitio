@@ -10,6 +10,8 @@
 //   · RDV créés (createdAt)    → Schedule (jumeau de booking.html) + RdvPose ;
 //   · issues saisies (outcomeAt) → RdvHonore (close / non close / offre)
 //                                  + Vente (close, montant contracté HT).
+// IP + navigateur des visiteurs : meta_ip (api/meta-ip.js), joints avant la
+// construction ; purge des IP de plus de 8 jours à chaque passage réel.
 // Règles, exclusions, hachage, journal : api/_metaCapi.js.
 //
 // Pourquoi un cron et pas un trigger Firestore : les issues de RDV sont
@@ -99,28 +101,38 @@ async function run(opts) {
     docsSince('bookings', 'outcomeAt', from)
   ]);
 
+  /* 1. Fiches et RDV de la fenêtre (le lead d'un RDV est cherché une fois). */
   const leadsById = {};
-  const items = [];
+  const optinLeads = [];
   leadsQ.list.forEach(function (l) {
     if (l._merged === true) return;
     leadsById[l._id] = l;
-    Capi.optinEvents(l, lqsGrid).forEach(function (it) { items.push(it); });
+    optinLeads.push(l);
   });
   const cache = {};
+  const createdPairs = [], outcomePairs = [];
   for (const b of createdQ.list) {
     if (!Capi.bookingIsCommercial(b)) continue;
     const lead = await leadForBooking(b, cache);
     if (!lead) continue;
-    leadsById[lead._id] = lead;
-    Capi.bookingCreatedEvents(b, lead).forEach(function (it) { items.push(it); });
+    leadsById[lead._id] = leadsById[lead._id] || lead;
+    createdPairs.push([b, leadsById[lead._id]]);
   }
   for (const b of outcomeQ.list) {
     if (!Capi.bookingIsCommercial(b)) continue;
     const lead = await leadForBooking(b, cache);
     if (!lead) continue;
-    leadsById[lead._id] = lead;
-    Capi.bookingOutcomeEvents(b, lead).forEach(function (it) { items.push(it); });
+    leadsById[lead._id] = leadsById[lead._id] || lead;
+    outcomePairs.push([b, leadsById[lead._id]]);
   }
+  /* 2. IP des visiteurs (meta_ip, api/meta-ip.js) jointe aux fiches et RDV. */
+  await Capi.attachNet(Object.keys(leadsById).map(function (k) { return leadsById[k]; }),
+    createdPairs.concat(outcomePairs).map(function (p) { return p[0]; }));
+  /* 3. Événements. */
+  const items = [];
+  optinLeads.forEach(function (l) { Capi.optinEvents(l, lqsGrid).forEach(function (it) { items.push(it); }); });
+  createdPairs.forEach(function (p) { Capi.bookingCreatedEvents(p[0], p[1]).forEach(function (it) { items.push(it); }); });
+  outcomePairs.forEach(function (p) { Capi.bookingOutcomeEvents(p[0], p[1]).forEach(function (it) { items.push(it); }); });
   /* Jamais un fait antérieur à l'activation du mode. */
   const fresh = items.filter(function (it) { return it.at >= since; });
 
@@ -142,6 +154,7 @@ async function run(opts) {
   summary.sent = res.sent;
   summary.errors = res.errors;
   summary.skippedOrDone = fresh.length - toSend.length;
+  try { summary.ipPurged = await Capi.purgeNet(300); } catch (e) { summary.ipPurged = 'erreur : ' + String(e && e.message).slice(0, 100); }
   /* Curseur avancé seulement si la lecture n'a pas été tronquée : sinon le
      passage suivant repart du même point (le journal évite les doublons). */
   if (!summary.truncated) {

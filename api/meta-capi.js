@@ -88,7 +88,9 @@ async function probe(auth) {
     _id: 'probe-' + stamp, nom: 'Test Capi', email: 'test-capi@alteore.invalid', telephone: '+33612345678',
     stage: 'lead', quiz: { ca_mensuel: 'Entre 20 000 € et 50 000 € par mois' },
     landingLast: { label: 'Test API Conversions', pageUrl: 'https://www.adrienemily.com/optin-a' },
-    metaIds: { eventId: 'probe-ld-' + stamp, ua: 'Mozilla/5.0 (Test API Conversions Alteore)', pageUrl: 'https://www.adrienemily.com/optin-a', at: new Date(stamp), allowed: true }
+    /* IP fictive de documentation (RFC 5737), envoyée avec le navigateur :
+       Meta veut toujours les deux ensemble. */
+    metaIds: { eventId: 'probe-ld-' + stamp, ua: 'Mozilla/5.0 (Test API Conversions Alteore)', ip: '203.0.113.10', pageUrl: 'https://www.adrienemily.com/optin-a', at: new Date(stamp), allowed: true }
   };
   const bk = { _id: 'probe-bk-' + stamp, source: 'self_booking', typeLabel: 'Test RDV', createdAt: new Date(stamp), outcomeAt: new Date(stamp), outcome: 'close', closeData: { contracte: 1, offre: 'Test' }, prospect: { email: fake.email } };
   const items = []
