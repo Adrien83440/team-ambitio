@@ -1285,7 +1285,8 @@
     @keyframes fcIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
     @media (prefers-reduced-motion:reduce){.fc-pane.on{animation:none}.fc-tile{transition:none}}
     .fc-pane > :first-child{margin-top:0}
-    .fc-pinned{border-bottom:1px solid var(--hair);padding-bottom:20px}
+    .fc-pinned{border-top:1px solid var(--hair);margin-top:10px;padding-top:18px;padding-bottom:48px}
+    .fc-pane:not(.fc-pinned){padding-bottom:6px}
     .fc-pane .dp-alert-box,.fc-pane .bp-credits,.fc-pane .dp-quota-section,.fc-pane .status-toggle-wrap,
     .fc-pane .drive-scan-bar,.fc-pane .drive-scan-log,.fc-pane .dp-plans-section{margin-left:0;margin-right:0}
     .fc-pane .dp-progress-section{margin-top:12px;border:1px solid var(--hair);border-radius:14px;padding:16px 18px}
@@ -3099,11 +3100,13 @@ function fcPaneFor(id){
 function fcShow(k){
   const panel = document.getElementById('detailPanel');
   if(!panel || !FC_PANES.some(p=>p.k===k)) return;
-  /* Séances : bloc toujours affiché en tête de fiche — on y défile, la
-     section ouverte en dessous ne change pas. */
+  /* Séances : bloc toujours affiché SOUS la section ouverte — on y défile
+     (sous l'en-tête collé), la section ouverte au-dessus ne change pas. */
   if(k === 'seances'){
     const sb = panel.querySelector('[data-fc-pinned="seances"]');
-    if(sb) panel.scrollTop = Math.max(0, sb.offsetTop - 8);
+    const tete = panel.querySelector('.fc-header');
+    const colle = tete && getComputedStyle(tete).position === 'sticky';
+    if(sb) panel.scrollTo({ top: Math.max(0, sb.offsetTop - (colle ? tete.offsetHeight : 0) - 8), behavior:'smooth' });
     return;
   }
   _fcPane = { id: panel.dataset.clientId || '', k:k };
@@ -3344,26 +3347,6 @@ function openDetail(id){
       <div class="fc-tiles" role="tablist" aria-label="Sections de la fiche">${fcTilesHtml(c, id, fcPane)}</div>
     </div>
 
-    <!-- ══ SÉANCES : toujours affichées, en tête de fiche (demande d'Adrien, 20/11/2026) ══ -->
-    <div class="fc-pane on fc-pinned" id="fcSeances-${id}" data-fc-pinned="seances">
-      <div class="dp-sessions-head">
-        <div class="dp-sessions-title">📅 Années de coaching</div>
-        <button class="btn btn-primary btn-sm" onclick="openAddYearModal('${id}')">🔄 Renouveler</button>
-      </div>
-    <div class="drive-scan-bar" id="driveScanBar">
-      <span>📁</span>
-      <span id="driveScanLabel">${_driveToken?'Drive connecté — ':'Connectez Drive pour lier les résumés Gemini'}</span>
-      ${_driveToken?
-        `<button class="btn-drive" id="driveScanBtn-${id}" onclick="scanDriveForClient('${id}')">🔍 Chercher les résumés</button>`
-        :`<button class="btn-drive" onclick="connectDriveThen('${id}')">🔗 Connecter Google Drive</button>`
-      }
-      <span id="driveScanStatus-${id}" style="margin-left:auto;font-size:11px;opacity:.8"></span>
-    </div>
-    <div class="drive-scan-log" id="driveScanLog-${id}"></div>
-
-      <div id="yearTabs-${id}" style="margin-top:14px">${renderYearTabs(c, id)}</div>
-    </div>
-
     <!-- ══ SYNTHÈSE : ce qu'il faut savoir avant d'ouvrir le reste ══ -->
     <div class="fc-pane${fcPane==='synthese'?' on':''}" data-fc-pane="synthese">
     ${alert==='alert'?`<div class="dp-alert-box red">🔴 ${alertText} — Relancez ce client !</div>`:alert==='warning'?`<div class="dp-alert-box orange">🟡 ${alertText}</div>`:`<div class="dp-alert-box green">✅ Client à jour</div>`}
@@ -3584,6 +3567,26 @@ function openDetail(id){
         <span>Supprimer la fiche de ce client</span>
         <button class="btn btn-danger btn-sm" onclick="deleteClient('${id}')">🗑 Supprimer</button>
       </div>
+    </div>
+
+    <!-- ══ SÉANCES : toujours affichées, SOUS la section ouverte : une tuile ouvre sa section AU-DESSUS des coachings (demande d'Adrien, 20/11/2026) ══ -->
+    <div class="fc-pane on fc-pinned" id="fcSeances-${id}" data-fc-pinned="seances">
+      <div class="dp-sessions-head">
+        <div class="dp-sessions-title">📅 Années de coaching</div>
+        <button class="btn btn-primary btn-sm" onclick="openAddYearModal('${id}')">🔄 Renouveler</button>
+      </div>
+    <div class="drive-scan-bar" id="driveScanBar">
+      <span>📁</span>
+      <span id="driveScanLabel">${_driveToken?'Drive connecté — ':'Connectez Drive pour lier les résumés Gemini'}</span>
+      ${_driveToken?
+        `<button class="btn-drive" id="driveScanBtn-${id}" onclick="scanDriveForClient('${id}')">🔍 Chercher les résumés</button>`
+        :`<button class="btn-drive" onclick="connectDriveThen('${id}')">🔗 Connecter Google Drive</button>`
+      }
+      <span id="driveScanStatus-${id}" style="margin-left:auto;font-size:11px;opacity:.8"></span>
+    </div>
+    <div class="drive-scan-log" id="driveScanLog-${id}"></div>
+
+      <div id="yearTabs-${id}" style="margin-top:14px">${renderYearTabs(c, id)}</div>
     </div>
   `;
   document.getElementById('detailOverlay').classList.add('show');

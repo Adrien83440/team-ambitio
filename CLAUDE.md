@@ -328,8 +328,8 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
 - **AlteoForms** : `alteoforms.html` (builder), `alteoforms-render.html` (rendu public),
   collection `alteo_forms`
 - **Coaching** : `coaching*.html` — SDK modulaire, style ES6
-  **Fiche client (20/11/2026)** : le bloc Séances est TOUJOURS affiché en tête de fiche (`data-fc-pinned`,
-  hors du jeu des tuiles ; la tuile Séances y fait défiler). **CSM = accès complet à la fiche** : bloc autonome
+  **Fiche client (20/11/2026)** : le bloc Séances est TOUJOURS affiché, SOUS la section ouverte (`data-fc-pinned`,
+  hors du jeu des tuiles ; la tuile Séances y fait défiler) : une tuile ouvre sa section AU-DESSUS des coachings. **CSM = accès complet à la fiche** : bloc autonome
   « CSM COACHING » de `firestore.rules` (lecture / ajout des documents du plan `clients/{id}/plans`, fichiers
   de séance `clients/{id}/files`, lecture des réponses de questionnaire `alteo_forms/{id}/responses`) ;
   côté page `window._canManage` (admin + csm) : ajouter un plan, « Proposer pour tous », liaison des
