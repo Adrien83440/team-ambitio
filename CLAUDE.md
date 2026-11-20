@@ -328,6 +328,16 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
 - **AlteoForms** : `alteoforms.html` (builder), `alteoforms-render.html` (rendu public),
   collection `alteo_forms`
 - **Coaching** : `coaching*.html` — SDK modulaire, style ES6
+- **Fiche coaching en tuiles (20/11/2026)** : `openDetail` de `coaching.html` range la fiche en six
+  sections ouvertes par des tuiles (`FC_PANES` : Synthèse · Plan d'action · Séances · Academy ·
+  Quota & RDV · Dossier), chaque tuile portant son chiffre (`data-fc-sub`, mis à jour par
+  `fcSetSub` quand l'Academy ou les fichiers du plan finissent de charger). Les blocs gardent leurs
+  identifiants et leurs fonctions : un nouveau bloc se pose dans le `data-fc-pane` qui convient, jamais
+  hors section. La section ouverte est conservée quand la même fiche se redessine (`_fcPane`). Clics
+  par délégation (`data-fc-tile`, `data-fc-go`, `data-fc-fix="edit"`). « 🧩 À compléter » =
+  `fcManques(c)` (fiche + plan + comptes rendus) ; l'onglet « Fiches incomplètes » de la liste et le
+  repère des cartes n'utilisent que `fcManquesFiche(c)` (e-mail, téléphone, nom complet, activité,
+  date d'entrée), calculé à l'affichage, rien d'écrit.
 - **Replays des coachings de groupe (12/11/2026)** : `api/coaching-replays-groupe.js`, cron du
   matin, derrière `_config/replays_groupe.enabled`. Lit « Meet Recordings » du Drive de
   coaching@ (`email_tokens/drive_coaching`, entrée « Drive Coaching » d'admin-email-auth), lit

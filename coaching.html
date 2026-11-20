@@ -1223,6 +1223,129 @@
     .add-year-modal.open{display:flex}
     .year-cnt-btn{flex:1;padding:10px;border:1.5px solid var(--border);border-radius:10px;background:white;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;color:var(--muted);transition:all .15s;text-align:center}
     .year-cnt-btn.sel{background:var(--blue-ghost);color:var(--blue-main);border-color:var(--blue-main)}
+
+    /* ═══════════════════════════════════════════════════════════
+     * FICHE EN TUILES (20/11/2026) — sections cliquables, verre dépoli
+     * 100 % peinture et mise en page de la fiche ; les blocs existants
+     * gardent leurs classes (.dp-*, .bp-*, .session-item…).
+     * ═══════════════════════════════════════════════════════════ */
+    .detail-panel{
+      background:
+        radial-gradient(60% 34% at 8% 0%, rgba(91,124,250,.13), transparent 70%),
+        radial-gradient(50% 30% at 96% 6%, rgba(214,120,250,.10), transparent 70%),
+        var(--bg-warm);
+      background-attachment:local;
+    }
+    .fc-header{
+      padding:20px 24px 14px;
+      background:rgba(247,246,242,.80);
+      -webkit-backdrop-filter:blur(20px) saturate(1.5);
+      backdrop-filter:blur(20px) saturate(1.5);
+    }
+    .fc-header .dp-header-top{align-items:flex-start;margin-bottom:10px}
+    .fc-header .dp-name{font-size:24px;overflow-wrap:anywhere}
+    .fc-header .dp-meta{margin-top:8px}
+    .fc-b-off{background:var(--slate-soft-2);color:var(--slate)}
+    .fc-contact{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;margin-bottom:12px}
+    .fc-contact a{color:var(--ink-soft);text-decoration:none;font-weight:550}
+    .fc-contact a:hover{color:var(--accent-ink);text-decoration:underline}
+    .fc-miss{
+      border:1px dashed #e9c98a;background:var(--amber-soft-2);color:var(--amber-2);
+      border-radius:999px;padding:2px 10px;font:inherit;font-size:11.5px;font-weight:600;cursor:pointer;
+    }
+    .fc-miss:hover{border-style:solid}
+
+    /* Tuiles de section */
+    .fc-tiles{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+    .fc-tile{
+      display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:0;
+      padding:9px 10px 8px;border-radius:14px;cursor:pointer;text-align:left;
+      font-family:inherit;color:var(--ink);
+      background:linear-gradient(165deg,rgba(255,255,255,.86),rgba(255,255,255,.58));
+      border:1px solid rgba(255,255,255,.95);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 0 0 1px rgba(17,19,36,.06),0 4px 14px -6px rgba(24,28,52,.18);
+      -webkit-backdrop-filter:blur(14px) saturate(1.4);backdrop-filter:blur(14px) saturate(1.4);
+      transition:transform .15s,box-shadow .15s,background .15s;
+    }
+    .fc-tile:hover{transform:translateY(-1px);box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 0 0 1px rgba(17,19,36,.10),0 10px 22px -8px rgba(24,28,52,.26)}
+    .fc-tile:focus-visible,.fc-stat:focus-visible,.fc-chip:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px}
+    .fc-tile[aria-pressed="true"]{
+      background:#fff;border-color:var(--accent-ink);
+      box-shadow:0 0 0 2px var(--accent-ink),0 12px 24px -10px rgba(26,61,206,.45);
+    }
+    .fc-tile[aria-pressed="true"] .fc-tile-t{color:var(--accent-ink)}
+    .fc-tile-ico{font-size:17px;line-height:1.2}
+    .fc-tile-t{font-size:12.5px;font-weight:700;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+    .fc-tile-s{font-size:10.5px;font-weight:600;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-variant-numeric:tabular-nums}
+    .fc-tile-s.ok{color:var(--green-2)} .fc-tile-s.warn{color:var(--amber-2)} .fc-tile-s.bad{color:var(--red-2)} .fc-tile-s.mute{color:var(--ink-muted-2)}
+
+    /* Sections */
+    .fc-pane{display:none;padding:16px 24px 40px}
+    .fc-pane.on{display:block;animation:fcIn .18s ease}
+    @keyframes fcIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+    @media (prefers-reduced-motion:reduce){.fc-pane.on{animation:none}.fc-tile{transition:none}}
+    .fc-pane > :first-child{margin-top:0}
+    .fc-pane .dp-alert-box,.fc-pane .bp-credits,.fc-pane .dp-quota-section,.fc-pane .status-toggle-wrap,
+    .fc-pane .drive-scan-bar,.fc-pane .drive-scan-log,.fc-pane .dp-plans-section{margin-left:0;margin-right:0}
+    .fc-pane .dp-progress-section{margin-top:12px;border:1px solid var(--hair);border-radius:14px;padding:16px 18px}
+    .fc-pane .dp-alert-box{margin-top:0;margin-bottom:12px}
+
+    /* Les quatre chiffres de la Synthèse */
+    .fc-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 12px}
+    .fc-stat{
+      display:flex;flex-direction:column;gap:2px;min-width:0;text-align:left;cursor:pointer;
+      padding:12px 14px;border-radius:16px;font-family:inherit;color:var(--ink);
+      background:linear-gradient(165deg,rgba(255,255,255,.92),rgba(255,255,255,.66));
+      border:1px solid rgba(255,255,255,.95);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 0 0 1px rgba(17,19,36,.06),0 6px 18px -8px rgba(24,28,52,.18);
+      transition:transform .15s,box-shadow .15s;
+    }
+    .fc-stat:hover{transform:translateY(-1px);box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 0 0 1px rgba(17,19,36,.10),0 12px 24px -10px rgba(24,28,52,.26)}
+    .fc-stat-l{font-size:10px;font-weight:650;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .fc-stat-v{font-family:'Fraunces',serif;font-size:24px;font-weight:600;letter-spacing:-.5px;line-height:1.15;font-variant-numeric:tabular-nums;white-space:nowrap}
+    .fc-stat-v i{font-style:normal;font-size:14px;color:var(--ink-muted);font-weight:500}
+    .fc-stat-s{font-size:11px;color:var(--ink-muted);line-height:1.35}
+    .fc-stat.ok .fc-stat-v{color:var(--green-2)} .fc-stat.warn .fc-stat-v{color:var(--amber-2)} .fc-stat.bad .fc-stat-v{color:var(--red-2)}
+    .fc-bar{display:block;height:5px;border-radius:99px;background:var(--hair-2);overflow:hidden;margin:3px 0 2px}
+    .fc-bar i{display:block;height:100%;border-radius:99px;background:var(--accent-ink)}
+
+    /* Cartes génériques de la fiche */
+    .fc-card{
+      margin:0 0 12px;padding:14px 16px;border-radius:14px;font-size:12.5px;line-height:1.6;color:var(--ink-soft);
+      background:rgba(255,255,255,.82);border:1px solid var(--hair);box-shadow:var(--shadow-s);
+    }
+    .fc-card-mute{color:var(--ink-muted)}
+    .fc-card-h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--ink);margin-bottom:10px}
+    .fc-count{font-size:11px;font-weight:700;background:var(--amber-soft-2);color:var(--amber-2);border-radius:999px;padding:1px 8px}
+    .fc-todo{border-color:#f0dcae;background:linear-gradient(165deg,rgba(255,251,240,.95),rgba(255,255,255,.8))}
+    .fc-chips{display:flex;flex-wrap:wrap;gap:6px}
+    .fc-chip{
+      display:inline-flex;align-items:center;gap:6px;border:1px solid #ecd9ab;background:#fff;color:var(--ink-soft);
+      border-radius:999px;padding:5px 11px;font:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;
+    }
+    .fc-chip span{color:var(--amber-2);font-weight:700}
+    .fc-chip:hover{background:var(--amber-soft-2);border-color:var(--amber-2)}
+    .fc-note{margin:0 0 12px;padding:12px 14px;background:var(--amber-soft-2);border-radius:12px;border-left:3px solid var(--amber-2);font-size:12px;line-height:1.7;color:var(--ink-soft);white-space:pre-wrap}
+    .fc-note-l{font-size:10px;font-weight:600;color:var(--amber-2);text-transform:uppercase;letter-spacing:.7px;display:block;margin-bottom:5px}
+    .fc-kv{display:grid;grid-template-columns:1fr 1fr;gap:8px 18px}
+    .fc-kv > div{display:flex;flex-direction:column;min-width:0}
+    .fc-kv span{font-size:10px;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.7px}
+    .fc-kv b{font-size:13px;font-weight:600;color:var(--ink);overflow-wrap:anywhere}
+    .fc-danger{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:22px;padding-top:14px;border-top:1px dashed var(--hair);font-size:12px;color:var(--ink-muted)}
+    .cc-miss{font-size:10.5px;font-weight:600;color:var(--prog-3);white-space:nowrap}
+
+    @media (max-width:760px){
+      .fc-header{padding:16px 14px 12px}
+      .fc-header .dp-header-top{padding-left:44px} /* bouton de menu de nav.js, fixe en haut à gauche */
+      .fc-tiles{display:flex;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin:0 -14px;padding:2px 14px 6px}
+      .fc-tiles::-webkit-scrollbar{display:none}
+      .fc-tile{flex:0 0 112px}
+      .fc-pane{padding:14px 14px 40px}
+      .fc-stats{grid-template-columns:1fr 1fr}
+      .fc-kv{grid-template-columns:1fr}
+    }
+    /* Écran peu haut : l'en-tête ne reste pas collé, il prendrait la moitié de la fiche */
+    @media (max-height:640px){ .fc-header{position:static} }
   </style>
   <!-- NAV SIDEBAR -->
   <script>
@@ -1316,6 +1439,10 @@
   <button class="status-tab" data-view="attention" onclick="setStatusTab('attention',this)">
     <span class="st-dot" style="background:var(--amber-2)"></span>
     Attention <span class="st-count" id="tabCount-attention">0</span>
+  </button>
+  <button class="status-tab" data-view="incomplets" onclick="setStatusTab('incomplets',this)" title="Clients actifs dont la fiche n'a pas d'e-mail, de téléphone, de nom complet, d'activité ou de date d'entrée">
+    <span class="st-dot" style="background:var(--prog-3)"></span>
+    Fiches incomplètes <span class="st-count" id="tabCount-incomplets">0</span>
   </button>
   <button class="status-tab" data-view="inactifs" onclick="setStatusTab('inactifs',this)">
     <span class="st-dot" style="background:var(--slate)"></span>
@@ -1908,6 +2035,7 @@ function applyFilters(){
   const retard    = actifs.filter(c=>getAlertStatus(c)==='alert');
   const attention = actifs.filter(c=>getAlertStatus(c)==='warning');
   const quotaMiss = actifs.filter(c=>{ const qs=getQuotaStatus(c,_viewYear,_viewMonth); return qs.status==='empty'||qs.status==='partial'; });
+  const incomplets = actifs.filter(c=>fcManquesFiche(c).length>0);
 
   // Update tab counts
   document.getElementById('tabCount-actifs').textContent    = actifs.length;
@@ -1915,6 +2043,7 @@ function applyFilters(){
   document.getElementById('tabCount-attention').textContent = attention.length;
   document.getElementById('tabCount-quota').textContent     = quotaMiss.length;
   document.getElementById('tabCount-inactifs').textContent  = inactifs.length;
+  document.getElementById('tabCount-incomplets').textContent = incomplets.length;
   document.getElementById('tabCount-tous').textContent      = base.length;
 
   // Apply status tab filter
@@ -1924,6 +2053,7 @@ function applyFilters(){
     case 'attention': _filtered = attention; break;
     case 'quota':     _filtered = quotaMiss; break;
     case 'inactifs':  _filtered = inactifs; break;
+    case 'incomplets': _filtered = incomplets; break;
     case 'tous':      _filtered = base; break;
     default:          _filtered = actifs;
   }
@@ -2131,7 +2261,7 @@ function renderCard(c){
     </div>
     ${!isInactive ? `<div class="cc-quota ${quotaCls}">Ce mois : ${q.label}</div>` : ''}
     <div class="cc-foot">
-      <div></div>
+      <div>${!isInactive && fcManquesFiche(c).length ? `<span class="cc-miss" title="${escHtml(fcManquesFiche(c).map(x=>x.t).join(' · '))}">🧩 ${fcManquesFiche(c).length} à compléter</span>` : ''}</div>
       ${lastBlock}
     </div>
   </div>`;
@@ -2245,19 +2375,20 @@ async function loadAcademyBlock(c, id){
   const box = document.getElementById('acadBlock-'+id);
   if(!box) return;
   const em = (c.email||'').trim();
-  if(!em){ box.innerHTML = "🎓 Academy — pas d'e-mail sur la fiche, impossible de faire le lien."; return; }
+  if(!em){ box.innerHTML = "🎓 Academy — pas d'e-mail sur la fiche, impossible de faire le lien."; fcSetSub(id,'academy','E-mail manquant','warn'); return; }
   try{
     const token = (window._auth && window._auth.currentUser) ? await window._auth.currentUser.getIdToken() : '';
     const r = await fetch('/api/academy-progress', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token }, body: JSON.stringify({ email: em }) });
     const j = await r.json().catch(()=>null);
-    if(!j){ box.innerHTML = '🎓 Academy indisponible pour le moment.'; return; }
-    if(j.ok === false){ box.innerHTML = '🎓 ' + (j.error==='bridge_not_configured' ? 'Pont Academy non configuré (variables Vercel).' : 'Academy indisponible pour le moment.'); return; }
-    if(!j.found){ box.innerHTML = '🎓 Aucun compte Academy pour cet e-mail.'; return; }
+    if(!j){ box.innerHTML = '🎓 Academy indisponible pour le moment.'; fcSetSub(id,'academy','Indisponible','mute'); return; }
+    if(j.ok === false){ box.innerHTML = '🎓 ' + (j.error==='bridge_not_configured' ? 'Pont Academy non configuré (variables Vercel).' : 'Academy indisponible pour le moment.'); fcSetSub(id,'academy','Indisponible','mute'); return; }
+    if(!j.found){ box.innerHTML = '🎓 Aucun compte Academy pour cet e-mail.'; fcSetSub(id,'academy','Pas de compte','warn'); return; }
     const d = j.dossier;
     /* Parcours à étapes : on s'arrête ici. Tout ce qui suit compte des leçons,
        des workbooks et des modules — des unités du programme vidéo, qui
        n'existent pas chez ce client. */
-    if(estParcoursEtapes(c)){ box.innerHTML = acadBlocEtapes(d); return; }
+    if(estParcoursEtapes(c)){ box.innerHTML = acadBlocEtapes(d); fcSetSub(id,'academy','Parcours à étapes',''); return; }
+    fcSetSub(id,'academy', d.totals.pct+' % · '+d.totals.done+'/'+d.totals.total, '');
     let y2 = 0, names = [], rows = '';
     d.courses.forEach(co=>{
       rows += `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:baseline;margin:3px 0"><b>${escHtml(co.name)}</b><span style="background:#ecebfa;color:#4338ca;border-radius:999px;padding:1px 8px;font-weight:600;font-size:11px">${co.pct} %</span><span style="color:#6b7194">${co.done}/${co.total} leçons</span>${co.milestones.total?`<span style="color:#6b7194">★ ${co.milestones.reached}/${co.milestones.total}</span>`:''}${co.building?`<span style="color:#6b7194">🏗️ ${co.building.roomsDone}/${co.building.roomsTotal} pièces</span>`:''}${co.wins&&co.wins.count?`<span style="color:#6b7194">🏆 ${co.wins.count}</span>`:''}</div>`;
@@ -2278,7 +2409,7 @@ async function loadAcademyBlock(c, id){
     if(pathBtn) pathBtn.addEventListener('click', ()=>openPathCopilot(c, id, d));
     const wbBtn = box.querySelector('[data-acad-wb]');
     if(wbBtn) wbBtn.addEventListener('click', ()=>openWorkbookPanel(c, id, d));
-  }catch(e){ box.innerHTML = '🎓 Academy indisponible pour le moment.'; }
+  }catch(e){ box.innerHTML = '🎓 Academy indisponible pour le moment.'; fcSetSub(id,'academy','Indisponible','mute'); }
 }
 
 // Encadré victoires du bloc Academy : totaux réels + dernière citation de l'élève.
@@ -2933,6 +3064,217 @@ function questionnaireBlock(c, id){
       </div>`;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   FICHE EN TUILES (20/11/2026)
+   ───────────────────────────────────────────────────────────────────────────
+   La fiche empilait 14 blocs à la suite : il fallait tout faire défiler pour
+   trouver le plan d'action ou une séance. Elle est maintenant rangée en six
+   sections, ouvertes par des tuiles cliquables qui portent chacune le chiffre
+   à retenir. Aucun bloc n'a changé d'identifiant ni de fonction de chargement :
+   seul leur emplacement change. La Synthèse dit ce qu'il faut savoir d'abord,
+   et ce qui manque à la fiche (« À compléter ») — le reste se déplie au clic.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const FC_PANES = [
+  { k:'synthese', ico:'🧭', t:'Synthèse' },
+  { k:'plan',     ico:'🎯', t:'Plan d\'action' },
+  { k:'seances',  ico:'📅', t:'Séances' },
+  { k:'academy',  ico:'🎓', t:'Academy' },
+  { k:'quota',    ico:'📊', t:'Quota & RDV' },
+  { k:'dossier',  ico:'📁', t:'Dossier' }
+];
+let _fcPane = { id:'', k:'synthese' };
+
+// Section à afficher : on garde la section ouverte quand la MÊME fiche se
+// redessine (après un enregistrement), on repart de la Synthèse sinon.
+function fcPaneFor(id){
+  if(_fcPane.id !== id) _fcPane = { id:id, k:'synthese' };
+  return _fcPane.k;
+}
+
+function fcShow(k){
+  const panel = document.getElementById('detailPanel');
+  if(!panel || !FC_PANES.some(p=>p.k===k)) return;
+  _fcPane = { id: panel.dataset.clientId || '', k:k };
+  panel.querySelectorAll('[data-fc-pane]').forEach(el=>el.classList.toggle('on', el.getAttribute('data-fc-pane')===k));
+  panel.querySelectorAll('[data-fc-tile]').forEach(el=>el.setAttribute('aria-pressed', el.getAttribute('data-fc-tile')===k ? 'true' : 'false'));
+  panel.scrollTop = 0;
+}
+
+// Ligne de chiffre d'une tuile, mise à jour par les chargements différés
+// (Academy, documents du plan) si la fiche est toujours celle de ce client.
+function fcSetSub(id, k, txt, tone){
+  const panel = document.getElementById('detailPanel');
+  if(!panel || panel.dataset.clientId !== id) return;
+  const el = panel.querySelector('[data-fc-sub="'+k+'"]');
+  if(!el) return;
+  el.textContent = txt;
+  el.className = 'fc-tile-s' + (tone ? ' '+tone : '');
+}
+
+function fcJours(d){
+  if(!d) return null;
+  const t = new Date(d).getTime();
+  return isNaN(t) ? null : Math.floor((Date.now() - t) / 86400000);
+}
+function fcJourCourt(d){
+  try{ return new Date(d).toLocaleDateString('fr-FR',{ day:'numeric', month:'short' }); }catch(e){ return d; }
+}
+
+// Séances encore à faire : la prochaine datée, celles sans date, et celles
+// dont la date est passée sans avoir été validées.
+function fcAVenir(c){
+  const today = new Date().toISOString().slice(0,10);
+  const open = getAllSessions(c).filter(s=>s && s.statut!=='fait' && s.statut!=='consommee');
+  const dated = open.filter(s=>s.date && String(s.date)>=today).sort((a,b)=>String(a.date)<String(b.date)?-1:1);
+  return {
+    next: dated[0] || null,
+    aPlanifier: open.filter(s=>!s.date).length,
+    aValider: open.filter(s=>s.date && String(s.date)<today).length
+  };
+}
+
+function fcPlanEtat(c){
+  if(window.BPCredits && BPCredits.isBusinessV2(c.programme)){
+    const p = c.planBP || {};
+    return (p.pointA && p.pointB) ? { ok:true, txt:'Point A / B posés' } : { ok:false, txt:'Point A / B à poser' };
+  }
+  if(c.planV2) return { ok:true, txt:'Généré' };
+  if(c.plans && c.plans.length) return { ok:true, txt:c.plans.length+' fichier'+(c.plans.length>1?'s':'') };
+  return { ok:false, txt:'À générer' };
+}
+
+// Ce qui manque sur la FICHE elle-même (identité, contact). Sert aussi à
+// l'onglet « Fiches incomplètes » de la liste : aucun chargement différé.
+function fcManquesFiche(c){
+  const m = [];
+  if(!String(c.email||'').trim()) m.push({ t:'E-mail', why:'sans lui : pas de lien Academy, pas d\'envoi de replay', fix:'edit' });
+  if(!String(c.telephone||c.tel||'').trim()) m.push({ t:'Téléphone', fix:'edit' });
+  if(String(c.nom||'').trim().split(/\s+/).filter(Boolean).length < 2) m.push({ t:'Nom complet', why:'prénom seul : le questionnaire et les enregistrements ne se relient pas', fix:'edit' });
+  if(!String(c.activite||'').trim()) m.push({ t:'Activité', fix:'edit' });
+  if(!c.dateEntree) m.push({ t:'Date d\'entrée', why:'sert à l\'historique du quota', fix:'edit' });
+  return m;
+}
+
+// La liste complète : la fiche + le suivi (plan, comptes rendus, séances).
+function fcManques(c){
+  const m = fcManquesFiche(c);
+  const pl = fcPlanEtat(c);
+  /* Un plan peut n'exister qu'en fichier (sous-collection chargée à
+     l'ouverture) : tant qu'elle n'est pas lue, on ne dit pas qu'il manque. */
+  if(!pl.ok && !(c.plans === undefined && !(window.BPCredits && BPCredits.isBusinessV2(c.programme)))) m.push({ t:'Plan d\'action', why:pl.txt.toLowerCase(), go:'plan' });
+  const faites = getAllSessions(c).filter(s=>s && s.statut==='fait');
+  const sansCr = faites.filter(s=>!String(s.resume||'').trim() && !String(s.driveSummary||'').trim()).length;
+  if(sansCr) m.push({ t:sansCr+' séance'+(sansCr>1?'s':'')+' sans compte rendu', go:'seances' });
+  const sansCoach = faites.filter(s=>!String(s.coach||'').trim()).length;
+  if(sansCoach) m.push({ t:sansCoach+' séance'+(sansCoach>1?'s':'')+' sans coach', go:'seances' });
+  const av = fcAVenir(c);
+  if(av.aValider && c.statut!=='inactif') m.push({ t:av.aValider+' séance'+(av.aValider>1?'s':'')+' passée'+(av.aValider>1?'s':'')+' à valider', go:'seances' });
+  if(!c.questionnaire) m.push({ t:'Questionnaire', why:'aucune réponse reliée', go:'dossier' });
+  return m;
+}
+
+function fcManquesHtml(c){
+  const m = fcManques(c);
+  if(!m.length) return '';
+  return `<div class="fc-card fc-todo">
+    <div class="fc-card-h">🧩 À compléter <span class="fc-count">${m.length}</span></div>
+    <div class="fc-chips">${m.map(x=>`<button type="button" class="fc-chip" ${x.fix?`data-fc-fix="${x.fix}"`:`data-fc-go="${x.go}"`}${x.why?` title="${escHtml(x.why)}"`:''}>${escHtml(x.t)}<span>›</span></button>`).join('')}</div>
+  </div>`;
+}
+
+function fcRefreshManques(id){
+  const c = _clients.find(x=>x._id===id);
+  const box = document.getElementById('fcManques-'+id);
+  if(!c || !box) return;
+  box.innerHTML = fcManquesHtml(c);
+  const pl = fcPlanEtat(c);
+  fcSetSub(id, 'plan', pl.txt, pl.ok ? 'ok' : 'warn');
+  const n = fcManques(c).length;
+  fcSetSub(id, 'dossier', n ? n+' à compléter' : 'Complet', n ? 'warn' : 'ok');
+}
+
+function fcTilesHtml(c, id, cur){
+  const done = c.nbCoachingsFaits||0, total = c.nbCoachingsTotal||12;
+  const inactif = c.statut === 'inactif';
+  const al = getAlertStatus(c), alTxt = getAlertText(c);
+  const q = getQuotaStatus(c, _viewYear, _viewMonth);
+  const pl = fcPlanEtat(c);
+  const av = fcAVenir(c);
+  const n = fcManques(c).length;
+  const sub = {
+    synthese: inactif ? ['Inactif','mute'] : al==='alert' ? [alTxt,'bad'] : al==='warning' ? [alTxt,'warn'] : ['À jour','ok'],
+    plan: [pl.txt, pl.ok ? 'ok' : 'warn'],
+    seances: [done+'/'+total + (av.next ? ' · le '+fcJourCourt(av.next.date) : av.aValider ? ' · '+av.aValider+' à valider' : ''), av.aValider ? 'warn' : ''],
+    academy: [c.email ? '…' : 'E-mail manquant', c.email ? 'mute' : 'warn'],
+    quota: q.status==='done' ? ['Terminé','mute'] : [q.label+' ce mois', inactif ? 'mute' : q.status==='ok' ? 'ok' : q.status==='partial' ? 'warn' : 'bad'],
+    dossier: [n ? n+' à compléter' : 'Complet', n ? 'warn' : 'ok']
+  };
+  return FC_PANES.map(p=>`<button type="button" class="fc-tile" role="tab" data-fc-tile="${p.k}" aria-pressed="${p.k===cur?'true':'false'}">
+      <span class="fc-tile-ico">${p.ico}</span>
+      <span class="fc-tile-t">${p.t}</span>
+      <span class="fc-tile-s ${sub[p.k][1]}" data-fc-sub="${p.k}">${escHtml(sub[p.k][0])}</span>
+    </button>`).join('');
+}
+
+// Les quatre chiffres à retenir, chacun ouvre la section qui le détaille.
+function fcStatsHtml(c){
+  const done = c.nbCoachingsFaits||0, total = c.nbCoachingsTotal||12;
+  const pct = Math.max(0, Math.min(100, total>0 ? done/total*100 : 0));
+  const q = getQuotaStatus(c, _viewYear, _viewMonth);
+  const faites = getDoneSessionsChrono(c);
+  const last = faites.length ? faites[faites.length-1] : null;
+  const j = last && last.date ? fcJours(last.date) : null;
+  const al = getAlertStatus(c);
+  const av = fcAVenir(c);
+  const moisVu = new Date(_viewYear, _viewMonth, 1).toLocaleDateString('fr-FR',{ month:'long' });
+  const stat = (go, lbl, val, sub, tone, extra) => `<button type="button" class="fc-stat ${tone||''}" data-fc-go="${go}">
+      <span class="fc-stat-l">${lbl}</span><span class="fc-stat-v">${val}</span>${extra||''}<span class="fc-stat-s">${sub}</span>
+    </button>`;
+  return stat('quota', 'Avancement', done+'<i>/'+total+'</i>',
+        pct>=100 ? 'Programme terminé' : Math.max(total-done,0)+' séance'+(total-done>1?'s':'')+' restante'+(total-done>1?'s':''), '',
+        `<span class="fc-bar"><i style="width:${pct}%"></i></span>`)
+    + stat('quota', 'Quota de '+escHtml(moisVu), q.status==='done' ? '—' : q.used+'<i>/'+q.max+'</i>',
+        q.status==='done' ? 'Programme terminé' : q.status==='ok' ? 'Quota atteint' : q.status==='partial' ? 'Reste à planifier' : 'Aucun coaching ce mois',
+        q.status==='ok' ? 'ok' : q.status==='partial' ? 'warn' : q.status==='empty' ? 'bad' : '')
+    + stat('seances', 'Dernière séance', last ? (j===null ? '#'+(last.numero||'?') : j===0 ? 'Aujourd\'hui' : j+'<i> j</i>') : '—',
+        last ? (last.date ? formatDate(last.date) : 'sans date') + (last.coach ? ' · '+escHtml(normalizeCoach(last.coach)) : '') : 'Aucune séance faite',
+        c.statut==='inactif' ? '' : al==='alert' ? 'bad' : al==='warning' ? 'warn' : last ? 'ok' : 'bad')
+    + stat('seances', 'Prochaine séance', av.next ? escHtml(fcJourCourt(av.next.date)) : '—',
+        av.next ? (av.next.heure ? 'à '+escHtml(av.next.heure)+' · ' : '') + (av.next.coach ? escHtml(normalizeCoach(av.next.coach)) : 'coach à assigner')
+                : (av.aValider ? av.aValider+' passée'+(av.aValider>1?'s':'')+' à valider' : av.aPlanifier ? av.aPlanifier+' à planifier' : 'Rien de prévu'),
+        av.next ? 'ok' : av.aValider ? 'warn' : '');
+}
+
+// Section Dossier : toutes les coordonnées au même endroit, ce qui manque en clair.
+function fcDossierHtml(c, id){
+  const v = x => String(x||'').trim() ? escHtml(x) : '<button type="button" class="fc-miss" data-fc-fix="edit">à renseigner</button>';
+  const rows = [
+    ['Nom', v(c.nom)],
+    ['E-mail', v(c.email)],
+    ['Téléphone', v(c.telephone||c.tel)],
+    ['Activité', v(c.activite)],
+    ['Programme', escHtml(window.BPCredits ? BPCredits.libelleProgramme(c.programme) : (c.programme||'—'))],
+    ['Date d\'entrée', c.dateEntree ? formatDate(c.dateEntree) : v('')]
+  ];
+  if(c.finAccompagnement) rows.push(['Fin d\'accompagnement', formatDate(c.finAccompagnement)]);
+  return `<div class="fc-card">
+    <div class="fc-card-h">👤 Coordonnées <button type="button" class="dp-plan-edit-btn" style="margin-left:auto" data-fc-fix="edit">✏️ Modifier</button></div>
+    <div class="fc-kv">${rows.map(r=>`<div><span>${r[0]}</span><b>${r[1]}</b></div>`).join('')}</div>
+  </div>`;
+}
+
+// Un seul écouteur pour toute la fiche (tuiles, chiffres, « à compléter »).
+document.addEventListener('click', function(ev){
+  const panel = document.getElementById('detailPanel');
+  if(!panel || !ev.target || !ev.target.closest || !panel.contains(ev.target)) return;
+  const tile = ev.target.closest('[data-fc-tile]');
+  if(tile){ fcShow(tile.getAttribute('data-fc-tile')); return; }
+  const go = ev.target.closest('[data-fc-go]');
+  if(go){ fcShow(go.getAttribute('data-fc-go')); return; }
+  const fix = ev.target.closest('[data-fc-fix]');
+  if(fix && fix.getAttribute('data-fc-fix')==='edit' && panel.dataset.clientId) editClient(panel.dataset.clientId);
+});
+
 // ── DETAIL PANEL ──
 function openDetail(id){
   const c = _clients.find(x=>x._id===id);
@@ -2964,33 +3306,42 @@ function openDetail(id){
   const _quotaEffective = _quotaOverrideVal !== null ? _quotaOverrideVal : _quotaDerived;
   
   const panel = document.getElementById('detailPanel');
+  const fcPane = fcPaneFor(id);
   panel.dataset.clientId = id;
   panel.innerHTML = `
-    <div class="dp-header">
+    <div class="dp-header fc-header">
       <div class="dp-header-top">
-        <div class="dp-name">🎓 ${c.nom}</div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn btn-outline btn-sm" onclick="editClient('${id}')">✏️</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteClient('${id}')">🗑</button>
-          <button class="dp-close" onclick="closeDetail()">✕</button>
+        <div style="min-width:0">
+          <div class="dp-name">${escHtml(c.nom||'—')}</div>
+          <div class="dp-meta">
+            <span class="dp-badge">${escHtml(window.BPCredits ? BPCredits.libelleProgramme(c.programme) : c.programme)}</span>
+            ${c.activite?`<span class="dp-badge">${escHtml(c.activite)}</span>`:''}
+            ${c.dateEntree?`<span class="dp-badge">Depuis ${formatDate(c.dateEntree)}</span>`:''}
+            ${c.statut==='inactif'?`<span class="dp-badge fc-b-off">${c.ancienClient===true?'Ancien client':'Inactif'}</span>`:''}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex:none">
+          <button class="btn btn-outline btn-sm" data-fc-fix="edit" title="Modifier les coordonnées">✏️ Modifier</button>
+          <button class="dp-close" onclick="closeDetail()" title="Fermer">✕</button>
         </div>
       </div>
-      <div class="dp-meta">
-        <span class="dp-badge">${escHtml(window.BPCredits ? BPCredits.libelleProgramme(c.programme) : c.programme)}</span>
-        ${c.activite?`<span class="dp-badge">${escHtml(c.activite)}</span>`:''}
-        ${c.dateEntree?`<span class="dp-badge">Depuis ${formatDate(c.dateEntree)}</span>`:''}
+      <div class="fc-contact">
+        ${c.email?`<a href="mailto:${escHtml(c.email)}">✉️ ${escHtml(c.email)}</a>`:`<button type="button" class="fc-miss" data-fc-fix="edit">✉️ e-mail à renseigner</button>`}
+        ${(c.telephone||c.tel)?`<a href="tel:${escHtml(String(c.telephone||c.tel).replace(/\s+/g,''))}">📞 ${escHtml(c.telephone||c.tel)}</a>`:`<button type="button" class="fc-miss" data-fc-fix="edit">📞 téléphone à renseigner</button>`}
       </div>
-      <div class="dp-info-grid">
-        <div class="dp-info"><div class="dp-info-label">Email</div><div class="dp-info-val">${c.email||'—'}</div></div>
-        <div class="dp-info"><div class="dp-info-label">Téléphone</div><div class="dp-info-val">${c.telephone||c.tel||'—'}</div></div>
-      </div>
-      <div data-demarrage data-client-id="${id}"></div>
-      ${c.clientNotes?`<div style="margin:14px 0 0;padding:12px 14px;background:var(--amber-soft-2);border-radius:12px;border-left:3px solid var(--amber-2);font-size:12px;line-height:1.7;color:var(--ink-soft);white-space:pre-wrap"><span style="font-size:10px;font-weight:600;color:var(--amber-2);text-transform:uppercase;letter-spacing:.7px;display:block;margin-bottom:5px">📌 Notes</span>${escHtml(c.clientNotes)}</div>`:''}
+      <div class="fc-tiles" role="tablist" aria-label="Sections de la fiche">${fcTilesHtml(c, id, fcPane)}</div>
     </div>
 
+    <!-- ══ SYNTHÈSE : ce qu'il faut savoir avant d'ouvrir le reste ══ -->
+    <div class="fc-pane${fcPane==='synthese'?' on':''}" data-fc-pane="synthese">
     ${alert==='alert'?`<div class="dp-alert-box red">🔴 ${alertText} — Relancez ce client !</div>`:alert==='warning'?`<div class="dp-alert-box orange">🟡 ${alertText}</div>`:`<div class="dp-alert-box green">✅ Client à jour</div>`}
+      ${pcPendingBanner(c, id)}
+      <div class="fc-stats">${fcStatsHtml(c)}</div>
+      <div id="fcManques-${id}">${fcManquesHtml(c)}</div>
+      <div data-demarrage data-client-id="${id}"></div>
     ${window.BPCredits && BPCredits.isBusinessV2(c.programme) ? `<div id="bpCredits-${id}" class="bp-credits">🔥 Business Phénix — compteur de séances en chargement…</div>` : ''}
 
+      ${c.clientNotes?`<div class="fc-note"><span class="fc-note-l">📌 Notes</span>${escHtml(c.clientNotes)}</div>`:''}
     <!-- BRIEF COACH — continuité entre séances (dernier coaching + synthèse IA) -->
     <div style="margin-top:12px;padding:14px 16px;background:linear-gradient(135deg,#eff6ff,#eef2ff);border:1px solid #c7d2fe;border-radius:12px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
@@ -3003,17 +3354,107 @@ function openDetail(id){
       <div id="coachBriefMeta-${id}" style="margin-top:6px;font-size:10px;color:#818cf8">${c.aiBrief && c.aiBrief.generatedAt ? 'Synthèse générée le ' + new Date(c.aiBrief.generatedAt).toLocaleDateString('fr-FR') + ' (' + (c.aiBrief.sessionsCount||0) + ' séance(s) analysée(s))' : ''}</div>
     </div>
 
-    <!-- STATUT ACTIF / INACTIF -->
-    <div class="status-toggle-wrap">
-      <div>
-        <div class="status-toggle-label">${c.ancienClient === true ? '🎓 Ancien client' : (c.statut === 'inactif' ? '⚫ Client inactif' : '🟢 Client actif')}</div>
-        <div class="status-toggle-sub">${c.ancienClient === true ? 'Fin d\'accompagnement — désactivé partout (Academy, RDV, CRM). Réactivation via CSM ou Admin Personnes.' : (c.statut === 'inactif' ? 'Contrat terminé — non renouvelé' : 'Contrat en cours')}</div>
-      </div>
-      <label class="toggle-switch" title="${c.ancienClient === true ? 'Verrouillé — fiche ancien client (réactivation via CSM / Admin Personnes)' : 'Changer le statut'}" style="${c.ancienClient === true ? 'opacity:.45;pointer-events:none' : ''}">
-        <input type="checkbox" ${c.statut !== 'inactif' ? 'checked' : ''} ${c.ancienClient === true ? 'disabled' : ''} onchange="toggleClientStatus('${id}', this.checked)"/>
-        <span class="toggle-slider"></span>
-      </label>
     </div>
+
+    <!-- ══ PLAN D'ACTION : le plan structuré, les notes, les fichiers ══ -->
+    <div class="fc-pane${fcPane==='plan'?' on':''}" data-fc-pane="plan">
+      ${window.BPCredits && BPCredits.isBusinessV2(c.programme) ? bpPlanSectionHtml(c, id) : ''}
+      <!-- PLAN D'ACTION ELITE PHÉNIX (structuré — coaching-plan.js) — masqué
+           (pas retiré) pour Business nouveau format, qui a son propre plan. -->
+      <div class="dp-plan-section${c.planV2 && planSectionCollapsed() ? ' collapsed' : ''}" style="margin: 0 0 16px${window.BPCredits && BPCredits.isBusinessV2(c.programme) ? ';display:none' : ''}" data-plan-section="${id}">
+        <div class="dp-plan-header">
+          <div class="dp-plan-title">🎯 Plan d'action — Elite Phénix
+            ${c.planV2 ? '<span class="dp-plan-badge">✅ Généré</span>' : '<span class="dp-plan-badge" style="background:#fef3c7;color:#92400e">À générer</span>'}
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            ${c.planV2 ? `
+              <button class="dp-plan-edit-btn" data-plan-toggle onclick="togglePlanSection('${id}')">${planSectionCollapsed() ? '▸ Afficher' : '▾ Réduire'}</button>
+              <button class="dp-plan-edit-btn" onclick="openPlanEditor('${id}')">✏️ Modifier le plan</button>
+              <button class="dp-plan-edit-btn" onclick="openPlanWizard('${id}')">🧭 Assistant / régénérer</button>
+              <button class="btn btn-primary btn-sm" onclick="sharePlan('${id}')">🔗 Lien client</button>
+              <button class="dp-plan-edit-btn" onclick="exportPlanPdf('${id}')">📄 PDF</button>
+              <button class="dp-plan-edit-btn" style="color:#dc2626;border-color:#f3c9c9" onclick="deletePlanV2('${id}')">🗑 Supprimer</button>
+            ` : ''}
+          </div>
+        </div>
+        <div class="dp-plan-body">
+          <div id="planV2-${id}">
+            ${c.planV2
+              ? window.CoachingPlan ? window.CoachingPlan.render(c.planV2, id) : ''
+              : `<div class="dp-plan-empty">
+                  <div class="dp-plan-empty-icon">🎯</div>
+                  <div class="dp-plan-empty-t">Aucun plan d'action pour ce client</div>
+                  <div class="dp-plan-empty-sub">5 étapes guidées à partir de son questionnaire — ou raconte ce que tu sais du dossier à voix haute, l'IA remplit le plan.</div>
+                  <button class="dp-plan-btn-ia" onclick="openPlanWizard('${id}')">✨ Générer le plan d'action</button>
+                  ${window.CoachingPlan && window.CoachingPlan.voiceSupported && window.CoachingPlan.voiceSupported()
+                    ? '<div class="dp-plan-empty-hint">🎙️ Mode vocal disponible dans l\'assistant</div>' : ''}
+                </div>`
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- NOTES LIBRES SUR LE PLAN (champ historique planAction) -->
+      <div class="dp-plan-section" style="margin: 0 0 16px">
+        <div class="dp-plan-header">
+          <div class="dp-plan-title">📝 Notes libres
+            ${c.planAction ? '<span class="dp-plan-badge">✅ Défini</span>' : ''}
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="dp-plan-edit-btn" onclick="togglePlanEdit('${id}')">${c.planAction ? '✏️ Modifier' : '+ Rédiger'}</button>
+          </div>
+        </div>
+        <div class="dp-plan-body">
+          <div id="planView-${id}">
+            ${c.planAction
+              ? `<div class="dp-plan-content">${escHtml(c.planAction)}</div>`
+              : `<div class="dp-plan-empty-sub" style="padding:6px 0">Notes libres du coach — complètent le plan structuré ci-dessus.</div>`
+            }
+          </div>
+          <div id="planEdit-${id}" style="display:none">
+            <textarea class="dp-plan-textarea" id="planTextarea-${id}" placeholder="Rédigez le plan d'action du client : objectifs, étapes clés, points de travail, axes d'amélioration...">${c.planAction||''}</textarea>
+            <div class="dp-plan-save-row">
+              <button class="dp-plan-edit-btn" onclick="togglePlanEdit('${id}')">Annuler</button>
+              <button class="btn btn-primary btn-sm" onclick="savePlanAction('${id}')">💾 Sauvegarder</button>
+            </div>
+            <div style="margin-top:10px;padding:10px 12px;background:var(--blue-ghost);border-radius:8px;font-size:11.5px;color:var(--muted);line-height:1.5">
+              Ces notes sont libres et n'apparaissent pas dans le PDF client — le plan structuré ci-dessus est le document remis au client.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PLANS D'ACTION (documents HTML) -->
+      <div class="dp-plans-section">
+        <div class="dp-plans-header">
+          <div class="dp-plans-title">📜 Documents du plan (fichiers)
+            <span class="dp-plans-count" id="plansCount-${id}">${(c.plans && c.plans.length) || 0}</span>
+          </div>
+          ${window._role === 'admin'
+            ? `<button class="dp-plan-upload-btn" onclick="triggerPlanUpload('${id}')">
+                 ➕ Ajouter un plan
+               </button>`
+            : ''
+          }
+        </div>
+        <div class="dp-plans-body">
+          <div id="plansList-${id}">
+            ${renderPlansList(c, id)}
+          </div>
+          ${window._role === 'admin' ? `
+            <input type="file" id="planFileInput-${id}" accept=".html,.htm,text/html" style="display:none" onchange="uploadPlanFile('${id}', this)"/>
+          ` : ''}
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ══ SÉANCES : années, séances, résumés Drive ══ -->
+    <div class="fc-pane${fcPane==='seances'?' on':''}" data-fc-pane="seances">
+      <div class="dp-sessions-head">
+        <div class="dp-sessions-title">📅 Années de coaching</div>
+        <button class="btn btn-primary btn-sm" onclick="openAddYearModal('${id}')">🔄 Renouveler</button>
+      </div>
     <div class="drive-scan-bar" id="driveScanBar">
       <span>📁</span>
       <span id="driveScanLabel">${_driveToken?'Drive connecté — ':'Connectez Drive pour lier les résumés Gemini'}</span>
@@ -3025,10 +3466,40 @@ function openDetail(id){
     </div>
     <div class="drive-scan-log" id="driveScanLog-${id}"></div>
 
+      <div id="yearTabs-${id}" style="margin-top:14px">${renderYearTabs(c, id)}</div>
+    </div>
+
+    <!-- ══ ACADEMY : avancement de la formation, parcours, outils ══ -->
+    <div class="fc-pane${fcPane==='academy'?' on':''}" data-fc-pane="academy">
     <!-- AE ACADEMY (V11a) : avancement formation du client -->
-    ${pcPendingBanner(c, id)}
     <div id="acadBlock-${id}" style="margin-top:12px;padding:12px 14px;background:#f8f7ff;border:1px solid #e4e1f7;border-radius:12px;font-size:12px;line-height:1.6;color:#1f2340">🎓 Academy — chargement…</div>
 
+      <!-- CE QUE LE CLIENT FAIT VRAIMENT — côté Academy.
+           Le plan d'action ci-dessus dit ce qui est PRÉVU. Ce panneau dit ce
+           qui est FAIT : le jalon et l'étape en cours, les outils remplis, les
+           séances restantes. « Gérer le parcours » ouvre la pop-up de pilotage
+           (academy-parcours.js) : constats de jalon, notation et décision
+           d'étape, déverrouillage, devoirs et leur notation. Tout se joue
+           depuis la fiche ; l'Academy reste la source de vérité. -->
+      <div class="dp-plan-section" style="margin: 0 0 16px" data-ap-scope>
+        <div class="dp-plan-header">
+          <div class="dp-plan-title">🎓 Son espace Academy
+            <span class="dp-plan-badge" style="background:#eef2ff;color:#4338ca">jalons · étapes · outils · devoirs</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button type="button" class="dp-plan-edit-btn" data-ap-open
+              title="Jalons, étape en cours, outils, séances et devoirs : tout se gère ici">🎛 Gérer le parcours</button>
+          </div>
+        </div>
+        <div class="dp-plan-body">
+          <div id="apSummary-${id}" data-ap-summary data-em="${escHtml(c.email || '')}"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ══ QUOTA & RDV : quota du mois, exceptions, avancement ══ -->
+    <div class="fc-pane${fcPane==='quota'?' on':''}" data-fc-pane="quota">
     <!-- QUOTA SECTION -->
     <div class="dp-quota-section" style="margin-top:12px">
       <div class="dp-quota-header">
@@ -3080,125 +3551,27 @@ function openDetail(id){
       </div>
     </div>
 
-    <div class="dp-sessions">
-      <div class="dp-sessions-head">
-        <div class="dp-sessions-title">📅 Années de coaching</div>
-        <button class="btn btn-primary btn-sm" onclick="openAddYearModal('${id}')">🔄 Renouveler</button>
-      </div>
+    </div>
 
-      ${questionnaireBlock(c, id)}
-      ${window.BPCredits && BPCredits.isBusinessV2(c.programme) ? bpPlanSectionHtml(c, id) : ''}
-      <!-- PLAN D'ACTION ELITE PHÉNIX (structuré — coaching-plan.js) — masqué
-           (pas retiré) pour Business nouveau format, qui a son propre plan. -->
-      <div class="dp-plan-section${c.planV2 && planSectionCollapsed() ? ' collapsed' : ''}" style="margin: 0 0 16px${window.BPCredits && BPCredits.isBusinessV2(c.programme) ? ';display:none' : ''}" data-plan-section="${id}">
-        <div class="dp-plan-header">
-          <div class="dp-plan-title">🎯 Plan d'action — Elite Phénix
-            ${c.planV2 ? '<span class="dp-plan-badge">✅ Généré</span>' : '<span class="dp-plan-badge" style="background:#fef3c7;color:#92400e">À générer</span>'}
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            ${c.planV2 ? `
-              <button class="dp-plan-edit-btn" data-plan-toggle onclick="togglePlanSection('${id}')">${planSectionCollapsed() ? '▸ Afficher' : '▾ Réduire'}</button>
-              <button class="dp-plan-edit-btn" onclick="openPlanEditor('${id}')">✏️ Modifier le plan</button>
-              <button class="dp-plan-edit-btn" onclick="openPlanWizard('${id}')">🧭 Assistant / régénérer</button>
-              <button class="btn btn-primary btn-sm" onclick="sharePlan('${id}')">🔗 Lien client</button>
-              <button class="dp-plan-edit-btn" onclick="exportPlanPdf('${id}')">📄 PDF</button>
-              <button class="dp-plan-edit-btn" style="color:#dc2626;border-color:#f3c9c9" onclick="deletePlanV2('${id}')">🗑 Supprimer</button>
-            ` : ''}
-          </div>
-        </div>
-        <div class="dp-plan-body">
-          <div id="planV2-${id}">
-            ${c.planV2
-              ? window.CoachingPlan ? window.CoachingPlan.render(c.planV2, id) : ''
-              : `<div class="dp-plan-empty">
-                  <div class="dp-plan-empty-icon">🎯</div>
-                  <div class="dp-plan-empty-t">Aucun plan d'action pour ce client</div>
-                  <div class="dp-plan-empty-sub">5 étapes guidées à partir de son questionnaire — ou raconte ce que tu sais du dossier à voix haute, l'IA remplit le plan.</div>
-                  <button class="dp-plan-btn-ia" onclick="openPlanWizard('${id}')">✨ Générer le plan d'action</button>
-                  ${window.CoachingPlan && window.CoachingPlan.voiceSupported && window.CoachingPlan.voiceSupported()
-                    ? '<div class="dp-plan-empty-hint">🎙️ Mode vocal disponible dans l\'assistant</div>' : ''}
-                </div>`
-            }
-          </div>
-        </div>
+    <!-- ══ DOSSIER : coordonnées, questionnaire, statut ══ -->
+    <div class="fc-pane${fcPane==='dossier'?' on':''}" data-fc-pane="dossier">
+      ${fcDossierHtml(c, id)}
+      ${questionnaireBlock(c, id) || `<div class="fc-card fc-card-mute">📋 <b>Questionnaire</b> — aucune réponse reliée à cette fiche. Le lien se fait tout seul dès que l'e-mail (ou le prénom + nom) de la fiche correspond à une réponse « Audit business ».</div>`}
+    <!-- STATUT ACTIF / INACTIF -->
+    <div class="status-toggle-wrap">
+      <div>
+        <div class="status-toggle-label">${c.ancienClient === true ? '🎓 Ancien client' : (c.statut === 'inactif' ? '⚫ Client inactif' : '🟢 Client actif')}</div>
+        <div class="status-toggle-sub">${c.ancienClient === true ? 'Fin d\'accompagnement — désactivé partout (Academy, RDV, CRM). Réactivation via CSM ou Admin Personnes.' : (c.statut === 'inactif' ? 'Contrat terminé — non renouvelé' : 'Contrat en cours')}</div>
       </div>
-
-      <!-- CE QUE LE CLIENT FAIT VRAIMENT — côté Academy.
-           Le plan d'action ci-dessus dit ce qui est PRÉVU. Ce panneau dit ce
-           qui est FAIT : le jalon et l'étape en cours, les outils remplis, les
-           séances restantes. « Gérer le parcours » ouvre la pop-up de pilotage
-           (academy-parcours.js) : constats de jalon, notation et décision
-           d'étape, déverrouillage, devoirs et leur notation. Tout se joue
-           depuis la fiche ; l'Academy reste la source de vérité. -->
-      <div class="dp-plan-section" style="margin: 0 0 16px" data-ap-scope>
-        <div class="dp-plan-header">
-          <div class="dp-plan-title">🎓 Son espace Academy
-            <span class="dp-plan-badge" style="background:#eef2ff;color:#4338ca">jalons · étapes · outils · devoirs</span>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <button type="button" class="dp-plan-edit-btn" data-ap-open
-              title="Jalons, étape en cours, outils, séances et devoirs : tout se gère ici">🎛 Gérer le parcours</button>
-          </div>
-        </div>
-        <div class="dp-plan-body">
-          <div id="apSummary-${id}" data-ap-summary data-em="${escHtml(c.email || '')}"></div>
-        </div>
+      <label class="toggle-switch" title="${c.ancienClient === true ? 'Verrouillé — fiche ancien client (réactivation via CSM / Admin Personnes)' : 'Changer le statut'}" style="${c.ancienClient === true ? 'opacity:.45;pointer-events:none' : ''}">
+        <input type="checkbox" ${c.statut !== 'inactif' ? 'checked' : ''} ${c.ancienClient === true ? 'disabled' : ''} onchange="toggleClientStatus('${id}', this.checked)"/>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+      <div class="fc-danger">
+        <span>Supprimer la fiche de ce client</span>
+        <button class="btn btn-danger btn-sm" onclick="deleteClient('${id}')">🗑 Supprimer</button>
       </div>
-
-      <!-- NOTES LIBRES SUR LE PLAN (champ historique planAction) -->
-      <div class="dp-plan-section" style="margin: 0 0 16px">
-        <div class="dp-plan-header">
-          <div class="dp-plan-title">📝 Notes libres
-            ${c.planAction ? '<span class="dp-plan-badge">✅ Défini</span>' : ''}
-          </div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <button class="dp-plan-edit-btn" onclick="togglePlanEdit('${id}')">${c.planAction ? '✏️ Modifier' : '+ Rédiger'}</button>
-          </div>
-        </div>
-        <div class="dp-plan-body">
-          <div id="planView-${id}">
-            ${c.planAction
-              ? `<div class="dp-plan-content">${escHtml(c.planAction)}</div>`
-              : `<div class="dp-plan-empty-sub" style="padding:6px 0">Notes libres du coach — complètent le plan structuré ci-dessus.</div>`
-            }
-          </div>
-          <div id="planEdit-${id}" style="display:none">
-            <textarea class="dp-plan-textarea" id="planTextarea-${id}" placeholder="Rédigez le plan d'action du client : objectifs, étapes clés, points de travail, axes d'amélioration...">${c.planAction||''}</textarea>
-            <div class="dp-plan-save-row">
-              <button class="dp-plan-edit-btn" onclick="togglePlanEdit('${id}')">Annuler</button>
-              <button class="btn btn-primary btn-sm" onclick="savePlanAction('${id}')">💾 Sauvegarder</button>
-            </div>
-            <div style="margin-top:10px;padding:10px 12px;background:var(--blue-ghost);border-radius:8px;font-size:11.5px;color:var(--muted);line-height:1.5">
-              Ces notes sont libres et n'apparaissent pas dans le PDF client — le plan structuré ci-dessus est le document remis au client.
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- PLANS D'ACTION (documents HTML) -->
-      <div class="dp-plans-section">
-        <div class="dp-plans-header">
-          <div class="dp-plans-title">📜 Plans d'action
-            <span class="dp-plans-count" id="plansCount-${id}">${(c.plans && c.plans.length) || 0}</span>
-          </div>
-          ${window._role === 'admin'
-            ? `<button class="dp-plan-upload-btn" onclick="triggerPlanUpload('${id}')">
-                 ➕ Ajouter un plan
-               </button>`
-            : ''
-          }
-        </div>
-        <div class="dp-plans-body">
-          <div id="plansList-${id}">
-            ${renderPlansList(c, id)}
-          </div>
-          ${window._role === 'admin' ? `
-            <input type="file" id="planFileInput-${id}" accept=".html,.htm,text/html" style="display:none" onchange="uploadPlanFile('${id}', this)"/>
-          ` : ''}
-        </div>
-      </div>
-
-      <div id="yearTabs-${id}">${renderYearTabs(c, id)}</div>
     </div>
   `;
   document.getElementById('detailOverlay').classList.add('show');
@@ -3262,7 +3635,7 @@ function renderLastCoaching(c){
       <div style="font-size:11px;font-weight:700;color:#4f46e5;text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px">
         Dernier coaching — #${s.numero||'?'}${s.date ? ' · ' + formatDate(s.date) : ''}${s.coach ? ' · ' + escHtml(normalizeCoach(s.coach)) : ''}
       </div>
-      ${s.resume ? `<div style="font-size:12px;line-height:1.65;color:#1f2340;white-space:pre-wrap">${escHtml(s.resume)}</div>` : `<div style="font-size:12px;color:#6b7194">Pas de résumé saisi pour cette séance.</div>`}
+      ${(s.resume || s.driveSummary) ? `<div style="font-size:12px;line-height:1.65;color:#1f2340;white-space:pre-wrap">${escHtml(s.resume || s.driveSummary)}</div>` : `<div style="font-size:12px;color:#6b7194">Pas de résumé saisi pour cette séance.</div>`}
       ${s.devoirs ? `<div style="margin-top:6px;font-size:12px;line-height:1.6;color:#1f2340"><b style="color:#4f46e5">📝 Devoirs donnés :</b> ${escHtml(s.devoirs)}</div>` : ''}
     </div>`;
 }
@@ -4015,6 +4388,7 @@ async function loadClientPlans(clientId){
     if(target) target.innerHTML = renderPlansList(c, clientId);
     const cnt = document.getElementById('plansCount-'+clientId);
     if(cnt) cnt.textContent = (c.plans || []).length;
+    fcRefreshManques(clientId);
     return;
   }
   try{
@@ -4035,6 +4409,7 @@ async function loadClientPlans(clientId){
   if(target) target.innerHTML = renderPlansList(c, clientId);
   const cnt = document.getElementById('plansCount-'+clientId);
   if(cnt) cnt.textContent = (c.plans || []).length;
+  fcRefreshManques(clientId);
 }
 
 function triggerPlanUpload(clientId){
