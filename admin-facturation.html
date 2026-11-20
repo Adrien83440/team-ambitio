@@ -25,7 +25,7 @@
 }
 
 /* ═══ LAYOUT ═══ */
-.bill-app{display:grid;grid-template-columns:240px 1fr;min-height:calc(var(--al-vh,100vh) - 56px);background:var(--bg)}
+.bill-app{display:grid;grid-template-columns:240px minmax(0,1fr);min-height:calc(var(--al-vh,100vh) - 56px);background:var(--bg)}
 .bill-sidebar{background:var(--bg2);border-right:1px solid var(--border);padding:20px 12px;display:flex;flex-direction:column;gap:4px;position:sticky;top:56px;height:calc(var(--al-vh,100vh) - 56px);overflow-y:auto}
 .bill-side-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);padding:0 12px;margin:8px 0 6px}
 .bill-side-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;transition:all .12s;text-decoration:none;border:1px solid transparent}
@@ -33,7 +33,7 @@
 .bill-side-item.active{background:var(--bill-green-bg);border-color:var(--bill-green-bd);color:var(--bill-green)}
 .bill-side-item .bsi-icon{width:18px;text-align:center;font-size:14px}
 .bill-side-item .bsi-soon{margin-left:auto;font-size:9px;font-weight:800;padding:2px 6px;border-radius:8px;background:var(--bg3);color:var(--muted);letter-spacing:.5px}
-.bill-main{padding:24px 32px 80px;max-width:1400px;width:100%;box-sizing:border-box}
+.bill-main{padding:24px 32px 80px;max-width:1400px;width:100%;min-width:0;box-sizing:border-box}
 
 /* ═══ HEADER ═══ */
 .bill-header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:24px;flex-wrap:wrap}
@@ -125,7 +125,7 @@
 .bill-search input{width:100%;padding:9px 12px 9px 34px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:13px;outline:none;box-sizing:border-box}
 .bill-search input:focus{border-color:var(--bill-green)}
 .bill-search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px;pointer-events:none}
-.bill-table-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.bill-table-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:14px}
 .bill-table{width:100%;border-collapse:collapse}
 .bill-table thead th{padding:11px 16px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);background:var(--bg3);border-bottom:1px solid var(--border);white-space:nowrap}
 .bill-table tbody tr{border-bottom:1px solid rgba(255,255,255,.03);transition:background .1s;cursor:pointer}
@@ -181,15 +181,95 @@
 .bill-cgv-version-d{font-size:10px;color:var(--muted);margin-top:2px}
 .bill-cgv-version-actions{display:flex;gap:6px}
 
-/* ═══ RESPONSIVE ═══ */
-@media(max-width:900px){
-  .bill-app{grid-template-columns:1fr}
-  .bill-sidebar{position:relative;top:0;height:auto;flex-direction:row;overflow-x:auto;padding:12px;gap:8px}
+/* ═══ RESPONSIVE (refonte 20/11/2026) ═══════════════════════════════════
+   Principe : la page ne déborde JAMAIS de l'écran ; ce qui est plus large que
+   l'écran (tableaux, onglets) glisse au doigt dans son propre cadre.
+   Paliers : ≤1180 (tablette, téléphone pliant ouvert) · ≤640 (téléphone) ·
+   ≤380 (téléphone étroit / pliant fermé) · écrans tactiles. */
+
+/* Zones qui glissent horizontalement. BILL-RESPONSIVE-V2 */
+.bill-table-wrap,.bill-hscroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;scrollbar-width:thin}
+/* Repère visuel « il y a une suite » : le bord s'estompe du côté où il reste
+   du contenu (classes posées par billScrollHints). */
+.bill-more-r{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 36px),transparent)}
+.bill-more-l{-webkit-mask-image:linear-gradient(to left,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(to left,#000 calc(100% - 36px),transparent)}
+.bill-more-l.bill-more-r{-webkit-mask-image:linear-gradient(to right,transparent,#000 36px,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(to right,transparent,#000 36px,#000 calc(100% - 36px),transparent)}
+.bill-swipe-hint{display:none;font-size:11px;color:var(--muted);text-align:right;margin:-6px 2px 8px}
+.bill-table .bill-nowrap{white-space:nowrap}
+.bill-table .bill-col-main{min-width:200px}
+
+@media(max-width:1180px){
+  .bill-app{grid-template-columns:minmax(0,1fr)}
+  .bill-sidebar{position:relative;top:0;height:auto;flex-direction:row;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;scrollbar-width:none;padding:10px 12px;gap:8px;border-right:none;border-bottom:1px solid var(--border);min-width:0}
+  .bill-sidebar::-webkit-scrollbar{display:none}
   .bill-sidebar .bill-side-title{display:none}
-  .bill-side-item{flex-shrink:0}
-  .bill-form-grid,.bill-form-grid.three{grid-template-columns:1fr}
+  .bill-side-item{flex-shrink:0;white-space:nowrap}
+  .bill-side-item .bsi-soon,.bill-side-item > span[id]{margin-left:4px !important}
+  .bill-main{padding:18px;max-width:none}
+  /* Un tableau garde une largeur lisible et glisse, plutôt que d'écraser ses colonnes. */
+  .bill-table{min-width:760px}
+  .bill-swipe-hint.show{display:block}
+}
+@media(max-width:1024px){
+  .bill-form-grid,.bill-form-grid.three{grid-template-columns:minmax(0,1fr)}
   .bill-form-row.span2,.bill-form-row.span3{grid-column:span 1}
-  .bill-main{padding:18px}
+}
+@media(max-width:640px){
+  .bill-main{padding:14px 12px 80px}
+  .bill-header{margin-bottom:16px;gap:12px}
+  .bill-header-l h1{font-size:19px}
+  .bill-header-r{width:100%}
+  .bill-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:18px}
+  .bill-stat{padding:12px 12px 12px 14px;min-width:0}
+  .bill-stat-l{font-size:9px;letter-spacing:.5px}
+  .bill-stat-v{font-size:17px;overflow-wrap:anywhere}
+  .bill-card{padding:16px}
+  .bill-card-h{flex-wrap:wrap}
+  .bill-card-h-r{flex-wrap:wrap}
+  .bill-subnav{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .bill-subnav::-webkit-scrollbar{display:none}
+  .bill-subnav-item{flex-shrink:0}
+  /* Barre d'outils : recherche pleine largeur, filtres deux par ligne, action principale pleine largeur. */
+  .bill-toolbar{gap:8px}
+  .bill-toolbar .bill-search{flex:1 1 100%;max-width:none;min-width:0}
+  .bill-toolbar .bill-select{flex:1 1 140px;min-width:0 !important;width:auto}
+  .bill-toolbar > span{flex:1 1 100%;flex-wrap:wrap;margin-left:0 !important}
+  .bill-toolbar > span > input{flex:1 1 120px;min-width:0}
+  .bill-toolbar > .bill-btn{flex:1 1 140px;justify-content:center}
+  .bill-toolbar > .bill-btn-lg{flex:1 1 100%}
+  .bill-table thead th{padding:10px 12px}
+  .bill-table tbody td{padding:11px 12px}
+  .bill-empty{padding:40px 16px}
+  /* Panneau latéral : plein écran. */
+  .bill-drawer{width:100vw;right:-100vw;border-left:none}
+  .bill-drawer-h{padding:14px 16px}
+  .bill-drawer-body{padding:16px;-webkit-overflow-scrolling:touch}
+  .bill-drawer-foot{padding:12px 16px;flex-wrap:wrap}
+  .bill-drawer-foot .bill-btn{flex:1 1 auto;justify-content:center}
+  .bill-cgv-version{flex-wrap:wrap}
+  .bill-logo-preview{padding:24px 14px}
+  .bill-wordmark{font-size:17px;letter-spacing:5px}
+  .bill-toast{left:12px;right:12px;bottom:16px;max-width:none;transform:translateY(80px)}
+  .bill-toast.show{transform:translateY(0)}
+}
+@media(max-width:380px){
+  .bill-main{padding:12px 10px 80px}
+  .bill-stat-v{font-size:15px}
+  .bill-info-grid{grid-template-columns:minmax(0,1fr) !important}
+  .bill-toolbar .bill-select{flex:1 1 120px}
+}
+/* Écrans tactiles : cibles confortables, et 16 px dans les champs (en dessous,
+   Safari iOS zoome la page à chaque saisie). */
+@media(hover:none) and (pointer:coarse){
+  .bill-input,.bill-select,.bill-textarea,.bill-search input{font-size:16px}
+  .bill-textarea.cgv{font-size:14px}
+  .bill-btn{min-height:40px}
+  .bill-btn-sm{min-height:36px}
+  .bill-table .col-actions .bill-btn{min-height:36px;min-width:38px;padding:8px 10px;font-size:13px;justify-content:center}
+  .bill-side-item{padding:10px 14px}
+  .bill-subnav-item{padding:10px 14px}
+  .bill-drawer-close{width:40px;height:40px}
+  .bill-table tbody tr:hover{background:transparent}
 }
 </style>
 </head>
@@ -1089,7 +1169,7 @@
           ⚠️ <strong>Garde-fou</strong> : maximum 100 factures créées par run (timeout 60s). Si plus, relancer pour traiter le reste.
         </div>
 
-        <div id="gcSyncResults" style="margin-top:14px"></div>
+        <div id="gcSyncResults" class="bill-hscroll" style="margin-top:14px"></div>
       </div>
 
       <!-- ════ Card 2 : Purge totale ════ -->
@@ -1118,7 +1198,7 @@
           </button>
         </div>
 
-        <div id="purgeResults" style="margin-top:14px"></div>
+        <div id="purgeResults" class="bill-hscroll" style="margin-top:14px"></div>
       </div>
 
     </div>
@@ -1411,6 +1491,59 @@ function initClientsListener() {
   });
 }
 
+/* ═══ RESPONSIVE — repères de glissement ═══════════════════════════════════
+   Chaque zone qui glisse (tableaux, onglets, résultats de synchro) reçoit
+   bill-more-l / bill-more-r selon qu'il reste du contenu à gauche / à droite ;
+   le CSS estompe alors le bord correspondant. Aucune donnée touchée. */
+var _billHintRaf = 0;
+function billScrollHintOne(el) {
+  var max = el.scrollWidth - el.clientWidth;
+  var x = el.scrollLeft;
+  el.classList.toggle('bill-more-l', max > 4 && x > 4);
+  el.classList.toggle('bill-more-r', max > 4 && x < max - 4);
+  var hint = el.previousElementSibling;
+  if (hint && hint.classList && hint.classList.contains('bill-swipe-hint')) {
+    hint.classList.toggle('show', max > 4 && x < 8);
+  }
+}
+function billScrollHints() {
+  var els = document.querySelectorAll('.bill-table-wrap,.bill-hscroll,.bill-sidebar,.bill-subnav');
+  for (var i = 0; i < els.length; i++) {
+    var el = els[i];
+    if (!el._billHint) {
+      el._billHint = true;
+      el.addEventListener('scroll', function() { billScrollHintOne(this); }, { passive: true });
+      if (el.classList.contains('bill-table-wrap') && !el.closest('.bill-drawer')) {
+        var h = document.createElement('div');
+        h.className = 'bill-swipe-hint';
+        h.textContent = 'Glisser le tableau pour voir la suite →';
+        el.parentNode.insertBefore(h, el);
+      }
+    }
+    billScrollHintOne(el);
+  }
+}
+function billScrollHintsSoon() {
+  if (_billHintRaf) return;
+  _billHintRaf = requestAnimationFrame(function() { _billHintRaf = 0; billScrollHints(); });
+}
+/* L'onglet actif reste visible dans la barre d'onglets quand elle glisse. */
+function billRevealActiveTab() {
+  var bar = document.querySelector('.bill-sidebar');
+  var it = bar && bar.querySelector('.bill-side-item.active');
+  if (!bar || !it || bar.scrollWidth <= bar.clientWidth) return;
+  var target = it.offsetLeft - (bar.clientWidth - it.offsetWidth) / 2;
+  bar.scrollLeft = Math.max(0, target);
+}
+(function() {
+  window.addEventListener('resize', billScrollHintsSoon);
+  window.addEventListener('orientationchange', billScrollHintsSoon);
+  var main = document.querySelector('.bill-main');
+  if (main && window.MutationObserver) {
+    new MutationObserver(billScrollHintsSoon).observe(main, { childList: true, subtree: true });
+  }
+})();
+
 /* ═══ TABS ═══ */
 function switchTab(tab) {
   /* Si on change d'onglet, retirer les query params spécifiques au tab Factures */
@@ -1454,6 +1587,8 @@ function switchTab(tab) {
   if (tab === 'subscriptions') renderSubscriptionsList();
   if (tab === 'sync') initSyncTab();
   if (tab === 'export') initExportTab();
+  billRevealActiveTab();
+  billScrollHintsSoon();
 }
 
 function switchSettingsSub(sub) {
@@ -2215,7 +2350,7 @@ function renderAlertsList() {
     /* Hint affiché en dernier, masqué si déjà couvert par daysPast (= Step 4B) */
     if (a.hint && a.daysPast == null) html += '<div style="color:#f59e0b">' + escapeHtml(a.hint) + '</div>';
     html += '</td>';
-    html += '<td style="text-align:right;font-family:var(--font-m);font-weight:700">' + amount + '</td>';
+    html += '<td class="bill-nowrap" style="text-align:right;font-family:var(--font-m);font-weight:700">' + amount + '</td>';
     html += '<td style="font-size:11px;color:var(--muted)">' + dateStr + '</td>';
     html += '<td class="col-actions">';
     if (!a.resolved) {
@@ -2372,10 +2507,10 @@ function renderSubscriptionsList() {
     const amount = formatEur(s.installmentAmount || 0);
 
     html += '<tr style="cursor:pointer" onclick="openSubscriptionDrawer(\'' + s.id + '\')">';
-    html += '<td><div style="font-weight:700;color:var(--text)">' + escapeHtml(cliName) + '</div>';
+    html += '<td class="bill-col-main"><div style="font-weight:700;color:var(--text)">' + escapeHtml(cliName) + '</div>';
     html += '<div style="font-size:11px;color:var(--muted)">' + escapeHtml(cli.gocardlessCustomerId || s.gcCustomerId || '') + '</div></td>';
-    html += '<td style="font-family:var(--font-m);font-size:12px">' + escapeHtml(s.description || '—') + '</td>';
-    html += '<td style="text-align:right;font-family:var(--font-m);font-weight:700">' + amount + '</td>';
+    html += '<td class="bill-col-main" style="font-family:var(--font-m);font-size:12px">' + escapeHtml(s.description || '—') + '</td>';
+    html += '<td class="bill-nowrap" style="text-align:right;font-family:var(--font-m);font-weight:700">' + amount + '</td>';
     html += '<td style="text-align:center;font-family:var(--font-m);font-size:12px">' + totalLabel + '</td>';
     html += '<td style="font-size:12px">' + next + '</td>';
     html += '<td style="font-size:12px">' + escapeHtml(s.closerName || '—') + '</td>';
@@ -3020,7 +3155,7 @@ function renderClientsList() {
 
     html += '<tr ' + (c.archived ? 'style="opacity:.5"' : '') + ' onclick="openClientDrawer(\'' + c.id + '\')">';
     html += '<td>' + badge + '</td>';
-    html += '<td><div style="font-weight:700">' + escapeHtml(name) + eiBadge + reachBadge + statusBadge + archivedBadge + exempt + '</div>'
+    html += '<td class="bill-col-main"><div style="font-weight:700">' + escapeHtml(name) + eiBadge + reachBadge + statusBadge + archivedBadge + exempt + '</div>'
       + (contactName ? '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + escapeHtml(contactName) + '</div>' : '')
       + (c.linkedLeadId ? '<div style="font-size:10px;color:var(--muted);margin-top:2px">🔗 Lead lié</div>' : '')
       + '</td>';
@@ -3942,15 +4077,15 @@ function renderInvoicesList() {
       : '';
 
     html += '<tr onclick="editInvoice(\'' + inv.id + '\')">';
-    html += '<td><span style="font-family:var(--font-m);font-weight:700;font-size:13px">' + num + '</span></td>';
-    html += '<td>';
+    html += '<td class="bill-nowrap"><span style="font-family:var(--font-m);font-weight:700;font-size:13px">' + num + '</span></td>';
+    html += '<td class="bill-col-main">';
     html += '<div>' + escapeHtml(clientName) + catchUpBadge + '</div>';
     if (lineDesc) {
       html += '<div style="font-size:11px;color:var(--muted);margin-top:3px">' + escapeHtml(lineDesc) + '</div>';
     }
     html += '</td>';
-    html += '<td><span style="font-size:12px;color:var(--muted)">' + dateStr + '</span></td>';
-    html += '<td style="text-align:right;font-weight:700;font-family:var(--font-m)">' + formatEur(inv.totalTtc || 0) + '</td>';
+    html += '<td class="bill-nowrap"><span style="font-size:12px;color:var(--muted)">' + dateStr + '</span></td>';
+    html += '<td class="bill-nowrap" style="text-align:right;font-weight:700;font-family:var(--font-m)">' + formatEur(inv.totalTtc || 0) + '</td>';
     html += '<td>' + statusBadge + standbyBadge(inv) + qontoBadgeOf(inv) + qontoPaidBadgeOf(inv) + '</td>';
     html += '<td class="col-actions">';
     html += '<button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();editInvoice(\'' + inv.id + '\')">' + (inv.status === 'draft' ? '✏️ Éditer' : '👁️ Voir') + '</button>';
@@ -4528,16 +4663,16 @@ function validateQueueRow(inv, mode) {
       : new Date().toISOString().substring(0, 10));
 
   var html = '<tr>';
-  html += '<td><div style="font-weight:600">' + escapeHtml(cliName) + '</div>';
+  html += '<td class="bill-col-main"><div style="font-weight:600">' + escapeHtml(cliName) + '</div>';
   if (cs.email) html += '<div style="font-size:11px;color:var(--muted)">' + escapeHtml(cs.email) + '</div>';
   html += '</td>';
-  html += '<td style="font-size:12px">' + escapeHtml(desc);
+  html += '<td class="bill-col-main" style="font-size:12px">' + escapeHtml(desc);
   if (mode === 'standby') {
     var sb = standbyOf(inv) || {};
     html += '<div style="font-size:11px;color:var(--muted);margin-top:3px">' + escapeHtml(sb.motif || '') + '</div>';
   }
   html += '</td>';
-  html += '<td style="text-align:right;font-weight:700;font-family:var(--font-m)">' + formatEur(inv.totalTtc || 0) + '</td>';
+  html += '<td class="bill-nowrap" style="text-align:right;font-weight:700;font-family:var(--font-m)">' + formatEur(inv.totalTtc || 0) + '</td>';
   if (mode === 'standby') {
     html += '<td>' + standbyBadge(inv) + '</td>';
     html += '<td class="col-actions" style="white-space:nowrap">';
@@ -5361,7 +5496,7 @@ function renderProductsList() {
       : '<span class="bill-badge individual">📦 Archivé</span>';
 
     html += '<tr onclick="openProductDrawer(\'' + p.id + '\')">';
-    html += '<td><div style="font-weight:700">' + escapeHtml(p.name || '—') + '</div>' + (p.description ? '<div style="font-size:11px;color:var(--muted);margin-top:2px;max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(p.description) + '</div>' : '') + '</td>';
+    html += '<td class="bill-col-main"><div style="font-weight:700">' + escapeHtml(p.name || '—') + '</div>' + (p.description ? '<div style="font-size:11px;color:var(--muted);margin-top:2px;max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(p.description) + '</div>' : '') + '</td>';
     html += '<td><span style="font-size:11px;color:var(--muted)">' + escapeHtml(p.category || '—') + '</span></td>';
     html += '<td><span style="font-weight:700">' + variants.length + '</span> <span style="font-size:11px;color:var(--muted)">' + (variants.length > 1 ? 'variantes' : 'variante') + '</span></td>';
     html += '<td style="text-align:right;font-family:var(--font-m);font-weight:600">' + priceStr + '</td>';
