@@ -1353,10 +1353,10 @@ const FICHES = [
   {
     id: 'equipe-sales', cat: 'Set NB, Close SB, EOD & chiffres',
     title: 'La page Équipe Sales (espaces, débriefs, morning meeting)',
-    tags: 'équipe sales, morning meeting, call breakdown, débrief, espace salarié',
+    tags: 'équipe sales, morning meeting, call breakdown, débrief, espace équipe',
     pages: ['sales-equipe'],
     body: L([
-      "Onglets : **👤 Espaces salariés**, **📞 Call Breakdown** (débriefs d'appels), **☀️ Morning Meeting** (poser une question : « + Poser une question »).",
+      "Onglets : **👤 Espaces équipe**, **📞 Call Breakdown** (débriefs d'appels), **☀️ Morning Meeting** (poser une question : « + Poser une question »).",
       "⚠️ Ce que tu saisis sur cette page (profil, documents, messages, débriefs) est enregistré seulement dans TON navigateur : les autres ne le voient pas. Pour transmettre une info, utilise plutôt une note sur la fiche du lead ou le groupe WhatsApp de l'équipe.",
     ]),
     guide: [],
