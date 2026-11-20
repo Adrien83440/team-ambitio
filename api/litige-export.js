@@ -243,7 +243,128 @@ async function partTeam() {
   return { exists: true, updateTime: s.updateTime ? s.updateTime.toDate().toISOString() : null, topLevelKeys: Object.keys(data).length, fieldNames: Object.keys(acc).length > 600 ? '(trop nombreux)' : acc, members: members };
 }
 
+
+function h(id) { return id ? crypto.createHash('sha256').update('litige:' + id).digest('hex').slice(0, 12) : null; }
+function meta(d) { return { createTime: d.createTime ? d.createTime.toDate().toISOString() : null, updateTime: d.updateTime ? d.updateTime.toDate().toISOString() : null }; }
+
+// ── EOD : dates remplies par compte (jamais le contenu) ──
+async function partEod() {
+  const parents = await db.collection('eod').listDocuments();
+  const rows = [];
+  for (const p of parents) {
+    const snap = await p.collection('jours').get();
+    snap.forEach(function (d) {
+      const x = d.data() || {};
+      const m = meta(d);
+      rows.push({
+        compte: p.id, jour: d.id, champ_date: x.date || null, champ_uid: x.uid || null, champ_name: x.name || null,
+        updatedAt: iso(x.updatedAt), createTime: m.createTime, updateTime: m.updateTime,
+        a_setting: !!x.setting, a_closing: !!x.closing, closingSkipped: x.closingSkipped === true, a_kpis: !!x.kpis,
+        nb_feedback: Array.isArray(x.feedback) ? x.feedback.length : 0,
+      });
+    });
+  }
+  return { chemin: 'eod/{compte}/jours/{jour}', comptes: parents.map(function (p) { return p.id; }), lignes: rows.length, rows: rows };
+}
+
+// ── Commissions d'un compte : lignes sans client ──
+const DEAL_DROP = { client: 1, email: 1, notes: 1, leadId: 1 };
+async function partCommissions(query) {
+  const ids = String(query.ids || '').split(',').filter(function (x) { return /^[A-Za-z0-9_\-]{2,60}$/.test(x); });
+  const out = [];
+  for (const id of ids) {
+    const base = db.collection('commissions').doc(id);
+    const parent = await base.get();
+    const sub = await base.listCollections();
+    const entry = { compte: id, docParentExiste: parent.exists, sousCollections: sub.map(function (c) { return c.id; }), mois: [], total: [] };
+    const mois = await base.collection('mois').get();
+    mois.forEach(function (d) {
+      const x = d.data() || {};
+      const deals = Array.isArray(x.deals) ? x.deals : [];
+      const autres = Object.keys(x).filter(function (k) { return k !== 'deals'; });
+      entry.mois.push(Object.assign({ id: d.id, autresChamps: autres, nbDeals: deals.length }, meta(d), {
+        deals: deals.map(function (dl, i) {
+          const r = { index: i, champsPresents: Object.keys(dl || {}).sort() };
+          Object.keys(dl || {}).forEach(function (k) {
+            if (DEAL_DROP[k]) return;
+            const v = dl[k];
+            if (k === 'bookingId' || k === 'dealKey') { r[k + '_empreinte'] = h(String(v)); return; }
+            const t = typeOf(v);
+            r[k] = (t === 'timestamp') ? iso(v) : (t === 'object' || t === 'array') ? JSON.stringify(scrub(v, 0)) : v;
+          });
+          return r;
+        }),
+      }));
+    });
+    const tot = await base.collection('total').get();
+    tot.forEach(function (d) { entry.total.push(Object.assign({ id: d.id, data: scrub(d.data(), 0) }, meta(d))); });
+    out.push(entry);
+  }
+  const cfg = await db.collection('_config').doc('commissions').get();
+  return { comptes: out, '_config/commissions': cfg.exists ? scrub(cfg.data(), 0) : null };
+}
+
+// ── Fiches d'agenda (booking_config) : horaires et branchements, sans adresse ──
+function dom(e) { e = String(e || ''); const i = e.lastIndexOf('@'); return i > 0 ? e.slice(i + 1).toLowerCase() : (e ? '(sans @)' : null); }
+function conn(c) {
+  if (!c || typeof c !== 'object') return null;
+  const r = { champs: Object.keys(c).sort(), domaineEmail: dom(c.email) };
+  ['id', 'connectedAt', 'createdAt', 'archivedAt', 'addedAt', 'updatedAt'].forEach(function (k) { if (c[k] != null) r[k] = typeOf(c[k]) === 'timestamp' ? iso(c[k]) : c[k]; });
+  if (Array.isArray(c.calendars)) r.calendars = c.calendars.map(function (k) { return { primary: k.primary === true, checkConflicts: k.checkConflicts, createEvents: k.createEvents }; });
+  return r;
+}
+async function partPersons() {
+  const snap = await db.collection('booking_config').get();
+  const rows = [];
+  snap.forEach(function (d) {
+    const x = d.data() || {};
+    if (d.id.charAt(0) === '_') { rows.push(Object.assign({ id: d.id, special: true, champs: Object.keys(x).sort(), updatedAt: iso(x.updatedAt), updatedByName: x.updatedByName || null }, meta(d))); return; }
+    rows.push(Object.assign({
+      id: d.id, type: x.__type || null, name: x.name || null, title: x.title || null, firebaseUid: x.firebaseUid || null, isCoach: x.isCoach === true,
+      champs: Object.keys(x).sort(),
+      schedule: x.schedule || null,
+      dateOverrides: x.dateOverrides || null,
+      availabilityRules: Array.isArray(x.availabilityRules) ? x.availabilityRules : null,
+      blockedDates: x.blockedDates || null,
+      bufferBefore: x.bufferBefore == null ? null : x.bufferBefore, bufferAfter: x.bufferAfter == null ? null : x.bufferAfter,
+      minNoticeHours: x.minNoticeHours == null ? null : x.minNoticeHours, maxPerDay: x.maxPerDay == null ? null : x.maxPerDay, maxPerWeek: x.maxPerWeek == null ? null : x.maxPerWeek,
+      calendarConnected: x.calendarConnected == null ? null : x.calendarConnected,
+      calendarEmailDomaine: dom(x.calendarEmail),
+      calendarList: Array.isArray(x.calendarList) ? x.calendarList.map(function (k) { return { primary: k.primary === true, checkConflicts: k.checkConflicts, createEvents: k.createEvents }; }) : null,
+      extraConnections: Array.isArray(x.extraConnections) ? x.extraConnections.map(conn) : null,
+      extraConnectionsArchived: Array.isArray(x.extraConnectionsArchived) ? x.extraConnectionsArchived.map(conn) : (x.extraConnectionsArchived ? '(' + typeOf(x.extraConnectionsArchived) + ')' : null),
+    }, meta(d)));
+  });
+  return { chemin: 'booking_config', rows: rows };
+}
+
+// ── Agenda Google d'une fiche : existence des branchements, sans contenu ──
+async function partCalendar(query) {
+  const pid = String(query.pid || '');
+  if (!/^[A-Za-z0-9_\-]{2,80}$/.test(pid)) return { error: 'pid' };
+  const out = { pid: pid };
+  const b = await db.collection('calendar_busy').doc(pid).get();
+  if (b.exists) {
+    const x = b.data() || {};
+    out.calendar_busy = Object.assign({ champs: Object.keys(x).sort(), updatedAt: iso(x.updatedAt), nbPlagesOccupees: Array.isArray(x.busy) ? x.busy.length : null,
+      calendarsChecked: typeOf(x.calendarsChecked) === 'number' ? x.calendarsChecked : (Array.isArray(x.calendarsChecked) ? x.calendarsChecked.length : null),
+      sources: Array.isArray(x.sources) ? x.sources.map(function (s2) { return (s2 && typeof s2 === 'object') ? { champs: Object.keys(s2).sort(), type: s2.type || s2.kind || null, domaineEmail: dom(s2.email || s2.account), nb: s2.count == null ? null : s2.count } : String(typeOf(s2)); }) : null,
+      busyBySourceCles: x.busyBySource && typeof x.busyBySource === 'object' ? Object.keys(x.busyBySource).length : null }, meta(b));
+  } else out.calendar_busy = null;
+  const t = await db.collection('calendar_tokens').doc(pid).get();
+  out.calendar_tokens_principal = t.exists ? meta(t) : null;
+  const ex = await db.collection('calendar_extra_tokens').listDocuments();
+  const mine = ex.filter(function (r) { return r.id.indexOf(pid + '__') === 0; });
+  out.calendar_extra_tokens = [];
+  for (const r of mine) { const s2 = await r.get(); out.calendar_extra_tokens.push(Object.assign({ id_empreinte: h(r.id), existe: s2.exists }, s2.exists ? meta(s2) : {})); }
+  const av = await db.collection('availability_daily').where('personId', '==', pid).get();
+  out.availability_daily = [];
+  av.forEach(function (d) { const x = d.data() || {}; out.availability_daily.push(Object.assign({ id: d.id, personName: x.personName || null, month: x.month || null, days: x.days || null, updatedAt: iso(x.updatedAt) }, meta(d))); });
+  return out;
+}
+
 const PARTS = {
+  eod: partEod, commissions: partCommissions, persons: partPersons, calendar: partCalendar,
   cols: partCols, subcols: partSubcols, count: partCount, fields: partFields, distinct: partDistinct,
   ai: partAi, config_ai: partConfigAi, team: partTeam,
 };
