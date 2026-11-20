@@ -1285,6 +1285,7 @@
     @keyframes fcIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
     @media (prefers-reduced-motion:reduce){.fc-pane.on{animation:none}.fc-tile{transition:none}}
     .fc-pane > :first-child{margin-top:0}
+    .fc-pinned{border-bottom:1px solid var(--hair);padding-bottom:20px}
     .fc-pane .dp-alert-box,.fc-pane .bp-credits,.fc-pane .dp-quota-section,.fc-pane .status-toggle-wrap,
     .fc-pane .drive-scan-bar,.fc-pane .drive-scan-log,.fc-pane .dp-plans-section{margin-left:0;margin-right:0}
     .fc-pane .dp-progress-section{margin-top:12px;border:1px solid var(--hair);border-radius:14px;padding:16px 18px}
@@ -1651,7 +1652,11 @@
       return;
     }
     window._role=role;
-    if(role==='admin'){ var bpb=document.getElementById('batchProposeBtn'); if(bpb) bpb.style.display=''; }
+    /* Admin ET CSM (Marine) : actions de gestion sans suppression — ajouter un
+       document de plan, « Proposer pour tous », liaison des questionnaires
+       (demande d'Adrien, 20/11/2026). Supprimer un plan reste admin. */
+    window._canManage = (role==='admin' || role==='csm');
+    if(window._canManage){ var bpb=document.getElementById('batchProposeBtn'); if(bpb) bpb.style.display=''; }
     window._userName=user.displayName||user.email.split('@')[0];
     document.getElementById('uName').textContent=window._userName;
     document.getElementById('uAvatar').textContent=window._userName.charAt(0).toUpperCase();
@@ -2835,7 +2840,7 @@ async function autoProposePath(clientId){
 // Ignorés : sans e-mail, sans matière coaching, proposition déjà en attente,
 // parcours déjà guidé (ils ont déjà leur ordre), et clients inactifs.
 async function batchProposePaths(){
-  if(window._role!=='admin'){ showToast('Réservé aux administrateurs.','error'); return; }
+  if(!window._canManage){ showToast('Réservé aux administrateurs et à la CSM.','error'); return; }
   const btn = document.getElementById('batchProposeBtn');
   const hasCoachingInfo = (c)=>{
     if((c.planAction||'').trim()) return true;
@@ -3000,7 +3005,7 @@ function qNameFromResponse(r){
 }
 
 async function autoLinkQuestionnaires(){
-  if(_qLinkRan || window._role!=='admin') return;
+  if(_qLinkRan || !window._canManage) return;
   _qLinkRan = true;
   try{
     // 1) Trouver le formulaire par son titre (les définitions sont publiques).
@@ -3087,13 +3092,20 @@ let _fcPane = { id:'', k:'synthese' };
 // Section à afficher : on garde la section ouverte quand la MÊME fiche se
 // redessine (après un enregistrement), on repart de la Synthèse sinon.
 function fcPaneFor(id){
-  if(_fcPane.id !== id) _fcPane = { id:id, k:'synthese' };
+  if(_fcPane.id !== id || _fcPane.k === 'seances') _fcPane = { id:id, k:'synthese' };
   return _fcPane.k;
 }
 
 function fcShow(k){
   const panel = document.getElementById('detailPanel');
   if(!panel || !FC_PANES.some(p=>p.k===k)) return;
+  /* Séances : bloc toujours affiché en tête de fiche — on y défile, la
+     section ouverte en dessous ne change pas. */
+  if(k === 'seances'){
+    const sb = panel.querySelector('[data-fc-pinned="seances"]');
+    if(sb) panel.scrollTop = Math.max(0, sb.offsetTop - 8);
+    return;
+  }
   _fcPane = { id: panel.dataset.clientId || '', k:k };
   panel.querySelectorAll('[data-fc-pane]').forEach(el=>el.classList.toggle('on', el.getAttribute('data-fc-pane')===k));
   panel.querySelectorAll('[data-fc-tile]').forEach(el=>el.setAttribute('aria-pressed', el.getAttribute('data-fc-tile')===k ? 'true' : 'false'));
@@ -3209,7 +3221,7 @@ function fcTilesHtml(c, id, cur){
     quota: q.status==='done' ? ['Terminé','mute'] : [q.label+' ce mois', inactif ? 'mute' : q.status==='ok' ? 'ok' : q.status==='partial' ? 'warn' : 'bad'],
     dossier: [n ? n+' à compléter' : 'Complet', n ? 'warn' : 'ok']
   };
-  return FC_PANES.map(p=>`<button type="button" class="fc-tile" role="tab" data-fc-tile="${p.k}" aria-pressed="${p.k===cur?'true':'false'}">
+  return FC_PANES.map(p=>`<button type="button" class="fc-tile" role="tab" data-fc-tile="${p.k}" aria-pressed="${p.k===cur&&p.k!=='seances'?'true':'false'}">
       <span class="fc-tile-ico">${p.ico}</span>
       <span class="fc-tile-t">${p.t}</span>
       <span class="fc-tile-s ${sub[p.k][1]}" data-fc-sub="${p.k}">${escHtml(sub[p.k][0])}</span>
@@ -3332,6 +3344,26 @@ function openDetail(id){
       <div class="fc-tiles" role="tablist" aria-label="Sections de la fiche">${fcTilesHtml(c, id, fcPane)}</div>
     </div>
 
+    <!-- ══ SÉANCES : toujours affichées, en tête de fiche (demande d'Adrien, 20/11/2026) ══ -->
+    <div class="fc-pane on fc-pinned" id="fcSeances-${id}" data-fc-pinned="seances">
+      <div class="dp-sessions-head">
+        <div class="dp-sessions-title">📅 Années de coaching</div>
+        <button class="btn btn-primary btn-sm" onclick="openAddYearModal('${id}')">🔄 Renouveler</button>
+      </div>
+    <div class="drive-scan-bar" id="driveScanBar">
+      <span>📁</span>
+      <span id="driveScanLabel">${_driveToken?'Drive connecté — ':'Connectez Drive pour lier les résumés Gemini'}</span>
+      ${_driveToken?
+        `<button class="btn-drive" id="driveScanBtn-${id}" onclick="scanDriveForClient('${id}')">🔍 Chercher les résumés</button>`
+        :`<button class="btn-drive" onclick="connectDriveThen('${id}')">🔗 Connecter Google Drive</button>`
+      }
+      <span id="driveScanStatus-${id}" style="margin-left:auto;font-size:11px;opacity:.8"></span>
+    </div>
+    <div class="drive-scan-log" id="driveScanLog-${id}"></div>
+
+      <div id="yearTabs-${id}" style="margin-top:14px">${renderYearTabs(c, id)}</div>
+    </div>
+
     <!-- ══ SYNTHÈSE : ce qu'il faut savoir avant d'ouvrir le reste ══ -->
     <div class="fc-pane${fcPane==='synthese'?' on':''}" data-fc-pane="synthese">
     ${alert==='alert'?`<div class="dp-alert-box red">🔴 ${alertText} — Relancez ce client !</div>`:alert==='warning'?`<div class="dp-alert-box orange">🟡 ${alertText}</div>`:`<div class="dp-alert-box green">✅ Client à jour</div>`}
@@ -3430,7 +3462,7 @@ function openDetail(id){
           <div class="dp-plans-title">📜 Documents du plan (fichiers)
             <span class="dp-plans-count" id="plansCount-${id}">${(c.plans && c.plans.length) || 0}</span>
           </div>
-          ${window._role === 'admin'
+          ${window._canManage
             ? `<button class="dp-plan-upload-btn" onclick="triggerPlanUpload('${id}')">
                  ➕ Ajouter un plan
                </button>`
@@ -3441,32 +3473,12 @@ function openDetail(id){
           <div id="plansList-${id}">
             ${renderPlansList(c, id)}
           </div>
-          ${window._role === 'admin' ? `
+          ${window._canManage ? `
             <input type="file" id="planFileInput-${id}" accept=".html,.htm,text/html" style="display:none" onchange="uploadPlanFile('${id}', this)"/>
           ` : ''}
         </div>
       </div>
 
-    </div>
-
-    <!-- ══ SÉANCES : années, séances, résumés Drive ══ -->
-    <div class="fc-pane${fcPane==='seances'?' on':''}" data-fc-pane="seances">
-      <div class="dp-sessions-head">
-        <div class="dp-sessions-title">📅 Années de coaching</div>
-        <button class="btn btn-primary btn-sm" onclick="openAddYearModal('${id}')">🔄 Renouveler</button>
-      </div>
-    <div class="drive-scan-bar" id="driveScanBar">
-      <span>📁</span>
-      <span id="driveScanLabel">${_driveToken?'Drive connecté — ':'Connectez Drive pour lier les résumés Gemini'}</span>
-      ${_driveToken?
-        `<button class="btn-drive" id="driveScanBtn-${id}" onclick="scanDriveForClient('${id}')">🔍 Chercher les résumés</button>`
-        :`<button class="btn-drive" onclick="connectDriveThen('${id}')">🔗 Connecter Google Drive</button>`
-      }
-      <span id="driveScanStatus-${id}" style="margin-left:auto;font-size:11px;opacity:.8"></span>
-    </div>
-    <div class="drive-scan-log" id="driveScanLog-${id}"></div>
-
-      <div id="yearTabs-${id}" style="margin-top:14px">${renderYearTabs(c, id)}</div>
     </div>
 
     <!-- ══ ACADEMY : avancement de la formation, parcours, outils ══ -->
@@ -4344,7 +4356,7 @@ function renderPlansList(c, id){
       <div class="dp-plans-empty">
         <div class="dp-plans-empty-icon">📜</div>
         <div>Aucun plan d'action attaché</div>
-        <div class="dp-plans-empty-sub">${window._role === 'admin' ? 'Cliquez sur « Ajouter un plan » pour en uploader un (HTML)' : 'Les plans seront ajoutés par un administrateur'}</div>
+        <div class="dp-plans-empty-sub">${window._canManage ? 'Cliquez sur « Ajouter un plan » pour en uploader un (HTML)' : 'Les plans seront ajoutés par un administrateur'}</div>
       </div>`;
   }
   // Tri : plus récent en premier
@@ -4413,13 +4425,13 @@ async function loadClientPlans(clientId){
 }
 
 function triggerPlanUpload(clientId){
-  if(window._role !== 'admin'){ showToast('Réservé aux admins','error'); return; }
+  if(!window._canManage){ showToast('Réservé aux admins et à la CSM','error'); return; }
   const input = document.getElementById('planFileInput-'+clientId);
   if(input) input.click();
 }
 
 async function uploadPlanFile(clientId, inputEl){
-  if(window._role !== 'admin'){ showToast('Réservé aux admins','error'); return; }
+  if(!window._canManage){ showToast('Réservé aux admins et à la CSM','error'); return; }
   const file = inputEl && inputEl.files && inputEl.files[0];
   if(!file) return;
 

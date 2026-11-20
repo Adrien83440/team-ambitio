@@ -1356,5 +1356,28 @@ service cloud.firestore {
         && fvDoc in ['_types', 'funnel_targets', 'funnel_costs', 'lqs_grid', 'instagram_sync_state', 'facebook_sync_state'];
     }
     // ═══ FIN LECTEUR FUNNEL ════════════════════════════════════════════════
+
+    // ═══ CSM COACHING (20/11/2026) ═════════════════════════════════════════
+    // Demande d'Adrien : la CSM (Marine) voit TOUT de la fiche coaching. Elle
+    // n'avait pas les sous-collections, réservées coach / admin : documents du
+    // plan d'action (la fiche affichait « aucun plan »), fichiers joints aux
+    // séances, réponses aux questionnaires (liaison à la fiche). Bloc AUTONOME
+    // et purement additif (une règle autorise dès qu'UN match l'autorise) :
+    // rien n'est retiré ailleurs. Supprimer un document de plan reste admin.
+    // Fonction autonome, pour être publiée telle quelle à la fin des règles.
+    function isCsmCoaching() {
+      return request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'csm';
+    }
+    match /clients/{csmClient}/plans/{csmPlan} {
+      allow read, create, update: if isCsmCoaching();
+    }
+    match /clients/{csmClient}/files/{csmFile} {
+      allow read, create, delete: if isCsmCoaching();
+    }
+    match /alteo_forms/{csmForm}/responses/{csmResp} {
+      allow read: if isCsmCoaching();
+    }
+    // ═══ FIN CSM COACHING ══════════════════════════════════════════════════
   }
 }
