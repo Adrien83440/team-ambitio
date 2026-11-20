@@ -1280,7 +1280,9 @@
     .fc-tile-s.ok{color:var(--green-2)} .fc-tile-s.warn{color:var(--amber-2)} .fc-tile-s.bad{color:var(--red-2)} .fc-tile-s.mute{color:var(--ink-muted-2)}
 
     /* Sections */
-    .fc-pane{display:none;padding:16px 24px 40px}
+    .fc-pane{display:none;padding:16px 24px 6px}
+    .fc-seances{padding:18px 24px 48px;margin-top:10px;border-top:1px solid var(--hair)}
+    .fc-seances .drive-scan-bar,.fc-seances .drive-scan-log{margin-left:0;margin-right:0}
     .fc-pane.on{display:block;animation:fcIn .18s ease}
     @keyframes fcIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
     @media (prefers-reduced-motion:reduce){.fc-pane.on{animation:none}.fc-tile{transition:none}}
@@ -1340,7 +1342,8 @@
       .fc-tiles{display:flex;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin:0 -14px;padding:2px 14px 6px}
       .fc-tiles::-webkit-scrollbar{display:none}
       .fc-tile{flex:0 0 112px}
-      .fc-pane{padding:14px 14px 40px}
+      .fc-pane{padding:14px 14px 6px}
+      .fc-seances{padding:16px 14px 48px}
       .fc-stats{grid-template-columns:1fr 1fr}
       .fc-kv{grid-template-columns:1fr}
     }
@@ -3087,13 +3090,22 @@ let _fcPane = { id:'', k:'synthese' };
 // Section à afficher : on garde la section ouverte quand la MÊME fiche se
 // redessine (après un enregistrement), on repart de la Synthèse sinon.
 function fcPaneFor(id){
-  if(_fcPane.id !== id) _fcPane = { id:id, k:'synthese' };
+  if(_fcPane.id !== id || _fcPane.k === 'seances') _fcPane = { id:id, k:'synthese' };
   return _fcPane.k;
 }
 
 function fcShow(k){
   const panel = document.getElementById('detailPanel');
   if(!panel || !FC_PANES.some(p=>p.k===k)) return;
+  /* Les séances restent toujours affichées sous la section ouverte : leur
+     tuile y fait défiler, elle ne remplace rien. */
+  if(k === 'seances'){
+    const bloc = panel.querySelector('[data-fc-seances]');
+    const tete = panel.querySelector('.fc-header');
+    const colle = tete && getComputedStyle(tete).position === 'sticky';
+    if(bloc) panel.scrollTo({ top: Math.max(0, bloc.offsetTop - (colle ? tete.offsetHeight : 0) - 8), behavior:'smooth' });
+    return;
+  }
   _fcPane = { id: panel.dataset.clientId || '', k:k };
   panel.querySelectorAll('[data-fc-pane]').forEach(el=>el.classList.toggle('on', el.getAttribute('data-fc-pane')===k));
   panel.querySelectorAll('[data-fc-tile]').forEach(el=>el.setAttribute('aria-pressed', el.getAttribute('data-fc-tile')===k ? 'true' : 'false'));
@@ -3449,26 +3461,6 @@ function openDetail(id){
 
     </div>
 
-    <!-- ══ SÉANCES : années, séances, résumés Drive ══ -->
-    <div class="fc-pane${fcPane==='seances'?' on':''}" data-fc-pane="seances">
-      <div class="dp-sessions-head">
-        <div class="dp-sessions-title">📅 Années de coaching</div>
-        <button class="btn btn-primary btn-sm" onclick="openAddYearModal('${id}')">🔄 Renouveler</button>
-      </div>
-    <div class="drive-scan-bar" id="driveScanBar">
-      <span>📁</span>
-      <span id="driveScanLabel">${_driveToken?'Drive connecté — ':'Connectez Drive pour lier les résumés Gemini'}</span>
-      ${_driveToken?
-        `<button class="btn-drive" id="driveScanBtn-${id}" onclick="scanDriveForClient('${id}')">🔍 Chercher les résumés</button>`
-        :`<button class="btn-drive" onclick="connectDriveThen('${id}')">🔗 Connecter Google Drive</button>`
-      }
-      <span id="driveScanStatus-${id}" style="margin-left:auto;font-size:11px;opacity:.8"></span>
-    </div>
-    <div class="drive-scan-log" id="driveScanLog-${id}"></div>
-
-      <div id="yearTabs-${id}" style="margin-top:14px">${renderYearTabs(c, id)}</div>
-    </div>
-
     <!-- ══ ACADEMY : avancement de la formation, parcours, outils ══ -->
     <div class="fc-pane${fcPane==='academy'?' on':''}" data-fc-pane="academy">
     <!-- AE ACADEMY (V11a) : avancement formation du client -->
@@ -3573,6 +3565,27 @@ function openDetail(id){
         <button class="btn btn-danger btn-sm" onclick="deleteClient('${id}')">🗑 Supprimer</button>
       </div>
     </div>
+
+    <!-- ══ SÉANCES : toujours affichées, SOUS la section ouverte (demande d'Adrien, 20/11/2026) ══ -->
+    <div class="fc-seances" data-fc-seances>
+      <div class="dp-sessions-head">
+        <div class="dp-sessions-title">📅 Années de coaching</div>
+        <button class="btn btn-primary btn-sm" onclick="openAddYearModal('${id}')">🔄 Renouveler</button>
+      </div>
+    <div class="drive-scan-bar" id="driveScanBar">
+      <span>📁</span>
+      <span id="driveScanLabel">${_driveToken?'Drive connecté — ':'Connectez Drive pour lier les résumés Gemini'}</span>
+      ${_driveToken?
+        `<button class="btn-drive" id="driveScanBtn-${id}" onclick="scanDriveForClient('${id}')">🔍 Chercher les résumés</button>`
+        :`<button class="btn-drive" onclick="connectDriveThen('${id}')">🔗 Connecter Google Drive</button>`
+      }
+      <span id="driveScanStatus-${id}" style="margin-left:auto;font-size:11px;opacity:.8"></span>
+    </div>
+    <div class="drive-scan-log" id="driveScanLog-${id}"></div>
+
+      <div id="yearTabs-${id}" style="margin-top:14px">${renderYearTabs(c, id)}</div>
+    </div>
+
   `;
   document.getElementById('detailOverlay').classList.add('show');
   loadAcademyBlock(c, id);

@@ -330,7 +330,9 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
 - **Coaching** : `coaching*.html` — SDK modulaire, style ES6
 - **Fiche coaching en tuiles (20/11/2026)** : `openDetail` de `coaching.html` range la fiche en six
   sections ouvertes par des tuiles (`FC_PANES` : Synthèse · Plan d'action · Séances · Academy ·
-  Quota & RDV · Dossier), chaque tuile portant son chiffre (`data-fc-sub`, mis à jour par
+  Quota & RDV · Dossier), chaque tuile portant son chiffre. **Les séances restent toujours affichées**
+  (`[data-fc-seances]`, sous la section ouverte — demande d'Adrien) : leur tuile y fait défiler, elle ne
+  remplace rien ; les cinq autres sections s'ouvrent AU-DESSUS. Chiffre des tuiles : `data-fc-sub` (mis à jour par
   `fcSetSub` quand l'Academy ou les fichiers du plan finissent de charger). Les blocs gardent leurs
   identifiants et leurs fonctions : un nouveau bloc se pose dans le `data-fc-pane` qui convient, jamais
   hors section. La section ouverte est conservée quand la même fiche se redessine (`_fcPane`). Clics
