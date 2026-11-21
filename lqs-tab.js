@@ -224,6 +224,40 @@
     });
   }
 
+  /* Rapprochement avec le Stats funnel (21/11/2026, retour Vincent : 5 closes /
+     34 000 € ici, 6 / 40 000 € dans le funnel). Les closes DATÉS dans la
+     période sont comparés un par un ; chaque écart est nommé, avec sa raison.
+     Rien n'est recalculé : closes du funnel = K.closeRows, closes d'ici =
+     periodSigned (toute l'équipe, jamais le filtre closer). */
+  function funnelCheckHtml() {
+    var fc = S.ctx && S.ctx.funnelCloses;
+    if (!fc || !S.M || S.closer) return '';
+    var here = S.M.periodSigned || [];
+    var hereById = {}, hereCon = 0;
+    here.forEach(function (ps) { if (ps.lead) hereById[ps.lead._id] = ps; hereCon += ps.con || 0; });
+    var fun = fc.filter(function (r) { return !(r.rv && r.rv.cancelled); });
+    var funById = {}, funCon = 0;
+    fun.forEach(function (r) { if (r.leadId) funById[r.leadId] = r; funCon += (r.rv && r.rv.con) || 0; });
+    var only = [];
+    fun.forEach(function (r) {
+      if (r.leadId && hereById[r.leadId]) return;
+      only.push('<strong>' + esc(r.name || '—') + '</strong> (' + fEur((r.rv && r.rv.con) || 0) + ' signés) : compté par le funnel, absent d\'ici — ' +
+        (r.leadId ? 'fiche écartée par les filtres de cet onglet, ou close daté hors période d\'après son RDV'
+          : 'aucune fiche lead reliée (' + (r.src === 'paiement' ? 'close détecté par le module Paiements seul' : 'RDV closé sans fiche') + ') : pas de questionnaire, donc pas de note possible'));
+    });
+    here.forEach(function (ps) {
+      if (!ps.lead || funById[ps.lead._id]) return;
+      only.push('<strong>' + esc(ps.lead.nom || ps.lead.email || '—') + '</strong> (' + fEur(ps.con || 0) + ' signés) : compté ici (RDV « close » ou paiement daté dans la période), absent du funnel — fiche non gagnée sur la période pour le funnel');
+    });
+    var same = !only.length;
+    var body = '<div class="fn-stage-note" style="font-size:12.5px;line-height:1.7">' +
+      'Closes datés dans la période : <strong>' + fNum(here.length) + ' ici</strong> pour ' + fEur(hereCon) + ' signés · <strong>' + fNum(fun.length) + ' dans le Stats funnel</strong> pour ' + fEur(funCon) + ' signés.' +
+      (same ? ' ✅ Ce sont les mêmes clients.' : '<ul style="margin:6px 0 0 18px;padding:0"><li>' + only.join('</li><li>') + '</li></ul>') +
+      (S.cashMode === 'periode' ? '' : '<br/>Les cartes ci-dessus suivent les <em>leads entrés</em> sur la période : pour comparer au funnel, passe l\'affichage sur « période ».') +
+      '</div>';
+    return card((same ? '✅' : '🔎') + ' Rapprochement avec le Stats funnel', 'mêmes règles de montants (module Paiements, HT)', body);
+  }
+
   function viewOverview() {
     var R = rows();
     var bn = LC.byNote(R, periodPays(), periodSigned());
@@ -246,6 +280,8 @@
     h += kpi(fEur(totCash), S.cashMode === 'periode' ? 'Signé sur la période' : 'Signé', S.cashMode === 'periode' ? 'HT, closes datés dans la période' : 'HT, contrats des closes de ces leads');
     h += kpi(fEur(paidOf(t)), S.cashMode === 'periode' ? 'Encaissé sur la période' : 'Encaissé', S.cashMode === 'periode' ? 'HT, prélèvements passés, tous leads confondus' : 'HT, prélèvements passés à ce jour' + (totCash > paidOf(t) ? '<br>' + fEur(totCash - paidOf(t)) + ' restent à encaisser' : ''));
     h += '</div>';
+
+    h += funnelCheckHtml();
 
     /* Tunnel complet */
     h += card('🛤️ Le tunnel complet', 'quiz (mesure anonyme) → leads → RDV → présents → closes → signé', tunnelStrip(t));

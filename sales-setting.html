@@ -568,7 +568,7 @@
           else if (act === 'faux_numero' || act === 'pas_interesse' || act === 'disqualifie' || act === 'poubelle') add(bk, a.day, 'out', it);
           if (AF.SET_ACTIONS[act] && a.leadId) { // unique lead / jour
             bk.days[a.day]._setLeadIds[a.leadId] = 1;
-            setKeep(bk, a.day, a.leadId, { name: it.name, leadId: it.leadId, date: a.day, status: it.status, statusColor: '#a78bfa', setter: bk.name, info: 'statut posé sur la fiche — aucun RDV lié dans la période' }, false);
+            setKeep(bk, a.day, a.leadId, { name: it.name, leadId: it.leadId, date: a.day, status: it.status, statusColor: '#a78bfa', setter: bk.name, _cat: 'noRdv', info: 'statut posé sur la fiche — aucun RDV du setting lié' }, false);
           }
         });
       });
@@ -597,8 +597,19 @@
         var oc = b.outcome || null;
         var setterLbl = bk === naBk ? (aSlug ? memberName(aSlug) + ' (hors setters)' : 'Non attribué') : bk.name;
         var rv = null, it = null;
+        /* D'où vient ce RDV (21/11/2026) : posé sur la période, posé avant, ou
+           RDV de remplacement d'un replanifié — c'est ce qui explique l'écart
+           entre « Sets » (RDV posés) et « RDV NB » (RDV qui ont lieu). */
+        var cMs = (b.createdAt && b.createdAt.toMillis) ? b.createdAt.toMillis() : null;
+        var cDay = cMs != null ? AF.dayKey(new Date(cMs)) : null;
+        var rdvCat = b.rescheduledFromId ? 'replace' : ((cDay && cDay >= fromDay && cDay <= toDay) ? 'period' : 'before');
+        var posePar = (b.bookedBySlug && b.bookedBySlug !== aSlug) ? ' · posé par ' + memberName(b.bookedBySlug) + ' (setter retenu : celui de la fiche ou du close)' : '';
+        var poseTxt = (rdvCat === 'replace' ? 'remplace un RDV replanifié' : (cDay ? 'posé le ' + SD.frDate(cDay) + (rdvCat === 'before' ? ' — avant la période' : '') : 'date de pose inconnue')) + posePar;
         function item() {
-          if (!it) it = SD.bookingItem(b, { todayIso: todayIso, setter: setterLbl, closer: closerName(b), rv: rv, decl: (oc === 'close' && !rv) ? (b.closeData || null) : null });
+          if (!it) {
+            it = SD.bookingItem(b, { todayIso: todayIso, setter: setterLbl, closer: closerName(b), rv: rv, decl: (oc === 'close' && !rv) ? (b.closeData || null) : null });
+            it.info = poseTxt; it._cat = rdvCat;
+          }
           return it;
         }
         /* Set réel : compté le jour de CRÉATION du RDV (action de set).
@@ -609,7 +620,9 @@
             var sKey = b.leadId || ('bk_' + b.id);
             bk.days[ck]._setLeadIds[sKey] = 1;
             var bi = SD.bookingItem(b, { todayIso: todayIso, setter: setterLbl, closer: closerName(b) });
-            bi.info = 'RDV posé le ' + SD.frDate(ck);
+            var biResched = oc === 'replanifie' || (!oc && b.status === 'cancelled' && b.rescheduled === true);
+            bi._cat = biResched ? 'replan' : ((b.date || '') > toDay ? 'later' : 'due');
+            bi.info = 'posé le ' + SD.frDate(ck) + (bi._cat === 'later' ? ' — RDV après la période' : (bi._cat === 'replan' ? ' — replanifié depuis' : '')) + posePar;
             setKeep(bk, ck, sKey, bi, true);
           }
         }
@@ -816,6 +829,8 @@
       ]);
     }
 
+    var bridge = bridgeHtml(R, team);
+
     /* — Onglet Équipe : un setter par ligne, + les RDV sans setter identifiable.
        Le total de cette carte = la ligne TOTAL du tableau jour par jour. — */
     var teamCard = '';
@@ -895,7 +910,7 @@
 
     var h =
       startNote + journalNote + revBanner(S.data.rev) +
-      '<div class="au-kpis">' + kpis + '</div>' + teamCard +
+      '<div class="au-kpis">' + kpis + '</div>' + bridge + teamCard +
       '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Funnel ' + (ecrit ? 'Setting écrit' : (team ? 'Set NB — Équipe' : 'Set NB')) + ' — ' + periodLabel() + '</div>' +
         '<div class="au-card-note">' + (ecrit ? 'DM = webhook Instagram (Meta) · ' : '') + 'sets = statuts SET/RDV posé + RDV setter créés (uniques par lead/jour)</div></div>' + fun + '</div>' +
       '<div class="au-card" style="padding:0;overflow:hidden">' +
@@ -913,6 +928,32 @@
     document.querySelectorAll('.au-day-edit').forEach(function (b) {
       b.addEventListener('click', function () { openOverride(b.getAttribute('data-day')); });
     });
+  }
+
+  /* ══ PONT « Sets » ↔ « RDV NB » (21/11/2026, retour Vincent) ═══════════════
+     Les deux chiffres ne comptent pas la même chose : un set est compté le
+     jour où le RDV est POSÉ, un RDV NB le jour où il A LIEU. Ce bloc dit, en
+     nombres, d'où vient l'écart. Compté sur les lignes en base (hors ✎). */
+  function bridgeHtml(R, team) {
+    if (!S.data || !S.data.buckets) return '';
+    var r = { period: 0, before: 0, replace: 0 }, st = { due: 0, later: 0, replan: 0, noRdv: 0 }, nR = 0, nS = 0;
+    S.data.buckets.forEach(function (bk) {
+      R.days.forEach(function (dk) {
+        if (team ? (bk.start && dk < bk.start) : beforeStart(dk)) return;
+        var L = bk.lists[dk] || {};
+        (L.rdvNb || []).forEach(function (it) { nR++; if (r[it._cat] != null) r[it._cat]++; });
+        (L.sets || []).forEach(function (it) { nS++; if (st[it._cat] != null) st[it._cat]++; });
+      });
+    });
+    if (!nR && !nS) return '';
+    function part(n, txt) { return n > 0 ? '<strong>' + n + '</strong> ' + txt : ''; }
+    function join(a) { return a.filter(function (x) { return !!x; }).join(' + '); }
+    var who = team ? 'Onglet Équipe : tous les setters.' : 'Cet onglet = les RDV dont <strong>' + SD.esc((S.data.buckets[0] || {}).name || '') + ' est le setter</strong>, quel que soit le closer qui les reçoit (colonne « Closer » des listes).';
+    return '<div class="au-card" style="padding:12px 16px;font-size:12.5px;line-height:1.75">' +
+      '🔁 <strong>Pourquoi « Sets » et « RDV NB » diffèrent</strong> — un set est compté le jour où le RDV est <em>posé</em>, un RDV NB le jour où il <em>a lieu</em>.<br/>' +
+      '<strong>' + nR + ' RDV NB</strong> = ' + (join([part(r.period, 'posés sur la période'), part(r.before, 'posés avant la période'), part(r.replace, 'RDV de remplacement (replanifiés)')]) || '0') + '.<br/>' +
+      '<strong>' + nS + ' sets</strong> = ' + (join([part(st.due, 'dont le RDV a lieu sur la période'), part(st.later, 'dont le RDV a lieu après la période'), part(st.replan, 'replanifiés depuis'), part(st.noRdv, 'statut « set » sans RDV lié')]) || '0') + '.<br/>' +
+      '<span style="color:var(--muted)">Annulés, no-show, présents, pitchés et closes se lisent sur les <strong>RDV NB</strong> (date du RDV), jamais sur les sets. ' + who + '</span></div>';
   }
 
   /* ══ LISTES CLIQUABLES ════════════════════════════════════════════════
@@ -954,7 +995,7 @@
     if (money) sub = 'Montants HT, règle du module Paiements : encaissé = prélèvements réellement passés ; « en attente » = premier prélèvement pas encore passé. Closes issus du setting uniquement — ceux du Self Booking sont dans Close SB.';
     else if (key === 'sets') sub = 'Un set = un RDV setting posé, ou un lead passé en SET / RDV posé sur sa fiche, compté le jour où il est posé (un lead ne compte qu\'une fois par jour). La date affichée est celle du RDV ; la colonne Closer dit qui le reçoit.';
     else if (key === 'leads') sub = 'Leads travaillés : première action du setter sur la fiche, jamais recomptée ensuite.';
-    else if (key === 'rdvNb' || key === 'annulesNb' || key === 'noshowNb' || key === 'presentsNb' || key === 'pitchesNb' || key === 'closesNb') sub = 'RDV du setting (No Booking) comptés à la date du RDV. La colonne Closer dit qui a reçu le RDV. Clique sur un nom pour ouvrir la fiche.';
+    else if (key === 'rdvNb' || key === 'annulesNb' || key === 'noshowNb' || key === 'presentsNb' || key === 'pitchesNb' || key === 'closesNb') sub = 'RDV du setting (No Booking) comptés à la date du RDV, classés chez leur SETTER ; la colonne Closer dit qui a reçu le RDV, la colonne Précision quand il a été posé. Clique sur un nom pour ouvrir la fiche.';
     else sub = 'Actions enregistrées sur les fiches Leads Live, au jour du clic.';
     return {
       title: (DRILL_LBL[key] || key) + ' — ' + who + ' · ' + when,

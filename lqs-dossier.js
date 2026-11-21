@@ -177,7 +177,7 @@
     var l = r.lead || {};
     var h = '<div class="lqd-meta">' + [l.email ? esc(l.email) : '', l.telephone ? esc(l.telephone) : '', 'entré le ' + fDay(r.entry),
       r.sourceLabel ? 'source : ' + esc(r.sourceLabel) : '', r.axes && r.axes.creative && r.axes.creative.label ? 'pub : ' + esc(r.axes.creative.label) : '',
-      r.closerName ? 'closer : ' + esc(r.closerName) : '', r.team != null ? 'note équipe ★ ' + r.team : ''].filter(Boolean).join(' · ') + '</div>';
+      r.closerName ? 'closer : ' + esc(r.closerName) : '', r.setterName ? 'setter : ' + esc(r.setterName) : '', r.team != null ? 'note équipe ★ ' + r.team : ''].filter(Boolean).join(' · ') + '</div>';
     var q = LC.questionnaireOf(l);
     h += '<div class="lqd-h3">📝 Questionnaire rempli</div>';
     if (!q.length) h += '<div class="lqd-muted">Aucune réponse enregistrée sur cette fiche (RDV direct, import ou ancien tunnel).</div>';
@@ -201,11 +201,21 @@
     calls.forEach(function (c) { h += callHtml(c); });
     return h;
   }
+  /* Qui a eu le RDV (21/11/2026, demande Vincent) : visible sans déplier. */
+  function whoHtml(r) {
+    var parts = [];
+    if (r.rdvDate) parts.push('RDV ' + String(r.rdvDate).slice(8, 10) + '/' + String(r.rdvDate).slice(5, 7));
+    if (r.closerName) parts.push('closer : ' + esc(r.closerName));
+    if (r.setterName) parts.push('setter : ' + esc(r.setterName));
+    else if (r.bookedBy === 'self') parts.push('Self Booking');
+    return parts.length ? '<span class="lqd-st">' + parts.join(' · ') + '</span>' : '';
+  }
   function headHtml(r, i) {
     var st = statusOf(r);
     var nTr = readyCalls(r).length;
     return '<span class="lqd-i">' + (i + 1) + '</span>' + noteBadge(r.note) + '<span class="lqd-name">' + esc(nameOf(r)) + '</span>'
       + '<span class="lqd-st lqd-' + st.k + '">' + st.t + '</span>'
+      + whoHtml(r)
       + '<span class="lqd-tag">' + (nTr ? '🎙 ' + nTr + ' transcription' + (nTr > 1 ? 's' : '') : (r.present ? 'sans transcription' : '')) + '</span>';
   }
   /* HTML statique de tous les dossiers (export). Transcriptions = cache T. */

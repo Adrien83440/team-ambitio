@@ -412,26 +412,50 @@
     (D.payments || []).forEach(function (p) {
       if (!p || !p.leadId || known[p.leadId]) return;
       var inPeriod = FC.revPaidEntries(p).some(function (e) { return e.ms != null && e.ms >= pS && e.ms <= pE; });
+      /* 21/11/2026 : un paiement CRÉÉ dans la période compte aussi, même si
+         rien n'est encore prélevé (mandat signé, 1er prélèvement à venir) —
+         sinon ce close manquait ici alors que le Stats funnel le comptait
+         (5 closes / 34 000 € ici, 6 / 40 000 € dans le funnel). */
+      var cMs = FC.parseFlexMs(p.createdAt);
+      if (!inPeriod && p.status !== 'draft' && p.status !== 'cancelled' && cMs != null && cMs >= pS && cMs <= pE) inPeriod = true;
       if (inPeriod) want[p.leadId] = 1;
     });
-    var ids = Object.keys(want);
     var out = [];
+    function keepLead(id, d) {
+      if (known[id] || d._merged === true) return;
+      known[id] = 1;
+      d._id = id;
+      d._entry = FC.realEntryMs(d);
+      d._p9 = FC.phone9(d.telephone || d.phone);
+      d._extra = true;
+      out.push(d);
+    }
+    /* Fiches GAGNÉES dans la période (clientSince) — même requête que le Stats
+       funnel (FunnelCore.loadClosedLeads) : un lead entré il y a des mois,
+       gagné ce mois-ci sans RDV « close » ni prélèvement passé, doit figurer
+       dans les closes de la période. */
+    var wonInPeriod = db.collection('leads')
+      .where('clientSince', '>=', P.start)
+      .where('clientSince', '<=', P.end)
+      .limit(500).get().then(function (snap) {
+        snap.forEach(function (doc) { keepLead(doc.id, doc.data() || {}); });
+      }).catch(function (e) { if (typeof console !== 'undefined') console.warn('[lqs] fiches gagnées', e && e.message); });
+    return wonInPeriod.then(function () { return batchAll(); });
+
+    function batchAll() {
+    var ids = Object.keys(want).filter(function (id) { return !known[id]; });
     function batch(i) {
       if (i >= ids.length) { D.extraLeads = out; return Promise.resolve(); }
       var chunk = ids.slice(i, i + 40);
       return Promise.all(chunk.map(function (id) {
         return db.collection('leads').doc(id).get().then(function (s) {
           if (!s.exists) return;
-          var d = s.data() || {}; d._id = s.id;
-          if (d._merged === true) return;
-          d._entry = FC.realEntryMs(d);
-          d._p9 = FC.phone9(d.telephone || d.phone);
-          d._extra = true;
-          out.push(d);
+          keepLead(s.id, s.data() || {});
         }).catch(function () {});
       })).then(function () { return batch(i + 40); });
     }
     return batch(0);
+    }
   }
 
   /* ══ 5. MODÈLE ═════════════════════════════════════════════════════════ */
@@ -672,6 +696,17 @@
           r.closed = true; r.cash = rv.paid; r.con = rv.con;
           (bkByLead[l._id] || []).forEach(function (b) { if (b.outcome === 'close' && b.date && (!r.closeDay || b.date > r.closeDay)) r.closeDay = b.date; });
           if (!r.closeDay && csMs != null) r.closeDay = FC.isoDate(new Date(csMs));
+          /* Ni RDV « close » ni date client : le paiement fait foi (règle du
+             funnel, « un paiement = un close ») — daté de sa création. */
+          if (!r.closeDay) {
+            var pMs = null;
+            pays.forEach(function (p) {
+              if (p.status === 'cancelled') return;
+              var c0 = FC.parseFlexMs(p.createdAt);
+              if (c0 != null && (pMs == null || c0 < pMs)) pMs = c0;
+            });
+            if (pMs != null) r.closeDay = FC.isoDate(new Date(pMs));
+          }
           var cdo = null;
           (bkByLead[l._id] || []).forEach(function (b) { if (b.outcome === 'close' && b.closeData && offerOf(b.closeData)) cdo = b.closeData; });
           r.offer = offerOf(cdo) || offerOf(l.closedData);
@@ -685,6 +720,12 @@
       if (r.closed && !r.booked) { r.booked = true; r.present = true; r.allCancelled = false; }
       if (!r.booked) r.allCancelled = false;
       r.closerName = r.closer ? memberName(r.closer) : null;
+      /* Setter du lead (21/11/2026, listes nominatives) : setter 🔒 de la
+         fiche, sinon celui qui a posé son premier RDV du setting. */
+      var st0 = l.setterSlug || null;
+      if (!st0) heads.forEach(function (h0) { if (!st0 && h0._class === 'setter' && h0.bookedBySlug) st0 = h0.bookedBySlug; });
+      r.setter = st0;
+      r.setterName = st0 ? memberName(st0) : null;
       r.axes = {
         campaign: FC.leadAxisKey(l, 'campaign', CRE_IDX),
         adset: FC.leadAxisKey(l, 'adset', CRE_IDX),

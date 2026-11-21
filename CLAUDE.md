@@ -577,6 +577,16 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   champs de K sont nominatifs : ils figurent dans `AGENCY_EXCLUDE` (`api/agency-funnel.js`).
   « 1ers prélèvements en attente » (`rv.pending`) n'est qu'une partie du « reste à encaisser »
   (contracté − collecté) : ne plus jamais leur donner le même nom.
+  **Retour Vincent (21/11/2026)** : Set NB affiche le pont « Sets ↔ RDV NB » (`bridgeHtml` : RDV posés sur la
+  période / avant / de remplacement ; sets dont le RDV a lieu sur la période / après / replanifiés / sans RDV),
+  chaque ligne de liste dit quand le RDV a été posé et par qui si ce n'est pas le setter retenu. Un onglet de
+  setter = les RDV dont IL est le setter, jamais ceux qu'il reçoit comme closer. **Qualité leads** :
+  `loadMissingLeads` charge aussi les fiches gagnées dans la période (`clientSince`, même requête que le
+  funnel) et celles d'un paiement CRÉÉ dans la période même sans prélèvement passé (un close à 0 € encaissé
+  manquait : 5 closes / 34 000 € contre 6 / 40 000 € au funnel) ; date du close = RDV « close », sinon date
+  client, sinon création du paiement. Carte « Rapprochement avec le Stats funnel » (`funnelCheckHtml`,
+  `ctx.funnelCloses` = `K.closeRows`) : chaque écart nommé. Dossiers : closer, setter et date du RDV visibles
+  sans déplier (`whoHtml`, `row.setterName`).
 
 Spécification de référence du flux commercial : `REFONTE-SPEC.md`.
 
