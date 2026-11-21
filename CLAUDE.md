@@ -562,6 +562,22 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   Limite connue : `bookings.replay.summary/analysis` sont des champs du RDV, masqués à l'écran mais lisibles
   par le SDK (les règles ne filtrent pas les champs).
 
+- **Chiffres cliquables Set NB / Close SB / Funnel (21/11/2026, demande Vincent)** : `stats-drill.js`
+  (partagé, lecture seule, aucune requête : la page fournit les lignes déjà chargées ; styles injectés par
+  variables de thème, rien à régénérer). `sales-setting.html` et `sales-closing.html` gardent les lignes
+  derrière chaque chiffre (`lists[jour][colonne]`) ; clic sur une cellule, une semaine, le total ou une
+  carte → liste nominative (setter, closer, lien fiche), Collecté / Contracté → montants par client
+  (verdict `FunnelCore.revClient`, jamais recalculé). Une journée corrigée à la main (✎) est signalée
+  dans la liste (« N affiché, M en base »). **Set NB** : onglet « Équipe » = somme des onglets
+  (corrections comprises) + ligne « Non attribué » (RDV du setting sans setter identifiable, décision
+  Adrien) ; colonnes « RDV NB » (RDV qui ONT LIEU, replanifiés déduits — ≠ « Sets » = RDV POSÉS) et
+  « Pitchés » (`AF.isPitched`). **Funnel** : ligne 2 du héro cliquable (`k.drill`, `k.closeRows`) et
+  « Contrôle de cohérence » (`k.coh`) : les deux règles de close restent (pages équipe = RDV au résultat
+  « close » à la date du RDV ; funnel = fiche gagnée sur la période), chaque écart est NOMMÉ. Ces trois
+  champs de K sont nominatifs : ils figurent dans `AGENCY_EXCLUDE` (`api/agency-funnel.js`).
+  « 1ers prélèvements en attente » (`rv.pending`) n'est qu'une partie du « reste à encaisser »
+  (contracté − collecté) : ne plus jamais leur donner le même nom.
+
 Spécification de référence du flux commercial : `REFONTE-SPEC.md`.
 
 ---

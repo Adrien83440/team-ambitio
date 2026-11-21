@@ -494,6 +494,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
 <!-- Cœur du funnel (chargement + calcul des KPIs), partagé à l'identique
      avec api/agency-funnel.js. Doit être chargé AVANT le script de page. -->
 <script src="funnel-core.js"></script>
+<script src="stats-drill.js"></script>
 <script src="funnel-pages-table.js"></script>
 <!-- Qualité leads (LQS / MQS, 06/11/2026) : cœur + onglet, admin uniquement -->
 <script src="lqs-core.js"></script>
@@ -1579,8 +1580,96 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     return h;
   }
 
+  /* ══ Chiffres cliquables de la ligne 2 du héro (21/11/2026) ══════════════
+     Les listes viennent de K.drill / K.closeRows (funnel-core.js) : mêmes
+     ensembles que les compteurs, aucune requête. Lecteur du lien d'accès :
+     mêmes listes, sans lien vers la fiche (il n'a pas accès à Leads Live). */
+  var SDF = window.StatsDrill;
+  function fd(val, html, key) { return (SDF && val > 0) ? SDF.cell(html, key) : html; }
+  function fdToday() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function fdClassLbl(sb) { return sb ? 'Self Booking' : 'Setting (NB)'; }
+  var FD_LBL = { rdvMois: 'RDV du mois', kept: 'Kept Call', live: 'Live du mois (présents)', pitched: 'Pitchés du mois' };
+  var FD_SUB = {
+    rdvMois: 'RDV Self Booking et setting dont la date tombe dans la période, replanifiés déduits.',
+    kept: 'RDV du mois moins les annulés, les no-show et les replanifiés.',
+    live: 'RDV du mois où le prospect était présent (offre, close, non close, disqualifié — ou « tenu » sans détail).',
+    pitched: 'RDV du mois avec une offre faite (offre, close, non close).'
+  };
+  function fdResolve(ref) {
+    if (!K || !SDF) return null;
+    var noLink = window.FUNNEL_READONLY === true;
+    var per = (P && P.label) ? ' · ' + P.label : '';
+    if (ref.indexOf('coh:') === 0) {
+      var c = K.coh || {};
+      var src = (c[ref.slice(4)] || []);
+      return {
+        title: 'Écart funnel ↔ pages équipe' + per,
+        sub: 'Chaque ligne est un close compté d\'un côté et pas de l\'autre, avec la raison.',
+        items: src.map(function (x) { return { name: x.name, leadId: x.leadId || null, date: x.date || '', info: x.why }; }),
+        noLink: noLink, dateLabel: 'RDV'
+      };
+    }
+    if (ref === 'closes' || ref === 'money') {
+      var rows = (K.closeRows || []).filter(function (r) { return ref === 'money' || !(r.rv && r.rv.cancelled); });
+      return {
+        title: (ref === 'money' ? 'Montants par client — contracté, encaissé, en attente' : 'Closes') + per,
+        sub: 'Montants HT, règle du module Paiements : encaissé = prélèvements réellement passés ; « en attente » = premier prélèvement pas encore passé ; contracté − encaissé = reste à encaisser.',
+        items: rows.map(function (r) {
+          var rv = r.rv || {};
+          var it = { name: r.name, leadId: r.leadId || null, date: r.date || '', status: rv.cancelled ? 'Close annulé' : 'Close', statusColor: rv.cancelled ? '#ef4444' : '#34d399',
+            info: fdClassLbl(r.sb) + (r.src === 'paiement' ? ' · détecté par Paiements' : (r.src === 'rdv' ? ' · RDV sans fiche' : '')), con: 0, paid: 0, pending: 0, flag: '' };
+          if (rv.cancelled) it.flag = 'Retiré des closes et des montants (' + (rv.reason || '') + ')';
+          else {
+            it.con = rv.con || 0; it.paid = rv.paid || 0; it.pending = rv.pending || 0;
+            if (!rv.hasPay) it.flag = 'Aucun paiement dans le module Paiements' + (rv.declCol > 0 ? ' — encaissé déclaré ' + fmtEuro(rv.declCol) + ', non compté' : '');
+          }
+          return it;
+        }),
+        money: true, noLink: noLink, dateLabel: 'RDV'
+      };
+    }
+    var list = (K.drill && K.drill[ref]) || null;
+    if (!list) return null;
+    var today = fdToday();
+    return {
+      title: (FD_LBL[ref] || ref) + per,
+      sub: FD_SUB[ref] || '',
+      items: list.map(function (b) { return SDF.bookingItem(b, { todayIso: today, info: fdClassLbl(b._class === 'self') }); }),
+      noLink: noLink, dateLabel: 'RDV'
+    };
+  }
+
+  /* Contrôle de cohérence avec Set NB / Close SB (décision Adrien 21/11/2026 :
+     les deux règles de close restent, chaque écart est nommé). */
+  function cohBlock(k) {
+    var c = k.coh;
+    if (!c || !SDF) return '';
+    var nNB = k.dueNB - k.reschedNB, nSB = k.dueSB - k.reschedSB;
+    var ecarts = c.onlyPages.length + c.onlyFunnel.length + c.dup.length;
+    var ok = ecarts === 0 && c.pagesCloses === k.closesWonTotal;
+    function lien(n, key, txt) { return n > 0 ? SDF.cell('<strong>' + n + '</strong> ' + txt, 'coh:' + key) : ''; }
+    var h = '<details class="fn-help"' + (ok ? '' : ' open') + '><summary>' + (ok ? '✅' : '🔎') + ' Contrôle de cohérence avec Set NB et Close SB — ' +
+      (ok ? 'mêmes closes des deux côtés' : ecarts + ' écart' + (ecarts > 1 ? 's' : '') + ' sur les closes, nommé' + (ecarts > 1 ? 's' : '')) + '</summary><div class="hb">';
+    h += '<p><strong>RDV du mois : ' + fmtNum(k.rdvMois) + '</strong> = ' + fmtNum(nNB) + ' du setting + ' + fmtNum(nSB) + ' Self Booking. ' +
+      'À retrouver dans <strong>Set NB → onglet Équipe, colonne « RDV NB »</strong> (' + fmtNum(nNB) + ') et dans <strong>Close SB → Équipe, « RDV SB » moins « Replan. »</strong> (' + fmtNum(nSB) + '). ' +
+      'Les <em>Sets</em> de Set NB comptent les RDV <em>posés</em> sur la période : ce n\'est pas le même chiffre.</p>';
+    h += '<p><strong>Live ' + fmtNum(k.ocDue.present) + ' · Pitchés ' + fmtNum(k.ocDue.pitched) + '</strong> = « Présents » et « Pitchés » de Set NB (Équipe) + « Présents » et « Offres » de Close SB (Équipe).</p>';
+    h += '<p><strong>Closes : ' + fmtNum(k.closesWonTotal) + ' dans le funnel</strong> (fiches gagnées sur la période) · <strong>' + fmtNum(c.pagesCloses) + ' sur les pages équipe</strong> (RDV au résultat « close » : ' + fmtNum(c.pagesNB) + ' Set NB + ' + fmtNum(c.pagesSB) + ' Close SB).</p>';
+    if (ecarts || c.split.length) {
+      var parts = [];
+      if (c.onlyFunnel.length) parts.push(lien(c.onlyFunnel.length, 'onlyFunnel', 'compté(s) par le funnel seulement'));
+      if (c.onlyPages.length) parts.push(lien(c.onlyPages.length, 'onlyPages', 'compté(s) par les pages équipe seulement'));
+      if (c.dup.length) parts.push(lien(c.dup.length, 'dup', 'client(s) avec deux RDV closés'));
+      if (c.split.length) parts.push(lien(c.split.length, 'split', 'classé(s) SB d\'un côté et NB de l\'autre'));
+      h += '<p>Écarts, clique pour voir les noms : ' + parts.join(' · ') + '.</p>';
+    }
+    h += '<p style="color:var(--muted)">Comparaison valable sans filtre de tunnel ni de source (les pages équipe n\'en ont pas) et sans correction manuelle ✎ sur les pages équipe. Les closes annulés sont retirés des deux côtés.</p>';
+    return h + '</div></details>';
+  }
+
   function renderFunnel() {
     var el = $('#fnTabFunnel');
+    if (SDF) SDF.bind(el, fdResolve);
     if (!K) { el.innerHTML = '<div class="fn-loading">Chargement…</div>'; return; }
     var k = K;
     var h = '';
@@ -1616,23 +1705,27 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
 
     h += '<div class="fn-hero" style="margin-top:-8px">';
     h += '<div class="fn-hero-lbl">📆 Ligne 2 — Le mois en totalité : RDV qui ONT LIEU dans la période + business gagné</div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.rdvMois) + '</div><div class="l">RDV du mois</div><div class="s">SB ' + fmtNum(k.dueSB - k.reschedSB) + ' · NB ' + fmtNum(k.dueNB - k.reschedNB) + (k.dueCreatedBefore ? ' · dont ' + fmtNum(k.dueCreatedBefore) + ' posés avant la période' : '') + (k.dueRescheduled ? ' · ' + k.dueRescheduled + ' replanifiés déduits' : '') + '</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.kept) + '</div><div class="l">Kept Call</div><div class="s">RDV − annulés − no-show − replanifiés' + (k.keptPct != null ? ' · <span class="pct">' + fmtPct(k.keptPct, 0) + '</span>' : '') + '</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + numOrDash(k.ocDue.present, k.ocDue.sansDetail) + '</div><div class="l">Live du mois</div><div class="s">présents (résultats RDV)' + (k.ocDue.sansDetail ? ' · ⚠ ' + k.ocDue.sansDetail + ' sans détail' : '') + '</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + numOrDash(k.ocDue.pitched, k.ocDue.sansDetail) + '</div><div class="l">Pitchés du mois</div><div class="s">offres faites (résultats RDV)</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.closesWonTotal) + '</div><div class="l">Closes</div><div class="s">clients gagnés — fiches + RDV + Paiements' + (k.closesCancelled ? ' · <span style="color:var(--orange,#e8a13c)">' + k.closesCancelled + ' annulé(s) déduit(s)</span>' : '') + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fd(k.rdvMois, fmtNum(k.rdvMois), 'rdvMois') + '</div><div class="l">RDV du mois</div><div class="s">SB ' + fmtNum(k.dueSB - k.reschedSB) + ' · NB ' + fmtNum(k.dueNB - k.reschedNB) + (k.dueCreatedBefore ? ' · dont ' + fmtNum(k.dueCreatedBefore) + ' posés avant la période' : '') + (k.dueRescheduled ? ' · ' + k.dueRescheduled + ' replanifiés déduits' : '') + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fd(k.kept, fmtNum(k.kept), 'kept') + '</div><div class="l">Kept Call</div><div class="s">RDV − annulés − no-show − replanifiés' + (k.keptPct != null ? ' · <span class="pct">' + fmtPct(k.keptPct, 0) + '</span>' : '') + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fd(k.ocDue.present, numOrDash(k.ocDue.present, k.ocDue.sansDetail), 'live') + '</div><div class="l">Live du mois</div><div class="s">présents (résultats RDV)' + (k.ocDue.sansDetail ? ' · ⚠ ' + k.ocDue.sansDetail + ' sans détail' : '') + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fd(k.ocDue.pitched, numOrDash(k.ocDue.pitched, k.ocDue.sansDetail), 'pitched') + '</div><div class="l">Pitchés du mois</div><div class="s">offres faites (résultats RDV)</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fd(k.closesWonTotal, fmtNum(k.closesWonTotal), 'closes') + '</div><div class="l">Closes</div><div class="s">clients gagnés — fiches + RDV + Paiements' + (k.closesCancelled ? ' · <span style="color:var(--orange,#e8a13c)">' + k.closesCancelled + ' annulé(s) déduit(s)</span>' : '') + '</div></div>';
     var heroColSub = 'prélèvements réellement passés';
-    if (k.collecteMandat > 0) heroColSub += ' · ⏳ ' + fmtEuro(k.collecteMandat) + ' à encaisser (1er prélèvement pas encore passé)';
+    /* Libellés distincts (21/11/2026) : « 1ers prélèvements en attente » n'est
+       qu'une PARTIE du « reste à encaisser » du contracté — les deux portaient
+       le même nom et semblaient se contredire (7 000 € vs 22 000 €). */
+    if (k.collecteMandat > 0) heroColSub += ' · ⏳ ' + fmtEuro(k.collecteMandat) + ' de 1ers prélèvements en attente (mandat signé, rien de passé)';
     if (k.collecteMissing > 0) heroColSub += ' · <span style="color:var(--orange,#e8a13c)">⚠ ' + k.collecteMissing + ' close(s) sans paiement</span>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fmtEuro(k.wonCollecte) + '</div><div class="l">Collecté (HT)</div><div class="s">' + heroColSub + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fd((k.closeRows || []).length, fmtEuro(k.wonCollecte), 'money') + '</div><div class="l">Collecté (HT)</div><div class="s">' + heroColSub + '</div></div>';
     /* Contracté = valeur totale des contrats signés sur la période (module
        Paiements : totalAmount, repli tarif des cartes du Close). Le collecté
        n'en est que la part déjà encaissée — d'où le reste affiché ici. */
     var heroConSub = 'SB ' + fmtEuro(k.wonContracteSB) + ' · NB ' + fmtEuro(k.wonContracteNB);
     var resteAEnc = (k.wonContracte || 0) - (k.wonCollecte || 0);
-    if (k.wonContracte > 0 && resteAEnc > 0) heroConSub += ' · reste à encaisser ' + fmtEuro(resteAEnc);
-    h += '<div class="fn-hero-kpi"><div class="v">' + fmtEuro(k.wonContracte) + '</div><div class="l">Contracté (HT)</div><div class="s">' + heroConSub + '</div></div>';
+    if (k.wonContracte > 0 && resteAEnc > 0) heroConSub += ' · reste à encaisser ' + fmtEuro(resteAEnc) + ' = contracté − collecté, toutes échéances à venir' + (k.collecteMandat > 0 ? ' (dont ' + fmtEuro(k.collecteMandat) + ' de 1ers prélèvements en attente)' : '');
+    h += '<div class="fn-hero-kpi"><div class="v">' + fd((k.closeRows || []).length, fmtEuro(k.wonContracte), 'money') + '</div><div class="l">Contracté (HT)</div><div class="s">' + heroConSub + '</div></div>';
     h += '</div>';
+    h += cohBlock(k);
 
     /* ── Bandeau ROAS (demande Adrien 17/08) ─────────────────────────
        DEUX lectures, pas trois. Un ROAS « organique » a été écarté : sans

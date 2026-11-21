@@ -70,6 +70,11 @@ const AGENCY_EXCLUDE = {
   closesCancelledNames: 1,
   payCloseNames: 1,
   payCloseOther: 1,
+  /* Listes cliquables du héro + contrôle de cohérence (21/11/2026) : noms
+     de prospects et RDV complets — jamais hors de la maison. */
+  closeRows: 1,
+  drill: 1,
+  coh: 1,
   /* Équipe, par personne */
   callsByUser: 1,
   /* Coûts internes & commissions */

@@ -33,6 +33,7 @@
 <script>(function(){var r=localStorage.getItem('ambitio_role');if(!r)window.location.href='login.html';if(r==='coach')window.location.href='coaching.html';})()</script>
 <script src="funnel-core.js"></script>
 <script src="alteore-flow.js"></script>
+<script src="stats-drill.js"></script>
 <script src="nav.js" defer></script>
 </head>
 
@@ -121,6 +122,24 @@
     { key: 'contracte',  label: 'Contracté', grp: 'd', fmt: 'eur', title: 'Contrats des clients closés ce jour (module Paiements, HT) — closes annulés exclus' },
     { key: 'collecte',   label: 'Collecté',  grp: 'd', fmt: 'eur', title: 'Prélèvements GoCardless réellement passés pour ces clients (HT) — un mandat signé non prélevé ne compte pas' }
   ];
+  /* Chiffres cliquables (21/11/2026) : chaque colonne ci-dessous ouvre la
+     liste nominative des RDV comptés. Contracté et Collecté ouvrent le même
+     détail des montants par client. */
+  var SD = window.StatsDrill;
+  var DRILL = { rdvSb: 1, annules: 1, noshow: 1, replanifies: 1, presents: 1, disqua: 1, offres: 1, closes: 1, nonCloses: 1, aStatuer: 1, contracte: 1, collecte: 1 };
+  var DRILL_LBL = {
+    rdvSb: 'RDV Self Booking', annules: 'RDV annulés', noshow: 'No-show', replanifies: 'RDV replanifiés',
+    presents: 'Présents (Live)', disqua: 'Disqualifiés', offres: 'Offres pitchées', closes: 'Closes SB',
+    nonCloses: 'Non closes', aStatuer: 'RDV passés sans résultat', annNs: 'Annulés + No-show',
+    money: 'Montants par client — contracté, encaissé, en attente'
+  };
+  /* Clés réellement lues pour une colonne (les deux colonnes € partagent la
+     liste « money », la carte Annulés + No-show réunit deux listes). */
+  function drillKeys(key) {
+    if (key === 'contracte' || key === 'collecte' || key === 'money') return { list: ['money'], ov: ['contracte', 'collecte'], money: true };
+    if (key === 'annNs') return { list: ['annules', 'noshow'], ov: ['annules', 'noshow'], money: false };
+    return { list: [key], ov: [key], money: false };
+  }
   var OV_KEYS = ['rdvSb','annules','noshow','replanifies','presents','disqua','offres','closes','nonCloses','contracte','collecte'];
 
   var S = {
@@ -239,6 +258,27 @@
     return false;
   }
 
+  function memberName(slug) {
+    var m = (window.TEAM_MEMBERS || {})[slug];
+    return m ? (m.shortName || m.displayName || slug) : (slug || '');
+  }
+  /* Closer d'un RDV — même ordre que memberMatchesBooking. Le nom affiché est
+     celui du membre de l'équipe quand la fiche d'agenda lui est reliée. */
+  function closerName(b) {
+    if (b.closeData && b.closeData.closerSlug) return memberName(b.closeData.closerSlug);
+    if (b.expertSlug) return memberName(b.expertSlug);
+    var p = S.personsMap[b.personId];
+    if (p && p.firebaseUid) {
+      var list = window.TEAM_MEMBERS_LIST || [];
+      for (var i = 0; i < list.length; i++) {
+        if (list[i] && list[i].firebaseUid === p.firebaseUid) return list[i].shortName || list[i].displayName || list[i].slug;
+      }
+    }
+    if (b.personId && (window.TEAM_MEMBERS || {})[b.personId]) return memberName(b.personId);
+    if (p && p.name) return p.name;
+    return b.personId ? memberName(b.personId) : '';
+  }
+
   function refresh() {
     if (S.loading) return;
     S.loading = true;
@@ -279,6 +319,8 @@
       R.days.forEach(function (dk) { days[dk] = emptyDay(); });
       var todayIso = AF.dayKey(new Date());
       var createdSb = 0;
+      var lists = {};   // lists[jour][colonne] = lignes de la liste cliquable
+      function keep(dk, key, it) { var d = lists[dk] || (lists[dk] = {}); (d[key] || (d[key] = [])).push(it); }
 
       bookings.forEach(function (b) {
         if (AF.classifyBooking(b, S.typeMap) !== 'self') return;
@@ -287,23 +329,27 @@
         if (b._inCreated && !b.rescheduledFromId) createdSb++;
         if (!b._inDue || !days[b.date]) return;
         var row = days[b.date];
-        row.rdvSb++;
+        var dk = b.date;
         var oc = b.outcome || null;
-        if (oc === 'annule' || (!oc && b.status === 'cancelled' && b.rescheduled !== true)) row.annules++;
-        else if (oc === 'no_show' || (!oc && b.status === 'no_show')) row.noshow++;
-        else if (oc === 'replanifie' || (!oc && b.status === 'cancelled' && b.rescheduled === true)) row.replanifies++;
-        if (oc ? AF.isPresent(oc) : b.status === 'completed') row.presents++;
-        if (oc === 'disqualifie') row.disqua++;
-        if (oc ? AF.isPitched(oc) : false) row.offres++;
+        /* Un seul verdict REVENUE par RDV closé (revOf mémorise le client). */
+        var rv = oc === 'close' ? revOf(b) : null;
+        var it = SD.bookingItem(b, { todayIso: todayIso, closer: closerName(b), rv: rv, decl: (oc === 'close' && !rv) ? (b.closeData || null) : null });
+        row.rdvSb++; keep(dk, 'rdvSb', it);
+        if (oc === 'annule' || (!oc && b.status === 'cancelled' && b.rescheduled !== true)) { row.annules++; keep(dk, 'annules', it); }
+        else if (oc === 'no_show' || (!oc && b.status === 'no_show')) { row.noshow++; keep(dk, 'noshow', it); }
+        else if (oc === 'replanifie' || (!oc && b.status === 'cancelled' && b.rescheduled === true)) { row.replanifies++; keep(dk, 'replanifies', it); }
+        if (oc ? AF.isPresent(oc) : b.status === 'completed') { row.presents++; keep(dk, 'presents', it); }
+        if (oc === 'disqualifie') { row.disqua++; keep(dk, 'disqua', it); }
+        if (oc ? AF.isPitched(oc) : false) { row.offres++; keep(dk, 'offres', it); }
         if (oc === 'close') {
           /* Règle REVENUE (13/10/2026) : close annulé (paiement annulé ou
              client stoppé, 0 € encaissé) retiré ; collecté = prélèvements
              réellement passés ; mandat non prélevé = « à encaisser ». */
-          var rv = revOf(b);
           var nmC = (b.prospect && b.prospect.nom) || b.leadName || b.id;
+          keep(dk, 'money', it);   // closes annulés compris : la liste dit pourquoi ils valent 0
           if (rv && rv.cancelled) { if (!rv.dup) rev.cancelled.push(nmC + ' (' + rv.reason + ')'); }
           else {
-            row.closes++;
+            row.closes++; keep(dk, 'closes', it);
             if (rv) {
               row.contracte += rv.con;
               row.collecte += rv.paid;
@@ -315,12 +361,12 @@
             }
           }
         }
-        if (oc === 'non_close') row.nonCloses++;
+        if (oc === 'non_close') { row.nonCloses++; keep(dk, 'nonCloses', it); }
         var isPastNoResult = !oc && (b.status === 'confirmed' || b.status === 'pending') && b.date < todayIso;
-        if (isPastNoResult) row.aStatuer++;
+        if (isPastNoResult) { row.aStatuer++; keep(dk, 'aStatuer', it); }
       });
 
-      S.data = { days: days, createdSb: createdSb, rev: rev };
+      S.data = { days: days, createdSb: createdSb, rev: rev, lists: lists };
       S.loading = false;
       render();
     }).catch(function (e) {
@@ -355,11 +401,16 @@
     var showWeeks = S.mode === 'month'; // lignes Semaine uniquement en vue Mois
 
     function addTo(agg, dk) { COLS.forEach(function (c) { agg[c.key] += eff(dk, c.key).v; }); }
-    function aggRow(agg, label, cls) {
+    /* Chiffre cliquable dès qu'il y a quelque chose à montrer derrière. */
+    function drillCell(c, val, scope) {
+      var html = fmtCell(c, val);
+      return (DRILL[c.key] && val > 0) ? SD.cell(html, c.key + '|' + scope) : html;
+    }
+    function aggRow(agg, label, cls, scope) {
       var h = '<tr class="' + cls + '"><td>' + label + '</td>';
       COLS.forEach(function (c, i) {
         var grpStart = i > 0 && COLS[i - 1].grp !== c.grp;
-        h += '<td class="' + (grpStart ? 'grp' : '') + '">' + fmtCell(c, agg[c.key]) + '</td>';
+        h += '<td class="' + (grpStart ? 'grp' : '') + '">' + drillCell(c, agg[c.key], scope) + '</td>';
       });
       h += '<td></td></tr>';
       return h;
@@ -375,13 +426,13 @@
       COLS.forEach(function (c, i) {
         var e = eff(dk, c.key);
         var grpStart = i > 0 && COLS[i - 1].grp !== c.grp;
-        rowsH += '<td class="' + (grpStart ? 'grp ' : '') + (e.ov ? 'au-ov' : '') + '"' + (c.title ? ' title="' + c.title + '"' : '') + '>' + fmtCell(c, e.v) + '</td>';
+        rowsH += '<td class="' + (grpStart ? 'grp ' : '') + (e.ov ? 'au-ov' : '') + '"' + (c.title ? ' title="' + c.title + '"' : '') + '>' + drillCell(c, e.v, 'd|' + dk) + '</td>';
       });
       rowsH += '<td><button class="au-day-edit" data-day="' + dk + '" title="Corriger cette journée">✎</button></td></tr>';
       addTo(tot, dk);
       addTo(weekAgg, dk);
       if (showWeeks && (dow === 0 || di === R.days.length - 1)) {
-        rowsH += aggRow(weekAgg, 'Semaine ' + weekIdx + ' <span style="opacity:.6;font-weight:500">(' + R.days[weekStartIdx].slice(8) + '→' + dk.slice(8) + ')</span>', 'au-week');
+        rowsH += aggRow(weekAgg, 'Semaine ' + weekIdx + ' <span style="opacity:.6;font-weight:500">(' + R.days[weekStartIdx].slice(8) + '→' + dk.slice(8) + ')</span>', 'au-week', 'w|' + weekStartIdx + '|' + di);
         weekAgg = emptyDay(); weekStartIdx = di + 1; weekIdx++;
       }
     });
@@ -393,13 +444,14 @@
     var txCloseLive = tot.presents > 0 ? tot.closes / tot.presents * 100 : null;
     var aov = tot.closes > 0 ? tot.collecte / tot.closes : null;
 
+    function kv(val, txt, key) { return val > 0 ? SD.cell(txt, key + '|t') : txt; }
     var kpis =
-      kpi(String(tot.rdvSb), 'RDV SB — ' + (S.mode === 'month' ? 'mois' : S.mode === 'day' ? 'jour' : (S.mode === '3d' ? '3 jours' : '7 jours')), S.data.createdSb + ' pris (créés) sur la période', '#fbbf24') +
-      kpi(String(tot.annules + tot.noshow), 'Annulés + No-show', tot.annules + ' annulés · ' + tot.noshow + ' no-show · ' + tot.replanifies + ' replanifiés', '#ef4444') +
-      kpi(String(tot.presents), 'Présents (Live)', 'Show-up ' + fmtPct(txShow), '#5b7cfa') +
-      kpi(String(tot.offres), 'Offres pitchées', fmtPct(txOffre) + ' des présents', '#a78bfa') +
-      kpi(String(tot.closes), 'Closes SB', fmtPct(txCloseOffre) + ' / offres · ' + fmtPct(txCloseLive) + ' / live', '#34d399') +
-      kpi(fmtEuro(tot.collecte), 'Collecté (HT)', 'Contracté ' + fmtEuro(tot.contracte) + (S.data.rev.pending > 0 ? ' · ⏳ ' + fmtEuro(S.data.rev.pending) + ' à encaisser' : '') + (aov != null ? ' · AOV ' + fmtEuro(aov) : ''), '#34d399');
+      kpi(kv(tot.rdvSb, String(tot.rdvSb), 'rdvSb'), 'RDV SB — ' + (S.mode === 'month' ? 'mois' : S.mode === 'day' ? 'jour' : (S.mode === '3d' ? '3 jours' : '7 jours')), S.data.createdSb + ' pris (créés) sur la période', '#fbbf24') +
+      kpi(kv(tot.annules + tot.noshow, String(tot.annules + tot.noshow), 'annNs'), 'Annulés + No-show', tot.annules + ' annulés · ' + tot.noshow + ' no-show · ' + tot.replanifies + ' replanifiés', '#ef4444') +
+      kpi(kv(tot.presents, String(tot.presents), 'presents'), 'Présents (Live)', 'Show-up ' + fmtPct(txShow), '#5b7cfa') +
+      kpi(kv(tot.offres, String(tot.offres), 'offres'), 'Offres pitchées', fmtPct(txOffre) + ' des présents', '#a78bfa') +
+      kpi(kv(tot.closes, String(tot.closes), 'closes'), 'Closes SB', fmtPct(txCloseOffre) + ' / offres · ' + fmtPct(txCloseLive) + ' / live', '#34d399') +
+      kpi(kv(tot.closes + tot.contracte + tot.collecte, fmtEuro(tot.collecte), 'money'), 'Collecté (HT)', 'Contracté ' + fmtEuro(tot.contracte) + (S.data.rev.pending > 0 ? ' · ⏳ ' + fmtEuro(S.data.rev.pending) + ' de 1ers prélèvements en attente' : '') + (aov != null ? ' · AOV ' + fmtEuro(aov) : ''), '#34d399');
 
     var fun = funnel([
       { l: 'RDV SB', v: tot.rdvSb },
@@ -434,7 +486,7 @@
         '<div class="au-card-head" style="padding:16px 18px 0;margin-bottom:12px"><div class="au-card-title">Jour par jour <span style="color:var(--muted);font-weight:500;font-size:12px">(par date du RDV)</span></div>' +
           '<div class="right"><span class="au-chip sb">Self Booking</span></div></div>' +
         '<div class="au-twrap" style="border:none;border-radius:0"><table class="au-table"><thead>' + headH + '</thead><tbody>' +
-        rowsH + (R.days.length > 1 ? aggRow(tot, 'TOTAL — ' + periodLabel().toUpperCase(), 'au-total') : '') +
+        rowsH + (R.days.length > 1 ? aggRow(tot, 'TOTAL — ' + periodLabel().toUpperCase(), 'au-total', 't') : '') +
         '</tbody></table></div>' + aStatuerNote +
       '</div>' +
       legacyBlock();
@@ -446,13 +498,57 @@
     });
   }
 
+  /* ══ LISTES CLIQUABLES ════════════════════════════════════════════════
+     ref = « colonne|d|jour », « colonne|w|début|fin » (indices de jours) ou
+     « colonne|t » (toute la période). Aucune requête : les lignes viennent de
+     l'agrégation déjà faite. Une journée corrigée à la main (✎) est signalée :
+     le chiffre affiché n'est alors plus le nombre de lignes. */
+  function drillResolve(ref) {
+    if (!S.data || !S.data.lists) return null;
+    var p = String(ref).split('|');
+    var key = p[0], kind = p[1];
+    var R = S.range || period();
+    var dks = kind === 'd' ? [p[2]] : (kind === 'w' ? R.days.slice(Number(p[2]), Number(p[3]) + 1) : R.days);
+    var dk0 = drillKeys(key);
+    var items = [], shown = 0, auto = 0, corrected = false;
+    dks.forEach(function (dk) {
+      var L = S.data.lists[dk] || {};
+      dk0.list.forEach(function (k) { items = items.concat(L[k] || []); });
+      dk0.ov.forEach(function (k) {
+        var e = eff(dk, k);
+        if (e.ov) corrected = true;
+        shown += e.v; auto += (S.data.days[dk] && S.data.days[dk][k]) || 0;
+      });
+    });
+    var member = currentMember();
+    var who = member ? (member.shortName || member.displayName || member.slug) : 'Équipe';
+    var when = kind === 'd' ? SD.frDate(p[2]) : (kind === 'w' ? 'du ' + SD.frDate(dks[0]) + ' au ' + SD.frDate(dks[dks.length - 1]) : periodLabel());
+    var note = '';
+    if (corrected) {
+      note = dk0.money
+        ? 'Une journée de cette période a été corrigée à la main (✎) : les totaux affichés dans le tableau peuvent différer du détail ci-dessous, qui vient du module Paiements.'
+        : 'Chiffre corrigé à la main (✎) : ' + shown + ' affiché, ' + auto + ' en base. La liste ci-dessous montre ce qui est en base.';
+    }
+    return {
+      title: (DRILL_LBL[dk0.money ? 'money' : key] || key) + ' — ' + who + ' · ' + when,
+      sub: dk0.money
+        ? 'Montants HT, règle du module Paiements : encaissé = prélèvements réellement passés ; « en attente » = premier prélèvement pas encore passé. Self Booking uniquement — les closes issus du setting sont dans Set NB.'
+        : 'RDV Self Booking comptés à la date du RDV. Clique sur un nom pour ouvrir la fiche.',
+      note: note,
+      items: items,
+      money: dk0.money || key === 'closes',
+      dateLabel: 'RDV'
+    };
+  }
+  SD.bind($('#content'), drillResolve);
+
   /* Closes annulés / à encaisser / sans paiement — règle REVENUE (13/10/2026). */
   function revBanner(rev) {
     if (!rev) return '';
     var esc = function (t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
     var parts = [];
     if (rev.cancelled.length) parts.push('🚫 <strong>' + rev.cancelled.length + ' close(s) annulé(s)</strong> — ' + esc(rev.cancelled.join(', ')) + ' : retiré(s) des closes, du contracté et du collecté.');
-    if (rev.pending > 0) parts.push('⏳ <strong>' + fmtEuro(rev.pending) + ' à encaisser</strong> — mandat signé, 1er prélèvement pas encore passé : non compté dans le collecté.');
+    if (rev.pending > 0) parts.push('⏳ <strong>' + fmtEuro(rev.pending) + ' de 1ers prélèvements en attente</strong> — mandat signé, 1er prélèvement pas encore passé : non compté dans le collecté.');
     if (rev.noPay.length) parts.push('💶 <strong>' + rev.noPay.length + ' close(s) sans paiement GoCardless</strong> — ' + esc(rev.noPay.join(', ')) + ' : encaissé déclaré non compté, crée le paiement dans le module Paiements.');
     if (!parts.length) return '';
     return '<div class="au-card" style="border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.05);padding:12px 16px;font-size:12.5px;line-height:1.7">' + parts.join('<br/>') + '</div>';

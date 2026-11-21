@@ -2104,6 +2104,10 @@
     });
 
     k.closesCancelledNames = [];
+    /* Une ligne par close compté (ou annulé) — sert aux listes cliquables du
+       héro et au contrôle de cohérence avec Set NB / Close SB (21/11/2026).
+       Rien n'est recalculé : c'est le verdict revClient utilisé ci-dessous. */
+    var closeRows = [];
     var wonColSB = 0, wonConSB = 0, wonColNB = 0, wonConNB = 0;
     /* Collecté isolé de la PUBLICITÉ PAYANTE — seul numérateur légitime
        d'un ROAS, puisque le dénominateur est la dépense pub. */
@@ -2120,6 +2124,7 @@
       var pays = payListFor(l._id, lem, l.telephone || l.phone);
       var decl = declByLead[l._id] || declOf(l.closedData);
       var rv = revClient(pays, l, decl);
+      closeRows.push({ name: l.nom || lem || l._id, leadId: l._id, sb: l.stage === 'closed_won_self', rv: rv, src: 'fiche' });
       if (rv.cancelled) { k.closesCancelledNames.push((l.nom || lem || l._id) + ' (' + rv.reason + ')'); return; }
       closedLeads.push(l);
       var sb2 = l.stage === 'closed_won_self';
@@ -2150,6 +2155,7 @@
       var pays3 = payListFor(null, bem, b.prospect && (b.prospect.telephone || b.prospect.phone));
       var rv3 = revClient(pays3, null, declOf(b.closeData));
       var nm3 = (b.prospect && b.prospect.nom) || bem || b._id;
+      closeRows.push({ name: nm3, leadId: null, sb: b._class === 'self', rv: rv3, src: 'rdv', date: b.date || '', bookingId: b._id || b.id || null });
       if (rv3.cancelled) { k.closesCancelledNames.push(nm3 + ' (' + rv3.reason + ')'); return; }
       if (!rv3.hasPay) { colMissing++; colMissingNames.push(nm3 + (rv3.declCol > 0 ? ' — déclaré ' + Math.round(rv3.declCol) + ' €' : '')); }
       mandatSum += rv3.pending;
@@ -2169,6 +2175,7 @@
       if (!srcMatch(pc.lead ? leadSource(pc.lead, TMETA) : 'other')) return;
       p._matched = true;
       var rv4 = revClient([p], pc.lead || null, null);
+      closeRows.push({ name: pc.name, leadId: (pc.lead && pc.lead._id) || null, sb: !!pc.sb, rv: rv4, src: 'paiement' });
       if (rv4.cancelled) { k.closesCancelledNames.push(pc.name + ' (' + rv4.reason + ')'); return; }
       mandatSum += rv4.pending;
       if (pc.sb) { payClosesSB++; wonColSB += rv4.paid; wonConSB += rv4.con; }
@@ -2179,6 +2186,49 @@
     k.wonSelf = wonSelfLeads + closesNoLeadSB + payClosesSB;
     k.wonSetting = (closedLeads.length - wonSelfLeads) + closesNoLeadNB + payClosesNB;
     k.closesWonTotal = k.wonSelf + k.wonSetting;
+
+    /* ── Listes derrière les chiffres du héro (ligne 2) ──
+       Mêmes ensembles et mêmes prédicats que les compteurs : k.rdvMois,
+       k.kept, k.ocDue.present, k.ocDue.pitched, closes, montants. */
+    k.closeRows = closeRows;
+    k.drill = {
+      rdvMois: due.filter(function (b) { return !dueRescheduledF(b); }),
+      kept: due.filter(function (b) { return !dueRescheduledF(b) && !dueCancelledF(b) && b.status !== 'no_show'; }),
+      live: due.filter(ocPresent),
+      pitched: due.filter(ocPitched)
+    };
+
+    /* ── Contrôle de cohérence avec les pages équipe (décision Adrien 21/11/2026 :
+       les deux règles restent, chaque écart est NOMMÉ) ──
+       Pages Set NB / Close SB : un close = un RDV au résultat « close », à la
+       date du RDV, SB ou NB selon le RDV. Funnel : un close = une fiche gagnée
+       sur la période (+ RDV closé sans fiche, + paiement sans fiche), SB ou NB
+       selon l'étape de la fiche. Les closes annulés sortent des deux côtés. */
+    (function () {
+      var rowByLead = {};
+      closeRows.forEach(function (r) { if (r.leadId) rowByLead[r.leadId] = r; });
+      var coh = { pagesCloses: 0, pagesSB: 0, pagesNB: 0, onlyPages: [], onlyFunnel: [], split: [], dup: [] };
+      var seenLead = {};
+      due.forEach(function (b) {
+        if (b.outcome !== 'close') return;
+        var nm = (b.prospect && b.prospect.nom) || b.leadName || (b.prospect && b.prospect.email) || b._id;
+        var r = b.leadId ? rowByLead[b.leadId] : null;
+        if (r && r.rv && r.rv.cancelled) return;                 // close annulé : retiré partout
+        coh.pagesCloses++;
+        if (b._class === 'self') coh.pagesSB++; else coh.pagesNB++;
+        if (!b.leadId) return;                                    // compté des deux côtés (② ci-dessus)
+        if (seenLead[b.leadId]) { coh.dup.push({ name: nm, leadId: b.leadId, why: 'deux RDV au résultat « close » pour le même client : 2 sur les pages équipe, 1 dans le funnel' }); return; }
+        seenLead[b.leadId] = 1;
+        if (!r) { coh.onlyPages.push({ name: nm, leadId: b.leadId, date: b.date || '', sb: b._class === 'self', why: 'RDV closé dans la période, mais fiche non comptée gagnée sur la période (gagnée à une autre date, pas passée en « gagné », ou hors du filtre affiché)' }); return; }
+        if (r.sb !== (b._class === 'self')) coh.split.push({ name: nm, leadId: b.leadId, date: b.date || '', why: 'RDV ' + (b._class === 'self' ? 'Self Booking' : 'du setting (NB)') + ', mais fiche classée ' + (r.sb ? 'Self Booking' : 'setting (NB)') + ' dans le funnel' });
+      });
+      closeRows.forEach(function (r) {
+        if (r.rv && r.rv.cancelled) return;
+        if (r.src === 'paiement') { coh.onlyFunnel.push({ name: r.name, leadId: r.leadId, sb: r.sb, why: 'close détecté par le module Paiements seul — aucun RDV au résultat « close »' }); return; }
+        if (r.src === 'fiche' && !seenLead[r.leadId]) coh.onlyFunnel.push({ name: r.name, leadId: r.leadId, sb: r.sb, why: 'fiche gagnée sur la période sans RDV au résultat « close » daté dans la période (RDV d\'un autre mois, close sans RDV, ou RDV non statué)' });
+      });
+      k.coh = coh;
+    })();
     k.closesCancelled = k.closesCancelledNames.length;
     k.wonCollecteSB = Math.round(wonColSB * 100) / 100; k.wonCollecteNB = Math.round(wonColNB * 100) / 100;
     k.wonContracteSB = Math.round(wonConSB * 100) / 100; k.wonContracteNB = Math.round(wonConNB * 100) / 100;
