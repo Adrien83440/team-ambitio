@@ -262,7 +262,10 @@
     S.members.forEach(function (m) {
       var name = m.shortName || m.displayName || m.slug;
       var initials = (m.initials || name.slice(0, 2)).toUpperCase();
-      var roleLbl = (isEcrit(m) ? '✍️ ' : '') + AF.roleLabel(m.role);
+      /* Cette page ne montre que la partie SETTING du membre (retour Vincent
+         22/11/2026) : « Setting + Closing » laissait croire que l'onglet
+         contenait aussi les RDV qu'il reçoit comme closer. */
+      var roleLbl = isEcrit(m) ? '✍️ Setting écrit' : 'Setting';
       h += '<button class="au-member' + (m.slug === S.slug ? ' active' : '') + '" style="--au-mc:' + (m.color || '#5b7cfa') + '" data-slug="' + m.slug + '">' +
         '<span class="au-member-av">' + initials + '</span>' +
         '<span><span class="au-member-n">' + name + (m.active === false ? ' 🔒' : '') + '</span><br/><span class="au-member-r">' + roleLbl + '</span></span></button>';
@@ -787,7 +790,7 @@
     function kv(val, txt, key) { return val > 0 ? SD.cell(txt, key + '|t') : txt; }
     var txPitch = tot.presentsNb > 0 ? tot.pitchesNb / tot.presentsNb * 100 : null;
     var kpiRdv =
-      kpi(kv(tot.presentsNb, String(tot.presentsNb), 'presentsNb'), 'Présents NB', kv(tot.rdvNb, tot.rdvNb + ' RDV NB', 'rdvNb') + ' sur la période · ' + tot.annulesNb + ' annulés · ' + tot.noshowNb + ' no-show', '#34d399') +
+      kpi(kv(tot.presentsNb, String(tot.presentsNb), 'presentsNb'), 'Présents NB', kv(tot.rdvNb, tot.rdvNb + ' RDV NB', 'rdvNb') + ' sur la période' + (rdvOrigin(S.data.buckets, R, team) ? ' (' + rdvOrigin(S.data.buckets, R, team) + ')' : '') + ' · ' + tot.annulesNb + ' annulés · ' + tot.noshowNb + ' no-show', '#34d399') +
       kpi(kv(tot.pitchesNb, String(tot.pitchesNb), 'pitchesNb'), 'Pitchés NB', fmtPct(txPitch) + ' des présents', '#a78bfa') +
       kpi(kv(tot.closesNb, String(tot.closesNb), 'closesNb'), 'Closes NB', kv(tot.closesNb + tot.collecteNb + S.data.rev.pending, fmtEuro(tot.collecteNb) + ' collecté HT', 'collecteNb') + (S.data.rev.pending > 0 ? ' · ⏳ ' + fmtEuro(S.data.rev.pending) + ' de 1ers prélèvements en attente' : ''), '#34d399');
     if (ecrit) {
@@ -850,11 +853,19 @@
         });
         if (bk.slug === NA && !any) return;
         tB += '<tr><td>' + SD.esc(bk.name) + (bk.slug === NA ? ' <span style="opacity:.6;font-weight:500">(RDV sans setter identifiable)</span>' : '') + '</td>';
-        tk.forEach(function (c) { tB += '<td>' + ((DRILL[c.key] && line[c.key] > 0) ? SD.cell(fmtCell(c, line[c.key]), c.key + '|m|' + bk.slug) : fmtCell(c, line[c.key])) + '</td>'; });
+        var org = rdvOrigin([bk], R, true);
+        tk.forEach(function (c) {
+          tB += '<td>' + ((DRILL[c.key] && line[c.key] > 0) ? SD.cell(fmtCell(c, line[c.key]), c.key + '|m|' + bk.slug) : fmtCell(c, line[c.key])) +
+            ((c.key === 'rdvNb' && org) ? '<div style="font-size:10.5px;font-weight:500;opacity:.65;white-space:nowrap">' + org + '</div>' : '') + '</td>';
+        });
         tB += '</tr>';
       });
       tB += '<tr class="au-total"><td>ÉQUIPE</td>';
-      tk.forEach(function (c) { tB += '<td>' + ((DRILL[c.key] && tTot[c.key] > 0) ? SD.cell(fmtCell(c, tTot[c.key]), c.key + '|t') : fmtCell(c, tTot[c.key])) + '</td>'; });
+      var orgT = rdvOrigin(S.data.buckets, R, true);
+      tk.forEach(function (c) {
+        tB += '<td>' + ((DRILL[c.key] && tTot[c.key] > 0) ? SD.cell(fmtCell(c, tTot[c.key]), c.key + '|t') : fmtCell(c, tTot[c.key])) +
+          ((c.key === 'rdvNb' && orgT) ? '<div style="font-size:10.5px;font-weight:500;opacity:.65;white-space:nowrap">' + orgT + '</div>' : '') + '</td>';
+      });
       tB += '</tr>';
       teamCard =
         '<div class="au-card" style="padding:0;overflow:hidden">' +
@@ -934,6 +945,23 @@
      Les deux chiffres ne comptent pas la même chose : un set est compté le
      jour où le RDV est POSÉ, un RDV NB le jour où il A LIEU. Ce bloc dit, en
      nombres, d'où vient l'écart. Compté sur les lignes en base (hors ✎). */
+  /* Origine des RDV NB d'un ensemble de seaux, sur la période : combien ont
+     été posés AVANT la période, combien remplacent un RDV replanifié. Affiché
+     à côté du chiffre « RDV NB », là où l'écart avec « Sets » se voit. */
+  function rdvOrigin(bks, R, team) {
+    var o = { before: 0, replace: 0 };
+    bks.forEach(function (bk) {
+      R.days.forEach(function (dk) {
+        if (team ? (bk.start && dk < bk.start) : beforeStart(dk)) return;
+        ((bk.lists[dk] || {}).rdvNb || []).forEach(function (it) { if (o[it._cat] != null) o[it._cat]++; });
+      });
+    });
+    var parts = [];
+    if (o.before) parts.push(o.before + ' posé' + (o.before > 1 ? 's' : '') + ' avant la période');
+    if (o.replace) parts.push(o.replace + ' de remplacement');
+    return parts.length ? 'dont ' + parts.join(', ') : '';
+  }
+
   function bridgeHtml(R, team) {
     if (!S.data || !S.data.buckets) return '';
     var r = { period: 0, before: 0, replace: 0 }, st = { due: 0, later: 0, replan: 0, noRdv: 0 }, nR = 0, nS = 0;
