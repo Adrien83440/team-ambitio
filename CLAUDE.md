@@ -587,6 +587,12 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   client, sinon création du paiement. Carte « Rapprochement avec le Stats funnel » (`funnelCheckHtml`,
   `ctx.funnelCloses` = `K.closeRows`) : chaque écart nommé. Dossiers : closer, setter et date du RDV visibles
   sans déplier (`whoHtml`, `row.setterName`).
+  **Vérifié sur novembre 2026 (22/11/2026, contrôle temporaire retiré)** : Qualité leads suit PAR DÉFAUT les
+  leads ENTRÉS sur la période (`cashMode: 'cohorte'`) — un lead entré en octobre et signé en novembre n'y est
+  pas, d'où 5 closes / 34 000 € contre 6 / 40 000 € au funnel ; les cartes Closes et Signé affichent donc aussi
+  le chiffre « sur la période » et celui du Stats funnel (`twoLens`, `funnelTot`). Set NB : onglets libellés
+  « Setting » ; sous chaque « RDV NB », « dont N posés avant la période, N de remplacement » (`rdvOrigin`) —
+  ex. réel : 4 sets et 6 RDV NB = 4 + 1 posé en octobre + 1 RDV de remplacement.
 
 Spécification de référence du flux commercial : `REFONTE-SPEC.md`.
 
