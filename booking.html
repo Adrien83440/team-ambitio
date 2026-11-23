@@ -860,6 +860,16 @@ function bkPixelSchedule(booking, bookingId) {
   } catch (e) { if (window.console) console.warn('[booking] pixel Schedule:', e && e.message); }
 }
 
+/* Lieu et appareil du prospect (api/visiteur.js, 23/11/2026) : seulement un
+   RDV pris par le prospect LUI-MÊME (jamais agent, setter, replanification
+   interne ni coaching : on relèverait l'appareil de l'équipe). Pour tous les
+   visiteurs, pixel autorisé ou non — rien ne part chez Meta. */
+function bkVisiteurBeacon(booking, bookingId) {
+  if (!bookingId || !_bkPixelPublic || !navigator.sendBeacon) return;
+  if (!booking || booking.isCoaching === true || booking.source !== 'self_booking') return;
+  try { navigator.sendBeacon('/api/visiteur', new Blob([JSON.stringify({ b: String(bookingId) })], { type: 'application/json' })); } catch (e) {}
+}
+
 /* ═══ MODE REPLANIFICATION (refonte 07/2026) ═══
    ?reschedule={bookingId} (embed, iframe interne authentifiée — RdvOutcome).
    On charge l'ancien RDV pour forcer type + expert + prospect + lead, puis à
@@ -2906,6 +2916,7 @@ async function submitBooking() {
     // Pixel Meta : conversion « Schedule » (RDV neuf uniquement — un doublon
     // adopté n'est pas une seconde conversion).
     if (!alreadyExisted) bkPixelSchedule(booking, docRef.id);
+    if (!alreadyExisted) bkVisiteurBeacon(booking, docRef.id);
 
     /* ── SÉRIE HEBDOMADAIRE ──────────────────────────────────────────────
        Le premier RDV est confirmé : on lance la pose des séances suivantes.

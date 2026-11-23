@@ -2106,8 +2106,20 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     ttc:     function (l) { return l._ttc == null ? Infinity : l._ttc; },
     rdv:     function (l) { return l._bk && l._bk.length ? (l._bk[0]._class === 'self' ? 1 : 2) : 0; },
     status:  function (l) { return l._bk && l._bk.length ? (l._bk[0].status || '') : ''; },
-    ttb:     function (l) { return l._ttb == null ? Infinity : l._ttb; }
+    ttb:     function (l) { return l._ttb == null ? Infinity : l._ttb; },
+    place:   function (l) { var v = visOf(l); return (v.zone + ' ' + v.city).toLowerCase() || '~'; },
+    device:  function (l) { return FC.deviceLabel(visOf(l)) || '~'; }
   };
+
+  /* Lieu et appareil du prospect (23/11/2026) : bloc visiteur de la fiche,
+     sinon celui de son premier RDV, sinon le navigateur capté à l'opt-in
+     (FunnelCore.visiteurOf). Lecteur funnel : la région, jamais la ville. */
+  function visOf(l) {
+    var bv = null;
+    (l._bk || []).forEach(function (b) { if (!bv && b.visiteur && (b.visiteur.country || b.visiteur.device)) bv = b.visiteur; });
+    return FC.visiteurOf(l, bv || l._bkVis || null);
+  }
+  function visPlace(v) { return window.FUNNEL_READONLY === true ? (v.zone || '') : FC.placeLabel(v); }
 
   function leadRdvInfo(l) {
     if (!l._bk || !l._bk.length) return null;
@@ -2132,7 +2144,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     h += '<button class="fn-btn" id="fnLeadsCsv">⬇ Export CSV</button>';
     h += '</div>';
     h += '<div class="fn-table-wrap"><table class="fn-table"><thead><tr>';
-    var cols = [['name', 'Lead'], ['tunnel', 'Tunnel'], ['utm', 'UTM'], ['score', '⭐'], ['entry', 'Entrée réelle'], ['calls', '📞'], ['sms', '💬'], ['ttc', '1er contact'], ['rdv', 'RDV'], ['status', 'Statut RDV'], ['ttb', '⏱ Book']];
+    var cols = [['name', 'Lead'], ['tunnel', 'Tunnel'], ['utm', 'UTM'], ['place', '📍 Lieu'], ['device', '📱 Appareil'], ['score', '⭐'], ['entry', 'Entrée réelle'], ['calls', '📞'], ['sms', '💬'], ['ttc', '1er contact'], ['rdv', 'RDV'], ['status', 'Statut RDV'], ['ttb', '⏱ Book']];
     cols.forEach(function (c) {
       var arrow = leadsSort.key === c[0] ? (leadsSort.dir > 0 ? ' ▲' : ' ▼') : '';
       h += '<th data-sort="' + c[0] + '">' + c[1] + arrow + '</th>';
@@ -2167,7 +2179,8 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       if (leadsRdvFilter === 'without' && bk) return false;
       if (leadsRdvFilter === 'nocontact' && ((l._nbCalls || 0) > 0 || (l._nbSms || 0) > 0 || bk)) return false;
       if (q) {
-        var hay = ((l.nom || '') + ' ' + (l.email || '') + ' ' + (l.telephone || '') + ' ' + (decodeUtm(l.utm) || '')).toLowerCase();
+        var hv = visOf(l);
+        var hay = ((l.nom || '') + ' ' + (l.email || '') + ' ' + (l.telephone || '') + ' ' + (decodeUtm(l.utm) || '') + ' ' + visPlace(hv) + ' ' + FC.deviceLabel(hv)).toLowerCase();
         if (hay.indexOf(q) < 0) return false;
       }
       return true;
@@ -2186,7 +2199,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       return 0;
     });
     $('#fnLeadsCount').textContent = list.length + ' lead(s)';
-    if (!list.length) { body.innerHTML = '<tr><td colspan="11"><div class="fn-empty">Aucun lead ne correspond.</div></td></tr>'; return; }
+    if (!list.length) { body.innerHTML = '<tr><td colspan="13"><div class="fn-empty">Aucun lead ne correspond.</div></td></tr>'; return; }
     var rows = '';
     var shown = list.slice(0, 800);
     shown.forEach(function (l) {
@@ -2197,6 +2210,9 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       rows += '<td><a class="fn-lead-link" href="sales-contact.html?id=' + encodeURIComponent(l._id) + '" target="_blank">' + esc(l.nom || l.email || '—') + '</a>' + reopt + '</td>';
       rows += '<td><span class="fn-tbadge ' + l._tunnel + '">' + tunnelLabel(l._tunnel) + '</span></td>';
       rows += '<td><span class="fn-utm" title="' + escAttr(utm) + '">' + esc(utm) + '</span></td>';
+      var lv = visOf(l), lvp = visPlace(lv), lvd = FC.deviceLabel(lv);
+      rows += '<td>' + (lvp ? '<span class="fn-utm" title="' + escAttr(lvp + (lv.geoVia === 'signature' ? ' (lieu de la signature)' : '')) + '">' + esc(lvp) + '</span>' : '<span style="color:var(--muted2)">—</span>') + '</td>';
+      rows += '<td>' + (lvd ? '<span class="fn-utm" title="' + escAttr(lvd) + '">' + esc(lvd) + '</span>' : '<span style="color:var(--muted2)">—</span>') + '</td>';
       var lsc = (l.leadScore >= 1 && l.leadScore <= 5) ? l.leadScore : null;
       rows += '<td class="num">' + (lsc ? '<span style="color:' + FN_SCORE_COLORS[lsc] + ';font-weight:700" title="Qualité du lead (Leads Live)' + (l.leadScoreByName ? ' — noté par ' + escAttr(l.leadScoreByName) : '') + '">⭐ ' + lsc + '</span>' : '<span style="color:var(--muted2)">—</span>') + '</td>';
       rows += '<td class="num">' + frDate(l._entry) + '</td>';
@@ -2214,22 +2230,25 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       rows += '<td class="num">' + fmtDelay(l._ttb) + '</td>';
       rows += '</tr>';
     });
-    if (list.length > shown.length) rows += '<tr><td colspan="11" style="text-align:center;color:var(--muted);font-size:11.5px;padding:10px">Affichage limité à 800 lignes — affine la recherche ou exporte en CSV (complet).</td></tr>';
+    if (list.length > shown.length) rows += '<tr><td colspan="13" style="text-align:center;color:var(--muted);font-size:11.5px;padding:10px">Affichage limité à 800 lignes — affine la recherche ou exporte en CSV (complet).</td></tr>';
     body.innerHTML = rows;
   }
 
   function exportLeadsCsv() {
     var list = filteredLeads();
     var sep = ';';
-    var head = ['Nom', 'Email', 'Telephone', 'Tunnel', 'UTM', 'Score', 'Entree reelle', 'Re-optins', 'Appels', 'SMS', '1er contact (h)', '1er appel par', 'RDV', 'Statut RDV', 'Date RDV', 'Time-to-book (h)'];
+    var head = ['Nom', 'Email', 'Telephone', 'Tunnel', 'UTM', 'Ville', 'Region', 'Pays', 'Appareil', 'Systeme', 'Navigateur ou appli', 'Score', 'Entree reelle', 'Re-optins', 'Appels', 'SMS', '1er contact (h)', '1er appel par', 'RDV', 'Statut RDV', 'Date RDV', 'Time-to-book (h)'];
     var lines = [head.join(sep)];
     list.forEach(function (l) {
       var bk = leadRdvInfo(l);
+      var cv = visOf(l);
       function cell(v) { v = v == null ? '' : String(v); return '"' + v.replace(/"/g, '""') + '"'; }
       function hours(ms) { return ms == null ? '' : (Math.round(ms / 3600000 * 10) / 10); }
       lines.push([
         cell(l.nom || ''), cell(l.email || ''), cell(l.telephone || l.phone || ''),
         cell(tunnelLabel(l._tunnel)), cell(decodeUtm(l.utm) || ''),
+        cell(window.FUNNEL_READONLY === true ? '' : cv.city), cell(cv.zone), cell(FC.countryName(cv.country)),
+        cell(cv.device), cell(cv.os), cell(cv.app ? 'appli ' + cv.app : cv.browser),
         cell((l.leadScore >= 1 && l.leadScore <= 5) ? l.leadScore : ''),
         cell(l._entry ? new Date(l._entry).toISOString() : ''),
         cell(l.engagementHistory ? l.engagementHistory.length : 0),

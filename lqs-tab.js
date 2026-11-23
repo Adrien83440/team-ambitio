@@ -874,7 +874,23 @@
   }
 
   /* ══ VUE 3 — MARKETING (MQS) ═══════════════════════════════════════════ */
-  var AXES = [['campaign', 'Campagne'], ['adset', 'Adset / audience'], ['creative', 'Créa'], ['channel', 'Canal']];
+  var AXES = [['campaign', 'Campagne'], ['adset', 'Adset / audience'], ['creative', 'Créa'], ['channel', 'Canal'], ['device', 'Appareil'], ['region', 'Région']];
+  /* Couverture des axes Appareil / Région (23/11/2026) : le navigateur n'est
+     capté que depuis le 12/11/2026, le lieu depuis la mise en ligne du bloc
+     visiteur — le dire plutôt que laisser lire « Inconnu » comme un résultat. */
+  function visiteurCoverage(ax) {
+    if (S.axis !== 'device' && S.axis !== 'region') return '';
+    var unknown = 0;
+    ax.rows.forEach(function (x) { if (x.key === 'dev:inconnu' || x.key === 'geo:inconnu') unknown += x.agg.leads; });
+    var tot = ax.total.leads || 0;
+    var known = tot - unknown;
+    return '<div class="fn-stage-note" style="margin-bottom:10px">' + (S.axis === 'device' ? '📱 Appareil' : '📍 Lieu') + ' connu pour <strong>' + fNum(known) + '</strong> lead' + (known > 1 ? 's' : '') + ' sur ' + fNum(tot)
+      + ' (' + fPct(tot ? known / tot * 100 : null, 0) + ').'
+      + (S.axis === 'device'
+        ? ' Navigateur capté à l\'inscription depuis le 12/11/2026, ou à la prise de RDV.'
+        : ' Lieu approximatif (ville de l\'adresse internet) capté depuis le 23/11/2026 à l\'inscription ou à la prise de RDV ; clients plus anciens : lieu de la signature du contrat.')
+      + ' Pas de dépense par appareil ni par région : Meta ne la transmet pas.</div>';
+  }
   function viewMarketing() {
     var R = rows();
     var ax = LC.byAxis(R, S.axis, S.M.adsByAd, S.ctx.tunnelFilter);
@@ -884,6 +900,7 @@
     h += '<div class="fn-seg" style="margin-bottom:14px;width:fit-content">';
     AXES.forEach(function (a) { h += '<button data-lq-axis="' + a[0] + '" class="' + (S.axis === a[0] ? 'active' : '') + '">' + a[1] + '</button>'; });
     h += '</div>';
+    h += visiteurCoverage(ax);
     var withMqs = ax.rows.filter(function (x) { return x.m; }).sort(function (a, b) { return b.m.mqs - a.m.mqs; });
     if (withMqs.length >= 2) {
       var top = withMqs[0], low = withMqs[withMqs.length - 1];
