@@ -19,11 +19,16 @@
 //   4. `signature_templates`   : modèles GÉNÉRÉS (texte), hors contrats ponctuels
 //                                → nouvelle version (sous-collection versions),
 //                                comme un enregistrement de l'Atelier contrats
+//                                Modèles PDF importés (demande d'Adrien : « tu
+//                                les régénères et tu les ajoutes à la place ») :
+//                                leur copie texte est convertie en contrat
+//                                généré (legacyToGenerated, comme l'Atelier) et
+//                                passe en SAS ; le PDF d'origine reste stocké.
 //
 // Ce qui ne change JAMAIS : factures émises (instantané figé), contrats signés
-// ou déjà envoyés (webSnapshot de la demande), modèles PDF importés (le PDF ne
-// se corrige pas par du texte : ils sont listés pour être refaits), la valeur
-// technique `billingScope: 'sarl'` des fiches clients.
+// ou déjà envoyés (webSnapshot de la demande), modèles PDF sans copie texte
+// (listés : à reprendre dans l'Atelier), la valeur technique
+// `billingScope: 'sarl'` des fiches clients.
 //
 // Rien n'est supprimé : les valeurs d'avant sont gardées dans la trace.
 // Aucune donnée personnelle en sortie (réglages et modèles seulement ; un
@@ -35,6 +40,7 @@
 
 const crypto = require('crypto');
 const { db, admin } = require('./_firebaseAdmin');
+const render = require('./_contract-render');
 
 function keyOk(req) {
   const want = String(process.env.SAS_MIGRATION_KEY || '');
@@ -174,7 +180,7 @@ module.exports = async function handler(req, res) {
 
     /* ── 4. Modèles de contrat ────────────────────────────────────────────── */
     const tSnap = await db.collection('signature_templates').get();
-    const r4 = { total: tSnap.size, modifies: [], pdfARefaire: [], ponctuelsAvecSarl: 0, dejaAJour: 0 };
+    const r4 = { total: tSnap.size, modifies: [], pdfConvertis: [], pdfSansTexte: [], pdfSansMentionSarl: [], ponctuelsAvecSarl: 0, dejaAJour: 0 };
     const todo = [];
     tSnap.forEach(function (d) {
       const T = d.data() || {};
@@ -186,8 +192,17 @@ module.exports = async function handler(req, res) {
       walk(String(T.name || ''), 'name', nameCh, null);
       if (T.isAdhoc) { if (ch.length) r4.ponctuelsAvecSarl++; return; }
       if (!gen) {
-        /* Modèle PDF importé : le PDF signé porte le texte, on ne touche à rien. */
-        if (ch.length || !hasWeb) r4.pdfARefaire.push({ id: d.id, nom: String(T.name || '').slice(0, 80), copieTexteAvecSarl: ch.length, sansCopieTexte: !hasWeb });
+        const nom = String(T.name || '').slice(0, 80);
+        if (!hasWeb) { r4.pdfSansTexte.push({ id: d.id, nom: nom }); return; }
+        if (!ch.length) { r4.pdfSansMentionSarl.push({ id: d.id, nom: nom }); return; }
+        /* Modèle PDF importé : sa copie texte devient le contrat (généré). */
+        const ch2 = [], rs2 = [];
+        const conv = walk(render.legacyToGenerated(T.web, T.fields || []), 'web', ch2, rs2);
+        r4.pdfConvertis.push({
+          id: d.id, nom: nom, articles: conv.sections.length, variables: (conv.variables || []).length, cases: (conv.clientChecks || []).length,
+          changements: ch2.map(function (c) { return { path: c.path, avant: c.avant, apres: c.apres }; }), residus: rs2,
+        });
+        todo.push({ id: d.id });
         return;
       }
       if (!ch.length) { r4.dejaAJour++; return; }
@@ -204,9 +219,11 @@ module.exports = async function handler(req, res) {
         const done = await db.runTransaction(async function (tx) {
           const s = await tx.get(ref);
           const T = s.data() || {};
-          if (!(T.web && T.web.generated)) return null;
+          if (!(T.web && Array.isArray(T.web.sections)) || T.isAdhoc) return null;
+          const converti = !T.web.generated;
           const ch = [];
-          const web0 = walk(T.web, 'web', ch, null);     /* relu dans la transaction */
+          /* relu dans la transaction */
+          const web0 = walk(converti ? render.legacyToGenerated(T.web, T.fields || []) : T.web, 'web', ch, null);
           if (!ch.length) return null;
           const version = (T.web.version || 0) + 1;
           const web = Object.assign({}, web0, { version: version, savedAt: nowIso, savedBy: 'sas-migration' });
@@ -215,12 +232,12 @@ module.exports = async function handler(req, res) {
           /* L'ancienne version doit rester consultable, même si elle n'avait
              jamais été enregistrée par l'Atelier. */
           if (!p.exists) tx.set(prev, { version: T.web.version || 0, name: T.name || '', web: T.web, note: 'Version d\'avant le passage en SAS (sauvegarde automatique)', by: 'sas-migration', at: TS, atIso: nowIso });
-          tx.set(ref, { web: web, updatedAt: TS }, { merge: true });
+          tx.set(ref, Object.assign({ web: web, updatedAt: TS }, converti ? { generated: true, pdfRemplaceLe: nowIso } : {}), { merge: true });
           tx.set(ref.collection('versions').doc(String(version).padStart(4, '0')), {
-            version: version, name: T.name || '', web: web, note: 'Passage de la SARL en SAS (Emily Ughetto Présidente, Adrien François Directeur général)',
+            version: version, name: T.name || '', web: web, note: (converti ? 'Contrat PDF régénéré en contrat généré. ' : '') + 'Passage de la SARL en SAS (Emily Ughetto Présidente, Adrien François Directeur général)',
             by: 'sas-migration', at: TS, atIso: nowIso,
           });
-          return { id: ref.id, de: T.web.version || 0, vers: version };
+          return { id: ref.id, de: T.web.version || 0, vers: version, pdfConverti: converti };
         });
         if (done) trace.templates.push(done);
       }
