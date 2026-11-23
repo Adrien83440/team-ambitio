@@ -57,6 +57,7 @@ const RULES = [
   [/(Ambitio\s?Corp\*{0,2}\s*(?:,|—|–|-|\()\s*)soci[ée]t[ée] [àa] responsabilit[ée] limit[ée]e/gi, '$1société par actions simplifiée'],
   [/(repr[ée]sent[ée]e par (?:\*\*)?Emily\s+Ughetto)\s+et\s+(Adrien\s+Fran[cç]ois)(?!,\s*Directeur)/gi, '$1, Présidente, et $2, Directeur général'],
   [/\bSARL(\s+)(Ambitio\s?Corp)/gi, 'SAS$1$2'],
+  [/cog[ée]r[ée]e par Adrien François et Emily/gi, 'présidée par Emily Ughetto, Adrien François étant Directeur général'],
   [/(Ambitio\s?Corp\*{0,2}\s*(?:,|—|–|-|\()\s*)SARL\b/gi, '$1SAS'],
 ];
 function rename(s) {
@@ -103,6 +104,8 @@ module.exports = async function handler(req, res) {
   if (!keyOk(req)) { res.status(404).end('Not found'); return; }
   if (req.method !== 'GET') { res.status(405).json({ error: 'GET seulement' }); return; }
   const apply = String((req.query && req.query.apply) || '') === '1';
+  const voir = String((req.query && req.query.voir) || '') === '1';
+  const VOIR = /g[ée]rant|g[ée]rance|SARL|responsabilit[ée] limit|Ambitio|Ughetto|Pr[ée]sident|Directeur g[ée]n/i;
   const nowIso = new Date().toISOString();
   const TS = admin.firestore.FieldValue.serverTimestamp();
   const report = { mode: apply ? 'APPLIQUÉ' : 'À BLANC — rien écrit', at: nowIso };
@@ -190,7 +193,16 @@ module.exports = async function handler(req, res) {
       const web = hasWeb ? walk(T.web, 'web', ch, rs) : null;
       const nameCh = [];
       walk(String(T.name || ''), 'name', nameCh, null);
-      if (T.isAdhoc) { if (ch.length) r4.ponctuelsAvecSarl++; return; }
+      if (T.isAdhoc) { r4.ponctuels = (r4.ponctuels || 0) + 1; if (ch.length) r4.ponctuelsAvecSarl++; return; }
+      if (voir && hasWeb) {
+        /* Lecture seule : les blocs qui parlent de la société ou de ses dirigeants. */
+        const vus = [];
+        (T.web.sections || []).forEach(function (sec, i) { (sec.blocks || []).forEach(function (b, j) {
+          if (VOIR.test(String(b))) vus.push({ ou: i + '.' + j, avant: String(b).slice(0, 700), apres: rename(String(b)).slice(0, 700) });
+        }); });
+        report.blocs = report.blocs || {};
+        report.blocs[d.id] = vus;
+      }
       if (!gen) {
         const nom = String(T.name || '').slice(0, 80);
         if (!hasWeb) { r4.pdfSansTexte.push({ id: d.id, nom: nom }); return; }
@@ -245,18 +257,32 @@ module.exports = async function handler(req, res) {
     }
     report.contrats = r4;
 
-    /* ── 5. Repérage (lecture seule) : autres réglages qui citent la SARL ─── */
+    /* ── 5. Autres réglages qui citent la SARL (champs texte de premier niveau
+       corrigés ; ce qui est plus profond est seulement signalé) ─────────── */
     const cfg = await db.collection('_config').get();
     const autres = [];
+    const aEcrire = [];
     cfg.forEach(function (d) {
       if (d.id === 'billing') return;
       const rs = [];
-      walk(d.data() || {}, '', [], rs);
       const ch = [];
-      walk(d.data() || {}, '', ch, null);
-      if (rs.length || ch.length) autres.push({ doc: '_config/' + d.id, aCorriger: ch.map(function (c) { return { path: c.path, avant: c.avant }; }), mentionsSarl: rs });
+      const data = d.data() || {};
+      const next = walk(data, '', ch, rs);
+      if (rs.length || ch.length) autres.push({ doc: '_config/' + d.id, corriges: ch.map(function (c) { return { path: c.path, avant: c.avant, apres: c.apres }; }), mentionsSarlRestantes: rs });
+      if (ch.length) {
+        const upd = {}, before = {};
+        Object.keys(data).forEach(function (k) { if (JSON.stringify(next[k]) !== JSON.stringify(data[k]) && typeof data[k] === 'string') { upd[k] = next[k]; before[k] = data[k]; } });
+        if (Object.keys(upd).length) aEcrire.push({ ref: d.ref, id: d.id, upd: upd, before: before });
+      }
     });
     report.autresReglages = autres;
+    if (apply) {
+      trace.autresReglagesAvant = {};
+      for (let i = 0; i < aEcrire.length; i++) {
+        trace.autresReglagesAvant[aEcrire[i].id] = aEcrire[i].before;
+        await aEcrire[i].ref.update(aEcrire[i].upd);
+      }
+    }
 
     if (apply) await db.collection('sas_migration_log').doc(nowIso.replace(/[:.]/g, '-')).set(trace);
     res.status(200).json(report);
