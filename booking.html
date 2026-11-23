@@ -159,7 +159,8 @@ body.bk-embed .bk-panel-right{padding:4px 16px 16px}
 .bk-slot,.bk-slot-go{flex:1;min-width:0;height:44px;border:1px solid var(--border);border-radius:11px;background:var(--card);font-size:14.5px;font-weight:700;text-align:center;cursor:pointer;transition:all .15s var(--ease);font-family:var(--fb);color:var(--text)}
 .bk-slot:hover{border-color:var(--primary);color:var(--primary)}
 .bk-slot.sel{background:var(--navy);border-color:var(--navy);color:#fff}
-.bk-slots-group{grid-column:1/-1;font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;padding-top:4px}
+.bk-slots-group{font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;padding-top:4px}
+.bk-slots-line{display:flex;flex-direction:column;gap:8px}
 .bk-slot-go{display:none;background:var(--cta);border-color:transparent;color:var(--cta-ink)}
 .bk-slot-go:hover{filter:brightness(1.1)}
 .bk-slot-row.sel .bk-slot-go{display:block}
@@ -269,7 +270,12 @@ body.bk-embed .bk-panel-right{padding:4px 16px 16px}
   .bk-cal{display:none;margin-top:6px}
   body.bk-showmonth .bk-cal{display:block}
   body.bk-showmonth .bk-strip-wrap{display:none}
-  .bk-slots-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));max-height:none;overflow:visible}
+  .bk-slots-list{max-height:none;overflow:visible;padding:0}
+  .bk-slots-line{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+  .bk-slots-list.grouped .bk-slots-line{display:flex;flex-direction:row;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:2px 28px 2px 0;margin-right:-18px;-webkit-mask-image:linear-gradient(90deg,#000 86%,transparent);mask-image:linear-gradient(90deg,#000 86%,transparent)}
+  .bk-slots-list.grouped .bk-slots-line::-webkit-scrollbar{display:none}
+  .bk-slots-list.grouped .bk-slot-row{flex:none;width:86px}
+  .bk-slots-list.grouped .bk-slots-group{padding-top:2px}
   .bk-slot-row.sel .bk-slot-go{display:none}
   .bk-dock{display:flex;position:sticky;bottom:10px;z-index:5;margin-top:14px;align-items:center;justify-content:space-between;gap:10px;background:var(--navy);color:#fff;padding:8px 8px 8px 16px;border-radius:14px;font-size:14px;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.2)}
   .bk-dock button{flex:none;border:0;background:var(--cta);color:var(--cta-ink);font-size:14.5px;font-weight:700;padding:12px 18px;border-radius:10px;cursor:pointer}
@@ -277,7 +283,7 @@ body.bk-embed .bk-panel-right{padding:4px 16px 16px}
   .bk-summary,.bk-form{max-width:none}
 }
 @media(max-width:350px){
-  .bk-slots-list{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .bk-slots-line{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 
 /* ── QUOTA COACHING MODAL ── */
@@ -1721,24 +1727,38 @@ function renderSlots() {
     /* Le créneau choisi se dédouble : l'heure + « Suivant ». Sur téléphone,
        « Suivant » passe dans la barre du bas (#continueBar). */
     /* Journée chargée (plus de 8 horaires) : repères Matin / Après-midi / Soir. */
-    var grouped = available.length > 8, lastGroup = '';
-    h += '<div class="bk-slots-list">';
+    /* Sur téléphone, chaque période tient sur UNE ligne qui défile de côté
+       (comme la bande des jours) : 20 horaires n'étirent plus la page. */
+    var grouped = available.length > 8, lastGroup = null;
+    h += '<div class="bk-slots-list' + (grouped ? ' grouped' : '') + '">';
     for (var i = 0; i < available.length; i++) {
       var isSel = S.selTime === available[i];
-      if (grouped) {
-        var mins = timeToMin(available[i]);
-        var grp = mins < 720 ? 'Matin' : (mins < 1080 ? 'Après-midi' : 'Soir');
-        if (grp !== lastGroup) { lastGroup = grp; h += '<div class="bk-slots-group">' + grp + '</div>'; }
+      var mins = timeToMin(available[i]);
+      var grp = !grouped ? '' : (mins < 720 ? 'Matin' : (mins < 1080 ? 'Après-midi' : 'Soir'));
+      if (grp !== lastGroup) {
+        if (lastGroup !== null) h += '</div>';
+        lastGroup = grp;
+        if (grp) h += '<div class="bk-slots-group">' + grp + '</div>';
+        h += '<div class="bk-slots-line">';
       }
       h += '<div class="bk-slot-row' + (isSel ? ' sel' : '') + '">';
       h += '<button type="button" class="bk-slot' + (isSel ? ' sel' : '') + '" data-action="selectTime" data-time="' + available[i] + '">' + available[i] + '</button>';
       h += '<button type="button" class="bk-slot-go" data-action="next">Suivant</button>';
       h += '</div>';
     }
-    h += '</div>';
+    h += '</div></div>';
   }
   h += '</div>';
+  /* Position de défilement de chaque ligne reprise après le re-rendu. */
+  var oldLines = wrap.querySelectorAll('.bk-slots-line'), lefts = [];
+  for (var ol = 0; ol < oldLines.length; ol++) lefts.push(oldLines[ol].scrollLeft);
+  var sameDay = wrap.getAttribute('data-day') === S.selDate;
   wrap.innerHTML = h;
+  wrap.setAttribute('data-day', S.selDate);
+  if (sameDay) {
+    var newLines = wrap.querySelectorAll('.bk-slots-line');
+    for (var nl = 0; nl < newLines.length && nl < lefts.length; nl++) newLines[nl].scrollLeft = lefts[nl];
+  }
 
   if (S.selTime) {
     var d = new Date(S.selDate + 'T12:00:00');
