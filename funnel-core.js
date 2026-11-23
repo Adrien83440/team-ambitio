@@ -1873,6 +1873,12 @@
       return a;
     }
     k.ocDue = dueAgg(due);
+    /* Même lecture par nature (23/11/2026, demande Vincent : Global / Self
+       Booking / Setting sous chaque carte du héro). */
+    k.ocDueSB = dueAgg(dueSelf);
+    k.ocDueNB = dueAgg(dueSetter);
+    k.keptSB = k.dueSB - k.cancSB - k.noshowSB - k.reschedSB;
+    k.keptNB = k.dueNB - k.cancNB - k.noshowNB - k.reschedNB;
     k.ocHasData = due.length > 0 && (k.ocDue.present + k.ocDue.pitched + k.ocDue.closesOc + k.dueCancelled + k.dueNoShow) > 0;
 
     /* Échelle CPR — MÊME AXE que la carte « RDV pris SB » (RDV SB créés

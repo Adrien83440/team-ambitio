@@ -628,6 +628,15 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   et le dit. Ne plus jamais mettre en tête un chiffre de cohorte à côté d'un funnel qui compte la période.
   `stats-drill.js` : fenêtre OPAQUE en thème clair (`--bg2` y est translucide). Set NB : « reporté à une nouvelle
   date » remplace « de remplacement ».
+  **4e retour Vincent (23/11/2026)** : (1) Funnel — sous chaque carte des deux lignes du héro, la part Self
+  Booking et Setting (`split3` ; `k.ocDueSB` / `k.ocDueNB`, `k.keptSB` / `k.keptNB`) ; LTB SB + LTB NB = LTB global.
+  (2) Qualité leads — cartes Closes / Signé / Encaissé cliquables (`drillV`, kind `signed`). (3) Set NB — colonnes
+  « Contracté » (`contracteNb`) et « Reçus » (`recus` : leads ENTRÉS sur la période via `FunnelCore.loadLeads`, sans
+  RDV Self Booking, rangés chez `setterSlug || assignedTo`, sinon « Non attribué » en Équipe) ; « pas encore
+  travaillé » = fiche sans `firstActionAt`. Les leads TRAVAILLÉS ne sont pas un sous-ensemble des reçus (première
+  action du setter, quelle que soit la date d'entrée). (4) **Global closing** = `sales-closing.html?vue=global`
+  (entrée de menu `sales-global`, `nav.js` distingue les deux adresses) : par closer, Self Booking + RDV du
+  setting ; pas de corrections ✎ dans cette vue (elles restent propres à Close SB et Set NB).
 
 Spécification de référence du flux commercial : `REFONTE-SPEC.md`.
 

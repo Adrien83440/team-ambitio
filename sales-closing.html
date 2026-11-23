@@ -43,11 +43,11 @@
   <div class="au-head">
     <div class="au-head-ico">🎯</div>
     <div>
-      <h1 class="au-title">Close SB <span style="color:var(--muted);font-weight:500">· rapport Closing</span></h1>
-      <div class="au-sub">Équipe sales uniquement — RDV <strong>Self Booking</strong> : les résultats saisis sur les RDV remontent automatiquement. RDV coaching &amp; clients exclus.</div>
+      <h1 class="au-title" id="pageTitle">Close SB <span style="color:var(--muted);font-weight:500">· rapport Closing</span></h1>
+      <div class="au-sub" id="pageSub">Équipe sales uniquement — RDV <strong>Self Booking</strong> : les résultats saisis sur les RDV remontent automatiquement. RDV coaching &amp; clients exclus.</div>
     </div>
     <div class="au-head-right">
-      <span class="au-chip sb">Self Booking</span>
+      <span class="au-chip sb" id="pageChip">Self Booking</span>
       <span class="au-badge-auto"><span class="dot"></span> Données automatiques</span>
     </div>
   </div>
@@ -108,8 +108,15 @@
   var JOURS_FR = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
   var pad2 = function (n) { return String(n).padStart(2, '0'); };
 
+  /* ══ VUE « GLOBAL CLOSING » (23/11/2026, demande Vincent) ══════════════
+     Même page, ouverte par ?vue=global : par closer, TOUS les RDV qu'il reçoit
+     — Self Booking + RDV posés par le setting — au lieu du seul Self Booking.
+     Mêmes règles, mêmes colonnes, plus la part SB / NB des RDV. Les corrections
+     manuelles ✎ restent propres à Close SB et à Set NB : cette vue n'en a pas,
+     elle montre ce qui est en base. */
+  var GLOBAL = /[?&]vue=global(&|$)/.test(window.location.search);
   var COLS = [
-    { key: 'rdvSb',      label: 'RDV SB',    grp: 'a', fmt: 'n' },
+    { key: 'rdvSb',      label: GLOBAL ? 'RDV' : 'RDV SB', grp: 'a', fmt: 'n', title: GLOBAL ? 'Tous les RDV reçus : Self Booking + setting' : '' },
     { key: 'annules',    label: 'Annulé',    grp: 'a', fmt: 'bad' },
     { key: 'noshow',     label: 'No-show',   grp: 'a', fmt: 'bad' },
     { key: 'replanifies',label: 'Replan.',   grp: 'a', fmt: 'n' },
@@ -140,8 +147,22 @@
     if (key === 'annNs') return { list: ['annules', 'noshow'], ov: ['annules', 'noshow'], money: false };
     return { list: [key], ov: [key], money: false };
   }
+  if (GLOBAL) {
+    COLS.splice(1, 0,
+      { key: 'partSb', label: 'dont SB', grp: 'a', fmt: 'n', title: 'RDV Self Booking (le prospect a réservé seul)' },
+      { key: 'partNb', label: 'dont NB', grp: 'a', fmt: 'n', title: 'RDV posés par un setter' });
+    DRILL.partSb = 1; DRILL.partNb = 1;
+    DRILL_LBL.rdvSb = 'RDV reçus (Self Booking + setting)'; DRILL_LBL.partSb = 'RDV Self Booking'; DRILL_LBL.partNb = 'RDV du setting (NB)';
+    DRILL_LBL.closes = 'Closes';
+  }
   var OV_KEYS = ['rdvSb','annules','noshow','replanifies','presents','disqua','offres','closes','nonCloses','contracte','collecte'];
 
+  if (GLOBAL) {
+    document.title = 'Alteore — Global closing';
+    $('#pageTitle').innerHTML = 'Global closing <span style="color:var(--muted);font-weight:500">· tous les RDV reçus par closer</span>';
+    $('#pageSub').innerHTML = 'Par closer : <strong>Self Booking + RDV posés par le setting</strong>, additionnés. Les résultats saisis sur les RDV remontent automatiquement. RDV coaching &amp; clients exclus.';
+    $('#pageChip').textContent = 'Self Booking + Setting';
+  }
   var S = {
     mode: 'month',          // 'day' | '3d' | '7d' | 'month' — tous les KPIs suivent la période
     anchor: null,           // Date de référence (jour affiché / fin de fenêtre / mois)
@@ -224,6 +245,7 @@
         '<span class="au-member-av">' + initials + '</span>' +
         '<span><span class="au-member-n">' + name + (m.active === false ? ' 🔒' : '') + '</span><br/><span class="au-member-r">' + roleLbl + '</span></span></button>';
     });
+    h += '<a class="au-btn ghost" style="align-self:center;margin-left:auto;text-decoration:none" href="' + (GLOBAL ? 'sales-closing.html' : 'sales-closing.html?vue=global') + '">' + (GLOBAL ? '🎯 Voir Close SB seul' : '🧮 Voir Global closing (SB + setting)') + '</a>';
     $('#memberTabs').innerHTML = h;
     document.querySelectorAll('#memberTabs .au-member').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -300,8 +322,8 @@
       AF.loadBookingsRange(fromDay, toDay, from, to),
       AF.loadTypeMap(),
       AF.loadPersonsMap(),
-      AF.loadOverrides(ovSlug, fromDay, toDay),
-      (member && S.mode === 'month')
+      GLOBAL ? Promise.resolve({}) : AF.loadOverrides(ovSlug, fromDay, toDay),
+      (!GLOBAL && member && S.mode === 'month')
         ? db.collection('saisies').doc(member.slug).collection('mois').doc(monthKey()).get().catch(function () { return { exists: false }; })
         : Promise.resolve({ exists: false })
     ]).then(function (res) {
@@ -323,7 +345,8 @@
       function keep(dk, key, it) { var d = lists[dk] || (lists[dk] = {}); (d[key] || (d[key] = [])).push(it); }
 
       bookings.forEach(function (b) {
-        if (AF.classifyBooking(b, S.typeMap) !== 'self') return;
+        var cls = AF.classifyBooking(b, S.typeMap);
+        if (cls !== 'self' && !(GLOBAL && cls === 'setter')) return;
         if (!memberMatchesBooking(b, member)) return;
         /* Replanifications exclues des « pris » (le RDV remplacé a déjà compté) */
         if (b._inCreated && !b.rescheduledFromId) createdSb++;
@@ -333,8 +356,14 @@
         var oc = b.outcome || null;
         /* Un seul verdict REVENUE par RDV closé (revOf mémorise le client). */
         var rv = oc === 'close' ? revOf(b) : null;
-        var it = SD.bookingItem(b, { todayIso: todayIso, closer: closerName(b), rv: rv, decl: (oc === 'close' && !rv) ? (b.closeData || null) : null });
+        var it = SD.bookingItem(b, { todayIso: todayIso, closer: closerName(b), rv: rv, decl: (oc === 'close' && !rv) ? (b.closeData || null) : null,
+          setter: (GLOBAL && cls === 'setter') ? memberName((b.closeData && b.closeData.setterSlug) || b.bookedBySlug || '') : '',
+          info: GLOBAL ? (cls === 'self' ? 'Self Booking' : 'Setting (NB)') : '' });
         row.rdvSb++; keep(dk, 'rdvSb', it);
+        if (GLOBAL) {
+          if (cls === 'self') { row.partSb++; keep(dk, 'partSb', it); }
+          else { row.partNb++; keep(dk, 'partNb', it); }
+        }
         if (oc === 'annule' || (!oc && b.status === 'cancelled' && b.rescheduled !== true)) { row.annules++; keep(dk, 'annules', it); }
         else if (oc === 'no_show' || (!oc && b.status === 'no_show')) { row.noshow++; keep(dk, 'noshow', it); }
         else if (oc === 'replanifie' || (!oc && b.status === 'cancelled' && b.rescheduled === true)) { row.replanifies++; keep(dk, 'replanifies', it); }
@@ -428,7 +457,7 @@
         var grpStart = i > 0 && COLS[i - 1].grp !== c.grp;
         rowsH += '<td class="' + (grpStart ? 'grp ' : '') + (e.ov ? 'au-ov' : '') + '"' + (c.title ? ' title="' + c.title + '"' : '') + '>' + drillCell(c, e.v, 'd|' + dk) + '</td>';
       });
-      rowsH += '<td><button class="au-day-edit" data-day="' + dk + '" title="Corriger cette journée">✎</button></td></tr>';
+      rowsH += '<td>' + (GLOBAL ? '' : '<button class="au-day-edit" data-day="' + dk + '" title="Corriger cette journée">✎</button>') + '</td></tr>';
       addTo(tot, dk);
       addTo(weekAgg, dk);
       if (showWeeks && (dow === 0 || di === R.days.length - 1)) {
@@ -446,15 +475,15 @@
 
     function kv(val, txt, key) { return val > 0 ? SD.cell(txt, key + '|t') : txt; }
     var kpis =
-      kpi(kv(tot.rdvSb, String(tot.rdvSb), 'rdvSb'), 'RDV SB — ' + (S.mode === 'month' ? 'mois' : S.mode === 'day' ? 'jour' : (S.mode === '3d' ? '3 jours' : '7 jours')), S.data.createdSb + ' pris (créés) sur la période', '#fbbf24') +
+      kpi(kv(tot.rdvSb, String(tot.rdvSb), 'rdvSb'), (GLOBAL ? 'RDV reçus — ' : 'RDV SB — ') + (S.mode === 'month' ? 'mois' : S.mode === 'day' ? 'jour' : (S.mode === '3d' ? '3 jours' : '7 jours')), (GLOBAL ? kv(tot.partSb, tot.partSb + ' Self Booking', 'partSb') + ' · ' + kv(tot.partNb, tot.partNb + ' du setting', 'partNb') : S.data.createdSb + ' pris (créés) sur la période'), '#fbbf24') +
       kpi(kv(tot.annules + tot.noshow, String(tot.annules + tot.noshow), 'annNs'), 'Annulés + No-show', tot.annules + ' annulés · ' + tot.noshow + ' no-show · ' + tot.replanifies + ' replanifiés', '#ef4444') +
       kpi(kv(tot.presents, String(tot.presents), 'presents'), 'Présents (Live)', 'Show-up ' + fmtPct(txShow), '#5b7cfa') +
       kpi(kv(tot.offres, String(tot.offres), 'offres'), 'Offres pitchées', fmtPct(txOffre) + ' des présents', '#a78bfa') +
-      kpi(kv(tot.closes, String(tot.closes), 'closes'), 'Closes SB', fmtPct(txCloseOffre) + ' / offres · ' + fmtPct(txCloseLive) + ' / live', '#34d399') +
+      kpi(kv(tot.closes, String(tot.closes), 'closes'), GLOBAL ? 'Closes' : 'Closes SB', fmtPct(txCloseOffre) + ' / offres · ' + fmtPct(txCloseLive) + ' / live', '#34d399') +
       kpi(kv(tot.closes + tot.contracte + tot.collecte, fmtEuro(tot.collecte), 'money'), 'Collecté (HT)', 'Contracté ' + fmtEuro(tot.contracte) + (S.data.rev.pending > 0 ? ' · ⏳ ' + fmtEuro(S.data.rev.pending) + ' de 1ers prélèvements en attente' : '') + (aov != null ? ' · AOV ' + fmtEuro(aov) : ''), '#34d399');
 
     var fun = funnel([
-      { l: 'RDV SB', v: tot.rdvSb },
+      { l: GLOBAL ? 'RDV reçus' : 'RDV SB', v: tot.rdvSb },
       { l: 'Présents (Live)', v: tot.presents },
       { l: 'Offres', v: tot.offres },
       { l: 'Closes', v: tot.closes }
@@ -480,11 +509,11 @@
     var h =
       revBanner(S.data.rev) +
       '<div class="au-kpis">' + kpis + '</div>' +
-      '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Funnel Close SB — ' + periodLabel() + '</div>' +
-        '<div class="au-card-note">résultats saisis sur les RDV (module RDV / fiche prospect) — Self Booking uniquement</div></div>' + fun + '</div>' +
+      '<div class="au-card"><div class="au-card-head"><div class="au-card-title">' + (GLOBAL ? 'Funnel Global closing — ' : 'Funnel Close SB — ') + periodLabel() + '</div>' +
+        '<div class="au-card-note">résultats saisis sur les RDV (module RDV / fiche prospect) — ' + (GLOBAL ? 'Self Booking + RDV du setting' : 'Self Booking uniquement') + '</div></div>' + fun + '</div>' +
       '<div class="au-card" style="padding:0;overflow:hidden">' +
         '<div class="au-card-head" style="padding:16px 18px 0;margin-bottom:12px"><div class="au-card-title">Jour par jour <span style="color:var(--muted);font-weight:500;font-size:12px">(par date du RDV)</span></div>' +
-          '<div class="right"><span class="au-chip sb">Self Booking</span></div></div>' +
+          '<div class="right"><span class="au-chip sb">' + (GLOBAL ? 'Self Booking + Setting' : 'Self Booking') + '</span></div></div>' +
         '<div class="au-twrap" style="border:none;border-radius:0"><table class="au-table"><thead>' + headH + '</thead><tbody>' +
         rowsH + (R.days.length > 1 ? aggRow(tot, 'TOTAL — ' + periodLabel().toUpperCase(), 'au-total', 't') : '') +
         '</tbody></table></div>' + aStatuerNote +
@@ -532,8 +561,8 @@
     return {
       title: (DRILL_LBL[dk0.money ? 'money' : key] || key) + ' — ' + who + ' · ' + when,
       sub: dk0.money
-        ? 'Montants HT, règle du module Paiements : encaissé = prélèvements réellement passés ; « en attente » = premier prélèvement pas encore passé. Self Booking uniquement — les closes issus du setting sont dans Set NB.'
-        : 'RDV Self Booking comptés à la date du RDV. Clique sur un nom pour ouvrir la fiche.',
+        ? 'Montants HT, règle du module Paiements : encaissé = prélèvements réellement passés ; « en attente » = premier prélèvement pas encore passé. ' + (GLOBAL ? 'Tous les closes du closer, Self Booking et setting.' : 'Self Booking uniquement — les closes issus du setting sont dans Set NB.')
+        : (GLOBAL ? 'RDV reçus par le closer (Self Booking + setting), comptés à la date du RDV. Clique sur un nom pour ouvrir la fiche.' : 'RDV Self Booking comptés à la date du RDV. Clique sur un nom pour ouvrir la fiche.'),
       note: note,
       items: items,
       money: dk0.money || key === 'closes',

@@ -1694,36 +1694,61 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       + '<p><strong>6 · « — » = pas de donnée, jamais un chiffre inventé.</strong> RDV passés non statués, journal d\'actions inexistant avant le 14/07/2026, coûts non renseignés (💶) : le funnel affiche un tiret et l\'explication, et les chiffres se remplissent tout seuls dès que la donnée existe (statuer les RDV via 🎯 Résultat).</p>'
       + '</div></details>';
 
+    /* Global / Self Booking / Setting sous chaque carte (23/11/2026, demande
+       Vincent) : le chiffre du haut reste le global, les deux lignes dessous
+       disent d'où il vient. `pct` = part calculée par l'appelant, ou null. */
+    function split3(sb, nb, pSb, pNb) {
+      function one(lbl, v, p, col) {
+        return '<div style="display:flex;justify-content:space-between;gap:8px"><span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + col + ';margin-right:5px"></span>' + lbl + '</span>' +
+          '<span><strong style="color:var(--text)">' + v + '</strong>' + (p != null ? ' <span class="pct">' + p + '</span>' : '') + '</span></div>';
+      }
+      return '<div class="s" style="margin-top:7px;padding-top:6px;border-top:1px solid var(--border)">' +
+        one('Self Booking', sb, pSb, '#fbbf24') + one('Setting (NB)', nb, pNb, '#a78bfa') + '</div>';
+    }
+    function pc(a, b) { return b > 0 ? fmtPct(a / b * 100, 0) : null; }
+    var cS = k.chSB || {}, cN = k.chNB || {};
     h += '<div class="fn-hero">';
     h += '<div class="fn-hero-lbl">📥 Ligne 1 — Leads entrés sur la période → les RDV PRIS sur la période</div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.leads) + '</div><div class="l">Leads</div><div class="s">' + (k.reoptins ? '+ ' + k.reoptins + ' ré-optins 🔄' : 'entrés sur la période') + '</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(ch.n) + '</div><div class="l">RDV pris</div><div class="s">' + (k.ltb != null ? 'LTB ' + fmtPct(k.ltb) + ' (RDV ÷ leads)' : 'SB + NB, replanif. dédupliqués') + '</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(ch.kept) + '</div><div class="l">Kept</div><div class="s">pris − ' + fmtNum(ch.cancelled) + ' annulés' + (ch.n > 0 ? ' · <span class="pct">' + fmtPct(ch.kept / ch.n * 100, 0) + '</span>' : '') + '</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + numOrDash(ch.present, ch.sansDetail) + '</div><div class="l">Live (présents)</div><div class="s">' + (ch.kept > 0 && ch.present > 0 ? '<span class="pct">' + fmtPct(ch.present / ch.kept * 100, 0) + '</span> des kept' : 'résultats RDV') + (ch.aVenir ? ' · ' + ch.aVenir + ' à venir' : '') + '</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + numOrDash(ch.pitched, ch.sansDetail) + '</div><div class="l">Pitchés (offres)</div><div class="s">' + (ch.pitched > 0 && ch.present > 0 ? '<span class="pct">' + fmtPct(ch.pitched / ch.present * 100, 0) + '</span> des live' : 'offre · close · non close') + (ch.sansDetail ? ' · ⚠ ' + ch.sansDetail + ' tenus sans détail' : '') + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(ch.n) + '</div><div class="l">RDV pris</div><div class="s">' + (k.ltb != null ? 'LTB global ' + fmtPct(k.ltb) + ' (RDV ÷ leads)' : 'SB + NB, replanif. dédupliqués') + '</div>' +
+      split3(fmtNum(cS.n), fmtNum(cN.n), k.leads > 0 ? 'LTB ' + fmtPct(cS.n / k.leads * 100) : null, k.leads > 0 ? 'LTB ' + fmtPct(cN.n / k.leads * 100) : null) + '</div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(ch.kept) + '</div><div class="l">Kept</div><div class="s">pris − ' + fmtNum(ch.cancelled) + ' annulés' + (ch.n > 0 ? ' · <span class="pct">' + fmtPct(ch.kept / ch.n * 100, 0) + '</span>' : '') + '</div>' +
+      split3(fmtNum(cS.kept), fmtNum(cN.kept), pc(cS.kept, cS.n), pc(cN.kept, cN.n)) + '</div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + numOrDash(ch.present, ch.sansDetail) + '</div><div class="l">Live (présents)</div><div class="s">' + (ch.kept > 0 && ch.present > 0 ? '<span class="pct">' + fmtPct(ch.present / ch.kept * 100, 0) + '</span> des kept' : 'résultats RDV') + (ch.aVenir ? ' · ' + ch.aVenir + ' à venir' : '') + '</div>' +
+      split3(fmtNum(cS.present), fmtNum(cN.present), pc(cS.present, cS.kept), pc(cN.present, cN.kept)) + '</div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + numOrDash(ch.pitched, ch.sansDetail) + '</div><div class="l">Pitchés (offres)</div><div class="s">' + (ch.pitched > 0 && ch.present > 0 ? '<span class="pct">' + fmtPct(ch.pitched / ch.present * 100, 0) + '</span> des live' : 'offre · close · non close') + (ch.sansDetail ? ' · ⚠ ' + ch.sansDetail + ' tenus sans détail' : '') + '</div>' +
+      split3(fmtNum(cS.pitched), fmtNum(cN.pitched), pc(cS.pitched, cS.present), pc(cN.pitched, cN.present)) + '</div>';
+    h += '<div class="fn-stage-note" style="grid-column:1/-1;margin-top:2px">Sous chaque carte : la part <strong>Self Booking</strong> (le prospect réserve seul depuis la page) et la part <strong>Setting</strong> (RDV posé par un setter). Les deux LTB s\'additionnent pour donner le LTB global ; les pourcentages suivants se lisent sur l\'étape précédente de la même ligne.</div>';
     h += '</div>';
 
     h += '<div class="fn-hero" style="margin-top:-8px">';
     h += '<div class="fn-hero-lbl">📆 Ligne 2 — Le mois en totalité : RDV qui ONT LIEU dans la période + business gagné</div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fd(k.rdvMois, fmtNum(k.rdvMois), 'rdvMois') + '</div><div class="l">RDV du mois</div><div class="s">SB ' + fmtNum(k.dueSB - k.reschedSB) + ' · NB ' + fmtNum(k.dueNB - k.reschedNB) + (k.dueCreatedBefore ? ' · dont ' + fmtNum(k.dueCreatedBefore) + ' posés avant la période' : '') + (k.dueRescheduled ? ' · ' + k.dueRescheduled + ' replanifiés déduits' : '') + '</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fd(k.kept, fmtNum(k.kept), 'kept') + '</div><div class="l">Kept Call</div><div class="s">RDV − annulés − no-show − replanifiés' + (k.keptPct != null ? ' · <span class="pct">' + fmtPct(k.keptPct, 0) + '</span>' : '') + '</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fd(k.ocDue.present, numOrDash(k.ocDue.present, k.ocDue.sansDetail), 'live') + '</div><div class="l">Live du mois</div><div class="s">présents (résultats RDV)' + (k.ocDue.sansDetail ? ' · ⚠ ' + k.ocDue.sansDetail + ' sans détail' : '') + '</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fd(k.ocDue.pitched, numOrDash(k.ocDue.pitched, k.ocDue.sansDetail), 'pitched') + '</div><div class="l">Pitchés du mois</div><div class="s">offres faites (résultats RDV)</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fd(k.closesWonTotal, fmtNum(k.closesWonTotal), 'closes') + '</div><div class="l">Closes</div><div class="s">clients gagnés — fiches + RDV + Paiements' + (k.closesCancelled ? ' · <span style="color:var(--orange,#e8a13c)">' + k.closesCancelled + ' annulé(s) déduit(s)</span>' : '') + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fd(k.rdvMois, fmtNum(k.rdvMois), 'rdvMois') + '</div><div class="l">RDV du mois</div><div class="s">SB ' + fmtNum(k.dueSB - k.reschedSB) + ' · NB ' + fmtNum(k.dueNB - k.reschedNB) + (k.dueCreatedBefore ? ' · dont ' + fmtNum(k.dueCreatedBefore) + ' posés avant la période' : '') + (k.dueRescheduled ? ' · ' + k.dueRescheduled + ' replanifiés déduits' : '') + '</div>' +
+      split3(fmtNum(k.dueSB - k.reschedSB), fmtNum(k.dueNB - k.reschedNB), pc(k.dueSB - k.reschedSB, k.rdvMois), pc(k.dueNB - k.reschedNB, k.rdvMois)) + '</div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fd(k.kept, fmtNum(k.kept), 'kept') + '</div><div class="l">Kept Call</div><div class="s">RDV − annulés − no-show − replanifiés' + (k.keptPct != null ? ' · <span class="pct">' + fmtPct(k.keptPct, 0) + '</span>' : '') + '</div>' +
+      split3(fmtNum(k.keptSB), fmtNum(k.keptNB), pc(k.keptSB, k.dueSB), pc(k.keptNB, k.dueNB)) + '</div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fd(k.ocDue.present, numOrDash(k.ocDue.present, k.ocDue.sansDetail), 'live') + '</div><div class="l">Live du mois</div><div class="s">présents (résultats RDV)' + (k.ocDue.sansDetail ? ' · ⚠ ' + k.ocDue.sansDetail + ' sans détail' : '') + '</div>' +
+      split3(fmtNum((k.ocDueSB || {}).present), fmtNum((k.ocDueNB || {}).present), pc((k.ocDueSB || {}).present, k.keptSB), pc((k.ocDueNB || {}).present, k.keptNB)) + '</div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fd(k.ocDue.pitched, numOrDash(k.ocDue.pitched, k.ocDue.sansDetail), 'pitched') + '</div><div class="l">Pitchés du mois</div><div class="s">offres faites (résultats RDV)</div>' +
+      split3(fmtNum((k.ocDueSB || {}).pitched), fmtNum((k.ocDueNB || {}).pitched), pc((k.ocDueSB || {}).pitched, (k.ocDueSB || {}).present), pc((k.ocDueNB || {}).pitched, (k.ocDueNB || {}).present)) + '</div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fd(k.closesWonTotal, fmtNum(k.closesWonTotal), 'closes') + '</div><div class="l">Closes</div><div class="s">clients gagnés — fiches + RDV + Paiements' + (k.closesCancelled ? ' · <span style="color:var(--orange,#e8a13c)">' + k.closesCancelled + ' annulé(s) déduit(s)</span>' : '') + '</div>' +
+      split3(fmtNum(k.wonSelf), fmtNum(k.wonSetting), pc(k.wonSelf, (k.ocDueSB || {}).pitched), pc(k.wonSetting, (k.ocDueNB || {}).pitched)) + '</div>';
     var heroColSub = 'prélèvements réellement passés';
     /* Libellés distincts (21/11/2026) : « 1ers prélèvements en attente » n'est
        qu'une PARTIE du « reste à encaisser » du contracté — les deux portaient
        le même nom et semblaient se contredire (7 000 € vs 22 000 €). */
     if (k.collecteMandat > 0) heroColSub += ' · ⏳ ' + fmtEuro(k.collecteMandat) + ' de 1ers prélèvements en attente (mandat signé, rien de passé)';
     if (k.collecteMissing > 0) heroColSub += ' · <span style="color:var(--orange,#e8a13c)">⚠ ' + k.collecteMissing + ' close(s) sans paiement</span>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fd((k.closeRows || []).length, fmtEuro(k.wonCollecte), 'money') + '</div><div class="l">Collecté (HT)</div><div class="s">' + heroColSub + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fd((k.closeRows || []).length, fmtEuro(k.wonCollecte), 'money') + '</div><div class="l">Collecté (HT)</div><div class="s">' + heroColSub + '</div>' +
+      split3(fmtEuro(k.wonCollecteSB), fmtEuro(k.wonCollecteNB), null, null) + '</div>';
     /* Contracté = valeur totale des contrats signés sur la période (module
        Paiements : totalAmount, repli tarif des cartes du Close). Le collecté
        n'en est que la part déjà encaissée — d'où le reste affiché ici. */
-    var heroConSub = 'SB ' + fmtEuro(k.wonContracteSB) + ' · NB ' + fmtEuro(k.wonContracteNB);
+    var heroConSub = 'valeur des contrats signés sur la période';
     var resteAEnc = (k.wonContracte || 0) - (k.wonCollecte || 0);
     if (k.wonContracte > 0 && resteAEnc > 0) heroConSub += ' · reste à encaisser ' + fmtEuro(resteAEnc) + ' = contracté − collecté, toutes échéances à venir' + (k.collecteMandat > 0 ? ' (dont ' + fmtEuro(k.collecteMandat) + ' de 1ers prélèvements en attente)' : '');
-    h += '<div class="fn-hero-kpi"><div class="v">' + fd((k.closeRows || []).length, fmtEuro(k.wonContracte), 'money') + '</div><div class="l">Contracté (HT)</div><div class="s">' + heroConSub + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fd((k.closeRows || []).length, fmtEuro(k.wonContracte), 'money') + '</div><div class="l">Contracté (HT)</div><div class="s">' + heroConSub + '</div>' +
+      split3(fmtEuro(k.wonContracteSB), fmtEuro(k.wonContracteNB), null, null) + '</div>';
     h += '</div>';
     h += cohBlock(k);
 

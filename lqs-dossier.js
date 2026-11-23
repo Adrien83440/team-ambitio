@@ -62,7 +62,7 @@
   function offerLbl(o) { return o === 'elite' ? 'Élite' : (o === 'business' ? 'Business' : 'offre non renseignée'); }
   /* Issue du prospect, en une phrase. */
   function statusOf(r) {
-    if (r.closed) return { k: 'won', t: '✅ Closé — ' + offerLbl(r.offer) + ' · ' + fEur(r.con) + ' signé · ' + fEur(r.cash) + ' encaissé' };
+    if (r.closed) return { k: 'won', t: '✅ Closé — ' + offerLbl(r.offer) + ' · ' + fEur(r.con) + ' signé · ' + fEur(r.cash) + ' encaissé' + (r.con - r.cash > 0.5 ? ' · reste ' + fEur(r.con - r.cash) : '') };
     if (r.closeCancelled) return { k: 'lost', t: '↩️ Close annulé' };
     if (r.present) return { k: 'lost', t: '❌ Présent au RDV, non closé' };
     if (r.upcoming) return { k: 'wait', t: '🗓 RDV à venir' };

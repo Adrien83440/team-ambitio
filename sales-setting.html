@@ -124,7 +124,8 @@
     { key: 'tempsAppelSec', label: '⏱ Temps',   grp: 'tel', fmt: 'dur',  ovKey: 'tempsAppelMin', ovLabel: "Temps d'appel (min)" },
     { key: 'calls',         label: 'Calls',      grp: 'tel', fmt: 'n' },
     { key: 'decroches',     label: 'Décro.',     grp: 'tel', fmt: 'n' },
-    { key: 'leads',         label: 'Leads',      grp: 'act', fmt: 'n' },
+    { key: 'recus',         label: 'Reçus',      grp: 'act', fmt: 'n', title: 'Leads NB reçus : leads entrés ce jour-là, sans RDV Self Booking, attribués à ce setter (Équipe : tous, attribués ou non). À comparer aux leads travaillés.' },
+    { key: 'leads',         label: 'Leads',      grp: 'act', fmt: 'n', title: 'Leads travaillés : première action du setter sur la fiche ce jour-là (quelle que soit la date d\'entrée du lead)' },
     { key: 'nrp1',          label: 'NRP1',       grp: 'act', fmt: 'n' },
     { key: 'nrp2',          label: 'NRP2',       grp: 'act', fmt: 'n' },
     { key: 'nrp3',          label: 'NRP3',       grp: 'act', fmt: 'n' },
@@ -139,6 +140,7 @@
     { key: 'presentsNb',    label: 'Présents',   grp: 'rdv', fmt: 'good' },
     { key: 'pitchesNb',     label: 'Pitchés',    grp: 'rdv', fmt: 'hot',  title: 'RDV pitchés (offre + close + non close) — même règle que Close SB' },
     { key: 'closesNb',      label: 'Closes',     grp: 'rdv', fmt: 'good' },
+    { key: 'contracteNb',   label: 'Contracté',  grp: 'rdv', fmt: 'eur', title: 'Contrats des clients closés ce jour (module Paiements, HT) — closes annulés exclus' },
     { key: 'collecteNb',    label: 'Collecté',   grp: 'rdv', fmt: 'eur', title: 'Prélèvements GoCardless réellement passés pour les clients closés (HT) — closes annulés exclus' }
   ];
   var COLS_ECRIT = [
@@ -147,7 +149,8 @@
     { key: 'convOut',    label: 'Conv. ouv.',  grp: 'dm',  fmt: 'n',    title: 'Conversations ouvertes par nous ce jour (démarchage)' },
     { key: 'replies',    label: 'Réponses',    grp: 'dm',  fmt: 'good', title: 'Conversations ouvertes par nous ayant reçu leur 1ʳᵉ réponse ce jour' },
     { key: 'convIn',     label: 'Conv. entr.', grp: 'dm',  fmt: 'n',    title: 'Conversations ouvertes par le prospect ce jour' },
-    { key: 'leads',      label: 'Leads',       grp: 'act', fmt: 'n' },
+    { key: 'recus',      label: 'Reçus',       grp: 'act', fmt: 'n', title: 'Leads NB reçus : leads entrés ce jour-là, sans RDV Self Booking, attribués à ce setter (Équipe : tous, attribués ou non). À comparer aux leads travaillés.' },
+    { key: 'leads',      label: 'Leads',       grp: 'act', fmt: 'n', title: 'Leads travaillés : première action du setter sur la fiche ce jour-là (quelle que soit la date d\'entrée du lead)' },
     { key: 'follow_up',  label: 'FU',          grp: 'act', fmt: 'n' },
     { key: 'out',        label: 'Out',         grp: 'act', fmt: 'n', title: 'Faux numéro + pas intéressé + disqualifié + poubelle' },
     { key: 'sets',       label: 'Sets',        grp: 'act', fmt: 'hot' },
@@ -157,6 +160,7 @@
     { key: 'presentsNb', label: 'Présents',    grp: 'rdv', fmt: 'good' },
     { key: 'pitchesNb',  label: 'Pitchés',     grp: 'rdv', fmt: 'hot',  title: 'RDV pitchés (offre + close + non close) — même règle que Close SB' },
     { key: 'closesNb',   label: 'Closes',      grp: 'rdv', fmt: 'good' },
+    { key: 'contracteNb', label: 'Contracté',  grp: 'rdv', fmt: 'eur', title: 'Contrats des clients closés ce jour (module Paiements, HT) — closes annulés exclus' },
     { key: 'collecteNb', label: 'Collecté',    grp: 'rdv', fmt: 'eur', title: 'Prélèvements GoCardless réellement passés pour les clients closés (HT) — closes annulés exclus' }
   ];
 
@@ -165,9 +169,10 @@
      Les appels et les messages Instagram ne sont pas des listes de leads. */
   var SD = window.StatsDrill;
   var NA = '_na';   // RDV du setting sans setter identifiable (onglet Équipe)
-  var DRILL = { leads: 1, nrp1: 1, nrp2: 1, nrp3: 1, all_nrp: 1, messagerie: 1, follow_up: 1, out: 1, sets: 1,
+  var DRILL = { recus: 1, contracteNb: 1, leads: 1, nrp1: 1, nrp2: 1, nrp3: 1, all_nrp: 1, messagerie: 1, follow_up: 1, out: 1, sets: 1,
     rdvNb: 1, annulesNb: 1, noshowNb: 1, presentsNb: 1, pitchesNb: 1, closesNb: 1, collecteNb: 1 };
   var DRILL_LBL = {
+    recus: 'Leads NB reçus', nonTrav: 'Leads NB reçus pas encore travaillés', contracteNb: 'Montants par client — contracté, encaissé, en attente',
     leads: 'Leads travaillés', nrp1: 'NRP 1', nrp2: 'NRP 2', nrp3: 'NRP 3', all_nrp: 'All NRP', messagerie: 'Messageries',
     follow_up: 'Follow-up', out: 'Sortis (faux numéro, pas intéressé, disqualifié, poubelle)', sets: 'Sets (RDV posés)',
     rdvNb: 'RDV du setting (NB)', annulesNb: 'RDV annulés', noshowNb: 'No-show', presentsNb: 'Présents',
@@ -177,7 +182,7 @@
     faux_numero: 'Faux numéro', pas_interesse: 'Pas intéressé', disqualifie: 'Disqualifié', poubelle: 'Poubelle',
     set: 'Set', set_booking: 'Set (RDV posé)', rdv_pose: 'RDV posé', assign: 'Attribution' };
   /* Colonnes de la carte « Par setter » de l'onglet Équipe. */
-  var TEAM_KEYS = ['leads', 'sets', 'rdvNb', 'annulesNb', 'noshowNb', 'presentsNb', 'pitchesNb', 'closesNb', 'collecteNb'];
+  var TEAM_KEYS = ['recus', 'leads', 'sets', 'rdvNb', 'annulesNb', 'noshowNb', 'presentsNb', 'pitchesNb', 'closesNb', 'contracteNb', 'collecteNb'];
 
   var S = {
     mode: 'month',          // 'day' | '3d' | '7d' | 'month' — tous les KPIs suivent la période
@@ -397,6 +402,19 @@
     if (it) keep(bk, dk, key, it);
   }
 
+  /* Leads ENTRÉS sur la période (23/11/2026, demande Vincent : « combien de
+     leads NB sont tombés », à comparer aux leads travaillés). Même chargement
+     que le Stats funnel (FunnelCore.loadLeads : date d'entrée réelle, fiches
+     fusionnées écartées) ; les ré-optins ne sont pas des leads entrés. */
+  function loadEntered(from, to) {
+    var FC = window.FunnelCore;
+    if (!FC || typeof FC.loadLeads !== 'function') return Promise.resolve(null);
+    var LD = {};
+    return FC.loadLeads(db, { start: from, end: to }, LD)
+      .then(function () { return LD.leads || []; })
+      .catch(function (e) { console.warn('[setting] leads entrés :', e && e.message); return null; });
+  }
+
   function refresh() {
     if (S.loading) return;
     S.loading = true;
@@ -458,7 +476,8 @@
         ? db.collection('saisies').doc(member.slug).collection('mois').doc(monthKey()).get().catch(function () { return { exists: false }; })
         : Promise.resolve({ exists: false }),
       ecrit ? loadDm(fromDay, toDay, from, to) : Promise.resolve(null),
-      AF.loadPersonsMap()
+      AF.loadPersonsMap(),
+      loadEntered(from, to)
     ]).then(function (res) {
       return AF.loadCloseRevenue(res[2]).then(function (revOf) { return { res: res, revOf: revOf }; });
     }).then(function (pack) {
@@ -469,6 +488,7 @@
       S.legacy = (res[4] && res[4].exists) ? res[4].data() : null;
       var dm = res[5];
       S.personsMap = res[6] || {};
+      var entered = res[7];
       var todayIso = AF.dayKey(new Date());
 
       /* Seaux : un par setter affiché, + « non attribué » pour l'Équipe. */
@@ -650,12 +670,36 @@
           else {
             add(bk, dk, 'closesNb', item());
             if (rv) {
+              add(bk, dk, 'contracteNb', null, rv.con);
               add(bk, dk, 'collecteNb', null, rv.paid);
               rev.pending += rv.pending;
               if (!rv.hasPay && !rv.dup) rev.noPay.push(nmC + (rv.declCol > 0 ? ' — déclaré ' + fmtEuro(rv.declCol) : ''));
-            } else add(bk, dk, 'collecteNb', null, (b.closeData && Number(b.closeData.collecte)) || 0);
+            } else {
+              add(bk, dk, 'contracteNb', null, (b.closeData && Number(b.closeData.contracte)) || 0);
+              add(bk, dk, 'collecteNb', null, (b.closeData && Number(b.closeData.collecte)) || 0);
+            }
           }
         }
+      });
+
+      /* — Leads NB reçus : entrés sur la période, sans RDV Self Booking,
+         rangés chez le setter de la fiche. Sans setter (ou setter hors de la
+         liste) : comptés dans l'Équipe seulement, ligne « Non attribué ». — */
+      var sbLead = {};
+      bookings.forEach(function (b) { if (b.leadId && AF.classifyBooking(b, S.typeMap) === 'self') sbLead[b.leadId] = 1; });
+      (entered || []).forEach(function (l) {
+        if (sbLead[l._id]) return;
+        var lSlug = l.setterSlug || l.assignedTo || null;
+        var bkL = B[lSlug] || (team ? naBk : null);
+        if (!bkL || (!team && bkL !== buckets[0])) return;
+        var eDay = l._entry != null ? AF.dayKey(new Date(l._entry)) : null;
+        if (!eDay || !bkL.days[eDay]) return;
+        var worked = !!l.firstActionAt;
+        var itL = { name: l.nom || l.email || l._id, leadId: l._id, date: eDay,
+          status: worked ? 'Travaillé' : 'Pas encore travaillé', statusColor: worked ? '#34d399' : '#fbbf24',
+          setter: bkL === naBk ? (lSlug ? memberName(lSlug) + ' (hors setters)' : 'Non attribué') : bkL.name };
+        add(bkL, eDay, 'recus', itL);
+        if (!worked) keep(bkL, eDay, 'nonTrav', itL);
       });
 
       buckets.forEach(function (bk) {
@@ -670,6 +714,7 @@
         buckets: buckets,
         days: buckets[0].days,   // valeurs automatiques du membre affiché (modale ✎)
         rev: rev,
+        enteredOk: entered != null,
         callsOk: ecrit ? true : (canSeeCalls || (!team && calls.length > 0)),
         dmOk: !dm || dm.ok !== false,
         dmError: dm && dm.ok === false ? dm.error : null,
@@ -788,11 +833,21 @@
     /* — KPIs de la période — */
     var kpis, fun;
     function kv(val, txt, key) { return val > 0 ? SD.cell(txt, key + '|t') : txt; }
+    /* Leads NB reçus et, parmi eux, ceux que personne n'a encore travaillés. */
+    var nNonTrav = 0;
+    S.data.buckets.forEach(function (bk) {
+      R.days.forEach(function (dk) {
+        if (team ? (bk.start && dk < bk.start) : beforeStart(dk)) return;
+        nNonTrav += ((bk.lists[dk] || {}).nonTrav || []).length;
+      });
+    });
+    var recusSub = !S.data.enteredOk ? '1ʳᵉ action fiche · jamais recomptés'
+      : kv(tot.recus, tot.recus + ' leads NB reçus', 'recus') + ' sur la période' + (nNonTrav > 0 ? ' · ' + SD.cell('<strong style="color:var(--gold)">' + nNonTrav + ' pas encore travaillés</strong>', 'nonTrav|t') : (tot.recus > 0 ? ' · tous travaillés' : ''));
     var txPitch = tot.presentsNb > 0 ? tot.pitchesNb / tot.presentsNb * 100 : null;
     var kpiRdv =
       kpi(kv(tot.presentsNb, String(tot.presentsNb), 'presentsNb'), 'Présents NB', kv(tot.rdvNb, tot.rdvNb + ' RDV NB', 'rdvNb') + ' sur la période' + (rdvOrigin(S.data.buckets, R, team) ? ' (' + rdvOrigin(S.data.buckets, R, team) + ')' : '') + ' · ' + tot.annulesNb + ' annulés · ' + tot.noshowNb + ' no-show', '#34d399') +
       kpi(kv(tot.pitchesNb, String(tot.pitchesNb), 'pitchesNb'), 'Pitchés NB', fmtPct(txPitch) + ' des présents', '#a78bfa') +
-      kpi(kv(tot.closesNb, String(tot.closesNb), 'closesNb'), 'Closes NB', kv(tot.closesNb + tot.collecteNb + S.data.rev.pending, fmtEuro(tot.collecteNb) + ' collecté HT', 'collecteNb') + (S.data.rev.pending > 0 ? ' · ⏳ ' + fmtEuro(S.data.rev.pending) + ' de 1ers prélèvements en attente' : ''), '#34d399');
+      kpi(kv(tot.closesNb, String(tot.closesNb), 'closesNb'), 'Closes NB', kv(tot.closesNb + tot.collecteNb + S.data.rev.pending, fmtEuro(tot.contracteNb) + ' contracté · ' + fmtEuro(tot.collecteNb) + ' collecté HT', 'collecteNb') + (S.data.rev.pending > 0 ? ' · ⏳ ' + fmtEuro(S.data.rev.pending) + ' de 1ers prélèvements en attente' : ''), '#34d399');
     if (ecrit) {
       var txRep = tot.convOut > 0 ? tot.replies / tot.convOut * 100 : null;
       var txSetConv = tot.replies > 0 ? tot.sets / tot.replies * 100 : null;
@@ -800,7 +855,7 @@
       kpis =
         kpi(tot.dmOut.toLocaleString('fr-FR'), 'DM envoyés', tot.dmIn.toLocaleString('fr-FR') + ' reçus · Instagram', '#e1306c') +
         kpi(String(tot.convOut), 'Conversations ouvertes', tot.replies + ' réponses · ' + fmtPct(txRep) + ' · ' + tot.convIn + ' entrantes', '#5b7cfa') +
-        kpi(kv(tot.leads, String(tot.leads), 'leads'), 'Leads travaillés', '1ʳᵉ action fiche · jamais recomptés', '#5b7cfa') +
+        kpi(kv(tot.leads, String(tot.leads), 'leads'), 'Leads travaillés', recusSub, '#5b7cfa') +
         kpi(kv(tot.sets, String(tot.sets), 'sets'), 'Sets (NB)', 'Set % réponses ' + fmtPct(txSetConv) + ' · show-up ' + fmtPct(txShowE), '#a78bfa') +
         kpiRdv;
       fun = funnel([
@@ -819,7 +874,7 @@
       kpis =
         kpi(AF.fmtDuration(tot.tempsAppelSec), "Temps d'appel", 'Ringover · auto', '#2dd4bf') +
         kpi(tot.calls.toLocaleString('fr-FR'), 'Calls passés', tot.decroches + ' décrochés · ' + fmtPct(txDecro), '#5b7cfa') +
-        kpi(kv(tot.leads, String(tot.leads), 'leads'), 'Leads travaillés', '1ʳᵉ action fiche · jamais recomptés', '#5b7cfa') +
+        kpi(kv(tot.leads, String(tot.leads), 'leads'), 'Leads travaillés', recusSub, '#5b7cfa') +
         kpi(kv(tot.sets, String(tot.sets), 'sets'), 'Sets (NB)', 'Set % décro ' + fmtPct(txSet) + ' · show-up ' + fmtPct(txShow), '#a78bfa') +
         kpiRdv;
       fun = funnel([
@@ -840,7 +895,7 @@
     if (team) {
       var tk = TEAM_KEYS.map(function (k) { return COLS.filter(function (c) { return c.key === k; })[0]; }).filter(function (c) { return !!c; });
       var tH = '<tr><th>Setter</th>';
-      tk.forEach(function (c) { tH += '<th>' + (c.key === 'leads' ? 'Leads trav.' : c.label) + '</th>'; });
+      tk.forEach(function (c) { tH += '<th' + (c.title ? ' title="' + c.title + '"' : '') + '>' + (c.key === 'leads' ? 'Leads trav.' : (c.key === 'recus' ? 'Leads reçus' : c.label)) + '</th>'; });
       tH += '</tr>';
       var tB = '', tTot = {};
       tk.forEach(function (c) { tTot[c.key] = 0; });
@@ -852,7 +907,7 @@
           line[c.key] = v; tTot[c.key] += v; if (v) any = true;
         });
         if (bk.slug === NA && !any) return;
-        tB += '<tr><td>' + SD.esc(bk.name) + (bk.slug === NA ? ' <span style="opacity:.6;font-weight:500">(RDV sans setter identifiable)</span>' : '') + '</td>';
+        tB += '<tr><td>' + SD.esc(bk.name) + (bk.slug === NA ? ' <span style="opacity:.6;font-weight:500">(sans setter identifiable)</span>' : '') + '</td>';
         var org = rdvOrigin([bk], R, true);
         tk.forEach(function (c) {
           tB += '<td>' + ((DRILL[c.key] && line[c.key] > 0) ? SD.cell(fmtCell(c, line[c.key]), c.key + '|m|' + bk.slug) : fmtCell(c, line[c.key])) +
@@ -871,7 +926,7 @@
         '<div class="au-card" style="padding:0;overflow:hidden">' +
           '<div class="au-card-head" style="padding:16px 18px 0;margin-bottom:12px"><div class="au-card-title">Par setter — ' + periodLabel() + '</div>' +
             '<div class="au-card-note">Sets = RDV posés sur la période · RDV NB = RDV qui ont lieu sur la période · clique un chiffre pour voir les noms</div></div>' +
-          '<div class="au-twrap" style="border:none;border-radius:0"><table class="au-table" style="min-width:720px"><thead>' + tH + '</thead><tbody>' + tB + '</tbody></table></div>' +
+          '<div class="au-twrap" style="border:none;border-radius:0"><table class="au-table" style="min-width:900px"><thead>' + tH + '</thead><tbody>' + tB + '</tbody></table></div>' +
         '</div>';
     }
 
@@ -998,7 +1053,7 @@
     var team = S.slug === '_all';
     var dks = kind === 'd' ? [p[2]] : (kind === 'w' ? R.days.slice(Number(p[2]), Number(p[3]) + 1) : R.days);
     var bks = kind === 'm' ? S.data.buckets.filter(function (bk) { return bk.slug === p[2]; }) : S.data.buckets;
-    var money = key === 'collecteNb';
+    var money = key === 'collecteNb' || key === 'contracteNb';
     var listKey = money ? 'money' : key;
     var items = [], shown = 0, auto = 0, corrected = false;
     bks.forEach(function (bk) {
@@ -1006,6 +1061,7 @@
         if (team && bk.start && dk < bk.start) return;
         if (!team && beforeStart(dk)) return;
         items = items.concat((bk.lists[dk] || {})[listKey] || []);
+        if (key === 'nonTrav') return;   // liste seule, pas une colonne
         var e = effB(bk, dk, key);
         if (e.ov) corrected = true;
         shown += e.v; auto += (bk.days[dk] && bk.days[dk][key]) || 0;
@@ -1022,14 +1078,15 @@
     var sub;
     if (money) sub = 'Montants HT, règle du module Paiements : encaissé = prélèvements réellement passés ; « en attente » = premier prélèvement pas encore passé. Closes issus du setting uniquement — ceux du Self Booking sont dans Close SB.';
     else if (key === 'sets') sub = 'Un set = un RDV setting posé, ou un lead passé en SET / RDV posé sur sa fiche, compté le jour où il est posé (un lead ne compte qu\'une fois par jour). La date affichée est celle du RDV ; la colonne Closer dit qui le reçoit.';
-    else if (key === 'leads') sub = 'Leads travaillés : première action du setter sur la fiche, jamais recomptée ensuite.';
+    else if (key === 'leads') sub = 'Leads travaillés : première action du setter sur la fiche, jamais recomptée ensuite — quelle que soit la date d\'entrée du lead.';
+    else if (key === 'recus' || key === 'nonTrav') sub = 'Leads entrés sur la période, sans RDV Self Booking, rangés chez le setter de la fiche. « Pas encore travaillé » = aucune action enregistrée sur la fiche, par personne. Les ré-optins ne sont pas comptés.';
     else if (key === 'rdvNb' || key === 'annulesNb' || key === 'noshowNb' || key === 'presentsNb' || key === 'pitchesNb' || key === 'closesNb') sub = 'RDV du setting (No Booking) comptés à la date du RDV, classés chez leur SETTER ; la colonne Closer dit qui a reçu le RDV, la colonne Précision quand il a été posé. Clique sur un nom pour ouvrir la fiche.';
     else sub = 'Actions enregistrées sur les fiches Leads Live, au jour du clic.';
     return {
       title: (DRILL_LBL[key] || key) + ' — ' + who + ' · ' + when,
       sub: sub, note: note, items: items,
       money: money || key === 'closesNb',
-      dateLabel: (key === 'leads' || (!money && !/Nb$/.test(key) && key !== 'sets')) ? 'Jour' : 'RDV'
+      dateLabel: (key === 'recus' || key === 'nonTrav') ? 'Entré le' : ((key === 'leads' || (!money && !/Nb$/.test(key) && key !== 'sets')) ? 'Jour' : 'RDV')
     };
   }
   SD.bind($('#content'), drillResolve);

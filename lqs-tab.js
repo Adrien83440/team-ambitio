@@ -206,8 +206,15 @@
     if (!n || !window.LqsDossier) return fNum(n);
     return '<a href="#" class="lq-drill" data-lq-drill="' + kind + '" data-lq-dn="' + note + '" title="Voir les ' + fNum(n) + ' prospects, leurs réponses et leurs visios">' + fNum(n) + '</a>';
   }
-  var DRILL_LBL = { leads: 'Leads', booked: 'RDV pris', present: 'Présents au RDV', closed: 'Closés' };
+  var DRILL_LBL = { leads: 'Leads', booked: 'RDV pris', present: 'Présents au RDV', closed: 'Closés', signed: 'Closes signés sur la période — signé, encaissé, reste' };
+  /* Carte cliquable (23/11/2026, demande Vincent : « cliquer sur l'encaissé
+     pour voir le détail ») : ouvre les clients signés sur la période. */
+  function drillV(html, n) {
+    if (!n || !window.LqsDossier) return html;
+    return '<a href="#" class="lq-drill" data-lq-drill="signed" data-lq-dn="all" title="Voir le détail client par client">' + html + '</a>';
+  }
   function drillRows(note, kind) {
+    if (kind === 'signed') return periodSigned().map(function (ps) { return ps.leadRow; }).filter(function (r) { return !!r; });
     return rows().filter(function (r) {
       if (note !== 'all' && String(r.note == null ? 0 : r.note) !== String(note)) return false;
       if (kind === 'booked') return r.booked;
@@ -218,7 +225,7 @@
   }
   function openDrill(note, kind) {
     window.LqsDossier.open({
-      title: DRILL_LBL[kind] + (note === 'all' ? ' — toutes les notes' : (String(note) === '0' ? ' — non notés' : ' — note LQS ' + note)),
+      title: kind === 'signed' ? DRILL_LBL[kind] : DRILL_LBL[kind] + (note === 'all' ? ' — toutes les notes' : (String(note) === '0' ? ' — non notés' : ' — note LQS ' + note)),
       sub: S.closer ? 'leads de ' + S.M.memberName(S.closer) : 'toute l\'équipe',
       periodLabel: S.ctx.periodLabel || '', rows: drillRows(note, kind)
     });
@@ -298,13 +305,13 @@
        le tableau par note, lui, reste sur les leads entrés (c'est son objet). */
     var mh = monthHead();
     if (S.cashMode === 'periode') {
-      h += kpi(fNum(mh.n), 'Closes signés', 'datés dans la période, comme le Stats funnel · ' + fNum(t.payers) + ' client' + (t.payers > 1 ? 's ont' : ' a') + ' payé');
-      h += kpi(fEur(mh.con), 'Signé sur la période', 'HT, closes datés dans la période');
+      h += kpi(drillV(fNum(mh.n), mh.n), 'Closes signés', 'datés dans la période, comme le Stats funnel · ' + fNum(t.payers) + ' client' + (t.payers > 1 ? 's ont' : ' a') + ' payé');
+      h += kpi(drillV(fEur(mh.con), mh.n), 'Signé sur la période', 'HT, closes datés dans la période');
       h += kpi(fEur(paidOf(t)), 'Encaissé sur la période', 'HT, prélèvements passés pendant la période, tous clients confondus<br>dont ' + fEur(mh.cash) + ' sur les closes de la période (= collecté du Stats funnel)');
     } else {
-      h += kpi(fNum(mh.n), 'Closes signés', 'sur la période, comme le Stats funnel' + (mh.n !== t.closes ? '<br>dont ' + fNum(t.closes) + ' de leads entrés sur la période' : '') + (t.closes ? '<br>' + offerSplit(t) : ''));
-      h += kpi(fEur(mh.con), 'Signé', 'HT, closes signés sur la période' + (Math.abs(mh.con - totCash) > 0.5 ? '<br>dont ' + fEur(totCash) + ' de leads entrés sur la période' : ''));
-      h += kpi(fEur(mh.cash), 'Encaissé', 'HT, déjà prélevé sur ces closes' + (mh.con > mh.cash ? '<br>' + fEur(mh.con - mh.cash) + ' restent à encaisser' : ''));
+      h += kpi(drillV(fNum(mh.n), mh.n), 'Closes signés', 'sur la période, comme le Stats funnel' + (mh.n !== t.closes ? '<br>dont ' + fNum(t.closes) + ' de leads entrés sur la période' : '') + (t.closes ? '<br>' + offerSplit(t) : ''));
+      h += kpi(drillV(fEur(mh.con), mh.n), 'Signé', 'HT, closes signés sur la période' + (Math.abs(mh.con - totCash) > 0.5 ? '<br>dont ' + fEur(totCash) + ' de leads entrés sur la période' : ''));
+      h += kpi(drillV(fEur(mh.cash), mh.n), 'Encaissé', 'HT, déjà prélevé sur ces closes' + (mh.con > mh.cash ? '<br>' + fEur(mh.con - mh.cash) + ' restent à encaisser' : ''));
     }
     h += '</div>';
 

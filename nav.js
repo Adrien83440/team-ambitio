@@ -95,6 +95,7 @@
     { id: 'sales-saisie', icon: '✏️', label: 'Saisie', section: 'Commercial', children: [
       { id: 'sales-setting',     icon: '📞', label: 'Set NB',        href: 'sales-setting.html',     perm: 'sales_saisie' },
       { id: 'sales-closing',     icon: '🎯', label: 'Close SB',      href: 'sales-closing.html',     perm: 'sales_saisie' },
+      { id: 'sales-global',      icon: '🧮', label: 'Global closing', href: 'sales-closing.html?vue=global', perm: 'sales_saisie' },
       { id: 'sales-eod',         icon: '📝', label: 'EOD',           href: 'sales-eod.html',         perm: 'sales_saisie' },
     ]},
     // Agenda (booking-admin) : Rendez-vous et Booking fusionnés le 19/10/2026
@@ -701,7 +702,12 @@
     return { name, email: window._currentUserEmail || localStorage.getItem('ambitio_email') || '', initials: name.slice(0,1).toUpperCase() };
   }
   function getActivePage() {
-    return { path: window.location.pathname.split('/').pop() || 'index.html' };
+    /* « Global closing » est la même page que Close SB, ouverte avec
+       ?vue=global (23/11/2026) : le paramètre fait partie de l'adresse de
+       menu, sinon les deux entrées s'allumeraient ensemble. */
+    var navPage = window.location.pathname.split('/').pop() || 'index.html';
+    if (navPage === 'sales-closing.html' && /[?&]vue=global(&|$)/.test(window.location.search)) navPage += '?vue=global';
+    return { path: navPage };
   }
 
   function buildSidebar() {
