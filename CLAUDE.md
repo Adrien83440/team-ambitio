@@ -46,7 +46,8 @@ dans le backlog ; n'en ajoute pas un quatrième.
 
 ## Le projet
 
-**team.alteore.com** — plateforme SaaS interne de SARL Ambitio Corp (marque Alteore),
+**team.alteore.com** — plateforme SaaS interne de SAS Ambitio Corp (marque Alteore ;
+SARL transformée en SAS en novembre 2026 : Emily Ughetto Présidente, Adrien François Directeur général),
 entreprise de coaching et de formation. Couvre : CRM, pipeline commercial, coaching,
 facturation, réservation, formulaires, signatures électroniques, paiements, téléphonie.
 
@@ -208,8 +209,14 @@ facture en production (incident du 22/07/2026 sur `_config/billing/cgv`).
   quotas mensuels.
 - Numérotation de facture : jamais de retour en arrière. Un 409 signifie « existe déjà ».
 
-### Dualité EI / SARL
-L'activité a démarré en entreprise individuelle avant la création de la SARL. Certains
+### Dualité EI / SAS
+L'activité a démarré en entreprise individuelle avant la création de la société (SARL,
+devenue SAS en novembre 2026 — la valeur technique `billingScope: 'sarl'` est conservée,
+seuls les libellés disent « SAS » ; factures et contrats émis avant restent en SARL).
+Données de production (émetteur `_config/billing`, nouvelle version des CGV, modèles de contrat
+générés, nom Booking) : route temporaire `api/sas-migration.js`, à blanc par défaut, clé Vercel
+`SAS_MIGRATION_KEY`, trace `sas_migration_log`. Cachet des contrats refait en « SAS AMBITIO CORP »
+(`api/_sign-brand.js`). Certains
 clients restent facturés sur l'EI, **depuis un autre outil** : BERNARD Mireille,
 BERTOLINO Laure, COMBES Alexandre, JANVIER Delphine, NAVES Anne-Lise, PRAX Aurore.
 

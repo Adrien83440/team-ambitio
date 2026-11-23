@@ -490,7 +490,7 @@ async function proofPages(doc, fonts, P) {
   F.y = F.H - 180;
 
   F.box([
-    { text: 'Ce dossier a été établi automatiquement par le serveur de SARL Ambitio Corp au moment de la signature. Il rassemble les éléments qui identifient le signataire, attestent de son consentement et garantissent l\'intégrité du document : vérification ' + (P.signers.some(function (x) { return x.otpCanal === 'email'; }) ? 'de l\'adresse e-mail' : 'du téléphone') + ' par code à usage unique, mentions saisies de sa main, journal horodaté de chacune de ses actions, empreintes cryptographiques et jetons d\'horodatage émis par une autorité tierce.', font: fonts.regular },
+    { text: 'Ce dossier a été établi automatiquement par le serveur de SAS Ambitio Corp au moment de la signature. Il rassemble les éléments qui identifient le signataire, attestent de son consentement et garantissent l\'intégrité du document : vérification ' + (P.signers.some(function (x) { return x.otpCanal === 'email'; }) ? 'de l\'adresse e-mail' : 'du téléphone') + ' par code à usage unique, mentions saisies de sa main, journal horodaté de chacune de ses actions, empreintes cryptographiques et jetons d\'horodatage émis par une autorité tierce.', font: fonts.regular },
   ]);
 
   F.section('1', 'Document');
@@ -511,7 +511,7 @@ async function proofPages(doc, fonts, P) {
   const prest = P.roleSignataire === 'prestataire';
   F.section('2', 'Parties');
   F.kv([
-    [prest ? 'Société' : 'Prestataire', 'SARL Ambitio Corp — SIRET 943 098 707 00012 — 231B chemin de Mourre de Masque, 83440 Fayence — représentée par Emily UGHETTO et Adrien FRANCOIS'],
+    [prest ? 'Société' : 'Prestataire', 'SAS Ambitio Corp — SIRET 943 098 707 00012 — 231B chemin de Mourre de Masque, 83440 Fayence — représentée par Emily UGHETTO, Présidente, et Adrien FRANCOIS, Directeur général'],
   ]);
   const C = P.company || {};
   const ca = C.country === 'CA';
@@ -581,12 +581,12 @@ async function proofPages(doc, fonts, P) {
     ['Journal des actions', P.audit.length + ' entrées — chaîne d\'empreintes ' + (P.auditIntact ? 'vérifiée intacte' : 'NON INTÈGRE')],
     ['Tête de chaîne', 'SHA-256 ' + P.auditHead, { mono: true }],
     ['Horodatage du journal', P.auditTsa ? ('Jeton RFC 3161 émis par ' + P.auditTsa.authority + ' — ' + parisStamp(P.auditTsa.genTime) + ' (heure de Paris)') : 'Autorité d\'horodatage indisponible au moment de la signature — heure serveur seule'],
-    ['Sceau du fichier', P.sealPlanned ? 'Ce fichier PDF est scellé par un horodatage RFC 3161 intégré (DocTimeStamp), visible dans le panneau « Signatures » d\'un lecteur PDF. Toute modification ultérieure du fichier invalide ce sceau.' : 'Non scellé : autorités d\'horodatage injoignables au moment de la signature. L\'empreinte du fichier est conservée par SARL Ambitio Corp.'],
+    ['Sceau du fichier', P.sealPlanned ? 'Ce fichier PDF est scellé par un horodatage RFC 3161 intégré (DocTimeStamp), visible dans le panneau « Signatures » d\'un lecteur PDF. Toute modification ultérieure du fichier invalide ce sceau.' : 'Non scellé : autorités d\'horodatage injoignables au moment de la signature. L\'empreinte du fichier est conservée par SAS Ambitio Corp.'],
   ]);
 
   F.box([
     { text: 'Cadre juridique', font: fonts.bold },
-    { text: 'Signature électronique au sens de l\'article 1367 du Code civil et du règlement (UE) n° 910/2014 dit « eIDAS ». L\'écrit électronique a la même force probante que l\'écrit sur support papier, sous réserve que puisse être dûment identifiée la personne dont il émane et qu\'il soit établi et conservé dans des conditions de nature à en garantir l\'intégrité (article 1366 du Code civil). Le présent dossier, le journal chaîné des actions et les jetons d\'horodatage sont conservés par SARL Ambitio Corp pendant toute la durée de la relation contractuelle et au-delà, dans la limite des délais de prescription applicables.' },
+    { text: 'Signature électronique au sens de l\'article 1367 du Code civil et du règlement (UE) n° 910/2014 dit « eIDAS ». L\'écrit électronique a la même force probante que l\'écrit sur support papier, sous réserve que puisse être dûment identifiée la personne dont il émane et qu\'il soit établi et conservé dans des conditions de nature à en garantir l\'intégrité (article 1366 du Code civil). Le présent dossier, le journal chaîné des actions et les jetons d\'horodatage sont conservés par SAS Ambitio Corp pendant toute la durée de la relation contractuelle et au-delà, dans la limite des délais de prescription applicables.' },
   ], { size: 7.6 });
 
   F.footers('Dossier de preuve · réf. ' + P.certificateId);
@@ -704,7 +704,7 @@ async function finishSigned(makeContract, proof) {
     const doc = built.doc;
     const fonts = built.fonts;
     doc.setTitle(proof.templateName + ' — signé');
-    doc.setAuthor('SARL Ambitio Corp');
+    doc.setAuthor('SAS Ambitio Corp');
     doc.setSubject('Contrat signé électroniquement — réf. ' + proof.certificateId);
     doc.setProducer('Ambitio — signature électronique');
     doc.setCreator('team.alteore.com');

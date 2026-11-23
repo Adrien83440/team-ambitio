@@ -1925,7 +1925,7 @@ function renderRolesTab(){
   var body=document.getElementById('setBody');
   var roles=getRoles();
   var h='<div style="margin-bottom:16px"><span style="font-size:11px;color:var(--muted);line-height:1.6">Les rôles définissent les niveaux de visibilité pour les enregistrements. Un utilisateur de rôle inférieur ne peut pas afficher les enregistrements au-dessus de lui dans la hiérarchie.</span></div>';
-  h+='<div style="font-family:var(--fh);font-size:13px;font-weight:800;margin-bottom:4px">SARL Ambitio Corp</div>';
+  h+='<div style="font-family:var(--fh);font-size:13px;font-weight:800;margin-bottom:4px">SAS Ambitio Corp</div>';
   h+='<div class="set-role-tree" id="setRoleTree">';
   h+=buildRoleTree(roles);
   h+='</div>';

@@ -873,7 +873,7 @@
           <div class="bill-stat-v" id="statClientsTotal">—</div>
         </div>
         <div class="bill-stat blue">
-          <div class="bill-stat-l">Facturés ici (SARL)</div>
+          <div class="bill-stat-l">Facturés ici (SAS)</div>
           <div class="bill-stat-v" id="statClientsSarl">—</div>
         </div>
         <div class="bill-stat purple">
@@ -900,7 +900,7 @@
         </div>
         <select class="bill-select" id="clientsScopeFilter" onchange="renderClientsList()" style="min-width:170px">
           <option value="all">Tous périmètres</option>
-          <option value="sarl">🏢 Facturés ici (SARL)</option>
+          <option value="sarl">🏢 Facturés ici (SAS)</option>
           <option value="ei">🔒 Hors périmètre (EI)</option>
         </select>
         <select class="bill-select" id="clientsStatusFilter" onchange="renderClientsList()" style="min-width:150px">
@@ -1307,7 +1307,7 @@ const DEFAULT_EMAIL_BODY =
 
 const DEFAULT_BILLING = {
   companyName: 'Ambitio Corp',
-  companyLegalForm: 'SARL',
+  companyLegalForm: 'SAS',
   companyShareCapital: '1000 €',
   companySiret: '94309870700012',
   companySiren: '943098707',
@@ -1360,7 +1360,7 @@ const CGV_V1_TEXT = [
   "CONDITIONS GÉNÉRALES DE FACTURATION",
   "",
   "1. Objet",
-  "Les présentes Conditions Générales de Facturation régissent les modalités de paiement et obligations liées aux services proposés par Ambitio Corp (SARL au capital de 1000 €, SIREN 943 098 707, SIRET 943 098 707 00012, 231B chemin de mourre de masque, 83440 Fayence).",
+  "Les présentes Conditions Générales de Facturation régissent les modalités de paiement et obligations liées aux services proposés par Ambitio Corp (SAS au capital de 1000 €, SIREN 943 098 707, SIRET 943 098 707 00012, 231B chemin de mourre de masque, 83440 Fayence).",
   "",
   "2. Prix et paiement",
   "Les prix sont exprimés en euros, TVA de 20 % incluse.",
@@ -1774,7 +1774,7 @@ function renderCompanyForm() {
   const c = billingConfig;
   const a = c.companyAddress || {};
   setVal('cfCompanyName', c.companyName || '');
-  setVal('cfLegalForm', c.companyLegalForm || 'SARL');
+  setVal('cfLegalForm', c.companyLegalForm || 'SAS');
   setVal('cfShareCapital', c.companyShareCapital || '');
   setVal('cfSiret', c.companySiret || '');
   setVal('cfVatNumber', c.companyVatNumber || '');
@@ -2988,7 +2988,7 @@ async function activateCgv(id) {
 /* ═══ CLIENTS LIST ═══ */
 
 /* Périmètre de facturation. L'activité a démarré en entreprise individuelle
-   avant la création de la SARL : quelques clients restent facturés sur l'EI,
+   avant la création de la société (SARL devenue SAS en 2026) : quelques clients restent facturés sur l'EI,
    depuis un autre outil. Leur fiche existe ici pour le suivi, mais AUCUNE
    facture ne doit sortir d'Alteore pour eux — d'où le blocage dur côté
    api/invoice-validate.js, et l'exclusion du flux Qonto. */
@@ -3472,7 +3472,7 @@ function openClientDrawer(clientId) {
   html += '<div class="bill-form-grid" style="margin-bottom:4px">';
   html += '  <div class="bill-form-row"><div class="bill-label">Facturé par <span class="bill-req">*</span></div>';
   html += '    <select class="bill-select" id="ctBillingScope" onchange="onScopeChange()">';
-  html += '      <option value="sarl"' + (curScope === 'sarl' ? ' selected' : '') + '>🏢 SARL Ambitio Corp — facturé ici</option>';
+  html += '      <option value="sarl"' + (curScope === 'sarl' ? ' selected' : '') + '>🏢 SAS Ambitio Corp — facturé ici</option>';
   html += '      <option value="ei"' + (curScope === 'ei' ? ' selected' : '') + '>🔒 Entreprise individuelle — facturé ailleurs</option>';
   html += '    </select>';
   html += '    <div class="bill-help" style="font-size:11px;margin-top:4px">Sur « EI », aucune facture ne peut être émise depuis cet outil.</div>';
@@ -3704,7 +3704,7 @@ document.addEventListener('click', async function (e) {
   }
 });
 
-/* Bascule SARL ↔ EI : le bandeau d'avertissement suit le sélecteur. */
+/* Bascule SAS ↔ EI : le bandeau d'avertissement suit le sélecteur. */
 function onScopeChange() {
   var sel = document.getElementById('ctBillingScope');
   var warn = document.getElementById('ctEiWarn');

@@ -7,7 +7,7 @@
  *
  * Usage : nettoyer des factures de rattrapage historique générées par
  * erreur (typiquement quand on rattrape des mensualités déjà couvertes
- * par un autre système comptable — ex : EI vs SARL).
+ * par un autre système comptable — ex : EI vs SAS).
  *
  * Pour chaque invoiceId :
  *   1. Lit la facture

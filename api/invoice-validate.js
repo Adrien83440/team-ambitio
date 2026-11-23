@@ -80,7 +80,7 @@ module.exports = async function(req, res) {
     /* ── Périmètre de facturation ──
        Quelques clients ont démarré sur l'entreprise individuelle et y sont
        restés : leurs factures sont émises depuis un autre outil. Leur fiche
-       existe ici pour le suivi, mais une facture émise depuis la SARL pour
+       existe ici pour le suivi, mais une facture émise depuis la SAS pour
        l'un d'eux serait une erreur comptable — et, une fois la facturation
        électronique active, une erreur transmise au réseau, donc irrattrapable.
        D'où un blocage dur, et non un simple avertissement.

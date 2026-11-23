@@ -28,8 +28,8 @@
 //
 // web.roleSignataire === 'prestataire' (14/10/2026) : contrat d'un
 // prestataire d'Ambitio (closer, setter…). Le bloc de signatures dit alors
-// « La SOCIÉTÉ — SARL Ambitio Corp » et « Le PRESTATAIRE — <signataire> » au
-// lieu de « Le PRESTATAIRE — SARL Ambitio Corp » et « Le CLIENT ».
+// « La SOCIÉTÉ — SAS Ambitio Corp » et « Le PRESTATAIRE — <signataire> » au
+// lieu de « Le PRESTATAIRE — SAS Ambitio Corp » et « Le CLIENT ».
 //
 // Mise en page : celle des contrats actuels — titre centré, « ARTICLE »
 // en gras souligné, texte justifié — avec en pied de CHAQUE page les deux
@@ -318,9 +318,9 @@ async function signatureBlock(C, opts, cachet) {
   /* AMBITIO */
   let y = top - SIZE;
   txt(T.ambitio, ML, y, F.b); y -= LH;
-  txt('SARL Ambitio Corp', ML, y); y -= LH;
-  txt('Représentée par Emily UGHETTO', ML, y); y -= LH;
-  txt('et Adrien FRANCOIS', ML, y); y -= 6;
+  txt('SAS Ambitio Corp', ML, y); y -= LH;
+  txt('Représentée par Emily UGHETTO, Présidente,', ML, y); y -= LH;
+  txt('et Adrien FRANCOIS, Directeur général', ML, y); y -= 6;
   if (cachet) {
     const w = Math.min(colW, 190);
     const h = w * cachet.height / cachet.width;
