@@ -213,10 +213,12 @@ facture en production (incident du 22/07/2026 sur `_config/billing/cgv`).
 L'activité a démarré en entreprise individuelle avant la création de la société (SARL,
 devenue SAS en novembre 2026 — la valeur technique `billingScope: 'sarl'` est conservée,
 seuls les libellés disent « SAS » ; factures et contrats émis avant restent en SARL).
-Données de production (émetteur `_config/billing`, nouvelle version des CGV, modèles de contrat
-générés, nom Booking) : route temporaire `api/sas-migration.js`, à blanc par défaut, clé Vercel
-`SAS_MIGRATION_KEY`, trace `sas_migration_log`. Cachet des contrats refait en « SAS AMBITIO CORP »
-(`api/_sign-brand.js`). Certains
+Bascule des données faite le 23/11/2026 (route temporaire retirée, visible dans l'historique git) :
+émetteur `_config/billing` en SAS, CGV de facturation version 1.1 (la 1.0 archivée), 7 modèles de
+contrat en nouvelle version (« Emily Ughetto, Présidente, et Adrien François, Directeur général »),
+`_config/ai_context` ; valeurs d'avant dans `sas_migration_log`. Cachet des contrats refait en
+« SAS AMBITIO CORP » (`api/_sign-brand.js`). Un nouveau contrat ne dit jamais « SARL » ni « gérant »
+pour Ambitio Corp. Certains
 clients restent facturés sur l'EI, **depuis un autre outil** : BERNARD Mireille,
 BERTOLINO Laure, COMBES Alexandre, JANVIER Delphine, NAVES Anne-Lise, PRAX Aurore.
 
