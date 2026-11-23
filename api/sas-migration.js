@@ -56,6 +56,9 @@ const RULES = [
   [/soci[ée]t[ée] [àa] responsabilit[ée] limit[ée]e \(SARL\)/gi, 'société par actions simplifiée (SAS)'],
   [/(Ambitio\s?Corp\*{0,2}\s*(?:,|—|–|-|\()\s*)soci[ée]t[ée] [àa] responsabilit[ée] limit[ée]e/gi, '$1société par actions simplifiée'],
   [/(repr[ée]sent[ée]e par (?:\*\*)?Emily\s+Ughetto)\s+et\s+(Adrien\s+Fran[cç]ois)(?!,\s*Directeur)/gi, '$1, Présidente, et $2, Directeur général'],
+  [/repr[ée]sent[ée]e par Monsieur Adrien FRAN[ÇC]OIS et Madame Emily UGHETTO, agissant en qualit[ée] de co-?g[ée]rants d[ûu]ment habilit[ée]s/gi,
+    'représentée par Madame Emily UGHETTO, Présidente, et Monsieur Adrien FRANÇOIS, Directeur général, dûment habilités'],
+  [/(Directeur g[ée]n[ée]ral),? en leur qualit[ée] de co-?g[ée]rants/gi, '$1'],
   [/\bSARL(\s+)(Ambitio\s?Corp)/gi, 'SAS$1$2'],
   [/cog[ée]r[ée]e par Adrien François et Emily/gi, 'présidée par Emily Ughetto, Adrien François étant Directeur général'],
   [/(Ambitio\s?Corp\*{0,2}\s*(?:,|—|–|-|\()\s*)SARL\b/gi, '$1SAS'],
@@ -72,7 +75,7 @@ function walk(v, path, changes, residus) {
     if (v.length > 200000) return v;
     const n = rename(v);
     if (n !== v) changes.push({ path: path, avant: around(v, n, false), apres: around(v, n, true) });
-    if (/\bSARL\b/i.test(n) && residus) residus.push({ path: path, extrait: snippet(n, n.search(/\bSARL\b/i)) });
+    if (/\bSARL\b|co-?g[ée]r/i.test(n) && residus) residus.push({ path: path, extrait: snippet(n, n.search(/\bSARL\b|co-?g[ée]r/i)) });
     return n;
   }
   if (Array.isArray(v)) return v.map(function (x, i) { return walk(x, path + '[' + i + ']', changes, residus); });
