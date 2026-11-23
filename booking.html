@@ -286,8 +286,10 @@ body.bk-embed .bk-panel-right{padding:4px 16px 16px}
   .bk-slots-list.grouped .bk-slot-row{flex:none;width:86px}
   .bk-slots-list.grouped .bk-slots-group{padding-top:2px}
   .bk-slot-row.sel .bk-slot-go{display:none}
-  .bk-dock{display:flex;position:sticky;bottom:10px;z-index:5;margin-top:14px;align-items:center;justify-content:space-between;gap:10px;background:var(--navy);color:#fff;padding:8px 8px 8px 16px;border-radius:14px;font-size:14px;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+  .bk-dock{display:flex;margin-top:14px;align-items:center;justify-content:space-between;gap:10px;background:var(--navy);color:#fff;padding:8px 8px 8px 16px;border-radius:14px;font-size:14px;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.2)}
   .bk-dock button{flex:none;border:0;background:var(--cta);color:var(--cta-ink);font-size:14.5px;font-weight:700;padding:12px 18px;border-radius:10px;cursor:pointer}
+  /* Place sous « Suivant » pour pouvoir le remonter au-dessus de la barre du navigateur */
+  body:not(.bk-embed) .bk-panel-right{padding-bottom:140px}
   .bk-field-row{grid-template-columns:1fr}
   .bk-summary,.bk-form{max-width:none}
 }
@@ -1003,15 +1005,21 @@ function bkQuizCalendarReady() {
    défiler CETTE page jusqu'au bouton, seulement s'il est caché. Cadre
    intégré à sa hauteur réelle (ordinateur) : la page ne défile pas, rien ne
    bouge — jamais de scrollIntoView, qui ferait aussi défiler la page du quiz. */
+var BK_NEXT_CLEAR = 110;
 function bkQuizRevealContinue() {
-  if (!_bkQuizBridge) return;
+  /* Toutes les pages (plus seulement le quiz) : sur téléphone, la barre
+     « Suivant » doit se VOIR dès qu'une heure est choisie. Safari pose sa barre
+     d'adresse flottante PAR-DESSUS le bas de la page : on amène donc « Suivant »
+     nettement au-dessus du bord (BK_NEXT_CLEAR), pas contre lui. En iframe à
+     hauteur réelle la page ne défile pas, rien ne bouge. */
   setTimeout(function() {
     var bar = document.getElementById('continueBar');
     if (!bar || bar.style.display === 'none') return;
-    var vh = window.innerHeight || document.documentElement.clientHeight;
+    var vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight || document.documentElement.clientHeight;
+    var clear = _bkQuizBridge ? 16 : BK_NEXT_CLEAR;
     var r = bar.getBoundingClientRect();
-    if (!r.height || r.bottom <= vh) return;
-    var top = (window.pageYOffset || 0) + r.bottom - vh + 16;
+    if (!r.height || r.bottom <= vh - clear) return;
+    var top = (window.pageYOffset || 0) + r.bottom - vh + clear;
     try { window.scrollTo({ top: top, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, top); }
   }, 60);
 }
