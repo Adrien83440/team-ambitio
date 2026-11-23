@@ -2687,6 +2687,9 @@ h+='<div style="margin-top:8px"><button class="bb bb-g" onclick="connectExtraCal
 }else{
 h+='<div class="cal-card"><div class="cal-card-head"><span class="cal-card-icon">📅</span><div><div class="cal-card-title" style="color:rgba(255,255,255,.38)">Aucun calendrier connecté</div><div class="cal-card-sub">La vérification de conflits n\'est pas active.</div></div></div></div>';
 h+='<div style="margin-top:10px"><button class="bb bb-g" onclick="connectCalendar(\''+exPerson.id+'\')">+ Connecter un Google Agenda</button></div>';
+if(window._currentRole==='admin'&&exPerson.isCoach===true){
+h+='<div style="margin-top:10px;padding:12px;border:1px solid rgba(167,139,250,.25);background:rgba(167,139,250,.06);border-radius:10px"><button class="bb bb-p" data-coach-auto="'+esc(exPerson.id)+'">⚡ Mise en place automatique</button><div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:6px;line-height:1.5">Règle la fiche comme celles des autres coachs : consultations, compte coaching partagé, sous-agenda au prénom du coach. Ne remplit que ce qui manque.</div></div>';
+}
 }
 
 h+='<div style="font-family:\'Bricolage Grotesque\',sans-serif;font-size:14px;font-weight:700;margin:24px 0 10px">Fonctionnement</div>';
@@ -3662,6 +3665,69 @@ toast('✅');
 window.addExternalCal=addExternalCal;window.removeExternalCal=removeExternalCal;
 window.connectExtraCalendar=connectExtraCalendar;window.disconnectExtraCal=disconnectExtraCal;window.toggleExtraCalCheck=toggleExtraCalCheck;
 
+// ═══ FICHE COACH — MISE EN PLACE AUTOMATIQUE (23/11/2026) ═══
+// api/coach-provision.js : consultations, règles, connexion du compte coaching
+// partagé, sous-agenda au prénom du coach. La création du sous-agenda demande
+// UNE fois le droit Google « gérer les agendas » sur ce compte (bouton ⚡ →
+// connexion → retour ici avec state.master) ; ensuite plus rien à connecter.
+function coachAutoAppel(payload){
+var u=firebase.auth().currentUser;
+if(!u)return Promise.reject(new Error('Session expirée'));
+return u.getIdToken().then(function(tk){
+return fetch('/api/coach-provision',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tk},body:JSON.stringify(payload)});
+}).then(function(r){return r.json().catch(function(){return {};});});
+}
+function coachAutoBilan(r){
+if(!r||r.ok!==true){alert('Mise en place impossible : '+((r&&(r.message||r.error))||'erreur inconnue'));return;}
+var l=(r.ecrit||[]).length?('Fait :\n• '+r.ecrit.join('\n• ')):'Rien à changer : la fiche était déjà réglée.';
+if((r.aFaire||[]).length)l+='\n\nReste à faire :\n• '+r.aFaire.join('\n• ');
+alert(l);
+location.reload();
+}
+function coachAutoLancer(pid){
+if(window._currentRole!=='admin'){toast('🔒 Admin requis');return;}
+toast('⚡ Mise en place…');
+coachAutoAppel({action:'provision',personId:pid,apply:true}).then(function(r){
+if(r&&r.ok===true&&r.masterManquant){
+if(!confirm('Le sous-agenda de ce coach n\'existe pas encore.\n\nPour qu\'il se crée tout seul (pour ce coach et les suivants), connecte-toi UNE fois avec le compte '+(r.comptePartage||'coaching')+' et accepte le droit de gérer les agendas.\n\nContinuer ?')){coachAutoBilan(r);return;}
+db.collection('_config').doc('oauth_calendar').get().then(function(doc){
+if(!doc.exists){alert('OAuth non configuré.');return;}
+var conf=doc.data();
+var st=btoa(JSON.stringify({master:true,personId:pid}));
+window.location.href='https://accounts.google.com/o/oauth2/v2/auth'
++'?client_id='+encodeURIComponent(conf.client_id)
++'&redirect_uri='+encodeURIComponent(conf.redirect_uri)
++'&response_type=code'
++'&scope='+encodeURIComponent('https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email')
++'&access_type=offline'
++'&prompt=consent'
++(r.comptePartage?'&login_hint='+encodeURIComponent(r.comptePartage):'')
++'&state='+encodeURIComponent(st);
+}).catch(function(e){alert('Erreur: '+e.message);});
+return;
+}
+coachAutoBilan(r);
+}).catch(function(e){alert('Erreur: '+e.message);});
+}
+function coachAutoRetour(code,pid){
+toast('⚡ Autorisation en cours…');
+var fait=false;
+firebase.auth().onAuthStateChanged(function(u){
+if(!u||fait)return;
+fait=true;
+coachAutoAppel({action:'master',code:code}).then(function(r){
+if(!r||r.ok!==true){alert('Autorisation refusée : '+((r&&(r.message||r.error))||'erreur inconnue'));return null;}
+toast('✅ Autorisation enregistrée ('+r.email+')');
+if(!pid)return null;
+return coachAutoAppel({action:'provision',personId:pid,apply:true}).then(coachAutoBilan);
+}).catch(function(e){alert('Erreur: '+e.message);});
+});
+}
+document.addEventListener('click',function(ev){
+var b=ev.target&&ev.target.closest?ev.target.closest('[data-coach-auto]'):null;
+if(b)coachAutoLancer(b.getAttribute('data-coach-auto'));
+});
+
 // Handle OAuth return — Google redirects here with ?code=xxx&state=yyy
 (function(){
 var params=new URLSearchParams(window.location.search);
@@ -3672,6 +3738,7 @@ if(code&&state){
 window.history.replaceState({},document.title,window.location.pathname);
 try{
 var stateData=JSON.parse(atob(state));
+if(stateData.master){coachAutoRetour(code,stateData.personId||'');return;}
 var pid=stateData.personId;
 if(!pid){toast('Erreur: personId manquant');return;}
 toast('🔗 Connexion au calendrier en cours…');

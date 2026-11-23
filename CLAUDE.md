@@ -80,6 +80,22 @@ coachs (`getCoachOptions`, règle unique `window.isCoachMember`), actes Academy 
 Booking, reliée au compte coaching@ (sinon l'enregistrement Meet n'arrive pas dans le Drive lu par la
 synchro des coachings) ; la fiche CSM reste sur son propre agenda.
 
+**Fiche coach automatique (23/11/2026)** : `api/coach-provision.js` fait ce qui se faisait à la main dans
+Booking, pour un compte de rôle `coach` ou « Aussi coach » : fiche « 🎯 Coach » (SÉPARÉE de la fiche
+d'origine pour une double casquette, créée si absente), consultations coaching de la MAJORITÉ des coachs
+déjà réglés (double casquette : seulement les `coaching_*`, pas les RDV d'accueil / d'audit du coach
+référent), tampons / délais / plafonds des coachs en place, connexion du compte coaching partagé RECOPIÉE
+d'une fiche coach (`calendar_tokens`, champ `copieDe`), sous-agenda au prénom du coach (repris s'il existe,
+sinon créé), agendas de la fiche d'origine recopiés en agendas supplémentaires. Ne remplit que ce qui
+MANQUE, n'écrase rien ; les horaires ne sont jamais recopiés (personnels). Le nouveau sous-agenda est
+ajouté DÉCOCHÉ aux autres fiches du compte : sinon `fetchAndStoreBusy` le coche d'office et ses RDV
+bloquent tous les coachs. Créer un agenda exige le droit Google « gérer les agendas », donné UNE fois
+(Booking → fiche coach → « ⚡ Mise en place automatique » → `calendar_master_tokens/coaching`, Admin SDK
+seul) ; les jetons des fiches n'ont que lecture + événements. Déclenché par `admin-users.html` (création
+d'un coach, passage en coach, case « Aussi coach ») et par le bouton ⚡. À blanc par défaut (`apply`),
+trace `coach_provision_log`. Réglages facultatifs `_config/coach_provision` (`types`, `typesAussiCoach`,
+`nomSousAgenda`). Accès manuel : clé Vercel temporaire `COACH_PROVISION_KEY` (`action=audit|provision`).
+
 Rôles techniques : `admin`, `sales` (setter / closer / closer_setter), `coach`, `csm`,
 `funnel_viewer` (utilisateur technique d'un lien d'accès en lecture au Stats funnel — voir plus bas).
 
