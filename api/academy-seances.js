@@ -35,7 +35,7 @@
 //              |"academy_unreachable"|<erreur Academy>, message? }
 // ============================================================================
 
-const { requireAuth } = require('./_verifyFirebaseAuth');
+const { requireAuth, estCoach } = require('./_verifyFirebaseAuth');
 
 const ACADEMY_URL = (process.env.ACADEMY_BRIDGE_URL || 'https://academy.adrienemily.com').replace(/\/$/, '');
 const ROLES = ['admin', 'coach', 'csm'];
@@ -81,7 +81,7 @@ module.exports = async (req, res) => {
     res.status(200).json({ ok: false, error: 'forbidden', message: 'Réservé à l\'équipe coaching.' });
     return;
   }
-  const acteur = ROLES_ACTEURS.indexOf(auth.role) >= 0;
+  const acteur = ROLES_ACTEURS.indexOf(auth.role) >= 0 || estCoach(auth);
 
   const key = process.env.ACADEMY_BRIDGE_KEY || '';
   if (!key) {

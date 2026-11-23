@@ -63,10 +63,38 @@ facturation, réservation, formulaires, signatures électroniques, paiements, t�
 | Adrien, Emily | admin |
 | Vincent | Head of Sales / admin — **pas** setter, hors rotation dialer |
 | Élodie Vidotto Siarri | setter + closer — utilisatrice principale du dialer |
-| Marine | CSM |
+| Marine | CSM **et aussi coach** (double casquette `alsoCoach`, voir plus bas) |
 | Steven, Valentin | setters (Steven : setting écrit) |
 | Edouard, Flore, Thomas, Farah | coachs — **jamais** concernés par le module Dialer |
 | Guillaume Bilcke | **parti** — exclu en dur (`DEPARTED`) de tous les affichages, historique conservé en base |
+
+**Double casquette « Aussi coach » (23/11/2026)** : un compte n'a qu'UN rôle. Pour qu'un membre
+garde son rôle (Marine : `csm`) et coache aussi, case « 🎓 Aussi coach » d'Admin → Utilisateurs →
+`users/{uid}.alsoCoach` + même drapeau sur sa fiche `_meta/team_members`. Ne JAMAIS changer son rôle
+en `coach` (elle perdrait cockpit CSM, Mes notes, signatures, e-mails de démarrage). Effets : listes de
+coachs (`getCoachOptions`, règle unique `window.isCoachMember`), actes Academy des coachs
+(`estCoach(auth)` de `_verifyFirebaseAuth.js` : jalons, validations, devoirs), bloc de règles autonome
+« AUSSI COACH » (créer une fiche client, Communication coaching, alarmes ; publiable par
+`rules-lecteur-funnel.js?bloc=aussi_coach`). Volontairement exclu : le choix du coach référent au close
+(`close-wizard.js`, pilote) reste `role === 'coach'`. RDV : une fiche expert SÉPARÉE « 🎯 Coach » dans
+Booking, reliée au compte coaching@ (sinon l'enregistrement Meet n'arrive pas dans le Drive lu par la
+synchro des coachings) ; la fiche CSM reste sur son propre agenda.
+
+**Fiche coach automatique (23/11/2026)** : `api/coach-provision.js` fait ce qui se faisait à la main dans
+Booking, pour un compte de rôle `coach` ou « Aussi coach » : fiche « 🎯 Coach » (SÉPARÉE de la fiche
+d'origine pour une double casquette, créée si absente), consultations coaching de la MAJORITÉ des coachs
+déjà réglés (double casquette : seulement les `coaching_*`, pas les RDV d'accueil / d'audit du coach
+référent), tampons / délais / plafonds des coachs en place, connexion du compte coaching partagé RECOPIÉE
+d'une fiche coach (`calendar_tokens`, champ `copieDe`), sous-agenda au prénom du coach (repris s'il existe,
+sinon créé), agendas de la fiche d'origine recopiés en agendas supplémentaires. Ne remplit que ce qui
+MANQUE, n'écrase rien ; les horaires ne sont jamais recopiés (personnels). Le nouveau sous-agenda est
+ajouté DÉCOCHÉ aux autres fiches du compte : sinon `fetchAndStoreBusy` le coche d'office et ses RDV
+bloquent tous les coachs. Créer un agenda exige le droit Google « gérer les agendas », donné UNE fois
+(Booking → fiche coach → « ⚡ Mise en place automatique » → `calendar_master_tokens/coaching`, Admin SDK
+seul) ; les jetons des fiches n'ont que lecture + événements. Déclenché par `admin-users.html` (création
+d'un coach, passage en coach, case « Aussi coach ») et par le bouton ⚡. À blanc par défaut (`apply`),
+trace `coach_provision_log`. Réglages facultatifs `_config/coach_provision` (`types`, `typesAussiCoach`,
+`nomSousAgenda`). Accès manuel : clé Vercel temporaire `COACH_PROVISION_KEY` (`action=audit|provision`).
 
 Rôles techniques : `admin`, `sales` (setter / closer / closer_setter), `coach`, `csm`,
 `funnel_viewer` (utilisateur technique d'un lien d'accès en lecture au Stats funnel — voir plus bas).

@@ -35,7 +35,7 @@
 //   { ok:false, error:"bridge_not_configured"|"forbidden"|"academy_unreachable" }
 // ============================================================================
 
-const { requireAuth } = require('./_verifyFirebaseAuth');
+const { requireAuth, estCoach } = require('./_verifyFirebaseAuth');
 
 const ACADEMY_URL = (process.env.ACADEMY_BRIDGE_URL || 'https://academy.adrienemily.com').replace(/\/$/, '');
 const ROLES = ['admin', 'coach', 'csm'];
@@ -80,7 +80,7 @@ module.exports = async (req, res) => {
     let j = null;
     try { j = await r.json(); } catch (e) { j = null; }
     if (!j || j.ok !== true) { res.status(200).json({ ok: false, error: 'academy_unreachable' }); return; }
-    j.peutAgir = ROLES_ACTEURS.indexOf(auth.role) >= 0;
+    j.peutAgir = ROLES_ACTEURS.indexOf(auth.role) >= 0 || estCoach(auth);
     res.status(200).json(j);
   } catch (e) {
     console.error('[academy-etat]', e && e.message);
