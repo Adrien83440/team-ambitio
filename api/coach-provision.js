@@ -262,7 +262,15 @@ async function provisionner(input, apply, par) {
         if (p.id === cible.id) return;
         (p.calendarList || []).forEach(function (c) { if (c && c.createEvents === true && c.id) pris[c.id] = p.name || p.id; });
       });
-      let sien = agendas.find(function (c) { return estSousAgenda(c.id) && !pris[c.id] && fold(c.name) === fold(voulu); }) || null;
+      /* Repris s'il existe : même nom, sinon le SEUL sous-agenda libre dont le
+         nom commence par le prénom (« Edouard.DW », « Marine C. »…). */
+      const libres = agendas.filter(function (c) { return estSousAgenda(c.id) && !pris[c.id]; });
+      rap.sousAgendasLibres = libres.map(function (c) { return c.name; });
+      let sien = libres.find(function (c) { return fold(c.name) === fold(voulu); }) || null;
+      if (!sien) {
+        const proches = libres.filter(function (c) { return fold(c.name).indexOf(fold(voulu)) === 0; });
+        if (proches.length === 1) sien = proches[0];
+      }
       if (sien) note('sous_agenda', 'existe', '« ' + sien.name + ' » déjà présent dans ' + partage + ' : repris.');
       else if (!ctx.master || !ctx.master.refreshToken) {
         note('sous_agenda', 'autorisation_manquante', 'Le sous-agenda « ' + voulu + ' » n\'existe pas dans ' + partage + ' et l\'autorisation unique de créer des agendas n\'a pas encore été donnée.');
