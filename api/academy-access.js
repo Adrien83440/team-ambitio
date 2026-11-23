@@ -21,6 +21,7 @@
 
 const { requireAuth } = require('./_verifyFirebaseAuth');
 const { admin, db } = require('./_firebaseAdmin');
+const { fetchPont } = require('./_academyCompte');
 
 const ACADEMY_URL = (process.env.ACADEMY_BRIDGE_URL || 'https://academy.adrienemily.com').replace(/\/$/, '');
 const ROLES = ['admin', 'csm'];
@@ -28,7 +29,7 @@ const ROLES = ['admin', 'csm'];
 function cap(s, n) { s = String(s == null ? '' : s); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
 
 async function bridge(key, payload) {
-  const r = await fetch(ACADEMY_URL + '/api/bridge/manage-access', {
+  const r = await fetchPont(ACADEMY_URL + '/api/bridge/manage-access', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-bridge-key': key },
     body: JSON.stringify(payload),

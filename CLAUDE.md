@@ -372,6 +372,15 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   côté page `window._canManage` (admin + csm) : ajouter un plan, « Proposer pour tous », liaison des
   questionnaires. Supprimer un document de plan reste admin. Les blocs de règles autonomes se publient par
   `api/rules-lecteur-funnel.js?bloc=…` (copies dans `api/_rulesLecteurFunnelBlock.js`, clé Vercel temporaire).
+- **E-mail du compte Academy (23/11/2026)** : le compte vit sous l'e-mail du SIGNATAIRE du contrat
+  (`academy-grant`), la fiche coaching garde souvent celui du lead (opt-in). Tout appel au pont qui porte
+  un e-mail passe par `fetchPont` de `api/_academyCompte.js` (même signature que `fetch`) : si l'Academy
+  répond « aucun élève à cet e-mail », l'appel est rejoué avec l'e-mail du signataire des contrats signés
+  du même client (par `clientEmail`, par le lead, par `clients._leadId`). Rien d'écrit, aucun coût quand
+  les e-mails concordent. Une nouvelle route vers le pont utilise `fetchPont`, jamais `fetch` nu. Sens
+  inverse : `academy-client-info` retrouve la fiche par le contrat. La fiche affiche l'e-mail du compte
+  quand il diffère. Non concernés : `academy-grant`, `_accesPaiement`, `signature-cancel` (partent déjà
+  du contrat).
 - **Fiche coaching en tuiles (20/11/2026)** : `openDetail` de `coaching.html` range la fiche en six
   sections ouvertes par des tuiles (`FC_PANES` : Synthèse · Plan d'action · Séances · Academy ·
   Quota & RDV · Dossier), chaque tuile portant son chiffre (`data-fc-sub`, mis à jour par

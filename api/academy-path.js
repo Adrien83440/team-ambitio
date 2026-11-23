@@ -29,6 +29,7 @@
 const { requireAuth } = require('./_verifyFirebaseAuth');
 const { callClaude, humanError } = require('./_ai');
 const { admin, db } = require('./_firebaseAdmin');
+const { fetchPont } = require('./_academyCompte');
 
 const ACADEMY_URL = (process.env.ACADEMY_BRIDGE_URL || 'https://academy.adrienemily.com').replace(/\/$/, '');
 const ROLES = ['admin', 'coach', 'csm'];
@@ -143,7 +144,7 @@ function parseProposal(text) {
 // ---------------------------------------------------------------------------
 
 async function fetchDossier(email, key) {
-  const r = await fetch(ACADEMY_URL + '/api/bridge/progress', {
+  const r = await fetchPont(ACADEMY_URL + '/api/bridge/progress', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-bridge-key': key },
     body: JSON.stringify({ email: email }),
@@ -297,7 +298,7 @@ module.exports = async (req, res) => {
         res.status(200).json({ ok: false, error: 'steps_required' });
         return;
       }
-      const r = await fetch(ACADEMY_URL + '/api/bridge/set-path', {
+      const r = await fetchPont(ACADEMY_URL + '/api/bridge/set-path', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-bridge-key': key },
         body: JSON.stringify({

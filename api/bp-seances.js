@@ -31,6 +31,7 @@
 const { admin, db } = require('./_firebaseAdmin');
 const { requireAuth } = require('./_verifyFirebaseAuth');
 const BP = require('../bp-credits.js');
+const { fetchPont } = require('./_academyCompte');
 
 const ROLES_LECTURE = ['admin', 'coach', 'csm'];
 const ACADEMY_URL = (process.env.ACADEMY_BRIDGE_URL || 'https://academy.adrienemily.com').replace(/\/$/, '');
@@ -68,7 +69,7 @@ async function relaisAcademy(email, totalAjoute, motif, par) {
   const key = process.env.ACADEMY_BRIDGE_KEY || '';
   if (!key || !email) return { ok: false, error: 'bridge_not_configured' };
   try {
-    const r = await fetch(ACADEMY_URL + '/api/bridge/seances-ajout', {
+    const r = await fetchPont(ACADEMY_URL + '/api/bridge/seances-ajout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-bridge-key': key },
       body: JSON.stringify({ email: email, total: totalAjoute, motif: cap(motif, 500), par: par }),

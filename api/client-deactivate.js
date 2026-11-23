@@ -45,6 +45,7 @@ const { google } = require('googleapis');
 const { admin, db } = require('./_firebaseAdmin');
 const { requireAuth } = require('./_verifyFirebaseAuth');
 const parseBody = require('./_parseBody');
+const { fetchPont } = require('./_academyCompte');
 
 const ROLES = ['admin', 'csm'];
 const ACADEMY_URL = (process.env.ACADEMY_BRIDGE_URL || 'https://academy.adrienemily.com').replace(/\/$/, '');
@@ -72,7 +73,7 @@ async function academyBridge(payload) {
   const key = process.env.ACADEMY_BRIDGE_KEY || '';
   if (!key) return { ok: false, error: 'bridge_not_configured' };
   try {
-    const r = await fetch(ACADEMY_URL + '/api/bridge/manage-access', {
+    const r = await fetchPont(ACADEMY_URL + '/api/bridge/manage-access', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-bridge-key': key },
       body: JSON.stringify(payload),

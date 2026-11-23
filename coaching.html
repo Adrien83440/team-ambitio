@@ -2393,7 +2393,11 @@ async function loadAcademyBlock(c, id){
     /* Parcours à étapes : on s'arrête ici. Tout ce qui suit compte des leçons,
        des workbooks et des modules — des unités du programme vidéo, qui
        n'existent pas chez ce client. */
-    if(estParcoursEtapes(c)){ box.innerHTML = acadBlocEtapes(d); fcSetSub(id,'academy','Parcours à étapes',''); return; }
+    /* Compte ouvert sous l'e-mail du signataire du contrat, différent de celui
+       de la fiche (api/_academyCompte.js) : on le dit, sinon on le cherche. */
+    const acadAutreEmail = (d.email && String(d.email).trim().toLowerCase() !== em.toLowerCase())
+      ? `<div style="margin-top:8px;font-size:11.5px;color:#6b7194">ℹ️ Compte Academy ouvert sous l'e-mail du contrat : <b>${escHtml(d.email)}</b></div>` : '';
+    if(estParcoursEtapes(c)){ box.innerHTML = acadBlocEtapes(d) + acadAutreEmail; fcSetSub(id,'academy','Parcours à étapes',''); return; }
     fcSetSub(id,'academy', d.totals.pct+' % · '+d.totals.done+'/'+d.totals.total, '');
     let y2 = 0, names = [], rows = '';
     d.courses.forEach(co=>{
@@ -2408,7 +2412,7 @@ async function loadAcademyBlock(c, id){
       ${acadWinsBox(d)}
       ${rows}
       ${y2>0?`<div style="margin-top:7px;padding:7px 9px;background:#fffaf0;border:1px solid #f3e3c3;border-radius:8px">🔒 <b>Année 2 :</b> ${y2} module${y2>1?'s':''} encore verrouillé${y2>1?'s':''}${names.length?` <span style="color:#6b7194">(${escHtml(names.join(' · '))}${y2>names.length?'…':''})</span>`:''}</div>`:''}
-      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-outline btn-sm" data-acad-path>🧭 Parcours IA</button><button type="button" class="btn btn-outline btn-sm" data-acad-wb>📓 Workbooks</button><button type="button" class="btn btn-outline btn-sm" data-acad-copy>📋 Copier le dossier</button><a class="btn btn-outline btn-sm" style="text-decoration:none" href="https://academy.adrienemily.com/suivi/${encodeURIComponent(d.email)}" target="_blank" rel="noreferrer">Fiche Academy ↗</a></div>`;
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-outline btn-sm" data-acad-path>🧭 Parcours IA</button><button type="button" class="btn btn-outline btn-sm" data-acad-wb>📓 Workbooks</button><button type="button" class="btn btn-outline btn-sm" data-acad-copy>📋 Copier le dossier</button><a class="btn btn-outline btn-sm" style="text-decoration:none" href="https://academy.adrienemily.com/suivi/${encodeURIComponent(d.email)}" target="_blank" rel="noreferrer">Fiche Academy ↗</a></div>${acadAutreEmail}`;
     const copyBtn = box.querySelector('[data-acad-copy]');
     if(copyBtn) copyBtn.addEventListener('click', ()=>{ navigator.clipboard.writeText(j.text||'').then(()=>showToast('📋 Dossier Academy copié')); });
     const pathBtn = box.querySelector('[data-acad-path]');

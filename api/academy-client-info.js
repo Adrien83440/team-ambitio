@@ -154,6 +154,10 @@ module.exports = async (req, res) => {
       clientDoc = snap.docs[0];
     }
 
+    /* L'Academy connaît l'élève sous l'e-mail du signataire du contrat ; la
+       fiche coaching peut garder celui du lead (voir api/_academyCompte.js). */
+    if (!clientDoc) clientDoc = await ficheParContrat(email);
+
     if (!clientDoc) {
       res.status(200).json({ ok: true, found: false });
       return;
@@ -176,6 +180,30 @@ module.exports = async (req, res) => {
     res.status(500).json({ ok: false, error: 'internal' });
   }
 };
+
+/* Contrat signé à cet e-mail → son lead → la fiche de ce lead (par _leadId,
+   sinon par l'e-mail du lead). Ne lève jamais : sans résultat, pas de fiche. */
+async function ficheParContrat(email) {
+  try {
+    const cs = await db.collection('signature_requests').where('clientEmail', '==', email).get();
+    const leadIds = [];
+    cs.forEach(function (d) {
+      const r = d.data() || {};
+      if (r.status === 'signed' && r.leadId && leadIds.indexOf(r.leadId) < 0) leadIds.push(r.leadId);
+    });
+    for (let i = 0; i < leadIds.length; i++) {
+      let q = await db.collection('clients').where('_leadId', '==', leadIds[i]).limit(1).get();
+      if (!q.empty) return q.docs[0];
+      const l = await db.collection('leads').doc(leadIds[i]).get();
+      const le = l.exists ? normEmail((l.data() || {}).email) : '';
+      if (le && le !== email) {
+        q = await db.collection('clients').where('email', '==', le).limit(1).get();
+        if (!q.empty) return q.docs[0];
+      }
+    }
+  } catch (e) { console.warn('[academy-client-info] contrat illisible :', e && e.message); }
+  return null;
+}
 
 // Helpers exposés pour les tests (aucun effet en production).
 module.exports.__test = { normEmail, getMonthlyQuota, flattenSessions, countSessionsInMonth, coachingSummary };

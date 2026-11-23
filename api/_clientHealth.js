@@ -31,6 +31,7 @@ const { db } = require('./_firebaseAdmin');
 const BP = require('../bp-credits.js');
 const Demarrage = require('../demarrage-core.js');
 const { callClaude, cap, tsToMs, getAiConfig } = require('./_ai');
+const { fetchPont } = require('./_academyCompte');
 
 const DEFAULT_RULES = { redDays: 21, orangeDays: 14, missedStreak: 2, homeworkMissed: 2, newClientGraceDays: 10 };
 const LEVEL_RANK = { vert: 0, orange: 1, rouge: 2 };
@@ -199,7 +200,7 @@ async function academyFacts(c) {
   try {
     const ctrl = new AbortController();
     const t = setTimeout(function () { ctrl.abort(); }, 7000);
-    const r = await fetch(ACADEMY_URL + '/api/bridge/seances', {
+    const r = await fetchPont(ACADEMY_URL + '/api/bridge/seances', {
       method: 'POST', signal: ctrl.signal,
       headers: { 'Content-Type': 'application/json', 'x-bridge-key': key },
       body: JSON.stringify({ email: lower(c.email), action: 'lire', par: ACADEMY_ACTOR }),

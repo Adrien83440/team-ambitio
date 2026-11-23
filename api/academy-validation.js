@@ -41,6 +41,7 @@
 // ============================================================================
 
 const { requireAuth, estCoach } = require('./_verifyFirebaseAuth');
+const { fetchPont } = require('./_academyCompte');
 
 const ACADEMY_URL = (process.env.ACADEMY_BRIDGE_URL || 'https://academy.adrienemily.com').replace(/\/$/, '');
 const ROLES = ['admin', 'coach'];
@@ -108,7 +109,7 @@ module.exports = async (req, res) => {
   if (action === 'deverrouiller') charge.motif = txt(body.motif, 1000);
 
   try {
-    const r = await fetch(ACADEMY_URL + '/api/bridge/validation-etape', {
+    const r = await fetchPont(ACADEMY_URL + '/api/bridge/validation-etape', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-bridge-key': key },
       body: JSON.stringify(charge),
