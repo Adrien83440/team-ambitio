@@ -14,22 +14,32 @@
 // Body : { action:"status"|"platform"|"grant"|"revoke", email,
 //          disabled?, courseId?, clientId? }
 //
+// ENVOYER SES ACCÈS (23/11/2026) — trois actions de plus, ouvertes AUSSI aux
+// coachs (rôle coach ou « Aussi coach ») depuis la fiche coaching :
+//   invite-etat  → le client a-t-il un compte de connexion, s'est-il déjà
+//                  connecté, quand un lien lui a-t-il été envoyé (lecture) ;
+//   invite       → envoie l'e-mail Academy « Crée ton mot de passe » ;
+//   invite-lien  → renvoie le même lien sans e-mail (à coller dans WhatsApp).
+// Pont /api/bridge/send-access : ne crée aucune fiche, n'ouvre aucune
+// formation. Le lien vaut 3 jours, un nouveau lien annule le précédent.
+//
 // Chaque modification est tracée dans la fiche client
 // (clients.academyAccessHistory, fail-soft) : qui, quand, quoi.
 // Variables Vercel : ACADEMY_BRIDGE_KEY (déjà en place).
 // ============================================================================
 
-const { requireAuth } = require('./_verifyFirebaseAuth');
+const { requireAuth, estCoach } = require('./_verifyFirebaseAuth');
 const { admin, db } = require('./_firebaseAdmin');
 const { fetchPont } = require('./_academyCompte');
 
 const ACADEMY_URL = (process.env.ACADEMY_BRIDGE_URL || 'https://academy.adrienemily.com').replace(/\/$/, '');
 const ROLES = ['admin', 'csm'];
+const ACTIONS_INVITATION = { 'invite-etat': 'etat', 'invite': 'envoyer', 'invite-lien': 'lien' };
 
 function cap(s, n) { s = String(s == null ? '' : s); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
 
-async function bridge(key, payload) {
-  const r = await fetchPont(ACADEMY_URL + '/api/bridge/manage-access', {
+async function bridge(key, payload, chemin) {
+  const r = await fetchPont(ACADEMY_URL + '/api/bridge/' + (chemin || 'manage-access'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-bridge-key': key },
     body: JSON.stringify(payload),
@@ -47,7 +57,16 @@ module.exports = async (req, res) => {
 
   const auth = await requireAuth(req, res);
   if (!auth) return;
-  if (ROLES.indexOf(auth.role) < 0) {
+
+  let body = {};
+  try { body = typeof req.body === 'object' && req.body ? req.body : JSON.parse(req.body || '{}'); }
+  catch (e) { body = {}; }
+  const action = String(body.action || '');
+  const invitation = Object.prototype.hasOwnProperty.call(ACTIONS_INVITATION, action);
+
+  /* Les accès (désactiver, ouvrir, retirer) restent admin / CSM ; envoyer ses
+     accès à un client est aussi un geste de coach. */
+  if (ROLES.indexOf(auth.role) < 0 && !(invitation && estCoach(auth))) {
     res.status(200).json({ ok: false, error: 'forbidden' });
     return;
   }
@@ -58,14 +77,38 @@ module.exports = async (req, res) => {
     return;
   }
 
-  let body = {};
-  try { body = typeof req.body === 'object' && req.body ? req.body : JSON.parse(req.body || '{}'); }
-  catch (e) { body = {}; }
-  const action = String(body.action || '');
   const email = String(body.email || '').trim().toLowerCase();
   const clientId = String(body.clientId || '').trim();
   if (!action || !email) {
     res.status(200).json({ ok: false, error: 'action_email_required' });
+    return;
+  }
+
+  if (invitation) {
+    try {
+      const j = await bridge(key, { email: email, mode: ACTIONS_INVITATION[action] }, 'send-access');
+      if (!j || j.ok !== true) {
+        res.status(200).json({ ok: false, error: (j && j.error) || 'academy_unreachable' });
+        return;
+      }
+      /* Trace dans la fiche (fail-soft), avant de répondre : Vercel coupe ensuite. */
+      if (clientId && action !== 'invite-etat' && j.found) {
+        try {
+          await db.collection('clients').doc(clientId).update({
+            academyAccessHistory: admin.firestore.FieldValue.arrayUnion({
+              at: Date.now(),
+              by: auth.email || auth.uid,
+              action: action,
+              resume: action === 'invite' ? '📧 Accès Academy envoyés par e-mail' : '🔗 Lien d\'accès Academy copié',
+            }),
+          });
+        } catch (e) { console.warn('[academy-access] trace fiche impossible:', e && e.message); }
+      }
+      res.status(200).json(j);
+    } catch (e) {
+      console.error('[academy-access] invitation', e && e.message);
+      res.status(200).json({ ok: false, error: 'internal' });
+    }
     return;
   }
 

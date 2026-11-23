@@ -2397,7 +2397,7 @@ async function loadAcademyBlock(c, id){
        de la fiche (api/_academyCompte.js) : on le dit, sinon on le cherche. */
     const acadAutreEmail = (d.email && String(d.email).trim().toLowerCase() !== em.toLowerCase())
       ? `<div style="margin-top:8px;font-size:11.5px;color:#6b7194">ℹ️ Compte Academy ouvert sous l'e-mail du contrat : <b>${escHtml(d.email)}</b></div>` : '';
-    if(estParcoursEtapes(c)){ box.innerHTML = acadBlocEtapes(d) + acadAutreEmail; fcSetSub(id,'academy','Parcours à étapes',''); return; }
+    if(estParcoursEtapes(c)){ box.innerHTML = acadBlocEtapes(d) + acadAutreEmail; fcSetSub(id,'academy','Parcours à étapes',''); acadAcces(c, id, box); return; }
     fcSetSub(id,'academy', d.totals.pct+' % · '+d.totals.done+'/'+d.totals.total, '');
     let y2 = 0, names = [], rows = '';
     d.courses.forEach(co=>{
@@ -2419,7 +2419,72 @@ async function loadAcademyBlock(c, id){
     if(pathBtn) pathBtn.addEventListener('click', ()=>openPathCopilot(c, id, d));
     const wbBtn = box.querySelector('[data-acad-wb]');
     if(wbBtn) wbBtn.addEventListener('click', ()=>openWorkbookPanel(c, id, d));
+    acadAcces(c, id, box);
   }catch(e){ box.innerHTML = '🎓 Academy indisponible pour le moment.'; fcSetSub(id,'academy','Indisponible','mute'); }
+}
+
+// « Envoyer ses accès » (23/11/2026) : le client a un compte Academy mais ne s'est
+// peut-être jamais connecté. /api/academy-access (invite-etat / invite /
+// invite-lien) → pont send-access : e-mail « Crée ton mot de passe » ou lien à
+// coller dans WhatsApp, valable 3 jours. Admin, CSM et coachs. Fail-soft : la
+// zone disparaît si l'Academy ne répond pas.
+async function acadAcces(c, id, box){
+  const zone = document.createElement('div');
+  zone.style.cssText = 'margin-top:10px;padding-top:10px;border-top:1px dashed #d9dcf0;font-size:12px;line-height:1.5';
+  box.appendChild(zone);
+  const quand = ms => ms ? new Date(ms).toLocaleDateString('fr-FR',{ day:'numeric', month:'short' }) : '';
+  const appel = async action => {
+    const token = (window._auth && window._auth.currentUser) ? await window._auth.currentUser.getIdToken() : '';
+    const r = await fetch('/api/academy-access', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token }, body: JSON.stringify({ action, email: (c.email||'').trim(), clientId: id }) });
+    return await r.json().catch(()=>null);
+  };
+  const erreur = j => {
+    const e = j && j.error;
+    if(e === 'forbidden') return 'Action réservée aux admins, CSM et coachs.';
+    if(e === 'compte_desactive') return 'Compte Academy désactivé : le réactiver avant d\'envoyer des accès.';
+    if(e === 'envoi_impossible') return 'L\'e-mail n\'a pas pu partir. Utilise « Copier le lien ».';
+    return 'Academy indisponible pour le moment.';
+  };
+  const dessiner = (e, lien) => {
+    let etat;
+    if(e.desactive) etat = '🔴 <b>Compte de connexion désactivé</b>';
+    else if(e.dejaConnecte) etat = '✅ <b>S\'est déjà connecté</b> à l\'Academy';
+    else {
+      const expire = e.inviteExpiresAt && !e.inviteUsedAt && e.inviteExpiresAt < Date.now();
+      etat = '⚠️ <b>Ne s\'est jamais connecté</b> à l\'Academy'
+        + (e.inviteSentAt ? ' · accès envoyés le '+quand(e.inviteSentAt)+(expire ? ', <b>lien expiré</b>' : (e.inviteExpiresAt ? ', lien valable jusqu\'au '+quand(e.inviteExpiresAt) : '')) : ' · <b>aucun accès envoyé</b>');
+    }
+    const boutons = e.desactive ? '' : `<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="btn ${e.dejaConnecte ? 'btn-outline' : 'btn-primary'} btn-sm" data-acad-invite="invite">${e.dejaConnecte ? '🔑 Renvoyer un lien de mot de passe' : '📧 Envoyer ses accès'}</button>
+        <button type="button" class="btn btn-outline btn-sm" data-acad-invite="invite-lien">🔗 Copier le lien</button>
+      </div>`;
+    const champ = lien ? `<div style="margin-top:8px"><div style="color:#6b7194;margin-bottom:3px">Lien à coller dans WhatsApp (valable 3 jours, une seule utilisation) :</div><input type="text" readonly data-acad-lien value="${escHtml(lien)}" style="width:100%;box-sizing:border-box;font-size:11.5px;padding:6px 8px;border:1px solid #d9dcf0;border-radius:7px"></div>` : '';
+    zone.innerHTML = `<div>${etat}</div><div style="color:#6b7194">E-mail du compte : ${escHtml(e.email || c.email || '')}</div>${boutons}${champ}`;
+    const input = zone.querySelector('[data-acad-lien]');
+    if(input) input.addEventListener('focus', ()=>input.select());
+    zone.querySelectorAll('[data-acad-invite]').forEach(b => b.addEventListener('click', async ()=>{
+      const action = b.getAttribute('data-acad-invite');
+      const dest = e.email || c.email || '';
+      if(action === 'invite' && !confirm((e.dejaConnecte
+          ? 'Ce client s\'est déjà connecté. Lui envoyer un nouveau lien pour refaire son mot de passe ?'
+          : 'Envoyer ses accès Academy à ce client ?') + '\n\nE-mail : ' + dest + '\nUn lien déjà envoyé ne fonctionnera plus.')) return;
+      zone.querySelectorAll('button').forEach(x => x.disabled = true);
+      let j = null;
+      try{ j = await appel(action); }catch(err){ j = null; }
+      if(!j || j.ok !== true || !j.found){ showToast('🎓 ' + (j && j.ok === true ? 'Aucun compte Academy pour cet e-mail' : erreur(j)), 'error'); dessiner(e, lien); return; }
+      const suite = Object.assign({}, e, { inviteSentAt: Date.now(), inviteExpiresAt: j.expiresAt || null, inviteUsedAt: null });
+      if(action === 'invite'){ showToast('📧 Accès envoyés à ' + dest); dessiner(suite, ''); return; }
+      let copie = false;
+      try{ await navigator.clipboard.writeText(j.link); copie = true; }catch(err){ copie = false; }
+      showToast(copie ? '🔗 Lien copié' : '🔗 Lien prêt : copie-le dans le champ');
+      dessiner(suite, j.link);
+    }));
+  };
+  try{
+    const e = await appel('invite-etat');
+    if(!e || e.ok !== true || !e.found){ zone.remove(); return; }
+    dessiner(e, '');
+  }catch(err){ zone.remove(); }
 }
 
 // Encadré victoires du bloc Academy : totaux réels + dernière citation de l'élève.

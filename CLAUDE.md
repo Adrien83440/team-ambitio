@@ -381,6 +381,15 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   inverse : `academy-client-info` retrouve la fiche par le contrat. La fiche affiche l'e-mail du compte
   quand il diffère. Non concernés : `academy-grant`, `_accesPaiement`, `signature-cancel` (partent déjà
   du contrat).
+- **Envoyer ses accès Academy (23/11/2026)** : rien n'envoie l'e-mail « Crée ton mot de passe » tout seul
+  (ni la signature, ni l'ouverture au paiement) ; avant, seul le back-office Academy le pouvait. Tuile
+  Academy de la fiche coaching, sous l'avancement (`acadAcces` de `coaching.html`) : état (jamais connecté /
+  déjà connecté / désactivé, date du dernier envoi, lien expiré), « 📧 Envoyer ses accès » et « 🔗 Copier le
+  lien » (WhatsApp). `api/academy-access.js` actions `invite-etat` / `invite` / `invite-lien`, ouvertes aux
+  admins, CSM ET coachs (`estCoach`, « Aussi coach » compris) — les autres actions de la route restent
+  admin / CSM. Pont Academy `POST /api/bridge/send-access` (repo `ae-academy`, `mode` etat / envoyer / lien) :
+  lien 3 jours à usage unique, un nouveau lien annule le précédent ; ne crée aucune fiche, n'ouvre aucune
+  formation, refuse un compte désactivé. Trace `clients.academyAccessHistory`.
 - **Fiche coaching en tuiles (20/11/2026)** : `openDetail` de `coaching.html` range la fiche en six
   sections ouvertes par des tuiles (`FC_PANES` : Synthèse · Plan d'action · Séances · Academy ·
   Quota & RDV · Dossier), chaque tuile portant son chiffre (`data-fc-sub`, mis à jour par
