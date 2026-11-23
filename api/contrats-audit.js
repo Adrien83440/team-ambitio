@@ -10,6 +10,8 @@
 //   GET                → liste : id, nom, ponctuel ou non, généré ou PDF, date
 //   GET ?id=<id>       → texte complet du modèle (sections et blocs)
 //   GET ?id=<id>&pdf=1 → PDF d'origine d'un modèle importé (base64)
+//   GET ?id=<id>&brut=1 → le modèle tel qu'il est stocké (web complet), pour
+//                         en refaire le PDF à l'identique hors ligne
 //
 // Clé : en-tête `x-audit-key` égal à la variable Vercel CONTRATS_AUDIT_KEY
 // (preview de la branche, jamais dans le dépôt) ; absente ou fausse → 404.
@@ -76,6 +78,7 @@ module.exports = async function handler(req, res) {
       return;
     }
     const web = T.web || {};
+    if (String((req.query && req.query.brut) || '') === '1') { res.status(200).json({ id: id, nom: T.name || '', ponctuel: !!T.isAdhoc, pages: T.pages || 0, web: T.web || null }); return; }
     res.status(200).json({
       id: id, nom: mask(T.name || ''), ponctuel: !!T.isAdhoc, genere: !!web.generated, version: web.version || 0,
       titre: mask(web.title || ''), sousTitre: mask(web.subtitle || ''),
