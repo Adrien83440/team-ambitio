@@ -40,7 +40,7 @@
 //              |"academy_unreachable"|<erreur Academy>, message?, manques? }
 // ============================================================================
 
-const { requireAuth } = require('./_verifyFirebaseAuth');
+const { requireAuth, estCoach } = require('./_verifyFirebaseAuth');
 
 const ACADEMY_URL = (process.env.ACADEMY_BRIDGE_URL || 'https://academy.adrienemily.com').replace(/\/$/, '');
 const ROLES = ['admin', 'coach'];
@@ -59,7 +59,7 @@ module.exports = async (req, res) => {
 
   const auth = await requireAuth(req, res);
   if (!auth) return; // requireAuth a déjà répondu 401
-  if (ROLES.indexOf(auth.role) < 0) {
+  if (ROLES.indexOf(auth.role) < 0 && !estCoach(auth)) {
     res.status(200).json({ ok: false, error: 'forbidden', message: 'Réservé aux coachs et administrateurs.' });
     return;
   }

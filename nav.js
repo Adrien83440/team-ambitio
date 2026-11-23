@@ -285,6 +285,14 @@
   }
 
   const ROLE_LABELS = { coach: '🎓 Coach', sales: '📈 Commercial', admin: '👑 Administrateur', csm: '💎 Customer Success' };
+  /* Double casquette (23/11/2026) : un membre garde son rôle (ex. CSM) et est
+     AUSSI coach — drapeau `alsoCoach` sur users/{uid} et sur sa fiche
+     _meta/team_members (Admin → Utilisateurs). Le rôle ne change jamais. */
+  function roleLabel(role) {
+    var l = ROLE_LABELS[role] || role;
+    if (role !== 'coach' && role !== 'funnel_viewer' && localStorage.getItem('ambitio_also_coach') === '1') l += ' · 🎓 Coach';
+    return l;
+  }
 
   /* ═══ REBRANDING ALTEORE (phase 1 — pilote) ═══════════════════════════
      brand.css redéfinit uniquement les variables CSS (:root) des pages +
@@ -868,7 +876,7 @@
         <div class="nav-logo">A</div>
         <div class="nav-brand">
           <div class="nav-brand-title">Ambitio <span style="opacity:.6">Corp</span></div>
-          <div class="nav-rolepill">${ROLE_LABELS[role]||role}</div>
+          <div class="nav-rolepill">${roleLabel(role)}</div>
         </div>
         <button class="nav-collapse-btn" id="navCollapseBtn" title="Réduire">◀</button>
       </div>
@@ -999,7 +1007,7 @@
           <div class="pm-avatar-big">${user.initials}</div>
           <div class="pm-avatar-info">
             <div class="pm-avatar-name">${user.name}</div>
-            <div class="pm-avatar-role">${ROLE_LABELS[role]||role}</div>
+            <div class="pm-avatar-role">${roleLabel(role)}</div>
           </div>
         </div>
         <div class="pm-body">
@@ -1067,7 +1075,7 @@
 
     document.getElementById('pmLogout').addEventListener('click', async () => {
       if (window._signOut && window._auth) await window._signOut(window._auth);
-      ['ambitio_role','ambitio_name','ambitio_email','ambitio_modules'].forEach(k => localStorage.removeItem(k));
+      ['ambitio_role','ambitio_name','ambitio_email','ambitio_modules','ambitio_also_coach'].forEach(k => localStorage.removeItem(k));
       window.location.href = 'login.html';
     });
   }
@@ -1339,11 +1347,20 @@
     { slug: 'adrien',  label: 'Adrien',  color: '#6366f1', shortName: 'Adrien',  displayName: 'Adrien',  role: 'admin' }
   ];
 
+  /* Vrai si le membre est coach : rôle `coach`, ou double casquette
+     (`alsoCoach`, ex. la CSM qui coache aussi). Seule règle à utiliser pour
+     « apparaît parmi les coachs » — jamais pour le coach référent du close,
+     qui reste réservé au rôle `coach` (décision Adrien 23/11/2026). */
+  window.isCoachMember = function (m) {
+    return !!m && (String(m.role || '').toLowerCase() === 'coach' || m.alsoCoach === true);
+  };
+
   window.getCoachOptions = function () {
     // 1. Mode normal : TEAM_MEMBERS chargé avec succès
     if (window.TEAM_MEMBERS_ACTIVE && window.TEAM_MEMBERS_ACTIVE.length) {
       var EXCLUDED_ROLES = { sales: 1, setter: 1, closer: 1, closing: 1, csm: 1, setter_ecrit: 1 };
       var filtered = window.TEAM_MEMBERS_ACTIVE.filter(function (m) {
+        if (m.alsoCoach === true) return true;
         if (!m.role) return true;
         var r = String(m.role).toLowerCase();
         return !EXCLUDED_ROLES[r];
@@ -1517,7 +1534,11 @@
       for (var k in fmMap) { if (Object.prototype.hasOwnProperty.call(fmMap, k) && fmMap[k] === true) fmAny = true; }
       var fmAccess = fmAny ? '1' : '0';
       var prevFm = localStorage.getItem('ambitio_formations_access') || '0';
-      var changed = prev !== next || prevPay !== payAccess || prevSig !== sigAccess || prevFm !== fmAccess;
+      var alsoCoach = userData.alsoCoach === true ? '1' : '0';
+      var prevAlsoCoach = localStorage.getItem('ambitio_also_coach') || '0';
+      if (alsoCoach === '1') localStorage.setItem('ambitio_also_coach', '1');
+      else localStorage.removeItem('ambitio_also_coach');
+      var changed = prev !== next || prevPay !== payAccess || prevSig !== sigAccess || prevFm !== fmAccess || prevAlsoCoach !== alsoCoach;
       if (formIds.length > 0) localStorage.setItem('ambitio_alteoforms_forms', next);
       else localStorage.removeItem('ambitio_alteoforms_forms');
       if (payAccess === '1') localStorage.setItem('ambitio_payments_access', '1');
@@ -1533,6 +1554,7 @@
     function clearFlags() {
       localStorage.removeItem('ambitio_alteoforms_forms');
       localStorage.removeItem('ambitio_formations_access');
+      localStorage.removeItem('ambitio_also_coach');
     }
     var role = localStorage.getItem('ambitio_role') || 'coach';
 

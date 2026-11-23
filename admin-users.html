@@ -1840,6 +1840,19 @@ function openEditModal(u){
     h+='<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:1px">Rend le membre sélectionnable dans <b>Admin → Numéros</b> pour lui attribuer sa propre ligne Twilio ou Ringover. C\'est ce rattachement qui permet de savoir qui a appelé qui, et de router vers lui les SMS entrants sur son numéro.</div></div>';
     h+='</label>';
 
+    // Double casquette (23/11/2026) : garde son rôle ET apparaît parmi les
+    // coachs. Écrit sur users/{uid}.alsoCoach (droits serveur + règles) et
+    // sur la fiche team_members (listes de coachs). Inutile pour un coach ou
+    // un admin : ils y sont déjà.
+    if (u.role !== 'coach' && u.role !== 'admin' && u.role !== 'funnel_viewer') {
+      var alsoCoach = (u.alsoCoach === true) || (tmMember.alsoCoach === true);
+      h+='<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;background:rgba(167,139,250,0.05);border:1px solid rgba(167,139,250,0.18);border-radius:8px;margin-bottom:10px">';
+      h+='<input type="checkbox" id="eAlsoCoach"'+(alsoCoach?' checked':'')+' style="width:16px;height:16px;accent-color:#a78bfa"/>';
+      h+='<div><div style="font-size:13px;font-weight:700;color:rgba(255,255,255,.85)">🎓 Aussi coach (double casquette)</div>';
+      h+='<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:1px">Garde son rôle et tous ses accès actuels, et devient <b>en plus</b> sélectionnable comme coach (fiches clients, dashboard coaching, alarmes) avec les actes Academy des coachs (jalons, validations, devoirs). N\'apparaît <b>pas</b> dans le choix du coach référent au close. Pour ses RDV : créer sa fiche expert « 🎯 Coach » dans Booking → Experts.</div></div>';
+      h+='</label>';
+    }
+
     // Rôle métier commercial (_meta/team_members.role) — cf. TEAM_ROLES_SALES
     h+='<div style="padding:10px 12px;background:rgba(251,191,36,.05);border:1px solid rgba(251,191,36,.2);border-radius:8px;margin-bottom:10px">';
     h+='<label style="font-size:11px;color:#fbbf24;font-weight:800;text-transform:uppercase;letter-spacing:.04em">Rôle équipe (Sales)</label>';
@@ -2061,6 +2074,9 @@ async function handleSave(uid){
     if(fmMap!==null)upd.formationsAccess=fmMap;
     var fmEd=document.getElementById('eFmEditor');
     if(fmEd)upd.formationsEditor=fmEd.checked;
+    var alsoCoachEl=document.getElementById('eAlsoCoach');
+    if(alsoCoachEl)upd.alsoCoach=alsoCoachEl.checked;
+    else if(upd.role==='coach'||upd.role==='admin')upd.alsoCoach=false;
     // Passage d'un compte invité / à activer vers « Actif » : le compte
     // Firebase Auth est déverrouillé côté serveur (et la personne prévenue
     // par email). Sans cet appel elle ne pourrait pas se connecter.
@@ -2085,6 +2101,8 @@ async function handleSave(uid){
       };
       var callsEl = document.getElementById('eCanPassCalls');
       if (callsEl) tmPatch.canPassCalls = callsEl.checked;
+      var alsoCoachTm = document.getElementById('eAlsoCoach');
+      if (alsoCoachTm) tmPatch.alsoCoach = alsoCoachTm.checked;
       var sboEl = document.getElementById('eSelfBookingOwner');
       if (sboEl) {
         tmPatch.selfBookingOwner = sboEl.checked;

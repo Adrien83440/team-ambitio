@@ -63,10 +63,22 @@ facturation, réservation, formulaires, signatures électroniques, paiements, t�
 | Adrien, Emily | admin |
 | Vincent | Head of Sales / admin — **pas** setter, hors rotation dialer |
 | Élodie Vidotto Siarri | setter + closer — utilisatrice principale du dialer |
-| Marine | CSM |
+| Marine | CSM **et aussi coach** (double casquette `alsoCoach`, voir plus bas) |
 | Steven, Valentin | setters (Steven : setting écrit) |
 | Edouard, Flore, Thomas, Farah | coachs — **jamais** concernés par le module Dialer |
 | Guillaume Bilcke | **parti** — exclu en dur (`DEPARTED`) de tous les affichages, historique conservé en base |
+
+**Double casquette « Aussi coach » (23/11/2026)** : un compte n'a qu'UN rôle. Pour qu'un membre
+garde son rôle (Marine : `csm`) et coache aussi, case « 🎓 Aussi coach » d'Admin → Utilisateurs →
+`users/{uid}.alsoCoach` + même drapeau sur sa fiche `_meta/team_members`. Ne JAMAIS changer son rôle
+en `coach` (elle perdrait cockpit CSM, Mes notes, signatures, e-mails de démarrage). Effets : listes de
+coachs (`getCoachOptions`, règle unique `window.isCoachMember`), actes Academy des coachs
+(`estCoach(auth)` de `_verifyFirebaseAuth.js` : jalons, validations, devoirs), bloc de règles autonome
+« AUSSI COACH » (créer une fiche client, Communication coaching, alarmes ; publiable par
+`rules-lecteur-funnel.js?bloc=aussi_coach`). Volontairement exclu : le choix du coach référent au close
+(`close-wizard.js`, pilote) reste `role === 'coach'`. RDV : une fiche expert SÉPARÉE « 🎯 Coach » dans
+Booking, reliée au compte coaching@ (sinon l'enregistrement Meet n'arrive pas dans le Drive lu par la
+synchro des coachings) ; la fiche CSM reste sur son propre agenda.
 
 Rôles techniques : `admin`, `sales` (setter / closer / closer_setter), `coach`, `csm`,
 `funnel_viewer` (utilisateur technique d'un lien d'accès en lecture au Stats funnel — voir plus bas).

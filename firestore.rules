@@ -1379,5 +1379,36 @@ service cloud.firestore {
       allow read: if isCsmCoaching();
     }
     // ═══ FIN CSM COACHING ══════════════════════════════════════════════════
+
+    // ═══ AUSSI COACH (23/11/2026) ══════════════════════════════════════════
+    // Double casquette : un membre garde son rôle (ex. la CSM) et coache aussi.
+    // Drapeau users/{uid}.alsoCoach, posé par un admin seul (users : write
+    // admin). Bloc AUTONOME et purement additif : il donne ce qu'un coach a et
+    // que son rôle n'a pas — créer une fiche client, les canaux de la
+    // Communication coaching, les alarmes. Rien n'est retiré ailleurs ;
+    // modifier ou supprimer un message reste interdit, supprimer reste admin.
+    function isAlsoCoach() {
+      return request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.alsoCoach == true;
+    }
+    match /clients/{acClient} {
+      allow create: if isAlsoCoach();
+    }
+    match /messages_general/{acMsg} {
+      allow read, create: if isAlsoCoach();
+    }
+    match /messages_alarmes/{acMsg} {
+      allow read, create: if isAlsoCoach();
+    }
+    match /messages_suivi/{acMsg} {
+      allow read, create: if isAlsoCoach();
+    }
+    match /messages_annonces/{acMsg} {
+      allow read: if isAlsoCoach();
+    }
+    match /alarms/{acAlarm} {
+      allow read, create, update: if isAlsoCoach();
+    }
+    // ═══ FIN AUSSI COACH ═══════════════════════════════════════════════════
   }
 }

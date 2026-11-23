@@ -175,7 +175,17 @@ async function requireFunnelReader(req, res) {
   return null;
 }
 
+/**
+ * Vrai si le compte agit comme coach : rôle `coach`, ou double casquette
+ * (`users/{uid}.alsoCoach === true`, ex. la CSM qui coache aussi — 23/11/2026).
+ * Le rôle, lui, ne change pas : tous les autres contrôles restent sur auth.role.
+ */
+function estCoach(auth) {
+  return !!auth && (auth.role === 'coach' || !!(auth.userData && auth.userData.alsoCoach === true));
+}
+
 module.exports = {
+  estCoach,
   verifyFirebaseAuth,
   requireAuth,
   requireAdmin,
