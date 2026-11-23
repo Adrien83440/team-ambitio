@@ -35,6 +35,9 @@ const INJECT = ANCHOR + '\n'
   /* IP du visiteur pour l'API Conversions (api/meta-ip.js, 20/11/2026) : Make
      appelle lead-optin depuis SES serveurs, seule la page voit le visiteur. */
   + ' if(epqM.meta_allowed===\'1\' && d.event_id && navigator.sendBeacon){ try{ navigator.sendBeacon(\'/api/meta-ip\', new Blob([JSON.stringify({e:String(d.event_id)})],{type:\'application/json\'})); }catch(e2){} }'
+  /* Lieu et appareil du prospect (api/visiteur.js, 23/11/2026) : pour TOUS
+     les visiteurs, pixel autorisé ou non — rien ne part chez Meta. */
+  + ' if(d.event_id && navigator.sendBeacon){ try{ navigator.sendBeacon(\'/api/visiteur\', new Blob([JSON.stringify({e:String(d.event_id)})],{type:\'application/json\'})); }catch(e3){} }'
   + ' } }catch(e){}';
 
 /* Retourne { html, changed, note }. */

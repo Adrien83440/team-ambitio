@@ -35,8 +35,13 @@
   var AXES = [
     { id: 'creative', label: 'Pub', name: 'Pub' },
     { id: 'adset', label: 'Ensemble', name: 'Ensemble de pubs' },
-    { id: 'campaign', label: 'Campagne', name: 'Campagne' }
+    { id: 'campaign', label: 'Campagne', name: 'Campagne' },
+    /* Lieu et appareil du prospect (23/11/2026) : mêmes colonnes, sans les
+       coûts — Meta ne transmet pas la dépense par appareil ni par région. */
+    { id: 'device', label: 'Appareil', name: 'Appareil' },
+    { id: 'region', label: 'Région', name: 'Région' }
   ];
+  function isVis() { return state.axis === 'device' || state.axis === 'region'; }
   var SMALL = 10;
 
   var state = { axis: 'creative', sort: 'cph', dir: 1, showOut: false };
@@ -77,12 +82,13 @@
     { k: 'col', l: 'Encaissé', t: 'Prélèvements réellement passés (HT)', v: function (r) { return r.col; }, f: function (r) { return r.col ? eur(r.col) : '—'; } }
   ];
   function colByKey(k) { for (var i = 0; i < COLS.length; i++) if (COLS[i].k === k) return COLS[i]; return null; }
+  function cols() { return isVis() ? COLS.filter(function (c) { return !c.cost && c.k !== 'spend'; }) : COLS; }
 
   /* ── Données ──────────────────────────────────────────────────────────── */
   function fromKpis(K, periodLabel) {
     var by = (K && K.utmRowsByAxis) || {};
     return {
-      rowsByAxis: { creative: by.creative || [], adset: by.adset || [], campaign: by.campaign || [] },
+      rowsByAxis: { creative: by.creative || [], adset: by.adset || [], campaign: by.campaign || [], device: by.device || [], region: by.region || [] },
       coverage: {
         leads: K ? K.leads : 0, attributedLeads: K ? K.attributedLeads : 0, attributedPct: K ? K.attributedPct : null,
         hasAdLevelSpend: !!(K && K.hasAdLevelSpend), adLevelSpend: K ? K.adLevelSpend : 0,
@@ -102,6 +108,8 @@
   function sortRows(rows) {
     var c = colByKey(state.sort) || colByKey('cph');
     var dir = state.dir;
+    /* Axe Appareil / Région : un tri sur un coût masqué → tri par leads. */
+    if (isVis() && (c.cost || c.k === 'spend')) { c = colByKey('leads'); dir = -1; }
     return rows.slice().sort(function (a, b) {
       if (!!a.outOfAds !== !!b.outOfAds) return a.outOfAds ? 1 : -1;
       var va = c.v(a), vb = c.v(b);
@@ -188,20 +196,20 @@
     var axisName = AXES.filter(function (a) { return a.id === state.axis; })[0].name;
 
     var h = '<div class="aq-tw"><table class="aq-t"><thead><tr><th data-aq-sort="key">' + esc(axisName) + '</th>';
-    COLS.forEach(function (c) {
+    cols().forEach(function (c) {
       var cls = (c.star ? 'star ' : '') + (state.sort === c.k ? 'sorted' : '');
       var arrow = state.sort === c.k ? (state.dir > 0 ? ' ▲' : ' ▼') : '';
       h += '<th class="' + cls + '" data-aq-sort="' + c.k + '" title="' + esc(c.t) + '">' + (c.star ? '★ ' : '') + esc(c.l) + arrow + '</th>';
     });
     h += '</tr></thead><tbody>';
-    if (!rows.length) h += '<tr><td colspan="' + (COLS.length + 1) + '" style="text-align:center;color:var(--muted,#8f97b2);padding:22px">Aucun lead attribué à une pub sur la période.</td></tr>';
+    if (!rows.length) h += '<tr><td colspan="' + (cols().length + 1) + '" style="text-align:center;color:var(--muted,#8f97b2);padding:22px">' + (isVis() ? 'Aucun lead dont ' + (state.axis === 'device' ? 'l\'appareil' : 'le lieu') + ' est connu sur la période.' : 'Aucun lead attribué à une pub sur la période.') + '</td></tr>';
     rows.forEach(function (r) {
       var cls = r.outOfAds ? 'out' : (r.leads < SMALL ? 'small' : '');
       h += '<tr class="' + cls + '"><td><span class="aq-name" title="' + esc(r.key) + (r.adIdList && r.adIdList.length ? ' · ' + esc(r.adIdList.join(', ')) : '') + '">' + esc(r.key)
         + (!r.outOfAds && r.leads < SMALL ? '<span class="aq-tag small" title="Moins de 10 leads : échantillon trop faible pour conclure">⚠ &lt; 10 leads</span>' : '')
         + (r.legacy && !r.outOfAds ? '<span class="aq-tag leg" title="Rattaché par le nom (ancien paramétrage d\'URL), pas par l\'identifiant de la pub">nom</span>' : '')
         + '</span></td>';
-      COLS.forEach(function (c) {
+      cols().forEach(function (c) {
         var txt = (c.cost && !ok) ? '—' : c.f(r);
         h += '<td class="' + (c.star ? 'star' : '') + '">' + txt + '</td>';
       });
@@ -209,13 +217,13 @@
     });
     if (rows.length) {
       var t = totals(ads);
-      h += '<tr class="tot"><td>Total pubs (' + ads.length + ')</td>';
-      COLS.forEach(function (c) { h += '<td class="' + (c.star ? 'star' : '') + '">' + ((c.cost && !ok) ? '—' : c.f(t)) + '</td>'; });
+      h += '<tr class="tot"><td>' + (isVis() ? 'Total connus (' : 'Total pubs (') + ads.length + ')</td>';
+      cols().forEach(function (c) { h += '<td class="' + (c.star ? 'star' : '') + '">' + ((c.cost && !ok) ? '—' : c.f(t)) + '</td>'; });
       h += '</tr>';
     }
     h += '</tbody></table></div>';
     if (out.length) {
-      h += '<div class="aq-row"><button type="button" class="aq-btn" data-aq-out="1">' + (state.showOut ? 'Masquer' : 'Afficher') + ' les ' + out.length + ' ligne(s) hors pub / pub inconnue</button></div>';
+      h += '<div class="aq-row"><button type="button" class="aq-btn" data-aq-out="1">' + (state.showOut ? 'Masquer' : 'Afficher') + ' les ' + out.length + ' ligne(s) ' + (isVis() ? (state.axis === 'device' ? 'appareil inconnu' : 'lieu inconnu') : 'hors pub / pub inconnue') + '</button></div>';
     }
     return h;
   }
@@ -234,6 +242,10 @@
       + '<b>' + att + '</b> des ' + (cov.leads || 0) + ' leads de la période portent une attribution publicitaire. '
       + 'Les leads d\'avant le nouveau paramétrage d\'URL restent rattachés par le nom de la pub (repère « nom ») ou « pub inconnue ». '
       + '<b>★</b> = les trois coûts à piloter. Colonnes triables (clic sur l\'en-tête).</div>';
+    if (isVis()) h += '<div class="aq-note">' + (state.axis === 'device'
+      ? 'Appareil du prospect à l\'inscription (navigateur capté depuis le 12/11/2026) ou à la prise de RDV. Le navigateur intégré de Facebook / Instagram forme sa propre ligne.'
+      : 'Lieu approximatif du prospect (déduit de son adresse internet, aucune adresse conservée) à l\'inscription ou à la prise de RDV ; clients plus anciens : lieu de la signature.')
+      + ' Pas de coûts sur cet axe : Meta ne transmet pas la dépense par appareil ni par région.</div>';
     if (!cov.hasAdLevelSpend) {
       h += '<div class="aq-note warn">Aucune dépense par pub sur la période (scénario Make « FB insight ÉLITE — Créatives ») : les coûts sont masqués.</div>';
     } else if (!costsOk(cov)) {

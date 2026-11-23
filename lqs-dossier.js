@@ -178,6 +178,7 @@
     var h = '<div class="lqd-meta">' + [l.email ? esc(l.email) : '', l.telephone ? esc(l.telephone) : '', 'entré le ' + fDay(r.entry),
       r.sourceLabel ? 'source : ' + esc(r.sourceLabel) : '', r.axes && r.axes.creative && r.axes.creative.label ? 'pub : ' + esc(r.axes.creative.label) : '',
       r.closerName ? 'closer : ' + esc(r.closerName) : '', r.setterName ? 'setter : ' + esc(r.setterName) : '', r.team != null ? 'note équipe ★ ' + r.team : ''].filter(Boolean).join(' · ') + '</div>';
+    h += visiteurHtml(r);
     var q = LC.questionnaireOf(l);
     h += '<div class="lqd-h3">📝 Questionnaire rempli</div>';
     if (!q.length) h += '<div class="lqd-muted">Aucune réponse enregistrée sur cette fiche (RDV direct, import ou ancien tunnel).</div>';
@@ -200,6 +201,21 @@
     if (!calls.length) h += '<div class="lqd-muted">Aucun appel de vente tenu.</div>';
     calls.forEach(function (c) { h += callHtml(c); });
     return h;
+  }
+  /* Lieu et appareil (23/11/2026). Lecteur funnel : la région, jamais la
+     ville, sur une fiche nominative. */
+  function visiteurHtml(r) {
+    var v = r.visiteur;
+    var FC = (typeof window !== 'undefined' && window.FunnelCore) || null;
+    if (!v || !FC || !FC.deviceLabel) return '';
+    var place = readOnly() ? (v.zone || '') : FC.placeLabel(v);
+    var dev = FC.deviceLabel(v);
+    var via = { signature: 'lieu de la signature du contrat', rdv: 'capté à la prise de RDV' };
+    var parts = [
+      '📍 ' + (place ? esc(place) + (via[v.geoVia] ? ' <span class="lqd-muted">(' + via[v.geoVia] + ')</span>' : '') : '<span class="lqd-muted">lieu inconnu</span>'),
+      '📱 ' + (dev ? esc(dev) : '<span class="lqd-muted">appareil inconnu</span>')
+    ];
+    return '<div class="lqd-meta">' + parts.join(' · ') + '</div>';
   }
   /* Qui a eu le RDV (21/11/2026, demande Vincent) : visible sans déplier. */
   function whoHtml(r) {
