@@ -160,7 +160,10 @@ body.bk-embed .bk-panel-right{padding:4px 16px 16px}
 .bk-slot:hover{border-color:var(--primary);color:var(--primary)}
 .bk-slot.sel{background:var(--navy);border-color:var(--navy);color:#fff}
 .bk-slots-group{font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;padding-top:4px}
+.bk-slots-group span{font-weight:600;text-transform:none;letter-spacing:0;color:var(--muted2)}
 .bk-slots-line{display:flex;flex-direction:column;gap:8px}
+.bk-scroller{position:relative}
+.bk-sc-btn{display:none}
 .bk-slot-go{display:none;background:var(--cta);border-color:transparent;color:var(--cta-ink)}
 .bk-slot-go:hover{filter:brightness(1.1)}
 .bk-slot-row.sel .bk-slot-go{display:block}
@@ -272,7 +275,13 @@ body.bk-embed .bk-panel-right{padding:4px 16px 16px}
   body.bk-showmonth .bk-strip-wrap{display:none}
   .bk-slots-list{max-height:none;overflow:visible;padding:0}
   .bk-slots-line{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
-  .bk-slots-list.grouped .bk-slots-line{display:flex;flex-direction:row;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:2px 28px 2px 0;margin-right:-18px;-webkit-mask-image:linear-gradient(90deg,#000 86%,transparent);mask-image:linear-gradient(90deg,#000 86%,transparent)}
+  .bk-slots-list.grouped .bk-slots-line{display:flex;flex-direction:row;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:2px 0}
+  /* Flèches de défilement : grosses, contrastées, cliquables au pouce */
+  .bk-sc-btn{display:flex;align-items:center;justify-content:center;position:absolute;top:50%;margin-top:-21px;width:42px;height:42px;border-radius:50%;border:2px solid #fff;background:var(--navy);color:#fff;font-size:24px;line-height:1;padding:0 0 3px;cursor:pointer;z-index:2;box-shadow:0 3px 10px rgba(11,19,50,.3)}
+  .bk-sc-btn[hidden]{display:none}
+  .bk-sc-next{right:-10px}
+  .bk-sc-prev{left:-10px}
+  .bk-scroller.more::after{content:'';position:absolute;top:0;right:0;bottom:0;width:64px;background:linear-gradient(90deg,rgba(255,255,255,0),#fff 70%);pointer-events:none;z-index:1}
   .bk-slots-list.grouped .bk-slots-line::-webkit-scrollbar{display:none}
   .bk-slots-list.grouped .bk-slot-row{flex:none;width:86px}
   .bk-slots-list.grouped .bk-slots-group{padding-top:2px}
@@ -1314,13 +1323,13 @@ function renderCalendar() {
   var stripLeft = oldStrip ? oldStrip.scrollLeft : 0;
   var h = '<div class="bk-strip-wrap"><div class="bk-strip-h">Prochaines disponibilités</div>';
   if (nextDays.length) {
-    h += '<div class="bk-strip">';
+    h += '<div class="bk-scroller"><div class="bk-strip">';
     for (var n = 0; n < nextDays.length; n++) {
       var nd = new Date(nextDays[n] + 'T12:00:00');
       h += '<button type="button" class="bk-chip' + (S.selDate === nextDays[n] ? ' sel' : '') + '" data-action="selectDate" data-date="' + nextDays[n] + '">';
       h += '<small>' + JOURS_C[nd.getDay()] + '</small><b>' + nd.getDate() + '</b><i>' + MOIS_C[nd.getMonth()] + '</i></button>';
     }
-    h += '</div>';
+    h += '</div>' + BK_SC_BTNS + '</div>';
   } else {
     h += '<div class="bk-strip-none">Aucune disponibilité dans les prochaines semaines.</div>';
   }
@@ -1364,6 +1373,7 @@ function renderCalendar() {
   el.innerHTML = h;
   var newStrip = el.querySelector('.bk-strip');
   if (newStrip && stripLeft) newStrip.scrollLeft = stripLeft;
+  bkScSyncAll();
 
   if (S.selDate) renderSlots();
   else {
@@ -1701,6 +1711,30 @@ function computeSlotsFor(person, dateStr) {
   return available;
 }
 
+/* Lignes qui défilent de côté (téléphone) : des flèches rondes, bien visibles,
+   font avancer la ligne d'un simple appui — personne n'a à deviner qu'on peut
+   faire glisser. Chaque flèche disparaît quand il n'y a plus rien de ce côté. */
+var BK_SC_BTNS = '<button type="button" class="bk-sc-btn bk-sc-prev" data-action="scrollLine" data-dir="-1" aria-label="Horaires précédents" hidden>‹</button>'
+  + '<button type="button" class="bk-sc-btn bk-sc-next" data-action="scrollLine" data-dir="1" aria-label="Voir plus d\'horaires" hidden>›</button>';
+function bkScSync(scroller) {
+  if (!scroller) return;
+  var line = scroller.firstChild, prev = scroller.querySelector('.bk-sc-prev'), next = scroller.querySelector('.bk-sc-next');
+  if (!line || !prev || !next) return;
+  var more = line.scrollWidth - line.clientWidth - line.scrollLeft > 4;
+  prev.hidden = line.scrollLeft <= 4;
+  next.hidden = !more;
+  if (more) scroller.classList.add('more'); else scroller.classList.remove('more');
+}
+function bkScSyncAll() {
+  var all = document.querySelectorAll('.bk-scroller');
+  for (var i = 0; i < all.length; i++) bkScSync(all[i]);
+}
+document.addEventListener('scroll', function(e) {
+  var t = e.target;
+  if (t && t.parentNode && t.parentNode.classList && t.parentNode.classList.contains('bk-scroller')) bkScSync(t.parentNode);
+}, true);
+window.addEventListener('resize', bkScSyncAll);
+
 function renderSlots() {
   var wrap = document.getElementById('slotsWrap');
   var people = (S.rrPool && S.rrPool.length) ? S.rrPool : (S.selPerson ? [S.selPerson] : []);
@@ -1730,23 +1764,25 @@ function renderSlots() {
     /* Sur téléphone, chaque période tient sur UNE ligne qui défile de côté
        (comme la bande des jours) : 20 horaires n'étirent plus la page. */
     var grouped = available.length > 8, lastGroup = null;
+    var grpOf = function(t) { var mn = timeToMin(t); return !grouped ? '' : (mn < 720 ? 'Matin' : (mn < 1080 ? 'Après-midi' : 'Soir')); };
+    var grpCount = {};
+    for (var gc = 0; gc < available.length; gc++) grpCount[grpOf(available[gc])] = (grpCount[grpOf(available[gc])] || 0) + 1;
     h += '<div class="bk-slots-list' + (grouped ? ' grouped' : '') + '">';
     for (var i = 0; i < available.length; i++) {
       var isSel = S.selTime === available[i];
-      var mins = timeToMin(available[i]);
-      var grp = !grouped ? '' : (mins < 720 ? 'Matin' : (mins < 1080 ? 'Après-midi' : 'Soir'));
+      var grp = grpOf(available[i]);
       if (grp !== lastGroup) {
-        if (lastGroup !== null) h += '</div>';
+        if (lastGroup !== null) h += '</div>' + BK_SC_BTNS + '</div>';
         lastGroup = grp;
-        if (grp) h += '<div class="bk-slots-group">' + grp + '</div>';
-        h += '<div class="bk-slots-line">';
+        if (grp) h += '<div class="bk-slots-group">' + grp + ' <span>· ' + grpCount[grp] + ' horaire' + (grpCount[grp] > 1 ? 's' : '') + '</span></div>';
+        h += '<div class="bk-scroller"><div class="bk-slots-line">';
       }
       h += '<div class="bk-slot-row' + (isSel ? ' sel' : '') + '">';
       h += '<button type="button" class="bk-slot' + (isSel ? ' sel' : '') + '" data-action="selectTime" data-time="' + available[i] + '">' + available[i] + '</button>';
       h += '<button type="button" class="bk-slot-go" data-action="next">Suivant</button>';
       h += '</div>';
     }
-    h += '</div></div>';
+    h += '</div>' + BK_SC_BTNS + '</div></div>';
   }
   h += '</div>';
   /* Position de défilement de chaque ligne reprise après le re-rendu. */
@@ -1759,6 +1795,7 @@ function renderSlots() {
     var newLines = wrap.querySelectorAll('.bk-slots-line');
     for (var nl = 0; nl < newLines.length && nl < lefts.length; nl++) newLines[nl].scrollLeft = lefts[nl];
   }
+  bkScSyncAll();
 
   if (S.selTime) {
     var d = new Date(S.selDate + 'T12:00:00');
@@ -3374,6 +3411,11 @@ document.addEventListener('click', function(e) {
     updateInfoPanel();
     bkQuizStep('creneau');
     bkQuizRevealContinue();
+  }
+  if (action === 'scrollLine') {
+    var scLine = a.parentNode.firstChild;
+    var scBy = (a.dataset.dir === '-1' ? -1 : 1) * Math.max(120, Math.round(scLine.clientWidth * 0.75));
+    try { scLine.scrollBy({ left: scBy, behavior: 'smooth' }); } catch (err) { scLine.scrollLeft += scBy; }
   }
   if (action === 'next') {
     if (S.selDate && S.selTime) goStep(4);
