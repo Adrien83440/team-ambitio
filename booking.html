@@ -13,7 +13,7 @@ document.write('<plaintext style="display:none">');})();</script>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Réserver un rendez-vous — Alteore</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -23,8 +23,10 @@ document.write('<plaintext style="display:none">');})();</script>
 :root{
   --bg:#f8f9fb;--card:#fff;--card-hover:#fdfcff;
   --border:#e8e5f0;--border2:#d4d0e0;
-  --primary:#6d28d9;--primary-soft:#8b5cf6;--primary-pale:#f5f3ff;--primary-ring:rgba(109,40,217,0.12);
-  --text:#1a1a2e;--text2:#374151;--muted:#6b7280;--muted2:#9ca3af;--muted3:#d1d5db;
+  --primary:#2563eb;--primary-soft:#3b82f6;--primary-pale:#eef4ff;--primary-ring:rgba(37,99,235,0.16);
+  /* Couleurs de la marque, reprises du quiz public : bleu nuit, bleu, bouton ambre → orange */
+  --navy:#0b1332;--cta:linear-gradient(90deg,#fbbf24 0%,#f97316 100%);--cta-ink:#0b1220;
+  --text:#0b1332;--text2:#374151;--muted:#6b7280;--muted2:#9ca3af;--muted3:#d1d5db;
   --green:#059669;--green-pale:#ecfdf5;--green-border:#a7f3d0;
   --amber:#d97706;--amber-pale:#fffbeb;
   --red:#dc2626;
@@ -32,7 +34,7 @@ document.write('<plaintext style="display:none">');})();</script>
   --shadow-sm:0 1px 3px rgba(0,0,0,0.04),0 1px 2px rgba(0,0,0,0.03);
   --shadow:0 4px 16px rgba(0,0,0,0.06),0 1px 3px rgba(0,0,0,0.04);
   --shadow-lg:0 12px 40px rgba(0,0,0,0.08),0 4px 12px rgba(0,0,0,0.04);
-  --fh:'Bricolage Grotesque',system-ui,sans-serif;
+  --fh:'Sora','Figtree',system-ui,sans-serif;
   --fb:'Figtree','Segoe UI',sans-serif;
   --ease:cubic-bezier(.4,0,.2,1);--ease-bounce:cubic-bezier(.34,1.56,.64,1);
 }
@@ -53,7 +55,7 @@ button{font-family:inherit}
 
 /* ── PROGRESS BAR ── */
 .bk-progress{position:fixed;top:0;left:0;right:0;height:3px;background:transparent;z-index:100}
-.bk-progress-fill{height:100%;background:var(--primary);border-radius:0 3px 3px 0;transition:width .5s var(--ease);width:0}
+.bk-progress-fill{height:100%;background:var(--cta);border-radius:0 3px 3px 0;transition:width .5s var(--ease);width:0}
 
 /* ── MAIN LAYOUT ── */
 .bk-shell{min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:56px 20px 40px}
@@ -66,7 +68,7 @@ body.bk-embed .bk-card{max-width:none;border:0;border-radius:0;box-shadow:none;g
 
 /* ── COLONNE D'INFO ── */
 .bk-brand{display:flex;align-items:center;gap:10px;margin-bottom:24px}
-.bk-brand-logo{width:32px;height:32px;border-radius:10px;background:var(--primary);display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-size:15px;font-weight:800;color:#fff}
+.bk-brand-logo{width:32px;height:32px;border-radius:10px;background:var(--navy);display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-size:15px;font-weight:800;color:#fff}
 .bk-brand-name{font-family:var(--fh);font-size:16px;font-weight:800;color:var(--text)}
 .bk-i-title{font-family:var(--fh);font-size:22px;font-weight:800;letter-spacing:-.3px;line-height:1.2;color:var(--text)}
 .bk-i-meta{display:flex;flex-direction:column;gap:8px;margin:16px 0;font-size:14px;font-weight:500;color:var(--text2)}
@@ -130,7 +132,7 @@ body.bk-embed .bk-panel-right{padding:4px 16px 16px}
 .bk-cal-day{width:100%;max-width:44px;margin:0 auto;aspect-ratio:1;border-radius:50%;border:0;background:transparent;font-family:var(--fb);font-size:14px;font-weight:500;color:var(--muted3);cursor:default;display:flex;align-items:center;justify-content:center;position:relative;transition:box-shadow .15s}
 .bk-cal-day.avail{background:var(--primary-pale);color:var(--primary);font-weight:700;cursor:pointer}
 .bk-cal-day.avail:hover{box-shadow:0 0 0 2px var(--primary-ring)}
-.bk-cal-day.sel{background:var(--primary);color:#fff}
+.bk-cal-day.sel{background:var(--navy);color:#fff}
 .bk-cal-day.today::after{content:'';position:absolute;bottom:5px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:currentColor}
 .bk-cal-day.past{opacity:.55}
 
@@ -143,8 +145,8 @@ body.bk-embed .bk-panel-right{padding:4px 16px 16px}
 .bk-chip small{display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase}
 .bk-chip b{display:block;font-size:17px;font-weight:800;line-height:1.25}
 .bk-chip i{display:block;font-style:normal;font-size:10.5px;font-weight:600;color:var(--muted2)}
-.bk-chip.sel{background:var(--primary);border-color:var(--primary);color:#fff}
-.bk-chip.sel small,.bk-chip.sel i{color:#e4d9ff}
+.bk-chip.sel{background:var(--navy);border-color:var(--navy);color:#fff}
+.bk-chip.sel small,.bk-chip.sel i{color:#b9c6ea}
 .bk-strip-none{font-size:13px;color:var(--muted);padding:6px 0}
 .bk-linkbtn{background:none;border:0;color:var(--primary);font-size:13px;font-weight:700;padding:10px 0 0;cursor:pointer}
 
@@ -156,8 +158,9 @@ body.bk-embed .bk-panel-right{padding:4px 16px 16px}
 .bk-slot-row{display:flex;gap:6px}
 .bk-slot,.bk-slot-go{flex:1;min-width:0;height:44px;border:1px solid var(--border);border-radius:11px;background:var(--card);font-size:14.5px;font-weight:700;text-align:center;cursor:pointer;transition:all .15s var(--ease);font-family:var(--fb);color:var(--text)}
 .bk-slot:hover{border-color:var(--primary);color:var(--primary)}
-.bk-slot.sel{background:var(--text);border-color:var(--text);color:#fff}
-.bk-slot-go{display:none;background:var(--primary);border-color:var(--primary);color:#fff}
+.bk-slot.sel{background:var(--navy);border-color:var(--navy);color:#fff}
+.bk-slots-group{grid-column:1/-1;font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;padding-top:4px}
+.bk-slot-go{display:none;background:var(--cta);border-color:transparent;color:var(--cta-ink)}
 .bk-slot-go:hover{filter:brightness(1.1)}
 .bk-slot-row.sel .bk-slot-go{display:block}
 .bk-no-slots{padding:14px 0;color:var(--muted);font-size:13px}
@@ -220,7 +223,7 @@ body.bk-embed .bk-panel-right{padding:4px 16px 16px}
 
 /* ── BUTTONS ── */
 .bk-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 20px;border:none;border-radius:12px;font-family:var(--fb);font-size:16px;font-weight:700;cursor:pointer;transition:all .2s var(--ease)}
-.bk-btn-primary{background:var(--primary);color:#fff}
+.bk-btn-primary{background:var(--cta);color:var(--cta-ink)}
 .bk-btn-primary:hover{filter:brightness(1.1)}
 .bk-btn-primary:disabled{opacity:.5;cursor:not-allowed;filter:none}
 .bk-btn-back{background:transparent;color:var(--muted);border:1px solid var(--border);margin-bottom:8px}
@@ -268,9 +271,8 @@ body.bk-embed .bk-panel-right{padding:4px 16px 16px}
   body.bk-showmonth .bk-strip-wrap{display:none}
   .bk-slots-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));max-height:none;overflow:visible}
   .bk-slot-row.sel .bk-slot-go{display:none}
-  .bk-slot.sel{background:var(--primary);border-color:var(--primary)}
-  .bk-dock{display:flex;position:sticky;bottom:10px;z-index:5;margin-top:14px;align-items:center;justify-content:space-between;gap:10px;background:var(--text);color:#fff;padding:8px 8px 8px 16px;border-radius:14px;font-size:14px;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.2)}
-  .bk-dock button{flex:none;border:0;background:var(--primary);color:#fff;font-size:14.5px;font-weight:700;padding:12px 18px;border-radius:10px;cursor:pointer}
+  .bk-dock{display:flex;position:sticky;bottom:10px;z-index:5;margin-top:14px;align-items:center;justify-content:space-between;gap:10px;background:var(--navy);color:#fff;padding:8px 8px 8px 16px;border-radius:14px;font-size:14px;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+  .bk-dock button{flex:none;border:0;background:var(--cta);color:var(--cta-ink);font-size:14.5px;font-weight:700;padding:12px 18px;border-radius:10px;cursor:pointer}
   .bk-field-row{grid-template-columns:1fr}
   .bk-summary,.bk-form{max-width:none}
 }
@@ -288,13 +290,13 @@ body.bk-embed .bk-panel-right{padding:4px 16px 16px}
 .bk-quota-title{font-family:var(--fh);font-size:22px;font-weight:700;color:var(--text);text-align:center;margin-bottom:12px;line-height:1.3}
 .bk-quota-text{font-size:14px;color:var(--muted);text-align:center;line-height:1.6;margin-bottom:24px}
 .bk-quota-text strong{color:var(--text);font-weight:600}
-.bk-quota-stat{background:var(--primary-pale);border:1px solid rgba(109,40,217,0.12);border-radius:12px;padding:16px;text-align:center;margin-bottom:24px}
+.bk-quota-stat{background:var(--primary-pale);border:1px solid rgba(37,99,235,0.12);border-radius:12px;padding:16px;text-align:center;margin-bottom:24px}
 .bk-quota-stat-num{font-family:var(--fh);font-size:32px;font-weight:800;color:var(--primary);line-height:1}
 .bk-quota-stat-lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-top:6px;font-weight:600}
 .bk-quota-actions{display:flex;gap:10px;flex-direction:column}
 .bk-quota-btn{padding:13px 22px;border-radius:11px;font-family:var(--fb);font-size:14px;font-weight:600;cursor:pointer;border:none;transition:all .2s var(--ease);width:100%}
 .bk-quota-btn-primary{background:var(--primary);color:#fff}
-.bk-quota-btn-primary:hover{background:#5b21b6;transform:translateY(-1px);box-shadow:0 4px 14px rgba(109,40,217,0.3)}
+.bk-quota-btn-primary:hover{background:#1d4ed8;transform:translateY(-1px);box-shadow:0 4px 14px rgba(37,99,235,0.3)}
 .bk-quota-btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
 .bk-quota-btn-ghost:hover{background:var(--primary-pale);color:var(--text)}
 </style>
@@ -1718,9 +1720,16 @@ function renderSlots() {
   } else {
     /* Le créneau choisi se dédouble : l'heure + « Suivant ». Sur téléphone,
        « Suivant » passe dans la barre du bas (#continueBar). */
+    /* Journée chargée (plus de 8 horaires) : repères Matin / Après-midi / Soir. */
+    var grouped = available.length > 8, lastGroup = '';
     h += '<div class="bk-slots-list">';
     for (var i = 0; i < available.length; i++) {
       var isSel = S.selTime === available[i];
+      if (grouped) {
+        var mins = timeToMin(available[i]);
+        var grp = mins < 720 ? 'Matin' : (mins < 1080 ? 'Après-midi' : 'Soir');
+        if (grp !== lastGroup) { lastGroup = grp; h += '<div class="bk-slots-group">' + grp + '</div>'; }
+      }
       h += '<div class="bk-slot-row' + (isSel ? ' sel' : '') + '">';
       h += '<button type="button" class="bk-slot' + (isSel ? ' sel' : '') + '" data-action="selectTime" data-time="' + available[i] + '">' + available[i] + '</button>';
       h += '<button type="button" class="bk-slot-go" data-action="next">Suivant</button>';
