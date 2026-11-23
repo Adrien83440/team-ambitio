@@ -56,10 +56,10 @@ module.exports = async function (req, res) {
       return { leadId: r.leadId || null, src: r.src, sb: !!r.sb, cancelled: !!(r.rv && r.rv.cancelled),
         con: r2(r.rv && r.rv.con), paid: r2(r.rv && r.rv.paid), pending: r2(r.rv && r.rv.pending) };
     });
-    /* — Qualité leads : mêmes appels que lqs-tab.js (plage closers par défaut = 3 mois) — */
+    /* — Qualité leads : mêmes appels que lqs-tab.js (plage closers par défaut = la période) — */
     const typeMap = await Core.loadTypeMap(db);
-    const now = new Date();
-    const CR = { start: new Date(now.getFullYear(), now.getMonth() - 2, 1, 0, 0, 0, 0), end: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999) };
+    /* Plage closers par défaut de l'onglet (crMode 'period') = la période. */
+    const CR = { start: P.start, end: P.end };
     const D = await Lqs.loadAll(db, { P: P, typeMap: typeMap, closerRange: CR });
     const M = Lqs.buildModel(D, { P: P, grid: Lqs.normalizeGrid(D.gridRaw), gridStamp: 1, tunnelFilter: 'all', sourceFilter: 'all',
       teamMembers: loaded.teamMembers || [], closerRange: CR, tunnelsMeta: null });
