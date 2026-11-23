@@ -99,6 +99,27 @@ const Reg = require('./_tunnelRegistry');
 // Identifiants Meta de l'opt-in (API Conversions, 12/11/2026) : relayés par
 // Make dans `meta` (event_id, fbp, fbc, user_agent, meta_allowed), ou à plat.
 const MetaIds = require('./_metaIds');
+const Visiteur = require('./_visiteur');
+
+/* Lieu et appareil du prospect (23/11/2026, api/visiteur.js) : la page quiz
+   a envoyé son relevé au navigateur de Team AVANT que Make n'appelle ici —
+   on le retrouve par l'event_id du Lead. Le premier relevé fait foi. */
+async function visiteurOfEvent(metaIds) {
+  const e = metaIds && metaIds.eventId;
+  if (!e) return null;
+  try {
+    const ref = db.collection('lead_visiteur').doc(String(e).replace(/[/.]/g, '_').slice(0, 100));
+    const snap = await ref.get();
+    if (!snap.exists) return null;
+    const x = snap.data() || {};
+    const blk = {};
+    ['city', 'region', 'country', 'device', 'os', 'browser', 'app', 'via', 'at'].forEach(function (k) { if (x[k]) blk[k] = x[k]; });
+    return { ref: ref, blk: blk, joined: !!x.joined };
+  } catch (err) {
+    console.warn('[lead-optin] visiteur :', err && err.message);
+    return null;
+  }
+}
 
 // ─── ATTRIBUTION PUBLICITAIRE (chantier UTM 17/08/2026) ───────────────
 // Le champ `utm` reste écrit tel quel (Leads Live, CRM, export en
@@ -521,6 +542,8 @@ module.exports = async (req, res) => {
     }
     // Identifiants Meta du DERNIER opt-in (API Conversions).
     if (metaIds) update.metaIds = metaIds;
+    const visU = Visiteur.hasGeo(prev.visiteur) ? null : await visiteurOfEvent(metaIds);
+    if (visU && !prev.visiteur) update.visiteur = visU.blk;
 
     // ─── Soft-reset stage/status (sauf clients) ────────────────────────
     if (!isClient) {
@@ -540,6 +563,7 @@ module.exports = async (req, res) => {
 
     try {
       await existingSnap.ref.update(update);
+      if (visU && !visU.joined) await visU.ref.update({ joined: true, leadId: existingSnap.id }).catch(function () {});
     } catch (e) {
       console.error('[lead-optin] update error:', e);
       res.status(500).json({ error: 'update_failed' });
@@ -592,9 +616,12 @@ module.exports = async (req, res) => {
     newLead.landingLast  = landing;
   }
   if (metaIds) newLead.metaIds = metaIds;
+  const visN = await visiteurOfEvent(metaIds);
+  if (visN) newLead.visiteur = visN.blk;
 
   try {
     const ref = await db.collection('leads').add(newLead);
+    if (visN && !visN.joined) await visN.ref.update({ joined: true, leadId: ref.id }).catch(function () {});
     console.log('[lead-optin] created new lead', ref.id, 'type=', type,
       'attribution=', attribution ? (attribution.utm_content || attribution.ad_id || 'partielle') : 'aucune');
     res.status(200).json({

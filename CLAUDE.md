@@ -595,6 +595,22 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
     bouton « 🧪 10 événements de test » = contact fictif, code de test obligatoire.
   - **Paramètres d'URL des pubs** (média buyeuse) : `utm_source={{site_source_name}}&utm_medium={{placement}}&utm_campaign={{campaign.name}}&utm_content={{ad.name}}&Audience={{adset.name}}&campaign_id={{campaign.id}}&adset_id={{adset.id}}&ad_id={{ad.id}}`.
 
+- **Lieu et appareil du prospect (23/11/2026, demande Adrien)** : bloc `leads/{id}.visiteur` (et
+  `bookings/{id}.visiteur`) `{ city, region, country, device, os, browser, app, via, at }`. Lieu = en-têtes de
+  géolocalisation Vercel (`x-vercel-ip-*`), juste UNIQUEMENT quand le navigateur du prospect appelle Team (jamais
+  Make) ; **aucune adresse IP conservée**. Premier relevé = fait foi, jamais écrasé. Captes : `tunnel-optin`
+  (direct), quiz → beacon `POST /api/visiteur {e: event_id}` injecté par `_quizMetaIds.js` → `lead_visiteur/{event_id}`
+  (Admin SDK seul) relu par `lead-optin` à l'arrivée de Make (sinon cron horaire `?job=rattrapage`), RDV pris par le
+  prospect lui-même (`booking.html` `bkVisiteurBeacon`, `{b: id}` ; jamais setter / agent / coaching). Pour TOUS les
+  visiteurs, pixel autorisé ou non (rien ne part chez Meta). Règles partagées dans `funnel-core.js` : `uaDevice`
+  (appli Facebook / Instagram / Messenger / TikTok détectée), régions FR (codes ISO, anciens codes, départements,
+  outre-mer), `visiteurOf(lead, blocRdv)` (bloc lead → RDV → appareil déduit de `metaIds.ua` à l'affichage, leads
+  depuis le 12/11/2026, rien d'écrit), axes `device` / `region` de `leadAxisKey` → Qualité leads (MQS), Qualité par
+  pub (sans colonnes de coût : Meta ne donne pas la dépense par appareil / région ; lien média buyeuse compris),
+  onglet 👥 Leads (colonnes + CSV), dossiers nominatifs. Lecteur funnel : région seulement, jamais la ville sur une
+  fiche nominative. Rattrapage des CLIENTS : `GET /api/visiteur?job=signatures` (lieu de la signature,
+  `via: 'signature'`, à blanc par défaut, `&apply=1`, trace `visiteur_backfill_log`, clé Vercel temporaire
+  `VISITEUR_KEY` ou `CRON_SECRET`). Avant le 12/11/2026 : rien de récupérable (aucun navigateur ni lieu enregistré).
 - **Accès lecture au Stats funnel — liens par personne (19/11/2026, média buyeuse)** : Stats funnel →
   « 👁 Accès lecture » (admin) : un lien par personne, durée 24 h / 7 / 30 / 90 j / date (≤ 1 an),
   prolonger, désactiver / réactiver, journal des connexions (une session par ouverture de page : date,

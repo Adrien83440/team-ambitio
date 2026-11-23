@@ -726,7 +726,16 @@
       if (!st0) heads.forEach(function (h0) { if (!st0 && h0._class === 'setter' && h0.bookedBySlug) st0 = h0.bookedBySlug; });
       r.setter = st0;
       r.setterName = st0 ? memberName(st0) : null;
+      /* Lieu et appareil (23/11/2026) : repli sur le premier RDV pris par le
+         prospect lui-même. FC.visiteurOf fait le reste (bloc lead, puis
+         navigateur de l'opt-in). */
+      if (!l._bkVis) (bkByLead[l._id] || []).forEach(function (b) {
+        if (!l._bkVis && b.visiteur && (b.visiteur.country || b.visiteur.device)) l._bkVis = b.visiteur;
+      });
+      r.visiteur = FC.visiteurOf ? FC.visiteurOf(l) : null;
       r.axes = {
+        device: FC.leadAxisKey(l, 'device', CRE_IDX),
+        region: FC.leadAxisKey(l, 'region', CRE_IDX),
         campaign: FC.leadAxisKey(l, 'campaign', CRE_IDX),
         adset: FC.leadAxisKey(l, 'adset', CRE_IDX),
         creative: FC.leadAxisKey(l, 'creative', CRE_IDX),

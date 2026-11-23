@@ -33,7 +33,7 @@ const TUNNEL_RE = /^(all|elite|business)$/;
 const MODE_RE = /^(month|day|7d|30d|custom)$/;
 const MAX_RANGE_DAYS = 92;
 const CACHE_TTL_MS = 120 * 1000;
-const AXES = ['creative', 'adset', 'campaign'];
+const AXES = ['creative', 'adset', 'campaign', 'device', 'region'];
 
 const ROW_FIELDS = ['key', 'group', 'legacy', 'outOfAds', 'adIdList',
   'leads', 'caKnown', 'qualCa', 'faux', 'disq', 'neverReached', 'neverEligible',
