@@ -263,15 +263,12 @@
      plus tôt et signé ce mois-ci n'y est pas, alors que le Stats funnel le
      compte. On affiche donc aussi le chiffre « sur la période », celui du
      funnel, pour que les deux écrans se recoupent sans changer de mode. */
-  function funnelTot() {
-    var fc = S.ctx && S.ctx.funnelCloses;
-    if (!fc || S.closer) return null;
-    var n = 0, con = 0;
-    fc.forEach(function (r) { if (r.rv && r.rv.cancelled) return; n++; con += (r.rv && r.rv.con) || 0; });
-    return { n: n, con: con };
-  }
-  function twoLens(txt, funnelTxt) {
-    return '<br><span style="color:var(--gold)">Leads entrés sur la période seulement.</span> ' + txt + (funnelTxt ? ' · Stats funnel : <strong>' + funnelTxt + '</strong>' : '');
+  /* Closes signés sur la période (mêmes fiches que le Stats funnel) : nombre,
+     signé, et ce qui est déjà encaissé sur ces closes-là. */
+  function monthHead() {
+    var n = 0, con = 0, cash = 0;
+    periodSigned().forEach(function (ps) { n++; con += ps.con || 0; cash += ps.cash || 0; });
+    return { n: n, con: con, cash: cash };
   }
 
   function viewOverview() {
@@ -292,9 +289,23 @@
     h += kpi(fPct(t.pct45, 0), 'Leads notés 4-5', fNum(t.n45) + ' leads · 1-2 : ' + fPct(t.pct12, 0));
     h += kpi(fNum(t.booked), 'RDV pris', fPct(t.bookRate) + ' des leads');
     h += kpi(fNum(t.present), 'Présents', fPct(t.showRate) + ' des RDV');
-    h += kpi(fNum(closesOf(t)), S.cashMode === 'periode' ? 'Closes signés' : 'Closes', S.cashMode === 'periode' ? 'datés dans la période · ' + fNum(t.payers) + ' client' + (t.payers > 1 ? 's ont' : ' a') + ' payé' : fPct(t.closePresent) + ' des présents' + (t.closes ? '<br>' + offerSplit(t) : '') + twoLens(fNum(t.signers) + ' close' + (t.signers > 1 ? 's' : '') + ' signé' + (t.signers > 1 ? 's' : '') + ' sur la période', funnelTot() ? fNum(funnelTot().n) + ' closes' : ''));
-    h += kpi(fEur(totCash), S.cashMode === 'periode' ? 'Signé sur la période' : 'Signé', S.cashMode === 'periode' ? 'HT, closes datés dans la période' : 'HT, contrats des closes de ces leads' + twoLens(fEur(t.periodCon) + ' signés sur la période', funnelTot() ? fEur(funnelTot().con) : ''));
-    h += kpi(fEur(paidOf(t)), S.cashMode === 'periode' ? 'Encaissé sur la période' : 'Encaissé', S.cashMode === 'periode' ? 'HT, prélèvements passés, tous leads confondus' : 'HT, prélèvements passés à ce jour' + (totCash > paidOf(t) ? '<br>' + fEur(totCash - paidOf(t)) + ' restent à encaisser' : ''));
+    /* Closes / Signé / Encaissé en tête (23/11/2026, 3e retour Vincent) : ces
+       trois cartes affichent TOUJOURS les closes SIGNÉS sur la période, soit
+       exactement Closes / Contracté / Collecté du Stats funnel. Avant, elles
+       suivaient les seuls leads entrés sur la période (5 closes, 34 000 €)
+       pendant que le funnel en affichait 6 et 40 000 € : même mois, deux
+       chiffres. Le détail « leads entrés sur la période » passe en sous-ligne ;
+       le tableau par note, lui, reste sur les leads entrés (c'est son objet). */
+    var mh = monthHead();
+    if (S.cashMode === 'periode') {
+      h += kpi(fNum(mh.n), 'Closes signés', 'datés dans la période, comme le Stats funnel · ' + fNum(t.payers) + ' client' + (t.payers > 1 ? 's ont' : ' a') + ' payé');
+      h += kpi(fEur(mh.con), 'Signé sur la période', 'HT, closes datés dans la période');
+      h += kpi(fEur(paidOf(t)), 'Encaissé sur la période', 'HT, prélèvements passés pendant la période, tous clients confondus<br>dont ' + fEur(mh.cash) + ' sur les closes de la période (= collecté du Stats funnel)');
+    } else {
+      h += kpi(fNum(mh.n), 'Closes signés', 'sur la période, comme le Stats funnel' + (mh.n !== t.closes ? '<br>dont ' + fNum(t.closes) + ' de leads entrés sur la période' : '') + (t.closes ? '<br>' + offerSplit(t) : ''));
+      h += kpi(fEur(mh.con), 'Signé', 'HT, closes signés sur la période' + (Math.abs(mh.con - totCash) > 0.5 ? '<br>dont ' + fEur(totCash) + ' de leads entrés sur la période' : ''));
+      h += kpi(fEur(mh.cash), 'Encaissé', 'HT, déjà prélevé sur ces closes' + (mh.con > mh.cash ? '<br>' + fEur(mh.con - mh.cash) + ' restent à encaisser' : ''));
+    }
     h += '</div>';
 
     h += funnelCheckHtml();
@@ -335,6 +346,10 @@
     body += '<div class="fn-stage-note" style="margin-top:8px">' + (S.cashMode === 'periode'
       ? 'Mode « signé / encaissé sur la période » : leads / RDV / présents = leads entrés dans la période ; signé = closes datés dans la période (RDV de close, sinon date client) ; encaissé = prélèvements réellement passés pendant la période ; les deux rangés selon la note du lead, quel que soit son mois d\'entrée.'
       : 'Leads entrés dans la période (ré-optins compris) · RDV et closes suivis jusqu\'à aujourd\'hui · signé = contrat HT du close · encaissé = prélèvements réellement passés (HT) · closes annulés exclus.') + '</div>';
+    if (S.cashMode !== 'periode' && (mh.n !== t.closes || Math.abs(mh.con - totCash) > 0.5)) {
+      body += '<div class="fn-stage-note" style="margin-top:8px">Ce tableau suit les leads <strong>entrés sur la période</strong> : ' + fNum(t.closes) + ' close' + (t.closes > 1 ? 's' : '') + ', ' + fEur(totCash) + ' signés. ' +
+        'Les cartes du haut comptent tous les closes <strong>signés sur la période</strong> (' + fNum(mh.n) + ', ' + fEur(mh.con) + ') : l\'écart vient de clients entrés avant la période et signés pendant. Pour voir ce tableau sur la même base, clique « 🏦 Signé / encaissé sur la période ».</div>';
+    }
     h += card('⭐ Qualité des leads → résultats', S.closer ? 'leads de ' + esc(S.M.memberName(S.closer)) : 'toute l\'équipe', body);
 
     h += alignmentCard(R);

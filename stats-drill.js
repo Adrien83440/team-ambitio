@@ -46,6 +46,18 @@
       '.sd-bg{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(3,5,14,.72);z-index:9995;display:none;align-items:center;justify-content:center;padding:20px}' +
       '.sd-bg.show{display:flex}' +
       '.sd-box{background:var(--bg2,#0e111c);color:var(--text,#eef0f8);border:1px solid var(--border2,rgba(148,163,214,.22));border-radius:18px;width:100%;max-width:980px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 12px 36px rgba(3,5,14,.55)}' +
+      /* Thème clair : les surfaces « verre » du thème sont translucides — une
+         fenêtre de lecture doit être OPAQUE, sinon le tableau de la page se lit
+         à travers (capture d'Adrien, 23/11/2026). */
+      'body.light-theme .sd-bg{background:rgba(20,24,48,.45);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}' +
+      'body.light-theme .sd-box{background:#ffffff;color:#14182f;border-color:rgba(20,24,48,.14);box-shadow:0 24px 60px rgba(20,24,48,.28)}' +
+      'body.light-theme .sd-table th{background:#ffffff;color:#5b6180;border-bottom-color:rgba(20,24,48,.18)}' +
+      'body.light-theme .sd-table td{border-bottom-color:rgba(20,24,48,.09)}' +
+      'body.light-theme .sd-table tfoot td{border-top-color:rgba(20,24,48,.18)}' +
+      'body.light-theme .sd-sub,body.light-theme .sd-mut{color:#5b6180}' +
+      'body.light-theme .sd-x{border-color:rgba(20,24,48,.2)}' +
+      'body.light-theme .sd-table a{color:#2f55e0}' +
+      'body.light-theme .sd-note,body.light-theme .sd-flag{color:#a05a00;border-color:#d08a1c}' +
       '.sd-head{padding:18px 22px 10px;display:flex;gap:12px;align-items:flex-start}' +
       '.sd-head h3{margin:0;font-size:16px;font-weight:700;flex:1;line-height:1.35}' +
       '.sd-x{background:none;border:1px solid var(--border2,rgba(148,163,214,.22));color:inherit;border-radius:9px;padding:4px 10px;font-size:13px;cursor:pointer}' +

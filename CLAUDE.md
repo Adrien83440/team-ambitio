@@ -593,6 +593,13 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   le chiffre « sur la période » et celui du Stats funnel (`twoLens`, `funnelTot`). Set NB : onglets libellés
   « Setting » ; sous chaque « RDV NB », « dont N posés avant la période, N de remplacement » (`rdvOrigin`) —
   ex. réel : 4 sets et 6 RDV NB = 4 + 1 posé en octobre + 1 RDV de remplacement.
+  **23/11/2026 (3e retour Vincent, re-vérifié sur les données réelles : calcul juste, 6 closes / 40 000 € des deux
+  côtés)** : les cartes Closes / Signé / Encaissé de Qualité leads affichent TOUJOURS les closes SIGNÉS sur la
+  période (`monthHead` = `periodSigned`), donc les mêmes chiffres que Closes / Contracté / Collecté du funnel ;
+  le chiffre « leads entrés sur la période » passe en sous-ligne, le tableau par note reste sur les leads entrés
+  et le dit. Ne plus jamais mettre en tête un chiffre de cohorte à côté d'un funnel qui compte la période.
+  `stats-drill.js` : fenêtre OPAQUE en thème clair (`--bg2` y est translucide). Set NB : « reporté à une nouvelle
+  date » remplace « de remplacement ».
 
 Spécification de référence du flux commercial : `REFONTE-SPEC.md`.
 

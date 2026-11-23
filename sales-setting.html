@@ -607,7 +607,7 @@
         var cDay = cMs != null ? AF.dayKey(new Date(cMs)) : null;
         var rdvCat = b.rescheduledFromId ? 'replace' : ((cDay && cDay >= fromDay && cDay <= toDay) ? 'period' : 'before');
         var posePar = (b.bookedBySlug && b.bookedBySlug !== aSlug) ? ' · posé par ' + memberName(b.bookedBySlug) + ' (setter retenu : celui de la fiche ou du close)' : '';
-        var poseTxt = (rdvCat === 'replace' ? 'remplace un RDV replanifié' : (cDay ? 'posé le ' + SD.frDate(cDay) + (rdvCat === 'before' ? ' — avant la période' : '') : 'date de pose inconnue')) + posePar;
+        var poseTxt = (rdvCat === 'replace' ? 'RDV reporté : nouvelle date d\'un RDV replanifié' : (cDay ? 'posé le ' + SD.frDate(cDay) + (rdvCat === 'before' ? ' — avant la période' : '') : 'date de pose inconnue')) + posePar;
         function item() {
           if (!it) {
             it = SD.bookingItem(b, { todayIso: todayIso, setter: setterLbl, closer: closerName(b), rv: rv, decl: (oc === 'close' && !rv) ? (b.closeData || null) : null });
@@ -958,7 +958,7 @@
     });
     var parts = [];
     if (o.before) parts.push(o.before + ' posé' + (o.before > 1 ? 's' : '') + ' avant la période');
-    if (o.replace) parts.push(o.replace + ' de remplacement');
+    if (o.replace) parts.push(o.replace + ' reporté' + (o.replace > 1 ? 's' : '') + ' à une nouvelle date');
     return parts.length ? 'dont ' + parts.join(', ') : '';
   }
 
@@ -979,7 +979,7 @@
     var who = team ? 'Onglet Équipe : tous les setters.' : 'Cet onglet = les RDV dont <strong>' + SD.esc((S.data.buckets[0] || {}).name || '') + ' est le setter</strong>, quel que soit le closer qui les reçoit (colonne « Closer » des listes).';
     return '<div class="au-card" style="padding:12px 16px;font-size:12.5px;line-height:1.75">' +
       '🔁 <strong>Pourquoi « Sets » et « RDV NB » diffèrent</strong> — un set est compté le jour où le RDV est <em>posé</em>, un RDV NB le jour où il <em>a lieu</em>.<br/>' +
-      '<strong>' + nR + ' RDV NB</strong> = ' + (join([part(r.period, 'posés sur la période'), part(r.before, 'posés avant la période'), part(r.replace, 'RDV de remplacement (replanifiés)')]) || '0') + '.<br/>' +
+      '<strong>' + nR + ' RDV NB</strong> = ' + (join([part(r.period, 'posés sur la période'), part(r.before, 'posés avant la période'), part(r.replace, 'reportés à une nouvelle date (le set avait déjà été compté au premier créneau)')]) || '0') + '.<br/>' +
       '<strong>' + nS + ' sets</strong> = ' + (join([part(st.due, 'dont le RDV a lieu sur la période'), part(st.later, 'dont le RDV a lieu après la période'), part(st.replan, 'replanifiés depuis'), part(st.noRdv, 'statut « set » sans RDV lié')]) || '0') + '.<br/>' +
       '<span style="color:var(--muted)">Annulés, no-show, présents, pitchés et closes se lisent sur les <strong>RDV NB</strong> (date du RDV), jamais sur les sets. ' + who + '</span></div>';
   }
