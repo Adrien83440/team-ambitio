@@ -4,7 +4,7 @@
 
 ## Comment ça marche
 
-1. Le lendemain du rendez-vous, l'IA lit l'appel et choisit **un** frein. Team l'envoie à ActiveCampaign (via Make), qui :
+1. Le lendemain du rendez-vous, l'IA lit l'appel et choisit **un** frein. Team l'envoie directement à ActiveCampaign, qui :
    - pose le tag du frein (`frein_tresorerie`, `frein_timing`, `frein_decision`, `frein_preuves`, `frein_priorite` ou `frein_general`) ;
    - pose `stop_autom`, ce qui arrête le nurturing généraliste ;
    - retire le tag `rdv_a_venir`.
@@ -384,3 +384,55 @@ Quatre e-mails seulement, à J+1, J+5, J+12 et J+21.
 **E3 (J+12)** reprend **E3 « Trois chiffres à suivre chaque mois »** de la séquence 5.
 
 **E4 (J+21)** reprend **E5 « Où en êtes-vous ? »** de la séquence 5.
+
+---
+
+## 7. Rendez-vous manqué : no-show, ou annulé sans report (`rdv_manque`)
+
+Le prospect quitte le nurturing dès sa réservation. Si le rendez-vous n'a pas lieu, il ne reprend donc pas le nurturing général : il reçoit cette courte séquence. Elle s'ajoute au SMS de rattrapage et à l'appel du closer, qui partent le jour même.
+
+- E1 : le lendemain à 9 h 30 ; E2 : 3 jours après ; E3 : 7 jours après.
+- Sortie automatique s'il reprend rendez-vous (`rdv_a_venir`) ou devient client.
+
+**E1 (J+1) : Votre rendez-vous n'a pas pu avoir lieu**
+*Pré-en-tête : Ça arrive. On vous garde une place.*
+
+> Bonjour %FIRSTNAME%,
+>
+> Notre rendez-vous n'a pas pu avoir lieu. Une urgence, un client, une journée qui déborde : ça arrive à tous les dirigeants, il n'y a rien à justifier.
+>
+> Si le sujet vous occupe toujours, le plus simple est de choisir un nouveau créneau, au moment qui vous arrange :
+>
+> [ Choisir un nouveau créneau ]
+>
+> Adrien & Emily
+
+**E2 (J+3) : Ce que vous auriez retiré de l'audit**
+*Pré-en-tête : 45 minutes pour y voir clair sur votre entreprise.*
+
+> Bonjour %FIRSTNAME%,
+>
+> Pour que vous sachiez ce que vous auriez retiré de notre échange, voici comment se déroule l'audit :
+>
+> 1. **On vous écoute** : ce qui vous prend le plus de temps et d'énergie aujourd'hui, avec vos mots.
+> 2. **On met le doigt sur ce qui bloque** : souvent la marge ou l'organisation, plus que le commercial.
+> 3. **Vous repartez avec vos priorités** : deux ou trois actions concrètes, que nous travaillions ensemble ou non.
+>
+> Vous n'avez rien à préparer.
+>
+> [ Réserver mon audit ]
+>
+> Adrien & Emily
+
+**E3 (J+7) : On garde le contact ?**
+*Pré-en-tête : Un mot suffit.*
+
+> Bonjour %FIRSTNAME%,
+>
+> Je ne veux pas vous encombrer. Si ce n'est plus d'actualité, répondez simplement « plus tard » à cet e-mail et je ne vous relancerai pas sur ce sujet.
+>
+> Si c'est toujours d'actualité, votre créneau vous attend :
+>
+> [ Choisir un créneau ]
+>
+> Adrien & Emily

@@ -13,8 +13,8 @@
 //   2. Pas d'enregistrement : on attend jusqu'à J+3 ; ensuite la note du
 //      closer seule ; sans note, frein « général ».
 //   3. Le frein est écrit sur le RDV (`parcoursRdv.frein`) et sur la fiche
-//      (`freinPrincipal`, trace dans la timeline), puis Make reçoit
-//      `evenement: 'frein'` → ActiveCampaign : tag du frein + `stop_autom`
+//      (`freinPrincipal`, trace dans la timeline), puis ActiveCampaign (en direct) :
+//      tag du frein + `stop_autom`
 //      (fin du nurturing généraliste) + retrait de « RDV à venir ».
 //
 // Même interrupteur et même mode test que le parcours RDV

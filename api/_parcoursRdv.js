@@ -16,9 +16,10 @@
 //   ⑤ sms_h1              une heure avant : SMS avec le lien
 //   ⑥ rattrapage          5 à 15 min après l'heure, si le prospect n'est pas
 //                         dans le Meet : SMS + alerte au closer
-//   ⑦ ac_*                ActiveCampaign via Make : tag « RDV à venir » posé à
-//                         la réservation, retiré ou remplacé par l'arrêt du
-//                         nurturing une fois l'issue du RDV connue
+//   ⑦ ac_*                ActiveCampaign en direct (api/_activeCampaign.js) :
+//                         tag « rdv_a_venir » + sortie du nurturing à la
+//                         réservation ; selon l'issue : séquence « rendez-vous
+//                         manqué », arrêt, ou séquence du frein (parcours-frein)
 //
 // Les rappels de l'agenda (Cloud Functions : e-mail de confirmation, SMS,
 // J-1, H-1) s'effacent pour un type de consultation dont la config porte
@@ -78,7 +79,14 @@ const DEFAUTS = {
   valeur: { ecartMinH: 36, apresReservationMin: 180 },
   h1: { avantMin: 60, auPlusTardMin: 20 },
   rattrapage: { actif: true, apresMin: 5, jusquaMin: 15 },
-  activeCampaign: { webhook: '' },
+  // ActiveCampaign en direct (api/_activeCampaign.js, clé Vercel). Tags par
+  // NOM. `nurturing` : automatisations dont le prospect sort à la réservation
+  // (35 Élite, 26 Business, 32 ancien Élite).
+  activeCampaign: {
+    actif: true,
+    nurturing: ['35', '26', '32'],
+    tagRdv: 'rdv_a_venir', tagStop: 'stop_autom', tagManque: 'rdv_manque',
+  },
   textes: {},
 };
 
@@ -564,26 +572,50 @@ async function noter(ref, etape, r) {
   await ref.set(patch, { merge: true }).catch(function (e) { console.warn('[parcours-rdv] trace', e && e.message); });
 }
 
-/* ═══ ActiveCampaign via Make ═══════════════════════════════════════════ */
+/* ═══ ActiveCampaign ═══════════════════════════════════════════════════ */
 
-/* evenement : 'rdv_pris' | 'rdv_libere' | 'nurturing_stop'. Make pose ou
-   retire les tags. Sans webhook configuré : rien (et rien de réservé). */
+/* ActiveCampaign en direct (plus de Make, demande d'Adrien du 24/11/2026).
+   evenement :
+   - 'rdv_pris'       → tag `rdv_a_venir` + sortie du nurturing (35/26/32) ;
+   - 'rdv_libere'     → RDV manqué (no-show) ou annulé sans report : tag
+                        `rdv_a_venir` retiré, tag `rdv_manque` → séquence
+                        « votre rendez-vous n'a pas pu avoir lieu » ;
+   - 'nurturing_stop' → offre / close / disqualifié : `stop_autom`, tag retiré ;
+   - 'frein'          → tag du frein (extra.tag) + `stop_autom`, tag retiré. */
 async function versActiveCampaign(cfg, evenement, b, extra) {
-  const url = (cfg.activeCampaign || {}).webhook;
-  if (!url) return { ok: false, canal: 'ac', erreur: 'webhook_absent' };
-  const email = String(((b.prospect || {}).email) || '').trim().toLowerCase();
-  if (!email) return { ok: false, canal: 'ac', erreur: 'email_absent' };
+  const A = cfg.activeCampaign || {};
+  if (A.actif === false) return { ok: false, canal: 'ac', erreur: 'ac_coupe' };
+  const AC = require('./_activeCampaign');
+  const p = b.prospect || {};
+  const c = await AC.contact(p.email, { firstName: p.prenom || undefined, lastName: p.nom || undefined });
+  if (!c.ok) return { ok: false, canal: 'ac', erreur: c.erreur || 'contact' };
+  const faits = [];
+  async function pas(r, lib) { if (!r.ok) throw new Error(lib + ' : ' + (r.erreur || 'echec')); faits.push(lib); }
   try {
-    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(Object.assign({ evenement: evenement, email: email, bookingId: b._id || null, leadId: b.leadId || null }, extra || {})) });
-    return r.ok ? { ok: true, canal: 'ac', texte: evenement } : { ok: false, canal: 'ac', erreur: 'make_http_' + r.status };
+    if (evenement === 'rdv_pris') {
+      await pas(await AC.ajouterTag(c.id, A.tagRdv || 'rdv_a_venir'), '+' + (A.tagRdv || 'rdv_a_venir'));
+      const s = await AC.sortirDesAutomatisations(c.id, A.nurturing || []);
+      await pas(s, 'sortie nurturing ' + ((s.sortis || []).join(',') || 'aucune en cours'));
+    } else if (evenement === 'rdv_libere') {
+      await pas(await AC.retirerTag(c.id, A.tagRdv || 'rdv_a_venir'), '-' + (A.tagRdv || 'rdv_a_venir'));
+      await pas(await AC.ajouterTag(c.id, A.tagManque || 'rdv_manque'), '+' + (A.tagManque || 'rdv_manque'));
+    } else if (evenement === 'nurturing_stop') {
+      await pas(await AC.ajouterTag(c.id, A.tagStop || 'stop_autom'), '+' + (A.tagStop || 'stop_autom'));
+      await pas(await AC.retirerTag(c.id, A.tagRdv || 'rdv_a_venir'), '-' + (A.tagRdv || 'rdv_a_venir'));
+    } else if (evenement === 'frein') {
+      if (!extra || !extra.tag) return { ok: false, canal: 'ac', erreur: 'tag_frein_absent' };
+      await pas(await AC.ajouterTag(c.id, extra.tag), '+' + extra.tag);
+      await pas(await AC.ajouterTag(c.id, A.tagStop || 'stop_autom'), '+' + (A.tagStop || 'stop_autom'));
+      await pas(await AC.retirerTag(c.id, A.tagRdv || 'rdv_a_venir'), '-' + (A.tagRdv || 'rdv_a_venir'));
+    } else return { ok: false, canal: 'ac', erreur: 'evenement_inconnu' };
   } catch (e) {
-    return { ok: false, canal: 'ac', erreur: (e && e.message) || 'make_reseau' };
+    return { ok: false, canal: 'ac', erreur: e.message, texte: faits.join(' ; '), id: c.id };
   }
+  return { ok: true, canal: 'ac', id: c.id, texte: evenement + ' : ' + faits.join(' ; ') };
 }
 
 /* Après le RDV : que fait le nurturing ?
-   - no-show / annulé (hors report) → reprend (tag retiré) ;
+   - no-show / annulé (hors report) → séquence « rendez-vous manqué » ;
    - non-close → séquence personnalisée selon le frein (parcours-frein.js) ;
    - offre / close / disqualifié → arrêt (le closer suit, ou client). */
 function suiteNurturing(b) {
@@ -912,8 +944,7 @@ async function passage(opts) {
       if (suite && !etapesAc['ac_' + suite]) {
         const lAc = { id: it.id, etape: 'ac_' + suite };
         if (simulation || !ctx.estTest(b)) lAc.resultat = 'simule';
-        else if (!(cfg.activeCampaign || {}).webhook) lAc.resultat = 'webhook_absent';
-        else if ((await reserver(it.ref, 'ac_' + suite)) === 'ok' || b.status === 'cancelled') {
+        else if ((await reserver(it.ref, 'ac_' + suite)) === 'ok') {
           const r = await versActiveCampaign(cfg, suite, b, { outcome: b.outcome || null });
           await noter(it.ref, 'ac_' + suite, r);
           lAc.resultat = r.ok ? 'envoye' : 'echec';
@@ -932,7 +963,6 @@ async function passage(opts) {
     if (!etapesAc.ac_rdv_pris && now < debut) {
       const lAc = { id: it.id, etape: 'ac_rdv_pris' };
       if (simulation || !ctx.estTest(b)) lAc.resultat = 'simule';
-      else if (!(cfg.activeCampaign || {}).webhook) lAc.resultat = 'webhook_absent';
       else if ((await reserver(it.ref, 'ac_rdv_pris')) === 'ok') {
         const r = await versActiveCampaign(cfg, 'rdv_pris', b, { dateRdv: b.date, heureRdv: b.time });
         await noter(it.ref, 'ac_rdv_pris', r);

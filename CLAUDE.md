@@ -714,13 +714,14 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   (`actif` faux par défaut, `modeTest` vrai par défaut = seuls les RDV au téléphone / e-mail de test de
   `_config/relances.testTelephone/testEmail` ou `testMembres`, `depuis` = 1re activation, jamais de rattrapage du
   passé ; réel = « PRODUCTION » tapé). Traces : `bookings/{id}.parcoursRdv.etapes.*` (réservation transactionnelle,
-  jamais rejoué), fiche lead `communications` (`source: 'parcours_rdv'`). ActiveCampaign via le scénario Make
-  « Parcours RDV (Team) → ActiveCampaign » (webhook dans `_config/parcours_rdv.activeCampaign.webhook`, jamais
-  dans le dépôt) : `rdv_pris` → tag `rdv_a_venir` (44), `rdv_libere` (no-show, annulé) → retiré,
-  `nurturing_stop` (offre / close / disqualifié) → `stop_autom` (39), `frein` → tag `frein_*` (45-50) +
-  `stop_autom`. Après un `non_close` : `api/parcours-frein.js` (cron du matin) lit l'appel (`replay`, sinon note
+  jamais rejoué), fiche lead `communications` (`source: 'parcours_rdv'`). ActiveCampaign EN DIRECT
+  (`api/_activeCampaign.js`, variables Vercel `ACTIVECAMPAIGN_API_URL` / `ACTIVECAMPAIGN_API_KEY`, tags désignés par
+  leur NOM ; plus de Make, demande d'Adrien du 24/11/2026 — le scénario Make « Parcours RDV (Team) → ActiveCampaign »
+  10226515 est éteint, pas supprimé) : `rdv_pris` → tag `rdv_a_venir` + sortie des nurturing 35 / 26 / 32 ;
+  `rdv_libere` (no-show, annulé sans report) → `rdv_a_venir` retiré + `rdv_manque` (séquence « rendez-vous manqué ») ;
+  `nurturing_stop` (offre / close / disqualifié) → `stop_autom` ; `frein` → tag `frein_*` + `stop_autom`. Après un `non_close` : `api/parcours-frein.js` (cron du matin) lit l'appel (`replay`, sinon note
   du closer après J+3, sinon « général »), écrit `parcoursRdv.frein` et `leads.freinPrincipal` (jamais écrasé si
-  `corrigePar`), puis Make → séquence ActiveCampaign du frein (automatisations 36-41, textes
+  `corrigePar`), puis séquence ActiveCampaign du frein (automatisations 36-41, textes
   `docs/parcours-rdv/sequences-freins.md`). Clé temporaire du chantier `PARCOURS_AUDIT_KEY` (preview de la branche,
   `api/parcours-audit.js` lecture seule) : à retirer à la fin.
 
