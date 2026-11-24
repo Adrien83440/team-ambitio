@@ -2344,6 +2344,73 @@ async function getBookingTypeNotifications(booking) {
   }
 }
 
+/* ═══ PARCOURS RDV (24/11/2026) ══════════════════════════════════════════
+   Pour un RDV commercial dont la consultation porte
+   `notifications.parcoursRdv === true`, c'est api/parcours-rdv.js (Vercel)
+   qui écrit au prospect : confirmation, e-mail de valeur, WhatsApp de la
+   veille, SMS une heure avant, rattrapage. Les envois de l'agenda
+   (e-mail de confirmation, SMS de confirmation, J-1, H-1) s'effacent alors,
+   sinon le prospect recevrait tout en double.
+
+   Ils ne s'effacent QUE pour un RDV que le parcours prend réellement :
+   parcours actif (`_config/parcours_rdv.actif`), RDV créé après son
+   activation (`depuis`), et — tant que `modeTest` n'est pas explicitement
+   faux — prospect de test (téléphone / e-mail d'un membre `testMembres`,
+   ou listés dans `testTelephones` / `testEmails`). Mêmes règles que
+   _parcoursRdv.js : un prospect réel en mode test garde les rappels
+   actuels, il n'est jamais laissé sans message. Config lue une fois par
+   minute au plus. */
+let _abParcoursCache = null;
+async function _abParcoursConfig() {
+  if (_abParcoursCache && Date.now() - _abParcoursCache.at < 60000) return _abParcoursCache;
+  const out = { at: Date.now(), cfg: {}, tel: {}, email: {} };
+  try {
+    const s = await db.collection('_config').doc('parcours_rdv').get();
+    out.cfg = s.exists ? (s.data() || {}) : {};
+    if (out.cfg.actif === true && out.cfg.modeTest !== false) {
+      const fin9 = function (v) { const d = String(v || '').replace(/\D/g, ''); return d.length >= 9 ? d.slice(-9) : ''; };
+      const m = await db.collection('_meta').doc('team_members').get();
+      const raw = m.exists ? (m.data() || {}).members : null;
+      const list = Array.isArray(raw) ? raw : Object.values(raw || {});
+      const slugs = Array.isArray(out.cfg.testMembres) ? out.cfg.testMembres : ['adrien'];
+      list.forEach(function (x) {
+        if (!x || slugs.indexOf(x.slug) < 0) return;
+        Object.keys(x).forEach(function (k) {
+          if (/phone|tel|mobile|whatsapp/i.test(k) && fin9(x[k])) out.tel[fin9(x[k])] = true;
+          if (/mail/i.test(k) && /@/.test(String(x[k] || ''))) out.email[String(x[k]).trim().toLowerCase()] = true;
+        });
+      });
+      (out.cfg.testTelephones || []).forEach(function (t) { if (fin9(t)) out.tel[fin9(t)] = true; });
+      (out.cfg.testEmails || []).forEach(function (e) { if (e) out.email[String(e).trim().toLowerCase()] = true; });
+      // Numéro et e-mail de test d'Adrien : _config/relances (même source que _parcoursRdv.js).
+      const rel = await db.collection('_config').doc('relances').get();
+      const rd = rel.exists ? (rel.data() || {}) : {};
+      if (fin9(rd.testTelephone)) out.tel[fin9(rd.testTelephone)] = true;
+      if (rd.testEmail && /@/.test(String(rd.testEmail))) out.email[String(rd.testEmail).trim().toLowerCase()] = true;
+    }
+  } catch (e) {
+    console.warn('[parcoursRdv] config illisible :', e.message);
+    out.cfg = {};
+  }
+  _abParcoursCache = out;
+  return out;
+}
+async function _abParcoursRdvPrend(booking, nf) {
+  if (!booking || !nf || nf.parcoursRdv !== true) return false;
+  if (booking.isCoaching === true || booking.clientId || booking.skipLeadCreation === true || booking.source === 'csm_manual') return false;
+  const P = await _abParcoursConfig();
+  if (P.cfg.actif !== true) return false;
+  const c = booking.createdAt;
+  const creeMs = c && typeof c.toMillis === 'function' ? c.toMillis() : (typeof c === 'number' ? c : Date.now());
+  if (P.cfg.depuis && creeMs < P.cfg.depuis) return false;
+  if (P.cfg.modeTest === false) return true;
+  const p = booking.prospect || {};
+  const d = String(p.telephone || p.tel || '').replace(/\D/g, '');
+  const tel9 = d.length >= 9 ? d.slice(-9) : '';
+  const em = String(p.email || '').trim().toLowerCase();
+  return !!((tel9 && P.tel[tel9]) || (em && P.email[em]));
+}
+
 
 /* ═══════════════════════════════════════════════════
    9. BOOKING CONFIRMATION
@@ -2389,7 +2456,9 @@ exports.onBookingConfirmation = functions.firestore
       // SMS de confirmation : conservé ci-dessous (pas de doublon).
       // ─────────────────────────────────────────────────────────────────
 
-      if (nf.smsOnBook && tel) {
+      // Parcours RDV : le SMS de confirmation part de api/parcours-rdv.js.
+      const parcours = await _abParcoursRdvPrend(booking, nf);
+      if (nf.smsOnBook && tel && !parcours) {
         try {
           const smsBody = replaceTemplate(templates.confirmation_sms || "Bonjour {{prenom}}, votre RDV {{typeLabel}} est confirmé pour le {{date}} à {{time}}. À bientôt ! - Adrien&Emily", vars);
           const phoneClean = tel.replace(/\s+/g, "");
@@ -2491,6 +2560,8 @@ exports.scheduledBookingReminders = functions.pubsub
 
         const nf = await getBookingTypeNotifications(booking);
         if (!nf) continue;
+        // Parcours RDV : rappels pris en charge par api/parcours-rdv.js.
+        if (await _abParcoursRdvPrend(booking, nf)) continue;
 
         const emailAccount = nf.emailAccount || "strategie";
         const prospect = booking.prospect || {};
@@ -3030,7 +3101,9 @@ exports.onBookingCreated = functions.firestore
       }
     }
 
-    if (prospect.email) {
+    // Parcours RDV : l'e-mail de confirmation part de api/parcours-rdv.js.
+    const parcoursPrend = await _abParcoursRdvPrend(booking, await getBookingTypeNotifications(booking));
+    if (prospect.email && !parcoursPrend) {
       try {
         const notifs = await _abGetTypeNotif(booking.type) || {};
         const accountKey = notifs.emailAccount || 'strategie';
@@ -3346,7 +3419,12 @@ exports.onBookingUpdated = functions.firestore
       }
     }
 
-    if (prospect.email) {
+    /* Un REPORT n'est pas une annulation pour le prospect (24/11/2026) : il
+       recevait « Annulation de votre RDV » juste avant la confirmation de sa
+       nouvelle date. L'ancien RDV porte rescheduled / cancellation.via
+       'reschedule' (booking.html, alteore-flow.js) : pas d'e-mail. */
+    const estReport = after.rescheduled === true || (after.cancellation && after.cancellation.via === 'reschedule') || after.outcome === 'replanifie';
+    if (prospect.email && !estReport) {
       try {
         const notifs = await _abGetTypeNotif(after.type) || {};
         const accountKey = notifs.emailAccount || 'strategie';

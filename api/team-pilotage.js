@@ -1688,3 +1688,10 @@ module.exports = async (req, res) => {
     if (!res.headersSent) res.status(500).json({ error: e.message || 'Erreur interne' });
   }
 };
+
+/* Lecture de la présence Meet, réutilisée par le rattrapage du parcours RDV
+   (api/_parcoursRdv.js, 24/11/2026). Ajout pur : la route ne change pas. */
+module.exports.fetchPresence = fetchPresence;
+module.exports.presenceSummary = presenceSummary;
+module.exports.loadRoster = loadRoster;
+module.exports.loadPersons = loadPersons;

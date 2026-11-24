@@ -36,6 +36,7 @@ const { estBloque } = require('./_blockedContacts');
 const { getWhatsappCreds, majConversation, rattacherLead,
         importerMediaEntrant, FENETRE_MS } = require('./_whatsappClient');
 const RelancesHooks = require('./_relances-hooks');
+const ParcoursRdv = require('./_parcoursRdv');
 
 /* Lecture du corps brut. La signature porte sur les octets exacts envoyés par
    Meta : re-sérialiser un objet déjà parsé donnerait un JSON différent (ordre
@@ -388,6 +389,19 @@ async function enregistrerEntrant(msg, contacts) {
         leadId: lead.leadId, canal: 'whatsapp', texte: texte, payload: payload,
         fromNumber: '+' + de, leadName: lead.nom || nom || null,
         dejaNotifieUid: await uidDuSlug(ownerSlug), cle: wamid,
+      });
+    }
+
+    /* Parcours RDV (24/11/2026) : réponse au WhatsApp de confirmation de la
+       veille. « Oui » confirme le RDV ; « je dois déplacer » ou une réponse
+       ambiguë alerte le setter. Le moteur retrouve seul le RDV (message cité,
+       sinon numéro) et ne lance jamais. */
+    if (de) {
+      await ParcoursRdv.surReponseWhatsapp({
+        de: de, texte: texte, wamid: wamid,
+        contextId: (msg.context && msg.context.id) || null,
+        payload: (msg.button && msg.button.payload)
+          || (msg.interactive && msg.interactive.button_reply && msg.interactive.button_reply.id) || null,
       });
     }
   }

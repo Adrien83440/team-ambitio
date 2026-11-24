@@ -701,6 +701,30 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   (entrée de menu `sales-global`, `nav.js` distingue les deux adresses) : par closer, Self Booking + RDV du
   setting ; pas de corrections ✎ dans cette vue (elles restent propres à Close SB et Set NB).
 
+- **Parcours RDV des prospects (24/11/2026, plan « Offres ouvertes et no-show »)** : entre la réservation d'un
+  Audit (self-booking OU posé par un setter) et le RDV, UN parcours, un message par moment. Moteur
+  `api/_parcoursRdv.js`, cron `api/parcours-rdv.js` (*/5) : ① e-mail de confirmation soigné (rien à préparer)
+  ② SMS court ③ e-mail de valeur si le RDV est à > 36 h ④ WhatsApp `rappel_rdv_closing` la veille 18 h–21 h
+  (variables prénom, prénom du CLOSER, heure ; « OUI » → `presenceConfirmed` + `rdv_confirmations` automatiques,
+  « déplacer » / réponse ambiguë → alerte setter, `whatsapp-webhook.js` → `surReponseWhatsapp`) ⑤ SMS + lien
+  1 h avant ⑥ rattrapage +5 à +15 min si l'API Meet dit le prospect ABSENT (illisible → rien), SMS + alerte closer
+  (cloche `inbox_notifications`). Consultations concernées : `booking_config/_types[].notifications.parcoursRdv`
+  — le même drapeau efface les rappels de l'agenda dans les Cloud Functions (`_abParcoursRdvPrend` : confirmation
+  e-mail/SMS, J-1, H-1), SEULEMENT pour les RDV que le parcours prend vraiment. Réglages `_config/parcours_rdv`
+  (`actif` faux par défaut, `modeTest` vrai par défaut = seuls les RDV au téléphone / e-mail de test de
+  `_config/relances.testTelephone/testEmail` ou `testMembres`, `depuis` = 1re activation, jamais de rattrapage du
+  passé ; réel = « PRODUCTION » tapé). Traces : `bookings/{id}.parcoursRdv.etapes.*` (réservation transactionnelle,
+  jamais rejoué), fiche lead `communications` (`source: 'parcours_rdv'`). ActiveCampaign EN DIRECT
+  (`api/_activeCampaign.js`, variables Vercel `ACTIVECAMPAIGN_API_URL` / `ACTIVECAMPAIGN_API_KEY`, tags désignés par
+  leur NOM ; plus de Make, demande d'Adrien du 24/11/2026 — le scénario Make « Parcours RDV (Team) → ActiveCampaign »
+  10226515 est éteint, pas supprimé) : `rdv_pris` → tag `rdv_a_venir` + sortie des nurturing 35 / 26 / 32 ;
+  `rdv_libere` (no-show, annulé sans report) → `rdv_a_venir` retiré + `rdv_manque` (séquence « rendez-vous manqué ») ;
+  `nurturing_stop` (offre / close / disqualifié) → `stop_autom` ; `frein` → tag `frein_*` + `stop_autom`. Après un `non_close` : `api/parcours-frein.js` (cron du matin) lit l'appel (`replay`, sinon note
+  du closer après J+3, sinon « général »), écrit `parcoursRdv.frein` et `leads.freinPrincipal` (jamais écrasé si
+  `corrigePar`), puis séquence ActiveCampaign du frein (automatisations 36-41, textes
+  `docs/parcours-rdv/sequences-freins.md`). Clé temporaire du chantier `PARCOURS_AUDIT_KEY` (preview de la branche,
+  `api/parcours-audit.js` lecture seule) : à retirer à la fin.
+
 Spécification de référence du flux commercial : `REFONTE-SPEC.md`.
 
 ---

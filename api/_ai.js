@@ -72,6 +72,8 @@ const DEFAULT_TASKS = {
   call_rating:      { model: HAIKU, maxTokens: 2000 },
   // Confirmation de présence au RDV (api/rdv-presence.js, 16/10/2026).
   presence_check:   { model: HAIKU, maxTokens: 800 },
+  // Frein principal après un « non » (api/parcours-frein.js, 24/11/2026).
+  parcours_frein:   { model: SONNET, effort: 'low', maxTokens: 800 },
   // Opus effort bas : la justesse du ton prime (retour Adrien 09/10/2026).
   message_assist:   { model: OPUS,  effort: 'low', maxTokens: 2500 },
   client_risk:      { model: HAIKU, maxTokens: 1200 },
