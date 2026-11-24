@@ -719,7 +719,16 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   leur NOM ; plus de Make, demande d'Adrien du 24/11/2026 — le scénario Make « Parcours RDV (Team) → ActiveCampaign »
   10226515 est éteint, pas supprimé) : `rdv_pris` → tag `rdv_a_venir` + sortie des nurturing 35 / 26 / 32 ;
   `rdv_libere` (no-show, annulé sans report) → `rdv_a_venir` retiré + `rdv_manque` (séquence « rendez-vous manqué ») — SAUF si le même prospect (e-mail / téléphone) a déjà un autre RDV non annulé à venir (`autreRdvAVenir`, il a déplacé lui-même) ; `rdv_pris` retire aussi `rdv_manque` et sort des séquences d'après-RDV 43-49 (`activeCampaign.apresRdv`) ;
-  `nurturing_stop` (offre / close / disqualifié) → `stop_autom` ; `frein` → tag `frein_*` + `stop_autom`. Après un `non_close` : `api/parcours-frein.js` (cron du matin) lit l'appel (`replay`, sinon note
+  `nurturing_stop` (offre / close / disqualifié) → `stop_autom` ; `frein` → tag `frein_*` + `stop_autom`. **Durcissement du 24/11/2026 (relecture complète avant le passage en réel)** : le passage lit TOUS les RDV à venir + 14 jours en
+  arrière (confirmation immédiate même à J+10, issue saisie tard prise en compte), un `try/catch` par RDV et un budget de 45 s ;
+  l'e-mail de confirmation part à toute heure et quel que soit le délai (le SMS : en journée, à plus de 75 min), après le lien de visio
+  (attendu 3 min au plus) ; WhatsApp de la veille non remis (échec immédiat, statut `failed` dans `whatsapp_messages`, modèle
+  inutilisable) → SMS `sms_veille` ; une réponse n'est lue qu'ENTRE le rappel et l'heure du RDV, et ne confirme que si elle est courte
+  et sans le moindre doute (négation, « mais », question → alerte setter) ; rattrapage : SMS seulement si l'équipe est dans la visio et
+  pas le prospect, visio non ouverte → alerte closer seule ; étapes `ac_*` rejouées en cas d'échec (`reserver` `rejouable`, 6 essais) ;
+  aucune séquence d'après-RDV si un autre RDV du parcours est à venir, 45 min de grâce après une annulation, annulation par l'équipe
+  (`cancellation.origin: 'equipe'`) → `rdv_equipe` (tag retiré, pas de « rendez-vous manqué ») ; `depuis` est REPOSÉ à chaque
+  réactivation et au passage en réel (un RDV pris avant garde les rappels de l'agenda : jamais de doublon). Après un `non_close` : `api/parcours-frein.js` (cron du matin) lit l'appel (`replay`, sinon note
   du closer après J+3, sinon « général »), écrit `parcoursRdv.frein` et `leads.freinPrincipal` (jamais écrasé si
   `corrigePar`), puis séquence ActiveCampaign du frein (automatisations 36-41, textes
   `docs/parcours-rdv/sequences-freins.md`). Clé temporaire du chantier `PARCOURS_AUDIT_KEY` (preview de la branche,

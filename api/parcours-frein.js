@@ -124,7 +124,21 @@ async function passage(opts) {
     const t = P.typeDe(b, typeMap);
     if (!t || !((t.notifications || {}).parcoursRdv === true) || !P.estCommercial(b, t)) continue;
     const et = (b.parcoursRdv || {}).etapes || {};
+    // Frein déjà choisi mais ActiveCampaign en échec : on ne relit pas
+    // l'appel, on rejoue seulement l'envoi (au plus 6 essais).
+    const blocDeja = (b.parcoursRdv || {}).frein;
+    if (et.frein && et.frein.ok === false && blocDeja && blocDeja.tag && !simulation && (cfg.modeTest === false || P.estRdvDeTest(b, T))) {
+      if ((await P.reserver(d.ref, 'frein', { rejouable: true })) === 'ok') {
+        const rr = await P.versActiveCampaign(cfg, 'frein', b, { frein: blocDeja.frein, tag: blocDeja.tag });
+        await P.noter(d.ref, 'frein', Object.assign({ canal: 'ac' }, rr));
+        out.detail.push({ id: d.id, date: b.date, frein: blocDeja.frein, resultat: rr.ok ? 'rejoue' : 'echec', erreur: rr.ok ? undefined : rr.erreur });
+      }
+      continue;
+    }
     if (et.frein) continue;
+    // Un autre RDV est déjà posé : pas de séquence « après un non », et
+    // l'étiquette « RDV à venir » reste (elle appartient au nouveau RDV).
+    if (await P.autreRdvAVenir(b, d.id, Date.now(), typeMap)) { out.detail.push({ id: d.id, date: b.date, resultat: 'autre_rdv_a_venir' }); continue; }
     // Seuls les RDV entrés dans le parcours (tag « RDV à venir » posé).
     if (!(et.ac_rdv_pris && et.ac_rdv_pris.ok) && !simulation) continue;
     out.examines++;

@@ -56,11 +56,18 @@ async function reglage(body, par) {
   if (patch.modeTest === false && String(body.confirmation || '') !== 'PRODUCTION') {
     return { ok: false, erreur: 'Passage en réel : confirmation « PRODUCTION » exigée' };
   }
-  if (patch.actif === true) {
-    const s = await ref.get();
-    const d = s.exists ? (s.data() || {}) : {};
-    // `depuis` posé à la PREMIÈRE activation : jamais de rattrapage du passé.
-    if (!d.depuis) patch.depuis = Date.now();
+  const s0 = await ref.get();
+  const d0 = s0.exists ? (s0.data() || {}) : {};
+  // `depuis` = à partir de quand le parcours prend les RDV (les deux côtés,
+  // Vercel et Cloud Functions, le lisent). Reposé à chaque (ré)activation ET
+  // au passage en réel : un RDV réservé AVANT a déjà reçu la confirmation de
+  // l'agenda et garde ses rappels de l'agenda — jamais de doublon, jamais de
+  // rattrapage du passé.
+  const active = patch.actif === true && d0.actif !== true;
+  const passeEnReel = patch.modeTest === false && d0.modeTest !== false;
+  if (active || passeEnReel || (patch.actif === true && !d0.depuis)) {
+    patch.depuis = Date.now();
+    if (d0.depuis) patch.depuisPrecedent = d0.depuis;
   }
   if (!Object.keys(patch).length) return { ok: false, erreur: 'rien_a_modifier' };
   const trace = { at: Date.now(), par: par, champs: Object.keys(patch) };
