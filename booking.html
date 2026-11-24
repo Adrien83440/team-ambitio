@@ -1806,12 +1806,28 @@ function renderSlots() {
   /* Position de défilement de chaque ligne reprise après le re-rendu. */
   var oldLines = wrap.querySelectorAll('.bk-slots-line'), lefts = [];
   for (var ol = 0; ol < oldLines.length; ol++) lefts.push(oldLines[ol].scrollLeft);
+  /* Idem pour la liste verticale (ordinateur) : sans cela, choisir une heure
+     du bas de la liste la faisait remonter tout en haut, et « Suivant », posé
+     à côté de l'heure choisie, sortait de la vue. */
+  var oldList = wrap.querySelector('.bk-slots-list');
+  var oldListTop = oldList ? oldList.scrollTop : 0;
   var sameDay = wrap.getAttribute('data-day') === S.selDate;
   wrap.innerHTML = h;
   wrap.setAttribute('data-day', S.selDate);
   if (sameDay) {
     var newLines = wrap.querySelectorAll('.bk-slots-line');
     for (var nl = 0; nl < newLines.length && nl < lefts.length; nl++) newLines[nl].scrollLeft = lefts[nl];
+    var newList = wrap.querySelector('.bk-slots-list');
+    if (newList) {
+      newList.scrollTop = oldListTop;
+      /* Ceinture : l'heure choisie et son « Suivant » restent entièrement visibles. */
+      var selRow = newList.querySelector('.bk-slot-row.sel');
+      if (selRow && newList.scrollHeight > newList.clientHeight) {
+        var lr = newList.getBoundingClientRect(), sr = selRow.getBoundingClientRect();
+        if (sr.top < lr.top) newList.scrollTop -= (lr.top - sr.top) + 6;
+        else if (sr.bottom > lr.bottom) newList.scrollTop += (sr.bottom - lr.bottom) + 6;
+      }
+    }
   }
   bkScSyncAll();
 
