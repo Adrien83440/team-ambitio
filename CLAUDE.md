@@ -366,7 +366,8 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   `_pendingValidation` portant `_rejetGc` (`etat`, `gcStatus`, `chargeDate`, `cause`, `motif` FR, `reasonCode`, `historique`),
   rangé dans « À valider » → « ❌ Prélèvements rejetés » ; « 🧾 Valider (impayée) » = `invoice-validate` seul (numéro + PDF
   à la date du prélèvement), JAMAIS `invoice-mark-paid`. Exclus : facture déjà sur ce `gcPaymentId`, client EI, rejet RATTRAPÉ
-  par un autre prélèvement encaissé du même mandat et même montant (sa facture naît de celui-là). Prélèvement encaissé PUIS
+  par un autre prélèvement PONCTUEL encaissé (hors abonnement / échéancier : la mensualité suivante n'est pas un
+  rattrapage) du même mandat et même montant (sa facture naît de celui-là). Prélèvement encaissé PUIS
   rejeté (échec tardif, contestation) : son brouillon « Paiement reçu » est CONVERTI en brouillon de rejet
   (`_rejetGc.convertiDepuisEncaissement`, ancienne mention gardée dans `_notesPublicAvantRejet`) ; déjà émis → signalé seulement
   (`facture_emise_rejet`). Rapprochement à chaque passage

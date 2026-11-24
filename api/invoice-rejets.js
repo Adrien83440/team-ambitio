@@ -45,7 +45,7 @@
  * Accès :
  *   GET  Bearer <CRON_SECRET>   cron quotidien — n'écrit que si
  *        _config/billing.rejetsAuto === true (fenêtre : 60 derniers jours).
- *   GET  ?key=<REJETS_KEY>[&apply=1][&since=][&until=]   accès manuel
+ *   GET  ?key=<REJETS_KEY>[&apply=1][&since=][&until=] | [&auto=1|0]   accès manuel
  *        temporaire (variable Vercel), à blanc par défaut, aucune donnée
  *        personnelle en sortie hormis le nom du client de facturation.
  *   POST (admin) { action: 'scan', since, until, apply }
@@ -163,13 +163,19 @@ async function paymentsOfMandate(ctx, mandateId) {
   return ctx.mandatePayments[mandateId];
 }
 
-/* Prélèvement encaissé, même mandat, même montant, à une date >= celle du
-   rejet, pas déjà utilisé pour un autre rejet. */
+/* Prélèvement ponctuel encaissé (hors abonnement / échéancier), même mandat,
+   même montant, à une date >= celle du rejet, pas déjà utilisé pour un autre
+   rejet. */
 async function findRattrapage(ctx, gp) {
   const mandateId = gp.links && gp.links.mandate;
   if (!mandateId) return null;
   const list = await paymentsOfMandate(ctx, mandateId);
+  /* Un rattrapage est un prélèvement PONCTUEL relancé à la main : jamais
+     une échéance d'abonnement ou d'échéancier (la mensualité suivante a le
+     même montant, ce n'est pas un rattrapage). */
   const cands = list.filter(function (o) {
+    const l = o.links || {};
+    if (l.subscription || l.instalment_schedule) return false;
     return o.id !== gp.id && PAID_STATUSES.indexOf(o.status) >= 0 && o.amount === gp.amount &&
       (o.charge_date || '') >= (gp.charge_date || '') && !ctx.consumed[o.id];
   }).sort(function (a, b) { return (a.charge_date || '') < (b.charge_date || '') ? -1 : 1; });
@@ -670,6 +676,15 @@ module.exports = async function (req, res) {
 
       /* Accès manuel temporaire (clé Vercel) */
       if (manualKey && q.key && String(q.key) === manualKey) {
+        if (q.auto === '1' || q.auto === '0') {
+          const en = q.auto === '1';
+          await db.collection('_config').doc('billing').set({
+            rejetsAuto: en,
+            rejetsAutoHistorique: admin.firestore.FieldValue.arrayUnion({ at: new Date().toISOString(), enabled: en, by: 'key:invoice-rejets' }),
+          }, { merge: true });
+          res.status(200).json({ ok: true, rejetsAuto: en });
+          return;
+        }
         const r = await run({
           since: dateParam(q.since, '2026-01-01'), until: dateParam(q.until, today),
           apply: q.apply === '1', by: 'key:invoice-rejets',
