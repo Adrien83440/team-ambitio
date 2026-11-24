@@ -100,8 +100,8 @@ module.exports = async function (req, res) {
     const dejaPartie = !demo && !!(s.etapes || {})['e' + ((Number(q.e) || 0) + 1)];
     const corps = dejaPartie
       ? '<h1>La suite est déjà partie' + (prenom ? ', ' + prenom : '') + '</h1><p>Elle se trouve dans votre boîte e-mail. Si vous préférez en parler directement, choisissez un créneau :</p>'
-      : '<h1>Bien noté' + (prenom ? ', ' + prenom : '') + '.</h1><p>Vous recevrez la suite que vous avez choisie :</p><div class="q">' + esc(titre) + '</div>'
-        + '<p>Elle arrive dans votre boîte e-mail dans les prochains jours. Rien d\'autre à faire.</p><p>Et si vous préférez ne pas attendre :</p>';
+      : '<h1>Bien noté' + (prenom ? ', ' + prenom : '') + '.</h1><p>Votre réponse :</p><div class="q">« ' + esc(titre) + ' »</div>'
+        + '<p>La suite de votre histoire en tient compte. Elle arrive dans votre boîte e-mail dans les prochains jours : rien d\'autre à faire.</p><p>Et si vous préférez ne pas attendre :</p>';
     res.status(200).send(page('Bien noté', corps + '<p><a class="btn" href="' + esc(S.lienRdvDirect(s.sequence)) + '">Réserver mon audit</a></p><p class="s">Vous pouvez fermer cette page.</p>',
       dejaPartie ? null : scriptClic(jeton, 'c', q.e, '', chapitre)));
   } catch (e) {

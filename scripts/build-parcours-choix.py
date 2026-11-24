@@ -31,6 +31,8 @@ def render(lines):
             parts.append('<p style="margin:0 0 16px;color:#4b5563">{{ouverture}}</p>'); txt.append('{{ouverture}}'); continue
         if l=='{{choix}}':
             parts.append('{{choix_html}}'); txt.append('{{choix_texte}}'); continue
+        if l=='{{recap}}':
+            parts.append('{{recap_html}}'); txt.append('{{recap_texte}}'); continue
         m=re.match(r'^\{\{(m_[a-z0-9_]+)\}\}$', l)
         if m:  # phrase miroir : ligne entière, retirée si vide (marqueurs lus par le moteur)
             parts.append('<!--M:'+m.group(1)+'--><p style="margin:0 0 16px;padding:10px 14px;background:#fffbeb;border-radius:10px;color:#92400e">{{'+m.group(1)+'}}</p><!--/M-->'); txt.append('{{'+m.group(1)+'}}'); continue
@@ -86,17 +88,46 @@ for sec in re.split(r'\n## (?=\d\. )', s)[1:]:
     key=re.search(r'\(`([a-z]+)`\)', sec.split('\n',1)[0]).group(1)
     cit=re.search(r'\nCitation : « (.+?) »', sec).group(1)
     ems={}
-    for m in re.finditer(r'\n\*\*(C\d) : (.+?)\*\*\n\*Pré-en-tête : (.+?)\*\n\*Bouton : (.+?)\*\n((?:\n?>.*)+)', sec):
-        quote=[re.sub(r'^> ?','',l) for l in m.group(5).split('\n') if l.startswith('>')]
-        if m.group(1)=='C1':
+    PIED='\n\n--\nAdrien & Emily · adrienemily.com\nSe désinscrire : {{lien_desinscription}}\n'
+    # Paragraphe final de l'étape 4, selon la dernière réponse (C4N = sans réponse).
+    fins={}
+    for m in re.finditer(r'\n\*\*(C4[A-CN])\*\*\n(?:\*Bouton : (.+?)\*\n)?((?:\n?>.*)+)', sec):
+        fins[m.group(1)]={'bouton':(m.group(2) or '').strip() or None,'lignes':[re.sub(r'^> ?','',l) for l in m.group(3).split('\n') if l.startswith('>')]}
+    assert sorted(fins)==['C4A','C4B','C4C','C4N'],(key,sorted(fins))
+    assert all(fins[c]['bouton'] for c in ('C4A','C4B','C4C')) and not fins['C4N']['bouton'],(key,'boutons C4')
+    def email(code,sujet,pre,bouton,question,quote,etape):
+        body,txt=render(quote)
+        return {'etape':etape,'bouton':bouton,'question':question,'subject':sujet,'preheader':pre,'html':page(sujet,pre,body),'text':txt+PIED}
+    for m in re.finditer(r'\n\*\*(C\d[A-C]?) : (.+?)\*\*\n\*Pré-en-tête : (.+?)\*\n(?:\*Bouton : (.+?)\*\n)?(?:\*Question : (.+?)\*\n)?((?:\n?>.*)+)', sec):
+        code=m.group(1); sujet=m.group(2).strip(); pre=m.group(3).strip()
+        bouton=(m.group(4) or '').strip() or None; question=(m.group(5) or '').strip() or None
+        quote=[re.sub(r'^> ?','',l) for l in m.group(6).split('\n') if l.startswith('>')]
+        assert sum(l=='{{choix}}' for l in quote)==1,(key,code,'choix')
+        if code=='C1':
             assert sum(('« '+cit) in l for l in quote)==1,(key,'citation')
             quote=[('>> « {{douleur_citation}}. »' if ('« '+cit) in l else l) for l in quote]
-        body,txt=render(quote)
-        assert sum(l=='{{choix}}' for l in quote)==1,(key,m.group(1),'choix')
-        assert (m.group(1)=='C1') == (sum(l=='{{ouverture}}' for l in quote)==0),(key,m.group(1),'ouverture')
-        ems[m.group(1)]={'bouton':m.group(4).strip(),'subject':m.group(2).strip(),'preheader':m.group(3).strip(),'html':page(m.group(2).strip(),m.group(3).strip(),body),'text':txt+'\n\n--\nAdrien & Emily · adrienemily.com\nSe désinscrire : {{lien_desinscription}}\n'}
-        w=len(re.findall(r'\w+',txt)); print(key,m.group(1),w,'mots')
-    assert sorted(ems)==['C1','C2','C3','C4','C5','C6','C7'],(key,sorted(ems))
+            assert question and not bouton and '{{ouverture}}' not in quote,(key,code)
+            ems[code]=email(code,sujet,pre,None,question,quote,1)
+        elif code=='C4':
+            # Un seul texte, décliné par dernière réponse : C4A, C4B, C4C, C4N.
+            assert sum(l=='{{recap}}' for l in quote)==1 and sum(l=='{{fin}}' for l in quote)==1 and not question and not bouton,(key,code)
+            for f in sorted(fins):
+                q2=[]
+                for l in quote: q2.extend(fins[f]['lignes'] if l=='{{fin}}' else [l])
+                ems[f]=email(f,sujet,pre,fins[f]['bouton'],None,q2,4)
+        else:
+            assert re.match(r'^C[23][A-C]$',code) and bouton and question and sum(l=='{{ouverture}}' for l in quote)==1,(key,code)
+            ems[code]=email(code,sujet,pre,bouton,question,quote,int(code[1]))
+        print(key,code,len(re.findall(r'\w+',ems.get(code,ems.get('C4N'))['text'])),'mots')
+    assert sorted(ems)==['C1','C2A','C2B','C2C','C3A','C3B','C3C','C4A','C4B','C4C','C4N'],(key,sorted(ems))
+    # Le graphe : les trois réponses proposées à la fin de chaque texte, et la
+    # suite envoyée sans clic (`defaut`).
+    ems['C1']['suite']=['C2A','C2B','C2C']; ems['C1']['defaut']='C2A'
+    for c in ('C2A','C2B','C2C'): ems[c]['suite']=['C3A','C3B','C3C']; ems[c]['defaut']='C3A'
+    for c in ('C3A','C3B','C3C'): ems[c]['suite']=['C4A','C4B','C4C']; ems[c]['defaut']='C4N'
+    for c in ('C4A','C4B','C4C','C4N'): ems[c]['suite']=[]; ems[c]['defaut']=None
+    b9=[ems[c]['bouton'] for c in ems if ems[c]['bouton']]
+    assert len(b9)==9 and all(len(x)<=75 for x in b9),(key,[x for x in b9 if len(x)>75])
     out[key]={'citation':cit,'chapitres':ems}
 assert sorted(out)==['equipe','operationnel','plafond','rentabilite','vie']
 assert sorted(FREINS)==['frein_decision','frein_general','frein_preuves','frein_priorite','frein_timing','frein_tresorerie'] and all(sorted(v)==['E1','E5'] for v in FREINS.values()),FREINS.keys()
