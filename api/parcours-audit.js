@@ -158,6 +158,13 @@ async function lireRdv() {
   return st;
 }
 
+async function lireConfirmations() {
+  const snap = await db.collection('rdv_confirmations').limit(5).get();
+  const formes = [];
+  snap.forEach(function (d) { formes.push(formeDe(d.data() || {}, 1)); });
+  return { echantillon: snap.size, formes: formes };
+}
+
 module.exports = async function (req, res) {
   if (!keyOk(req)) { res.status(404).json({ error: 'Not found' }); return; }
   if (req.method !== 'GET') { res.status(405).json({ error: 'GET only' }); return; }
@@ -165,7 +172,7 @@ module.exports = async function (req, res) {
   const out = { lu: new Date().toISOString() };
   const parts = [
     ['whatsapp', lireModele], ['types', lireTypes], ['config', lireConfig],
-    ['membreTest', function () { return lireMembre(slug); }], ['rdv', lireRdv],
+    ['membreTest', function () { return lireMembre(slug); }], ['rdv', lireRdv], ['confirmations', lireConfirmations],
   ];
   for (const p of parts) {
     try { out[p[0]] = await p[1](); } catch (e) { out[p[0]] = { erreur: e.message }; }
