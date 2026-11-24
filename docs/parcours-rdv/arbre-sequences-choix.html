@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Séquences à choix : l'arbre</title>
+<style>
+:root{--bleu:#1e3a8a;--b2:#2563eb;--fond:#f3f4f8;--gris:#6b7280;--bord:#e5e7eb}
+*{box-sizing:border-box}body{margin:0;background:var(--fond);font-family:Helvetica,Arial,sans-serif;color:#1f2937;line-height:1.55;font-size:15px}
+.wrap{max-width:1040px;margin:0 auto;padding:28px 18px 60px}
+h1{font-size:26px;margin:0 0 6px;color:var(--bleu)}h2{font-size:19px;margin:38px 0 12px;color:var(--bleu)}h3{font-size:15px;margin:0 0 6px}
+.sub{color:var(--gris);margin:0 0 18px}
+.card{background:#fff;border:1px solid var(--bord);border-radius:14px;padding:18px 20px;margin:0 0 14px}
+.grid{display:grid;gap:12px}.g5{grid-template-columns:repeat(5,1fr)}.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:860px){.g5,.g3,.g2{grid-template-columns:1fr}}
+.pill{display:inline-block;background:#eff4ff;color:var(--bleu);border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700;margin:0 4px 4px 0}
+.n{font-size:26px;font-weight:800;color:var(--b2);line-height:1}
+.q{font-style:italic;color:#374151;margin:6px 0 0}
+.flow{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap}
+.step{flex:1;min-width:150px;background:#fff;border:1px solid var(--bord);border-radius:12px;padding:12px 14px}
+.step b{color:var(--bleu)}.step small{display:block;color:var(--gris);margin-top:4px}
+.arrow{align-self:center;color:var(--gris);font-size:20px}
+.choix{background:#eff4ff;border-left:4px solid var(--b2);border-radius:0 10px 10px 0;padding:10px 14px;margin:8px 0}
+.btn{display:inline-block;background:var(--b2);color:#fff;border-radius:8px;padding:7px 12px;font-weight:700;font-size:13px;margin:4px 6px 0 0}
+.btn.alt{background:#fff;color:var(--b2);border:1.5px solid var(--b2)}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--bord);vertical-align:top}th{color:var(--gris);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+.miroir{background:#fffbeb;border:1px dashed #f59e0b;border-radius:10px;padding:10px 14px;margin:8px 0;font-size:14px}
+.ok{color:#059669;font-weight:700}.no{color:#b91c1c;font-weight:700}
+</style></head><body><div class="wrap">
+
+<h1>Séquences d'après-RDV : l'arbre des mails à choix</h1>
+<p class="sub">Proposition du 24/11/2026, à valider avant d'écrire les e-mails. Chiffres : 138 prospects venus en audit depuis 90 jours et ayant répondu au questionnaire.</p>
+
+<h2>1. Ce qu'on sait déjà, sans rien redemander</h2>
+<div class="card">
+<p style="margin-top:0">La première question du questionnaire est : <b>« Qu'est-ce qui vous pèse le plus dans votre entreprise aujourd'hui ? »</b> Le prospect y a choisi une réponse parmi cinq. C'est sa douleur, dans des mots qu'il a lui-même choisis. Pas besoin d'IA pour la deviner.</p>
+<div class="grid g5">
+<div class="card" style="margin:0"><div class="n">27 %</div><h3>Rentabilité</h3><p class="q">« Je fais du chiffre, mais il ne me reste presque rien à la fin du mois »</p></div>
+<div class="card" style="margin:0"><div class="n">26 %</div><h3>Opérationnel</h3><p class="q">« Je suis noyé dans l'opérationnel, je n'ai plus une minute pour piloter »</p></div>
+<div class="card" style="margin:0"><div class="n">20 %</div><h3>Vie avalée</h3><p class="q">« Mon entreprise a avalé ma vie : soirées, week-ends et vacances y passent »</p></div>
+<div class="card" style="margin:0"><div class="n">20 %</div><h3>Équipe</h3><p class="q">« Mes salariés viennent me voir pour tout : rien n'avance sans moi »</p></div>
+<div class="card" style="margin:0"><div class="n">7 %</div><h3>Plafond</h3><p class="q">« Mon chiffre d'affaires plafonne, malgré tous mes efforts »</p></div>
+</div>
+<p style="margin-bottom:0"><b>Si la réponse manque</b> (ancien questionnaire, RDV posé par un setter) : on prend le « pilier prioritaire » du diagnostic, sinon ce que l'IA a relevé dans l'appel, sinon la séquence actuelle, sans personnalisation.</p>
+</div>
+
+<div class="card">
+<h3>Les autres réponses qui servent de « miroir »</h3>
+<p>Chaque e-mail peut reprendre une ou deux réponses du prospect, mot pour mot. Ce sont des réponses à choix : aucun risque de phrase inventée.</p>
+<table>
+<tr><th>Question du questionnaire</th><th>Ce que les prospects ont répondu</th><th>Phrase miroir possible</th></tr>
+<tr><td>Deux semaines sans téléphone : l'entreprise tournerait-elle ?</td><td><b>76 %</b> non</td><td>« Vous nous avez dit que votre entreprise ne tiendrait pas deux semaines sans vous. »</td></tr>
+<tr><td>Connaissez-vous votre marge sur chaque offre ?</td><td><b>59 %</b> non</td><td>« Vous ne connaissez pas précisément votre marge offre par offre. »</td></tr>
+<tr><td>Mal dormir en pensant à la trésorerie</td><td><b>65 %</b> à 4 ou 5 sur 5</td><td>« Il vous arrive de mal dormir en pensant à la trésorerie. »</td></tr>
+<tr><td>Depuis combien de temps ?</td><td>le plus souvent 1 à 3 ans, ou plus de 3 ans</td><td>« Cela dure depuis plus de trois ans. »</td></tr>
+<tr><td>Qu'avez-vous déjà tenté ?</td><td>embaucher, augmenter les prix, déléguer puis tout reprendre…</td><td>« Vous avez déjà essayé de déléguer, avant de tout reprendre vous-même. »</td></tr>
+<tr><td>Que feriez-vous du temps retrouvé ?</td><td>prendre de la hauteur, souffler, partir en vacances téléphone éteint</td><td>« Vous nous disiez que vous commenceriez par partir en vacances, téléphone éteint. »</td></tr>
+<tr><td>Dans 12 mois, quel résultat changerait tout ?</td><td><b>42 %</b> « enfin me payer correctement »</td><td>« Ce qui changerait tout pour vous : vous payer enfin correctement. »</td></tr>
+</table>
+</div>
+
+<h2>2. Le déroulé d'une séquence</h2>
+<p class="sub">Le frein (trésorerie, timing, décision, preuves, priorité) décide du début et de la fin. La douleur décide du milieu : c'est là que l'histoire se personnalise.</p>
+<div class="flow">
+<div class="step"><b>E-mail 1 · J+1</b><br>Réponse au frein, avec un paragraphe miroir.<small>selon le frein + 1 phrase du questionnaire</small></div><div class="arrow">→</div>
+<div class="step"><b>E-mail 2 · J+4</b><br>Le premier chapitre de SA douleur. Se termine par deux boutons.<small>selon la douleur</small></div><div class="arrow">→</div>
+<div class="step"><b>E-mail 3 · J+8</b><br>La suite qu'il a choisie. Sans clic : la suite par défaut.<small>selon son clic</small></div><div class="arrow">→</div>
+<div class="step"><b>E-mail 4 · J+14</b><br>Le client qui lui ressemble.<small>selon la douleur</small></div><div class="arrow">→</div>
+<div class="step"><b>E-mail 5 · J+21</b><br>La main tendue, adaptée au frein.<small>selon le frein</small></div>
+</div>
+<div class="miroir"><b>Règle d'écriture :</b> chaque e-mail montre <b>ce qui se passe</b> chez lui et <b>pourquoi</b>, jamais <b>comment</b> le régler. Le comment, c'est l'audit. Chaque e-mail se termine sur une question ouverte ou une annonce, pour donner envie de lire le suivant.</div>
+
+<h2>3. L'arbre, douleur par douleur</h2>
+<p class="sub">Les deux boutons ne posent pas de question au prospect : ils lui font choisir la suite. Un bouton pour <b>comprendre</b>, un bouton pour <b>voir quelqu'un qui en est sorti</b>.</p>
+
+<div class="card"><span class="pill">Rentabilité · 27 %</span>
+<h3>E-mail 2 : « Vous faites du chiffre. Alors où part l'argent ? »</h3>
+<p>Miroir : sa marge inconnue offre par offre, ses nuits courtes à cause de la trésorerie. Le constat : le problème est rarement le chiffre d'affaires. Fin : « Il y a trois endroits où l'argent s'échappe. Dans la plupart des entreprises, un seul fait presque tout le dégât. »</p>
+<div class="choix">Que voulez-vous lire ensuite ?<br><span class="btn">Les trois endroits où la marge s'échappe</span><span class="btn alt">Comment Franck est sorti du rouge en cinq mois</span></div>
+<p><b>Suite A :</b> les trois fuites (prix, coûts qui glissent, temps non facturé) et laquelle pèse le plus selon son profil. <b>Suite B :</b> l'histoire de Franck, boulanger, bilan dans le rouge. <b>E-mail 4 :</b> Delphine, « j'ai économisé 15 000 euros sur l'année ».</p></div>
+
+<div class="card"><span class="pill">Opérationnel · 26 %</span>
+<h3>E-mail 2 : « Vous n'avez plus une minute pour piloter. Ce n'est pas une question de temps. »</h3>
+<p>Miroir : ses 50 à 60 heures par semaine, ce qu'il a déjà tenté (embaucher, bloquer du temps qui saute). Le constat : chaque tentative ajoute du travail au lieu d'en enlever. Fin : « Il y a une raison précise pour laquelle rien n'a tenu. »</p>
+<div class="choix">Que voulez-vous lire ensuite ?<br><span class="btn">Pourquoi rien de ce que vous avez tenté n'a tenu</span><span class="btn alt">Ce qui a changé chez Margaux en trois mois</span></div>
+<p><b>Suite A :</b> le mécanisme qui ramène toujours le dirigeant dans l'opérationnel. <b>Suite B :</b> Margaux, « je peux enfin déléguer ». <b>E-mail 4 :</b> la boulangère ouverte sept jours sur sept.</p></div>
+
+<div class="card"><span class="pill">Vie avalée · 20 %</span>
+<h3>E-mail 2 : « Soirées, week-ends, vacances : votre entreprise a tout pris »</h3>
+<p>Miroir : depuis combien de temps cela dure, ce qu'il ferait du temps retrouvé (souffler, partir téléphone éteint). Le constat : travailler plus n'a jamais rendu une seule soirée. Fin : « Ce qui vous retient au travail le soir n'est presque jamais ce que vous croyez. »</p>
+<div class="choix">Que voulez-vous lire ensuite ?<br><span class="btn">Ce qui vous retient vraiment le soir</span><span class="btn alt">Comment Alexandre passe à table à 19 h 30</span></div>
+<p><b>Suite A :</b> les trois choses qui retiennent un dirigeant, et celle qu'on ne voit pas. <b>Suite B :</b> Alexandre, « j'ai fait plaisir à tout le monde, sauf à moi-même ». <b>E-mail 4 :</b> Delphine, qui termine désormais à 18 h.</p></div>
+
+<div class="card"><span class="pill">Équipe · 20 %</span>
+<h3>E-mail 2 : « Rien n'avance sans vous. Et ce n'est pas la faute de votre équipe. »</h3>
+<p>Miroir : « répéter les mêmes consignes encore et encore », déléguer puis tout reprendre, un nouveau salarié qui ne devient pas autonome sans lui. Le constat : une équipe remonte tout quand elle n'a pas le droit de décider. Fin : « Il y a une question que votre équipe ne vous pose jamais, et c'est la seule qui compte. »</p>
+<div class="choix">Que voulez-vous lire ensuite ?<br><span class="btn">Pourquoi tout remonte jusqu'à vous</span><span class="btn alt">Ce que la boulangère a changé dans son équipe</span></div>
+<p><b>Suite A :</b> ce qui fait qu'une équipe attend le patron. <b>Suite B :</b> « j'avais une équipe de vente qui me bouffait littéralement ». <b>E-mail 4 :</b> Margaux, équipe restructurée.</p></div>
+
+<div class="card"><span class="pill">Plafond · 7 %</span>
+<h3>E-mail 2 : « Vous faites tout ce qu'il faut, et le chiffre ne bouge plus »</h3>
+<p>Miroir : il ne sait pas quel levier actionner pour augmenter son chiffre le mois prochain (68 % des prospects). Le constat : un plafond vient rarement du commercial. Fin : « Le plafond a presque toujours la même origine, et elle n'est pas dans vos ventes. »</p>
+<div class="choix">Que voulez-vous lire ensuite ?<br><span class="btn">D'où vient vraiment un plafond</span><span class="btn alt">Margaux : +20 % sans effort commercial de plus</span></div>
+<p><b>Suite A :</b> le plafond, c'est la capacité du dirigeant. <b>Suite B :</b> Margaux. <b>E-mail 4 :</b> Franck.</p></div>
+
+<h2>4. Ce que ça change pour l'équipe</h2>
+<div class="grid g3">
+<div class="card" style="margin:0"><h3>Chaque clic remonte dans Team</h3><p style="margin:0">Sur la fiche : « a voulu lire : comment Franck est sorti du rouge ». Le closer reçoit une alerte : un prospect qui clique est chaud, et on sait de quoi lui parler.</p></div>
+<div class="card" style="margin:0"><h3>Rien n'est perdu sans clic</h3><p style="margin:0">Pas de clic : il reçoit la suite « comprendre » par défaut. Pas de douleur connue : il reçoit la séquence actuelle.</p></div>
+<div class="card" style="margin:0"><h3>Aucune phrase inventée</h3><p style="margin:0">Tous les textes sont écrits et validés à l'avance. Les phrases miroir reprennent ses réponses à choix, mot pour mot.</p></div>
+</div>
+
+<h2>5. Ce qu'il faut écrire</h2>
+<div class="card"><table>
+<tr><th>Quoi</th><th>Combien</th><th>Remarque</th></tr>
+<tr><td>E-mail 1 par frein, avec paragraphe miroir</td><td>5 e-mails + 5 paragraphes par douleur</td><td>base déjà écrite (version 2)</td></tr>
+<tr><td>E-mail 2 par douleur</td><td>5</td><td>nouveau</td></tr>
+<tr><td>E-mail 3, deux suites par douleur</td><td>10</td><td>nouveau</td></tr>
+<tr><td>E-mail 4, le client qui lui ressemble</td><td>5</td><td>témoignages réels déjà en place, à réécrire sous l'angle de la douleur</td></tr>
+<tr><td>E-mail 5 par frein</td><td>5</td><td>déjà écrit (version 2)</td></tr>
+<tr><td>Phrases miroir</td><td>environ 30</td><td>une par réponse possible du questionnaire</td></tr>
+</table>
+<p style="margin-bottom:0">Soit environ <b>20 nouveaux e-mails</b>. « Général » et « rendez-vous manqué » ne changent pas.</p></div>
+
+</div></body></html>
