@@ -195,7 +195,7 @@ function peindreVue() {
   if (st.problemes) h += '<div class="sq-card" style="border-color:rgba(239,68,68,.5)"><h2 style="color:#ef4444">' + st.problemes + ' prospect' + (st.problemes > 1 ? 's' : '') + ' à regarder</h2><small>Un e-mail n\'est pas parti, ou ActiveCampaign n\'a pas pu être mis à jour. Ouvre l\'onglet Prospects : la ligne concernée porte une pastille rouge ou la mention du problème.</small></div>';
   h += '<div class="sq-card"><h2>Chiffres</h2><small>Depuis le début, sur ' + st.total + ' prospect' + (st.total > 1 ? 's' : '') + ' entré' + (st.total > 1 ? 's' : '') + ' en séquence.</small><div class="sq-kpis">'
     + kpi('En cours', st.active) + kpi('En pause', st.pause) + kpi('Terminées', st.terminee) + kpi('Arrêtées', st.arretee)
-    + kpi('E-mails envoyés', st.envoyes) + kpi('Ont cliqué', st.clics) + kpi('Ont répondu à une question', st.choix)
+    + kpi('E-mails envoyés', st.envoyes) + kpi('Ont cliqué', st.clics) + kpi('Ont fait un choix', st.choix)
     + kpi('RDV repris', st.motifs.rdv_repris || 0) + kpi('Désinscrits', st.motifs.desinscription || 0) + kpi('Ont dit non', st.motifs.reponse_stop || 0)
     + '</div></div>';
   var lib = e.libelles;
@@ -291,19 +291,19 @@ function peindreArbre() {
     }
     h += '</div>';
   }
-  h += '<div class="sq-grp">Par histoire (douleur du questionnaire)</div><div class="sq-hint" style="margin:0 0 8px">Quatre étapes par histoire : constat, cause, prix, prise de conscience. Chaque e-mail pose une question nouvelle avec trois réponses ; la réponse cliquée choisit le texte suivant (sans clic : le premier). Le dernier e-mail résume ses réponses et propose de reprendre un audit. Une réponse désactivée n\'est plus proposée.</div>';
+  h += '<div class="sq-grp">Par histoire (douleur du questionnaire)</div><div class="sq-hint" style="margin:0 0 8px">Un récit en quatre épisodes par histoire, autour d\'un personnage. Chaque épisode finit sur trois décisions du personnage ; celle que le prospect clique choisit l\'épisode suivant (sans clic : la première). Le dernier épisode est le dénouement, suivi d\'un vrai client et du bouton pour reprendre un audit. Une décision désactivée n\'est plus proposée.</div>';
 
   for (var d = 0; d < a.douleurs.length; d++) {
     var D = a.douleurs[d];
     h += '<div class="sq-seq' + (D.off ? ' off' : '') + '"><div class="sq-seq-h"><b>' + esc(D.libelle) + '</b><span class="sp" style="flex:1"></span>'
       + '<button class="sq-act mini" type="button" data-action="off" data-cle="douleur:' + esc(D.cle) + '" data-v="' + (D.off ? '0' : '1') + '">' + (D.off ? 'Réactiver' : 'Désactiver') + '</button></div>'
       + '<div style="padding:0 11px 8px;font-size:11.5px;color:var(--muted);line-height:1.45">« ' + esc(D.citation) + ' »</div>';
-    var NOMS = { 1: '1. Le constat', 2: '2. La cause, selon sa réponse', 3: '3. Le prix, selon sa réponse', 4: '4. La prise de conscience, fin selon sa réponse' };
+    var NOMS = { 1: 'Épisode 1 : la scène de départ', 2: 'Épisode 2, selon la décision choisie', 3: 'Épisode 3, selon la décision choisie', 4: 'Dénouement, début selon la décision choisie' };
     var etapeVue = 0;
     for (var e = 0; e < D.emails.length; e++) {
       var em = D.emails[e];
       if (em.etape !== etapeVue) { etapeVue = em.etape; h += '<div style="padding:6px 11px 3px;font-size:11px;font-weight:700;color:var(--muted)">' + NOMS[em.etape] + '</div>'; }
-      var lib = em.e === 'C1' ? em.objet : (em.bouton ? 'S\'il répond « ' + em.bouton + ' »' : 'Sans réponse');
+      var lib = em.e === 'C1' ? em.objet : (em.bouton ? 'S\'il choisit « ' + em.bouton + ' »' : 'Sans clic');
       h += boutonMail({ sequence: 'frein_tresorerie', douleur: D.cle, etape: (em.etape || 1) + 1, chapitre: em.e === 'C1' ? '' : em.e, cle: em.cle }, em.e.length > 2 ? em.e.slice(2) : '·', lib, em.off);
     }
     h += '</div>';

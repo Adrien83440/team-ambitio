@@ -1,24 +1,23 @@
 # Séquences d'après-RDV à choix : une histoire par douleur
 
-*Version du 24/11/2026 (soir) : histoires en quatre étapes, choix différents à chaque e-mail (demande d'Adrien). Textes à valider.*
+*Version du 24/11/2026 (soir) : récits en quatre épisodes autour d'un personnage (demande d'Adrien). Textes à valider.*
 
 ## Principe
 
 - Les réponses de l'ancien formulaire (« Quel est votre principal défi ? ») n'ouvrent pas d'histoire : les textes citent la question et les mots du nouveau questionnaire.
 - La **douleur** vient de la première question du questionnaire (« Qu'est-ce qui vous pèse le plus dans votre entreprise aujourd'hui ? »). Cinq réponses, cinq histoires : `rentabilite`, `operationnel`, `vie`, `equipe`, `plafond`.
 - Le **frein** (trésorerie, timing, décision, preuves, priorité, général) ouvre et ferme la séquence. Quand le prospect suit une histoire, ses e-mails 1 et 5 sont ceux de la section « 0. Freins avec histoire » : ils citent sa réponse et n'annoncent pas les e-mails du frein, qui ne partiront pas.
-- Chaque histoire avance en **quatre étapes** (e-mails 2 à 5), et chaque étape pose une question nouvelle, avec trois réponses écrites à la première personne :
-  1. **Le constat** (`C1`) : « chez vous, ça ressemble plutôt à quoi ? » → trois situations.
-  2. **La cause** (`C2A`, `C2B`, `C2C`, selon sa réponse) : pourquoi cela arrive → « qu'est-ce qui vous a empêché de vous y attaquer ? ».
-  3. **Le prix** (`C3A`, `C3B`, `C3C`, selon sa réponse) : ce que coûte ce frein, avec un témoignage → « et aujourd'hui, où en êtes-vous ? ».
-  4. **La prise de conscience** (`C4`) : son histoire résumée avec ses propres réponses, ce qu'elle raconte mise bout à bout, puis un seul bouton : reprendre un audit. Le paragraphe `{{fin}}` dépend de sa dernière réponse (`C4A`, `C4B`, `C4C`) ; sans réponse, c'est `C4N`.
-- Sans clic, l'histoire continue avec la première des trois réponses, présentée comme « ce que les dirigeants dans votre situation nous disent le plus souvent » : on ne prête jamais au prospect une phrase qu'il n'a pas choisie. Le résumé de l'étape 4 ne reprend que les réponses réellement cliquées.
-- Les questions ne reprennent jamais celles du questionnaire (ce qu'il a déjà tenté, comment il vit son rythme, ce qu'il veut dans douze mois…).
-- `*Bouton : …*` = la réponse qui mène à ce texte ; `*Question : …*` = la question posée au-dessus des trois boutons de ce texte.
+- Chaque histoire est un **récit en quatre épisodes** (e-mails 2 à 5), autour d'un personnage : « Marc est chef d'entreprise, comme vous » (jamais de métier précis). Le personnage est inventé et on le dit une fois, à l'épisode 1 ; aucun résultat chiffré ne lui est attribué.
+  1. **Épisode 1** (`C1`) : la scène de départ, puis « À la place de Marc, que feriez-vous ? » → trois décisions.
+  2. **Épisode 2** (`C2A`, `C2B`, `C2C`, selon la décision) : ce qui arrive à Marc, et pourquoi cela ne suffit pas (« ce que Marc ne voit pas encore ») → « Et maintenant, que fait Marc ? ».
+  3. **Épisode 3** (`C3A`, `C3B`, `C3C`) : la deuxième tentative, puis le déclic : un échange avec un regard extérieur, et « Je vais réfléchir » → « Et là, que fait Marc ? ».
+  4. **Dénouement** (`C4`) : `{{fin}}` = comment Marc finit par rappeler, selon la dernière décision (`C4A`, `C4B`, `C4C` ; sans clic `C4N`), puis un an plus tard, puis « Marc n'existe pas. Franck, si. » (vrai client, ses mots, ses chiffres, sa vidéo), puis « Et votre histoire ? » et le bouton pour reprendre un audit.
+- Les choix sont toujours les décisions du personnage, jamais des questions posées au lecteur. Sans clic, l'histoire continue avec la première décision (« Marc a choisi : … »).
+- `Héros : …` = le prénom du personnage ; `*Bouton : …*` = la décision qui mène à ce texte ; `*Question : …*` = la question posée au-dessus des trois boutons de ce texte.
 - Chaque e-mail dit **ce qui se passe** et **pourquoi**, jamais **comment** le régler. Le comment, c'est l'audit.
 - Vouvoiement, aucun prix, aucune garantie, témoignages réels avec leurs propres mots.
 
-Syntaxe : `>> phrase` = encadré ; `[ Libellé ]` = bouton de réservation (ou lien entre parenthèses) ; `[[ Libellé ]]` = lien discret ; `{{choix}}` = la question et ses trois réponses (ou le bouton de réservation à l'étape 4) ; `{{ouverture}}` = « Vous nous avez répondu : … » après un clic, « Ce que les dirigeants dans votre situation nous disent le plus souvent : … » sinon ; `{{recap}}` = sa réponse au questionnaire puis ses réponses cliquées ; `{{fin}}` = le paragraphe de sa dernière réponse ; `![texte](image)` = image ; `{{m_…}}` = phrase miroir, tirée d'une réponse à choix du prospect (la ligne disparaît si la réponse manque).
+Syntaxe : `>> phrase` = encadré ; `[ Libellé ]` = bouton de réservation (ou lien entre parenthèses) ; `[[ Libellé ]]` = lien discret ; `{{choix}}` = la question et ses trois réponses (ou le bouton de réservation à l'étape 4) ; `{{ouverture}}` = « À la place de Marc, vous avez choisi : … » après un clic, « Marc a choisi : … » sinon ; `{{fin}}` = le paragraphe de la dernière décision ; `![texte](image)` = image ; `{{m_…}}` = phrase miroir, tirée d'une réponse à choix du prospect (la ligne disparaît si la réponse manque).
 
 ## Phrases miroir
 
@@ -314,1275 +313,1384 @@ E-mails 1 et 5 de chaque frein quand le prospect suit une histoire. `{{douleur_c
 ## 1. Rentabilité (`rentabilite`)
 
 Citation : « Je fais du chiffre, mais il ne me reste presque rien à la fin du mois »
+Héros : Marc
 
-**C1 : Vous faites du chiffre. Alors où part l'argent ?**
-*Pré-en-tête : Ce n'est presque jamais un problème de chiffre d'affaires.*
-*Question : Chez vous, ça ressemble plutôt à quoi ?*
+**C1 : L'histoire de Marc (1/4) : le meilleur mois de l'année**
+*Pré-en-tête : Il vient de faire son meilleur mois. Et il ne peut pas se payer.*
+*Question : À la place de Marc, que feriez-vous ?*
 
-> ![Le chiffre d'affaires monte, ce qui reste ne suit pas](rentabilite.jpg)
+> ![L'histoire de Marc, épisode 1](recit-rentabilite.jpg)
 >
 > Bonjour %FIRSTNAME%,
 >
-> Avant notre échange, nous vous avions demandé ce qui vous pèse le plus dans votre entreprise. Votre réponse :
+> Avant notre échange, vous nous aviez dit :
 >
 > >> « Je fais du chiffre, mais il ne me reste presque rien à la fin du mois. »
 >
-> C'est la réponse la plus fréquente : plus d'un dirigeant sur quatre nous dit exactement la même chose.
+> Laissez-nous vous raconter l'histoire de Marc. Il disait exactement la même chose.
 >
-> {{m_sommeil}}
+> Marc est chef d'entreprise, comme vous. Il n'existe pas tout à fait : son histoire est faite de celles des dirigeants que nous accompagnons. Vous allez sans doute vous y reconnaître.
 >
-> Ce qui frappe, c'est que ces dirigeants ne manquent ni de clients ni de travail. Ils en ont souvent trop. Le chiffre d'affaires est là, parfois en hausse. Et pourtant, le compte ne suit pas.
+> **Un vendredi soir**
 >
-> **Le réflexe : vendre plus**
+> Le carnet de commandes est plein. L'équipe est partie. Marc ouvre le compte de l'entreprise pour régler un fournisseur.
 >
-> C'est ce que presque tout le monde tente en premier. Et c'est souvent ce qui aggrave la situation : plus de volume, plus de charges, plus de fatigue, pour le même reste à la fin du mois.
+> Il le referme aussitôt.
 >
-> Parce que le problème n'est pas l'argent qui entre. C'est celui qui s'échappe en route.
+> Il vient de faire son meilleur mois de l'année. Et il ne peut pas se verser son salaire.
 >
-> Et il ne s'échappe pas de la même façon partout. Chez les dirigeants qui nous font votre réponse, trois situations reviennent. Une seule vous ressemblera vraiment.
->
-> {{choix}}
->
-> Adrien & Emily
-
-**C2A : Plus de travail, même résultat : ce que ça dit de votre entreprise**
-*Pré-en-tête : Le volume n'est pas le remède. C'est souvent le problème.*
-*Bouton : Je travaille plus qu'avant pour gagner pareil*
-*Question : Qu'est-ce qui vous a empêché de regarder ça de près jusqu'ici ?*
-
-> Bonjour %FIRSTNAME%,
->
-> {{ouverture}}
->
-> C'est la situation la plus déroutante : le carnet est plein, les journées aussi, et le compte ne bouge pas. On en conclut qu'il faut encore accélérer.
->
-> **Ce qui se passe réellement**
->
-> Quand une entreprise grandit en volume, tout ne grandit pas au même rythme. Une partie de ce que vous vendez rapporte bien. Une autre vous coûte plus qu'elle ne rapporte, une fois tout compté : votre temps, les reprises, les petits gestes commerciaux. Noyée dans le reste, elle ne se voit pas.
->
-> >> Chaque vente en plus de cette partie-là vous fait travailler davantage pour gagner moins.
->
-> C'est souvent l'activité dont on est le plus fier, ou le client le plus ancien. C'est pour cela que personne ne la soupçonne.
->
-> {{m_marge}}
->
-> Vous savez maintenant pourquoi accélérer ne change rien. Reste une question, plus importante qu'il n'y paraît.
+> Ce soir-là, sur le chemin du retour, Marc se dit que ça ne peut plus durer. Trois idées lui viennent.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
-**C2B : Tout a augmenté, sauf vos prix : l'érosion que personne ne voit**
-*Pré-en-tête : Aucune hausse ne justifie à elle seule de tout revoir. C'est le piège.*
-*Bouton : Tout a augmenté, sauf mes prix*
-*Question : Qu'est-ce qui vous a empêché de regarder ça de près jusqu'ici ?*
+**C2A : Marc (2/4) : le gros contrat**
+*Pré-en-tête : Trois mois de travail en plus. Et le compte, à la fin ?*
+*Bouton : Accepter le gros contrat qu'il hésitait à prendre*
+*Question : Et maintenant, que fait Marc ?*
 
 > Bonjour %FIRSTNAME%,
 >
 > {{ouverture}}
 >
-> Matières, énergie, salaires, abonnements, loyer : chaque hausse, prise seule, est supportable. Aucune ne justifie de revoir ses tarifs, d'affronter ses clients, de refaire tous ses calculs. Alors on absorbe.
+> Le lundi, il signe. C'est le plus gros contrat que l'entreprise ait jamais eu.
 >
-> **Ce qui se passe réellement**
+> Suivent trois mois comme il n'en a jamais connu. Des heures supplémentaires, un renfort pris en urgence, et Marc sur le terrain presque tous les soirs. Le chiffre d'affaires bat tous les records.
 >
-> Additionnées sur deux ou trois ans, ces petites hausses ont parfois avalé toute la marge. Sans bruit : le chiffre d'affaires, lui, n'a pas bougé, donc rien n'alerte.
+> À la fin du trimestre, il rouvre son compte.
 >
-> >> Vous n'avez pas perdu de clients. Vous avez perdu, sur chaque vente, un peu de ce qui vous revenait.
+> Il y a un peu moins qu'avant.
 >
-> Et le plus trompeur : le jour où l'on s'en aperçoit, on pense qu'il suffit d'augmenter ses prix. Ce n'est jamais partout pareil. Certaines de vos offres supportent très bien la hausse des coûts. D'autres ne la supportent plus du tout, et ce ne sont pas celles que l'on croit.
+> **Ce que Marc ne voit pas encore**
 >
-> {{m_marge}}
+> Pour décrocher ce contrat, il a serré son prix. Pour le tenir, il a payé du renfort et donné ses propres soirées. Tout compté, chaque jour passé dessus lui a coûté de l'argent.
 >
-> Vous savez maintenant d'où vient l'érosion. Reste une question, plus importante qu'il n'y paraît.
+> >> Le contrat dont il était le plus fier était celui qui lui rapportait le moins.
+>
+> Vendre plus de ce qui ne laisse rien ne laisse toujours rien. Marc, lui, retient seulement ceci : travailler plus n'a rien changé. Et il ne sait toujours pas où part son argent.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
-**C2C : Ce qui vous rapporte vraiment : presque personne ne le sait**
-*Pré-en-tête : Le chiffre d'affaires dit ce qui entre. Pas ce qui reste.*
-*Bouton : Je ne sais pas ce qui me rapporte vraiment*
-*Question : Qu'est-ce qui vous a empêché de regarder ça de près jusqu'ici ?*
+**C2B : Marc (2/4) : la hausse des prix**
+*Pré-en-tête : Dix pour cent sur tout. Trois mois plus tard, il n'en reste rien.*
+*Bouton : Augmenter tous ses prix*
+*Question : Et maintenant, que fait Marc ?*
 
 > Bonjour %FIRSTNAME%,
 >
 > {{ouverture}}
 >
-> C'est la plus honnête des trois réponses, et la plus courante. Un dirigeant connaît son chiffre d'affaires au jour près. Ce qui reste sur chacune de ses activités, presque personne ne le sait.
+> Il lui faut deux semaines pour oser. Puis il le fait : dix pour cent, sur tout.
 >
-> **Pourquoi c'est si répandu**
+> Deux clients protestent. Un s'en va. Les autres ne disent rien, et Marc se demande pourquoi il a attendu si longtemps.
 >
-> Parce que les comptes ne sont pas faits pour ça. Le bilan arrive une fois par an, des mois après, et il additionne tout. Il dit si l'année a été bonne. Il ne dit pas quelle activité a gagné de l'argent, ni laquelle en a perdu.
+> Le premier mois, le compte respire. Le deuxième, un fournisseur augmente ses tarifs. Le troisième, les charges suivent. À la fin du trimestre, Marc rouvre son compte.
 >
-> >> On pilote alors à l'intuition. Et l'intuition favorise ce qui fait du volume, pas ce qui laisse de la marge.
+> Il est revenu au même point.
 >
-> Résultat : on pousse parfois, de bonne foi, ce qui rapporte le moins.
+> **Ce que Marc ne voit pas encore**
 >
-> {{m_marge}}
+> Il a augmenté tous ses prix de la même façon. Or certaines de ses ventes auraient supporté bien davantage. Et d'autres lui faisaient perdre de l'argent avant la hausse, et lui en font encore perdre après.
 >
-> Vous savez maintenant pourquoi le chiffre d'affaires ne vous dit rien de ce qui vous reste. Reste une question, plus importante qu'il n'y paraît.
+> >> Augmenter tous ses prix sans savoir ce que laisse chaque vente, c'est soigner sans avoir cherché ce qu'on soigne.
+>
+> Marc, lui, retient seulement ceci : même en vendant plus cher, il ne reste rien. Et il ne sait toujours pas où part son argent.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
-**C3A : Seule de 9 h à 19 h : quand regarder ses chiffres ?**
-*Pré-en-tête : « J'ai économisé 15 000 euros sur l'année. »*
-*Bouton : Je n'ai pas le temps de me pencher sur mes chiffres*
-*Question : Et aujourd'hui, où en êtes-vous ?*
+**C2C : Marc (2/4) : la chasse aux dépenses**
+*Pré-en-tête : Il a tout épluché. La vraie fuite n'était sur aucun relevé.*
+*Bouton : Faire la chasse aux dépenses*
+*Question : Et maintenant, que fait Marc ?*
 
 > Bonjour %FIRSTNAME%,
 >
 > {{ouverture}}
 >
-> C'est la raison la plus légitime qui soit. Quand on produit toute la journée, les chiffres passent après : le soir, le dimanche, ou jamais.
+> Il y passe deux soirées entières. Les abonnements, l'assurance, le téléphone, le contrat d'entretien. Il résilie, il renégocie, il fait jouer la concurrence.
 >
-> Mais regardez la boucle. On ne regarde pas ses chiffres parce qu'on manque de temps. Et on manque de temps parce qu'il faut travailler toujours plus pour compenser ce que les chiffres auraient montré.
+> Il est assez fier du résultat : quelques centaines d'euros par mois.
 >
-> **Delphine était dans cette boucle**
+> Trois mois plus tard, Marc rouvre son compte.
 >
-> Esthéticienne depuis vingt-cinq ans, seule dans son institut, elle faisait tout elle-même, de 9 h à 19 h. Et chaque mois revenait ce qu'elle appelle « l'angoisse de la tréso permanente ».
+> Rien n'a changé.
 >
-> Puis elle a posé à plat ce qu'elle n'avait jamais regardé d'ensemble : ses charges, ses contrats, le calcul de ses prestations, l'organisation de ses tâches.
+> **Ce que Marc ne voit pas encore**
 >
-> >> « J'ai économisé 15 000 euros sur l'année. »
+> Il a regardé ce qui se voit : les lignes d'un relevé. Mais ce qui pèse vraiment dans son entreprise n'a pas de ligne. Ses propres heures. Le travail refait. Les ventes qui, une fois tout compté, coûtent plus qu'elles ne rapportent.
 >
-> Et elle termine désormais vers 18 h.
+> >> Marc a fermé les petites fuites. La grande n'apparaît sur aucun relevé.
 >
-> ![Delphine, institut de beauté : voir son témoignage](temoignage-delphine.jpg)(https://drive.google.com/file/d/1_HaqWTqx2SE-x6F7bOHf0LyI3kfpgvbQ/view)
->
-> Son résultat lui appartient, et ce n'est pas une promesse pour votre entreprise. Mais retenez l'ordre des choses : elle n'a pas attendu d'avoir du temps pour regarder. C'est d'avoir regardé qui lui a rendu du temps.
+> Lui retient seulement ceci : même en dépensant moins, il ne reste rien. Et il ne sait toujours pas où part son argent.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
-**C3B : « Avant, j'étais inconscient et j'avais peur »**
-*Pré-en-tête : Ne pas savoir par où commencer n'est pas un manque de compétence.*
-*Bouton : Je ne sais pas par où commencer*
-*Question : Et aujourd'hui, où en êtes-vous ?*
+**C3A : Marc (3/4) : les dimanches**
+*Pré-en-tête : Des chiffres plein l'écran, et toujours pas de réponse.*
+*Bouton : Il s'y plonge seul, le dimanche*
+*Question : Et là, que fait Marc ?*
 
 > Bonjour %FIRSTNAME%,
 >
 > {{ouverture}}
 >
-> Ne pas savoir par où commencer, ce n'est pas un manque de compétence. Vous connaissez votre métier mieux que personne. Mais personne ne vous a appris à lire une entreprise, et il y a mille choses que l'on pourrait regarder.
+> Le premier dimanche, il sort tout : relevés, factures, un grand tableau. Le deuxième, il additionne. Le troisième, il obtient des totaux.
 >
-> **Ce que ça coûte**
+> Ce sont des totaux qu'il connaissait déjà.
 >
-> Quand on ne sait pas par où commencer, on fait un peu de tout : on rogne une charge ici, on tente une hausse de prix là, on relance les ventes. Beaucoup d'efforts, dispersés, et le reste à la fin du mois ne change pas.
+> >> Ses comptes lui disent combien. Ils ne lui disent pas où.
 >
-> Franck, boulanger, en était là. Son bilan était dans le rouge, et voici comment il décrit cette période :
+> Marc connaît son métier mieux que personne. Mais personne ne lui a appris à lire une entreprise, et il y a mille choses que l'on pourrait regarder. À la maison, plus personne ne lui demande s'il vient déjeuner.
 >
-> >> « Avant, j'étais inconscient et j'avais peur. »
+> **Le déclic**
 >
-> La peur ne venait pas seulement de la situation. Elle venait de ne pas la voir.
+> C'est un autre dirigeant qui lui en parle, presque par hasard : il a fait regarder son entreprise par quelqu'un de l'extérieur. Marc hésite, puis prend rendez-vous.
+>
+> Une heure d'échange. Pour la première fois, quelqu'un lui montre l'endroit précis par où son argent s'en va. Ce n'est pas du tout celui qu'il soupçonnait.
+>
+> Marc est soulagé. Et un peu sonné. À la fin, il dit ce que tout le monde dit :
+>
+> >> « Je vais réfléchir. »
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C3B : Marc (3/4) : l'expert-comptable**
+*Pré-en-tête : « Une année correcte. » Alors pourquoi ne peut-il pas se payer ?*
+*Bouton : Il appelle son expert-comptable*
+*Question : Et là, que fait Marc ?*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> Le rendez-vous est pris pour le jeudi. Son expert-comptable est sérieux : les bilans sont justes, les déclarations partent à l'heure.
+>
+> Il regarde les chiffres et annonce une année « correcte ».
+>
+> Marc pose alors la seule question qui l'intéresse : pourquoi ne peut-il pas se payer ?
+>
+> Un silence. Puis : « Il faudrait regarder dans le détail. »
+>
+> >> Son comptable lui dit si l'année a été bonne. Personne ne lui dit pourquoi il ne reste rien.
+>
+> Ce n'est la faute de personne. Un bilan regarde l'année passée, d'un seul bloc. Ce que laisse chaque activité, aujourd'hui, n'est le travail de personne. Donc personne ne le fait.
+>
+> **Le déclic**
+>
+> C'est un autre dirigeant qui lui en parle, presque par hasard : il a fait regarder son entreprise par quelqu'un de l'extérieur. Marc hésite, puis prend rendez-vous.
+>
+> Une heure d'échange. Pour la première fois, quelqu'un lui montre l'endroit précis par où son argent s'en va. Ce n'est pas du tout celui qu'il soupçonnait.
+>
+> Marc est soulagé. Et un peu sonné. À la fin, il dit ce que tout le monde dit :
+>
+> >> « Je vais réfléchir. »
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C3C : Marc (3/4) : serrer les dents**
+*Pré-en-tête : Six mois à attendre le bilan. Il ne lui a rien appris.*
+*Bouton : Il serre les dents jusqu'au bilan*
+*Question : Et là, que fait Marc ?*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> Il se dit que le bilan tranchera. D'ici là, il tient.
+>
+> Il repousse l'achat du véhicule dont l'entreprise a besoin. Il annule une semaine de vacances. Il dort mal les fins de mois.
+>
+> Six mois plus tard, le bilan arrive. Le résultat est « correct ». Sur le compte, rien de plus.
+>
+> >> Attendre lui a coûté six mois. Et le bilan ne lui a rien appris qu'il ne savait déjà.
+>
+> Parce qu'un bilan dit si l'année a été bonne. Il ne dit pas par où l'argent est reparti.
+>
+> **Le déclic**
+>
+> C'est un autre dirigeant qui lui en parle, presque par hasard : il a fait regarder son entreprise par quelqu'un de l'extérieur. Marc hésite, puis prend rendez-vous.
+>
+> Une heure d'échange. Pour la première fois, quelqu'un lui montre l'endroit précis par où son argent s'en va. Ce n'est pas du tout celui qu'il soupçonnait.
+>
+> Marc est soulagé. Et un peu sonné. À la fin, il dit ce que tout le monde dit :
+>
+> >> « Je vais réfléchir. »
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C4 : Marc (4/4) : un an plus tard**
+*Pré-en-tête : Le même vendredi soir. Cette fois, il ne referme pas son compte.*
+
+> Bonjour %FIRSTNAME%,
+>
+> Voici la fin de l'histoire de Marc.
+>
+> {{fin}}
+>
+> Il s'est fait accompagner. Pas pour vendre plus : pour voir clair, puis pour agir là où cela comptait.
+>
+> **Un an plus tard, un vendredi soir**
+>
+> L'équipe est partie. Marc ouvre le compte de l'entreprise.
+>
+> Il ne le referme pas. Il sait déjà ce qu'il va y trouver.
+>
+> Son salaire est versé le 5 du mois, sans calcul. Il a acheté le véhicule qu'il repoussait. Et le mois dernier, pour la première fois, il a refusé un gros contrat : il savait exactement ce qu'il lui aurait coûté.
+>
+> >> Marc ne travaille pas plus qu'avant. Il sait ce que lui laisse chaque vente.
+>
+> **Marc n'existe pas. Franck, si.**
+>
+> Franck est boulanger. Quand il a commencé avec nous, son bilan était dans le rouge. Il le dit lui-même : « Avant, j'étais inconscient et j'avais peur. »
+>
+> Cinq mois plus tard, il était revenu à l'équilibre, avec 7 000 euros de bénéfice en plus chaque mois. « Aujourd'hui, je suis conscient et je n'ai plus peur. »
 >
 > ![Franck, boulanger : voir son témoignage](temoignage-franck.jpg)(https://vimeo.com/1204547163)
 >
-> Cinq mois plus tard, Franck était revenu à l'équilibre, avec 7 000 euros de bénéfice en plus chaque mois. Et la fin de sa phrase a changé :
+> Son résultat lui appartient, et ce n'est pas une promesse pour votre entreprise.
 >
-> >> « Aujourd'hui, je suis conscient et je n'ai plus peur. »
+> **Et votre histoire ?**
 >
-> Son résultat lui appartient, et ce n'est pas une promesse pour votre entreprise. Mais ce qui a changé en premier chez lui n'est pas un chiffre : c'est de savoir où regarder.
->
-> {{choix}}
->
-> Adrien & Emily
-
-**C3C : Le prochain mois sera meilleur. Et s'il ne l'était pas ?**
-*Pré-en-tête : Un calcul de deux minutes, à faire au calme.*
-*Bouton : Je me dis que le prochain mois sera meilleur*
-*Question : Et aujourd'hui, où en êtes-vous ?*
-
-> Bonjour %FIRSTNAME%,
->
-> {{ouverture}}
->
-> On se le dit tous. Après la saison. Après le bilan. Quand ce gros client aura payé. Et parfois, c'est vrai : un bon mois arrive.
->
-> Puis le suivant ressemble aux précédents. Parce qu'un bon mois ne change rien à l'endroit par où l'argent s'échappe.
->
-> **Le calcul que personne ne fait**
->
-> Prenez ce que vous estimez devoir vous verser chaque mois pour le travail que vous fournissez. Retirez ce que vous vous versez vraiment. La différence, multipliée par douze, c'est ce que vous coûte une année de plus dans la même situation.
->
-> >> Ce chiffre ne figure dans aucun bilan. C'est pourtant le plus important de votre entreprise.
->
-> Et il y a ce qui ne se chiffre pas : les décisions repoussées faute de marge, l'investissement qu'on n'ose pas faire, et la fatigue de travailler autant pour si peu de reste.
->
-> Attendre n'est pas neutre. C'est une décision, et elle a un prix.
->
-> {{choix}}
->
-> Adrien & Emily
-
-**C4 : Ce que votre histoire raconte, mise bout à bout**
-*Pré-en-tête : Le problème n'a jamais été votre chiffre d'affaires.*
-
-> Bonjour %FIRSTNAME%,
->
-> Depuis quelques jours, nous déroulons une histoire avec vous. La voici en entier.
->
-> {{recap}}
->
-> **Ce que cela raconte, mis bout à bout**
->
-> Prises une par une, ces phrases ressemblent aux tracas ordinaires d'un dirigeant. Ensemble, elles racontent autre chose : une entreprise qui gagne de l'argent, et un dirigeant qui n'a aucun moyen de voir par où il repart.
->
-> >> Le problème n'a jamais été votre chiffre d'affaires, ni votre travail. C'est que vous pilotez sans voir ce qui reste.
->
-> Cela ne se règle ni en vendant plus, ni en travaillant plus : vous l'avez déjà fait.
->
-> {{m_12mois}}
->
-> {{fin}}
+> Elle en est à l'épisode où Marc dit « je vais réfléchir ». La suite, c'est vous qui l'écrivez.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
 **C4A**
-*Bouton : Je veux voir clair, chiffres en main*
+*Bouton : Il rappelle dans la semaine*
 
-> Voir clair, chiffres en main : c'est exactement l'objet de 45 minutes d'audit. Nous partons de vos chiffres réels, pas de généralités, pour trouver l'endroit précis par où l'argent s'en va. Vous n'avez rien à préparer.
+> Marc a rappelé le jeudi. Pas par certitude : il avait fait le compte de ce que lui coûtait chaque mois passé à réfléchir.
 
 **C4B**
-*Bouton : Je me demande si ça vaut pour mon métier*
+*Bouton : Il laisse passer la saison*
 
-> Vous vous demandez si cela vaut pour votre métier, et la question est saine. Boulanger, esthéticienne, boucher, restauratrice : les dirigeants que nous accompagnons n'ont pas le même métier, et la question de ce qui reste s'est posée pour chacun. Si votre cas est différent, 45 minutes d'audit suffisent pour le voir, et nous vous le dirons.
+> Marc a laissé passer la saison. Puis une autre. Rien n'a bougé, sauf la fatigue. C'est un vendredi soir, devant le même compte, qu'il a fini par rappeler.
 
 **C4C**
-*Bouton : Je sais qu'il faut bouger, mais je repousse*
+*Bouton : Il essaie de régler ça seul*
 
-> Savoir qu'il faut bouger et repousser, c'est la position la plus courante, et elle se comprend. Mais relisez les phrases ci-dessus : rien de ce qu'elles décrivent ne s'arrange en attendant. La seule chose qui change avec le temps, c'est le montant. 45 minutes d'audit suffisent pour savoir par où commencer.
+> Marc a essayé seul. Il savait maintenant où regarder, et il a tenu six semaines. Puis une urgence, puis une autre : le quotidien a tout repris. Savoir où est le problème ne suffit pas quand on est seul face à lui. Il a rappelé.
 
 **C4N**
 
-> Si cette histoire ressemble à la vôtre, reprenons 45 minutes ensemble. Nous partons de vos chiffres réels, et vous repartez avec deux ou trois priorités, que nous travaillions ensemble ou non.
+> Marc a hésité. Longtemps. Puis il a rappelé.
 
 ---
 
 ## 2. Opérationnel (`operationnel`)
 
 Citation : « Je suis noyé dans l'opérationnel, je n'ai plus une minute pour piloter »
+Héros : Sophie
 
-**C1 : Plus une minute pour piloter. Ce n'est pas une question de temps.**
-*Pré-en-tête : Tout ce que vous avez tenté a ajouté du travail au lieu d'en enlever.*
-*Question : Chez vous, ça ressemble plutôt à quoi ?*
+**C1 : L'histoire de Sophie (1/4) : la liste de 21 heures**
+*Pré-en-tête : Quatorze lignes ce matin. Ce soir, aucune n'est barrée.*
+*Question : À la place de Sophie, que feriez-vous ?*
 
-> ![Des journées pleines, et aucune place pour piloter](operationnel.jpg)
+> ![L'histoire de Sophie, épisode 1](recit-operationnel.jpg)
 >
 > Bonjour %FIRSTNAME%,
 >
-> Avant notre échange, nous vous avions demandé ce qui vous pèse le plus dans votre entreprise. Votre réponse :
+> Avant notre échange, vous nous aviez dit :
 >
 > >> « Je suis noyé dans l'opérationnel, je n'ai plus une minute pour piloter. »
 >
-> {{m_heures}}
+> Laissez-nous vous raconter l'histoire de Sophie. Elle disait exactement la même chose.
 >
-> {{m_duree}}
+> Sophie est cheffe d'entreprise, comme vous. Elle n'existe pas tout à fait : son histoire est faite de celles des dirigeants que nous accompagnons. Vous allez sans doute vous y reconnaître.
 >
-> {{m_tente}}
+> **Un mardi, 21 heures**
 >
-> Si vous regardez tout ce que vous avez tenté pour vous en sortir, vous verrez un point commun : chaque solution a ajouté quelque chose. Une personne à former, un outil à apprendre, des heures en plus.
+> Les bureaux sont vides. Sophie retrouve la liste qu'elle a écrite le matin : quatorze lignes. En haut, soulignée deux fois, la seule qui compte vraiment pour l'avenir de l'entreprise.
 >
-> **Le piège**
+> Aucune n'est barrée.
 >
-> On croit manquer de temps. Alors on cherche du temps : on se lève plus tôt, on finit plus tard, on embauche. Et quelques mois après, les journées sont de nouveau pleines.
+> Elle n'a pourtant pas arrêté de la journée. Des questions, des urgences, un client, un fournisseur, une panne. Elle a tout réglé. Et rien avancé.
 >
-> Parce que le temps n'est pas la cause. C'est le symptôme.
->
-> Et ce symptôme ne prend pas la même forme partout. Chez les dirigeants qui nous font votre réponse, trois situations reviennent. Une seule vous ressemblera vraiment.
+> Ce soir-là, Sophie se dit que ça ne peut plus durer. Trois idées lui viennent.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
-**C2A : Pourquoi tout arrive sur votre bureau**
-*Pré-en-tête : Le travail va vers celui qui sait.*
-*Bouton : Je passe mes journées à répondre aux questions et aux urgences*
-*Question : Qu'est-ce qui vous a empêché de changer ça jusqu'ici ?*
+**C2A : Sophie (2/4) : la nouvelle recrue**
+*Pré-en-tête : Une paire de bras en plus. Et une source de questions en plus.*
+*Bouton : Embaucher quelqu'un pour la soulager*
+*Question : Et maintenant, que fait Sophie ?*
 
 > Bonjour %FIRSTNAME%,
 >
 > {{ouverture}}
 >
-> Vous arrivez le matin avec un plan. À 9 h 30, il n'en reste rien : un client, un salarié, un fournisseur, un imprévu. Le soir, vous avez beaucoup fait, et rien avancé.
+> Le recrutement prend six semaines. La personne est bien : motivée, sérieuse, pleine de bonne volonté.
 >
-> **Ce qui se passe réellement**
+> Seulement, elle ne sait pas encore. Alors elle demande. Où trouver ceci, comment traiter cela, que répondre à ce client. Et c'est Sophie qui répond, parce que c'est Sophie qui sait.
 >
-> Dans une entreprise, les questions vont vers celui qui sait, et les décisions vers celui qui peut trancher. Quand c'est la même personne pour presque tout, cette personne devient le passage obligé de tout ce qui bouge.
+> Trois mois plus tard, sa liste du matin compte seize lignes.
 >
-> >> Vous n'êtes pas interrompu parce que votre équipe est faible. Vous l'êtes parce que le savoir et les décisions sont rangés dans une seule tête.
+> **Ce que Sophie ne voit pas encore**
 >
-> C'est aussi pour cela que bloquer du temps dans l'agenda ne tient pas : le créneau existe, mais vous restez le seul à pouvoir répondre.
+> Dans une entreprise, le travail va vers celui qui sait. Elle a ajouté une personne, mais tout ce qui compte passe toujours par la même tête : la sienne.
 >
-> {{m_2semaines}}
+> >> Elle a une paire de bras en plus. Et une source de questions en plus.
 >
-> Vous savez maintenant pourquoi vos journées vous échappent. Reste une question, plus importante qu'il n'y paraît.
+> Sophie, elle, retient seulement ceci : même avec de l'aide, ses journées ne lui appartiennent pas. Et elle commence à penser que le problème n'est pas le temps.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
-**C2B : « Ça ira plus vite si je le fais moi-même »**
-*Pré-en-tête : C'est vrai aujourd'hui. C'est ce qui vous coûte demain.*
-*Bouton : Je fais moi-même ce que je devrais confier*
-*Question : Qu'est-ce qui vous a empêché de changer ça jusqu'ici ?*
+**C2B : Sophie (2/4) : la porte fermée**
+*Pré-en-tête : Ses matinées étaient bloquées. Elles ont tenu quatre jours.*
+*Bouton : Bloquer ses matinées, porte fermée*
+*Question : Et maintenant, que fait Sophie ?*
 
 > Bonjour %FIRSTNAME%,
 >
 > {{ouverture}}
 >
-> Expliquer prend vingt minutes. Faire prend dix. Alors vous faites. Et ce jour-là, vous avez raison.
+> Elle prévient tout le monde : le matin, de 9 heures à midi, la porte est fermée. Sauf urgence.
 >
-> **Ce qui se passe réellement**
+> Le lundi, c'est un bonheur. Le mardi aussi.
 >
-> Chaque fois que vous faites à la place de quelqu'un, deux choses arrivent. Vous gagnez dix minutes. Et la tâche vous appartient un peu plus : la prochaine fois, c'est encore vers vous qu'elle reviendra, parce que personne d'autre n'a appris.
+> Le jeudi, on frappe. Un client important menace de partir, et il faut décider tout de suite d'un geste commercial. Personne d'autre ne peut trancher.
 >
-> >> Ce n'est pas un manque de confiance en votre équipe. C'est un calcul juste à la journée, et faux à l'année.
+> La semaine suivante, « sauf urgence » revient trois fois. Au bout d'un mois, la porte reste ouverte.
 >
-> Voilà pourquoi une embauche soulage si peu : la nouvelle personne arrive dans une entreprise où tout ce qui compte passe déjà par vos mains.
+> **Ce que Sophie ne voit pas encore**
 >
-> {{m_autonome}}
+> Le créneau existait bien. Mais elle restait la seule à pouvoir répondre. Fermer une porte ne change pas l'endroit où arrivent les décisions.
 >
-> {{m_charge}}
+> >> On ne se protège pas d'une organisation dont on est le centre.
 >
-> Vous savez maintenant pourquoi la liste de ce que vous faites vous-même ne raccourcit jamais. Reste une question, plus importante qu'il n'y paraît.
+> Sophie, elle, retient seulement ceci : même en se protégeant, ses journées ne lui appartiennent pas. Et elle commence à penser que le problème n'est pas le temps.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
-**C2C : Votre vrai travail commence quand les autres partent**
-*Pré-en-tête : Le soir ne sert pas à travailler plus.*
-*Bouton : Mon vrai travail commence quand tout le monde est parti*
-*Question : Qu'est-ce qui vous a empêché de changer ça jusqu'ici ?*
+**C2C : Sophie (2/4) : le nouvel outil**
+*Pré-en-tête : Tout est mieux rangé. Tout est toujours pour elle.*
+*Bouton : S'équiper d'un nouvel outil*
+*Question : Et maintenant, que fait Sophie ?*
 
 > Bonjour %FIRSTNAME%,
 >
 > {{ouverture}}
 >
-> La journée appartient aux autres : clients, équipe, téléphone. Les devis, les commandes, les chiffres, la réflexion, tout ce qui demande du calme attend 19 heures, ou le dimanche.
+> Elle y passe un week-end entier. Des colonnes, des couleurs, des rappels, une application sur le téléphone. Le lundi, toute l'entreprise est dedans.
 >
-> **Ce qui se passe réellement**
+> C'est beau. C'est clair. Chaque tâche a sa place.
 >
-> Le soir ne vous sert pas à travailler plus. Il sert à faire ce que l'organisation de la journée n'a pas permis. Tant que la journée reste la même, vos soirées sont prises d'avance.
+> Trois mois plus tard, Sophie regarde l'écran. Tout est parfaitement rangé. Et presque toutes les cartes portent son nom.
 >
-> >> Et ce qui passe en dernier, c'est toujours le pilotage : regarder les chiffres, préparer la suite, décider. Le travail que vous seul pouvez faire.
+> **Ce que Sophie ne voit pas encore**
 >
-> Commencer plus tôt ou finir plus tard n'y change rien : la journée s'étend, puis se remplit à nouveau.
+> Un outil range le travail. Il ne dit à personne quoi décider à sa place. Elle voit mieux ce qu'elle a à faire, et elle a toujours autant à faire.
 >
-> {{m_heures}}
+> >> Elle a mis de l'ordre dans le problème. Le problème est resté.
 >
-> Vous savez maintenant pourquoi le pilotage passe toujours après. Reste une question, plus importante qu'il n'y paraît.
+> Sophie, elle, retient seulement ceci : même bien organisée, ses journées ne lui appartiennent pas. Et elle commence à penser que le problème n'est pas le temps.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
-**C3A : Pas le temps de réorganiser ? Regardez ce qu'a fait Margaux**
-*Pré-en-tête : « Je peux enfin déléguer. »*
-*Bouton : Je n'ai pas le temps de réorganiser quoi que ce soit*
-*Question : Et aujourd'hui, où en êtes-vous ?*
+**C3A : Sophie (3/4) : le classeur**
+*Pré-en-tête : Trois semaines de soirées à tout écrire. Personne ne l'a ouvert.*
+*Bouton : Elle écrit tout : une procédure pour chaque tâche*
+*Question : Et là, que fait Sophie ?*
 
 > Bonjour %FIRSTNAME%,
 >
 > {{ouverture}}
 >
-> C'est le piège parfait : il faudrait du temps pour s'organiser, et c'est justement faute d'organisation qu'il n'y en a pas. Alors on remet. Et chaque mois de plus rend l'entreprise un peu plus dépendante de vous.
+> Elle y consacre trois semaines de soirées. Chaque tâche, étape par étape, dans un classeur qu'elle pose bien en vue.
 >
-> **Margaux en est sortie**
+> Un mois plus tard, le classeur n'a pas bougé. Et on continue de venir la voir.
 >
-> Elle a ouvert sa première entreprise en 2023 : une épicerie fine, avec un restaurant italien. Deux activités, une équipe, et elle se sentait seule face à toutes les décisions.
+> >> Une procédure dit comment faire. Elle ne dit pas qui a le droit de décider.
 >
-> Elle n'a pas travaillé plus. Elle a restructuré son équipe, recruté, et appris à déléguer.
+> Dès qu'un cas sort un peu du cadre, et c'est le cas presque tous les jours, la question revient vers elle.
+>
+> **Le déclic**
+>
+> C'est une autre dirigeante qui lui en parle, presque par hasard : elle a fait regarder son entreprise par quelqu'un de l'extérieur. Sophie hésite, puis prend rendez-vous.
+>
+> Une heure d'échange. Pour la première fois, quelqu'un lui montre pourquoi tout revient vers elle. Ce n'est ni son équipe, ni son agenda : c'est la façon dont l'entreprise s'est construite autour d'elle.
+>
+> Sophie est soulagée. Et un peu sonnée. À la fin, elle dit ce que tout le monde dit :
+>
+> >> « Je vais réfléchir. Là, je n'ai vraiment pas le temps. »
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C3B : Sophie (3/4) : « Tiens, c'est pour toi »**
+*Pré-en-tête : Elle a tout confié d'un coup. Elle a tout repris en dix jours.*
+*Bouton : Elle confie d'un coup un gros dossier à quelqu'un*
+*Question : Et là, que fait Sophie ?*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> Elle choisit la personne en qui elle a le plus confiance, et lui confie tout un pan de l'activité. « À partir de maintenant, c'est toi. »
+>
+> La première semaine se passe bien. La deuxième, une erreur. Pas grave, mais visible : un client appelle.
+>
+> Sophie rattrape. Puis elle reprend le dossier. « Laisse, c'est plus simple si je le fais. »
+>
+> >> Confier sans cadre, c'est abandonner. Puis reprendre.
+>
+> Et la personne a retenu la leçon : la prochaine fois, elle demandera avant de faire.
+>
+> **Le déclic**
+>
+> C'est une autre dirigeante qui lui en parle, presque par hasard : elle a fait regarder son entreprise par quelqu'un de l'extérieur. Sophie hésite, puis prend rendez-vous.
+>
+> Une heure d'échange. Pour la première fois, quelqu'un lui montre pourquoi tout revient vers elle. Ce n'est ni son équipe, ni son agenda : c'est la façon dont l'entreprise s'est construite autour d'elle.
+>
+> Sophie est soulagée. Et un peu sonnée. À la fin, elle dit ce que tout le monde dit :
+>
+> >> « Je vais réfléchir. Là, je n'ai vraiment pas le temps. »
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C3C : Sophie (3/4) : les vacances**
+*Pré-en-tête : Dix appels par jour, les pieds dans l'eau.*
+*Bouton : Elle tient jusqu'aux vacances*
+*Question : Et là, que fait Sophie ?*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> Elle se dit qu'après une vraie coupure, elle y verra plus clair. Elle tient donc, deux mois de plus.
+>
+> Les vacances arrivent. Le premier jour, le téléphone sonne quatre fois. Le troisième, dix. Elle répond les pieds dans l'eau, valide un devis depuis la terrasse, règle un litige pendant le dîner.
+>
+> Au retour, trois semaines de retard l'attendent.
+>
+> >> Sophie n'était pas en vacances. Elle travaillait d'ailleurs.
+>
+> Et elle comprend une chose qu'elle n'osait pas regarder : son entreprise ne tient pas une semaine sans elle.
+>
+> **Le déclic**
+>
+> C'est une autre dirigeante qui lui en parle, presque par hasard : elle a fait regarder son entreprise par quelqu'un de l'extérieur. Sophie hésite, puis prend rendez-vous.
+>
+> Une heure d'échange. Pour la première fois, quelqu'un lui montre pourquoi tout revient vers elle. Ce n'est ni son équipe, ni son agenda : c'est la façon dont l'entreprise s'est construite autour d'elle.
+>
+> Sophie est soulagée. Et un peu sonnée. À la fin, elle dit ce que tout le monde dit :
+>
+> >> « Je vais réfléchir. Là, je n'ai vraiment pas le temps. »
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C4 : Sophie (4/4) : un an plus tard**
+*Pré-en-tête : Un mardi, 9 heures. La ligne soulignée deux fois est barrée.*
+
+> Bonjour %FIRSTNAME%,
+>
+> Voici la fin de l'histoire de Sophie.
+>
+> {{fin}}
+>
+> Elle s'est fait accompagner. Pas pour travailler plus vite : pour que l'entreprise cesse de passer par elle pour tout.
+>
+> **Un an plus tard, un mardi**
+>
+> Il est 9 heures. Sophie a devant elle une liste de quatre lignes. À 11 heures, celle qui compte vraiment est barrée.
+>
+> La semaine dernière, un client mécontent a appelé. L'équipe a réglé le problème. Sophie l'a appris le lendemain, dans un message qui commençait par « pour information ».
+>
+> Et en août, elle est partie dix jours. Le téléphone est resté dans le sac.
+>
+> >> Sophie ne travaille pas moins. Elle fait enfin le travail qu'elle seule peut faire.
+>
+> **Sophie n'existe pas. Margaux, si.**
+>
+> Margaux a ouvert sa première entreprise en 2023 : une épicerie fine, avec un restaurant italien. Elle se sentait seule face à toutes les décisions. Elle a restructuré son équipe, recruté, et appris à déléguer.
+>
+> Trois mois plus tard, avec ses mots : « Mon chiffre d'affaires a augmenté de 20 %, mes marges ont augmenté de 8 %. » Et surtout : « Je peux enfin déléguer. »
 >
 > ![Margaux, épicerie fine et restaurant : voir son témoignage](temoignage-margaux.jpg)(https://vimeo.com/1204547192)
 >
-> Trois mois plus tard, avec ses mots :
+> Son résultat lui appartient, et nous ne vous promettons pas le même.
 >
-> >> « Mon chiffre d'affaires a augmenté de 20 %, mes marges ont augmenté de 8 %. »
+> **Et votre histoire ?**
 >
-> Et la phrase qui compte le plus, pour quelqu'un qui n'a plus une minute :
->
-> >> « Je peux enfin déléguer. »
->
-> Son résultat lui appartient, et nous ne vous promettons pas le même. Mais remarquez d'où il vient : pas d'heures en plus. D'une autre façon de répartir le travail.
->
-> {{choix}}
->
-> Adrien & Emily
-
-**C3B : Par où commencer ? Une boulangère a regardé là où on ne regarde pas**
-*Pré-en-tête : « J'avais une équipe de vente qui me bouffait littéralement. »*
-*Bouton : Je ne sais pas par où commencer*
-*Question : Et aujourd'hui, où en êtes-vous ?*
-
-> Bonjour %FIRSTNAME%,
->
-> {{ouverture}}
->
-> Quand on est noyé, tout paraît urgent, donc rien ne paraît premier. On essaie un outil, une réunion, une embauche. Chaque tentative ajoute du travail avant d'en enlever, et la plupart s'arrêtent en route.
->
-> **Ce que ça coûte**
->
-> Des efforts dépensés au mauvais endroit. Et, peu à peu, l'idée que « chez moi, ça ne marche pas ».
->
-> Une boulangère que nous accompagnons en était là. Ouverte sept jours sur sept, elle décrivait son quotidien ainsi :
->
-> >> « J'avais une équipe de vente qui me bouffait littéralement. »
->
-> Le problème n'était ni elle, ni vraiment son équipe : c'était la façon dont le travail était organisé entre eux. Une fois ce point trouvé, le reste a suivi : une nouvelle équipe, des plannings revus, des horaires d'ouverture repensés.
->
-> Plus d'arrêts maladie, et des milliers d'euros de masse salariale économisés.
->
-> ![Une boulangère ouverte 7 jours sur 7 : voir son témoignage](temoignage-boulangere.jpg)(https://drive.google.com/file/d/1cyMcufjFmvVe5VwgXgP1Q0YwN4Y0Xjyh/view)
->
-> Son mot pour nous : « Vous ne m'avez pas vendu du rêve. »
->
-> Son résultat lui appartient, et ce n'est pas une promesse pour votre entreprise. Mais retenez ceci : elle n'a pas tout changé d'un coup. Elle a trouvé par quoi commencer.
->
-> {{choix}}
->
-> Adrien & Emily
-
-**C3C : « Ça ira mieux après cette période »**
-*Pré-en-tête : Il y a toujours une période après la période.*
-*Bouton : Je me dis que ça ira mieux après cette période*
-*Question : Et aujourd'hui, où en êtes-vous ?*
-
-> Bonjour %FIRSTNAME%,
->
-> {{ouverture}}
->
-> Après la saison. Après le chantier. Quand le nouveau sera formé. Il y a toujours une bonne raison, et elle est vraie à chaque fois.
->
-> Puis une autre période commence.
->
-> {{m_duree}}
->
-> **Ce qui n'est pas fait pendant ce temps**
->
-> Pendant que vous produisez, dépannez et rattrapez, personne ne regarde les chiffres, ne prépare la suite, ne remarque le client qui s'éloigne ou le salarié qui décroche. Ce sont les tâches que vous seul pouvez faire, et ce sont les premières sacrifiées.
->
-> **Ce qui s'installe**
->
-> Chaque mois de plus rend l'entreprise un peu plus dépendante de vous. Ce qui se réorganise facilement aujourd'hui sera plus lourd à changer dans un an.
->
-> >> Une entreprise qui ne tient que par son dirigeant ne grandit pas : elle s'use à sa vitesse.
->
-> Attendre n'est pas neutre. C'est une décision, et elle a un prix.
->
-> {{choix}}
->
-> Adrien & Emily
-
-**C4 : Ce que votre histoire raconte, mise bout à bout**
-*Pré-en-tête : Et pourquoi rien de ce que vous avez tenté n'a tenu.*
-
-> Bonjour %FIRSTNAME%,
->
-> Depuis quelques jours, nous déroulons une histoire avec vous. La voici en entier.
->
-> {{recap}}
->
-> **Ce que cela raconte, mis bout à bout**
->
-> Prises une par une, ces phrases ressemblent aux tracas ordinaires d'un dirigeant. Ensemble, elles racontent autre chose : une entreprise qui s'est organisée, année après année, autour d'une seule personne. Vous.
->
-> >> Vous ne manquez pas de temps. Vous occupez, seul, une place que toute l'organisation devrait se partager.
->
-> C'est pour cela que ni les heures en plus, ni les outils, ni les embauches n'ont suffi. Et c'est une bonne nouvelle : une organisation, ça se redessine.
->
-> {{m_temps}}
->
-> {{fin}}
+> Elle en est à l'épisode où Sophie dit « je vais réfléchir ». La suite, c'est vous qui l'écrivez.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
 **C4A**
-*Bouton : Je veux savoir par quoi commencer chez moi*
+*Bouton : Elle rappelle dans la semaine*
 
-> Par quoi commencer chez vous : c'est exactement la question à laquelle répondent 45 minutes d'audit. Nous partons de votre semaine réelle, pas d'une méthode toute faite, pour trouver ce qui libérerait la première heure. Vous n'avez rien à préparer.
+> Sophie a rappelé le jeudi. Elle n'avait pas plus de temps que la veille : elle avait compris qu'elle n'en aurait jamais davantage en attendant.
 
 **C4B**
-*Bouton : Je me demande si c'est possible dans mon métier*
+*Bouton : Elle attend une période plus calme*
 
-> Vous vous demandez si c'est possible dans votre métier, et la question est saine. Une épicerie avec restaurant, une boulangerie ouverte sept jours sur sept, un institut de beauté tenu par une seule personne : tous étaient pris dans leur quotidien. Si votre cas est différent, 45 minutes d'audit suffisent pour le voir, et nous vous le dirons.
+> Sophie a attendu une période plus calme. Elle n'est jamais venue. C'est un mardi soir, devant une liste de dix-huit lignes, qu'elle a fini par rappeler.
 
 **C4C**
-*Bouton : Je sais qu'il faut bouger, mais je repousse*
+*Bouton : Elle essaie de régler ça seule*
 
-> Savoir qu'il faut bouger et repousser, c'est la position la plus courante, et elle se comprend : quand on est noyé, il n'y a jamais de bon moment. C'est précisément pour cela qu'il ne viendra pas tout seul. 45 minutes d'audit suffisent pour savoir par quoi commencer.
+> Sophie a essayé seule. Elle savait maintenant d'où venait le problème, et elle a tenu un mois. Puis une urgence, puis une autre : le quotidien a tout repris. On ne redessine pas une organisation depuis son centre. Elle a rappelé.
 
 **C4N**
 
-> Si cette histoire ressemble à la vôtre, reprenons 45 minutes ensemble. Nous partons de votre semaine réelle, et vous repartez avec deux ou trois priorités, que nous travaillions ensemble ou non.
+> Sophie a hésité. Longtemps. Puis elle a rappelé.
 
 ---
 
 ## 3. Vie avalée (`vie`)
 
 Citation : « Mon entreprise a avalé ma vie : soirées, week-ends et vacances y passent »
+Héros : Julien
 
-**C1 : Soirées, week-ends, vacances : votre entreprise a tout pris**
-*Pré-en-tête : Travailler plus n'a jamais rendu une seule soirée.*
-*Question : Votre dernière soirée passée au travail, c'était plutôt…*
+**C1 : L'histoire de Julien (1/4) : le gâteau d'anniversaire**
+*Pré-en-tête : Sa fille a dix ans ce soir. Il arrive pour le dessert.*
+*Question : À la place de Julien, que feriez-vous ?*
 
-> ![Il est tard, et la lumière du bureau est encore allumée](vie.jpg)
+> ![L'histoire de Julien, épisode 1](recit-vie.jpg)
 >
 > Bonjour %FIRSTNAME%,
 >
-> Avant notre échange, nous vous avions demandé ce qui vous pèse le plus dans votre entreprise. Votre réponse :
+> Avant notre échange, vous nous aviez dit :
 >
 > >> « Mon entreprise a avalé ma vie : soirées, week-ends et vacances y passent. »
 >
-> {{m_duree}}
+> Laissez-nous vous raconter l'histoire de Julien. Il disait exactement la même chose.
 >
-> {{m_rythme}}
+> Julien est chef d'entreprise, comme vous. Il n'existe pas tout à fait : son histoire est faite de celles des dirigeants que nous accompagnons. Vous allez sans doute vous y reconnaître.
 >
-> Personne ne monte son entreprise pour ça. On la monte pour être libre, pour décider, pour mieux vivre. Et un jour on s'aperçoit que c'est elle qui décide : de l'heure du dîner, du week-end, de la date des vacances.
+> **Un jeudi soir**
 >
-> **Le réflexe : tenir**
+> Sa fille a dix ans aujourd'hui. Julien avait promis d'être là à 19 heures.
 >
-> Encore ce mois-ci, encore cette saison, « après, ça ira mieux ». Sauf que chaque heure donnée en plus devient la norme du mois suivant. L'entreprise s'habitue à votre présence comme à une ressource gratuite.
+> À 19 heures, il termine un devis que lui seul peut chiffrer. À 20 heures, il règle un problème de livraison. Il pousse la porte de la maison à 21 h 10.
 >
-> Ce qui vous retient le soir n'est presque jamais ce que vous croyez : ni la charge, ni les clients, ni la conscience professionnelle.
+> Les bougies sont soufflées. On lui a gardé une part de gâteau.
 >
-> Faites le test. Repensez à votre dernière soirée passée au travail. Que faisiez-vous, précisément ?
+> Personne ne lui fait de reproche. C'est peut-être le plus difficile.
 >
-> {{choix}}
->
-> Adrien & Emily
-
-**C2A : Ce que vous seul savez faire : la vraie raison de vos soirées**
-*Pré-en-tête : Tant que c'est dans votre tête, c'est dans vos soirées.*
-*Bouton : Je faisais ce que je suis seul à savoir faire*
-*Question : Qu'est-ce qui vous a empêché de changer ça jusqu'ici ?*
-
-> Bonjour %FIRSTNAME%,
->
-> {{ouverture}}
->
-> Les devis, la paie, les commandes, ce dossier délicat. Personne d'autre ne sait, donc cela attend le soir, quand vous êtes enfin tranquille.
->
-> **Ce qui se passe réellement**
->
-> Ce savoir, vous l'avez construit en années. Il n'est écrit nulle part, parce que vous n'en avez jamais eu besoin : vous, vous savez. Mais ce qui n'existe que dans une tête ne peut être fait que par cette tête.
->
-> >> Vos soirées ne sont pas prises par le travail. Elles sont prises par tout ce que vous êtes le seul à pouvoir faire.
->
-> Et plus l'entreprise grandit, plus cette liste s'allonge. C'est pour cela que tenir ne règle rien.
->
-> {{m_2semaines}}
->
-> Vous savez maintenant ce qui remplit vos soirées. Reste une question, plus importante qu'il n'y paraît.
+> Ce soir-là, Julien se dit que ça ne peut plus durer. Trois idées lui viennent.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
-**C2B : La journée appartient aux autres. Le soir, c'est votre tour.**
-*Pré-en-tête : Votre vrai travail commence quand ils partent.*
-*Bouton : Je faisais ce que la journée ne m'a pas laissé faire*
-*Question : Qu'est-ce qui vous a empêché de changer ça jusqu'ici ?*
+**C2A : Julien (2/4) : 18 h 30**
+*Pré-en-tête : Il s'était promis de partir à l'heure. Il a tenu deux soirs.*
+*Bouton : Se promettre de partir à 18 h 30, tous les soirs*
+*Question : Et maintenant, que fait Julien ?*
 
 > Bonjour %FIRSTNAME%,
 >
 > {{ouverture}}
 >
-> Dans la journée, vous êtes à tout le monde : clients, équipe, téléphone, imprévus. Votre propre travail attend que le calme revienne. Il revient vers 19 heures.
+> Il met une alarme sur son téléphone. Le lundi, il part à 18 h 30, un peu coupable. Le mardi aussi.
 >
-> **Ce qui se passe réellement**
+> Le mercredi, à 18 h 20, il reste un devis à envoyer avant le lendemain. Personne d'autre ne sait le chiffrer. Julien coupe l'alarme.
 >
-> Le soir ne vous sert pas à travailler plus. Il sert à faire ce que l'organisation de la journée n'a pas permis.
+> À la fin du mois, elle sonne encore tous les soirs. Il ne l'entend même plus.
 >
-> >> Tant que la journée reste la même, le soir est pris d'avance. Et le week-end sert à finir la semaine.
+> **Ce que Julien ne voit pas encore**
 >
-> Travailler plus vite n'y change rien : chaque minute gagnée dans la journée est aussitôt remplie par une question de plus.
+> Ce n'est pas la volonté qui lui manque. Ce qui le retient le soir, c'est tout ce qu'il est le seul à savoir faire. Et cela ne disparaît pas parce qu'on a décidé de partir plus tôt.
 >
-> {{m_heures}}
+> >> Une bonne résolution ne pèse rien face à une entreprise qui a besoin de toutes vos heures.
 >
-> Vous savez maintenant pourquoi vos soirées sont prises avant même de commencer. Reste une question, plus importante qu'il n'y paraît.
+> Julien, lui, retient seulement ceci : il n'a pas tenu. Et il commence à se demander si le problème vient vraiment de lui.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
-**C2C : Rattraper : le travail qu'aucun client ne paie**
-*Pré-en-tête : Chaque soirée de rattrapage a une cause, dans la journée.*
-*Bouton : Je rattrapais : une erreur, un retard, un client*
-*Question : Qu'est-ce qui vous a empêché de changer ça jusqu'ici ?*
+**C2B : Julien (2/4) : le dimanche matin**
+*Pré-en-tête : Il voulait libérer ses soirées. Il a perdu ses dimanches.*
+*Bouton : Travailler le dimanche matin pour libérer ses soirées*
+*Question : Et maintenant, que fait Julien ?*
 
 > Bonjour %FIRSTNAME%,
 >
 > {{ouverture}}
 >
-> L'erreur à corriger, la commande à refaire, le client à rassurer, le retard à combler. Du travail que personne ne vous paie, fait aux heures où vous devriez être ailleurs.
+> L'idée paraît raisonnable : trois heures au calme le dimanche matin, et des soirées enfin libres.
 >
-> **Ce qui se passe réellement**
+> Le premier dimanche, il avance bien. Le deuxième, il déborde jusqu'à 14 heures. Au bout d'un mois, le dimanche matin est devenu le dimanche.
 >
-> Une erreur isolée, c'est la vie d'une entreprise. Des soirées entières de rattrapage, c'est autre chose : le signe que quelque chose, dans la journée, fabrique ces erreurs. Une consigne floue, un contrôle qui n'existe pas, une tâche confiée sans que personne sache précisément ce qui est attendu.
+> Et ses soirées ? Elles sont toujours prises.
 >
-> >> Vous ne rattrapez pas vos salariés. Vous rattrapez une organisation qui ne leur dit pas comment bien faire sans vous.
+> **Ce que Julien ne voit pas encore**
 >
-> C'est pour cela que tenir ne règle rien : ce que vous réparez ce soir se reproduira la semaine prochaine.
+> Il a donné des heures en plus, et l'entreprise les a prises. Aussitôt, elle s'est organisée autour. Ce qui était un effort exceptionnel est devenu la règle.
 >
-> {{m_consignes}}
+> >> Chaque heure offerte à l'entreprise devient la norme du mois suivant.
 >
-> Vous savez maintenant d'où viennent vos soirées de rattrapage. Reste une question, plus importante qu'il n'y paraît.
+> Julien, lui, retient seulement ceci : plus il donne, plus on lui prend. Et il commence à se demander si le problème vient vraiment de lui.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
-**C3A : « J'ai fait plaisir à tout le monde, sauf à moi-même »**
-*Pré-en-tête : Alexandre avait la tête dans le guidon. Il passe à table à 19 h 30.*
-*Bouton : Je n'ai pas le temps de m'en occuper*
-*Question : Et aujourd'hui, où en êtes-vous ?*
+**C2C : Julien (2/4) : après la saison**
+*Pré-en-tête : La saison s'est terminée. Une autre a commencé.*
+*Bouton : Tenir jusqu'à la fin de la saison*
+*Question : Et maintenant, que fait Julien ?*
 
 > Bonjour %FIRSTNAME%,
 >
 > {{ouverture}}
 >
-> Quand l'entreprise prend toutes les heures, il n'en reste aucune pour se demander comment faire autrement. C'est le cercle le plus solide qui soit.
+> Il se dit que c'est une question de semaines. Après la saison, il lèvera le pied. Il le promet à la maison, et il le pense.
 >
-> **Alexandre y était**
+> La saison se termine. Vient l'inventaire. Puis un salarié en arrêt. Puis un gros client à ne surtout pas perdre.
 >
-> Boucher-charcutier-traiteur, son chiffre d'affaires montait. De l'extérieur, tout allait bien. De l'intérieur, il avait, selon ses mots, « la tête dans le guidon ».
+> Trois mois plus tard, Julien s'aperçoit qu'il a dit « après » toute l'année.
 >
-> Un soir, une fois tout le monde payé, il a fait ce constat :
+> **Ce que Julien ne voit pas encore**
 >
-> >> « J'ai fait plaisir à tout le monde, sauf à moi-même. »
+> Il n'y a pas de période calme qui attend au bout. Tant que l'entreprise repose sur sa présence, chaque creux se remplit de ce qui était en retard.
 >
-> ![Alexandre, boucher-charcutier-traiteur : voir son témoignage](temoignage-alexandre.jpg)(https://drive.google.com/file/d/1tPEoSaGRAGXZmo_h0x16eb8gWfl3aDBK/view)
+> >> « Après » n'est pas une date. C'est une façon de ne pas regarder.
+>
+> Julien, lui, retient seulement ceci : le calme ne viendra pas tout seul. Et il commence à se demander si le problème vient vraiment de lui.
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C3A : Julien (3/4) : le renfort**
+*Pré-en-tête : Il a embauché pour souffler. Il forme le soir.*
+*Bouton : Il embauche pour se décharger*
+*Question : Et là, que fait Julien ?*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> La nouvelle recrue arrive un lundi. Elle est volontaire, et elle a tout à apprendre.
+>
+> La journée, Julien n'a pas une minute pour lui montrer. Alors il lui explique le soir, après la fermeture. Puis il fait son propre travail, encore après.
+>
+> Il rentre plus tard qu'avant.
+>
+> >> Il a embauché pour retrouver ses soirées. Ce sont ses soirées qui servent à former.
+>
+> Tout ce qui compte dans l'entreprise est dans sa tête. Tant que c'est le cas, chaque personne en plus commence par lui prendre du temps.
+>
+> **Le déclic**
+>
+> C'est un autre dirigeant qui lui en parle, presque par hasard : il a fait regarder son entreprise par quelqu'un de l'extérieur. Julien hésite, puis prend rendez-vous.
+>
+> Une heure d'échange. Pour la première fois, quelqu'un lui montre ce qui remplit vraiment ses soirées. Ce n'est ni la charge de travail, ni ses clients : c'est la façon dont l'entreprise s'est organisée autour de sa présence.
+>
+> Julien est soulagé. Et un peu sonné. À la fin, il dit ce que tout le monde dit :
+>
+> >> « Je vais réfléchir. »
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C3B : Julien (3/4) : l'ordinateur sur la table**
+*Pré-en-tête : Il est rentré à l'heure. Il n'était pas là pour autant.*
+*Bouton : Il rapporte le travail à la maison, pour être là*
+*Question : Et là, que fait Julien ?*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> Il rentre à 19 heures, comme promis. Il dîne avec tout le monde. Puis il ouvre l'ordinateur sur la table du salon.
+>
+> Les premiers soirs, il en est presque content. Il est là.
+>
+> Un soir, sa fille lui raconte sa journée. Il répond « oui, oui » en finissant un devis. Elle s'arrête au milieu de sa phrase, et monte dans sa chambre.
+>
+> >> Julien avait déplacé son travail. Il ne l'avait pas réduit d'une minute.
+>
+> Être dans la même pièce n'est pas être là. Il le sait. Elle aussi.
+>
+> **Le déclic**
+>
+> C'est un autre dirigeant qui lui en parle, presque par hasard : il a fait regarder son entreprise par quelqu'un de l'extérieur. Julien hésite, puis prend rendez-vous.
+>
+> Une heure d'échange. Pour la première fois, quelqu'un lui montre ce qui remplit vraiment ses soirées. Ce n'est ni la charge de travail, ni ses clients : c'est la façon dont l'entreprise s'est organisée autour de sa présence.
+>
+> Julien est soulagé. Et un peu sonné. À la fin, il dit ce que tout le monde dit :
+>
+> >> « Je vais réfléchir. »
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C3C : Julien (3/4) : l'erreur**
+*Pré-en-tête : Une erreur bête. De celles qu'il ne faisait jamais.*
+*Bouton : Il n'en parle à personne et continue*
+*Question : Et là, que fait Julien ?*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> Il continue, donc. Il se lève plus tôt. Il se couche plus tard. Il ne se plaint pas.
+>
+> Un matin, un client l'appelle : il y a une erreur dans le devis. Une erreur bête, de celles que Julien ne faisait jamais. Elle lui coûte le client.
+>
+> Le soir, il relit le document. Il l'avait rédigé à 23 heures, après quatorze heures de travail.
+>
+> >> La fatigue ne prévient pas. Elle envoie la facture.
+>
+> Julien pensait protéger son entreprise en lui donnant tout. Il vient de voir ce que cela lui coûte.
+>
+> **Le déclic**
+>
+> C'est un autre dirigeant qui lui en parle, presque par hasard : il a fait regarder son entreprise par quelqu'un de l'extérieur. Julien hésite, puis prend rendez-vous.
+>
+> Une heure d'échange. Pour la première fois, quelqu'un lui montre ce qui remplit vraiment ses soirées. Ce n'est ni la charge de travail, ni ses clients : c'est la façon dont l'entreprise s'est organisée autour de sa présence.
+>
+> Julien est soulagé. Et un peu sonné. À la fin, il dit ce que tout le monde dit :
+>
+> >> « Je vais réfléchir. »
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C4 : Julien (4/4) : un an plus tard**
+*Pré-en-tête : Sa fille a onze ans ce soir. Devinez qui apporte le gâteau.*
+
+> Bonjour %FIRSTNAME%,
+>
+> Voici la fin de l'histoire de Julien.
+>
+> {{fin}}
+>
+> Il s'est fait accompagner. Pas pour apprendre à lever le pied : pour que l'entreprise cesse d'avoir besoin de toutes ses heures.
+>
+> **Un an plus tard, un jeudi soir**
+>
+> Sa fille a onze ans aujourd'hui. À 18 h 15, Julien ferme son bureau. Le devis du jour est parti à 16 heures, et ce n'est pas lui qui l'a chiffré.
+>
+> Il passe chercher le gâteau. C'est lui qui allume les bougies.
+>
+> Son téléphone est resté dans la voiture. Il ne s'en aperçoit qu'en allant se coucher.
+>
+> >> Julien n'a pas levé le pied. Son entreprise a appris à tourner sans lui le soir.
+>
+> **Julien n'existe pas. Alexandre, si.**
+>
+> Alexandre est boucher-charcutier-traiteur. Son chiffre d'affaires montait, et il avait, selon ses mots, « la tête dans le guidon ». Un soir, une fois tout le monde payé, il a fait ce constat : « J'ai fait plaisir à tout le monde, sauf à moi-même. »
 >
 > Aujourd'hui, ses marges sont reprises, ses fiches de production sont calées, et à 19 h 30 il passe à table avec toute sa famille.
 >
-> Son parcours n'est pas une promesse pour le vôtre. Mais ses soirées ne sont pas revenues parce qu'il a levé le pied : elles sont revenues parce que l'entreprise a été organisée autrement.
+> ![Alexandre, boucher-charcutier-traiteur : voir son témoignage](temoignage-alexandre.jpg)(https://drive.google.com/file/d/1tPEoSaGRAGXZmo_h0x16eb8gWfl3aDBK/view)
 >
-> Son conseil à ceux qui hésitent : demandez-vous plutôt combien vous allez perdre à attendre.
+> Son parcours n'est pas une promesse pour le vôtre. Son conseil à ceux qui hésitent : demandez-vous plutôt combien vous allez perdre à attendre.
 >
-> {{choix}}
+> **Et votre histoire ?**
 >
-> Adrien & Emily
-
-**C3B : « Dans mon métier, c'est comme ça » : Delphine l'a cru vingt-cinq ans**
-*Pré-en-tête : Elle termine désormais à 18 h.*
-*Bouton : Je ne vois pas comment faire autrement dans mon métier*
-*Question : Et aujourd'hui, où en êtes-vous ?*
-
-> Bonjour %FIRSTNAME%,
->
-> {{ouverture}}
->
-> C'est l'une des phrases que nous entendons le plus. Commerce, artisanat, restauration, soin : dans chaque métier, on apprend que les horaires sans fin font partie du prix à payer quand on est à son compte.
->
-> Et tant qu'on le croit, on ne cherche pas.
->
-> **Delphine l'a cru pendant vingt-cinq ans**
->
-> Esthéticienne, seule dans son institut, elle faisait tout elle-même, de 9 h à 19 h. Et par-dessus les heures, il y avait ce qu'elle appelle « l'angoisse de la tréso permanente ».
->
-> Les deux vont souvent ensemble : on travaille tard parce que l'argent inquiète, et l'argent inquiète parce qu'on n'a jamais le temps de le regarder en face.
->
-> Elle a posé à plat ses charges, ses contrats, le calcul de ses prestations, l'organisation de ses tâches.
->
-> >> « J'ai économisé 15 000 euros sur l'année. »
->
-> Et elle termine désormais vers 18 h.
->
-> ![Delphine, institut de beauté : voir son témoignage](temoignage-delphine.jpg)(https://drive.google.com/file/d/1_HaqWTqx2SE-x6F7bOHf0LyI3kfpgvbQ/view)
->
-> Une heure par jour, cela paraît peu. Sur une année, c'est plus d'un mois de soirées retrouvées.
->
-> Son résultat lui appartient, et ce n'est pas une promesse pour vous. Mais son métier n'a pas changé : c'est la façon de l'exercer qui a bougé.
->
-> {{choix}}
->
-> Adrien & Emily
-
-**C3C : « Après cette saison, ça ira mieux »**
-*Pré-en-tête : Certaines choses ne se rattrapent pas.*
-*Bouton : Je me dis que ça ira mieux après cette saison*
-*Question : Et aujourd'hui, où en êtes-vous ?*
-
-> Bonjour %FIRSTNAME%,
->
-> {{ouverture}}
->
-> Les soirées, les week-ends, les vacances : on se dit qu'on se rattrapera. Quand l'entreprise ira mieux. Quand l'équipe sera en place. L'an prochain.
->
-> Le problème, c'est que ce temps-là ne se met pas de côté.
->
-> **Ce qui s'use**
->
-> La forme, d'abord : on tient, jusqu'au jour où l'on ne tient plus. La lucidité, ensuite : les meilleures décisions ne se prennent pas à 22 heures, après quatorze heures de travail.
->
-> **Ce qui ne revient pas**
->
-> Un dîner manqué se rattrape. Une année de dîners manqués, non.
->
-> >> Votre entreprise peut attendre une semaine. Certaines choses, autour de vous, n'attendent pas.
->
-> Et il y a un paradoxe : plus vous donnez d'heures, plus l'entreprise s'organise autour de votre présence. Attendre ne rapproche pas du moment où elle pourra s'en passer. Cela l'éloigne.
->
-> {{choix}}
->
-> Adrien & Emily
-
-**C4 : Ce que votre histoire raconte, mise bout à bout**
-*Pré-en-tête : Vous ne travaillez pas trop. C'est autre chose.*
-
-> Bonjour %FIRSTNAME%,
->
-> Depuis quelques jours, nous déroulons une histoire avec vous. La voici en entier.
->
-> {{recap}}
->
-> **Ce que cela raconte, mis bout à bout**
->
-> Prises une par une, ces phrases ressemblent à la vie normale d'un dirigeant. Ensemble, elles racontent autre chose : une entreprise qui s'est habituée à votre présence comme à une ressource gratuite, et qui en demande un peu plus chaque année.
->
-> >> Vous ne travaillez pas trop par manque de volonté ou d'efficacité. Votre entreprise est organisée de telle façon qu'elle a besoin de toutes vos heures.
->
-> Tenir ne changera donc rien. Mais une organisation, ça se redessine. Les années, non.
->
-> {{m_temps}}
->
-> {{fin}}
+> Elle en est à l'épisode où Julien dit « je vais réfléchir ». La suite, c'est vous qui l'écrivez.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
 **C4A**
-*Bouton : Je veux savoir ce qui me rendrait du temps, concrètement*
+*Bouton : Il rappelle dans la semaine*
 
-> Concrètement : c'est le mot juste. Pendant 45 minutes d'audit, nous partons de vos journées réelles pour trouver ce qui vous rendrait la première soirée. Vous n'avez rien à préparer.
+> Julien a rappelé le jeudi. Il avait regardé le calendrier : le prochain anniversaire était dans onze mois, et il ne voulait pas arriver pour le dessert.
 
 **C4B**
-*Bouton : J'ai peur que tout s'écroule si je lève le pied*
+*Bouton : Il attend la fin de la saison*
 
-> Vous craignez que tout s'écroule si vous levez le pied, et vous avez raison : lever le pied sans rien changer, cela ne marche pas. Il ne s'agit pas de travailler moins du jour au lendemain, mais d'organiser autrement, pour que votre absence ne se voie plus. Par où commencer sans rien mettre en danger : c'est ce que nous regardons ensemble pendant 45 minutes d'audit.
+> Julien a attendu la fin de la saison. Puis la suivante. C'est en voyant passer un deuxième été sans vacances qu'il a fini par rappeler.
 
 **C4C**
-*Bouton : Je sais qu'il faut bouger, mais je repousse*
+*Bouton : Il essaie de régler ça seul*
 
-> Savoir qu'il faut bouger et repousser, c'est la position la plus courante, et elle se comprend. Mais ce temps-là ne se met pas de côté. 45 minutes d'audit suffisent pour savoir par quoi commencer, et c'est sans doute moins que ce que l'entreprise vous a pris hier soir.
+> Julien a essayé seul. Il savait maintenant d'où venait le problème, et il a tenu un mois. Puis une urgence, puis une autre : le quotidien a tout repris. On ne réorganise pas une entreprise entre 22 heures et minuit. Il a rappelé.
 
 **C4N**
 
-> Si cette histoire ressemble à la vôtre, reprenons 45 minutes ensemble. Nous partons de vos journées réelles, et vous repartez avec deux ou trois priorités, que nous travaillions ensemble ou non.
+> Julien a hésité. Longtemps. Puis il a rappelé.
 
 ---
 
 ## 4. Équipe (`equipe`)
 
 Citation : « Mes salariés viennent me voir pour tout : rien n'avance sans moi »
+Héros : Claire
 
-**C1 : Rien n'avance sans vous. Et ce n'est pas la faute de votre équipe.**
-*Pré-en-tête : Une équipe qui remonte tout n'est pas une équipe incapable.*
-*Question : Chez vous, ça ressemble plutôt à quoi ?*
+**C1 : L'histoire de Claire (1/4) : deux jours d'absence**
+*Pré-en-tête : Vingt-trois messages, six décisions en attente, un client perdu.*
+*Question : À la place de Claire, que feriez-vous ?*
 
-> ![Toutes les questions arrivent au même endroit](equipe.jpg)
+> ![L'histoire de Claire, épisode 1](recit-equipe.jpg)
 >
 > Bonjour %FIRSTNAME%,
 >
-> Avant notre échange, nous vous avions demandé ce qui vous pèse le plus dans votre entreprise. Votre réponse :
+> Avant notre échange, vous nous aviez dit :
 >
 > >> « Mes salariés viennent me voir pour tout : rien n'avance sans moi. »
 >
-> {{m_consignes}}
+> Laissez-nous vous raconter l'histoire de Claire. Elle disait exactement la même chose.
 >
-> {{m_tente}}
+> Claire est cheffe d'entreprise, comme vous. Elle n'existe pas tout à fait : son histoire est faite de celles des dirigeants que nous accompagnons. Vous allez sans doute vous y reconnaître.
 >
-> À ce stade, la conclusion paraît évidente : il faudrait une meilleure équipe. Des gens plus autonomes, plus impliqués, qui réfléchissent avant de venir vous voir.
+> **Un mercredi matin**
 >
-> **Sauf que le même scénario se répète avec chaque recrue**
+> Claire rentre de deux jours de salon. Deux jours seulement.
 >
-> Les premières semaines, elle prend des initiatives. Puis elle se trompe une fois, vous rattrapez, et elle comprend la règle : ici, mieux vaut demander.
+> Sur son téléphone, vingt-trois messages. Sur son bureau, six décisions qui l'attendent, dont aucune n'était difficile. Et un client parti chez un concurrent, faute de réponse à temps.
 >
-> Une équipe qui remonte tout n'est pas une équipe incapable. C'est une équipe à qui il manque quelque chose de précis pour décider seule. Et ce quelque chose n'est ni la compétence, ni la motivation.
+> Son équipe est là, de bonne humeur, soulagée de la revoir. « On a préféré vous attendre. »
 >
-> Ce qui manque n'est pas la même chose partout. Chez les dirigeants qui nous font votre réponse, trois situations reviennent. Une seule vous ressemblera vraiment.
->
-> {{choix}}
->
-> Adrien & Emily
-
-**C2A : Pourquoi votre équipe attend votre feu vert**
-*Pré-en-tête : Pour un salarié, la décision la plus prudente est de ne pas en prendre.*
-*Bouton : On attend mon feu vert pour la moindre décision*
-*Question : Qu'est-ce qui vous a empêché de changer ça jusqu'ici ?*
-
-> Bonjour %FIRSTNAME%,
->
-> {{ouverture}}
->
-> Un geste commercial, une commande urgente, un client mécontent : la question arrive chez vous, même quand la réponse est évidente.
->
-> **Ce qui se passe réellement**
->
-> Votre équipe sait souvent quoi faire. Ce qu'elle ne sait pas, c'est si elle a le droit de le décider. Jusqu'où peut-elle aller seule ? Personne ne l'a jamais dit clairement, parce que jusqu'ici vous étiez toujours là pour trancher.
->
-> >> Sans limite claire, la décision la plus prudente pour un salarié est de ne pas en prendre.
->
-> Ce n'est pas un manque d'initiative. De leur point de vue, c'est du bon sens.
->
-> {{m_autonome}}
->
-> Vous savez maintenant pourquoi tout attend votre feu vert. Reste une question, plus importante qu'il n'y paraît.
+> Ce matin-là, Claire se dit que ça ne peut plus durer. Trois idées lui viennent.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
-**C2B : Rarement fait comme vous le voulez : ce que votre équipe ne peut pas deviner**
-*Pré-en-tête : Le résultat attendu n'existe que dans votre tête.*
-*Bouton : Je repasse derrière : c'est rarement fait comme je veux*
-*Question : Qu'est-ce qui vous a empêché de changer ça jusqu'ici ?*
+**C2A : Claire (2/4) : la réunion**
+*Pré-en-tête : Tout le monde a hoché la tête. Dix jours plus tard, rien n'avait changé.*
+*Bouton : Réunir l'équipe et remettre les choses au clair*
+*Question : Et maintenant, que fait Claire ?*
 
 > Bonjour %FIRSTNAME%,
 >
 > {{ouverture}}
 >
-> Vous confiez, on fait, vous regardez : ce n'est pas ça. Alors vous corrigez, ou vous refaites. Et la fois suivante, vous hésitez à confier.
+> Elle les réunit le vendredi. Elle explique, calmement : elle veut des initiatives, elle leur fait confiance, ils n'ont pas besoin d'elle pour tout.
 >
-> **Ce qui se passe réellement**
+> Tout le monde hoche la tête. La semaine suivante, c'est mieux.
 >
-> « Bien faire », pour vous, c'est une image très précise, construite en années de métier. Pour votre équipe, c'est une devinette. Tant que le résultat attendu n'existe que dans votre tête, il n'y a que deux façons de le connaître : vous le demander, ou se tromper.
+> Dix jours plus tard, on frappe à sa porte : « Je préfère vous demander, on ne sait jamais. »
 >
-> >> Et chaque « laisse, je vais le faire » enseigne la même leçon : le patron préfère faire lui-même.
+> **Ce que Claire ne voit pas encore**
 >
-> C'est aussi pour cela que répéter ne change rien : une consigne dit quoi faire aujourd'hui, pas comment décider demain.
+> Elle a demandé des initiatives. Elle n'a pas dit jusqu'où chacun pouvait aller sans elle. Alors, dans le doute, chacun a fait ce qui est le plus prudent : demander.
 >
-> {{m_autonome}}
+> >> Une consigne dit quoi faire aujourd'hui. Elle ne dit pas comment décider demain.
 >
-> Vous savez maintenant pourquoi vous repassez derrière. Reste une question, plus importante qu'il n'y paraît.
+> Claire, elle, retient seulement ceci : elle a été claire, et rien n'a changé. Elle commence à se demander si le problème vient vraiment de son équipe.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
-**C2C : Dès qu'il y a un imprévu, c'est pour vous**
-*Pré-en-tête : Votre équipe sait suivre la route. Pas quoi faire quand elle dévie.*
-*Bouton : Dès qu'il y a un imprévu, c'est pour moi*
-*Question : Qu'est-ce qui vous a empêché de changer ça jusqu'ici ?*
+**C2B : Claire (2/4) : le responsable**
+*Pré-en-tête : Elle a recruté un bras droit. Maintenant, c'est lui qui vient la voir.*
+*Bouton : Recruter un responsable pour faire tampon*
+*Question : Et maintenant, que fait Claire ?*
 
 > Bonjour %FIRSTNAME%,
 >
 > {{ouverture}}
 >
-> Tant que tout se passe comme prévu, l'équipe tourne. Un fournisseur en retard, un client qui conteste, une machine en panne, un collègue absent : tout s'arrête, et tout le monde vous regarde.
+> Elle prend son temps et recrute quelqu'un de solide, avec de l'expérience. L'équipe passera par lui, et elle pourra enfin souffler.
 >
-> **Ce qui se passe réellement**
+> Le premier mois, l'équipe va le voir. Puis il vient voir Claire.
 >
-> Votre équipe a appris les gestes du quotidien. Les imprévus, c'est vous qui les avez toujours réglés : vite, bien, et seul. Personne n'a donc jamais vu comment vous raisonnez dans ces moments-là.
+> Les mêmes questions arrivent sur son bureau, simplement une personne plus tard. Et avec un salaire de plus.
 >
-> >> Ce que votre équipe ne sait pas faire, c'est exactement ce qu'elle ne vous a jamais vu expliquer.
+> **Ce que Claire ne voit pas encore**
 >
-> Et comme il y a un imprévu presque chaque jour, vos journées leur appartiennent.
+> Son responsable est compétent. Mais il ne sait pas plus que les autres jusqu'où il a le droit de décider. Alors il fait comme eux : il demande.
 >
-> {{m_2semaines}}
+> >> Elle n'a pas supprimé la file d'attente devant son bureau. Elle y a ajouté un étage.
 >
-> Vous savez maintenant pourquoi les imprévus finissent tous chez vous. Reste une question, plus importante qu'il n'y paraît.
+> Claire, elle, retient seulement ceci : même une bonne recrue vient tout lui demander. Elle commence à se demander si le problème vient vraiment de son équipe.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
-**C3A : Pas le temps d'expliquer ? Faites le compte, une seule fois**
-*Pré-en-tête : Ce temps-là, vous le payez deux fois.*
-*Bouton : Je n'ai pas le temps de former ni d'expliquer*
-*Question : Et aujourd'hui, où en êtes-vous ?*
+**C2C : Claire (2/4) : tout valider**
+*Pré-en-tête : Plus une seule erreur. Et plus rien qui avance.*
+*Bouton : Tout valider elle-même, pour être sûre*
+*Question : Et maintenant, que fait Claire ?*
 
 > Bonjour %FIRSTNAME%,
 >
 > {{ouverture}}
 >
-> Expliquer prend du temps, et vous n'en avez pas. C'est vrai. Mais faites le compte, une seule fois.
+> Puisque tout remonte, autant l'organiser : désormais, rien ne sort sans son accord. Devis, commandes, réponses aux clients.
 >
-> **Le compte**
+> Les erreurs disparaissent. Claire est rassurée.
 >
-> Combien de fois par jour êtes-vous interrompu pour une question, une validation, un « je fais comment ? ». Multipliez par le temps qu'il vous faut pour répondre, puis pour retrouver le fil de ce que vous faisiez.
+> Puis les dossiers s'empilent. Tout attend sa signature. Ses journées passent à relire le travail des autres. Et plus personne ne propose rien.
 >
-> >> Ce temps-là, vous le payez deux fois : le vôtre, et celui du salarié qui attend votre réponse.
+> **Ce que Claire ne voit pas encore**
 >
-> Autrement dit : le temps que vous n'avez pas pour expliquer, vous le dépensez déjà, chaque jour, à répondre.
+> Elle a obtenu ce qu'elle demandait : une équipe qui ne décide plus de rien. Chacun fait sa part, puis attend.
 >
-> **Margaux connaissait cette situation**
+> >> À force de vérifier tout ce qui sort, elle est devenue le seul endroit par où tout passe.
 >
-> Elle a ouvert sa première entreprise en 2023, une épicerie fine avec un restaurant italien, et elle se sentait seule face à toutes les décisions. Elle a restructuré son équipe, recruté, et appris à déléguer.
->
-> >> « Je peux enfin déléguer. »
->
-> ![Margaux, épicerie fine et restaurant : voir son témoignage](temoignage-margaux.jpg)(https://vimeo.com/1204547192)
->
-> Trois mois plus tard, avec ses mots : « Mon chiffre d'affaires a augmenté de 20 %, mes marges ont augmenté de 8 %. »
->
-> Son résultat lui appartient, et nous ne vous promettons pas le même. Mais il dit une chose : une équipe qui décide, c'est un dirigeant qui retrouve du temps.
+> Claire, elle, retient seulement ceci : plus elle contrôle, moins ils décident. Elle commence à se demander si le problème vient vraiment de son équipe.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
-**C3B : Par où commencer avec une équipe ? Ce qu'a fait une boulangère**
-*Pré-en-tête : « J'avais une équipe de vente qui me bouffait littéralement. »*
-*Bouton : Je ne sais pas par où commencer*
-*Question : Et aujourd'hui, où en êtes-vous ?*
+**C3A : Claire (3/4) : le remplaçant**
+*Pré-en-tête : Trois semaines d'initiatives. Puis la même phrase qu'avant.*
+*Bouton : Elle remplace ceux qui ne suivent pas*
+*Question : Et là, que fait Claire ?*
 
 > Bonjour %FIRSTNAME%,
 >
 > {{ouverture}}
 >
-> Avec une équipe, tout paraît lié : les personnes, les plannings, les habitudes, votre propre façon de faire. On ne sait pas quel fil tirer, alors on répète les consignes un peu plus fort.
+> Elle se sépare du salarié qui demandait le plus, et recrute quelqu'un de plus autonome. Du moins, c'est ce que dit l'entretien.
 >
-> **Ce que ça coûte**
+> Les trois premières semaines lui donnent raison : il prend des initiatives.
 >
-> De l'énergie, surtout. La vôtre, dépensée à redire. Et celle de l'équipe, qui sent bien que quelque chose ne va pas sans savoir quoi changer.
+> Puis il se trompe, une fois. Claire rattrape, vite et bien, comme toujours. Le lendemain, il passe la tête par la porte : « Je préfère vous demander. »
 >
-> Une boulangère que nous accompagnons en était là. Ouverte sept jours sur sept, voici comment elle décrivait son équipe :
+> >> Elle a changé la personne. Elle n'a pas changé ce que la personne apprend en arrivant.
 >
-> >> « J'avais une équipe de vente qui me bouffait littéralement. »
+> Ici, la règle n'est écrite nulle part, et tout le monde la connaît : mieux vaut demander.
 >
-> Le mot est fort. Il dit bien ce que vivent beaucoup de dirigeants : une équipe censée soulager, et qui prend toute l'énergie.
+> **Le déclic**
 >
-> Ce qu'elle a changé : une nouvelle équipe, des plannings revus, des horaires d'ouverture repensés. Pas seulement les personnes, donc, mais la façon dont le travail est réparti entre elles.
+> C'est une autre dirigeante qui lui en parle, presque par hasard : elle a fait regarder son entreprise par quelqu'un de l'extérieur. Claire hésite, puis prend rendez-vous.
+>
+> Une heure d'échange. Pour la première fois, quelqu'un lui montre ce qui manque à son équipe pour décider seule. Ce n'est ni la compétence, ni la motivation.
+>
+> Claire est soulagée. Et un peu sonnée. À la fin, elle dit ce que tout le monde dit :
+>
+> >> « Je vais réfléchir. »
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C3B : Claire (3/4) : laisser faire**
+*Pré-en-tête : Elle a décidé de ne plus répondre. Cela a duré jusqu'à la première erreur.*
+*Bouton : Elle laisse faire, pour voir ce qui se passe*
+*Question : Et là, que fait Claire ?*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> Elle se fait violence. À chaque question, la même réponse : « Décidez, je vous fais confiance. »
+>
+> Pendant deux semaines, l'équipe décide. Maladroitement, mais elle décide.
+>
+> Puis un salarié accorde à un client une remise que Claire n'aurait jamais acceptée. La somme est sérieuse.
+>
+> Elle reprend tout en main le jour même. Plus serré qu'avant.
+>
+> >> Elle leur a donné la liberté de décider. Elle ne leur avait pas donné de limites.
+>
+> Et l'équipe a retenu la leçon : quand on décide seul ici, cela finit mal.
+>
+> **Le déclic**
+>
+> C'est une autre dirigeante qui lui en parle, presque par hasard : elle a fait regarder son entreprise par quelqu'un de l'extérieur. Claire hésite, puis prend rendez-vous.
+>
+> Une heure d'échange. Pour la première fois, quelqu'un lui montre ce qui manque à son équipe pour décider seule. Ce n'est ni la compétence, ni la motivation.
+>
+> Claire est soulagée. Et un peu sonnée. À la fin, elle dit ce que tout le monde dit :
+>
+> >> « Je vais réfléchir. »
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C3C : Claire (3/4) : les fiches de poste**
+*Pré-en-tête : Tout était écrit. Sauf ce qui comptait.*
+*Bouton : Elle écrit une fiche de poste pour chacun*
+*Question : Et là, que fait Claire ?*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> Elle y passe ses soirées pendant deux semaines. Une fiche par personne, avec les missions, les tâches, les horaires. Elle les remet en main propre.
+>
+> L'équipe lit, signe, range.
+>
+> Le lundi suivant : « Le client demande un délai, je fais quoi ? »
+>
+> Claire regarde la fiche. Tout y est. Sauf la réponse à cette question.
+>
+> >> Ses fiches disaient qui fait quoi. Elles ne disaient pas qui décide quoi.
+>
+> Et c'est exactement ce que son équipe vient lui demander, dix fois par jour.
+>
+> **Le déclic**
+>
+> C'est une autre dirigeante qui lui en parle, presque par hasard : elle a fait regarder son entreprise par quelqu'un de l'extérieur. Claire hésite, puis prend rendez-vous.
+>
+> Une heure d'échange. Pour la première fois, quelqu'un lui montre ce qui manque à son équipe pour décider seule. Ce n'est ni la compétence, ni la motivation.
+>
+> Claire est soulagée. Et un peu sonnée. À la fin, elle dit ce que tout le monde dit :
+>
+> >> « Je vais réfléchir. »
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C4 : Claire (4/4) : un an plus tard**
+*Pré-en-tête : Trois jours de salon. Deux messages, tous les deux « pour information ».*
+
+> Bonjour %FIRSTNAME%,
+>
+> Voici la fin de l'histoire de Claire.
+>
+> {{fin}}
+>
+> Elle s'est fait accompagner. Pas pour changer d'équipe : pour lui donner ce qui lui manquait pour décider sans elle.
+>
+> **Un an plus tard, un jeudi matin**
+>
+> Claire rentre de trois jours de salon. Trois jours, cette fois.
+>
+> Sur son téléphone, deux messages. Les deux commencent par « pour information ».
+>
+> Pendant son absence, l'équipe a pris quatre décisions. Trois sont celles qu'elle aurait prises. La quatrième, elle l'aurait prise autrement. Elle a très bien fonctionné.
+>
+> >> L'équipe est la même. Elle sait maintenant ce qu'elle a le droit de décider.
+>
+> **Claire n'existe pas. Cette boulangère, si.**
+>
+> Sa boulangerie est ouverte sept jours sur sept. Voici comment elle décrivait son équipe : « J'avais une équipe de vente qui me bouffait littéralement. »
+>
+> Ce qui a changé : une nouvelle équipe, des plannings revus, des horaires d'ouverture repensés. Plus d'arrêts maladie, et des milliers d'euros de masse salariale économisés. Son mot pour nous : « Vous ne m'avez pas vendu du rêve. »
 >
 > ![Une boulangère ouverte 7 jours sur 7 : voir son témoignage](temoignage-boulangere.jpg)(https://drive.google.com/file/d/1cyMcufjFmvVe5VwgXgP1Q0YwN4Y0Xjyh/view)
 >
-> Plus d'arrêts maladie, et des milliers d'euros de masse salariale économisés. Son mot pour nous : « Vous ne m'avez pas vendu du rêve. »
+> Son résultat lui appartient, et ce n'est pas une promesse pour votre entreprise.
 >
-> Son résultat lui appartient, et ce n'est pas une promesse pour votre entreprise. Mais elle n'a pas tiré tous les fils à la fois : elle a trouvé le premier.
+> **Et votre histoire ?**
 >
-> {{choix}}
->
-> Adrien & Emily
-
-**C3C : De meilleures recrues ? Ce que coûte cette idée**
-*Pré-en-tête : Ce n'est pas une question de personnes.*
-*Bouton : Je me dis qu'il me faudrait surtout de meilleures recrues*
-*Question : Et aujourd'hui, où en êtes-vous ?*
-
-> Bonjour %FIRSTNAME%,
->
-> {{ouverture}}
->
-> C'est la conclusion la plus naturelle : avec des gens plus autonomes, tout irait mieux. Et il arrive, bien sûr, qu'un recrutement soit une erreur.
->
-> **Ce que coûte cette idée**
->
-> Un recrutement, ce sont des mois : chercher, intégrer, former. Si la nouvelle personne arrive dans la même organisation, elle prend les mêmes habitudes que les autres. Vous repartez de zéro, avec une déception de plus.
->
-> **Ce qui s'installe pendant ce temps**
->
-> Vos meilleurs éléments finissent par se lasser de demander la permission. Les autres s'habituent à ne plus décider. Et le jour où vous êtes absent, tout s'arrête.
->
-> >> Les mêmes personnes se comportent tout autrement dès qu'elles savent ce qu'on attend d'elles et jusqu'où elles peuvent décider.
->
-> Ce n'est pas une question de personnes. C'est une question de cadre. Et chaque mois de plus ancre un peu plus l'habitude, chez eux comme chez vous.
->
-> {{choix}}
->
-> Adrien & Emily
-
-**C4 : Ce que votre histoire raconte, mise bout à bout**
-*Pré-en-tête : Votre équipe ne manque ni de compétence, ni de bonne volonté.*
-
-> Bonjour %FIRSTNAME%,
->
-> Depuis quelques jours, nous déroulons une histoire avec vous. La voici en entier.
->
-> {{recap}}
->
-> **Ce que cela raconte, mis bout à bout**
->
-> Prises une par une, ces phrases ressemblent aux tracas ordinaires d'un patron. Ensemble, elles racontent autre chose : une équipe qui a appris, année après année, que la meilleure façon de bien faire était de passer par vous.
->
-> >> Votre équipe ne manque ni de compétence, ni de bonne volonté. Il lui manque un cadre pour décider sans vous.
->
-> Répéter les consignes, recruter, surveiller de plus près : rien de tout cela ne construit ce cadre. C'est pour cela que rien n'a changé.
->
-> {{m_12mois}}
->
-> {{fin}}
+> Elle en est à l'épisode où Claire dit « je vais réfléchir ». La suite, c'est vous qui l'écrivez.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
 **C4A**
-*Bouton : Je veux savoir ce qui manque à mon équipe pour décider*
+*Bouton : Elle rappelle dans la semaine*
 
-> Ce qui manque précisément à votre équipe : en 45 minutes d'audit, cela se voit. Nous partons des questions qu'on vous pose dans une journée ordinaire, et de ce qui se passe quand vous n'êtes pas là. Vous n'avez rien à préparer.
+> Claire a rappelé le jeudi. Elle avait un autre salon dans deux mois, et elle ne voulait pas rentrer une deuxième fois devant vingt-trois messages.
 
 **C4B**
-*Bouton : Et si le problème venait vraiment de mes salariés ?*
+*Bouton : Elle attend une période plus calme*
 
-> Et si le problème venait vraiment de vos salariés ? C'est possible, et nous vous le dirons si c'est le cas. Mais on ne peut le savoir qu'après avoir regardé le cadre dans lequel ils travaillent. C'est par là que commencent 45 minutes d'audit.
+> Claire a attendu une période plus calme. Entre-temps, son meilleur élément a donné sa démission : il en avait assez de demander la permission. C'est ce jour-là qu'elle a rappelé.
 
 **C4C**
-*Bouton : Je sais qu'il faut bouger, mais je repousse*
+*Bouton : Elle essaie de régler ça seule*
 
-> Savoir qu'il faut bouger et repousser, c'est la position la plus courante, et elle se comprend. Mais une habitude d'équipe ne s'efface pas en attendant : elle s'ancre. Ce qui se change simplement aujourd'hui sera plus lourd dans un an. 45 minutes d'audit suffisent pour savoir par quoi commencer.
+> Claire a essayé seule. Elle savait maintenant ce qui manquait, et elle a tenu un mois. Puis une urgence, puis une autre : le quotidien a tout repris. On ne change pas les habitudes d'une équipe en étant soi-même celle qui répond à tout. Elle a rappelé.
 
 **C4N**
 
-> Si cette histoire ressemble à la vôtre, reprenons 45 minutes ensemble. Nous partons de ce que vous vivez avec votre équipe, et vous repartez avec deux ou trois priorités, que nous travaillions ensemble ou non.
+> Claire a hésité. Longtemps. Puis elle a rappelé.
 
 ---
 
 ## 5. Plafond (`plafond`)
 
 Citation : « Mon chiffre d'affaires plafonne, malgré tous mes efforts »
+Héros : Antoine
 
-**C1 : Vous faites tout ce qu'il faut, et le chiffre ne bouge plus**
-*Pré-en-tête : Un plafond vient rarement des ventes.*
-*Question : Avec 30 % de commandes en plus, chez vous…*
+**C1 : L'histoire d'Antoine (1/4) : la même ligne qu'il y a trois ans**
+*Pré-en-tête : Il n'a jamais autant travaillé. Son chiffre n'a pas bougé.*
+*Question : À la place d'Antoine, que feriez-vous ?*
 
-> ![Le chiffre d'affaires bute sur un plafond](plafond.jpg)
+> ![L'histoire d'Antoine, épisode 1](recit-plafond.jpg)
 >
 > Bonjour %FIRSTNAME%,
 >
-> Avant notre échange, nous vous avions demandé ce qui vous pèse le plus dans votre entreprise. Votre réponse :
+> Avant notre échange, vous nous aviez dit :
 >
 > >> « Mon chiffre d'affaires plafonne, malgré tous mes efforts. »
 >
-> {{m_levier}}
+> Laissez-nous vous raconter l'histoire d'Antoine. Il disait exactement la même chose.
 >
-> « Malgré tous mes efforts » : tout est dans ces mots. Vous ne restez pas les bras croisés. Vous prospectez, vous communiquez, vous relancez. Et le chiffre reste, à peu de chose près, où il était.
+> Antoine est chef d'entreprise, comme vous. Il n'existe pas tout à fait : son histoire est faite de celles des dirigeants que nous accompagnons. Vous allez sans doute vous y reconnaître.
 >
-> **Le réflexe : pousser plus fort**
+> **Un soir de janvier**
 >
-> Plus de publicité, plus de démarchage, une nouvelle offre. Chaque effort donne un petit sursaut, puis le chiffre retombe à son niveau habituel. Comme s'il existait un plafond invisible.
+> Antoine prépare sa nouvelle année. Par curiosité, il ressort ses chiffres d'il y a trois ans et les pose à côté de ceux de l'année qui s'achève.
 >
-> Il existe. Et il est rarement là où on le cherche.
+> Les deux lignes se superposent presque.
 >
-> Pour le trouver, une question suffit. Imaginez que vous receviez, dès demain, 30 % de commandes en plus. Que se passerait-il ?
+> Il n'a pourtant jamais autant travaillé. Il a prospecté, communiqué, relancé. Chaque effort a donné un sursaut. Puis le chiffre est revenu se poser au même endroit, comme sous un plafond.
+>
+> Ce soir-là, Antoine se dit qu'il faut frapper plus fort. Trois idées lui viennent.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
-**C2A : Votre entreprise vend ce qu'elle peut absorber**
-*Pré-en-tête : Le plafond n'est pas du côté des ventes.*
-*Bouton : On ne pourrait pas suivre : retards, erreurs, équipe débordée*
-*Question : Qu'est-ce qui vous a empêché de vous y attaquer jusqu'ici ?*
+**C2A : Antoine (2/4) : la publicité**
+*Pré-en-tête : Les demandes ont afflué. Il a coupé la publicité lui-même.*
+*Bouton : Investir dans la publicité*
+*Question : Et maintenant, que fait Antoine ?*
 
 > Bonjour %FIRSTNAME%,
 >
 > {{ouverture}}
 >
-> Des retards, des erreurs, une équipe débordée, et vous au milieu pour tout rattraper. Vous connaissez la scène : vous l'avez sans doute déjà vécue, lors d'un pic d'activité.
+> Il met un vrai budget. Et cela fonctionne : en trois semaines, les demandes affluent.
 >
-> **Ce qui se passe réellement**
+> La quatrième semaine, les délais s'allongent. La cinquième, deux erreurs partent chez des clients. La sixième, un avis sévère apparaît en ligne, et l'équipe est à bout.
+>
+> Antoine coupe la publicité lui-même. Deux mois plus tard, le chiffre est revenu à son niveau habituel.
+>
+> **Ce qu'Antoine ne voit pas encore**
+>
+> Les clients étaient là. C'est l'entreprise qui n'a pas pu les servir correctement. Et sans y penser, il a lui-même refermé le robinet.
 >
 > >> Une entreprise ne vend pas ce que le marché peut acheter. Elle vend ce qu'elle est capable d'absorber.
 >
-> Quand la limite approche, vous levez le pied sur le commercial, sans même y penser, jusqu'à ce que le calme revienne. Le chiffre retombe à son niveau habituel. Ce niveau n'est pas un hasard : c'est exactement ce que votre organisation actuelle sait produire correctement.
->
-> Voilà pourquoi pousser plus fort sur les ventes ne change rien : on remplit un verre déjà plein.
->
-> {{m_charge}}
->
-> Vous savez maintenant où se trouve votre plafond : pas chez vos clients. Reste une question, plus importante qu'il n'y paraît.
+> Antoine, lui, retient seulement ceci : il a trouvé des clients, et il a dû les refuser. Il commence à se demander si son plafond est vraiment du côté des ventes.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
-**C2B : Plus de chiffre, pas plus de résultat : l'autre plafond**
-*Pré-en-tête : Faire grandir ce qui entre n'est pas toujours la bonne bataille.*
-*Bouton : Je travaillerais beaucoup plus, sans gagner beaucoup plus*
-*Question : Qu'est-ce qui vous a empêché de vous y attaquer jusqu'ici ?*
+**C2B : Antoine (2/4) : la nouvelle offre**
+*Pré-en-tête : Elle s'est bien vendue. Le total n'a pas bougé.*
+*Bouton : Lancer une nouvelle offre*
+*Question : Et maintenant, que fait Antoine ?*
 
 > Bonjour %FIRSTNAME%,
 >
 > {{ouverture}}
 >
-> Vous pourriez vendre plus, au prix de semaines encore plus lourdes. Et au bout, pas grand-chose de plus pour vous.
+> Il la prépare pendant deux mois, le soir. L'offre est bonne, et les clients l'accueillent bien.
 >
-> **Ce qui se passe réellement**
+> Seulement, c'est lui qui la porte. Chaque heure passée dessus est une heure prise ailleurs : un devis en retard, une relance oubliée, un client historique un peu délaissé.
 >
-> Votre plafond n'est pas seulement sur le chiffre d'affaires. Il est sur ce qui reste. Quand chaque vente supplémentaire demande presque autant de travail et de charges qu'elle rapporte, grandir ne sert qu'à s'épuiser.
+> À la fin de l'année, la nouvelle offre a bien marché. Et le chiffre d'affaires total est le même.
 >
-> >> Un chiffre d'affaires qui monterait sans que le résultat suive, c'est un plafond déguisé.
+> **Ce qu'Antoine ne voit pas encore**
 >
-> Dans ce cas, s'acharner sur les ventes est la bataille la plus coûteuse. Faire grandir ce qui reste est parfois plus rapide que faire grandir ce qui entre.
+> Il n'a pas ajouté une activité. Il a déplacé ses heures de l'une vers l'autre. Et ses heures, il n'en a pas une de plus.
 >
-> {{m_charge}}
+> >> Quand tout repose sur une seule personne, une nouveauté ne s'ajoute pas : elle remplace.
 >
-> Vous savez maintenant que votre plafond n'est pas là où vous poussez. Reste une question, plus importante qu'il n'y paraît.
+> Antoine, lui, retient seulement ceci : même avec une offre qui se vend, le total ne bouge pas. Il commence à se demander si son plafond est vraiment du côté des ventes.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
-**C2C : Ce sont les clients qui manquent. Vraiment ?**
-*Pré-en-tête : Chaque effort donne un sursaut, puis le chiffre retombe.*
-*Bouton : On suivrait sans problème : ce sont les clients qui manquent*
-*Question : Qu'est-ce qui vous a empêché de vous y attaquer jusqu'ici ?*
+**C2C : Antoine (2/4) : la prospection**
+*Pré-en-tête : Un mois il signe, le mois suivant il produit. Et ainsi de suite.*
+*Bouton : Prospecter lui-même, tous les matins*
+*Question : Et maintenant, que fait Antoine ?*
 
 > Bonjour %FIRSTNAME%,
 >
 > {{ouverture}}
 >
-> C'est possible : il arrive que le plafond soit bien du côté des ventes. Mais un détail mérite votre attention.
+> Tous les matins, de 8 heures à 10 heures, il appelle. Il est bon : en un mois, il signe trois nouveaux clients.
 >
-> Vous n'êtes pas resté les bras croisés. Publicité, démarchage, nouvelle offre : chaque effort a donné un sursaut. Puis le chiffre est revenu à son niveau habituel.
+> Le mois suivant, il faut les servir. Les matinées de prospection sautent une à une. Deux mois plus tard, le carnet se vide, et Antoine reprend le téléphone.
 >
-> **Ce qui se passe réellement**
+> Sur l'année, son chiffre monte, descend, remonte. La moyenne est celle d'avant.
 >
-> Si le problème était seulement le manque de clients, vos efforts auraient laissé une trace durable. Un chiffre qui retombe toujours au même endroit dit autre chose : les clients arrivent, puis quelque chose ne suit pas. Le suivi, la relance, la fidélité, le temps que vous pouvez consacrer à chacun.
+> **Ce qu'Antoine ne voit pas encore**
 >
-> >> Quand le dirigeant fait à la fois la vente et tout le reste, le commercial s'arrête chaque fois que le reste déborde.
+> Il fait à la fois la vente et tout le reste. Dès que le reste déborde, la vente s'arrête. Il ne peut pas pousser l'une sans lâcher l'autre.
 >
-> Le plafond n'est alors pas dans le marché. Il est dans la place que la vente peut prendre dans vos semaines.
+> >> Son chiffre ne plafonne pas faute de clients. Il plafonne à la taille de ses propres journées.
 >
-> Vous savez maintenant pourquoi vos efforts retombent. Reste une question, plus importante qu'il n'y paraît.
+> Antoine, lui, retient seulement ceci : il sait trouver des clients, et cela ne change rien. Il commence à se demander si son plafond est vraiment du côté des ventes.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
-**C3A : Pas le temps ? C'est peut-être là qu'est votre plafond**
-*Pré-en-tête : « Mon chiffre d'affaires a augmenté de 20 %. »*
-*Bouton : Je n'ai pas le temps de m'y pencher*
-*Question : Et aujourd'hui, où en êtes-vous ?*
+**C3A : Antoine (3/4) : l'embauche**
+*Pré-en-tête : Les charges ont monté tout de suite. La capacité, non.*
+*Bouton : Il embauche pour produire plus*
+*Question : Et là, que fait Antoine ?*
 
 > Bonjour %FIRSTNAME%,
 >
 > {{ouverture}}
 >
-> Si vous n'avez pas le temps de vous pencher sur votre plafond, c'est peut-être que vous venez de le trouver. Quand tout repose sur le dirigeant, la limite de l'entreprise a un nom : ses journées.
+> Le raisonnement est simple : s'il manque des bras, il faut des bras. Il recrute.
 >
-> **Margaux en était là**
+> Le salaire part dès le premier mois. La capacité, elle, n'arrive pas : il faut former, montrer, contrôler. Et c'est Antoine qui forme, montre et contrôle.
 >
-> Elle a ouvert sa première entreprise en 2023 : une épicerie fine, avec un restaurant italien. Elle se sentait seule face à toutes les décisions.
+> Six mois plus tard, l'entreprise produit à peine plus. Ses charges, elles, ont bien augmenté.
 >
-> Elle aurait pu faire comme tout le monde : plus de communication, plus d'offres, plus d'heures. Elle a fait autre chose. Elle a restructuré son équipe, recruté, et appris à déléguer.
+> >> Il a ajouté des bras. Tout passe encore par les siens.
 >
-> ![Margaux, épicerie fine et restaurant : voir son témoignage](temoignage-margaux.jpg)(https://vimeo.com/1204547192)
+> Tant que chaque dossier doit repasser par lui, une personne de plus ne fait qu'allonger la file d'attente devant son bureau.
 >
-> Trois mois plus tard, avec ses mots :
+> **Le déclic**
 >
-> >> « Mon chiffre d'affaires a augmenté de 20 %, mes marges ont augmenté de 8 %. »
+> C'est un autre dirigeant qui lui en parle, presque par hasard : il a fait regarder son entreprise par quelqu'un de l'extérieur. Antoine hésite, puis prend rendez-vous.
 >
-> Ce qui nous frappe dans son parcours : rien de cela n'est venu d'un effort commercial de plus. Tout est venu de l'organisation.
+> Une heure d'échange. Pour la première fois, quelqu'un lui montre où se trouve son plafond. Il n'est pas chez ses clients : il est à l'intérieur de l'entreprise, à un endroit précis.
 >
-> >> « Je peux enfin déléguer. »
+> Antoine est soulagé. Et un peu sonné. À la fin, il dit ce que tout le monde dit :
 >
-> Son résultat lui appartient, et nous ne vous promettons pas le même. Mais chaque mois sans temps pour regarder est un mois de plus sous le même plafond.
+> >> « Je vais réfléchir. »
 >
 > {{choix}}
 >
 > Adrien & Emily
 
-**C3B : Tout essayé du côté des ventes ? Franck a regardé ailleurs**
-*Pré-en-tête : « Aujourd'hui, je suis conscient et je n'ai plus peur. »*
-*Bouton : J'ai déjà tout essayé, je ne vois pas quoi faire d'autre*
-*Question : Et aujourd'hui, où en êtes-vous ?*
+**C3B : Antoine (3/4) : la baisse des prix**
+*Pré-en-tête : Plus de clients, plus de travail. Et moins à la fin.*
+*Bouton : Il baisse ses prix pour faire du volume*
+*Question : Et là, que fait Antoine ?*
 
 > Bonjour %FIRSTNAME%,
 >
 > {{ouverture}}
 >
-> Si vous avez tout essayé et que rien n'a tenu, ce n'est pas que vous vous y prenez mal. C'est sans doute que la réponse n'est pas là où vous cherchez.
+> Il se dit qu'en étant moins cher, il prendra des parts aux concurrents. Il a raison : les commandes augmentent.
 >
-> **Ce que ça coûte**
+> Le travail aussi. L'équipe fait des heures, Antoine aussi. Le chiffre d'affaires dépasse enfin celui des années précédentes.
 >
-> Chaque tentative coûte du temps et de l'argent, pour un sursaut qui retombe. Et à force, c'est l'envie qui s'érode : la vôtre, et celle de l'équipe. Rien n'use autant que de donner beaucoup sans voir bouger le résultat.
+> À la fin de l'année, il regarde ce qui reste. C'est moins qu'avant.
 >
-> Quand le chiffre plafonne, on regarde le haut de la colonne : les ventes. Franck, boulanger, a regardé le bas : ce qui reste. Son bilan était dans le rouge, et voici comment il décrit cette période :
+> >> Il a enfin crevé son plafond de chiffre d'affaires. En passant par-dessous.
 >
-> >> « Avant, j'étais inconscient et j'avais peur. »
+> Il a vendu davantage de ce qui, à ce prix-là, ne lui laisse presque plus rien.
 >
-> ![Franck, boulanger : voir son témoignage](temoignage-franck.jpg)(https://vimeo.com/1204547163)
+> **Le déclic**
 >
-> Cinq mois plus tard, il était revenu à l'équilibre, avec 7 000 euros de bénéfice en plus chaque mois.
+> C'est un autre dirigeant qui lui en parle, presque par hasard : il a fait regarder son entreprise par quelqu'un de l'extérieur. Antoine hésite, puis prend rendez-vous.
 >
-> >> « Aujourd'hui, je suis conscient et je n'ai plus peur. »
+> Une heure d'échange. Pour la première fois, quelqu'un lui montre où se trouve son plafond. Il n'est pas chez ses clients : il est à l'intérieur de l'entreprise, à un endroit précis.
 >
-> Son résultat lui appartient, et ce n'est pas une promesse pour votre entreprise. Mais il rappelle une chose : quand on a tout essayé au même endroit, il reste à regarder ailleurs.
+> Antoine est soulagé. Et un peu sonné. À la fin, il dit ce que tout le monde dit :
+>
+> >> « Je vais réfléchir. »
 >
 > {{choix}}
 >
 > Adrien & Emily
 
-**C3C : « Ça repartira avec la conjoncture »**
-*Pré-en-tête : Stagner n'est jamais vraiment stable.*
-*Bouton : Je me dis que ça repartira avec la conjoncture*
-*Question : Et aujourd'hui, où en êtes-vous ?*
+**C3C : Antoine (3/4) : attendre que ça reparte**
+*Pré-en-tête : Son chiffre n'a pas bougé. Tout le reste, si.*
+*Bouton : Il attend que le marché reparte*
+*Question : Et là, que fait Antoine ?*
 
 > Bonjour %FIRSTNAME%,
 >
 > {{ouverture}}
 >
-> C'est possible. La conjoncture pèse, et personne ne la commande. Mais en attendant, un chiffre d'affaires qui plafonne ressemble à de la stabilité : on ne perd rien, on ne gagne rien, on tient.
+> Il se dit que la période est difficile pour tout le monde, et qu'il suffit de tenir. Il arrête de s'agiter.
 >
-> Sauf que rien, autour, ne reste immobile.
+> Son chiffre d'affaires ne bouge pas. C'est presque rassurant.
 >
-> **Ce qui monte pendant que vous stagnez**
->
-> Les charges, les salaires, les matières, les loyers. Avec un chiffre qui ne bouge pas, chaque hausse se prend sur ce qui vous reste.
+> Mais autour, tout bouge. Le loyer, l'énergie, les salaires, les fournisseurs. À la fin de l'année, avec le même chiffre, il lui reste nettement moins.
 >
 > >> Un chiffre d'affaires qui stagne, c'est un résultat qui recule.
 >
-> **Ce que coûte l'attente**
+> Et un concurrent, lui, n'a pas attendu.
 >
-> Une année de plus, c'est une année d'efforts de plus contre le même mur. Et si le plafond vient de l'intérieur de l'entreprise, la conjoncture peut repartir sans que votre chiffre la suive.
+> **Le déclic**
 >
-> Attendre n'est pas neutre. C'est une décision, et elle a un prix.
+> C'est un autre dirigeant qui lui en parle, presque par hasard : il a fait regarder son entreprise par quelqu'un de l'extérieur. Antoine hésite, puis prend rendez-vous.
+>
+> Une heure d'échange. Pour la première fois, quelqu'un lui montre où se trouve son plafond. Il n'est pas chez ses clients : il est à l'intérieur de l'entreprise, à un endroit précis.
+>
+> Antoine est soulagé. Et un peu sonné. À la fin, il dit ce que tout le monde dit :
+>
+> >> « Je vais réfléchir. »
 >
 > {{choix}}
 >
 > Adrien & Emily
 
-**C4 : Ce que votre histoire raconte, mise bout à bout**
-*Pré-en-tête : Votre plafond n'est pas un manque de clients.*
+**C4 : Antoine (4/4) : un an plus tard**
+*Pré-en-tête : Il ressort ses chiffres. Cette fois, les deux lignes ne se superposent plus.*
 
 > Bonjour %FIRSTNAME%,
 >
-> Depuis quelques jours, nous déroulons une histoire avec vous. La voici en entier.
->
-> {{recap}}
->
-> **Ce que cela raconte, mis bout à bout**
->
-> Prises une par une, ces phrases ressemblent à un passage à vide. Ensemble, elles racontent autre chose : une entreprise qui a atteint la limite de ce que son organisation actuelle peut porter.
->
-> >> Votre plafond n'est ni un manque de clients, ni un manque d'efforts. C'est la taille exacte de votre organisation d'aujourd'hui.
->
-> Pousser plus fort ne le déplacera pas : vous l'avez déjà fait. Savoir précisément où il se trouve, si.
->
-> {{m_12mois}}
+> Voici la fin de l'histoire d'Antoine.
 >
 > {{fin}}
+>
+> Il s'est fait accompagner. Pas pour vendre plus fort : pour déplacer le plafond là où il se trouvait vraiment.
+>
+> **Un an plus tard, un soir de janvier**
+>
+> Antoine ressort ses chiffres, comme chaque année. Il pose la nouvelle ligne à côté des anciennes.
+>
+> Pour la première fois depuis quatre ans, elle ne se superpose pas aux autres.
+>
+> Ce qui l'étonne le plus n'est pas là. Il n'a pas fait une campagne de plus, ni une heure de plus. Et quand les demandes arrivent, l'entreprise suit.
+>
+> >> Antoine n'a pas poussé plus fort. Il a relevé ce qui retenait tout le reste.
+>
+> **Antoine n'existe pas. Margaux, si.**
+>
+> Margaux a ouvert sa première entreprise en 2023 : une épicerie fine, avec un restaurant italien. Elle aurait pu faire comme tout le monde : plus de communication, plus d'offres, plus d'heures. Elle a restructuré son équipe, recruté, et appris à déléguer.
+>
+> Trois mois plus tard, avec ses mots : « Mon chiffre d'affaires a augmenté de 20 %, mes marges ont augmenté de 8 %. »
+>
+> ![Margaux, épicerie fine et restaurant : voir son témoignage](temoignage-margaux.jpg)(https://vimeo.com/1204547192)
+>
+> Son résultat lui appartient, et nous ne vous promettons pas le même.
+>
+> **Et votre histoire ?**
+>
+> Elle en est à l'épisode où Antoine dit « je vais réfléchir ». La suite, c'est vous qui l'écrivez.
 >
 > {{choix}}
 >
 > Adrien & Emily
 
 **C4A**
-*Bouton : Je veux savoir où se trouve mon plafond*
+*Bouton : Il rappelle dans la semaine*
 
-> Savoir où se trouve votre plafond : c'est exactement l'objet de 45 minutes d'audit. La production, l'équipe, vos propres heures ou ce qui reste sur chaque vente : nous partons de votre situation réelle pour le situer. Vous n'avez rien à préparer.
+> Antoine a rappelé le jeudi. Il avait refait le calcul : chaque année sous le même plafond lui coûtait un peu plus que la précédente.
 
 **C4B**
-*Bouton : Je me demande si ça vaut pour mon métier*
+*Bouton : Il attend la fin de l'année*
 
-> Vous vous demandez si cela vaut pour votre métier, et la question est saine. Une épicerie avec restaurant, une boulangerie, une boucherie : aucun de ces dirigeants n'avait le même marché, et pour chacun la réponse se trouvait dans l'organisation ou dans les chiffres, pas dans un effort commercial de plus. Si votre plafond est vraiment du côté des ventes, 45 minutes d'audit suffisent pour le voir, et nous vous le dirons.
+> Antoine a attendu la fin de l'année. En janvier, il a ressorti ses chiffres : une quatrième ligne s'est posée sur les trois autres. Il a rappelé le lendemain.
 
 **C4C**
-*Bouton : Je sais qu'il faut bouger, mais je repousse*
+*Bouton : Il essaie de régler ça seul*
 
-> Savoir qu'il faut bouger et repousser, c'est la position la plus courante, et elle se comprend. Mais un chiffre qui stagne n'attend pas avec vous : pendant ce temps, vos charges montent. 45 minutes d'audit suffisent pour savoir où se trouve le plafond, et par quoi commencer.
+> Antoine a essayé seul. Il savait maintenant où se trouvait son plafond, et il a tenu un mois. Puis une urgence, puis une autre : le quotidien a tout repris. Savoir où est le problème ne suffit pas quand on est seul face à lui. Il a rappelé.
 
 **C4N**
 
-> Si cette histoire ressemble à la vôtre, reprenons 45 minutes ensemble. Nous partons de votre situation réelle, et vous repartez avec deux ou trois priorités, que nous travaillions ensemble ou non.
+> Antoine a hésité. Longtemps. Puis il a rappelé.
