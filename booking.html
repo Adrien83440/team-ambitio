@@ -1817,6 +1817,16 @@ function renderSlots() {
   if (sameDay) {
     var newLines = wrap.querySelectorAll('.bk-slots-line');
     for (var nl = 0; nl < newLines.length && nl < lefts.length; nl++) newLines[nl].scrollLeft = lefts[nl];
+    /* Ligne qui défile de côté : l'heure choisie ne reste jamais à moitié
+       cachée sous la flèche et son fondu (BK_SC_PAD = leur largeur). */
+    var BK_SC_PAD = 62;
+    for (var sl = 0; sl < newLines.length; sl++) {
+      var ln = newLines[sl], selIn = ln.querySelector('.bk-slot-row.sel');
+      if (!selIn || ln.scrollWidth - ln.clientWidth < 4) continue;
+      var lnr = ln.getBoundingClientRect(), sir = selIn.getBoundingClientRect();
+      if (sir.right > lnr.right - BK_SC_PAD) ln.scrollLeft += sir.right - (lnr.right - BK_SC_PAD);
+      else if (sir.left < lnr.left + BK_SC_PAD && ln.scrollLeft > 0) ln.scrollLeft -= (lnr.left + BK_SC_PAD) - sir.left;
+    }
     var newList = wrap.querySelector('.bk-slots-list');
     if (newList) {
       newList.scrollTop = oldListTop;
