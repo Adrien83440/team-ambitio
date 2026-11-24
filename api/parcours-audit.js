@@ -250,6 +250,28 @@ async function lireQuestionnaire(jours) {
 module.exports = async function (req, res) {
   if (!keyOk(req)) { res.status(404).json({ error: 'Not found' }); return; }
   if (req.method !== 'GET') { res.status(405).json({ error: 'GET only' }); return; }
+  /* ?part=suivi — où en sont les RDV pris par le parcours (ceux qui portent
+     `parcoursRdv`) : étapes parties, sens de la réponse au WhatsApp, présence
+     confirmée ou non. Aucun nom, aucun numéro, aucun texte de message. */
+  if (req.query && req.query.part === 'suivi') {
+    try {
+      const debut = parisDay(Date.now() - 3 * 86400000);
+      const snap = await db.collection('bookings').where('date', '>=', debut).get();
+      const liste = [];
+      snap.forEach(function (doc) {
+        const b = doc.data() || {};
+        if (!b.parcoursRdv) return;
+        const et = b.parcoursRdv.etapes || {};
+        const etapes = {};
+        Object.keys(et).forEach(function (k) { etapes[k] = et[k] && et[k].ok === true ? 'ok' : (et[k] && et[k].ok === false ? 'echec:' + (et[k].erreur || et[k].motif || '') : 'reserve'); });
+        liste.push({ ref: crypto.createHash('sha256').update('pa:' + doc.id).digest('hex').slice(0, 8), date: b.date, heure: b.time, statut: b.status || null, issue: b.outcome || null,
+          etapes: etapes, reponseSens: (b.parcoursRdv.reponse || {}).sens || null, reponseA: (b.parcoursRdv.reponse || {}).at || null,
+          presenceConfirmee: !!b.presenceConfirmed, confirmeePar: b.presenceConfirmed ? (b.presenceConfirmed.by || null) : null, auto: b.presenceConfirmed ? b.presenceConfirmed.auto === true : null });
+      });
+      res.status(200).json({ lu: new Date().toISOString(), rdv: liste });
+    } catch (e) { res.status(500).json({ erreur: e.message }); }
+    return;
+  }
   if (req.query && req.query.part === 'questionnaire') {
     try {
       const j = Math.min(180, Math.max(14, parseInt(req.query.jours, 10) || 90));
