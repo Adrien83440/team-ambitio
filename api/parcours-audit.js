@@ -31,7 +31,9 @@ const { graph, getWhatsappCreds } = require('./_whatsappClient');
 
 function keyOk(req) {
   const want = String(process.env.PARCOURS_AUDIT_KEY || '');
-  const got = String((req.headers && req.headers['x-audit-key']) || '');
+  /* En-tête, ou paramètre `k` : l'outil Vercel qui lit la preview ne sait
+     pas poser d'en-tête. Clé limitée à la preview de la branche. */
+  const got = String((req.headers && req.headers['x-audit-key']) || (req.query && req.query.k) || '');
   if (want.length < 24 || got.length !== want.length) return false;
   return crypto.timingSafeEqual(Buffer.from(got), Buffer.from(want));
 }
