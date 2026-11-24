@@ -12,10 +12,11 @@
 //     (sa réponse à « Qu'est-ce qui vous pèse le plus ? » du questionnaire) ;
 //   - après un RDV manqué ou annulé sans report : 3 e-mails sur 7 jours.
 //
-// Avec une douleur : e-mail 1 = frein + paragraphe miroir ; e-mail 2 = premier
-// chapitre de sa douleur, deux boutons « la suite » ; e-mail 3 = la suite
-// choisie (sans clic : A) ; e-mail 4 = le client qui lui ressemble ;
-// e-mail 5 = frein. Sans douleur : la séquence du frein telle quelle.
+// Avec une douleur : e-mail 1 = frein ; e-mails 2 à 5 = son HISTOIRE en quatre
+// étapes (constat → cause → prix → prise de conscience), chaque e-mail posant
+// une question nouvelle avec trois réponses ; la réponse cliquée choisit le
+// texte suivant (sans clic : la suite par défaut) ; e-mail 6 = frein.
+// Sans douleur : la séquence du frein telle quelle.
 //
 // Textes : docs/parcours-rdv/sequences-freins.md → _acSequencesData.json ;
 //          docs/parcours-rdv/sequences-choix.md  → _parcoursChoixData.json
@@ -53,11 +54,9 @@ const DEFAUTS = { actif: false, plafondJour: 80, newsletterAutomation: '29', heu
 
 /* Jours après le RDV, par type de séquence. */
 const JOURS = { frein: [1, 4, 8, 14, 21], general: [1, 5, 12, 21], rdv_manque: [1, 3, 7], histoire: [1, 4, 8, 12, 16, 21] };
-/* Avec une histoire : e-mail 1 = frein, e-mails 2 à 5 = quatre CHAPITRES (le
-   premier est toujours C1, les suivants sont choisis par le prospect parmi
-   trois boutons, ou pris dans cet ordre faute de clic), e-mail 6 = frein. */
-const ORDRE_CHAPITRES = ['C2', 'C3', 'C5', 'C6', 'C4', 'C7'];
-const PREMIER_CHAPITRE = 2, DERNIER_CHAPITRE = 5, NB_BOUTONS = 3;
+/* Avec une histoire : e-mail 1 = frein, e-mails 2 à 5 = les quatre ÉTAPES
+   (C1, puis C2x, C3x, C4x selon ses réponses), e-mail 6 = frein. */
+const PREMIER_CHAPITRE = 2, DERNIER_CHAPITRE = 5;
 const ECART_MIN_MS = 40 * 3600000; // jamais deux e-mails à moins de 40 h
 
 const LIB_SEQ = {
@@ -200,44 +199,47 @@ function dernierN(tag) {
 function chapitresDe(suite) { return suite.douleur && CHOIX[suite.douleur] ? CHOIX[suite.douleur].chapitres : null; }
 function chapitreActif(suite, c, off) { const C = chapitresDe(suite); return !!(C && C[c]) && !(off && off['email:' + suite.douleur + '#' + c]); }
 
-/* Les boutons affichés à la fin de l'étape k : trois chapitres pas encore
-   lus (ni celui de l'étape k). Aucun au dernier chapitre. `lus` : chapitres
-   des étapes 2…k. */
-function optionsApres(suite, k, lus, off) {
-  if (k >= DERNIER_CHAPITRE) return [];
-  return ORDRE_CHAPITRES.filter(function (c) { return lus.indexOf(c) < 0 && chapitreActif(suite, c, off); }).slice(0, NB_BOUTONS);
+/* Une histoire avance en quatre étapes (e-mails 2 à 5). Chaque texte porte
+   les trois réponses qu'il propose (`suite`) et la suite envoyée sans clic
+   (`defaut`). Les réponses d'un texte, sans celles désactivées par l'admin. */
+function optionsApres(suite, c, off) {
+  const C = chapitresDe(suite);
+  return ((C && C[c] && C[c].suite) || []).filter(function (x) { return chapitreActif(suite, x, off); });
 }
 
-/* Le chapitre de l'étape k (2…5) : { c, choisi, options } — options = les
-   boutons qu'il affichera. Une étape déjà envoyée garde ce qui est parti.
-   Sinon : le chapitre que le prospect a choisi dans l'e-mail précédent
-   (`choixSuivant`), à défaut le premier des boutons qu'on lui proposait. */
+/* Le texte de l'étape k (2…5) : { c, choisi, options, chemin } — options =
+   les réponses qu'il affichera, chemin = les textes des étapes 2…k. Une
+   étape déjà envoyée garde ce qui est parti. Sinon : la réponse cliquée
+   dans l'e-mail précédent (`choixSuivant`), à défaut la suite par défaut. */
 function chapitreDe(suite, k, off) {
-  if (!chapitresDe(suite) || k < PREMIER_CHAPITRE || k > DERNIER_CHAPITRE) return null;
+  const C = chapitresDe(suite);
+  if (!C || k < PREMIER_CHAPITRE || k > DERNIER_CHAPITRE) return null;
   const et = suite.etapes || {};
-  const lus = [];
+  const chemin = [];
   let dernier = null;
   for (let i = PREMIER_CHAPITRE; i <= k; i++) {
     const e = et['e' + i];
     let x;
-    if (e && e.chapitre) x = { c: e.chapitre, choisi: e.choisi === true, options: Array.isArray(e.options) ? e.options : null };
+    if (e && e.chapitre && C[e.chapitre]) x = { c: e.chapitre, choisi: e.choisi === true, options: Array.isArray(e.options) ? e.options : null };
     else if (i === PREMIER_CHAPITRE) x = { c: 'C1', choisi: false, options: null };
     else if (suite.forceChapitre && i === k) x = { c: suite.forceChapitre, choisi: suite.forceChoisi === true, options: null };
     else {
       const proposes = (dernier && dernier.options) || [];
       const voulu = suite.choixSuivant && suite.choixSuivant.e === i - 1 ? suite.choixSuivant.c : null;
-      if (voulu && lus.indexOf(voulu) < 0 && chapitreActif(suite, voulu, off)) x = { c: voulu, choisi: true, options: null };
+      if (voulu && proposes.indexOf(voulu) >= 0 && chapitreActif(suite, voulu, off)) x = { c: voulu, choisi: true, options: null };
       else {
-        const suivant = proposes.filter(function (c) { return lus.indexOf(c) < 0 && chapitreActif(suite, c, off); })[0]
-          || ORDRE_CHAPITRES.filter(function (c) { return lus.indexOf(c) < 0 && chapitreActif(suite, c, off); })[0];
+        const d = dernier && C[dernier.c] ? C[dernier.c].defaut : null;
+        const suivant = (d && chapitreActif(suite, d, off)) ? d : proposes[0];
         if (!suivant) return null;
-        x = { c: suivant, choisi: false, options: null };
+        // Aperçus et tests : la réponse par défaut montrée comme cliquée.
+        x = { c: suivant, choisi: suite.toutChoisi === true && proposes.indexOf(suivant) >= 0, options: null };
       }
     }
-    lus.push(x.c);
-    if (!x.options) x.options = optionsApres(suite, i, lus, off);
+    if (!x.options) x.options = optionsApres(suite, x.c, off);
+    chemin.push({ c: x.c, choisi: x.choisi });
     dernier = x;
   }
+  dernier.chemin = chemin;
   return dernier;
 }
 
@@ -283,28 +285,43 @@ function contenuDe(suite, k, off) {
   const rdv = lien(suite.jeton, 'rdv', k);
   const dm = /^0+$/.test(String(suite.jeton)) ? suite.douleur : null; // e-mail de test
 
-  // Chapitre d'une histoire : la phrase d'ouverture et les boutons de la suite.
+  // Étape d'une histoire : la phrase d'ouverture, le résumé de ses réponses,
+  // et la question suivante avec ses trois réponses.
   if (chap) {
-    const ouv = chap.choisi ? 'Vous avez choisi de lire : « ' + D.chapitres[chap.c].bouton + ' ». Le voici.' : 'Voici la suite de votre histoire.';
+    const moi = D.chapitres[chap.c];
+    // On ne prête jamais au prospect une phrase qu'il n'a pas cliquée.
+    const ouv = !moi.bouton ? '' : (chap.choisi
+      ? 'Vous nous avez répondu : « ' + moi.bouton + ' ».'
+      : 'Ce que les dirigeants dans votre situation nous disent le plus souvent : « ' + moi.bouton + ' ».');
+    // Résumé (étape 4) : sa réponse au questionnaire, puis ses réponses cliquées ;
+    // sans aucun clic, ce que disent le plus souvent les dirigeants dans son cas.
+    const dits = (chap.chemin || []).filter(function (x) { return x.choisi && D.chapitres[x.c] && D.chapitres[x.c].bouton; }).map(function (x) { return D.chapitres[x.c].bouton; });
+    const courant = ['C2A', 'C3A'].map(function (c) { return D.chapitres[c] ? D.chapitres[c].bouton : null; }).filter(Boolean);
+    const cit = String(suite.citation || D.citation || '');
+    const intro2 = dits.length ? 'Et au fil de ces e-mails, vous avez ajouté :' : 'Les dirigeants qui nous font cette réponse ajoutent presque toujours :';
+    const liste = dits.length ? dits : courant;
+    const enc = function (t) { return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px"><tr><td style="background:#eff4ff;border-left:4px solid #2563eb;border-radius:0 10px 10px 0;padding:12px 18px;font-size:16px;line-height:1.55;font-weight:600;color:#1e3a8a">« ' + esc(t) + ' »</td></tr></table>'; };
+    const rh = '<p style="margin:0 0 12px">Avant notre échange, vous nous aviez dit :</p>' + enc(cit + '.')
+      + '<p style="margin:14px 0 12px">' + esc(intro2) + '</p>' + liste.map(enc).join('') + '<div style="height:10px;line-height:10px;font-size:10px">&nbsp;</div>';
+    const rt = 'Avant notre échange, vous nous aviez dit :\n\n  « ' + cit + '. »\n\n' + intro2 + '\n\n' + liste.map(function (t) { return '  « ' + t + ' »'; }).join('\n');
     let bh = '', bt = '';
     if (chap.options.length) {
-      bh = '<p style="margin:26px 0 12px;font-size:17px;font-weight:700;color:#111827">Que voulez-vous lire ensuite ?</p>';
-      bt = 'QUE VOULEZ-VOUS LIRE ENSUITE ?';
-      chap.options.forEach(function (c, i) {
+      const q = moi.question || 'Et chez vous ?';
+      const aide = 'Cliquez sur la phrase qui vous ressemble le plus : la suite de votre histoire en dépend.';
+      bh = '<p style="margin:26px 0 6px;font-size:17px;font-weight:700;color:#111827">' + esc(q) + '</p>'
+        + '<p style="margin:0 0 14px;font-size:14px;line-height:1.5;color:#6b7280">' + esc(aide) + '</p>';
+      bt = q.toUpperCase() + '\n' + aide;
+      chap.options.forEach(function (c) {
         const u = lien(suite.jeton, 'c', k, dm) + '&c=' + c;
-        const st = i === 0 ? 'background:#2563eb;color:#ffffff;border:2px solid #2563eb' : 'background:#ffffff;color:#2563eb;border:2px solid #2563eb';
-        bh += '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px"><tr><td><a href="' + esc(u) + '" style="display:block;' + st + ';border-radius:12px;padding:14px 18px;font-size:16px;font-weight:700;text-decoration:none;text-align:center">' + esc(D.chapitres[c].bouton) + ' →</a></td></tr></table>';
-        bt += '\n→ ' + D.chapitres[c].bouton + ' : ' + u;
+        bh += '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px"><tr><td><a href="' + esc(u) + '" style="display:block;background:#ffffff;color:#1e3a8a;border:2px solid #2563eb;border-radius:12px;padding:14px 18px;font-size:16px;line-height:1.4;font-weight:700;text-decoration:none;text-align:center">« ' + esc(D.chapitres[c].bouton) + ' »</a></td></tr></table>';
+        bt += '\n→ « ' + D.chapitres[c].bouton + ' » : ' + u;
       });
-      const defaut = D.chapitres[chap.options[0]].bouton;
-      bh += '<p style="margin:4px 0 0;font-size:13px;line-height:1.5;color:#6b7280">Sans clic de votre part, vous recevrez « ' + esc(defaut) + ' ».</p>';
-      bt += '\nSans clic de votre part, vous recevrez « ' + defaut + ' ».';
     } else {
       bh = '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:14px 0 6px"><tr><td style="background:#2563eb;border-radius:10px"><a href="' + esc(rdv) + '" style="display:inline-block;padding:14px 26px;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none">Réserver mon audit</a></td></tr></table>';
       bt = 'Réserver mon audit : ' + rdv;
     }
-    html = html.split('{{ouverture}}').join(esc(ouv)).split('{{choix_html}}').join(bh);
-    text = text.split('{{ouverture}}').join(ouv).split('{{choix_texte}}').join(bt);
+    html = html.split('{{ouverture}}').join(esc(ouv)).split('{{choix_html}}').join(bh).split('{{recap_html}}').join(rh);
+    text = text.split('{{ouverture}}').join(ouv).split('{{choix_texte}}').join(bt).split('{{recap_texte}}').join(rt);
   }
   function partout(s, enHtml) {
     s = s.split('{{douleur_citation}}').join(enHtml ? esc(suite.citation || '') : (suite.citation || ''));
@@ -757,7 +774,7 @@ function arbre(off) {
   const douleurs = Object.keys(CHOIX).map(function (dl) {
     const D = CHOIX[dl];
     return { cle: dl, libelle: LIB_DOULEUR[dl] || dl, citation: D.citation, off: !!off['douleur:' + dl],
-      emails: ['C1'].concat(ORDRE_CHAPITRES).map(function (e) { return { e: e, cle: dl + '#' + e, objet: D.chapitres[e].subject, bouton: D.chapitres[e].bouton, off: !!off['email:' + dl + '#' + e] }; }) };
+      emails: Object.keys(D.chapitres).sort().map(function (e) { const x = D.chapitres[e]; return { e: e, etape: x.etape, cle: dl + '#' + e, objet: x.subject, bouton: x.bouton || null, question: x.question || null, off: !!off['email:' + dl + '#' + e] }; }) };
   });
   return { sequences: sequences, douleurs: douleurs, jours: JOURS };
 }
@@ -786,7 +803,8 @@ async function actionAdmin(id, quoi, valeur, par) {
   }
   else if (quoi === 'choix') {
     const dernierK = dernierChapitreParti(s);
-    if (!dernierK || !libelleChapitre(s, String(valeur)) || parcoursDe(s).some(function (x) { return x.c === valeur; })) return { ok: false, erreur: 'choix_invalide' };
+    const eD = dernierK ? (s.etapes || {})['e' + dernierK] : null;
+    if (!eD || !libelleChapitre(s, String(valeur)) || (eD.options || []).indexOf(String(valeur)) < 0 || (s.etapes || {})['e' + (dernierK + 1)]) return { ok: false, erreur: 'choix_invalide' };
     patch.choixSuivant = { c: String(valeur), e: dernierK, at: Date.now(), admin: true }; patch.choixLibelle = libelleChapitre(s, String(valeur));
   }
   else return { ok: false, erreur: 'action_inconnue' };
@@ -853,7 +871,7 @@ async function enregistrerClic(jeton, action, etape, chapitre) {
     const upd = { suiteApresRdv: resume(apres) };
     // Une ligne d'historique par CHOIX (pas de cloche : le closer la lit en ouvrant la fiche).
     const deja = (s.clics || []).some(function (c) { return c.a === action && (action !== 'c' || c.c === clic.c); });
-    if (!deja && libelle) upd.timeline_history = FV.arrayUnion({ text: '👆 Séquence après RDV — a choisi de lire : « ' + libelle + ' »', date: dateFr(), color: '#a78bfa' });
+    if (!deja && libelle) upd.timeline_history = FV.arrayUnion({ text: '👆 Séquence après RDV — a répondu : « ' + libelle + ' »', date: dateFr(), color: '#a78bfa' });
     if (!deja && action === 'rdv') upd.timeline_history = FV.arrayUnion({ text: '👆 Séquence après RDV — a cliqué sur « réserver »', date: dateFr(), color: '#a78bfa' });
     await db.collection('leads').doc(String(s.leadId)).update(upd).catch(function () {});
   }
@@ -948,7 +966,7 @@ function suiteFictive(o) {
   const douleur = CHOIX[o.douleur] ? o.douleur : null;
   return { bookingId: 'test', leadId: null, email: o.email, prenom: o.prenom || 'Adrien', sequence: LIB_SEQ[o.sequence] ? o.sequence : 'frein_tresorerie',
     douleur: douleur, citation: douleur ? CHOIX[douleur].citation : null, choixSuivant: null, miroirs: EXEMPLE_MIROIRS, jeton: '0'.repeat(36),
-    forceChapitre: (douleur && CHOIX[douleur].chapitres[o.chapitre]) ? o.chapitre : null, forceChoisi: o.choisi === true,
+    forceChapitre: (douleur && CHOIX[douleur].chapitres[o.chapitre]) ? o.chapitre : null, forceChoisi: o.choisi === true, toutChoisi: o.choisi === true,
     etapes: {}, etat: 'active' };
 }
 
@@ -969,7 +987,7 @@ module.exports = {
   DEFAUTS: DEFAUTS, JOURS: JOURS, LIB_SEQ: LIB_SEQ, LIB_DOULEUR: LIB_DOULEUR, MIROIRS: MIROIRS, COL: COL,
   profilDe: profilDe, planDe: planDe, contenuDe: contenuDe, etapeDue: etapeDue, creer: creer, arreter: arreter, passage: passage,
   parJeton: parJeton, enregistrerClic: enregistrerClic, titreChoix: titreChoix, lienRdvDirect: lienRdvDirect,
-  chapitreDe: chapitreDe, optionsApres: optionsApres, parcoursDe: parcoursDe, ORDRE_CHAPITRES: ORDRE_CHAPITRES,
+  chapitreDe: chapitreDe, optionsApres: optionsApres, parcoursDe: parcoursDe,
   prochainEnvoi: prochainEnvoi, ligneAdmin: ligneAdmin, listeAdmin: listeAdmin, statsDe: statsDe, arbre: arbre, actionAdmin: actionAdmin,
   desinscrire: desinscrire, faireAC: faireAC, reglee: reglee,
   surReponseEmail: surReponseEmail, prospectsChauds: prospectsChauds, suiteFictive: suiteFictive, envoyerTest: envoyerTest, lireConfig: lireConfig, resume: resume, typeDe: typeDe,
