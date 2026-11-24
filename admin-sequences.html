@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Séquences · Alteore</title>
+<link rel="stylesheet" href="sales.css">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}</script>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   admin-sequences.html — Module « Séquences » (24/11/2026, admin)
+   Voir et contrôler les séquences d'e-mails d'après-RDV envoyées par Team :
+   qui est dans quelle séquence, à quelle étape, l'arbre des e-mails, aperçu,
+   test, activer / désactiver. Données : api/parcours-suite-admin.js.
+   Moteur : api/_parcoursSuite.js.
+   ═══════════════════════════════════════════════════════════════════════ */
+.sq{padding:20px 26px 80px;max-width:1280px;margin:0 auto}
+.sq .sp{flex:1}
+.sq-top{display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.sq-ic{width:44px;height:44px;border-radius:13px;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.sq-top h1{font-family:var(--font-d);font-size:21px;font-weight:800;letter-spacing:-.4px;line-height:1.2}
+.sq-top small{display:block;font-size:12px;color:var(--muted);margin-top:3px}
+.sq-pills{display:flex;gap:8px;flex-wrap:wrap;margin-right:36px}
+.sq-pill{padding:7px 12px;border-radius:10px;font-size:12px;font-weight:700;border:1px solid var(--border);background:var(--bg2)}
+.sq-pill.vert{border-color:rgba(34,197,94,.5);color:#22c55e}
+.sq-pill.rouge{border-color:rgba(239,68,68,.6);color:#ef4444}
+.sq-pill.jaune{border-color:rgba(245,158,11,.6);color:#f59e0b}
+.sq-tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.sq-tab{padding:8px 16px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.sq-tab:hover{color:var(--text)}
+.sq-tab.on{color:var(--text);border-color:rgba(37,99,235,.6);background:rgba(37,99,235,.12)}
+.sq-pane{display:none}
+.sq-pane.on{display:block}
+.sq-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:14px}
+.sq-card h2{font-size:14px;font-weight:800;margin:0 0 3px}
+.sq-card>small{display:block;font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5}
+.sq-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:10px 0 4px}
+.sq-kpi{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 11px}
+.sq-kpi span{display:block;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700}
+.sq-kpi b{font-family:var(--font-d);font-size:20px;font-weight:800}
+.sq-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.sq-act{padding:9px 14px;border:1px solid var(--border2);border-radius:9px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;background:var(--bg3);color:var(--text);line-height:1.3;white-space:nowrap}
+.sq-act:hover{border-color:#2563eb}
+.sq-act:disabled{opacity:.5;cursor:default}
+.sq-act.pri{background:#2563eb;border-color:#2563eb;color:#fff}
+.sq-act.ko{border-color:rgba(239,68,68,.5);color:#ef4444}
+.sq-act.mini{padding:5px 9px;font-size:11.5px}
+.sq-in,.sq-sel{padding:8px 10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:9px;color:var(--text);font-family:inherit;font-size:13px;outline:0;box-sizing:border-box}
+.sq-scroll{overflow-x:auto}
+.sq-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.sq-table th{text-align:left;color:var(--muted);font-size:11px;font-weight:700;padding:6px 8px;border-bottom:1px solid var(--border2);white-space:nowrap}
+.sq-table td{padding:8px;border-bottom:1px solid var(--border);vertical-align:top}
+.sq-table a{color:#60a5fa;text-decoration:none;font-weight:700}
+.sq-table a:hover{text-decoration:underline}
+.sq-table small{display:block;color:var(--muted);font-size:11.5px;margin-top:2px}
+.sq-pts{display:flex;gap:4px;align-items:center}
+.sq-pt{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:800;color:var(--muted)}
+.sq-pt.ok{background:#16a34a;border-color:#16a34a;color:#fff}
+.sq-pt.ko{background:#ef4444;border-color:#ef4444;color:#fff}
+.sq-pt.saute{border-style:dashed}
+.sq-pt.suiv{border-color:#2563eb;color:#60a5fa}
+.sq-bad{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid var(--border2)}
+.sq-bad.active{color:#22c55e;border-color:rgba(34,197,94,.5)}
+.sq-bad.pause{color:#f59e0b;border-color:rgba(245,158,11,.5)}
+.sq-bad.arretee{color:#ef4444;border-color:rgba(239,68,68,.5)}
+.sq-bad.terminee{color:var(--muted)}
+.sq-vide{text-align:center;padding:26px 16px;color:var(--muted);font-size:13px;line-height:1.7;background:var(--bg2);border:1px dashed var(--border2);border-radius:12px}
+.sq-split{display:grid;grid-template-columns:340px minmax(0,1fr);gap:14px;align-items:start}
+.sq-grp{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:14px 0 6px}
+.sq-grp:first-child{margin-top:0}
+.sq-seq{border:1px solid var(--border);border-radius:11px;background:var(--bg3);margin-bottom:8px;overflow:hidden}
+.sq-seq-h{display:flex;align-items:center;gap:8px;padding:9px 11px;font-size:13px;font-weight:800}
+.sq-seq-h small{font-weight:600;color:var(--muted);font-size:11.5px}
+.sq-seq.off .sq-seq-h b{text-decoration:line-through;color:var(--muted)}
+.sq-mail{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:7px 11px;border:0;border-top:1px solid var(--border);background:transparent;color:var(--text);font-family:inherit;font-size:12.5px;cursor:pointer}
+.sq-mail:hover{background:rgba(37,99,235,.08)}
+.sq-mail.on{background:rgba(37,99,235,.16)}
+.sq-mail.off span.t{text-decoration:line-through;color:var(--muted)}
+.sq-mail i{font-style:normal;font-size:10.5px;font-weight:800;color:var(--muted);min-width:44px;white-space:nowrap}
+#sqApercu{position:sticky;top:12px}
+.sq-frame{width:100%;height:calc(100vh - 230px);min-height:420px;border:1px solid var(--border);border-radius:12px;background:#f3f4f8}
+.sq-hint{font-size:12px;color:var(--muted);line-height:1.5;margin-top:8px}
+.sq-hint.ko{color:#ef4444}
+.sq-hint.ok{color:#22c55e}
+.sq-locked{padding:80px 20px;text-align:center;color:var(--muted);font-size:14px}
+.sq-toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#111827;color:#fff;padding:11px 18px;border-radius:11px;font-size:13px;font-weight:600;opacity:0;pointer-events:none;transition:all .2s;z-index:9999;max-width:90vw}
+.sq-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.sq-filtres{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+@media(max-width:900px){.sq-split{grid-template-columns:1fr}#sqApercu{position:static}.sq{padding:16px 12px 70px}}
+</style>
+</head>
+<body>
+<main class="sq" id="mainView" style="display:none">
+  <header class="sq-top">
+    <div class="sq-ic">📬</div>
+    <div>
+      <h1>Séquences</h1>
+      <small>Les e-mails envoyés par Team après un rendez-vous : un « non », ou un rendez-vous manqué</small>
+    </div>
+    <div class="sp"></div>
+    <div class="sq-pills" id="sqPills"></div>
+  </header>
+
+  <nav class="sq-tabs">
+    <button class="sq-tab on" type="button" data-tab="vue">📊 Vue d'ensemble</button>
+    <button class="sq-tab" type="button" data-tab="prospects">👥 Prospects</button>
+    <button class="sq-tab" type="button" data-tab="arbre">🌳 Séquences et e-mails</button>
+  </nav>
+
+  <section class="sq-pane on" id="paneVue"><div id="sqVue"></div></section>
+  <section class="sq-pane" id="paneProspects"><div id="sqProspects"></div></section>
+  <section class="sq-pane" id="paneArbre"><div class="sq-split"><div id="sqArbre"></div><div id="sqApercu"></div></div></section>
+</main>
+
+<div class="sq-locked" id="lockedView" style="display:none"><div style="font-size:48px;margin-bottom:12px">🔒</div><div>Module réservé aux administrateurs.</div></div>
+<div class="sq-toast" id="sqToast"></div>
+
+<script src="nav.js"></script>
+<script>
+(function () {
+'use strict';
+
+var API = '/api/parcours-suite-admin';
+var S = { etat: null, filtre: 'active', cherche: '', sel: null, apercu: null, occupe: false };
+
+function $(id) { return document.getElementById(id); }
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function toast(msg) {
+  var t = $('sqToast');
+  t.textContent = msg;
+  t.className = 'sq-toast show';
+  clearTimeout(t._tm);
+  t._tm = setTimeout(function () { t.className = 'sq-toast'; }, 4500);
+}
+function appel(corps) {
+  return firebase.auth().currentUser.getIdToken().then(function (t) {
+    var o = { headers: { 'Authorization': 'Bearer ' + t } };
+    if (corps) { o.method = 'POST'; o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(corps); }
+    return fetch(API, o);
+  }).then(function (r) { return r.json().catch(function () { return { ok: false, error: 'server_error' }; }); })
+    .catch(function () { return { ok: false, error: 'Erreur réseau.' }; });
+}
+function erreurTexte(j) { return (j && (j.detail || j.error || j.erreur)) || 'Une erreur est survenue.'; }
+function ymdFr(s) { s = String(s || ''); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s.slice(8, 10) + '/' + s.slice(5, 7) : '—'; }
+function jourHeure(ms) { return ms ? new Date(ms).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'; }
+function occupe(b) { S.occupe = b; var l = document.querySelectorAll('button[data-action]'); for (var i = 0; i < l.length; i++) l[i].disabled = b; }
+var LIB_ETAT = { active: 'En cours', pause: 'En pause', arretee: 'Arrêtée', terminee: 'Terminée' };
+
+/* ── Chargement ──────────────────────────────────────────────────────── */
+function charger() {
+  return appel(null).then(function (j) {
+    if (!j.ok) { toast(erreurTexte(j)); return; }
+    S.etat = j;
+    peindreEntete(); peindreVue(); peindreProspects(); peindreArbre();
+  });
+}
+function faire(corps, apres) {
+  if (S.occupe) return;
+  occupe(true);
+  appel(corps).then(function (j) {
+    occupe(false);
+    if (!j.ok) { toast(erreurTexte(j)); return; }
+    if (apres) apres(j);
+  });
+}
+
+/* ── En-tête ─────────────────────────────────────────────────────────── */
+function peindreEntete() {
+  var e = S.etat, h = '';
+  h += '<span class="sq-pill ' + (e.reglages.actif ? 'vert' : 'rouge') + '">' + (e.reglages.actif ? '● Allumées' : '○ Éteintes') + '</span>';
+  h += '<span class="sq-pill ' + (e.modeTest ? 'jaune' : 'vert') + '">' + (e.modeTest ? 'Mode test' : 'Mode réel') + '</span>';
+  $('sqPills').innerHTML = h;
+}
+
+/* ── Vue d'ensemble ──────────────────────────────────────────────────── */
+function kpi(l, v) { return '<div class="sq-kpi"><span>' + esc(l) + '</span><b>' + esc(v) + '</b></div>'; }
+function peindreVue() {
+  var e = S.etat, st = e.stats, r = e.reglages, h = '';
+  var cj = e.compteurJour && e.compteurJour.jour === new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' }) ? (e.compteurJour.n || 0) : 0;
+  h += '<div class="sq-card"><h2>État</h2><small>'
+    + (r.actif ? 'Les séquences sont allumées : les e-mails partent entre 9 h 30 et 19 h, hors dimanche.' : 'Les séquences sont éteintes : aucun e-mail ne part.')
+    + ' ' + (e.modeTest ? 'Le parcours est en mode test : seuls les prospects de test reçoivent quelque chose.' : 'Le parcours est en mode réel : tous les prospects concernés reçoivent leurs e-mails.')
+    + (e.parcoursActif ? '' : ' Attention : le parcours RDV lui-même est éteint, rien ne peut partir.') + '</small>'
+    + '<div class="sq-row"><button class="sq-act ' + (r.actif ? 'ko' : 'pri') + '" type="button" data-action="actif" data-v="' + (r.actif ? '0' : '1') + '">' + (r.actif ? 'Éteindre les séquences' : 'Allumer les séquences') + '</button>'
+    + '<span style="font-size:12.5px;color:var(--muted)">Plafond par jour</span><input class="sq-in" id="sqPlafond" type="number" min="1" max="500" style="width:90px" value="' + esc(r.plafondJour) + '">'
+    + '<button class="sq-act" type="button" data-action="plafond">Enregistrer</button>'
+    + '<span style="font-size:12.5px;color:var(--muted)">Envoyés aujourd\'hui : <b style="color:var(--text)">' + cj + '</b></span></div>'
+    + '<div class="sq-hint">Le passage du mode test au mode réel se fait pour tout le parcours RDV, pas ici.</div></div>';
+  h += '<div class="sq-card"><h2>Chiffres</h2><small>Depuis le début, sur ' + st.total + ' prospect' + (st.total > 1 ? 's' : '') + ' entré' + (st.total > 1 ? 's' : '') + ' en séquence.</small><div class="sq-kpis">'
+    + kpi('En cours', st.active) + kpi('En pause', st.pause) + kpi('Terminées', st.terminee) + kpi('Arrêtées', st.arretee)
+    + kpi('E-mails envoyés', st.envoyes) + kpi('Ont cliqué', st.clics) + kpi('Ont choisi une suite', st.choix)
+    + kpi('RDV repris', st.motifs.rdv_repris || 0) + kpi('Désinscrits', st.motifs.desinscription || 0) + kpi('Ont dit non', st.motifs.reponse_stop || 0)
+    + '</div></div>';
+  var lib = e.libelles;
+  function repart(titre, obj, libs) {
+    var k = Object.keys(obj).sort(function (a, b) { return obj[b] - obj[a]; });
+    if (!k.length) return '';
+    var x = '<div class="sq-card"><h2>' + esc(titre) + '</h2><div class="sq-kpis">';
+    for (var i = 0; i < k.length; i++) x += kpi(libs[k[i]] || (k[i] === 'aucune' ? 'sans histoire' : k[i]), obj[k[i]]);
+    return x + '</div></div>';
+  }
+  h += repart('Par séquence', st.sequences, lib.sequences) + repart('Par histoire (douleur)', st.douleurs, lib.douleurs);
+  $('sqVue').innerHTML = h;
+}
+
+/* ── Prospects ───────────────────────────────────────────────────────── */
+function points(x) {
+  var h = '<div class="sq-pts">', suiv = x.prochain ? x.prochain.etape : 0;
+  for (var i = 0; i < x.etapes.length; i++) {
+    var e = x.etapes[i], c = 'sq-pt', t = 'E-mail ' + (i + 1) + ' : pas encore parti';
+    if (e && e.ok) { c += ' ok'; t = 'E-mail ' + (i + 1) + ' envoyé le ' + jourHeure(e.at) + (e.objet ? ' — ' + e.objet : ''); }
+    else if (e && e.saute) { c += ' saute'; t = 'E-mail ' + (i + 1) + ' sauté (désactivé)'; }
+    else if (e) { c += ' ko'; t = 'E-mail ' + (i + 1) + ' en échec' + (e.erreur ? ' : ' + e.erreur : ''); }
+    else if (i + 1 === suiv) c += ' suiv';
+    h += '<span class="' + c + '" title="' + esc(t) + '">' + (i + 1) + '</span>';
+  }
+  return h + '</div>';
+}
+function peindreProspects() {
+  var e = S.etat, l = e.prospects, q = S.cherche.toLowerCase(), h = '';
+  h += '<div class="sq-filtres"><select class="sq-sel" id="sqFiltre">';
+  var opts = [['active', 'En cours'], ['pause', 'En pause'], ['arretee', 'Arrêtées'], ['terminee', 'Terminées'], ['', 'Tous']];
+  for (var i = 0; i < opts.length; i++) h += '<option value="' + opts[i][0] + '"' + (S.filtre === opts[i][0] ? ' selected' : '') + '>' + opts[i][1] + '</option>';
+  h += '</select><input class="sq-in" id="sqCherche" type="search" placeholder="Prénom ou e-mail" value="' + esc(S.cherche) + '" style="min-width:220px">'
+    + '<span class="sp" style="flex:1"></span><button class="sq-act mini" type="button" data-action="recharger">↻ Actualiser</button></div>';
+  var lignes = [];
+  for (var k = 0; k < l.length; k++) {
+    var x = l[k];
+    if (S.filtre && x.etat !== S.filtre) continue;
+    if (q && (x.prenom + ' ' + x.email).toLowerCase().indexOf(q) < 0) continue;
+    lignes.push(x);
+  }
+  if (!lignes.length) { $('sqProspects').innerHTML = h + '<div class="sq-vide">Aucun prospect dans cette vue.<br>Une séquence démarre le lendemain d\'un « non » ou d\'un rendez-vous manqué.</div>'; return; }
+  h += '<div class="sq-card"><div class="sq-scroll"><table class="sq-table"><thead><tr><th>Prospect</th><th>Séquence</th><th>Avancement</th><th>Prochain e-mail</th><th>Ce qu\'il a fait</th><th>État</th><th></th></tr></thead><tbody>';
+  for (var n = 0; n < lignes.length; n++) {
+    var p = lignes[n];
+    var nom = esc(p.prenom || '(sans prénom)');
+    if (p.leadId) nom = '<a href="sales-leads.html?leadId=' + encodeURIComponent(p.leadId) + '">' + nom + '</a>';
+    var fait = [];
+    if (p.choixLibelle) fait.push('A voulu lire : « ' + esc(p.choixLibelle) + ' »');
+    if (p.aCliqueReserver) fait.push('A cliqué sur « réserver »');
+    for (var r = 0; r < p.reponses.length; r++) fait.push('A répondu : ' + esc(p.reponses[r].resume || ''));
+    var proch = p.prochain ? (p.prochain.maintenant ? 'au prochain passage (15 min)' : 'e-mail ' + p.prochain.etape + ' le ' + ymdFr(p.prochain.jour)) : '—';
+    var act = '';
+    if (p.etat === 'active') {
+      act += '<button class="sq-act mini" type="button" data-action="suite" data-id="' + esc(p.id) + '" data-quoi="pause">Pause</button> ';
+      if (p.prochain && !p.prochain.maintenant) act += '<button class="sq-act mini" type="button" data-action="suite" data-id="' + esc(p.id) + '" data-quoi="forcer">Envoyer le suivant</button> ';
+      act += '<button class="sq-act mini ko" type="button" data-action="suite" data-id="' + esc(p.id) + '" data-quoi="arreter">Arrêter</button>';
+    } else if (p.etat === 'pause' || (p.etat === 'arretee' && p.motif !== 'desinscription')) {
+      act += '<button class="sq-act mini" type="button" data-action="suite" data-id="' + esc(p.id) + '" data-quoi="reprendre">Reprendre</button>';
+      if (p.etat === 'pause') act += ' <button class="sq-act mini ko" type="button" data-action="suite" data-id="' + esc(p.id) + '" data-quoi="arreter">Arrêter</button>';
+    }
+    h += '<tr><td>' + nom + '<small>' + esc(p.email) + '</small></td>'
+      + '<td>' + esc(p.sequenceLibelle) + '<small>' + (p.douleurLibelle ? 'histoire : ' + esc(p.douleurLibelle) : 'sans histoire') + ' · RDV du ' + ymdFr(p.rdvDate) + '</small></td>'
+      + '<td>' + points(p) + '</td><td>' + esc(proch) + '</td>'
+      + '<td>' + (fait.length ? fait.join('<br>') : '<span style="color:var(--muted)">—</span>') + '</td>'
+      + '<td><span class="sq-bad ' + esc(p.etat) + '">' + esc(LIB_ETAT[p.etat] || p.etat) + '</span>' + (p.motifLibelle ? '<small>' + esc(p.motifLibelle) + '</small>' : '') + '</td>'
+      + '<td style="white-space:nowrap">' + act + '</td></tr>';
+  }
+  $('sqProspects').innerHTML = h + '</tbody></table></div></div>';
+}
+
+/* ── Arbre des e-mails ───────────────────────────────────────────────── */
+function selEgal(a, b) { return a && b && a.sequence === b.sequence && a.douleur === b.douleur && a.etape === b.etape && a.choix === b.choix; }
+function boutonMail(o, etiquette, objet, off) {
+  var on = selEgal(S.sel, o);
+  return '<button class="sq-mail' + (on ? ' on' : '') + (off ? ' off' : '') + '" type="button" data-action="voir" data-sequence="' + esc(o.sequence) + '" data-douleur="' + esc(o.douleur || '') + '" data-etape="' + o.etape + '" data-choix="' + esc(o.choix || 'a') + '" data-cle="' + esc(o.cle) + '"><i>' + esc(etiquette) + '</i><span class="t">' + esc(objet) + '</span></button>';
+}
+function peindreArbre() {
+  var a = S.etat.arbre, h = '<div class="sq-grp">Par frein (et rendez-vous manqué)</div>';
+  for (var i = 0; i < a.sequences.length; i++) {
+    var s = a.sequences[i];
+    h += '<div class="sq-seq' + (s.off ? ' off' : '') + '"><div class="sq-seq-h"><b>' + esc(s.libelle) + '</b><small>' + s.emails.length + ' e-mails</small><span class="sp" style="flex:1"></span>'
+      + '<button class="sq-act mini" type="button" data-action="off" data-cle="seq:' + esc(s.cle) + '" data-v="' + (s.off ? '0' : '1') + '">' + (s.off ? 'Réactiver' : 'Désactiver') + '</button></div>';
+    for (var k = 0; k < s.emails.length; k++) {
+      var m = s.emails[k];
+      h += boutonMail({ sequence: s.cle, douleur: '', etape: m.k, choix: 'a', cle: m.cle }, 'J+' + m.jour, m.objet, m.off);
+    }
+    h += '</div>';
+  }
+  h += '<div class="sq-grp">Par histoire (douleur du questionnaire)</div>';
+  var LIB_E = { E2: 'chap. 1', E3A: 'suite A', E3B: 'suite B', E4: 'client' };
+  var ETAPE = { E2: 2, E3A: 3, E3B: 3, E4: 4 };
+  for (var d = 0; d < a.douleurs.length; d++) {
+    var D = a.douleurs[d];
+    h += '<div class="sq-seq' + (D.off ? ' off' : '') + '"><div class="sq-seq-h"><b>' + esc(D.libelle) + '</b><span class="sp" style="flex:1"></span>'
+      + '<button class="sq-act mini" type="button" data-action="off" data-cle="douleur:' + esc(D.cle) + '" data-v="' + (D.off ? '0' : '1') + '">' + (D.off ? 'Réactiver' : 'Désactiver') + '</button></div>'
+      + '<div style="padding:0 11px 8px;font-size:11.5px;color:var(--muted);line-height:1.45">« ' + esc(D.citation) + ' »</div>';
+    for (var e = 0; e < D.emails.length; e++) {
+      var em = D.emails[e];
+      h += boutonMail({ sequence: 'frein_tresorerie', douleur: D.cle, etape: ETAPE[em.e], choix: em.e === 'E3B' ? 'b' : 'a', cle: em.cle }, LIB_E[em.e], em.objet, em.off);
+    }
+    h += '</div>';
+  }
+  $('sqArbre').innerHTML = h;
+  if (!S.sel) $('sqApercu').innerHTML = '<div class="sq-vide">Choisis un e-mail à gauche pour le voir tel que le prospect le reçoit.</div>';
+}
+function estOff(cle) { return !!((S.etat.reglages.off || {})['email:' + cle]); }
+function peindreApercu() {
+  var s = S.sel, a = S.apercu;
+  if (!s || !a) return;
+  var off = estOff(s.cle);
+  var h = '<div class="sq-card"><h2>' + esc(a.objet) + '</h2><small>Aperçu avec un prospect d\'exemple (Julie) et toutes les phrases miroir. Un vrai prospect ne voit que les phrases qui correspondent à ses réponses.</small>'
+    + '<div class="sq-row"><button class="sq-act pri" type="button" data-action="test">M\'envoyer cet e-mail</button>'
+    + '<button class="sq-act' + (off ? '' : ' ko') + '" type="button" data-action="off" data-cle="email:' + esc(s.cle) + '" data-v="' + (off ? '0' : '1') + '">' + (off ? 'Réactiver cet e-mail' : 'Désactiver cet e-mail') + '</button></div>'
+    + '<div class="sq-hint" id="sqTestRes">' + (off ? 'Cet e-mail est désactivé : il est sauté, la séquence continue avec le suivant.' : '') + '</div></div>'
+    + '<iframe class="sq-frame" id="sqFrame" sandbox="" title="Aperçu de l\'e-mail"></iframe>';
+  $('sqApercu').innerHTML = h;
+  $('sqFrame').srcdoc = a.html;
+}
+
+/* ── Événements ──────────────────────────────────────────────────────── */
+document.addEventListener('click', function (ev) {
+  var t = ev.target;
+  while (t && t !== document && !(t.getAttribute && (t.getAttribute('data-action') || t.getAttribute('data-tab')))) t = t.parentNode;
+  if (!t || t === document) return;
+  var tab = t.getAttribute('data-tab');
+  if (tab) {
+    var tabs = document.querySelectorAll('.sq-tab'), panes = { vue: 'paneVue', prospects: 'paneProspects', arbre: 'paneArbre' };
+    for (var i = 0; i < tabs.length; i++) tabs[i].className = 'sq-tab' + (tabs[i] === t ? ' on' : '');
+    for (var k in panes) if (panes.hasOwnProperty(k)) $(panes[k]).className = 'sq-pane' + (k === tab ? ' on' : '');
+    return;
+  }
+  var a = t.getAttribute('data-action');
+  if (a === 'recharger') { charger().then(function () { toast('Actualisé.'); }); return; }
+  if (a === 'actif') {
+    var v = t.getAttribute('data-v') === '1';
+    if (!window.confirm(v ? 'Allumer les séquences ? Les e-mails dus partiront au prochain passage (15 minutes au plus).' : 'Éteindre les séquences ? Plus aucun e-mail ne partira tant qu\'elles sont éteintes.')) return;
+    faire({ action: 'reglage', actif: v }, function () { toast(v ? 'Séquences allumées.' : 'Séquences éteintes.'); charger(); });
+    return;
+  }
+  if (a === 'plafond') { faire({ action: 'reglage', plafondJour: Number($('sqPlafond').value) }, function () { toast('Plafond enregistré.'); charger(); }); return; }
+  if (a === 'off') {
+    var cle = t.getAttribute('data-cle'), on = t.getAttribute('data-v') === '1', off = {};
+    off[cle] = on;
+    faire({ action: 'reglage', off: off }, function () { toast(on ? 'Désactivé.' : 'Réactivé.'); charger().then(peindreApercu); });
+    return;
+  }
+  if (a === 'suite') {
+    var quoi = t.getAttribute('data-quoi');
+    var q = { pause: 'Mettre ce prospect en pause ?', arreter: 'Arrêter la séquence de ce prospect ?', reprendre: 'Reprendre la séquence de ce prospect ?', forcer: 'Envoyer l\'e-mail suivant sans attendre sa date ? Il partira au prochain passage (15 minutes au plus).' }[quoi];
+    if (q && !window.confirm(q)) return;
+    faire({ action: 'suite', id: t.getAttribute('data-id'), quoi: quoi }, function () { toast('C\'est fait.'); charger(); });
+    return;
+  }
+  if (a === 'voir') {
+    S.sel = { sequence: t.getAttribute('data-sequence'), douleur: t.getAttribute('data-douleur') || '', etape: Number(t.getAttribute('data-etape')), choix: t.getAttribute('data-choix') || 'a', cle: t.getAttribute('data-cle') };
+    peindreArbre();
+    $('sqApercu').innerHTML = '<div class="sq-vide">Chargement…</div>';
+    appel({ action: 'apercu', sequence: S.sel.sequence, douleur: S.sel.douleur, etape: S.sel.etape, choix: S.sel.choix }).then(function (j) {
+      if (!j.ok) { $('sqApercu').innerHTML = '<div class="sq-vide">' + esc(erreurTexte(j)) + '</div>'; return; }
+      S.apercu = j; peindreApercu();
+    });
+    return;
+  }
+  if (a === 'test') {
+    if (!S.sel) return;
+    var res = $('sqTestRes');
+    res.className = 'sq-hint'; res.textContent = 'Envoi en cours…';
+    faire({ action: 'test', sequence: S.sel.sequence, douleur: S.sel.douleur, etape: S.sel.etape, choix: S.sel.choix }, function (j) {
+      var r2 = $('sqTestRes');
+      if (r2) { r2.className = 'sq-hint ok'; r2.textContent = '✓ Envoyé à ' + (j.vers || 'ton adresse') + '.'; }
+    });
+    return;
+  }
+});
+document.addEventListener('change', function (ev) {
+  if (ev.target && ev.target.id === 'sqFiltre') { S.filtre = ev.target.value; peindreProspects(); }
+});
+document.addEventListener('input', function (ev) {
+  if (ev.target && ev.target.id === 'sqCherche') {
+    S.cherche = ev.target.value;
+    clearTimeout(S._tm);
+    S._tm = setTimeout(function () { peindreProspects(); var c = $('sqCherche'); if (c) { c.focus(); c.setSelectionRange(c.value.length, c.value.length); } }, 250);
+  }
+});
+
+firebase.auth().onAuthStateChanged(function (user) {
+  if (!user) { window.location.href = 'login.html'; return; }
+  if ((localStorage.getItem('ambitio_role') || '') !== 'admin') { $('lockedView').style.display = ''; return; }
+  $('mainView').style.display = '';
+  charger();
+});
+
+})();
+</script>
+</body>
+</html>

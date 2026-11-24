@@ -749,7 +749,12 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   n'est pas sonné** : clics et arrêts = une ligne d'historique + `leads.suiteApresRdv` (résumé) ; « non / plus tard » par e-mail =
   arrêt silencieux (`surReponseEmail`, appelé par `gmail-inbound-sync`) ; toute autre réponse sonne, avec un résumé d'une ligne (tâche
   IA `parcours_reponse`) ; les clics de la veille = une puce du brief du matin (`prospectsChaudsApresRdv`). Réglages
-  `_config/parcours_rdv.suites` (`actif` faux par défaut ; mode test = celui du parcours). Clé temporaire du chantier `PARCOURS_AUDIT_KEY` (preview de la branche,
+  `_config/parcours_rdv.suites` (`actif` faux par défaut ; mode test = celui du parcours). **Module admin « Séquences »** (Marketing → 📬, admin
+  seul) : `admin-sequences.html` + `api/parcours-suite-admin.js` — vue d'ensemble (allumer / éteindre, plafond, chiffres), prospects
+  (étape, prochain e-mail, clics ; pause / reprendre / arrêter / « envoyer le suivant » = `forcer`), arbre des e-mails (aperçu, test à
+  l'admin connecté, désactiver une séquence / une histoire / un e-mail : `suites.off` — séquence désactivée = plus de création ni
+  d'envoi, histoire désactivée = séquence simple du frein, e-mail désactivé = étape sautée). Éditeur de textes et de branches : 2e
+  livraison, pas encore faite (les textes se modifient dans les deux fichiers `.md` puis par les scripts de construction). Clé temporaire du chantier `PARCOURS_AUDIT_KEY` (preview de la branche,
   `api/parcours-audit.js` lecture seule) : à retirer à la fin.
 
 Spécification de référence du flux commercial : `REFONTE-SPEC.md`.

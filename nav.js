@@ -160,6 +160,9 @@
     // Relances (12/11/2026) : segment de leads → séquence WhatsApp / SMS /
     // e-mail → réponses, RDV, ventes. Admin seul (api/relances.js).
     { id: 'admin-relances',    icon: '🔁', label: 'Relances',          href: 'admin-relances.html',    section: 'Marketing', perm: '_admin' },
+    // Séquences (24/11/2026) : e-mails d'après-RDV envoyés par Team (frein ×
+    // douleur, mails à choix). Admin seul (api/parcours-suite-admin.js).
+    { id: 'admin-sequences',   icon: '📬', label: 'Séquences',         href: 'admin-sequences.html',   section: 'Marketing', perm: '_admin' },
     { id: 'alteoforms',        icon: '📝', label: 'AlteoForms',        href: 'alteoforms.html',        section: 'Marketing', perm: 'alteoforms' },
     // Mur de témoignages : ouvert à toute l'équipe connectée, coachs et CSM
     // compris — ce sont eux qui reçoivent le plus de retours clients. Chacun
@@ -312,7 +315,7 @@
     'alteoforms.html', 'booking-admin.html', 'clients-dedup.html',
     'csm-diagnostic.html', 'csm-import.html', 'formations.html',
     'formations-admin.html', 'payments.html',
-    'admin-pilotage.html', 'admin-scoring.html', 'admin-relances.html',
+    'admin-pilotage.html', 'admin-scoring.html', 'admin-relances.html', 'admin-sequences.html',
     'sales-appels.html', 'sales-clients.html', 'sales-closing.html', 'sales-commissions.html',
     'sales-contact.html', 'sales-crm.html', 'sales-dashboard.html',
     'sales-dialer.html', 'sales-eod.html', 'sales-equipe.html',

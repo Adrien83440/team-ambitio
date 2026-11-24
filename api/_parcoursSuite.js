@@ -260,6 +260,8 @@ async function creer(o) {
   if (!email || !/@/.test(email)) return { ok: false, erreur: 'email_absent' };
   if (!LIB_SEQ[o.sequence]) return { ok: false, erreur: 'sequence_inconnue' };
   const ref = db.collection(COL).doc(String(o.bookingId));
+  const off = ((await lireConfig()).suites.off) || {};
+  if (off['seq:' + o.sequence]) return { ok: false, erreur: 'sequence_desactivee' };
   let profil = { douleur: null, citation: null, miroirs: {} };
   let lead = null;
   if (b.leadId) {
@@ -267,6 +269,8 @@ async function creer(o) {
     lead = ls.exists ? (ls.data() || {}) : null;
     if (lead && o.sequence !== 'rdv_manque') profil = profilDe(lead);
   }
+  // Histoire désactivée dans le module admin : séquence simple du frein.
+  if (profil.douleur && off['douleur:' + profil.douleur]) { profil.douleur = null; profil.citation = null; }
   const doc = {
     bookingId: String(o.bookingId), leadId: b.leadId || null, email: email,
     prenom: String(p.prenom || '').trim() || String(p.nom || '').trim().split(/\s+/)[0] || '',
@@ -318,7 +322,7 @@ function resume(s) {
 const LIB_ARRET = {
   rdv_repris: 'a repris un rendez-vous', client: 'est devenu client', desinscription: 's\'est désinscrit',
   reponse_stop: 'a répondu qu\'il ne souhaitait pas donner suite', issue_changee: 'l\'issue du RDV a changé',
-  terminee: 'séquence terminée', rdv_annule_equipe: 'RDV annulé par l\'équipe',
+  terminee: 'séquence terminée', rdv_annule_equipe: 'RDV annulé par l\'équipe', arret_admin: 'arrêtée par un admin',
 };
 
 async function arreter(ref, s, motif, opts) {
@@ -360,6 +364,7 @@ function etapeDue(s, now) {
   let k = 1;
   while (k <= plan.length && et['e' + k]) k++;
   if (k > plan.length) return { k: 0, fini: true };
+  if (s.forcer === true) return { k: k, force: true };
   if (!s.rdvDate) return { k: 0 };
   const st = parisMin(now);
   const jour = Dispo.addDays(s.rdvDate, plan[k - 1]);
@@ -434,11 +439,21 @@ async function passage(opts) {
       }
       if (!due.k) { ligne.resultat = 'pas_encore'; sortie.detail.push(ligne); continue; }
       ligne.etape = due.k;
-      if (!fenetre) { ligne.resultat = 'hors_horaires'; sortie.detail.push(ligne); continue; }
+      const off = S.off || {};
+      if (off['seq:' + s.sequence]) { ligne.resultat = 'sequence_desactivee'; sortie.detail.push(ligne); continue; }
+      // « Envoyer maintenant » (module admin) passe outre le calendrier et les horaires.
+      if (!fenetre && !due.force) { ligne.resultat = 'hors_horaires'; sortie.detail.push(ligne); continue; }
       const c = contenuDe(s, due.k);
       if (!c || c.erreur) { ligne.resultat = 'contenu_indisponible'; ligne.erreur = c && c.erreur; sortie.detail.push(ligne); continue; }
       ligne.email = c.cle; ligne.objet = c.subject;
       if (!reel) { ligne.resultat = 'simule'; sortie.detail.push(ligne); continue; }
+      // E-mail désactivé dans le module admin : l'étape est sautée, la séquence continue.
+      if (off['email:' + c.cle]) {
+        const sv = { etapes: {}, majA: Date.now(), forcer: false };
+        sv.etapes['e' + due.k] = { at: Date.now(), ok: false, saute: true, email: c.cle, objet: c.subject };
+        await d.ref.set(sv, { merge: true });
+        ligne.resultat = 'email_desactive'; sortie.detail.push(ligne); continue;
+      }
       if (compteur >= S.plafondJour) { ligne.resultat = 'plafond_du_jour'; sortie.plafondAtteint = true; sortie.detail.push(ligne); continue; }
 
       // Réservation transactionnelle : un e-mail n'est jamais envoyé deux fois.
@@ -458,7 +473,7 @@ async function passage(opts) {
         const g = await sendEmailFromAccount({ accountKey: cfg.emailCompte || 'strategie', to: s.email, subject: c.subject, bodyHtml: c.html, bodyText: c.text });
         r = (g && g.ok) ? { ok: true, id: g.messageId || null } : { ok: false, erreur: (g && g.error) || 'echec_gmail' };
       } catch (e) { r = { ok: false, erreur: (e && e.message) || 'echec_gmail' }; }
-      const note = { etapes: {}, majA: Date.now() };
+      const note = { etapes: {}, majA: Date.now(), forcer: false };
       note.etapes[cleE] = { at: Date.now(), ok: !!r.ok, id: r.id || null, erreur: r.erreur || null, email: c.cle, objet: c.subject };
       // Le choix est figé au moment où la suite choisie part.
       if (due.k === 3 && s.douleur) note.choixFige = s.choix || 'a';
@@ -485,6 +500,121 @@ async function passage(opts) {
     sortie.detail.push(ligne);
   }
   return sortie;
+}
+
+/* ═══ Module admin (api/parcours-suite-admin.js) ════════════════════════ */
+
+/* Jour (AAAA-MM-JJ, Paris) du prochain e-mail, ou null. */
+function prochainEnvoi(s, now) {
+  if (s.etat !== 'active') return null;
+  const plan = planDe(s);
+  const et = s.etapes || {};
+  let k = 1;
+  while (k <= plan.length && et['e' + k]) k++;
+  if (k > plan.length || !s.rdvDate) return null;
+  let jour = Dispo.addDays(s.rdvDate, plan[k - 1]);
+  const prec = k > 1 ? et['e' + (k - 1)] : null;
+  if (prec && prec.at) { const j2 = parisMin(prec.at + ECART_MIN_MS).ymd; if (j2 > jour) jour = j2; }
+  const auj = parisMin(now).ymd;
+  if (jour < auj) jour = auj;
+  return { etape: k, jour: jour, maintenant: s.forcer === true };
+}
+
+function ligneAdmin(id, s, now) {
+  const plan = planDe(s);
+  const et = s.etapes || {};
+  const envoyes = [];
+  for (let k = 1; k <= plan.length; k++) {
+    const e = et['e' + k];
+    envoyes.push(e ? { k: k, ok: e.ok === true, saute: e.saute === true, at: e.at || null, objet: e.objet || null, erreur: e.erreur || null } : null);
+  }
+  const clics = (s.clics || []).filter(function (c) { return c && c.a !== 'stop'; });
+  return {
+    id: id, leadId: s.leadId || null, prenom: s.prenom || '', email: s.email || '',
+    sequence: s.sequence, sequenceLibelle: LIB_SEQ[s.sequence] || s.sequence,
+    douleur: s.douleur || null, douleurLibelle: s.douleur ? LIB_DOULEUR[s.douleur] : null,
+    etat: s.etat, motif: s.motifArret || null, motifLibelle: s.motifArret ? (LIB_ARRET[s.motifArret] || s.motifArret) : null,
+    rdvDate: s.rdvDate || null, creeA: s.creeA || null, total: plan.length, etapes: envoyes,
+    choix: s.choixFige || s.choix || null, choixLibelle: s.choixLibelle || null,
+    clics: clics.length, aCliqueReserver: clics.some(function (c) { return c.a === 'rdv'; }),
+    reponses: (s.reponses || []).slice(-3), prochain: prochainEnvoi(s, now),
+    miroirs: Object.keys(s.miroirs || {}).length,
+  };
+}
+
+async function listeAdmin() {
+  const now = Date.now();
+  const snap = await db.collection(COL).orderBy('creeA', 'desc').limit(500).get();
+  const out = [];
+  snap.forEach(function (d) { out.push(ligneAdmin(d.id, d.data() || {}, now)); });
+  return out;
+}
+
+function statsDe(liste) {
+  const st = { total: liste.length, active: 0, pause: 0, terminee: 0, arretee: 0, envoyes: 0, clics: 0, choix: 0, motifs: {}, sequences: {}, douleurs: {} };
+  liste.forEach(function (x) {
+    if (st[x.etat] != null) st[x.etat]++;
+    x.etapes.forEach(function (e) { if (e && e.ok) st.envoyes++; });
+    if (x.clics) st.clics++;
+    if (x.choixLibelle) st.choix++;
+    if (x.motif) st.motifs[x.motif] = (st.motifs[x.motif] || 0) + 1;
+    st.sequences[x.sequence] = (st.sequences[x.sequence] || 0) + 1;
+    st.douleurs[x.douleur || 'aucune'] = (st.douleurs[x.douleur || 'aucune'] || 0) + 1;
+  });
+  return st;
+}
+
+/* L'arbre des e-mails : par frein (séquence simple) et par douleur. */
+function arbre(off) {
+  off = off || {};
+  const sequences = Object.keys(LIB_SEQ).map(function (seq) {
+    const n = dernierN(seq), jours = seq === 'rdv_manque' ? JOURS.rdv_manque : (seq === 'frein_general' ? JOURS.general : JOURS.frein);
+    const emails = [];
+    for (let k = 1; k <= n; k++) { const m = acMessage(seq, k); if (m) emails.push({ k: k, cle: seq + '#' + k, objet: m.subject, jour: jours[k - 1], off: !!off['email:' + seq + '#' + k] }); }
+    return { cle: seq, libelle: LIB_SEQ[seq], off: !!off['seq:' + seq], emails: emails };
+  });
+  const douleurs = Object.keys(CHOIX).map(function (dl) {
+    const D = CHOIX[dl];
+    return { cle: dl, libelle: LIB_DOULEUR[dl] || dl, citation: D.citation, off: !!off['douleur:' + dl],
+      emails: ['E2', 'E3A', 'E3B', 'E4'].map(function (e) { return { e: e, cle: dl + '#' + e, objet: D.emails[e].subject, off: !!off['email:' + dl + '#' + e] }; }) };
+  });
+  return { sequences: sequences, douleurs: douleurs, jours: JOURS };
+}
+
+/* Action d'un admin sur UNE suite. Tout est tracé dans `historique`. */
+async function actionAdmin(id, quoi, valeur, par) {
+  const ref = db.collection(COL).doc(String(id || '_'));
+  const snap = await ref.get();
+  if (!snap.exists) return { ok: false, erreur: 'suite_introuvable' };
+  const s = snap.data() || {};
+  const trace = { at: Date.now(), par: par || null, quoi: quoi, valeur: valeur == null ? null : valeur };
+  const patch = { majA: Date.now(), historique: FV.arrayUnion(trace) };
+  if (quoi === 'pause') { if (s.etat !== 'active') return { ok: false, erreur: 'pas_active' }; patch.etat = 'pause'; }
+  else if (quoi === 'reprendre') {
+    if (s.etat !== 'pause' && s.etat !== 'arretee') return { ok: false, erreur: 'rien_a_reprendre' };
+    if (s.motifArret === 'desinscription') return { ok: false, erreur: 'prospect_desinscrit' };
+    patch.etat = 'active'; patch.motifArret = null;
+  }
+  else if (quoi === 'arreter') { if (s.etat !== 'active' && s.etat !== 'pause') return { ok: false, erreur: 'deja_arretee' }; patch.etat = 'arretee'; patch.motifArret = 'arret_admin'; patch.arreteA = Date.now(); }
+  else if (quoi === 'forcer') { if (s.etat !== 'active') return { ok: false, erreur: 'pas_active' }; patch.forcer = true; }
+  else if (quoi === 'douleur') {
+    const v = valeur ? String(valeur) : null;
+    if (v && !CHOIX[v]) return { ok: false, erreur: 'histoire_inconnue' };
+    if ((s.etapes || {}).e2) return { ok: false, erreur: 'histoire_deja_commencee' };
+    patch.douleur = v; patch.citation = v ? (s.citation || CHOIX[v].citation) : null;
+  }
+  else if (quoi === 'choix') {
+    if (valeur !== 'a' && valeur !== 'b') return { ok: false, erreur: 'choix_invalide' };
+    if (s.choixFige || (s.etapes || {}).e3) return { ok: false, erreur: 'suite_deja_partie' };
+    patch.choix = valeur; patch.choixLibelle = titreChoix(s, valeur);
+  }
+  else return { ok: false, erreur: 'action_inconnue' };
+  await ref.set(patch, { merge: true });
+  if (s.leadId) {
+    const apres = Object.assign({}, s, patch);
+    await db.collection('leads').doc(String(s.leadId)).update({ suiteApresRdv: resume(apres) }).catch(function () {});
+  }
+  return { ok: true };
 }
 
 /* ═══ Clics (page publique api/parcours-clic.js) ════════════════════════ */
@@ -618,7 +748,7 @@ function suiteFictive(o) {
 async function envoyerTest(o) {
   const cfg = await P.lireConfig();
   const r = await db.collection('_config').doc('relances').get();
-  const email = (r.exists ? (r.data() || {}).testEmail : null);
+  const email = o.vers || (r.exists ? (r.data() || {}).testEmail : null);
   if (!email) return { ok: false, erreur: 'email_de_test_absent' };
   const s = suiteFictive(Object.assign({}, o, { email: email }));
   const c = contenuDe(s, Number(o.etape) || 1);
@@ -632,5 +762,6 @@ module.exports = {
   DEFAUTS: DEFAUTS, JOURS: JOURS, LIB_SEQ: LIB_SEQ, LIB_DOULEUR: LIB_DOULEUR, MIROIRS: MIROIRS, COL: COL,
   profilDe: profilDe, planDe: planDe, contenuDe: contenuDe, etapeDue: etapeDue, creer: creer, arreter: arreter, passage: passage,
   parJeton: parJeton, enregistrerClic: enregistrerClic, titreChoix: titreChoix, lienRdvDirect: lienRdvDirect,
+  prochainEnvoi: prochainEnvoi, ligneAdmin: ligneAdmin, listeAdmin: listeAdmin, statsDe: statsDe, arbre: arbre, actionAdmin: actionAdmin,
   surReponseEmail: surReponseEmail, prospectsChauds: prospectsChauds, suiteFictive: suiteFictive, envoyerTest: envoyerTest, lireConfig: lireConfig, resume: resume, typeDe: typeDe,
 };
