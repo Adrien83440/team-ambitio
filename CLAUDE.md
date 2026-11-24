@@ -376,6 +376,26 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   `api/invoice-*.js`, `api/subscription-generate-invoice.js`,
   helpers `api/_billing-*.js` — **admin uniquement**
 - **Paiements** : `payments.html`, `api/gocardless-*.js`
+- **Prélèvements rejetés → factures impayées (24/11/2026)** : `api/invoice-rejets.js`. Avant, seule la Cloud Function
+  sur `paid_out` créait une facture : un rejet ne laissait aucune pièce pour le cabinet de recouvrement. Chaque prélèvement
+  GoCardless `failed` / `customer_approval_denied` / `charged_back` (sans facture existante) crée un BROUILLON
+  `_pendingValidation` portant `_rejetGc` (`etat`, `gcStatus`, `chargeDate`, `cause`, `motif` FR, `reasonCode`, `historique`),
+  rangé dans « À valider » → « ❌ Prélèvements rejetés » ; « 🧾 Valider (impayée) » = `invoice-validate` seul (numéro + PDF
+  à la date du prélèvement), JAMAIS `invoice-mark-paid`. Exclus : facture déjà sur ce `gcPaymentId`, client EI, rejet RATTRAPÉ
+  par un autre prélèvement PONCTUEL encaissé (hors abonnement / échéancier : la mensualité suivante n'est pas un
+  rattrapage) du même mandat et même montant (sa facture naît de celui-là). Prélèvement encaissé PUIS
+  rejeté (échec tardif, contestation) : son brouillon « Paiement reçu » est CONVERTI en brouillon de rejet
+  (`_rejetGc.convertiDepuisEncaissement`, ancienne mention gardée dans `_notesPublicAvantRejet`) ; déjà émis → signalé seulement
+  (`facture_emise_rejet`). Rapprochement à chaque passage
+  (`_rejetGc.etat === 'actif'`) : même prélèvement finalement `paid_out` → brouillon redevenu encaissement normal
+  (`encaisse_apres_rejet`) ou facture émise à marquer encaissée (`encaisse_apres_validation`, liste « 💶 Rejets finalement
+  encaissés ») ; compteurs `payments.paidCount/paymentsHistory` et `subscriptions.installmentsPaidOnGC` posés ici car la Cloud
+  Function s'arrête dès qu'une facture porte le `gcPaymentId`. Rattrapé par un autre prélèvement → brouillon archivé
+  (`_archived`, motif) ou `rattrape_apres_validation` (risque de double facture, signalé). Cron quotidien 05:25 UTC, n'écrit que si
+  `_config/billing.rejetsAuto === true` (bouton de l'onglet Synchro, 60 derniers jours) ; trace `_config/billing.rejetsDernierPassage`
+  + `audit_log` type `gocardless_rejets`. Aperçu / création manuels dans Synchro (à blanc d'abord). Accès manuel temporaire :
+  clé Vercel `REJETS_KEY` (`GET ?key=…[&apply=1]`). Filtre « ❌ Prélèvement rejeté » + badge dans la liste des factures.
+  Non couverts : mandats en échec SANS aucun prélèvement (rien à rejeter chez GoCardless) → facture manuelle.
 - **Dialer** : `sales-dialer.html/.css/.js`, `dialer-bridge.js`, `api/dialer-*.js` —
   visible **uniquement** pour les rôles `sales` et `admin`, **jamais** pour `coach`
 - **AlteoForms** : `alteoforms.html` (builder), `alteoforms-render.html` (rendu public),
@@ -388,6 +408,24 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   côté page `window._canManage` (admin + csm) : ajouter un plan, « Proposer pour tous », liaison des
   questionnaires. Supprimer un document de plan reste admin. Les blocs de règles autonomes se publient par
   `api/rules-lecteur-funnel.js?bloc=…` (copies dans `api/_rulesLecteurFunnelBlock.js`, clé Vercel temporaire).
+- **E-mail du compte Academy (23/11/2026)** : le compte vit sous l'e-mail du SIGNATAIRE du contrat
+  (`academy-grant`), la fiche coaching garde souvent celui du lead (opt-in). Tout appel au pont qui porte
+  un e-mail passe par `fetchPont` de `api/_academyCompte.js` (même signature que `fetch`) : si l'Academy
+  répond « aucun élève à cet e-mail », l'appel est rejoué avec l'e-mail du signataire des contrats signés
+  du même client (par `clientEmail`, par le lead, par `clients._leadId`). Rien d'écrit, aucun coût quand
+  les e-mails concordent. Une nouvelle route vers le pont utilise `fetchPont`, jamais `fetch` nu. Sens
+  inverse : `academy-client-info` retrouve la fiche par le contrat. La fiche affiche l'e-mail du compte
+  quand il diffère. Non concernés : `academy-grant`, `_accesPaiement`, `signature-cancel` (partent déjà
+  du contrat).
+- **Envoyer ses accès Academy (23/11/2026)** : rien n'envoie l'e-mail « Crée ton mot de passe » tout seul
+  (ni la signature, ni l'ouverture au paiement) ; avant, seul le back-office Academy le pouvait. Tuile
+  Academy de la fiche coaching, sous l'avancement (`acadAcces` de `coaching.html`) : état (jamais connecté /
+  déjà connecté / désactivé, date du dernier envoi, lien expiré), « 📧 Envoyer ses accès » et « 🔗 Copier le
+  lien » (WhatsApp). `api/academy-access.js` actions `invite-etat` / `invite` / `invite-lien`, ouvertes aux
+  admins, CSM ET coachs (`estCoach`, « Aussi coach » compris) — les autres actions de la route restent
+  admin / CSM. Pont Academy `POST /api/bridge/send-access` (repo `ae-academy`, `mode` etat / envoyer / lien) :
+  lien 3 jours à usage unique, un nouveau lien annule le précédent ; ne crée aucune fiche, n'ouvre aucune
+  formation, refuse un compte désactivé. Trace `clients.academyAccessHistory`.
 - **Fiche coaching en tuiles (20/11/2026)** : `openDetail` de `coaching.html` range la fiche en six
   sections ouvertes par des tuiles (`FC_PANES` : Synthèse · Plan d'action · Séances · Academy ·
   Quota & RDV · Dossier), chaque tuile portant son chiffre (`data-fc-sub`, mis à jour par
@@ -593,6 +631,22 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
     bouton « 🧪 10 événements de test » = contact fictif, code de test obligatoire.
   - **Paramètres d'URL des pubs** (média buyeuse) : `utm_source={{site_source_name}}&utm_medium={{placement}}&utm_campaign={{campaign.name}}&utm_content={{ad.name}}&Audience={{adset.name}}&campaign_id={{campaign.id}}&adset_id={{adset.id}}&ad_id={{ad.id}}`.
 
+- **Lieu et appareil du prospect (23/11/2026, demande Adrien)** : bloc `leads/{id}.visiteur` (et
+  `bookings/{id}.visiteur`) `{ city, region, country, device, os, browser, app, via, at }`. Lieu = en-têtes de
+  géolocalisation Vercel (`x-vercel-ip-*`), juste UNIQUEMENT quand le navigateur du prospect appelle Team (jamais
+  Make) ; **aucune adresse IP conservée**. Premier relevé = fait foi, jamais écrasé. Captes : `tunnel-optin`
+  (direct), quiz → beacon `POST /api/visiteur {e: event_id}` injecté par `_quizMetaIds.js` → `lead_visiteur/{event_id}`
+  (Admin SDK seul) relu par `lead-optin` à l'arrivée de Make (sinon cron horaire `?job=rattrapage`), RDV pris par le
+  prospect lui-même (`booking.html` `bkVisiteurBeacon`, `{b: id}` ; jamais setter / agent / coaching). Pour TOUS les
+  visiteurs, pixel autorisé ou non (rien ne part chez Meta). Règles partagées dans `funnel-core.js` : `uaDevice`
+  (appli Facebook / Instagram / Messenger / TikTok détectée), régions FR (codes ISO, anciens codes, départements,
+  outre-mer), `visiteurOf(lead, blocRdv)` (bloc lead → RDV → appareil déduit de `metaIds.ua` à l'affichage, leads
+  depuis le 12/11/2026, rien d'écrit), axes `device` / `region` de `leadAxisKey` → Qualité leads (MQS), Qualité par
+  pub (sans colonnes de coût : Meta ne donne pas la dépense par appareil / région ; lien média buyeuse compris),
+  onglet 👥 Leads (colonnes + CSV), dossiers nominatifs. Lecteur funnel : région seulement, jamais la ville sur une
+  fiche nominative. Rattrapage des CLIENTS : `GET /api/visiteur?job=signatures` (lieu de la signature,
+  `via: 'signature'`, à blanc par défaut, `&apply=1`, trace `visiteur_backfill_log`, clé Vercel temporaire
+  `VISITEUR_KEY` ou `CRON_SECRET`). Avant le 12/11/2026 : rien de récupérable (aucun navigateur ni lieu enregistré).
 - **Accès lecture au Stats funnel — liens par personne (19/11/2026, média buyeuse)** : Stats funnel →
   « 👁 Accès lecture » (admin) : un lien par personne, durée 24 h / 7 / 30 / 90 j / date (≤ 1 an),
   prolonger, désactiver / réactiver, journal des connexions (une session par ouverture de page : date,
@@ -662,6 +716,68 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   action du setter, quelle que soit la date d'entrée). (4) **Global closing** = `sales-closing.html?vue=global`
   (entrée de menu `sales-global`, `nav.js` distingue les deux adresses) : par closer, Self Booking + RDV du
   setting ; pas de corrections ✎ dans cette vue (elles restent propres à Close SB et Set NB).
+
+- **Parcours RDV des prospects (24/11/2026, plan « Offres ouvertes et no-show »)** : entre la réservation d'un
+  Audit (self-booking OU posé par un setter) et le RDV, UN parcours, un message par moment. Moteur
+  `api/_parcoursRdv.js`, cron `api/parcours-rdv.js` (*/5) : ① e-mail de confirmation soigné (rien à préparer)
+  ② SMS court ③ e-mail de valeur si le RDV est à > 36 h ④ WhatsApp `rappel_rdv_closing` la veille 18 h–21 h
+  (variables prénom, prénom du CLOSER, heure ; « OUI » → `presenceConfirmed` + `rdv_confirmations` automatiques,
+  « déplacer » / réponse ambiguë → alerte setter, `whatsapp-webhook.js` → `surReponseWhatsapp`) ⑤ SMS + lien
+  1 h avant ⑥ rattrapage +5 à +15 min si l'API Meet dit le prospect ABSENT (illisible → rien), SMS + alerte closer
+  (cloche `inbox_notifications`). Consultations concernées : `booking_config/_types[].notifications.parcoursRdv`
+  — le même drapeau efface les rappels de l'agenda dans les Cloud Functions (`_abParcoursRdvPrend` : confirmation
+  e-mail/SMS, J-1, H-1), SEULEMENT pour les RDV que le parcours prend vraiment. Réglages `_config/parcours_rdv`
+  (`actif` faux par défaut, `modeTest` vrai par défaut = seuls les RDV au téléphone / e-mail de test de
+  `_config/relances.testTelephone/testEmail` ou `testMembres`, `depuis` = 1re activation, jamais de rattrapage du
+  passé ; réel = « PRODUCTION » tapé). Traces : `bookings/{id}.parcoursRdv.etapes.*` (réservation transactionnelle,
+  jamais rejoué), fiche lead `communications` (`source: 'parcours_rdv'`). ActiveCampaign EN DIRECT
+  (`api/_activeCampaign.js`, variables Vercel `ACTIVECAMPAIGN_API_URL` / `ACTIVECAMPAIGN_API_KEY`, tags désignés par
+  leur NOM ; plus de Make, demande d'Adrien du 24/11/2026 — le scénario Make « Parcours RDV (Team) → ActiveCampaign »
+  10226515 est éteint, pas supprimé) : `rdv_pris` → tag `rdv_a_venir` + sortie des nurturing 35 / 26 / 32 ;
+  `rdv_libere` (no-show, annulé sans report) → `rdv_a_venir` retiré + `rdv_manque` (séquence « rendez-vous manqué ») — SAUF si le même prospect (e-mail / téléphone) a déjà un autre RDV non annulé à venir (`autreRdvAVenir`, il a déplacé lui-même) ; `rdv_pris` retire aussi `rdv_manque` et sort des séquences d'après-RDV 43-49 (`activeCampaign.apresRdv`) ;
+  `nurturing_stop` (offre / close / disqualifié) → `stop_autom` ; `frein` → tag `frein_*` + `stop_autom`. **Durcissement du 24/11/2026 (relecture complète avant le passage en réel)** : le passage lit TOUS les RDV à venir + 14 jours en
+  arrière (confirmation immédiate même à J+10, issue saisie tard prise en compte), un `try/catch` par RDV et un budget de 45 s ;
+  l'e-mail de confirmation part à toute heure et quel que soit le délai (le SMS : en journée, à plus de 75 min), après le lien de visio
+  (attendu 3 min au plus) ; WhatsApp de la veille non remis (échec immédiat, statut `failed` dans `whatsapp_messages`, modèle
+  inutilisable) → SMS `sms_veille` ; une réponse n'est lue qu'ENTRE le rappel et l'heure du RDV, et ne confirme que si elle est courte
+  et sans le moindre doute (négation, « mais », question → alerte setter) ; rattrapage : SMS seulement si l'équipe est dans la visio et
+  pas le prospect, visio non ouverte → alerte closer seule ; étapes `ac_*` rejouées en cas d'échec (`reserver` `rejouable`, 6 essais) ;
+  aucune séquence d'après-RDV si un autre RDV du parcours est à venir, 45 min de grâce après une annulation, annulation par l'équipe
+  (`cancellation.origin: 'equipe'`) → `rdv_equipe` (tag retiré, pas de « rendez-vous manqué ») ; `depuis` est REPOSÉ à chaque
+  réactivation et au passage en réel (un RDV pris avant garde les rappels de l'agenda : jamais de doublon). Après un `non_close` : `api/parcours-frein.js` (cron du matin) lit l'appel (`replay`, sinon note
+  du closer après J+3, sinon « général »), écrit `parcoursRdv.frein` et `leads.freinPrincipal` (jamais écrasé si
+  `corrigePar`), puis séquence ActiveCampaign du frein (automatisations 36-41, textes
+  `docs/parcours-rdv/sequences-freins.md`). **Séquences d'après-RDV envoyées par TEAM (24/11/2026, décision d'Adrien)** : `api/_parcoursSuite.js`, cron `api/parcours-suite.js`
+  (*/15), page publique des liens `api/parcours-clic.js`. Les automatisations ActiveCampaign 43-49 restent ÉTEINTES (les 36-42, vides,
+  sont à supprimer à la main) ; ActiveCampaign ne garde que le nurturing d'avant RDV, la newsletter et des étiquettes d'information
+  (`frein_*`, `douleur_*`, `rdv_a_venir`, `rdv_manque`, `stop_autom`). Une suite = `parcours_suites/{bookingId}` (Admin SDK seul), créée
+  par `parcours-frein.js` (non_close → 5 e-mails J+1/4/8/14/21) ou par le passage du parcours (`rdv_libere` → 3 e-mails J+1/3/7), envoyés
+  depuis strategie@, 9 h 30 – 19 h hors dimanche, jamais deux à moins de 40 h, plafond `suites.plafondJour`. **Douleur** = réponse du
+  prospect à « Qu'est-ce qui vous pèse le plus ? » du questionnaire (`profilDe`, règles fixes, jamais d'IA) : e-mail 1 du frein +
+  paragraphe miroir, e-mails 2-3-4 de la douleur (`docs/parcours-rdv/sequences-choix.md` → `api/_parcoursChoixData.json` par
+  `python3 scripts/build-parcours-choix.py`, images `media/parcours/`), e-mail 5 du frein ; l'e-mail 2 finit par deux boutons « la
+  suite » (sans clic : A). Phrases miroir (`MIROIRS`) = réponses À CHOIX reprises mot pour mot, la ligne disparaît si la réponse
+  manque. Sans douleur connue (dont l'ancien formulaire « principal défi ») : la séquence du frein telle quelle (`_acSequencesData.json`,
+  reconstruit par `python3 scripts/build-sequences-freins.py`). Avec douleur, les e-mails 1 et 5 du frein sont ceux de la section
+  « 0. Freins avec histoire » (ils citent sa réponse et n'annoncent pas les e-mails du frein). **Garde-fous (relecture du 24/11/2026)** :
+  une seule suite active par prospect, et seulement pour son DERNIER RDV (`rdvPlusRecent`) ; issue corrigée (manqué ↔ « non ») → la
+  bonne séquence remplace l'autre ; aucune suite créée moteur éteint, premier e-mail abandonné après 5 jours de retard (`trop_tard`) ;
+  e-mail en échec rejoué 3 fois, réservation restée sans suite jamais rejouée (signalée dans le module admin) ; ActiveCampaign rejoué
+  tant que ce n'est pas fait (`acEnAttente`) ; à la fin, `stop_autom` est retirée avant l'entrée newsletter. Un clic n'est compté que par le POST du
+  navigateur (jamais à la lecture du lien) ; deux choix opposés en 2 min = robot, ignoré ; la désinscription demande un vrai clic →
+  `leads.emailDesinscrit`, `stop_autom` et désinscription de toutes les listes ActiveCampaign. Avant CHAQUE e-mail la suite s'arrête si
+  le prospect a repris un RDV, est devenu client, s'est désinscrit ou si l'issue du RDV a changé. Fin (3 jours après le dernier
+  e-mail) → entrée dans l'automatisation « Newsletter 2k26 » (`suites.newsletterAutomation` = 29), sauf désinscription. **Le closer
+  n'est pas sonné** : clics et arrêts = une ligne d'historique + `leads.suiteApresRdv` (résumé) ; « non / plus tard » = arrêt silencieux et « stop / désinscription » = désinscription complète, MAIS seulement si la réponse est
+  courte et faite à un e-mail de la séquence (même objet) ; toute autre réponse sonne comme avant, avec un résumé d'une ligne (tâche
+  IA `parcours_reponse`, qui ne fait jamais taire une cloche) ; les clics de la veille = une puce du brief du matin (`prospectsChaudsApresRdv`). Réglages
+  `_config/parcours_rdv.suites` (`actif` faux par défaut ; mode test = celui du parcours). **Module admin « Séquences »** (Marketing → 📬, admin
+  seul) : `admin-sequences.html` + `api/parcours-suite-admin.js` — vue d'ensemble (allumer / éteindre, plafond, chiffres), prospects
+  (étape, prochain e-mail, clics ; pause / reprendre / arrêter / « envoyer le suivant » = `forcer`), arbre des e-mails (aperçu, test à
+  l'admin connecté, désactiver une séquence / une histoire / un e-mail : `suites.off` — séquence désactivée = plus de création ni
+  d'envoi, histoire désactivée = séquence simple du frein, e-mail désactivé = étape sautée). Éditeur de textes et de branches : 2e
+  livraison, pas encore faite (les textes se modifient dans les deux fichiers `.md` puis par les scripts de construction). Clé temporaire du chantier `PARCOURS_AUDIT_KEY` (preview de la branche,
+  `api/parcours-audit.js` lecture seule) : à retirer à la fin.
 
 Spécification de référence du flux commercial : `REFONTE-SPEC.md`.
 

@@ -40,6 +40,7 @@
 const { requireAuth } = require('./_verifyFirebaseAuth');
 const { db } = require('./_firebaseAdmin');
 const BP = require('../bp-credits.js');
+const { fetchPont } = require('./_academyCompte');
 
 const ACADEMY_URL = (process.env.ACADEMY_BRIDGE_URL || 'https://academy.adrienemily.com').replace(/\/$/, '');
 const ROLES = ['admin', 'coach', 'csm'];
@@ -140,7 +141,7 @@ module.exports = async (req, res) => {
         majLe: txt(pb.updatedAt, 40),
         revision: Number(pb.version) || 0,
       };
-      const rb = await fetch(ACADEMY_URL + '/api/bridge/plan', {
+      const rb = await fetchPont(ACADEMY_URL + '/api/bridge/plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-bridge-key': key },
         body: JSON.stringify(chargeBP),
@@ -186,7 +187,7 @@ module.exports = async (req, res) => {
       revision: Number(plan.version) || 0,
     };
 
-    const r = await fetch(ACADEMY_URL + '/api/bridge/plan', {
+    const r = await fetchPont(ACADEMY_URL + '/api/bridge/plan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-bridge-key': key },
       body: JSON.stringify(charge),

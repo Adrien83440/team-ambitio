@@ -39,6 +39,7 @@
 const { requireAuth } = require('./_verifyFirebaseAuth');
 const { callClaude, humanError } = require('./_ai');
 const { admin, db } = require('./_firebaseAdmin');
+const { fetchPont } = require('./_academyCompte');
 
 const ACADEMY_URL = (process.env.ACADEMY_BRIDGE_URL || 'https://academy.adrienemily.com').replace(/\/$/, '');
 const ROLES = ['admin', 'coach', 'csm'];
@@ -94,7 +95,7 @@ function coachingContext(c) {
 // ---------------------------------------------------------------------------
 
 async function bridgeWorkbook(key, payload) {
-  const r = await fetch(ACADEMY_URL + '/api/bridge/workbook', {
+  const r = await fetchPont(ACADEMY_URL + '/api/bridge/workbook', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-bridge-key': key },
     body: JSON.stringify(payload),
@@ -105,7 +106,7 @@ async function bridgeWorkbook(key, payload) {
 }
 
 async function fetchDossier(email, key) {
-  const r = await fetch(ACADEMY_URL + '/api/bridge/progress', {
+  const r = await fetchPont(ACADEMY_URL + '/api/bridge/progress', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-bridge-key': key },
     body: JSON.stringify({ email: email }),

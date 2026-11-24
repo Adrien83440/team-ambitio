@@ -1,0 +1,76 @@
+# ============================================================================
+# Déploiement des Cloud Functions par GitHub (24/11/2026, demande d'Adrien)
+# ----------------------------------------------------------------------------
+# Lancé À LA MAIN uniquement (onglet Actions → « Déployer les Cloud
+# Functions » → Run workflow, ou par l'agent via l'API GitHub). Jamais sur un
+# push : un déploiement reste une décision.
+#
+# SÉCURITÉ DES 9 FONCTIONS ORPHELINES (CLAUDE.md, règle 2) : le déploiement
+# vise NOMMÉMENT les fonctions exportées par Functions/index.js
+# (--only functions:a,functions:b,…). Une fonction qui n'est pas dans la liste
+# n'est ni modifiée ni supprimée : les orphelines restent en place, sans
+# question ni --force. Jamais de --force ici.
+#
+# Clé : secret GitHub FIREBASE_SERVICE_ACCOUNT (JSON d'un compte de service
+# du projet ambitio-team). Jamais dans le dépôt, jamais affichée.
+# ============================================================================
+name: Déployer les Cloud Functions
+
+on:
+  workflow_dispatch:
+    inputs:
+      fonctions:
+        description: "Fonctions à déployer, séparées par des virgules (vide = toutes celles d'index.js)"
+        required: false
+        default: ""
+
+concurrency:
+  group: deploy-functions
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Dépendances des functions
+        working-directory: Functions
+        run: npm install --no-audit --no-fund
+
+      - name: Liste des fonctions à déployer
+        id: liste
+        env:
+          DEMANDE: ${{ github.event.inputs.fonctions }}
+        run: |
+          if [ -n "$DEMANDE" ]; then
+            NOMS=$(echo "$DEMANDE" | tr -d ' ')
+          else
+            NOMS=$(grep -o '^exports\.[A-Za-z0-9_]\+' Functions/index.js | sed 's/^exports\.//' | sort -u | paste -sd, -)
+          fi
+          if [ -z "$NOMS" ]; then echo "Aucune fonction trouvée" >&2; exit 1; fi
+          CIBLE=$(echo "$NOMS" | tr ',' '\n' | sed 's/^/functions:/' | paste -sd, -)
+          echo "Fonctions : $NOMS"
+          echo "cible=$CIBLE" >> "$GITHUB_OUTPUT"
+
+      - name: Clé du compte de service
+        env:
+          CLE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$CLE" ]; then echo "Secret FIREBASE_SERVICE_ACCOUNT absent" >&2; exit 1; fi
+          printf '%s' "$CLE" > "$RUNNER_TEMP/cle.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/cle.json" >> "$GITHUB_ENV"
+
+      - name: Déploiement (projet ambitio-team uniquement)
+        run: npx --yes firebase-tools@13 deploy --only "${{ steps.liste.outputs.cible }}" --project ambitio-team --non-interactive
+
+      - name: Nettoyage de la clé
+        if: always()
+        run: rm -f "$RUNNER_TEMP/cle.json"

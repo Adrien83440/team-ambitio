@@ -542,8 +542,160 @@
     return 'creative';
   }
 
+  /* ── VISITEUR : lieu et appareil du prospect (23/11/2026) ───────────────
+     Bloc `leads/{id}.visiteur` (et `bookings/{id}.visiteur`) :
+       { city, region, country, device, os, browser, app, via, at }
+     city / region / country : géolocalisation APPROXIMATIVE de Vercel
+       (en-têtes x-vercel-ip-*), lue au moment où le NAVIGATEUR du prospect
+       appelle Team — aucune adresse IP n'est conservée ;
+     device : 'mobile' | 'tablette' | 'ordinateur' ; app : navigateur intégré
+       d'une appli ('facebook' | 'instagram' | 'messenger' | 'tiktok' |
+       'linkedin' | 'snapchat') ;
+     via : 'quiz' | 'tunnel' | 'rdv' | 'signature' (lieu repris de la
+       signature du contrat, rattrapage des clients).
+     Le premier relevé fait foi : jamais écrasé.
+     Lecture : visiteurOf(lead, blocRdv). Sans bloc, l'APPAREIL est déduit du
+     navigateur capté à l'opt-in (metaIds.ua, leads depuis le 12/11/2026) —
+     calculé à l'affichage, rien d'écrit. Partagé navigateur ↔ serveur
+     (api/_visiteur.js). */
+  function uaDevice(ua) {
+    var u = String(ua || '');
+    var out = { device: '', os: '', browser: '', app: '' };
+    if (!u) return out;
+    if (/Instagram/i.test(u)) out.app = 'instagram';
+    else if (/FBAN\/Messenger|MessengerForiOS|FB_IAB\/MESSENGER|MessengerLite/i.test(u)) out.app = 'messenger';
+    else if (/FBAN|FBAV|FB_IAB|FBIOS|FB4A/i.test(u)) out.app = 'facebook';
+    else if (/musical_ly|BytedanceWebview|TikTok|trill_/i.test(u)) out.app = 'tiktok';
+    else if (/LinkedInApp/i.test(u)) out.app = 'linkedin';
+    else if (/Snapchat/i.test(u)) out.app = 'snapchat';
+    if (/iPad/i.test(u)) { out.os = 'iOS'; out.device = 'tablette'; }
+    else if (/iPhone|iPod/i.test(u)) { out.os = 'iOS'; out.device = 'mobile'; }
+    else if (/Android/i.test(u)) { out.os = 'Android'; out.device = /Mobile/i.test(u) || out.app ? 'mobile' : 'tablette'; }
+    else if (/CrOS/i.test(u)) { out.os = 'ChromeOS'; out.device = 'ordinateur'; }
+    else if (/Windows Phone/i.test(u)) { out.os = 'Windows Phone'; out.device = 'mobile'; }
+    else if (/Windows/i.test(u)) { out.os = 'Windows'; out.device = 'ordinateur'; }
+    else if (/Macintosh|Mac OS X/i.test(u)) { out.os = 'macOS'; out.device = 'ordinateur'; }
+    else if (/Linux/i.test(u)) { out.os = 'Linux'; out.device = 'ordinateur'; }
+    if (!out.device && /Mobile/i.test(u)) out.device = 'mobile';
+    if (out.app) out.browser = '';
+    else if (/SamsungBrowser/i.test(u)) out.browser = 'Samsung Internet';
+    else if (/Edg(e|A|iOS)?\//i.test(u)) out.browser = 'Edge';
+    else if (/OPR\/|Opera/i.test(u)) out.browser = 'Opera';
+    else if (/Firefox|FxiOS/i.test(u)) out.browser = 'Firefox';
+    else if (/Chrome|CriOS/i.test(u)) out.browser = 'Chrome';
+    else if (/Safari/i.test(u)) out.browser = 'Safari';
+    return out;
+  }
+
+  /* Régions françaises : codes ISO 3166-2 actuels, anciens codes lettres
+     (avant 2016) et numéros de département → région. */
+  var FR_REGIONS = {
+    ARA: 'Auvergne-Rhône-Alpes', BFC: 'Bourgogne-Franche-Comté', BRE: 'Bretagne',
+    CVL: 'Centre-Val de Loire', COR: 'Corse', GES: 'Grand Est', HDF: 'Hauts-de-France',
+    IDF: 'Île-de-France', NOR: 'Normandie', NAQ: 'Nouvelle-Aquitaine', OCC: 'Occitanie',
+    PDL: 'Pays de la Loire', PAC: 'Provence-Alpes-Côte d\'Azur',
+    GUA: 'Guadeloupe', MTQ: 'Martinique', GUF: 'Guyane', LRE: 'La Réunion', MAY: 'Mayotte'
+  };
+  var FR_OLD = { A: 'GES', G: 'GES', M: 'GES', B: 'NAQ', L: 'NAQ', T: 'NAQ', C: 'ARA', V: 'ARA',
+    P: 'NOR', Q: 'NOR', D: 'BFC', I: 'BFC', E: 'BRE', F: 'CVL', H: 'COR', J: 'IDF',
+    K: 'OCC', N: 'OCC', O: 'HDF', S: 'HDF', R: 'PDL', U: 'PAC', '20R': 'COR', '6AE': 'GES' };
+  var FR_DEPTS = {
+    ARA: '01 03 07 15 26 38 42 43 63 69 73 74', BFC: '21 25 39 58 70 71 89 90',
+    BRE: '22 29 35 56', CVL: '18 28 36 37 41 45', COR: '2A 2B 20', GES: '08 10 51 52 54 55 57 67 68 88',
+    HDF: '02 59 60 62 80', IDF: '75 77 78 91 92 93 94 95', NOR: '14 27 50 61 76',
+    NAQ: '16 17 19 23 24 33 40 47 64 79 86 87', OCC: '09 11 12 30 31 32 34 46 48 65 66 81 82',
+    PDL: '44 49 53 72 85', PAC: '04 05 06 13 83 84',
+    GUA: '971', MTQ: '972', GUF: '973', LRE: '974', MAY: '976'
+  };
+  var DEPT_REGION = (function () {
+    var m = {};
+    Object.keys(FR_DEPTS).forEach(function (r) { FR_DEPTS[r].split(' ').forEach(function (d) { m[d] = r; }); });
+    return m;
+  }());
+  /* Outre-mer : MaxMind / Vercel les donnent souvent comme PAYS (GP, RE…). */
+  var DOM_COUNTRY = { GP: 'GUA', MQ: 'MTQ', GF: 'GUF', RE: 'LRE', YT: 'MAY' };
+  var COUNTRIES = {
+    FR: 'France', BE: 'Belgique', CH: 'Suisse', LU: 'Luxembourg', MC: 'Monaco', CA: 'Canada',
+    MA: 'Maroc', TN: 'Tunisie', DZ: 'Algérie', SN: 'Sénégal', CI: 'Côte d\'Ivoire', CM: 'Cameroun',
+    ES: 'Espagne', PT: 'Portugal', IT: 'Italie', DE: 'Allemagne', GB: 'Royaume-Uni', IE: 'Irlande',
+    NL: 'Pays-Bas', US: 'États-Unis', AE: 'Émirats arabes unis', IL: 'Israël', MU: 'Maurice',
+    PF: 'Polynésie française', NC: 'Nouvelle-Calédonie', PM: 'Saint-Pierre-et-Miquelon',
+    BL: 'Saint-Barthélemy', MF: 'Saint-Martin', TH: 'Thaïlande', AD: 'Andorre'
+  };
+  function countryName(c) { var k = String(c || '').toUpperCase(); return COUNTRIES[k] || k || ''; }
+  /* Code région → { code, name } (France), sinon null. */
+  function frRegion(country, region) {
+    var c = String(country || '').toUpperCase();
+    if (DOM_COUNTRY[c]) return { code: DOM_COUNTRY[c], name: FR_REGIONS[DOM_COUNTRY[c]] };
+    if (c && c !== 'FR') return null;
+    var r = String(region || '').toUpperCase().replace(/^FR-/, '');
+    if (!r) return null;
+    var code = FR_REGIONS[r] ? r : (FR_OLD[r] || DEPT_REGION[r] || DEPT_REGION[('0' + r).slice(-2)] || '');
+    return code ? { code: code, name: FR_REGIONS[code] } : { code: r, name: r };
+  }
+  /* « Région » lisible d'un bloc : région française, sinon pays. */
+  function zoneOf(v) {
+    if (!v || !v.country) return '';
+    var fr = frRegion(v.country, v.region);
+    if (fr) return fr.name;
+    var c = String(v.country).toUpperCase();
+    return c === 'FR' ? 'France (région inconnue)' : countryName(c);
+  }
+  function hasGeo(v) { return !!(v && (v.city || v.country)); }
+  function hasDevice(v) { return !!(v && v.device); }
+
+  function visiteurOf(l, bkVis) {
+    var lv = (l && l.visiteur && typeof l.visiteur === 'object') ? l.visiteur : null;
+    var bv = (bkVis && typeof bkVis === 'object') ? bkVis : ((l && l._bkVis) || null);
+    var out = { city: '', region: '', country: '', zone: '', device: '', os: '', browser: '', app: '', geoVia: '', deviceVia: '' };
+    var g = hasGeo(lv) ? lv : (hasGeo(bv) ? bv : null);
+    if (g) {
+      out.city = g.city || ''; out.region = g.region || ''; out.country = String(g.country || '').toUpperCase();
+      out.zone = zoneOf(g); out.geoVia = g.geoVia || g.via || '';
+    }
+    var d = hasDevice(lv) ? lv : null;
+    if (!d) {
+      var ua = l && l.metaIds && l.metaIds.ua;
+      if (ua) { d = uaDevice(ua); d.via = 'optin'; if (!d.device) d = null; }
+    }
+    if (!d && hasDevice(bv)) d = bv;
+    if (d) { out.device = d.device || ''; out.os = d.os || ''; out.browser = d.browser || ''; out.app = d.app || ''; out.deviceVia = d.via || ''; }
+    return out;
+  }
+  var APP_LBL = { facebook: 'appli Facebook', instagram: 'appli Instagram', messenger: 'appli Messenger',
+    tiktok: 'appli TikTok', linkedin: 'appli LinkedIn', snapchat: 'appli Snapchat' };
+  var DEVICE_LBL = { mobile: 'Téléphone', tablette: 'Tablette', ordinateur: 'Ordinateur' };
+  /* Libellé court : « Téléphone · iOS · appli Instagram ». */
+  function deviceLabel(v) {
+    if (!v || !v.device) return '';
+    var p = [DEVICE_LBL[v.device] || v.device];
+    if (v.os) p.push(v.os);
+    if (v.app) p.push(APP_LBL[v.app] || v.app); else if (v.browser) p.push(v.browser);
+    return p.join(' · ');
+  }
+  function placeLabel(v) {
+    if (!v || !(v.city || v.country)) return '';
+    var z = v.zone || zoneOf(v);
+    return [v.city, z].filter(Boolean).join(', ');
+  }
+  /* Clé des axes « Appareil » et « Région » (Qualité leads, Qualité par pub).
+     L'appli intégrée (Facebook / Instagram…) forme sa propre ligne. */
+  function visiteurAxisKey(l, ax) {
+    var v = visiteurOf(l);
+    if (ax === 'device') {
+      if (!v.device) return { label: 'Appareil inconnu', group: 'dev:inconnu', adId: '', legacy: false, outOfAds: true };
+      var lbl = DEVICE_LBL[v.device] || v.device;
+      if (v.app) lbl += ' — ' + (APP_LBL[v.app] || v.app);
+      else if (v.device === 'mobile') lbl += ' — navigateur';
+      return { label: lbl, group: 'dev:' + v.device + ':' + (v.app || (v.device === 'mobile' ? 'nav' : '')), adId: '', legacy: false };
+    }
+    if (!v.zone) return { label: 'Lieu inconnu', group: 'geo:inconnu', adId: '', legacy: false, outOfAds: true };
+    return { label: v.zone, group: 'geo:' + v.zone.toLowerCase(), adId: '', legacy: false };
+  }
+
   function leadAxisKey(l, axis, IDX) {
     var ax = axis || 'creative';
+    if (ax === 'device' || ax === 'region') return visiteurAxisKey(l, ax);
     function mk(label, isLegacy, adId) {
       return { label: label, group: creativeGroupKey(label), adId: adId || '', legacy: !!isLegacy };
     }
@@ -2345,13 +2497,22 @@
       l._neverReached = l._neverEligible && !(l._p9 && reachedP9[l._p9]) && !bookedLead[l._id] && !(l._p9 && bookedP9[l._p9]);
     });
 
-    var AXES = ['creative', 'adset', 'campaign', 'channel'];
-    var maps = { creative: {}, adset: {}, campaign: {}, channel: {} };
+    /* Appareil / Région (23/11/2026) : repli sur le bloc visiteur du premier
+       RDV pris par le prospect lui-même (Self Booking sans quiz). */
+    DATA.bookings.forEach(function (b) {
+      if (!b || !b.visiteur || (!b.visiteur.country && !b.visiteur.device)) return;
+      var vl = bookingLead(b);
+      if (vl && !vl._bkVis) vl._bkVis = b.visiteur;
+    });
+    var AXES = ['creative', 'adset', 'campaign', 'channel', 'device', 'region'];
+    var maps = { creative: {}, adset: {}, campaign: {}, channel: {}, device: {}, region: {} };
     var unattr = {
       creative: { booked: 0, cancelled: 0, noshow: 0, closes: 0 },
       adset:    { booked: 0, cancelled: 0, noshow: 0, closes: 0 },
       campaign: { booked: 0, cancelled: 0, noshow: 0, closes: 0 },
-      channel:  { booked: 0, cancelled: 0, noshow: 0, closes: 0 }
+      channel:  { booked: 0, cancelled: 0, noshow: 0, closes: 0 },
+      device:   { booked: 0, cancelled: 0, noshow: 0, closes: 0 },
+      region:   { booked: 0, cancelled: 0, noshow: 0, closes: 0 }
     };
 
     function rowOf(axis, l) {
@@ -2472,7 +2633,9 @@
       creative: sortRows(maps.creative),
       adset:    sortRows(maps.adset),
       campaign: sortRows(maps.campaign),
-      channel:  sortRows(maps.channel)
+      channel:  sortRows(maps.channel),
+      device:   sortRows(maps.device),
+      region:   sortRows(maps.region)
     };
     k.utmUnattrByAxis = unattr;
     /* Compat : api/agency-funnel.js et l'export lisent encore ces deux clés. */
@@ -2744,6 +2907,9 @@
     creativeGroupKey: creativeGroupKey, creativeMatchKey: creativeMatchKey,
     buildCreativeIndex: buildCreativeIndex, refAdOf: refAdOf,
     axisValueOf: axisValueOf, leadAxisKey: leadAxisKey,
+    /* Visiteur : lieu et appareil (23/11/2026) */
+    uaDevice: uaDevice, visiteurOf: visiteurOf, deviceLabel: deviceLabel, placeLabel: placeLabel,
+    zoneOf: zoneOf, frRegion: frRegion, countryName: countryName, visiteurAxisKey: visiteurAxisKey,
     classifyLegacyLabel: classifyLegacyLabel,
     realEntryMs: realEntryMs, pad2: pad2, isoDate: isoDate, median: median,
     phone9: phone9, leadTunnel: leadTunnel, frDateMs: frDateMs,

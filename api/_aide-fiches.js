@@ -344,14 +344,14 @@ const FICHES = [
     body: L([
       "1. Ouvre la fiche du lead, onglet **⚡ Action**, section **🔔 Follow-Up**.",
       "2. Choisis la **date** et l'**heure** (heure de Paris), une note si tu veux, et la **Durée**.",
-      "3. Laisse coché **📅 Calendrier Stratégie** pour que le rappel apparaisse dans le Google Agenda de la personne à qui le lead est attribué.",
+      "3. Laisse coché **📅 Calendrier Stratégie** pour que le rappel apparaisse dans TON Google Agenda (celui de ta fiche Booking), même si le lead est attribué à quelqu'un d'autre.",
       "4. Clique **🔔 Programmer** → « 🔔 Follow-up programmé ».",
       "2 minutes avant l'heure, Team t'affiche un rappel (et une notification si tu les as autorisées).",
       "",
       "Si tu vois « ⚠️ Event calendrier non créé : calendrier Google non connecté pour X » : le rappel est bien créé dans Team, mais pas dans l'agenda, car X n'a pas connecté son Google Agenda dans Booking (voir « Comment connecter mon Google Agenda à Booking ? »). « FU créé sans event : lead non assigné » : attribue d'abord le lead.",
       "Pour cocher un follow-up comme fait : la case à côté ; pour le supprimer : 🗑.",
     ]),
-    guide: [G_OPEN_LEAD, G_SEG_ACTION, { page: 'sales-leads', sel: '#ldSheetInner [data-fu-field="date"]', text: "Choisis la date, puis l'heure juste à côté." }, { page: 'sales-leads', sel: '#ldSheetInner [data-fu-field="pushCal"]', text: "Laisse coché « 📅 Calendrier Stratégie » pour l'ajouter au Google Agenda." }, { page: 'sales-leads', sel: '#ldSheetInner [data-action="addFu"]', text: "Clique sur « 🔔 Programmer »." }],
+    guide: [G_OPEN_LEAD, G_SEG_ACTION, { page: 'sales-leads', sel: '#ldSheetInner [data-fu-field="date"]', text: "Choisis la date, puis l'heure juste à côté." }, { page: 'sales-leads', sel: '#ldSheetInner [data-fu-field="pushCal"]', text: "Laisse coché « 📅 Calendrier Stratégie » pour l'ajouter à ton Google Agenda." }, { page: 'sales-leads', sel: '#ldSheetInner [data-action="addFu"]', text: "Clique sur « 🔔 Programmer »." }],
   },
   {
     id: 'leads-live-qualite', cat: 'Leads Live',

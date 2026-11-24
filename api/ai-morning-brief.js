@@ -187,6 +187,17 @@ async function collect(today) {
         return { quiz: c.name, arrives: c.arrives, ecarts: c.items.filter(function (i) { return i.alert; }).map(function (i) { return i.label + ' : ' + i.a + ' (' + i.aLbl + ') contre ' + i.b + ' (' + i.bLbl + ')'; }) };
       });
     }),
+    /* Séquences d'après-RDV (api/_parcoursSuite.js) : prospects qui ont
+       cliqué hier (choix d'une suite, bouton « réserver ») sans reprendre de
+       RDV. Une ligne dans le brief plutôt qu'une cloche par clic. */
+    safe('prospectsChauds', async function () {
+      const list = await require('./_parcoursSuite').prospectsChauds(yStart.getTime());
+      if (list.length) {
+        out.prospectsChaudsApresRdv = list.slice(0, 15).map(function (x) {
+          return { prenom: x.prenom, sequence: x.sequence, aCliqueReserverSansReserver: x.reserver, aVouluLire: x.choix };
+        });
+      }
+    }),
     safe('watch', async function () {
       const s = await db.collection('ai_watch').where('status', '==', 'open').limit(15).get();
       const list = [];
@@ -232,6 +243,7 @@ const SYSTEM = [
   '- resume : 2 phrases, le plus important d\'abord (argent encaissé / perdu, risque client, opportunité chaude) ;',
   '- sections, dans cet ordre et seulement si elles ont du contenu : « Hier » (📊, chiffres clés commentés), « Leads chauds à appeler » (🔥), « Clients à risque » (🚨, TOUJOURS présente s\'il y a des clients rouges ; signale les nouveaux passages au rouge), « Renouvellements & upsell » (💎), « Agenda du jour » (📅), « Alertes » (⚠️) ; 3 à 6 puces chacune, courtes, chiffrées ;',
   '- alertesMesureQuiz (si présent) : la mesure des quiz ne concorde pas hier — UNE puce dans « Alertes » par quiz, avec l\'écart chiffré (onglet Funnel Sales › Qualité leads › Quiz, encart « Contrôle de cohérence »). Absent = tout concorde : n\'en parle pas ;',
+  '- prospectsChaudsApresRdv (si présent) : prospects en séquence d\'e-mails après un RDV qui ont cliqué hier sans reprendre rendez-vous — UNE puce « À rappeler » par prospect (prénom, ce qu\'il a voulu lire, s\'il a cliqué sur réserver). Absent : n\'en parle pas ;',
   '- actions : 3 à 6 actions concrètes pour aujourd\'hui, avec qui (prénom ou rôle) et quoi.',
   'Règles : uniquement les données fournies, aucune invention, aucun chiffre inventé. Si une donnée manque, n\'en parle pas. Ton direct, factuel, français.',
 ].join('\n');

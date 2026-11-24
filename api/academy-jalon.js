@@ -34,6 +34,7 @@
 // ============================================================================
 
 const { requireAuth, estCoach } = require('./_verifyFirebaseAuth');
+const { fetchPont } = require('./_academyCompte');
 
 const ACADEMY_URL = (process.env.ACADEMY_BRIDGE_URL || 'https://academy.adrienemily.com').replace(/\/$/, '');
 const ROLES = ['admin', 'coach'];
@@ -82,7 +83,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const r = await fetch(ACADEMY_URL + '/api/bridge/constat-jalon', {
+    const r = await fetchPont(ACADEMY_URL + '/api/bridge/constat-jalon', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-bridge-key': key },
       body: JSON.stringify({ email: email, code: code, statut: statut, cause: cause, par: par }),
