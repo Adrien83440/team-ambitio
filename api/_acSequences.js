@@ -24,7 +24,9 @@
 const AC = require('./_activeCampaign');
 const DATA = require('./_acSequencesData.json');
 
-const EXPEDITEUR = { fromname: 'Adrien & Emily', fromemail: 'contact@adrienemily.com', reply2: 'contact@adrienemily.com' };
+/* Réponses → strategie@ : la seule boîte que Team lit (api/gmail-inbound-sync.js)
+   pour rattacher la réponse à la fiche et alerter le setter / closer. */
+const EXPEDITEUR = { fromname: 'Adrien & Emily', fromemail: 'contact@adrienemily.com', reply2: 'strategie@adrienemily.com' };
 
 function norm(s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
 
