@@ -718,7 +718,7 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   (`api/_activeCampaign.js`, variables Vercel `ACTIVECAMPAIGN_API_URL` / `ACTIVECAMPAIGN_API_KEY`, tags désignés par
   leur NOM ; plus de Make, demande d'Adrien du 24/11/2026 — le scénario Make « Parcours RDV (Team) → ActiveCampaign »
   10226515 est éteint, pas supprimé) : `rdv_pris` → tag `rdv_a_venir` + sortie des nurturing 35 / 26 / 32 ;
-  `rdv_libere` (no-show, annulé sans report) → `rdv_a_venir` retiré + `rdv_manque` (séquence « rendez-vous manqué ») ;
+  `rdv_libere` (no-show, annulé sans report) → `rdv_a_venir` retiré + `rdv_manque` (séquence « rendez-vous manqué ») — SAUF si le même prospect (e-mail / téléphone) a déjà un autre RDV non annulé à venir (`autreRdvAVenir`, il a déplacé lui-même) ; `rdv_pris` retire aussi `rdv_manque` et sort des séquences d'après-RDV 43-49 (`activeCampaign.apresRdv`) ;
   `nurturing_stop` (offre / close / disqualifié) → `stop_autom` ; `frein` → tag `frein_*` + `stop_autom`. Après un `non_close` : `api/parcours-frein.js` (cron du matin) lit l'appel (`replay`, sinon note
   du closer après J+3, sinon « général »), écrit `parcoursRdv.frein` et `leads.freinPrincipal` (jamais écrasé si
   `corrigePar`), puis séquence ActiveCampaign du frein (automatisations 36-41, textes

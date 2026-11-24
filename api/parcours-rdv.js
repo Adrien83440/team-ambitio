@@ -188,6 +188,17 @@ async function actionner(body, par, res) {
       res.status(r.ok ? 200 : 400).json(r);
       return;
     }
+    /* Lecture des réponses e-mail des prospects (api/gmail-inbound-sync.js) :
+       on ne touche qu'à `enabled`, avec une trace. Accord d'Adrien du
+       24/11/2026 pour l'allumer si elle était éteinte. */
+    if (action === 'gmail_inbound') {
+      if (typeof body.enabled !== 'boolean') { res.status(400).json({ ok: false, error: 'enabled (booléen) requis' }); return; }
+      const ref = db.collection('_config').doc('gmail_inbound');
+      const avant = await ref.get();
+      await ref.set({ enabled: body.enabled, enabledHistorique: admin.firestore.FieldValue.arrayUnion({ at: Date.now(), par: par, enabled: body.enabled, avant: avant.exists ? (avant.data() || {}).enabled === true : null }) }, { merge: true });
+      res.status(200).json({ ok: true, avant: avant.exists ? (avant.data() || {}).enabled === true : null, maintenant: body.enabled });
+      return;
+    }
     if (action === 'reglage') {
       const r = await reglage(body, par);
       res.status(r.ok ? 200 : 400).json(r);
