@@ -55,6 +55,22 @@ facturation, réservation, formulaires, signatures électroniques, paiements, t�
 - **Repo** : `Adrien83440/team-ambitio` → déploiement automatique Vercel sur push
 - **Interlocuteur unique** : Adrien, fondateur et seul développeur du projet
 
+## Contrats des indépendants de l'équipe (24/11/2026)
+
+Sept modèles GÉNÉRÉS dans `signature_templates` (audience admin, `roleSignataire: 'prestataire'` → le bloc de
+signature dit « La SOCIÉTÉ / Le PRESTATAIRE »), copies dans `scripts/data/contrats-atelier/` : `full-cycle`
+(5ji06Vk86eXGcLdkXQ5b), `full-cycle-canada`, `csm-coach-expert` (modèle « Marine », TiSsuFgNni218AC9n1bd),
+`setting-telephonique`, `setting-ecrit`, `coach-elite-phenix`, `coach-business-phenix`. Refondus après une relecture
+« requalification en salariat » (demande d'Adrien) — à ne JAMAIS réintroduire dans un contrat d'indépendant :
+heures ou volume horaire minimum, forfait proportionnel au temps, compte rendu quotidien, objectifs ou cadence
+« définis par » un responsable, « évaluation », réunions obligatoires, planning établi par la société, « période
+d'essai » (dire « phase de démarrage »), barème révisable par la société seule. Le forfait du setting rémunère la
+prise en charge de prospects (capacité et délai convenus par écrit), pas un temps. Pas d'annexe opérationnelle
+(retirée à la demande d'Adrien) : seule l'annexe 1 (barème) reste. Les anciens PDF importés (« envois rapides »,
+`isAdhoc`, cachés de la grille) restent en base. Rédaction de l'agent, pas un avis d'avocat. Non traité : le suivi
+du temps de connexion (`api/user-activity.js`) et l'EOD quotidien (`sales-eod.html`) s'appliquent encore aux
+indépendants.
+
 ## L'équipe (pour comprendre les rôles dans le code)
 
 > Photo au 09/10/2026. La source de vérité est `_meta/team_members` (Admin → Utilisateurs) : ne jamais coder une liste de noms en dur, la lire.
