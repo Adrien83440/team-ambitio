@@ -87,6 +87,7 @@ for sec in re.split(r'\n## (?=\d\. )', s)[1:]:
         continue
     key=re.search(r'\(`([a-z]+)`\)', sec.split('\n',1)[0]).group(1)
     cit=re.search(r'\nCitation : « (.+?) »', sec).group(1)
+    heros=re.search(r'\nHéros : (.+)', sec).group(1).strip()
     ems={}
     PIED='\n\n--\nAdrien & Emily · adrienemily.com\nSe désinscrire : {{lien_desinscription}}\n'
     # Paragraphe final de l'étape 4, selon la dernière réponse (C4N = sans réponse).
@@ -110,7 +111,7 @@ for sec in re.split(r'\n## (?=\d\. )', s)[1:]:
             ems[code]=email(code,sujet,pre,None,question,quote,1)
         elif code=='C4':
             # Un seul texte, décliné par dernière réponse : C4A, C4B, C4C, C4N.
-            assert sum(l=='{{recap}}' for l in quote)==1 and sum(l=='{{fin}}' for l in quote)==1 and not question and not bouton,(key,code)
+            assert sum(l=='{{recap}}' for l in quote)<=1 and sum(l=='{{fin}}' for l in quote)==1 and not question and not bouton,(key,code)
             for f in sorted(fins):
                 q2=[]
                 for l in quote: q2.extend(fins[f]['lignes'] if l=='{{fin}}' else [l])
@@ -128,7 +129,7 @@ for sec in re.split(r'\n## (?=\d\. )', s)[1:]:
     for c in ('C4A','C4B','C4C','C4N'): ems[c]['suite']=[]; ems[c]['defaut']=None
     b9=[ems[c]['bouton'] for c in ems if ems[c]['bouton']]
     assert len(b9)==9 and all(len(x)<=75 for x in b9),(key,[x for x in b9 if len(x)>75])
-    out[key]={'citation':cit,'chapitres':ems}
+    out[key]={'citation':cit,'heros':heros,'de':("d'" if heros[0] in 'AEIOUYÉH' else 'de ')+heros,'chapitres':ems}
 assert sorted(out)==['equipe','operationnel','plafond','rentabilite','vie']
 assert sorted(FREINS)==['frein_decision','frein_general','frein_preuves','frein_priorite','frein_timing','frein_tresorerie'] and all(sorted(v)==['E1','E5'] for v in FREINS.values()),FREINS.keys()
 if LOCAL:

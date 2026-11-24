@@ -12,10 +12,11 @@
 //     (sa réponse à « Qu'est-ce qui vous pèse le plus ? » du questionnaire) ;
 //   - après un RDV manqué ou annulé sans report : 3 e-mails sur 7 jours.
 //
-// Avec une douleur : e-mail 1 = frein ; e-mails 2 à 5 = son HISTOIRE en quatre
-// étapes (constat → cause → prix → prise de conscience), chaque e-mail posant
-// une question nouvelle avec trois réponses ; la réponse cliquée choisit le
-// texte suivant (sans clic : la suite par défaut) ; e-mail 6 = frein.
+// Avec une douleur : e-mail 1 = frein ; e-mails 2 à 5 = un RÉCIT en quatre
+// épisodes autour d'un personnage (« Marc est chef d'entreprise, comme vous ») ;
+// chaque épisode finit sur trois décisions du personnage, celle que le prospect
+// clique choisit l'épisode suivant (sans clic : la première) ; le dernier est
+// le dénouement, puis un vrai client ; e-mail 6 = frein.
 // Sans douleur : la séquence du frein telle quelle.
 //
 // Textes : docs/parcours-rdv/sequences-freins.md → _acSequencesData.json ;
@@ -291,8 +292,8 @@ function contenuDe(suite, k, off) {
     const moi = D.chapitres[chap.c];
     // On ne prête jamais au prospect une phrase qu'il n'a pas cliquée.
     const ouv = !moi.bouton ? '' : (chap.choisi
-      ? 'Vous nous avez répondu : « ' + moi.bouton + ' ».'
-      : 'Ce que les dirigeants dans votre situation nous disent le plus souvent : « ' + moi.bouton + ' ».');
+      ? 'À la place ' + (D.de || 'du personnage') + ', vous avez choisi : « ' + moi.bouton + ' ».'
+      : (D.heros || 'Le personnage') + ' a choisi : « ' + moi.bouton + ' ».');
     // Résumé (étape 4) : sa réponse au questionnaire, puis ses réponses cliquées ;
     // sans aucun clic, ce que disent le plus souvent les dirigeants dans son cas.
     const dits = (chap.chemin || []).filter(function (x) { return x.choisi && D.chapitres[x.c] && D.chapitres[x.c].bouton; }).map(function (x) { return D.chapitres[x.c].bouton; });
@@ -307,14 +308,14 @@ function contenuDe(suite, k, off) {
     let bh = '', bt = '';
     if (chap.options.length) {
       const q = moi.question || 'Et chez vous ?';
-      const aide = 'Cliquez sur la phrase qui vous ressemble le plus : la suite de votre histoire en dépend.';
+      const aide = 'Cliquez sur votre choix : la suite de l\'histoire en dépend.';
       bh = '<p style="margin:26px 0 6px;font-size:17px;font-weight:700;color:#111827">' + esc(q) + '</p>'
         + '<p style="margin:0 0 14px;font-size:14px;line-height:1.5;color:#6b7280">' + esc(aide) + '</p>';
       bt = q.toUpperCase() + '\n' + aide;
       chap.options.forEach(function (c) {
         const u = lien(suite.jeton, 'c', k, dm) + '&c=' + c;
-        bh += '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px"><tr><td><a href="' + esc(u) + '" style="display:block;background:#ffffff;color:#1e3a8a;border:2px solid #2563eb;border-radius:12px;padding:14px 18px;font-size:16px;line-height:1.4;font-weight:700;text-decoration:none;text-align:center">« ' + esc(D.chapitres[c].bouton) + ' »</a></td></tr></table>';
-        bt += '\n→ « ' + D.chapitres[c].bouton + ' » : ' + u;
+        bh += '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px"><tr><td><a href="' + esc(u) + '" style="display:block;background:#ffffff;color:#1e3a8a;border:2px solid #2563eb;border-radius:12px;padding:14px 18px;font-size:16px;line-height:1.4;font-weight:700;text-decoration:none;text-align:center">' + esc(D.chapitres[c].bouton) + ' →</a></td></tr></table>';
+        bt += '\n→ ' + D.chapitres[c].bouton + ' : ' + u;
       });
     } else {
       bh = '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:14px 0 6px"><tr><td style="background:#2563eb;border-radius:10px"><a href="' + esc(rdv) + '" style="display:inline-block;padding:14px 26px;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none">Réserver mon audit</a></td></tr></table>';
@@ -871,7 +872,7 @@ async function enregistrerClic(jeton, action, etape, chapitre) {
     const upd = { suiteApresRdv: resume(apres) };
     // Une ligne d'historique par CHOIX (pas de cloche : le closer la lit en ouvrant la fiche).
     const deja = (s.clics || []).some(function (c) { return c.a === action && (action !== 'c' || c.c === clic.c); });
-    if (!deja && libelle) upd.timeline_history = FV.arrayUnion({ text: '👆 Séquence après RDV — a répondu : « ' + libelle + ' »', date: dateFr(), color: '#a78bfa' });
+    if (!deja && libelle) upd.timeline_history = FV.arrayUnion({ text: '👆 Séquence après RDV — a choisi : « ' + libelle + ' »', date: dateFr(), color: '#a78bfa' });
     if (!deja && action === 'rdv') upd.timeline_history = FV.arrayUnion({ text: '👆 Séquence après RDV — a cliqué sur « réserver »', date: dateFr(), color: '#a78bfa' });
     await db.collection('leads').doc(String(s.leadId)).update(upd).catch(function () {});
   }

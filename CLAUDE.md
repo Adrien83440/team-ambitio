@@ -754,16 +754,18 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   par `parcours-frein.js` (non_close → 5 e-mails J+1/4/8/14/21) ou par le passage du parcours (`rdv_libere` → 3 e-mails J+1/3/7), envoyés
   depuis strategie@, 9 h 30 – 19 h hors dimanche, jamais deux à moins de 40 h, plafond `suites.plafondJour`. **Douleur** = réponse du
   prospect à « Qu'est-ce qui vous pèse le plus ? » du questionnaire (`profilDe`, règles fixes, jamais d'IA) : avec une histoire, 6 e-mails (J+1/4/8/12/16/21) :
-  e-mail 1 du frein, e-mails 2 à 5 = l'histoire en QUATRE ÉTAPES, e-mail 6 du frein. Les étapes avancent (demande d'Adrien du 24/11/2026 :
-  jamais les mêmes choix deux fois, on va vers une prise de conscience puis le retour) : constat (`C1`) → cause (`C2A/B/C`) → prix, avec un
-  témoignage (`C3A/B/C`) → prise de conscience (`C4A/B/C`, `C4N` sans réponse : un seul texte `C4`, paragraphe `{{fin}}` selon la dernière
-  réponse, `{{recap}}` = sa réponse au questionnaire + ses réponses cliquées, un seul bouton : reprendre un audit). Chaque e-mail pose une
-  question NOUVELLE (`*Question :*`) avec trois réponses à la première personne (`*Bouton :*`), jamais une question du questionnaire ; la
-  réponse cliquée choisit le texte suivant (`choixSuivant`, graphe `suite` / `defaut` de `_parcoursChoixData.json`), sans clic la suite par
-  défaut. On ne prête jamais au prospect une phrase non cliquée : `{{ouverture}}` = « Vous nous avez répondu… » ou « Ce que les dirigeants
-  dans votre situation nous disent le plus souvent… ». Textes : `docs/parcours-rdv/sequences-choix.md` → `api/_parcoursChoixData.json` par
-  `python3 scripts/build-parcours-choix.py`, images `media/parcours/`. Chaque étape garde `chapitre`, `choisi`, `options` (les réponses
-  affichées). Phrases miroir (`MIROIRS`) = réponses À CHOIX reprises mot pour mot, la ligne disparaît si la réponse
+  e-mail 1 du frein, e-mails 2 à 5 = un RÉCIT en quatre épisodes, e-mail 6 du frein. Forme voulue par Adrien (24/11/2026, après deux
+  versions refusées : un sommaire de chapitres, puis des questions posées au lecteur « qui ressemblaient au questionnaire ») : on suit un
+  PERSONNAGE (« Marc est chef d'entreprise, comme vous » — jamais de métier précis ; `Héros :` Marc, Sophie, Julien, Claire, Antoine),
+  inventé et dit comme tel une fois, sans aucun résultat chiffré. Épisode 1 (`C1`) : la scène de départ ; épisodes 2 (`C2A/B/C`) et 3
+  (`C3A/B/C`) : ce qui lui arrive avec la décision choisie et pourquoi cela ne suffit pas, puis le déclic (« Je vais réfléchir ») ;
+  dénouement (`C4`, début `{{fin}}` selon la dernière décision : `C4A/B/C`, `C4N` sans clic) : un an plus tard, puis « Marc n'existe pas.
+  Franck, si. » (vrai client, ses mots, ses chiffres, sa vidéo), puis « Et votre histoire ? » et le bouton pour reprendre un audit. Les
+  trois boutons de chaque épisode sont TOUJOURS des décisions du personnage (`*Bouton :*`, sous `*Question :*` « À la place de Marc, que
+  feriez-vous ? »), jamais une question sur le lecteur ; la décision cliquée choisit l'épisode suivant (`choixSuivant`, graphe `suite` /
+  `defaut` de `_parcoursChoixData.json`), sans clic la première (`{{ouverture}}` = « À la place de Marc, vous avez choisi… » ou « Marc a
+  choisi… »). Textes : `docs/parcours-rdv/sequences-choix.md` → `api/_parcoursChoixData.json` par `python3 scripts/build-parcours-choix.py`,
+  images `media/parcours/` (bandeaux `recit-*.jpg`). Chaque étape garde `chapitre`, `choisi`, `options` (les décisions affichées). Phrases miroir (`MIROIRS`) = réponses À CHOIX reprises mot pour mot, la ligne disparaît si la réponse
   manque. Sans douleur connue (dont l'ancien formulaire « principal défi ») : la séquence du frein telle quelle (`_acSequencesData.json`,
   reconstruit par `python3 scripts/build-sequences-freins.py`). Avec douleur, les e-mails 1 et 5 du frein sont ceux de la section
   « 0. Freins avec histoire » (ils citent sa réponse et n'annoncent pas les e-mails du frein). **Garde-fous (relecture du 24/11/2026)** :
