@@ -737,10 +737,13 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   (`frein_*`, `douleur_*`, `rdv_a_venir`, `rdv_manque`, `stop_autom`). Une suite = `parcours_suites/{bookingId}` (Admin SDK seul), créée
   par `parcours-frein.js` (non_close → 5 e-mails J+1/4/8/14/21) ou par le passage du parcours (`rdv_libere` → 3 e-mails J+1/3/7), envoyés
   depuis strategie@, 9 h 30 – 19 h hors dimanche, jamais deux à moins de 40 h, plafond `suites.plafondJour`. **Douleur** = réponse du
-  prospect à « Qu'est-ce qui vous pèse le plus ? » du questionnaire (`profilDe`, règles fixes, jamais d'IA) : e-mail 1 du frein +
-  paragraphe miroir, e-mails 2-3-4 de la douleur (`docs/parcours-rdv/sequences-choix.md` → `api/_parcoursChoixData.json` par
-  `python3 scripts/build-parcours-choix.py`, images `media/parcours/`), e-mail 5 du frein ; l'e-mail 2 finit par deux boutons « la
-  suite » (sans clic : A). Phrases miroir (`MIROIRS`) = réponses À CHOIX reprises mot pour mot, la ligne disparaît si la réponse
+  prospect à « Qu'est-ce qui vous pèse le plus ? » du questionnaire (`profilDe`, règles fixes, jamais d'IA) : avec une histoire, 6 e-mails (J+1/4/8/12/16/21) :
+  e-mail 1 du frein, e-mails 2 à 5 = quatre CHAPITRES de l'histoire, e-mail 6 du frein. Chaque histoire a sept chapitres (C1 à C7,
+  `docs/parcours-rdv/sequences-choix.md` → `api/_parcoursChoixData.json` par `python3 scripts/build-parcours-choix.py`, images
+  `media/parcours/`) : C1 d'abord, puis à la fin de chaque chapitre TROIS boutons vers des chapitres pas encore lus
+  (`ORDRE_CHAPITRES`) ; le chapitre cliqué est l'e-mail suivant (`choixSuivant`), sans clic le premier des trois ; le quatrième
+  chapitre ne propose que la prise de RDV. `{{ouverture}}` = « Vous avez choisi de lire… » après un clic, « Voici la suite… » sinon.
+  Chaque étape garde `chapitre`, `choisi`, `options` (les boutons affichés). Phrases miroir (`MIROIRS`) = réponses À CHOIX reprises mot pour mot, la ligne disparaît si la réponse
   manque. Sans douleur connue (dont l'ancien formulaire « principal défi ») : la séquence du frein telle quelle (`_acSequencesData.json`,
   reconstruit par `python3 scripts/build-sequences-freins.py`). Avec douleur, les e-mails 1 et 5 du frein sont ceux de la section
   « 0. Freins avec histoire » (ils citent sa réponse et n'annoncent pas les e-mails du frein). **Garde-fous (relecture du 24/11/2026)** :
@@ -748,7 +751,7 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   bonne séquence remplace l'autre ; aucune suite créée moteur éteint, premier e-mail abandonné après 5 jours de retard (`trop_tard`) ;
   e-mail en échec rejoué 3 fois, réservation restée sans suite jamais rejouée (signalée dans le module admin) ; ActiveCampaign rejoué
   tant que ce n'est pas fait (`acEnAttente`) ; à la fin, `stop_autom` est retirée avant l'entrée newsletter. Un clic n'est compté que par le POST du
-  navigateur (jamais à la lecture du lien) ; deux choix opposés en 2 min = robot, ignoré ; la désinscription demande un vrai clic →
+  navigateur (jamais à la lecture du lien) ; deux chapitres différents cliqués en 2 min = robot, ignoré ; un clic ne vaut que depuis le dernier e-mail parti ; la désinscription demande un vrai clic →
   `leads.emailDesinscrit`, `stop_autom` et désinscription de toutes les listes ActiveCampaign. Avant CHAQUE e-mail la suite s'arrête si
   le prospect a repris un RDV, est devenu client, s'est désinscrit ou si l'issue du RDV a changé. Fin (3 jours après le dernier
   e-mail) → entrée dans l'automatisation « Newsletter 2k26 » (`suites.newsletterAutomation` = 29), sauf désinscription. **Le closer

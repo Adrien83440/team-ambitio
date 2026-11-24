@@ -7,11 +7,12 @@
 - Les réponses de l'ancien formulaire (« Quel est votre principal défi ? ») n'ouvrent pas d'histoire : les textes citent la question et les mots du nouveau questionnaire.
 - La **douleur** vient de la première question du questionnaire (« Qu'est-ce qui vous pèse le plus dans votre entreprise aujourd'hui ? »). Cinq réponses, cinq histoires : `rentabilite`, `operationnel`, `vie`, `equipe`, `plafond`.
 - Le **frein** (trésorerie, timing, décision, preuves, priorité, général) ouvre et ferme la séquence. Quand le prospect suit une histoire, ses e-mails 1 et 5 sont ceux de la section « 0. Freins avec histoire » : ils citent sa réponse et n'annoncent pas les e-mails du frein, qui ne partiront pas.
-- Les e-mails 2, 3 et 4 sont ceux de la douleur. L'e-mail 2 se termine par deux boutons ; l'e-mail 3 est la suite choisie (sans clic : la suite A).
+- Chaque histoire a **sept chapitres** (C1 à C7). L'e-mail 2 est toujours le chapitre 1. À la fin de chaque chapitre, trois boutons proposent trois chapitres pas encore lus ; celui que le prospect choisit est son e-mail suivant (sans clic : le premier des trois). Il lit quatre chapitres (e-mails 2 à 5) ; le quatrième ne propose plus que la prise de RDV. L'e-mail 6 est celui du frein.
+- `*Bouton : …*` = le libellé du chapitre sur les boutons et sur la fiche du prospect.
 - Chaque e-mail dit **ce qui se passe** et **pourquoi**, jamais **comment** le régler. Le comment, c'est l'audit.
 - Vouvoiement, aucun prix, aucune garantie, témoignages réels avec leurs propres mots.
 
-Syntaxe : `>> phrase` = encadré ; `[ Libellé ]` = bouton de réservation (ou lien entre parenthèses) ; `[[ Libellé ]]` = lien discret ; `[A] Libellé` et `[B] Libellé` = les deux boutons de choix ; `![texte](image)` = image ; `{{m_…}}` = phrase miroir, tirée d'une réponse à choix du prospect (la ligne disparaît si la réponse manque).
+Syntaxe : `>> phrase` = encadré ; `[ Libellé ]` = bouton de réservation (ou lien entre parenthèses) ; `[[ Libellé ]]` = lien discret ; `{{choix}}` = les boutons des chapitres suivants (ou le bouton de réservation au dernier chapitre) ; `{{ouverture}}` = « Vous avez choisi… » après un clic, « Voici la suite… » sinon ; `![texte](image)` = image ; `{{m_…}}` = phrase miroir, tirée d'une réponse à choix du prospect (la ligne disparaît si la réponse manque).
 
 ## Phrases miroir
 
@@ -308,8 +309,9 @@ E-mails 1 et 5 de chaque frein quand le prospect suit une histoire. `{{douleur_c
 
 Citation : « Je fais du chiffre, mais il ne me reste presque rien à la fin du mois »
 
-**E2 : Vous faites du chiffre. Alors où part l'argent ?**
+**C1 : Vous faites du chiffre. Alors où part l'argent ?**
 *Pré-en-tête : Ce n'est presque jamais un problème de chiffre d'affaires.*
+*Bouton : Où part l'argent ?*
 
 > ![Le chiffre d'affaires monte, ce qui reste ne suit pas](rentabilite.jpg)
 >
@@ -335,22 +337,19 @@ Citation : « Je fais du chiffre, mais il ne me reste presque rien à la fin du 
 >
 > Il s'échappe par trois endroits. Dans la plupart des entreprises, un seul fait presque tout le dégât. Et c'est rarement celui que le dirigeant soupçonne.
 >
-> **Que voulez-vous lire ensuite ?**
->
-> [A] Les trois endroits où l'argent s'échappe
->
-> [B] Comment Franck est sorti du rouge en cinq mois
+> {{choix}}
 >
 > Adrien & Emily
->
-> P.S. Sans clic de votre part, vous recevrez les trois endroits. Mais choisissez : les deux suites sont écrites pour vous.
 
-**E3A : Les trois endroits où l'argent s'échappe**
+**C2 : Les trois endroits où l'argent s'échappe**
 *Pré-en-tête : Un seul fait presque tout le dégât. Lequel, chez vous ?*
+*Bouton : Les trois endroits où l'argent s'échappe*
 
 > Bonjour %FIRSTNAME%,
 >
-> Nous vous avions laissé sur une question : où part l'argent ? Voici les trois endroits. Lisez-les en pensant à vos trois derniers mois.
+> {{ouverture}}
+>
+> L'argent d'une entreprise s'échappe par trois endroits. Lisez-les en pensant à vos trois derniers mois.
 >
 > **1. Ce que vous vendez à perte sans le savoir**
 >
@@ -368,18 +367,19 @@ Citation : « Je fais du chiffre, mais il ne me reste presque rien à la fin du 
 >
 > Lequel, chez vous ? Vos chiffres le disent en moins d'une heure, à condition de savoir où regarder. C'est ce que nous faisons pendant un audit : nous ne vous dirons pas de vendre plus, nous vous montrerons par où l'argent s'en va.
 >
-> [ Voir par où il s'en va chez moi ]
+> [[ Voir par où il s'en va chez moi ]]
+>
+> {{choix}}
 >
 > Adrien & Emily
->
-> P.S. Dans quelques jours : Delphine, vingt-cinq ans de métier, et ce qu'elle appelait « l'angoisse de la tréso permanente ».
 
-**E3B : Comment Franck est sorti du rouge**
+**C3 : Comment Franck est sorti du rouge**
 *Pré-en-tête : « Avant, j'étais inconscient et j'avais peur. »*
+*Bouton : Comment Franck est sorti du rouge*
 
 > Bonjour %FIRSTNAME%,
 >
-> Vous avez choisi l'histoire de Franck. La voici.
+> {{ouverture}}
 >
 > Franck est boulanger. Quand il a commencé avec nous, son bilan était dans le rouge. Et quand il raconte cette période, il ne parle ni de ses clients ni de ses fournisseurs. Il parle de lui :
 >
@@ -397,16 +397,19 @@ Citation : « Je fais du chiffre, mais il ne me reste presque rien à la fin du 
 >
 > {{m_marge}}
 >
-> [ Voir clair sur mes chiffres ]
+> [[ Voir clair sur mes chiffres ]]
+>
+> {{choix}}
 >
 > Adrien & Emily
->
-> P.S. Dans quelques jours : Delphine, vingt-cinq ans de métier, et ce qu'elle appelait « l'angoisse de la tréso permanente ».
 
-**E4 : Delphine : 25 ans de métier, et l'angoisse chaque fin de mois**
+**C4 : Delphine : 25 ans de métier, et l'angoisse chaque fin de mois**
 *Pré-en-tête : « J'ai économisé 15 000 euros sur l'année. »*
+*Bouton : Delphine : 15 000 euros économisés en un an*
 
 > Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
 >
 > On pourrait croire qu'avec l'expérience, la question de l'argent finit par se régler toute seule. Delphine prouve que non.
 >
@@ -430,6 +433,102 @@ Citation : « Je fais du chiffre, mais il ne me reste presque rien à la fin du 
 >
 > [[ En parler avec nous, chiffres en main ]]
 >
+> {{choix}}
+>
+> Adrien & Emily
+
+**C5 : Ce que coûte une année de plus comme ça**
+*Pré-en-tête : Un calcul simple, à faire au calme.*
+*Bouton : Ce que coûte une année de plus comme ça*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> Quand il ne reste presque rien à la fin du mois, on se dit qu'on verra plus tard. Le mois prochain sera meilleur. Après la saison. Après le bilan.
+>
+> Sauf qu'attendre n'est pas gratuit. Voici un calcul que personne ne fait, et qui prend deux minutes.
+>
+> **Le calcul**
+>
+> Prenez ce que vous estimez devoir vous verser chaque mois pour le travail que vous fournissez. Retirez ce que vous vous versez vraiment. La différence, multipliée par douze, c'est ce que vous coûte une année de plus dans la même situation.
+>
+> >> Ce chiffre ne figure dans aucun bilan. C'est pourtant le plus important de votre entreprise.
+>
+> {{m_12mois}}
+>
+> Et il y a ce qui ne se chiffre pas : les décisions repoussées faute de marge, l'investissement qu'on n'ose pas faire, et la fatigue de travailler autant pour si peu de reste.
+>
+> La bonne nouvelle, c'est que ce coût n'est pas une fatalité : il vient d'endroits précis, que l'on peut trouver.
+>
+> [[ Trouver d'où il vient chez vous ]]
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C6 : Ce qu'on regarderait dans vos chiffres**
+*Pré-en-tête : 45 minutes, trois regards, aucun jargon.*
+*Bouton : Ce qu'on regarderait dans vos chiffres*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> « Un audit », cela peut vouloir tout dire. Voici donc, très concrètement, ce que nous regarderions avec vous si vous nous disiez à nouveau : « Je fais du chiffre, mais il ne me reste presque rien. »
+>
+> **1. Ce qui vous rapporte vraiment**
+>
+> Pas votre chiffre d'affaires : ce qui reste sur chacune de vos activités, une fois tout compté. C'est souvent là qu'arrive la première surprise.
+>
+> {{m_marge}}
+>
+> **2. Ce qui a bougé sans que vous le décidiez**
+>
+> Les charges qui ont monté, les prix qui n'ont pas suivi, les habitudes qui coûtent. Rien de spectaculaire pris un par un.
+>
+> **3. Ce que vous faites, vous**
+>
+> Votre temps est le premier coût de l'entreprise. Où il passe en dit long sur l'endroit où part l'argent.
+>
+> >> Vous repartez avec deux ou trois priorités, que nous travaillions ensemble ou non.
+>
+> Vous n'avez rien à préparer : nous partons de ce que vous savez déjà.
+>
+> [[ Réserver ces 45 minutes ]]
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C7 : Les questions qu'on nous pose avant de se lancer**
+*Pré-en-tête : Les trois que presque tout le monde se pose.*
+*Bouton : Les questions qu'on nous pose avant de se lancer*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> Avant de se lancer, presque tous les dirigeants nous posent les mêmes questions. Les voici, avec nos réponses.
+>
+> **« Je n'ai pas de trésorerie, comment faire ? »**
+>
+> C'est la question la plus fréquente, et elle est légitime. C'est aussi la raison pour laquelle l'audit commence par là : savoir d'où vient le manque avant de décider quoi que ce soit.
+>
+> **« Combien de temps ça me prendra ? »**
+>
+> Un rythme régulier, calé sur votre activité. Le but est de vous rendre du temps, pas de vous en prendre : si l'accompagnement devient une charge de plus, c'est qu'il est mal réglé, et on le règle.
+>
+> **« Et si ça ne marche pas pour moi ? »**
+>
+> C'est précisément ce que l'audit sert à vérifier, avant tout engagement. Nous regardons votre situation réelle. S'il n'y a pas de quoi avancer ensemble, nous vous le disons.
+>
+> Une autre question ? Répondez à cet e-mail : nous lisons tout, et nous répondons.
+>
+> [[ Ou posez-la de vive voix, pendant un audit ]]
+>
+> {{choix}}
+>
 > Adrien & Emily
 
 ---
@@ -438,8 +537,9 @@ Citation : « Je fais du chiffre, mais il ne me reste presque rien à la fin du 
 
 Citation : « Je suis noyé dans l'opérationnel, je n'ai plus une minute pour piloter »
 
-**E2 : Plus une minute pour piloter. Ce n'est pas une question de temps.**
+**C1 : Plus une minute pour piloter. Ce n'est pas une question de temps.**
 *Pré-en-tête : Tout ce que vous avez tenté a ajouté du travail au lieu d'en enlever.*
+*Bouton : Plus une minute pour piloter*
 
 > ![Des journées pleines, et aucune place pour piloter](operationnel.jpg)
 >
@@ -465,22 +565,19 @@ Citation : « Je suis noyé dans l'opérationnel, je n'ai plus une minute pour p
 >
 > Il y a une raison précise pour laquelle rien n'a tenu, et elle est la même dans presque toutes les entreprises que nous rencontrons.
 >
-> **Que voulez-vous lire ensuite ?**
->
-> [A] Pourquoi rien de ce que vous avez tenté n'a tenu
->
-> [B] Ce qui a changé chez Margaux en trois mois
+> {{choix}}
 >
 > Adrien & Emily
->
-> P.S. Sans clic de votre part, vous recevrez la première suite. Mais choisissez : les deux sont écrites pour vous.
 
-**E3A : Pourquoi rien de ce que vous avez tenté n'a tenu**
+**C2 : Pourquoi rien de ce que vous avez tenté n'a tenu**
 *Pré-en-tête : Le travail revient toujours vers la même personne.*
+*Bouton : Pourquoi rien de ce que vous avez tenté n'a tenu*
 
 > Bonjour %FIRSTNAME%,
 >
-> Nous vous avions laissé sur une question : pourquoi rien de ce que vous avez tenté n'a tenu ? Voici ce que nous voyons, presque à chaque fois.
+> {{ouverture}}
+>
+> Pourquoi rien de ce que vous avez tenté n'a tenu ? Voici ce que nous voyons, presque à chaque fois.
 >
 > Dans une entreprise, le travail va vers celui qui sait. Et celui qui sait, c'est vous.
 >
@@ -504,16 +601,19 @@ Citation : « Je suis noyé dans l'opérationnel, je n'ai plus une minute pour p
 >
 > La bonne nouvelle : une organisation, ça se redessine. Par où commencer chez vous, c'est ce qu'un audit permet de voir en 45 minutes.
 >
-> [ Voir par où commencer chez moi ]
+> [[ Voir par où commencer chez moi ]]
+>
+> {{choix}}
 >
 > Adrien & Emily
 
-**E3B : Ce qui a changé chez Margaux en trois mois**
+**C3 : Ce qui a changé chez Margaux en trois mois**
 *Pré-en-tête : « Je peux enfin déléguer. »*
+*Bouton : Ce qui a changé chez Margaux en trois mois*
 
 > Bonjour %FIRSTNAME%,
 >
-> Vous avez choisi l'histoire de Margaux. La voici.
+> {{ouverture}}
 >
 > Margaux a ouvert sa première entreprise en 2023 : une épicerie fine, avec un restaurant italien. Deux activités, une équipe, et une impression qu'elle décrit simplement : elle se sentait seule face à toutes les décisions.
 >
@@ -537,14 +637,19 @@ Citation : « Je suis noyé dans l'opérationnel, je n'ai plus une minute pour p
 >
 > Son résultat lui appartient, et nous ne vous promettons pas le même. Mais remarquez d'où il vient : pas d'un effort de plus. D'une autre façon de répartir le travail.
 >
-> [ Voir ce que ça donnerait chez moi ]
+> [[ Voir ce que ça donnerait chez moi ]]
+>
+> {{choix}}
 >
 > Adrien & Emily
 
-**E4 : « J'avais une équipe qui me bouffait littéralement »**
+**C4 : « J'avais une équipe qui me bouffait littéralement »**
 *Pré-en-tête : Ouverte sept jours sur sept. Voici ce qu'elle a changé.*
+*Bouton : La boulangère que son équipe « bouffait »*
 
 > Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
 >
 > Quand on est noyé dans l'opérationnel, on pense d'abord à soi : mes heures, mon agenda, ma fatigue. Une boulangère que nous accompagnons a regardé ailleurs.
 >
@@ -570,6 +675,106 @@ Citation : « Je suis noyé dans l'opérationnel, je n'ai plus une minute pour p
 >
 > [[ Regarder ensemble ce qui vous retient dans l'opérationnel ]]
 >
+> {{choix}}
+>
+> Adrien & Emily
+
+**C5 : Ce que coûte une année de plus dans l'opérationnel**
+*Pré-en-tête : Le prix ne se voit pas dans les comptes.*
+*Bouton : Ce que coûte une année de plus dans l'opérationnel*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> Être noyé dans l'opérationnel, on s'y habitue. L'entreprise tourne, les clients sont servis, les salaires sont payés. Alors pourquoi changer ?
+>
+> Parce que le prix existe, même s'il n'apparaît dans aucun compte.
+>
+> **Ce qui n'est pas fait**
+>
+> Pendant que vous produisez, dépannez et rattrapez, personne ne regarde les chiffres, ne prépare la suite, ne remarque le client qui s'éloigne ou le salarié qui décroche. Ce sont les tâches que vous seul pouvez faire, et ce sont les premières sacrifiées.
+>
+> **Ce qui s'installe**
+>
+> Chaque mois de plus rend l'entreprise un peu plus dépendante de vous. Ce qui se réorganise facilement aujourd'hui sera plus lourd à changer dans un an.
+>
+> {{m_duree}}
+>
+> >> Une entreprise qui ne tient que par son dirigeant ne grandit pas : elle s'use à sa vitesse.
+>
+> {{m_temps}}
+>
+> Ce n'est pas une question de courage. C'est une question d'ordre : par quoi commencer pour que la première heure libérée en libère d'autres.
+>
+> [[ Voir par où commencer chez vous ]]
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C6 : Ce qu'on regarderait dans vos semaines**
+*Pré-en-tête : 45 minutes, trois regards, aucun jargon.*
+*Bouton : Ce qu'on regarderait dans vos semaines*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> « Un audit », cela peut vouloir tout dire. Voici donc, très concrètement, ce que nous regarderions avec vous si vous nous disiez à nouveau : « Je n'ai plus une minute pour piloter. »
+>
+> **1. Où passent vos heures**
+>
+> Pas un emploi du temps idéal : votre semaine réelle. Ce que vous faites, ce que vous seul savez faire, et ce que vous faites parce que personne d'autre ne s'en charge.
+>
+> {{m_heures}}
+>
+> **2. Ce qui revient vers vous**
+>
+> Les questions, les validations, les urgences. D'où elles viennent, et pourquoi elles n'ont pas d'autre destination que votre bureau.
+>
+> **3. Ce qui pourrait tourner sans vous**
+>
+> Presque toujours plus qu'on ne le croit. Encore faut-il savoir par quoi commencer, pour que cela tienne.
+>
+> >> Vous repartez avec deux ou trois priorités, que nous travaillions ensemble ou non.
+>
+> Vous n'avez rien à préparer : nous partons de ce que vous vivez.
+>
+> [[ Réserver ces 45 minutes ]]
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C7 : Les questions qu'on nous pose avant de se lancer**
+*Pré-en-tête : Les trois que presque tout le monde se pose.*
+*Bouton : Les questions qu'on nous pose avant de se lancer*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> Avant de se lancer, presque tous les dirigeants nous posent les mêmes questions. Les voici, avec nos réponses.
+>
+> **« Je n'ai déjà pas le temps, comment en trouver pour ça ? »**
+>
+> C'est la question que posent tous ceux qui sont noyés, et c'est normal. Le premier travail consiste justement à vous rendre des heures, pas à en demander. On commence par ce qui libère le plus vite.
+>
+> **« Combien de temps ça me prendra ? »**
+>
+> Un rythme régulier, calé sur votre activité. Le but est de vous rendre du temps, pas de vous en prendre : si l'accompagnement devient une charge de plus, c'est qu'il est mal réglé, et on le règle.
+>
+> **« Et si ça ne marche pas pour moi ? »**
+>
+> C'est précisément ce que l'audit sert à vérifier, avant tout engagement. Nous regardons votre situation réelle. S'il n'y a pas de quoi avancer ensemble, nous vous le disons.
+>
+> Une autre question ? Répondez à cet e-mail : nous lisons tout, et nous répondons.
+>
+> [[ Ou posez-la de vive voix, pendant un audit ]]
+>
+> {{choix}}
+>
 > Adrien & Emily
 
 ---
@@ -578,8 +783,9 @@ Citation : « Je suis noyé dans l'opérationnel, je n'ai plus une minute pour p
 
 Citation : « Mon entreprise a avalé ma vie : soirées, week-ends et vacances y passent »
 
-**E2 : Soirées, week-ends, vacances : votre entreprise a tout pris**
+**C1 : Soirées, week-ends, vacances : votre entreprise a tout pris**
 *Pré-en-tête : Travailler plus n'a jamais rendu une seule soirée.*
+*Bouton : Votre entreprise a tout pris*
 
 > ![Il est tard, et la lumière du bureau est encore allumée](vie.jpg)
 >
@@ -601,22 +807,19 @@ Citation : « Mon entreprise a avalé ma vie : soirées, week-ends et vacances y
 >
 > Ce qui vous retient au travail le soir n'est presque jamais ce que vous croyez. Ce n'est ni la charge, ni les clients, ni la conscience professionnelle.
 >
-> **Que voulez-vous lire ensuite ?**
->
-> [A] Ce qui vous retient vraiment le soir
->
-> [B] Comment Alexandre passe à table à 19 h 30
+> {{choix}}
 >
 > Adrien & Emily
->
-> P.S. Sans clic de votre part, vous recevrez la première suite. Mais choisissez : les deux sont écrites pour vous.
 
-**E3A : Ce qui vous retient vraiment le soir**
+**C2 : Ce qui vous retient vraiment le soir**
 *Pré-en-tête : Ce n'est ni la charge, ni les clients.*
+*Bouton : Ce qui vous retient vraiment le soir*
 
 > Bonjour %FIRSTNAME%,
 >
-> Nous vous avions laissé sur une question : qu'est-ce qui vous retient vraiment au travail le soir ? Faites le test : repensez à votre dernière soirée passée au travail. Que faisiez-vous, précisément ?
+> {{ouverture}}
+>
+> Qu'est-ce qui vous retient vraiment au travail le soir ? Faites le test : repensez à votre dernière soirée passée au travail. Que faisiez-vous, précisément ?
 >
 > Dans presque tous les cas, la réponse tombe dans l'une de ces trois cases.
 >
@@ -640,16 +843,19 @@ Citation : « Mon entreprise a avalé ma vie : soirées, week-ends et vacances y
 >
 > Laquelle de ces trois cases pèse le plus chez vous ? C'est la première chose que nous regardons pendant un audit, parce que la réponse désigne ce qu'il faut changer en premier.
 >
-> [ Regarder ce qui me retient ]
+> [[ Regarder ce qui me retient ]]
+>
+> {{choix}}
 >
 > Adrien & Emily
 
-**E3B : Comment Alexandre passe à table à 19 h 30**
+**C3 : Comment Alexandre passe à table à 19 h 30**
 *Pré-en-tête : « J'ai fait plaisir à tout le monde, sauf à moi-même. »*
+*Bouton : Comment Alexandre passe à table à 19 h 30*
 
 > Bonjour %FIRSTNAME%,
 >
-> Vous avez choisi l'histoire d'Alexandre. La voici.
+> {{ouverture}}
 >
 > Alexandre est boucher-charcutier-traiteur. Son chiffre d'affaires montait. De l'extérieur, tout allait bien. De l'intérieur, il avait, selon ses mots, « la tête dans le guidon ».
 >
@@ -667,14 +873,19 @@ Citation : « Mon entreprise a avalé ma vie : soirées, week-ends et vacances y
 >
 > Son parcours n'est pas une promesse pour le vôtre. Mais il montre une chose : ses soirées ne sont pas revenues parce qu'il a levé le pied. Elles sont revenues parce que l'entreprise a été organisée autrement.
 >
-> [ Voir ce qui me rendrait mes soirées ]
+> [[ Voir ce qui me rendrait mes soirées ]]
+>
+> {{choix}}
 >
 > Adrien & Emily
 
-**E4 : Delphine : de 9 h à 19 h, seule, depuis 25 ans**
+**C4 : Delphine : de 9 h à 19 h, seule, depuis 25 ans**
 *Pré-en-tête : Elle termine désormais à 18 h.*
+*Bouton : Delphine : une heure gagnée chaque jour*
 
 > Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
 >
 > On se dit parfois que les horaires sans fin sont le prix à payer quand on est à son compte. Delphine l'a cru pendant vingt-cinq ans.
 >
@@ -698,6 +909,106 @@ Citation : « Mon entreprise a avalé ma vie : soirées, week-ends et vacances y
 >
 > [[ Parler de ce qui vous rendrait du temps ]]
 >
+> {{choix}}
+>
+> Adrien & Emily
+
+**C5 : Ce que coûte une année de plus à ce rythme**
+*Pré-en-tête : Certaines choses ne se rattrapent pas.*
+*Bouton : Ce que coûte une année de plus à ce rythme*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> Les soirées, les week-ends, les vacances : on se dit qu'on se rattrapera. Quand l'entreprise ira mieux. Quand l'équipe sera en place. L'an prochain.
+>
+> Le problème, c'est que ce temps-là ne se met pas de côté.
+>
+> **Ce qui s'use**
+>
+> La forme, d'abord : on tient, jusqu'au jour où l'on ne tient plus. La lucidité, ensuite : les meilleures décisions ne se prennent pas à 22 heures, après quatorze heures de travail.
+>
+> {{m_rythme}}
+>
+> **Ce qui ne revient pas**
+>
+> Un dîner manqué se rattrape. Une année de dîners manqués, non.
+>
+> >> Votre entreprise peut attendre une semaine. Certaines choses, autour de vous, n'attendent pas.
+>
+> {{m_temps}}
+>
+> Et il y a un paradoxe : plus vous donnez d'heures, plus l'entreprise s'organise autour de votre présence. Attendre ne rapproche pas du moment où elle pourra s'en passer. Cela l'éloigne.
+>
+> [[ Regarder ce qui pourrait changer, dès maintenant ]]
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C6 : Ce qu'on regarderait dans vos journées**
+*Pré-en-tête : 45 minutes, trois regards, aucun jargon.*
+*Bouton : Ce qu'on regarderait dans vos journées*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> « Un audit », cela peut vouloir tout dire. Voici donc, très concrètement, ce que nous regarderions avec vous si vous nous disiez à nouveau : « Mon entreprise a avalé ma vie. »
+>
+> **1. Ce qui remplit vos soirées**
+>
+> Ce que vous faites après la fermeture, précisément. C'est le meilleur indice de ce que la journée ne vous laisse pas faire.
+>
+> **2. Ce qui repose sur vous seul**
+>
+> Les tâches que personne d'autre ne sait faire, et celles que tout le monde vous laisse par habitude.
+>
+> {{m_2semaines}}
+>
+> **3. Ce que vous voulez retrouver**
+>
+> Pas un objectif d'entreprise : le vôtre. Une heure de fermeture, un jour dans la semaine, des vacances sans téléphone. C'est lui qui fixe l'ordre des priorités.
+>
+> >> Vous repartez avec deux ou trois priorités, que nous travaillions ensemble ou non.
+>
+> Vous n'avez rien à préparer : nous partons de ce que vous vivez.
+>
+> [[ Réserver ces 45 minutes ]]
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C7 : Les questions qu'on nous pose avant de se lancer**
+*Pré-en-tête : Les trois que presque tout le monde se pose.*
+*Bouton : Les questions qu'on nous pose avant de se lancer*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> Avant de se lancer, presque tous les dirigeants nous posent les mêmes questions. Les voici, avec nos réponses.
+>
+> **« Si je lève le pied, est-ce que tout ne va pas s'écrouler ? »**
+>
+> C'est la crainte de tous ceux dont l'entreprise repose sur eux, et elle est fondée : lever le pied sans rien changer, cela ne marche pas. Il s'agit d'organiser autrement, pour que votre absence ne se voie plus.
+>
+> **« Combien de temps ça me prendra ? »**
+>
+> Un rythme régulier, calé sur votre activité. Le but est de vous rendre du temps, pas de vous en prendre : si l'accompagnement devient une charge de plus, c'est qu'il est mal réglé, et on le règle.
+>
+> **« Et si ça ne marche pas pour moi ? »**
+>
+> C'est précisément ce que l'audit sert à vérifier, avant tout engagement. Nous regardons votre situation réelle. S'il n'y a pas de quoi avancer ensemble, nous vous le disons.
+>
+> Une autre question ? Répondez à cet e-mail : nous lisons tout, et nous répondons.
+>
+> [[ Ou posez-la de vive voix, pendant un audit ]]
+>
+> {{choix}}
+>
 > Adrien & Emily
 
 ---
@@ -706,8 +1017,9 @@ Citation : « Mon entreprise a avalé ma vie : soirées, week-ends et vacances y
 
 Citation : « Mes salariés viennent me voir pour tout : rien n'avance sans moi »
 
-**E2 : Rien n'avance sans vous. Et ce n'est pas la faute de votre équipe.**
+**C1 : Rien n'avance sans vous. Et ce n'est pas la faute de votre équipe.**
 *Pré-en-tête : Une équipe qui remonte tout n'est pas une équipe incapable.*
+*Bouton : Rien n'avance sans vous*
 
 > ![Toutes les questions arrivent au même endroit](equipe.jpg)
 >
@@ -731,22 +1043,19 @@ Citation : « Mes salariés viennent me voir pour tout : rien n'avance sans moi 
 >
 > Une équipe qui remonte tout n'est pas une équipe incapable. C'est une équipe à qui il manque quelque chose de précis pour décider seule. Et ce quelque chose n'est ni la compétence, ni la motivation.
 >
-> **Que voulez-vous lire ensuite ?**
->
-> [A] Pourquoi tout remonte jusqu'à vous
->
-> [B] Ce qu'une boulangère a changé dans son équipe
+> {{choix}}
 >
 > Adrien & Emily
->
-> P.S. Sans clic de votre part, vous recevrez la première suite. Mais choisissez : les deux sont écrites pour vous.
 
-**E3A : Pourquoi tout remonte jusqu'à vous**
+**C2 : Pourquoi tout remonte jusqu'à vous**
 *Pré-en-tête : Il manque trois choses à votre équipe, et aucune n'est la compétence.*
+*Bouton : Pourquoi tout remonte jusqu'à vous*
 
 > Bonjour %FIRSTNAME%,
 >
-> Nous vous avions laissé sur une question : pourquoi tout remonte-t-il jusqu'à vous ? Voici ce qui manque à une équipe qui demande tout. Trois choses, et aucune n'est la compétence.
+> {{ouverture}}
+>
+> Pourquoi tout remonte-t-il jusqu'à vous ? Voici ce qui manque à une équipe qui demande tout. Trois choses, et aucune n'est la compétence.
 >
 > **1. Savoir ce qui est attendu**
 >
@@ -768,16 +1077,19 @@ Citation : « Mes salariés viennent me voir pour tout : rien n'avance sans moi 
 >
 > Lequel de ces trois manques pèse le plus chez vous ? En 45 minutes d'audit, cela se voit, et c'est par là qu'il faut commencer.
 >
-> [ Voir ce qui manque à mon équipe ]
+> [[ Voir ce qui manque à mon équipe ]]
+>
+> {{choix}}
 >
 > Adrien & Emily
 
-**E3B : Ce qu'une boulangère a changé dans son équipe**
+**C3 : Ce qu'une boulangère a changé dans son équipe**
 *Pré-en-tête : « J'avais une équipe de vente qui me bouffait littéralement. »*
+*Bouton : Ce qu'une boulangère a changé dans son équipe*
 
 > Bonjour %FIRSTNAME%,
 >
-> Vous avez choisi l'histoire de la boulangère. La voici.
+> {{ouverture}}
 >
 > Sa boulangerie est ouverte sept jours sur sept. Sept jours où il faut du monde derrière le comptoir, des plannings qui tiennent, des absences à remplacer. Et voici comment elle décrivait son équipe :
 >
@@ -799,14 +1111,19 @@ Citation : « Mes salariés viennent me voir pour tout : rien n'avance sans moi 
 >
 > Son résultat lui appartient, et ce n'est pas une promesse pour votre entreprise. Mais si votre équipe vous prend plus d'énergie qu'elle ne vous en rend, son histoire vous parlera.
 >
-> [ Regarder mon équipe avec un œil extérieur ]
+> [[ Regarder mon équipe avec un œil extérieur ]]
+>
+> {{choix}}
 >
 > Adrien & Emily
 
-**E4 : Margaux : « Je peux enfin déléguer »**
+**C4 : Margaux : « Je peux enfin déléguer »**
 *Pré-en-tête : Elle se sentait seule face à toutes les décisions.*
+*Bouton : Margaux : « Je peux enfin déléguer »*
 
 > Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
 >
 > Il y a une solitude particulière chez le dirigeant dont l'équipe demande tout : on est entouré toute la journée, et seul devant chaque décision.
 >
@@ -828,6 +1145,106 @@ Citation : « Mes salariés viennent me voir pour tout : rien n'avance sans moi 
 >
 > [[ Parler de votre équipe avec nous ]]
 >
+> {{choix}}
+>
+> Adrien & Emily
+
+**C5 : Ce que coûte une équipe qui attend le patron**
+*Pré-en-tête : Le prix se paie chaque jour, sans facture.*
+*Bouton : Ce que coûte une équipe qui attend le patron*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> Une équipe qui vient vous voir pour tout, on finit par trouver cela normal. On répond, on tranche, on passe à la question suivante. Et la journée est finie.
+>
+> Faites pourtant le compte, une seule fois.
+>
+> **Le compte**
+>
+> Combien de fois par jour êtes-vous interrompu pour une question, une validation, un « je fais comment ? ». Multipliez par le temps qu'il vous faut pour répondre, puis pour retrouver le fil de ce que vous faisiez.
+>
+> >> Ce temps-là, vous le payez deux fois : le vôtre, et celui du salarié qui attend votre réponse.
+>
+> {{m_consignes}}
+>
+> **Ce qui s'installe**
+>
+> Vos meilleurs éléments finissent par se lasser de demander la permission. Les autres s'habituent à ne plus décider. Et le jour où vous êtes absent, tout s'arrête.
+>
+> {{m_2semaines}}
+>
+> Chaque mois de plus ancre un peu plus l'habitude. Ce n'est pas une question de personnes : c'est une question de cadre, et un cadre se construit.
+>
+> [[ Voir ce qui manque à votre équipe pour décider ]]
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C6 : Ce qu'on regarderait dans votre équipe**
+*Pré-en-tête : 45 minutes, trois regards, aucun jargon.*
+*Bouton : Ce qu'on regarderait dans votre équipe*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> « Un audit », cela peut vouloir tout dire. Voici donc, très concrètement, ce que nous regarderions avec vous si vous nous disiez à nouveau : « Rien n'avance sans moi. »
+>
+> **1. Ce qui remonte, et pourquoi**
+>
+> Les questions qu'on vous pose dans une journée. Lesquelles demandent vraiment votre avis, et lesquelles arrivent chez vous faute de savoir où aller.
+>
+> **2. Qui décide de quoi**
+>
+> Ce que chacun a le droit de trancher seul, dans les faits. C'est rarement écrit, et c'est presque toujours là que tout se joue.
+>
+> {{m_autonome}}
+>
+> **3. Ce qui se passe quand vous n'êtes pas là**
+>
+> Le meilleur test d'une organisation, et le plus honnête.
+>
+> >> Vous repartez avec deux ou trois priorités, que nous travaillions ensemble ou non.
+>
+> Vous n'avez rien à préparer : nous partons de ce que vous vivez avec votre équipe.
+>
+> [[ Réserver ces 45 minutes ]]
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C7 : Les questions qu'on nous pose avant de se lancer**
+*Pré-en-tête : Les trois que presque tout le monde se pose.*
+*Bouton : Les questions qu'on nous pose avant de se lancer*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> Avant de se lancer, presque tous les dirigeants nous posent les mêmes questions. Les voici, avec nos réponses.
+>
+> **« Et si le problème venait vraiment de mon équipe ? »**
+>
+> C'est possible, et l'audit le dira. Mais dans la plupart des cas, les mêmes personnes se comportent tout autrement dès qu'elles savent ce qu'on attend d'elles et jusqu'où elles peuvent décider. On commence donc par le cadre.
+>
+> **« Combien de temps ça me prendra ? »**
+>
+> Un rythme régulier, calé sur votre activité. Le but est de vous rendre du temps, pas de vous en prendre : si l'accompagnement devient une charge de plus, c'est qu'il est mal réglé, et on le règle.
+>
+> **« Et si ça ne marche pas pour moi ? »**
+>
+> C'est précisément ce que l'audit sert à vérifier, avant tout engagement. Nous regardons votre situation réelle. S'il n'y a pas de quoi avancer ensemble, nous vous le disons.
+>
+> Une autre question ? Répondez à cet e-mail : nous lisons tout, et nous répondons.
+>
+> [[ Ou posez-la de vive voix, pendant un audit ]]
+>
+> {{choix}}
+>
 > Adrien & Emily
 
 ---
@@ -836,8 +1253,9 @@ Citation : « Mes salariés viennent me voir pour tout : rien n'avance sans moi 
 
 Citation : « Mon chiffre d'affaires plafonne, malgré tous mes efforts »
 
-**E2 : Vous faites tout ce qu'il faut, et le chiffre ne bouge plus**
+**C1 : Vous faites tout ce qu'il faut, et le chiffre ne bouge plus**
 *Pré-en-tête : Un plafond vient rarement des ventes.*
+*Bouton : Le chiffre ne bouge plus*
 
 > ![Le chiffre d'affaires bute sur un plafond](plafond.jpg)
 >
@@ -859,22 +1277,19 @@ Citation : « Mon chiffre d'affaires plafonne, malgré tous mes efforts »
 >
 > Il existe. Et il est rarement là où on le cherche : dans la plupart des entreprises, le plafond n'est pas du côté des ventes.
 >
-> **Que voulez-vous lire ensuite ?**
->
-> [A] D'où vient vraiment un plafond
->
-> [B] Margaux : 20 % de plus, sans effort commercial supplémentaire
+> {{choix}}
 >
 > Adrien & Emily
->
-> P.S. Sans clic de votre part, vous recevrez la première suite. Mais choisissez : les deux sont écrites pour vous.
 
-**E3A : D'où vient vraiment un plafond**
+**C2 : D'où vient vraiment un plafond**
 *Pré-en-tête : Votre entreprise vend exactement ce qu'elle peut absorber.*
+*Bouton : D'où vient vraiment un plafond*
 
 > Bonjour %FIRSTNAME%,
 >
-> Nous vous avions laissé sur une question : d'où vient ce plafond ? Voici ce que nous constatons, presque à chaque fois.
+> {{ouverture}}
+>
+> D'où vient un plafond ? Voici ce que nous constatons, presque à chaque fois.
 >
 > >> Une entreprise ne vend pas ce que le marché peut acheter. Elle vend ce qu'elle est capable d'absorber.
 >
@@ -894,16 +1309,19 @@ Citation : « Mon chiffre d'affaires plafonne, malgré tous mes efforts »
 >
 > Où se trouve exactement la limite chez vous ? Dans la production, dans l'équipe, dans vos propres heures ? C'est la première chose qu'un audit fait apparaître, et c'est elle qui dit par où commencer.
 >
-> [ Trouver où se situe mon plafond ]
+> [[ Trouver où se situe mon plafond ]]
+>
+> {{choix}}
 >
 > Adrien & Emily
 
-**E3B : Margaux : 20 % de plus, sans effort commercial supplémentaire**
+**C3 : Margaux : 20 % de plus, sans effort commercial supplémentaire**
 *Pré-en-tête : Tout est venu de l'organisation.*
+*Bouton : Margaux : 20 % de plus sans effort commercial*
 
 > Bonjour %FIRSTNAME%,
 >
-> Vous avez choisi l'histoire de Margaux. La voici.
+> {{ouverture}}
 >
 > Margaux a ouvert sa première entreprise en 2023 : une épicerie fine, avec un restaurant italien. Elle se sentait seule face à toutes les décisions.
 >
@@ -921,14 +1339,19 @@ Citation : « Mon chiffre d'affaires plafonne, malgré tous mes efforts »
 >
 > Son résultat lui appartient, et nous ne vous promettons pas le même. Mais si vous poussez depuis des mois sur les ventes sans voir le chiffre bouger, son histoire mérite d'être regardée.
 >
-> [ Voir où se situe mon plafond ]
+> [[ Voir où se situe mon plafond ]]
+>
+> {{choix}}
 >
 > Adrien & Emily
 
-**E4 : Franck : du rouge à l'équilibre en cinq mois**
+**C4 : Franck : du rouge à l'équilibre en cinq mois**
 *Pré-en-tête : « Aujourd'hui, je suis conscient et je n'ai plus peur. »*
+*Bouton : Franck : du rouge à l'équilibre en cinq mois*
 
 > Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
 >
 > Quand le chiffre plafonne, on regarde le haut de la colonne : les ventes. Franck, lui, a regardé le bas : ce qui reste.
 >
@@ -951,5 +1374,107 @@ Citation : « Mon chiffre d'affaires plafonne, malgré tous mes efforts »
 > {{m_12mois}}
 >
 > [[ Regarder vos chiffres avec nous ]]
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C5 : Ce que coûte une année de plus sous le plafond**
+*Pré-en-tête : Stagner n'est jamais vraiment stable.*
+*Bouton : Ce que coûte une année de plus sous le plafond*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> Un chiffre d'affaires qui plafonne, cela ressemble à de la stabilité. On ne perd rien, on ne gagne rien, on tient.
+>
+> Sauf que rien, autour, ne reste immobile.
+>
+> **Ce qui monte pendant que vous stagnez**
+>
+> Les charges, les salaires, les matières, les loyers. Avec un chiffre qui ne bouge pas, chaque hausse se prend sur ce qui vous reste.
+>
+> >> Un chiffre d'affaires qui stagne, c'est un résultat qui recule.
+>
+> **Ce que coûtent les efforts**
+>
+> Vous poussez : publicité, prospection, nouvelles offres. Chaque tentative coûte du temps et de l'argent, pour un sursaut qui retombe. Une année de plus, c'est une année d'efforts de plus contre le même mur.
+>
+> {{m_levier}}
+>
+> **Ce qui s'érode**
+>
+> L'envie, la vôtre et celle de l'équipe. Rien n'use autant que de donner beaucoup sans voir bouger le résultat.
+>
+> Tant que l'origine du plafond n'est pas trouvée, pousser plus fort ne change rien. La trouver, en revanche, change tout.
+>
+> [[ Trouver d'où vient votre plafond ]]
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C6 : Ce qu'on regarderait pour trouver votre plafond**
+*Pré-en-tête : 45 minutes, trois regards, aucun jargon.*
+*Bouton : Ce qu'on regarderait pour trouver votre plafond*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> « Un audit », cela peut vouloir tout dire. Voici donc, très concrètement, ce que nous regarderions avec vous si vous nous disiez à nouveau : « Mon chiffre d'affaires plafonne, malgré tous mes efforts. »
+>
+> **1. Ce que votre entreprise peut absorber**
+>
+> Que se passerait-il avec un tiers de commandes en plus ? La réponse montre où se trouve la vraie limite : la production, l'équipe, ou vos propres heures.
+>
+> {{m_charge}}
+>
+> **2. Ce que vos efforts ont vraiment donné**
+>
+> Ce que vous avez tenté pour vendre plus, et ce que chaque tentative a rapporté. On y voit vite ce qui mérite d'être poursuivi.
+>
+> **3. Ce qui reste, plutôt que ce qui entre**
+>
+> Faire grandir le résultat est parfois plus rapide que faire grandir le chiffre.
+>
+> >> Vous repartez avec deux ou trois priorités, que nous travaillions ensemble ou non.
+>
+> Vous n'avez rien à préparer : nous partons de ce que vous savez déjà.
+>
+> [[ Réserver ces 45 minutes ]]
+>
+> {{choix}}
+>
+> Adrien & Emily
+
+**C7 : Les questions qu'on nous pose avant de se lancer**
+*Pré-en-tête : Les trois que presque tout le monde se pose.*
+*Bouton : Les questions qu'on nous pose avant de se lancer*
+
+> Bonjour %FIRSTNAME%,
+>
+> {{ouverture}}
+>
+> Avant de se lancer, presque tous les dirigeants nous posent les mêmes questions. Les voici, avec nos réponses.
+>
+> **« J'ai déjà tout essayé, qu'est-ce que vous feriez de plus ? »**
+>
+> Sans doute rien de plus du côté des ventes, justement. Quand un chiffre plafonne malgré les efforts, la réponse se trouve presque toujours ailleurs : dans ce que l'entreprise est capable d'absorber. C'est là que nous regardons.
+>
+> **« Combien de temps ça me prendra ? »**
+>
+> Un rythme régulier, calé sur votre activité. Le but est de vous rendre du temps, pas de vous en prendre : si l'accompagnement devient une charge de plus, c'est qu'il est mal réglé, et on le règle.
+>
+> **« Et si ça ne marche pas pour moi ? »**
+>
+> C'est précisément ce que l'audit sert à vérifier, avant tout engagement. Nous regardons votre situation réelle. S'il n'y a pas de quoi avancer ensemble, nous vous le disons.
+>
+> Une autre question ? Répondez à cet e-mail : nous lisons tout, et nous répondons.
+>
+> [[ Ou posez-la de vive voix, pendant un audit ]]
+>
+> {{choix}}
 >
 > Adrien & Emily

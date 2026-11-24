@@ -45,7 +45,7 @@ module.exports = async function (req, res) {
     if (!estCron && !cle) { res.status(401).json({ ok: false, error: 'Non autorisé' }); return; }
 
     if (cle && q.apercu) {
-      const s = S.suiteFictive({ sequence: String(q.sequence || 'frein_tresorerie'), douleur: String(q.douleur || ''), choix: String(q.choix || 'a'), email: 'exemple@exemple.fr' });
+      const s = S.suiteFictive({ sequence: String(q.sequence || 'frein_tresorerie'), douleur: String(q.douleur || ''), chapitre: String(q.chapitre || ''), choisi: q.choisi === '1', email: 'exemple@exemple.fr' });
       const c = S.contenuDe(s, Number(q.etape) || 1);
       if (!c || c.erreur) { res.status(404).json({ ok: false, error: (c && c.erreur) || 'etape_inconnue' }); return; }
       res.setHeader('Content-Type', 'text/html; charset=utf-8');

@@ -52,7 +52,12 @@ const COL = 'parcours_suites';
 const DEFAUTS = { actif: false, plafondJour: 80, newsletterAutomation: '29', heureDebut: 9 * 60 + 30, heureFin: 19 * 60 };
 
 /* Jours après le RDV, par type de séquence. */
-const JOURS = { frein: [1, 4, 8, 14, 21], general: [1, 5, 12, 21], rdv_manque: [1, 3, 7] };
+const JOURS = { frein: [1, 4, 8, 14, 21], general: [1, 5, 12, 21], rdv_manque: [1, 3, 7], histoire: [1, 4, 8, 12, 16, 21] };
+/* Avec une histoire : e-mail 1 = frein, e-mails 2 à 5 = quatre CHAPITRES (le
+   premier est toujours C1, les suivants sont choisis par le prospect parmi
+   trois boutons, ou pris dans cet ordre faute de clic), e-mail 6 = frein. */
+const ORDRE_CHAPITRES = ['C2', 'C3', 'C5', 'C6', 'C4', 'C7'];
+const PREMIER_CHAPITRE = 2, DERNIER_CHAPITRE = 5, NB_BOUTONS = 3;
 const ECART_MIN_MS = 40 * 3600000; // jamais deux e-mails à moins de 40 h
 
 const LIB_SEQ = {
@@ -172,11 +177,11 @@ function lienRdvDirect(sequence) {
 
 function typeDe(sequence) { return sequence === 'rdv_manque' ? 'rdv_manque' : 'frein'; }
 
-/* Nombre d'étapes et jours : avec une douleur, toujours 5 ; sinon la
+/* Nombre d'étapes et jours : avec une histoire, toujours 6 ; sinon la
    séquence telle qu'écrite (« général » n'a que 4 e-mails). */
 function planDe(suite) {
   if (suite.sequence === 'rdv_manque') return JOURS.rdv_manque;
-  if (suite.douleur) return JOURS.frein;
+  if (suite.douleur) return JOURS.histoire;
   return suite.sequence === 'frein_general' ? JOURS.general : JOURS.frein;
 }
 
@@ -190,19 +195,69 @@ function dernierN(tag) {
   return m;
 }
 
+/* ── Chapitres d'une histoire ─────────────────────────────────────────── */
+
+function chapitresDe(suite) { return suite.douleur && CHOIX[suite.douleur] ? CHOIX[suite.douleur].chapitres : null; }
+function chapitreActif(suite, c, off) { const C = chapitresDe(suite); return !!(C && C[c]) && !(off && off['email:' + suite.douleur + '#' + c]); }
+
+/* Les boutons affichés à la fin de l'étape k : trois chapitres pas encore
+   lus (ni celui de l'étape k). Aucun au dernier chapitre. `lus` : chapitres
+   des étapes 2…k. */
+function optionsApres(suite, k, lus, off) {
+  if (k >= DERNIER_CHAPITRE) return [];
+  return ORDRE_CHAPITRES.filter(function (c) { return lus.indexOf(c) < 0 && chapitreActif(suite, c, off); }).slice(0, NB_BOUTONS);
+}
+
+/* Le chapitre de l'étape k (2…5) : { c, choisi, options } — options = les
+   boutons qu'il affichera. Une étape déjà envoyée garde ce qui est parti.
+   Sinon : le chapitre que le prospect a choisi dans l'e-mail précédent
+   (`choixSuivant`), à défaut le premier des boutons qu'on lui proposait. */
+function chapitreDe(suite, k, off) {
+  if (!chapitresDe(suite) || k < PREMIER_CHAPITRE || k > DERNIER_CHAPITRE) return null;
+  const et = suite.etapes || {};
+  const lus = [];
+  let dernier = null;
+  for (let i = PREMIER_CHAPITRE; i <= k; i++) {
+    const e = et['e' + i];
+    let x;
+    if (e && e.chapitre) x = { c: e.chapitre, choisi: e.choisi === true, options: Array.isArray(e.options) ? e.options : null };
+    else if (i === PREMIER_CHAPITRE) x = { c: 'C1', choisi: false, options: null };
+    else if (suite.forceChapitre && i === k) x = { c: suite.forceChapitre, choisi: suite.forceChoisi === true, options: null };
+    else {
+      const proposes = (dernier && dernier.options) || [];
+      const voulu = suite.choixSuivant && suite.choixSuivant.e === i - 1 ? suite.choixSuivant.c : null;
+      if (voulu && lus.indexOf(voulu) < 0 && chapitreActif(suite, voulu, off)) x = { c: voulu, choisi: true, options: null };
+      else {
+        const suivant = proposes.filter(function (c) { return lus.indexOf(c) < 0 && chapitreActif(suite, c, off); })[0]
+          || ORDRE_CHAPITRES.filter(function (c) { return lus.indexOf(c) < 0 && chapitreActif(suite, c, off); })[0];
+        if (!suivant) return null;
+        x = { c: suivant, choisi: false, options: null };
+      }
+    }
+    lus.push(x.c);
+    if (!x.options) x.options = optionsApres(suite, i, lus, off);
+    dernier = x;
+  }
+  return dernier;
+}
+
+function libelleChapitre(suite, c) { const C = chapitresDe(suite); return C && C[c] ? C[c].bouton : null; }
+
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
 /* { subject, html, text, cle } de l'étape k (1…n), ou null. */
-function contenuDe(suite, k) {
+function contenuDe(suite, k, off) {
   const plan = planDe(suite);
   if (k < 1 || k > plan.length) return null;
   const prenom = String(suite.prenom || '').trim();
   let src = null, cle = '';
   const D = suite.douleur ? CHOIX[suite.douleur] : null;
+  let chap = null;
   if (suite.sequence === 'rdv_manque') { src = acMessage('rdv_manque', k); cle = 'rdv_manque#' + k; }
-  else if (D && k >= 2 && k <= 4) {
-    const e = k === 2 ? 'E2' : k === 4 ? 'E4' : (suite.choix === 'b' ? 'E3B' : 'E3A');
-    src = D.emails[e]; cle = suite.douleur + '#' + e;
+  else if (D && k >= PREMIER_CHAPITRE && k <= DERNIER_CHAPITRE) {
+    chap = chapitreDe(suite, k, off);
+    if (!chap) return { erreur: 'plus_de_chapitre', cle: suite.douleur + '#?' };
+    src = D.chapitres[chap.c]; cle = suite.douleur + '#' + chap.c;
   } else {
     // E-mail du frein. Avec une histoire, les e-mails 1 et 5 sont ceux
     // écrits POUR ce cas (ils n'annoncent pas les e-mails du frein, qui ne
@@ -226,10 +281,34 @@ function contenuDe(suite, k) {
 
   const stop = lien(suite.jeton, 'stop');
   const rdv = lien(suite.jeton, 'rdv', k);
+  const dm = /^0+$/.test(String(suite.jeton)) ? suite.douleur : null; // e-mail de test
+
+  // Chapitre d'une histoire : la phrase d'ouverture et les boutons de la suite.
+  if (chap) {
+    const ouv = chap.choisi ? 'Vous avez choisi de lire : « ' + D.chapitres[chap.c].bouton + ' ». Le voici.' : 'Voici la suite de votre histoire.';
+    let bh = '', bt = '';
+    if (chap.options.length) {
+      bh = '<p style="margin:26px 0 12px;font-size:17px;font-weight:700;color:#111827">Que voulez-vous lire ensuite ?</p>';
+      bt = 'QUE VOULEZ-VOUS LIRE ENSUITE ?';
+      chap.options.forEach(function (c, i) {
+        const u = lien(suite.jeton, 'c', k, dm) + '&c=' + c;
+        const st = i === 0 ? 'background:#2563eb;color:#ffffff;border:2px solid #2563eb' : 'background:#ffffff;color:#2563eb;border:2px solid #2563eb';
+        bh += '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px"><tr><td><a href="' + esc(u) + '" style="display:block;' + st + ';border-radius:12px;padding:14px 18px;font-size:16px;font-weight:700;text-decoration:none;text-align:center">' + esc(D.chapitres[c].bouton) + ' →</a></td></tr></table>';
+        bt += '\n→ ' + D.chapitres[c].bouton + ' : ' + u;
+      });
+      const defaut = D.chapitres[chap.options[0]].bouton;
+      bh += '<p style="margin:4px 0 0;font-size:13px;line-height:1.5;color:#6b7280">Sans clic de votre part, vous recevrez « ' + esc(defaut) + ' ».</p>';
+      bt += '\nSans clic de votre part, vous recevrez « ' + defaut + ' ».';
+    } else {
+      bh = '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:14px 0 6px"><tr><td style="background:#2563eb;border-radius:10px"><a href="' + esc(rdv) + '" style="display:inline-block;padding:14px 26px;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none">Réserver mon audit</a></td></tr></table>';
+      bt = 'Réserver mon audit : ' + rdv;
+    }
+    html = html.split('{{ouverture}}').join(esc(ouv)).split('{{choix_html}}').join(bh);
+    text = text.split('{{ouverture}}').join(ouv).split('{{choix_texte}}').join(bt);
+  }
   function partout(s, enHtml) {
     s = s.split('{{douleur_citation}}').join(enHtml ? esc(suite.citation || '') : (suite.citation || ''));
-    const dm = /^0+$/.test(String(suite.jeton)) ? suite.douleur : null; // e-mail de test
-    s = s.split('{{lien_rdv}}').join(rdv).split('{{lien_choix_a}}').join(lien(suite.jeton, 'a', k, dm)).split('{{lien_choix_b}}').join(lien(suite.jeton, 'b', k, dm));
+    s = s.split('{{lien_rdv}}').join(rdv);
     s = s.split('{{lien_desinscription}}').join(stop).split('%UNSUBSCRIBELINK%').join(stop);
     // Liens de réservation écrits pour ActiveCampaign → lien suivi par Team.
     s = s.replace(/https:\/\/team\.alteore\.com\/booking\.html\?type=call_strat_phenix_all[^"'\s<]*/g, rdv);
@@ -239,7 +318,7 @@ function contenuDe(suite, k) {
   }
   html = partout(html, true); text = partout(text, false);
   if (/\{\{|%[A-Z_]+%/.test(html) || /\{\{|%[A-Z_]+%/.test(text)) return { erreur: 'variable_non_remplie', cle: cle };
-  return { subject: src.subject, html: html, text: text, cle: cle };
+  return { subject: src.subject, html: html, text: text, cle: cle, chapitre: chap ? chap.c : null, choisi: chap ? chap.choisi : null, options: chap ? chap.options : null };
 }
 
 /* ═══ Création d'une suite ══════════════════════════════════════════════ */
@@ -275,7 +354,7 @@ async function creer(o) {
     sequence: o.sequence, douleur: profil.douleur, citation: profil.citation, miroirs: profil.miroirs,
     // RDV annulé à l'avance : les jours se comptent depuis l'annulation.
     rdvDate: (o.sequence === 'rdv_manque' && b.date && b.date > parisMin(Date.now()).ymd) ? parisMin(Date.now()).ymd : (b.date || null),
-    jeton: jetonNeuf(), etat: 'active', etapes: {}, choix: null, clics: [],
+    jeton: jetonNeuf(), etat: 'active', etapes: {}, choixSuivant: null, clics: [],
     creeA: Date.now(), majA: Date.now(),
   };
   const cree = await db.runTransaction(async function (tx) {
@@ -318,6 +397,17 @@ async function creer(o) {
 
 function dateFr() { return new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }); }
 
+/* Les chapitres déjà partis, dans l'ordre : [{ c, bouton, choisi }]. */
+function parcoursDe(s) {
+  const out = [];
+  if (!chapitresDe(s)) return out;
+  for (let k = PREMIER_CHAPITRE; k <= DERNIER_CHAPITRE; k++) {
+    const e = (s.etapes || {})['e' + k];
+    if (e && e.ok === true && e.chapitre) out.push({ c: e.chapitre, bouton: libelleChapitre(s, e.chapitre), choisi: e.choisi === true });
+  }
+  return out;
+}
+
 /* Le résumé affiché sur la fiche (leads.suiteApresRdv) : une seule ligne
    d'état, jamais une alerte. */
 function resume(s) {
@@ -327,7 +417,7 @@ function resume(s) {
     bookingId: s.bookingId, sequence: s.sequence, sequenceLibelle: LIB_SEQ[s.sequence] || s.sequence,
     douleur: s.douleur || null, douleurLibelle: s.douleur ? LIB_DOULEUR[s.douleur] : null,
     etat: s.etat, motifArret: s.motifArret || null, envoyes: faites, total: plan.length,
-    choix: s.choix || null, choixLibelle: s.choixLibelle || null, dernierClic: s.dernierClic || null, majA: Date.now(),
+    parcours: parcoursDe(s), choixLibelle: s.choixLibelle || null, dernierClic: s.dernierClic || null, majA: Date.now(),
   };
 }
 
@@ -517,7 +607,7 @@ async function passage(opts) {
       if (off['seq:' + s.sequence]) { ligne.resultat = 'sequence_desactivee'; sortie.detail.push(ligne); continue; }
       // « Envoyer maintenant » (module admin) passe outre le calendrier et les horaires.
       if (!fenetre && !due.force) { ligne.resultat = 'hors_horaires'; sortie.detail.push(ligne); continue; }
-      const c = contenuDe(s, due.k);
+      const c = contenuDe(s, due.k, off);
       if (!c || c.erreur) {
         ligne.resultat = 'contenu_indisponible'; ligne.erreur = c && c.erreur;
         if (reel && s.probleme !== 'contenu_indisponible') await d.ref.set({ probleme: 'contenu_indisponible', majA: Date.now() }, { merge: true });
@@ -529,6 +619,7 @@ async function passage(opts) {
       if (off['email:' + c.cle]) {
         const sv = { etapes: {}, majA: Date.now(), forcer: false };
         sv.etapes['e' + due.k] = { at: Date.now(), ok: false, saute: true, email: c.cle, objet: c.subject };
+        if (c.chapitre) { sv.etapes['e' + due.k].chapitre = c.chapitre; sv.etapes['e' + due.k].options = c.options || []; }
         await d.ref.set(sv, { merge: true });
         ligne.resultat = 'email_desactive'; sortie.detail.push(ligne); continue;
       }
@@ -556,8 +647,11 @@ async function passage(opts) {
       } catch (e) { r = { ok: false, erreur: (e && e.message) || 'echec_gmail' }; }
       const note = { etapes: {}, majA: Date.now(), forcer: false };
       note.etapes[cleE] = { at: Date.now(), ok: !!r.ok, id: r.id || null, erreur: r.erreur || null, email: c.cle, objet: c.subject, essais: essaiN };
-      // Le choix est figé au moment où la suite choisie part.
-      if (due.k === 3 && s.douleur) note.choixFige = s.choix || 'a';
+      // Le chapitre parti, s'il a été choisi, et les boutons qu'il affichait.
+      if (c.chapitre) {
+        note.etapes[cleE].chapitre = c.chapitre; note.etapes[cleE].choisi = c.choisi === true; note.etapes[cleE].options = c.options || [];
+        note.choixSuivant = null; note.choixLibelle = null;
+      }
       await d.ref.set(note, { merge: true });
       ligne.resultat = r.ok ? 'envoye' : 'echec';
       if (!r.ok) ligne.erreur = r.erreur;
@@ -617,7 +711,7 @@ function ligneAdmin(id, s, now) {
     douleur: s.douleur || null, douleurLibelle: s.douleur ? LIB_DOULEUR[s.douleur] : null,
     etat: s.etat, motif: s.motifArret || null, motifLibelle: s.motifArret ? (LIB_ARRET[s.motifArret] || s.motifArret) : null,
     rdvDate: s.rdvDate || null, creeA: s.creeA || null, total: plan.length, etapes: envoyes,
-    choix: s.choixFige || s.choix || null, choixLibelle: s.choixLibelle || null,
+    parcours: parcoursDe(s), choixLibelle: s.choixLibelle || null,
     clics: clics.length, aCliqueReserver: clics.some(function (c) { return c.a === 'rdv'; }),
     reponses: (s.reponses || []).slice(-3), prochain: prochainEnvoi(s, now),
     probleme: s.probleme || (s.acEnAttente === false && s.acResultat && s.acResultat.ok === false ? 'activecampaign_' + s.acAFaire : null)
@@ -640,7 +734,7 @@ function statsDe(liste) {
     if (st[x.etat] != null) st[x.etat]++;
     x.etapes.forEach(function (e) { if (e && e.ok) st.envoyes++; });
     if (x.clics) st.clics++;
-    if (x.choixLibelle) st.choix++;
+    if (x.choixLibelle || x.parcours.some(function (p) { return p.choisi; })) st.choix++;
     if (x.motif) st.motifs[x.motif] = (st.motifs[x.motif] || 0) + 1;
     if (x.probleme) st.problemes = (st.problemes || 0) + 1;
     st.sequences[x.sequence] = (st.sequences[x.sequence] || 0) + 1;
@@ -663,7 +757,7 @@ function arbre(off) {
   const douleurs = Object.keys(CHOIX).map(function (dl) {
     const D = CHOIX[dl];
     return { cle: dl, libelle: LIB_DOULEUR[dl] || dl, citation: D.citation, off: !!off['douleur:' + dl],
-      emails: ['E2', 'E3A', 'E3B', 'E4'].map(function (e) { return { e: e, cle: dl + '#' + e, objet: D.emails[e].subject, off: !!off['email:' + dl + '#' + e] }; }) };
+      emails: ['C1'].concat(ORDRE_CHAPITRES).map(function (e) { return { e: e, cle: dl + '#' + e, objet: D.chapitres[e].subject, bouton: D.chapitres[e].bouton, off: !!off['email:' + dl + '#' + e] }; }) };
   });
   return { sequences: sequences, douleurs: douleurs, jours: JOURS };
 }
@@ -691,9 +785,9 @@ async function actionAdmin(id, quoi, valeur, par) {
     patch.douleur = v; patch.citation = v ? (s.citation || CHOIX[v].citation) : null;
   }
   else if (quoi === 'choix') {
-    if (valeur !== 'a' && valeur !== 'b') return { ok: false, erreur: 'choix_invalide' };
-    if (s.choixFige || (s.etapes || {}).e3) return { ok: false, erreur: 'suite_deja_partie' };
-    patch.choix = valeur; patch.choixLibelle = titreChoix(s, valeur);
+    const dernierK = dernierChapitreParti(s);
+    if (!dernierK || !libelleChapitre(s, String(valeur)) || parcoursDe(s).some(function (x) { return x.c === valeur; })) return { ok: false, erreur: 'choix_invalide' };
+    patch.choixSuivant = { c: String(valeur), e: dernierK, at: Date.now(), admin: true }; patch.choixLibelle = libelleChapitre(s, String(valeur));
   }
   else return { ok: false, erreur: 'action_inconnue' };
   await ref.set(patch, { merge: true });
@@ -713,22 +807,25 @@ async function parJeton(jeton) {
   return s.empty ? null : { ref: s.docs[0].ref, id: s.docs[0].id, data: s.docs[0].data() || {} };
 }
 
-function titreChoix(s, lettre) {
-  const D = s.douleur ? CHOIX[s.douleur] : null;
-  if (!D) return null;
-  const e = D.emails[lettre === 'b' ? 'E3B' : 'E3A'];
-  return e ? e.subject : null;
+function titreChoix(s, c) { return libelleChapitre(s, String(c || '')); }
+
+/* Numéro de la dernière étape-chapitre partie (2…5), ou 0. */
+function dernierChapitreParti(s) {
+  let k = 0;
+  for (let i = PREMIER_CHAPITRE; i <= DERNIER_CHAPITRE; i++) { const e = (s.etapes || {})['e' + i]; if (e && e.ok === true && e.chapitre) k = i; }
+  return k;
 }
 
 /* Enregistre un clic FAIT PAR UN NAVIGATEUR (POST de la page, jamais la
    simple lecture du lien : les messageries ouvrent les liens pour l'aperçu).
    action : 'a' | 'b' | 'rdv' | 'stop'. */
-async function enregistrerClic(jeton, action, etape) {
+async function enregistrerClic(jeton, action, etape, chapitre) {
   const x = await parJeton(jeton);
   if (!x) return { ok: false, erreur: 'lien_inconnu' };
   const s = x.data;
   const now = Date.now();
   const clic = { at: now, a: action, e: Number(etape) || null };
+  if (action === 'c') clic.c = String(chapitre || '').slice(0, 4);
   if (action === 'stop') {
     await x.ref.set({ clics: FV.arrayUnion(clic) }, { merge: true });
     await desinscrire(x.ref, s);
@@ -736,14 +833,18 @@ async function enregistrerClic(jeton, action, etape) {
   }
   const patch = { clics: FV.arrayUnion(clic), majA: now };
   let libelle = null;
-  if (action === 'a' || action === 'b') {
-    // Deux choix opposés en moins de 2 min = un robot qui ouvre tous les
-    // liens : on ne retient rien (la suite par défaut partira).
-    const autre = (s.clics || []).some(function (c) { return (c.a === 'a' || c.a === 'b') && c.a !== action && now - c.at < 120000; });
-    if (!s.choixFige) {
-      if (autre) { patch.choix = null; patch.choixLibelle = null; patch.choixAmbigu = true; }
-      else { libelle = titreChoix(s, action); patch.choix = action; patch.choixLibelle = libelle; patch.choixA = now; }
-    }
+  if (action === 'c') {
+    // Le choix ne vaut que s'il vient du DERNIER e-mail parti, pour un
+    // chapitre que cet e-mail proposait, et tant que le suivant n'est pas parti.
+    const k = dernierChapitreParti(s);
+    const e = k ? s.etapes['e' + k] : null;
+    const valable = !!e && Number(etape) === k && Array.isArray(e.options) && e.options.indexOf(clic.c) >= 0 && !(s.etapes || {})['e' + (k + 1)];
+    if (!valable) { await x.ref.set({ clics: FV.arrayUnion(clic), majA: now }, { merge: true }); return { ok: true, action: 'c', tropTard: true }; }
+    // Deux chapitres différents cliqués en moins de 2 min = un robot qui
+    // ouvre tous les liens : on ne retient rien (le chapitre par défaut partira).
+    const autre = (s.clics || []).some(function (c) { return c.a === 'c' && c.c !== clic.c && now - c.at < 120000; });
+    if (autre) { patch.choixSuivant = null; patch.choixLibelle = null; patch.choixAmbigu = true; }
+    else { libelle = titreChoix(s, clic.c); patch.choixSuivant = { c: clic.c, e: k, at: now }; patch.choixLibelle = libelle; patch.choixAmbigu = false; }
   }
   if (action === 'rdv') patch.dernierClic = { quoi: 'reserver', at: now };
   await x.ref.set(patch, { merge: true });
@@ -751,8 +852,8 @@ async function enregistrerClic(jeton, action, etape) {
     const apres = Object.assign({}, s, patch, { clics: undefined });
     const upd = { suiteApresRdv: resume(apres) };
     // Une ligne d'historique par CHOIX (pas de cloche : le closer la lit en ouvrant la fiche).
-    const deja = (s.clics || []).some(function (c) { return c.a === action; });
-    if (!deja && libelle) upd.timeline_history = FV.arrayUnion({ text: '👆 Séquence après RDV — a voulu lire : « ' + libelle + ' »', date: dateFr(), color: '#a78bfa' });
+    const deja = (s.clics || []).some(function (c) { return c.a === action && (action !== 'c' || c.c === clic.c); });
+    if (!deja && libelle) upd.timeline_history = FV.arrayUnion({ text: '👆 Séquence après RDV — a choisi de lire : « ' + libelle + ' »', date: dateFr(), color: '#a78bfa' });
     if (!deja && action === 'rdv') upd.timeline_history = FV.arrayUnion({ text: '👆 Séquence après RDV — a cliqué sur « réserver »', date: dateFr(), color: '#a78bfa' });
     await db.collection('leads').doc(String(s.leadId)).update(upd).catch(function () {});
   }
@@ -846,8 +947,9 @@ const EXEMPLE_MIROIRS = (function () { const o = {}; MIROIRS.forEach(function (m
 function suiteFictive(o) {
   const douleur = CHOIX[o.douleur] ? o.douleur : null;
   return { bookingId: 'test', leadId: null, email: o.email, prenom: o.prenom || 'Adrien', sequence: LIB_SEQ[o.sequence] ? o.sequence : 'frein_tresorerie',
-    douleur: douleur, citation: douleur ? CHOIX[douleur].citation : null, miroirs: EXEMPLE_MIROIRS, jeton: '0'.repeat(36),
-    choix: o.choix === 'b' ? 'b' : 'a', etapes: {}, etat: 'active' };
+    douleur: douleur, citation: douleur ? CHOIX[douleur].citation : null, choixSuivant: null, miroirs: EXEMPLE_MIROIRS, jeton: '0'.repeat(36),
+    forceChapitre: (douleur && CHOIX[douleur].chapitres[o.chapitre]) ? o.chapitre : null, forceChoisi: o.choisi === true,
+    etapes: {}, etat: 'active' };
 }
 
 async function envoyerTest(o) {
@@ -867,6 +969,7 @@ module.exports = {
   DEFAUTS: DEFAUTS, JOURS: JOURS, LIB_SEQ: LIB_SEQ, LIB_DOULEUR: LIB_DOULEUR, MIROIRS: MIROIRS, COL: COL,
   profilDe: profilDe, planDe: planDe, contenuDe: contenuDe, etapeDue: etapeDue, creer: creer, arreter: arreter, passage: passage,
   parJeton: parJeton, enregistrerClic: enregistrerClic, titreChoix: titreChoix, lienRdvDirect: lienRdvDirect,
+  chapitreDe: chapitreDe, optionsApres: optionsApres, parcoursDe: parcoursDe, ORDRE_CHAPITRES: ORDRE_CHAPITRES,
   prochainEnvoi: prochainEnvoi, ligneAdmin: ligneAdmin, listeAdmin: listeAdmin, statsDe: statsDe, arbre: arbre, actionAdmin: actionAdmin,
   desinscrire: desinscrire, faireAC: faireAC, reglee: reglee,
   surReponseEmail: surReponseEmail, prospectsChauds: prospectsChauds, suiteFictive: suiteFictive, envoyerTest: envoyerTest, lireConfig: lireConfig, resume: resume, typeDe: typeDe,

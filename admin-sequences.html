@@ -244,7 +244,8 @@ function peindreProspects() {
     var nom = esc(p.prenom || '(sans prénom)');
     if (p.leadId) nom = '<a href="sales-leads.html?leadId=' + encodeURIComponent(p.leadId) + '">' + nom + '</a>';
     var fait = [];
-    if (p.choixLibelle) fait.push('A voulu lire : « ' + esc(p.choixLibelle) + ' »');
+    for (var c = 0; c < (p.parcours || []).length; c++) if (p.parcours[c].choisi) fait.push('A choisi : « ' + esc(p.parcours[c].bouton) + ' »');
+    if (p.choixLibelle) fait.push('Vient de choisir pour la suite : « ' + esc(p.choixLibelle) + ' »');
     if (p.aCliqueReserver) fait.push('A cliqué sur « réserver »');
     for (var r = 0; r < p.reponses.length; r++) fait.push('A répondu : ' + esc(p.reponses[r].resume || ''));
     var proch = p.prochain ? (p.prochain.maintenant ? 'au prochain passage (15 min)' : 'e-mail ' + p.prochain.etape + ' le ' + ymdFr(p.prochain.jour)) : '—';
@@ -269,10 +270,10 @@ function peindreProspects() {
 }
 
 /* ── Arbre des e-mails ───────────────────────────────────────────────── */
-function selEgal(a, b) { return a && b && a.sequence === b.sequence && a.douleur === b.douleur && a.etape === b.etape && a.choix === b.choix; }
+function selEgal(a, b) { return a && b && a.cle === b.cle; }
 function boutonMail(o, etiquette, objet, off) {
   var on = selEgal(S.sel, o);
-  return '<button class="sq-mail' + (on ? ' on' : '') + (off ? ' off' : '') + '" type="button" data-action="voir" data-sequence="' + esc(o.sequence) + '" data-douleur="' + esc(o.douleur || '') + '" data-etape="' + o.etape + '" data-choix="' + esc(o.choix || 'a') + '" data-cle="' + esc(o.cle) + '"><i>' + esc(etiquette) + '</i><span class="t">' + esc(objet) + '</span></button>';
+  return '<button class="sq-mail' + (on ? ' on' : '') + (off ? ' off' : '') + '" type="button" data-action="voir" data-sequence="' + esc(o.sequence) + '" data-douleur="' + esc(o.douleur || '') + '" data-etape="' + o.etape + '" data-chapitre="' + esc(o.chapitre || '') + '" data-cle="' + esc(o.cle) + '"><i>' + esc(etiquette) + '</i><span class="t">' + esc(objet) + '</span></button>';
 }
 function peindreArbre() {
   var a = S.etat.arbre, h = '<div class="sq-grp">Par frein (et rendez-vous manqué)</div>';
@@ -282,17 +283,16 @@ function peindreArbre() {
       + '<button class="sq-act mini" type="button" data-action="off" data-cle="seq:' + esc(s.cle) + '" data-v="' + (s.off ? '0' : '1') + '">' + (s.off ? 'Réactiver' : 'Désactiver') + '</button></div>';
     for (var k = 0; k < s.emails.length; k++) {
       var m = s.emails[k];
-      h += boutonMail({ sequence: s.cle, douleur: '', etape: m.k, choix: 'a', cle: m.cle }, 'J+' + m.jour, m.objet, m.off);
+      h += boutonMail({ sequence: s.cle, douleur: '', etape: m.k, cle: m.cle }, 'J+' + m.jour, m.objet, m.off);
     }
     for (var q = 0; q < (s.histoire || []).length; q++) {
       var hm = s.histoire[q];
-      h += boutonMail({ sequence: s.cle, douleur: 'rentabilite', etape: hm.e === 'E1' ? 1 : 5, choix: 'a', cle: hm.cle }, hm.e === 'E1' ? '1 hist.' : '5 hist.', hm.objet + ' (avec histoire)', hm.off);
+      h += boutonMail({ sequence: s.cle, douleur: 'rentabilite', etape: hm.e === 'E1' ? 1 : 6, cle: hm.cle }, hm.e === 'E1' ? 'début' : 'fin', hm.objet + ' (avec histoire)', hm.off);
     }
     h += '</div>';
   }
-  h += '<div class="sq-grp">Par histoire (douleur du questionnaire)</div>';
-  var LIB_E = { E2: 'chap. 1', E3A: 'suite A', E3B: 'suite B', E4: 'client' };
-  var ETAPE = { E2: 2, E3A: 3, E3B: 3, E4: 4 };
+  h += '<div class="sq-grp">Par histoire (douleur du questionnaire)</div><div class="sq-hint" style="margin:0 0 8px">Sept chapitres par histoire. Le prospect en lit quatre : le chapitre 1, puis ceux qu\'il choisit parmi trois boutons (sans clic, le premier proposé). Un chapitre désactivé n\'est plus proposé.</div>';
+
   for (var d = 0; d < a.douleurs.length; d++) {
     var D = a.douleurs[d];
     h += '<div class="sq-seq' + (D.off ? ' off' : '') + '"><div class="sq-seq-h"><b>' + esc(D.libelle) + '</b><span class="sp" style="flex:1"></span>'
@@ -300,7 +300,7 @@ function peindreArbre() {
       + '<div style="padding:0 11px 8px;font-size:11.5px;color:var(--muted);line-height:1.45">« ' + esc(D.citation) + ' »</div>';
     for (var e = 0; e < D.emails.length; e++) {
       var em = D.emails[e];
-      h += boutonMail({ sequence: 'frein_tresorerie', douleur: D.cle, etape: ETAPE[em.e], choix: em.e === 'E3B' ? 'b' : 'a', cle: em.cle }, LIB_E[em.e], em.objet, em.off);
+      h += boutonMail({ sequence: 'frein_tresorerie', douleur: D.cle, etape: em.e === 'C1' ? 2 : 3, chapitre: em.e === 'C1' ? '' : em.e, cle: em.cle }, 'chap. ' + em.e.slice(1), em.bouton || em.objet, em.off);
     }
     h += '</div>';
   }
@@ -356,10 +356,10 @@ document.addEventListener('click', function (ev) {
     return;
   }
   if (a === 'voir') {
-    S.sel = { sequence: t.getAttribute('data-sequence'), douleur: t.getAttribute('data-douleur') || '', etape: Number(t.getAttribute('data-etape')), choix: t.getAttribute('data-choix') || 'a', cle: t.getAttribute('data-cle') };
+    S.sel = { sequence: t.getAttribute('data-sequence'), douleur: t.getAttribute('data-douleur') || '', etape: Number(t.getAttribute('data-etape')), chapitre: t.getAttribute('data-chapitre') || '', cle: t.getAttribute('data-cle') };
     peindreArbre();
     $('sqApercu').innerHTML = '<div class="sq-vide">Chargement…</div>';
-    appel({ action: 'apercu', sequence: S.sel.sequence, douleur: S.sel.douleur, etape: S.sel.etape, choix: S.sel.choix }).then(function (j) {
+    appel({ action: 'apercu', sequence: S.sel.sequence, douleur: S.sel.douleur, etape: S.sel.etape, chapitre: S.sel.chapitre, choisi: !!S.sel.chapitre }).then(function (j) {
       if (!j.ok) { $('sqApercu').innerHTML = '<div class="sq-vide">' + esc(erreurTexte(j)) + '</div>'; return; }
       S.apercu = j; peindreApercu();
     });
@@ -369,7 +369,7 @@ document.addEventListener('click', function (ev) {
     if (!S.sel) return;
     var res = $('sqTestRes');
     res.className = 'sq-hint'; res.textContent = 'Envoi en cours…';
-    faire({ action: 'test', sequence: S.sel.sequence, douleur: S.sel.douleur, etape: S.sel.etape, choix: S.sel.choix }, function (j) {
+    faire({ action: 'test', sequence: S.sel.sequence, douleur: S.sel.douleur, etape: S.sel.etape, chapitre: S.sel.chapitre, choisi: !!S.sel.chapitre }, function (j) {
       var r2 = $('sqTestRes');
       if (r2) { r2.className = 'sq-hint ok'; r2.textContent = '✓ Envoyé à ' + (j.vers || 'ton adresse') + '.'; }
     });

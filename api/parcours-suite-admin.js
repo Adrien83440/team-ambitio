@@ -23,7 +23,7 @@ const { requireAdmin } = require('./_verifyFirebaseAuth');
 const parseBody = require('./_parseBody');
 const S = require('./_parcoursSuite');
 
-const RE_OFF = /^(seq:[a-z_]+|douleur:[a-z_]+|email:[a-z_]+#(E?\d[AB]?))$/;
+const RE_OFF = /^(seq:[a-z_]+|douleur:[a-z_]+|email:[a-z_]+#[A-Za-z0-9]{1,4})$/;
 
 module.exports = async function (req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -51,7 +51,7 @@ module.exports = async function (req, res) {
     const action = String(body.action || '');
 
     if (action === 'apercu') {
-      const s = S.suiteFictive({ sequence: String(body.sequence || ''), douleur: String(body.douleur || ''), choix: String(body.choix || 'a'), email: 'exemple@exemple.fr', prenom: 'Julie' });
+      const s = S.suiteFictive({ sequence: String(body.sequence || ''), douleur: String(body.douleur || ''), chapitre: String(body.chapitre || ''), choisi: body.choisi === true, email: 'exemple@exemple.fr', prenom: 'Julie' });
       const c = S.contenuDe(s, Number(body.etape) || 1);
       if (!c || c.erreur) { res.status(404).json({ ok: false, error: (c && c.erreur) || 'e-mail introuvable' }); return; }
       res.status(200).json({ ok: true, objet: c.subject, cle: c.cle, html: c.html });
@@ -59,7 +59,7 @@ module.exports = async function (req, res) {
     }
     if (action === 'test') {
       if (!auth.email) { res.status(400).json({ ok: false, error: 'adresse de l\'admin inconnue' }); return; }
-      const r = await S.envoyerTest({ sequence: String(body.sequence || ''), douleur: String(body.douleur || ''), choix: String(body.choix || 'a'), etape: Number(body.etape) || 1, vers: auth.email });
+      const r = await S.envoyerTest({ sequence: String(body.sequence || ''), douleur: String(body.douleur || ''), chapitre: String(body.chapitre || ''), choisi: body.choisi === true, etape: Number(body.etape) || 1, vers: auth.email });
       res.status(r.ok ? 200 : 400).json(Object.assign({ vers: auth.email }, r));
       return;
     }

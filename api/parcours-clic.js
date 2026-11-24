@@ -35,10 +35,10 @@ function page(titre, corps, script) {
 }
 
 /* Envoie le clic depuis le navigateur. `suite` : fonction appelée après. */
-function scriptClic(jeton, action, etape, apres) {
+function scriptClic(jeton, action, etape, apres, chapitre) {
   return '(function(){var fait=false;function go(){if(fait)return;fait=true;' + (apres || '') + '}'
     + 'try{var x=new XMLHttpRequest();x.open("POST","/api/parcours-clic",true);x.setRequestHeader("Content-Type","application/json");'
-    + 'x.onloadend=go;x.send(JSON.stringify({j:' + JSON.stringify(jeton) + ',a:' + JSON.stringify(action) + ',e:' + (Number(etape) || 0) + '}));}catch(e){go();}'
+    + 'x.onloadend=go;x.send(JSON.stringify({j:' + JSON.stringify(jeton) + ',a:' + JSON.stringify(action) + ',e:' + (Number(etape) || 0) + (chapitre ? ',c:' + JSON.stringify(chapitre) : '') + '}));}catch(e){go();}'
     + 'setTimeout(go,2500);})();';
 }
 
@@ -49,9 +49,9 @@ module.exports = async function (req, res) {
     if (req.method === 'POST') {
       const body = (await parseBody(req)) || {};
       const a = String(body.a || '');
-      if (['a', 'b', 'rdv', 'stop'].indexOf(a) < 0) { res.status(400).json({ ok: false }); return; }
+      if (['c', 'rdv', 'stop'].indexOf(a) < 0) { res.status(400).json({ ok: false }); return; }
       if (String(body.j || '') === DEMO) { res.status(200).json({ ok: true, demo: true }); return; }
-      const r = await S.enregistrerClic(body.j, a, body.e);
+      const r = await S.enregistrerClic(body.j, a, body.e, body.c);
       res.status(r.ok ? 200 : 404).json({ ok: !!r.ok });
       return;
     }
@@ -65,7 +65,7 @@ module.exports = async function (req, res) {
        n'enregistre rien. */
     const demo = jeton === DEMO;
     const x = demo ? { data: S.suiteFictive({ sequence: 'frein_tresorerie', douleur: String(q.d || 'rentabilite'), email: 'exemple@exemple.fr', prenom: '' }) } : await S.parJeton(jeton);
-    if (!x || ['a', 'b', 'rdv', 'stop'].indexOf(a) < 0) {
+    if (!x || ['c', 'rdv', 'stop'].indexOf(a) < 0) {
       res.status(404).send(page('Lien expiré', '<h1>Ce lien n\'est plus valable</h1><p>Vous pouvez nous écrire directement en répondant à l\'un de nos e-mails.</p>'));
       return;
     }
@@ -94,15 +94,16 @@ module.exports = async function (req, res) {
       return;
     }
     // Choix de la suite.
-    const titre = S.titreChoix(s, a);
+    const chapitre = String(q.c || '').replace(/[^A-Z0-9]/g, '').slice(0, 4);
+    const titre = S.titreChoix(s, chapitre);
     if (!titre) { res.status(404).send(page('Lien expiré', '<h1>Ce lien n\'est plus valable</h1>')); return; }
-    const dejaPartie = !!s.choixFige || !!(s.etapes || {}).e3;
+    const dejaPartie = !demo && !!(s.etapes || {})['e' + ((Number(q.e) || 0) + 1)];
     const corps = dejaPartie
       ? '<h1>La suite est déjà partie' + (prenom ? ', ' + prenom : '') + '</h1><p>Elle se trouve dans votre boîte e-mail. Si vous préférez en parler directement, choisissez un créneau :</p>'
       : '<h1>Bien noté' + (prenom ? ', ' + prenom : '') + '.</h1><p>Vous recevrez la suite que vous avez choisie :</p><div class="q">' + esc(titre) + '</div>'
         + '<p>Elle arrive dans votre boîte e-mail dans les prochains jours. Rien d\'autre à faire.</p><p>Et si vous préférez ne pas attendre :</p>';
     res.status(200).send(page('Bien noté', corps + '<p><a class="btn" href="' + esc(S.lienRdvDirect(s.sequence)) + '">Réserver mon audit</a></p><p class="s">Vous pouvez fermer cette page.</p>',
-      dejaPartie ? null : scriptClic(jeton, a, q.e, '')));
+      dejaPartie ? null : scriptClic(jeton, 'c', q.e, '', chapitre)));
   } catch (e) {
     console.error('[parcours-clic]', e && e.stack ? e.stack : e);
     res.status(500).send(page('Erreur', '<h1>Un souci de notre côté</h1><p>Réessayez dans un instant, ou répondez à notre e-mail.</p>'));
