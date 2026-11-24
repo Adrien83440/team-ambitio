@@ -8,8 +8,11 @@
 //
 // Périmètre : FU À VENIR (dateTime ≥ maintenant, heure de Paris) portant un
 // calendarEventId SANS calendarId (= créés avant le correctif), dont l'auteur
-// (createdBy, nom court de l'équipe) n'est pas le propriétaire de l'agenda
-// qui a reçu l'événement (calendarPersonId).
+// (createdBy : nom court, nom complet du compte ou début de son e-mail) n'est
+// pas le propriétaire de l'agenda qui a reçu l'événement (calendarPersonId),
+// OU qui sont dans le "primary" de la bonne fiche alors que cette fiche a un
+// autre « Calendrier pour créer les événements » (fiche branchée sur une
+// boîte partagée : primary = l'agenda d'un collègue).
 //
 //   - FU non fait → événement RECRÉÉ dans l'agenda Booking de l'auteur
 //     (« Calendrier pour créer les événements », primary à défaut), le FU
@@ -121,7 +124,20 @@ module.exports = async (req, res) => {
   const apply = String((req.query && req.query.apply) || '') === '1';
 
   try {
-    // 1. Équipe : nom → membre (unique), uid → fiches Booking.
+    // 1. Auteur : le champ createdBy contient selon le cas le nom court de
+    //    l'équipe, le nom complet du compte (« Prénom NOM ») ou le début de
+    //    l'adresse e-mail du compte. Index nom normalisé → uid(s), alimenté par
+    //    _meta/team_members, booking_config et users ; un auteur n'est retenu
+    //    que s'il désigne UN seul compte.
+    const uidsByName = {};
+    function index(name, uid) {
+      const k = norm(name);
+      if (!k || !uid) return;
+      const set = uidsByName[k] = uidsByName[k] || [];
+      if (set.indexOf(uid) < 0) set.push(uid);
+    }
+    function localPart(email) { return String(email || '').split('@')[0]; }
+
     const tmDoc = await db.collection('_meta').doc('team_members').get();
     const raw = (tmDoc.data() || {}).members || {};
     const members = Array.isArray(raw) ? raw : Object.keys(raw).map(function (k) {
@@ -129,16 +145,13 @@ module.exports = async (req, res) => {
       if (!m.slug) m.slug = k;
       return m;
     });
-    const byName = {};
     members.forEach(function (m) {
-      const names = [m.slug, m.shortName, m.displayName, m.name, m.firstName];
-      const seen = {};
-      names.forEach(function (n) {
-        const k = norm(n);
-        if (!k || seen[k]) return;
-        seen[k] = true;
-        (byName[k] = byName[k] || []).push(m);
-      });
+      [m.slug, m.shortName, m.displayName, m.name, m.firstName, localPart(m.email)].forEach(function (n) { index(n, m.firebaseUid); });
+    });
+    const usersSnap = await db.collection('users').select('displayName', 'name', 'email').get();
+    usersSnap.docs.forEach(function (d) {
+      const u = d.data() || {};
+      [u.displayName, u.name, localPart(u.email)].forEach(function (n) { index(n, d.id); });
     });
 
     const bcSnap = await db.collection('booking_config').get();
@@ -147,7 +160,10 @@ module.exports = async (req, res) => {
     bcSnap.docs.forEach(function (d) {
       const data = d.data() || {};
       bcById[d.id] = data;
-      if (data.firebaseUid) (bcByUid[data.firebaseUid] = bcByUid[data.firebaseUid] || []).push(d.id);
+      if (data.firebaseUid) {
+        (bcByUid[data.firebaseUid] = bcByUid[data.firebaseUid] || []).push(d.id);
+        index(data.name, data.firebaseUid);
+      }
     });
 
     async function authorFiche(uid) {
@@ -185,6 +201,7 @@ module.exports = async (req, res) => {
 
     // 3. Classement.
     const rows = [];
+    const fichesVues = {};
     for (const it of items) {
       const fu = it.fu;
       const row = {
@@ -195,23 +212,24 @@ module.exports = async (req, res) => {
         auteur: fu.createdBy || '',
         agendaActuel: (bcById[fu.calendarPersonId] || {}).name || fu.calendarPersonId || '?'
       };
-      const matches = byName[norm(fu.createdBy)] || [];
-      const uniq = matches.filter(function (m, i) { return matches.indexOf(m) === i; });
-      if (uniq.length !== 1) {
-        row.statut = uniq.length ? 'auteur_ambigu' : 'auteur_inconnu';
+      const uids = uidsByName[norm(fu.createdBy)] || [];
+      if (uids.length !== 1) {
+        row.statut = uids.length ? 'auteur_ambigu' : 'auteur_inconnu';
         rows.push(row); continue;
       }
-      const author = uniq[0];
-      if (!author.firebaseUid) { row.statut = 'auteur_sans_compte'; rows.push(row); continue; }
-      const fiche = await authorFiche(author.firebaseUid);
+      const fiche = await authorFiche(uids[0]);
       if (!fiche) { row.statut = 'auteur_sans_fiche_booking'; rows.push(row); continue; }
       if (typeof fiche === 'object') { row.statut = 'agenda_auteur_non_connecte'; rows.push(row); continue; }
-      if (fiche === fu.calendarPersonId) { row.statut = 'deja_dans_son_agenda'; rows.push(row); continue; }
       const bcAuthor = bcById[fiche] || {};
       const bcOld = bcById[fu.calendarPersonId] || {};
       const targetCal = eventCalendarIdOf(bcAuthor);
       row.agendaCible = (bcAuthor.name || fiche) + ' / ' + calendarNameOf(bcAuthor, targetCal);
-      if (targetCal === 'primary' && bcAuthor.calendarEmail && bcAuthor.calendarEmail === bcOld.calendarEmail) {
+      fichesVues[fiche] = true;
+      if (fu.calendarPersonId) fichesVues[fu.calendarPersonId] = true;
+      // Ancien format = toujours écrit dans "primary" du compte de calendarPersonId.
+      // Même fiche ET agenda de création = primary → il est déjà au bon endroit.
+      if (fiche === fu.calendarPersonId && targetCal === 'primary') { row.statut = 'deja_dans_son_agenda'; rows.push(row); continue; }
+      if (fiche !== fu.calendarPersonId && targetCal === 'primary' && bcAuthor.calendarEmail && bcAuthor.calendarEmail === bcOld.calendarEmail) {
         // Même compte Google, même agenda principal : déplacer ne changerait rien.
         row.statut = 'meme_agenda_reglage_fiche_a_faire';
         rows.push(row); continue;
@@ -330,6 +348,13 @@ module.exports = async (req, res) => {
       parStatut: compte,
       traitesCePassage: apply ? resultats : undefined,
       restants: todo.length - done.filter(function (r) { return r.resultat !== 'erreur'; }).length,
+      // Fiches Booking concernées : adresse de l'agenda relié (boîte de
+      // l'équipe) et agenda de création choisi dans Booking.
+      fiches: Object.keys(fichesVues).map(function (id) {
+        const bc = bcById[id] || {};
+        const cal = eventCalendarIdOf(bc);
+        return { fiche: bc.name || id, agendaRelie: bc.calendarEmail || '', agendaDeCreation: calendarNameOf(bc, cal) + (cal === 'primary' ? ' (principal)' : '') };
+      }),
       lignes: out
     });
   } catch (err) {
