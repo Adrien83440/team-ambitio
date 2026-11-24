@@ -731,7 +731,36 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   réactivation et au passage en réel (un RDV pris avant garde les rappels de l'agenda : jamais de doublon). Après un `non_close` : `api/parcours-frein.js` (cron du matin) lit l'appel (`replay`, sinon note
   du closer après J+3, sinon « général »), écrit `parcoursRdv.frein` et `leads.freinPrincipal` (jamais écrasé si
   `corrigePar`), puis séquence ActiveCampaign du frein (automatisations 36-41, textes
-  `docs/parcours-rdv/sequences-freins.md`). Clé temporaire du chantier `PARCOURS_AUDIT_KEY` (preview de la branche,
+  `docs/parcours-rdv/sequences-freins.md`). **Séquences d'après-RDV envoyées par TEAM (24/11/2026, décision d'Adrien)** : `api/_parcoursSuite.js`, cron `api/parcours-suite.js`
+  (*/15), page publique des liens `api/parcours-clic.js`. Les automatisations ActiveCampaign 43-49 restent ÉTEINTES (les 36-42, vides,
+  sont à supprimer à la main) ; ActiveCampaign ne garde que le nurturing d'avant RDV, la newsletter et des étiquettes d'information
+  (`frein_*`, `douleur_*`, `rdv_a_venir`, `rdv_manque`, `stop_autom`). Une suite = `parcours_suites/{bookingId}` (Admin SDK seul), créée
+  par `parcours-frein.js` (non_close → 5 e-mails J+1/4/8/14/21) ou par le passage du parcours (`rdv_libere` → 3 e-mails J+1/3/7), envoyés
+  depuis strategie@, 9 h 30 – 19 h hors dimanche, jamais deux à moins de 40 h, plafond `suites.plafondJour`. **Douleur** = réponse du
+  prospect à « Qu'est-ce qui vous pèse le plus ? » du questionnaire (`profilDe`, règles fixes, jamais d'IA) : e-mail 1 du frein +
+  paragraphe miroir, e-mails 2-3-4 de la douleur (`docs/parcours-rdv/sequences-choix.md` → `api/_parcoursChoixData.json` par
+  `python3 scripts/build-parcours-choix.py`, images `media/parcours/`), e-mail 5 du frein ; l'e-mail 2 finit par deux boutons « la
+  suite » (sans clic : A). Phrases miroir (`MIROIRS`) = réponses À CHOIX reprises mot pour mot, la ligne disparaît si la réponse
+  manque. Sans douleur connue (dont l'ancien formulaire « principal défi ») : la séquence du frein telle quelle (`_acSequencesData.json`,
+  reconstruit par `python3 scripts/build-sequences-freins.py`). Avec douleur, les e-mails 1 et 5 du frein sont ceux de la section
+  « 0. Freins avec histoire » (ils citent sa réponse et n'annoncent pas les e-mails du frein). **Garde-fous (relecture du 24/11/2026)** :
+  une seule suite active par prospect, et seulement pour son DERNIER RDV (`rdvPlusRecent`) ; issue corrigée (manqué ↔ « non ») → la
+  bonne séquence remplace l'autre ; aucune suite créée moteur éteint, premier e-mail abandonné après 5 jours de retard (`trop_tard`) ;
+  e-mail en échec rejoué 3 fois, réservation restée sans suite jamais rejouée (signalée dans le module admin) ; ActiveCampaign rejoué
+  tant que ce n'est pas fait (`acEnAttente`) ; à la fin, `stop_autom` est retirée avant l'entrée newsletter. Un clic n'est compté que par le POST du
+  navigateur (jamais à la lecture du lien) ; deux choix opposés en 2 min = robot, ignoré ; la désinscription demande un vrai clic →
+  `leads.emailDesinscrit`, `stop_autom` et désinscription de toutes les listes ActiveCampaign. Avant CHAQUE e-mail la suite s'arrête si
+  le prospect a repris un RDV, est devenu client, s'est désinscrit ou si l'issue du RDV a changé. Fin (3 jours après le dernier
+  e-mail) → entrée dans l'automatisation « Newsletter 2k26 » (`suites.newsletterAutomation` = 29), sauf désinscription. **Le closer
+  n'est pas sonné** : clics et arrêts = une ligne d'historique + `leads.suiteApresRdv` (résumé) ; « non / plus tard » = arrêt silencieux et « stop / désinscription » = désinscription complète, MAIS seulement si la réponse est
+  courte et faite à un e-mail de la séquence (même objet) ; toute autre réponse sonne comme avant, avec un résumé d'une ligne (tâche
+  IA `parcours_reponse`, qui ne fait jamais taire une cloche) ; les clics de la veille = une puce du brief du matin (`prospectsChaudsApresRdv`). Réglages
+  `_config/parcours_rdv.suites` (`actif` faux par défaut ; mode test = celui du parcours). **Module admin « Séquences »** (Marketing → 📬, admin
+  seul) : `admin-sequences.html` + `api/parcours-suite-admin.js` — vue d'ensemble (allumer / éteindre, plafond, chiffres), prospects
+  (étape, prochain e-mail, clics ; pause / reprendre / arrêter / « envoyer le suivant » = `forcer`), arbre des e-mails (aperçu, test à
+  l'admin connecté, désactiver une séquence / une histoire / un e-mail : `suites.off` — séquence désactivée = plus de création ni
+  d'envoi, histoire désactivée = séquence simple du frein, e-mail désactivé = étape sautée). Éditeur de textes et de branches : 2e
+  livraison, pas encore faite (les textes se modifient dans les deux fichiers `.md` puis par les scripts de construction). Clé temporaire du chantier `PARCOURS_AUDIT_KEY` (preview de la branche,
   `api/parcours-audit.js` lecture seule) : à retirer à la fin.
 
 Spécification de référence du flux commercial : `REFONTE-SPEC.md`.

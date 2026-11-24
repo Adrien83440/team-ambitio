@@ -67,8 +67,13 @@ async function contact(email, extra) {
   return { ok: true, id: String(s.data && s.data.contact && s.data.contact.id), cree: true };
 }
 
-async function ajouterTag(contactId, nom) {
-  const tid = await idTag(nom);
+async function ajouterTag(contactId, nom, opts) {
+  let tid = await idTag(nom);
+  // Étiquette d'information absente : créée à la demande (opts.creer).
+  if (!tid && opts && opts.creer) {
+    const c = await appel('POST', '/tags', { tag: { tag: nom, tagType: 'contact', description: 'Team (parcours RDV) : étiquette d\'information, ne déclenche rien.' } });
+    if (c.ok && c.data && c.data.tag) { tid = String(c.data.tag.id); _tags[nom] = tid; }
+  }
   if (!tid) return { ok: false, erreur: 'tag_introuvable:' + nom };
   const r = await appel('POST', '/contactTags', { contactTag: { contact: String(contactId), tag: tid } });
   return r.ok ? { ok: true } : r;
@@ -105,4 +110,32 @@ async function sortirDesAutomatisations(contactId, ids) {
   return { ok: true, sortis: sortis };
 }
 
-module.exports = { appel: appel, idTag: idTag, contact: contact, ajouterTag: ajouterTag, retirerTag: retirerTag, sortirDesAutomatisations: sortirDesAutomatisations, conf: conf };
+/* Fait entrer le contact dans une automatisation (la newsletter, à la fin
+   d'une séquence d'après-RDV). Rien s'il y a déjà une entrée EN COURS. */
+async function entrerAutomatisation(contactId, automationId) {
+  const id = String(automationId || '');
+  if (!id) return { ok: false, erreur: 'automatisation_absente' };
+  const l = await appel('GET', '/contacts/' + encodeURIComponent(contactId) + '/contactAutomations?limit=100');
+  if (!l.ok) return l;
+  const enCours = ((l.data && l.data.contactAutomations) || []).some(function (x) { return String(x.automation) === id && String(x.status) === '1'; });
+  if (enCours) return { ok: true, deja: true };
+  const r = await appel('POST', '/contactAutomations', { contactAutomation: { contact: String(contactId), automation: id } });
+  return r.ok ? { ok: true } : r;
+}
+
+/* Désinscription complète : statut « désinscrit » sur chaque liste où le
+   contact est abonné (les automatisations et campagnes ne l'atteignent plus). */
+async function desinscrire(contactId) {
+  const l = await appel('GET', '/contacts/' + encodeURIComponent(contactId) + '/contactLists?limit=100');
+  if (!l.ok) return l;
+  const abonne = ((l.data && l.data.contactLists) || []).filter(function (x) { return String(x.status) === '1'; });
+  let n = 0;
+  for (let i = 0; i < abonne.length; i++) {
+    const r = await appel('POST', '/contactLists', { contactList: { list: String(abonne[i].list), contact: String(contactId), status: 2 } });
+    if (!r.ok) return Object.assign({ listes: n }, r);
+    n++;
+  }
+  return { ok: true, listes: n };
+}
+
+module.exports = { entrerAutomatisation: entrerAutomatisation, desinscrire: desinscrire, appel: appel, idTag: idTag, contact: contact, ajouterTag: ajouterTag, retirerTag: retirerTag, sortirDesAutomatisations: sortirDesAutomatisations, conf: conf };

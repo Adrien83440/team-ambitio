@@ -168,9 +168,95 @@ async function lireConfirmations() {
   return { echantillon: snap.size, formes: formes };
 }
 
+/* ?part=questionnaire — ce que les prospects venus en audit ont DÉCLARÉ
+   (questionnaire d'inscription, formulaires) et les thèmes des douleurs
+   relevées par la préparation du closer. Des COMPTEURS seulement : une
+   réponse donnée par moins de 3 prospects est tue (un texte libre peut
+   identifier quelqu'un), aucun nom, aucune phrase de prospect. Sert à
+   construire les versions « par douleur » des séquences d'après-RDV. */
+const THEMES = {
+  tresorerie: /tr[ée]so|fin de mois|d[ée]couvert|dette|banque|cash/,
+  marge_rentabilite: /marge|rentab|b[ée]n[ée]fice|prix de revient|ne gagne pas|se payer|salaire du dirigeant|r[ée]mun[ée]r/,
+  temps_surcharge: /temps|heures|d[ée]bord|surcharg|week-?end|vacances|70 ?h|60 ?h|nez dans le guidon|t[êe]te dans le guidon/,
+  equipe: /[ée]quipe|salari|recrut|turn-?over|manag|personnel|employ|absent/,
+  delegation: /d[ée]l[ée]gu|tout faire|tout seul|d[ée]pend de (lui|elle|moi)|indispensable/,
+  organisation: /organis|process|structur|proc[ée]dure|pilotage|tableau de bord|chiffres|visibilit/,
+  fatigue_perso: /fatigu|[ée]puis|burn|stress|angoiss|sommeil|famille|couple|enfants|sant[ée]/,
+  commercial_clients: /client|commercial|chiffre d'affaires|prospect|vente|acquisition|visibilit[ée] en ligne|marketing/,
+  solitude: /seul|isol|personne (à|a) qui|accompagn/,
+  croissance: /croissance|d[ée]velopp|ouvrir|second|deuxi[èe]me|franchise|passer un cap|palier/,
+};
+async function lireQuestionnaire(jours) {
+  const Lqs = require('../lqs-core.js');
+  const debut = parisDay(Date.now() - jours * 86400000);
+  const snap = await db.collection('bookings').where('date', '>=', debut).get();
+  const parLead = {};
+  const themes = {}, themesParIssue = {};
+  let rdv = 0, avecPrep = 0;
+  snap.forEach(function (doc) {
+    const b = doc.data() || {};
+    if (b.isCoaching === true || b.csm_manual === true || b.skipLeadCreation === true || b.clientId || !b.leadId) return;
+    rdv++;
+    const issue = b.outcome || (b.status === 'cancelled' ? 'annule' : 'a_venir');
+    if (!parLead[b.leadId] || b.outcome) parLead[b.leadId] = issue;
+    const d = b.aiPrep && Array.isArray(b.aiPrep.douleurs) ? b.aiPrep.douleurs : null;
+    if (!d) return;
+    avecPrep++;
+    const txt = d.join(' \n ').toLowerCase();
+    Object.keys(THEMES).forEach(function (k) {
+      if (!THEMES[k].test(txt)) return;
+      themes[k] = (themes[k] || 0) + 1;
+      themesParIssue[issue] = themesParIssue[issue] || {};
+      themesParIssue[issue][k] = (themesParIssue[issue][k] || 0) + 1;
+    });
+  });
+  const ids = Object.keys(parLead);
+  const questions = {};
+  let lus = 0, avecReponses = 0;
+  for (let i = 0; i < ids.length; i += 30) {
+    const refs = ids.slice(i, i + 30).map(function (id) { return db.collection('leads').doc(String(id)); });
+    const docs = await db.getAll.apply(db, refs);
+    docs.forEach(function (d) {
+      if (!d.exists) return;
+      lus++;
+      const rep = Lqs.extractAnswers(d.data() || {});
+      if (rep.length) avecReponses++;
+      const issue = parLead[d.id];
+      rep.forEach(function (a) {
+        const q = questions[a.q] = questions[a.q] || { libelle: a.ql, origine: a.o, ordre: a.ord, total: 0, reponses: {} };
+        q.total++;
+        // Choix multiples « A | B » : comptés option par option.
+        String(a.al).split(' | ').forEach(function (opt) {
+          opt = opt.trim(); if (!opt) return;
+          const r = q.reponses[opt] = q.reponses[opt] || { n: 0, non_close: 0, close: 0, no_show: 0 };
+          r.n++;
+          if (r[issue] != null) r[issue]++;
+        });
+      });
+    });
+  }
+  const liste = Object.keys(questions).map(function (k) {
+    const q = questions[k];
+    const rep = Object.keys(q.reponses).filter(function (o) { return q.reponses[o].n >= 3; })
+      .sort(function (a, b) { return q.reponses[b].n - q.reponses[a].n; }).slice(0, 14)
+      .map(function (o) { return Object.assign({ reponse: o }, q.reponses[o]); });
+    return { cle: k, libelle: q.libelle, origine: q.origine, ordre: q.ordre, repondants: q.total, reponses: rep };
+  }).filter(function (q) { return q.repondants >= 5 && q.reponses.length; })
+    .sort(function (a, b) { return b.repondants - a.repondants; }).slice(0, 40);
+  return { depuis: debut, rdvCommerciaux: rdv, prospects: ids.length, fichesLues: lus, avecReponses: avecReponses,
+    questions: liste, douleursPrepCloser: { rdvAvecPrep: avecPrep, themes: themes, parIssue: themesParIssue } };
+}
+
 module.exports = async function (req, res) {
   if (!keyOk(req)) { res.status(404).json({ error: 'Not found' }); return; }
   if (req.method !== 'GET') { res.status(405).json({ error: 'GET only' }); return; }
+  if (req.query && req.query.part === 'questionnaire') {
+    try {
+      const j = Math.min(180, Math.max(14, parseInt(req.query.jours, 10) || 90));
+      res.status(200).json(await lireQuestionnaire(j));
+    } catch (e) { res.status(500).json({ erreur: e.message }); }
+    return;
+  }
   const slug = String((req.query && req.query.membre) || 'adrien').replace(/[^a-z0-9_-]/gi, '').slice(0, 40);
   const out = { lu: new Date().toISOString() };
   const parts = [

@@ -37,7 +37,7 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 
 > Bonjour %FIRSTNAME%,
 >
-> « Ce n'est pas le moment, la trésorerie est trop juste. » Vous nous l'avez dit hier sans détour, et merci pour ça : la plupart des dirigeants le pensent sans oser le dire.
+> « Ce n'est pas le moment, la trésorerie est trop juste. » Vous nous l'avez dit sans détour lors de notre échange, et merci pour ça : la plupart des dirigeants le pensent sans oser le dire.
 >
 > C'est aussi la phrase que nous entendons le plus. Presque toujours de la part de dirigeants qui travaillent beaucoup, qui facturent, et qui ne comprennent pas pourquoi il reste si peu sur le compte à la fin du mois.
 >
@@ -134,7 +134,7 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 
 > Bonjour %FIRSTNAME%,
 >
-> Trois semaines ont passé depuis notre échange.
+> Quelques semaines ont passé depuis notre échange.
 >
 > Peut-être avez-vous testé une ou deux pistes de ces e-mails. Peut-être que le quotidien a repris le dessus : c'est le cas le plus fréquent, et il n'y a rien à se reprocher.
 >
@@ -161,7 +161,7 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 
 > Bonjour %FIRSTNAME%,
 >
-> Vous nous avez dit hier que ce n'était pas le bon moment. C'est noté, et nous le respectons : personne ne connaît votre agenda mieux que vous.
+> Vous nous avez dit, lors de notre échange, que ce n'était pas le bon moment. C'est noté, et nous le respectons : personne ne connaît votre agenda mieux que vous.
 >
 > Nous vous laissons seulement une observation, tirée de ce que nous voyons chaque semaine.
 >
@@ -247,7 +247,7 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 
 > Bonjour %FIRSTNAME%,
 >
-> Vous nous aviez dit que ce n'était pas le bon moment. Trois semaines plus tard, il n'est peut-être toujours pas venu. C'est normal : il ne vient pas tout seul.
+> Vous nous aviez dit que ce n'était pas le bon moment. Quelques semaines plus tard, il n'est peut-être toujours pas venu. C'est normal : il ne vient pas tout seul.
 >
 > Voici donc une façon simple de ne plus y penser : **choisissez la date vous-même.** Dans deux semaines, dans un mois, après votre saison : le calendrier est ouvert.
 >
@@ -500,7 +500,7 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 
 > Bonjour %FIRSTNAME%,
 >
-> Merci pour le temps que vous nous avez accordé hier. Vous préférez avancer par vous-même pour l'instant : c'est tout à fait légitime, et beaucoup de dirigeants solides fonctionnent ainsi.
+> Merci pour le temps que vous nous avez accordé. Vous préférez avancer par vous-même pour l'instant : c'est tout à fait légitime, et beaucoup de dirigeants solides fonctionnent ainsi.
 >
 > Nous vous laissons une seule question pour la semaine :
 >
@@ -590,7 +590,7 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 
 > Bonjour %FIRSTNAME%,
 >
-> Trois semaines ont passé. Vous vouliez avancer par vous-même : où en êtes-vous ?
+> Quelques semaines ont passé. Vous vouliez avancer par vous-même : où en êtes-vous ?
 >
 > Si vous avez essayé le test des deux semaines sans téléphone ou les trois chiffres du mois, vous avez peut-être déjà repéré ce qui coince. C'est le plus difficile, et vous l'avez fait seul.
 >
@@ -619,7 +619,7 @@ Quatre e-mails seulement, à J+1, J+5, J+12 et J+21.
 
 > Bonjour %FIRSTNAME%,
 >
-> Merci pour le temps que vous nous avez accordé hier.
+> Merci pour le temps que vous nous avez accordé.
 >
 > Quelle que soit la suite, nous ne voulons pas que cet échange reste sans rien pour vous. Dans les prochaines semaines, nous vous envoyons donc trois idées courtes, utilisables tout de suite :
 >
@@ -642,7 +642,7 @@ Quatre e-mails seulement, à J+1, J+5, J+12 et J+21.
 
 > Bonjour %FIRSTNAME%,
 >
-> Trois semaines ont passé depuis notre échange. Où en êtes-vous ?
+> Quelques semaines ont passé depuis notre échange. Où en êtes-vous ?
 >
 > Si le test des deux semaines sans téléphone ou les trois chiffres du mois vous ont fait repérer quelque chose, c'est le bon moment pour en faire une action.
 >

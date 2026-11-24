@@ -47,7 +47,7 @@ function cron(req) {
 }
 
 /* Champs modifiables par `reglage` (jamais le reste du document). */
-const REGLAGES = ['actif', 'modeTest', 'testMembres', 'testTelephones', 'testEmails', 'whatsapp', 'activeCampaign', 'textes', 'rattrapage', 'emailCompte', 'syncTextesAC', 'sms'];
+const REGLAGES = ['actif', 'modeTest', 'testMembres', 'testTelephones', 'testEmails', 'whatsapp', 'activeCampaign', 'textes', 'rattrapage', 'emailCompte', 'syncTextesAC', 'sms', 'suites'];
 
 async function reglage(body, par) {
   const ref = db.collection('_config').doc('parcours_rdv');

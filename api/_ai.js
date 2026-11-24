@@ -74,6 +74,7 @@ const DEFAULT_TASKS = {
   presence_check:   { model: HAIKU, maxTokens: 800 },
   // Frein principal après un « non » (api/parcours-frein.js, 24/11/2026).
   parcours_frein:   { model: SONNET, effort: 'low', maxTokens: 800 },
+  parcours_reponse: { model: HAIKU, maxTokens: 300 },
   // Opus effort bas : la justesse du ton prime (retour Adrien 09/10/2026).
   message_assist:   { model: OPUS,  effort: 'low', maxTokens: 2500 },
   client_risk:      { model: HAIKU, maxTokens: 1200 },
