@@ -1,6 +1,8 @@
 # Séquences après un « non » : une par frein
 
-*Brouillon du 24/11/2026, à valider par Adrien avant création dans ActiveCampaign.*
+*Version 2 du 24/11/2026 (demande d'Adrien : plus agréable à lire, pensée pour rattraper un prospect). Mise en page et envoi vers ActiveCampaign : `api/_acSequencesData.json`.*
+
+Syntaxe : `>> phrase` = encadré mis en avant ; `[ Libellé ]` = bouton (réservation par défaut, ou lien entre parenthèses) ; `[[ Libellé ]]` = lien de réservation discret ; `P.S.` après la signature.
 
 ## Comment ça marche
 
@@ -35,26 +37,44 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 
 > Bonjour %FIRSTNAME%,
 >
-> Merci pour notre échange d'hier, et merci surtout d'avoir été franc sur la trésorerie. C'est la raison la plus fréquente pour laquelle un dirigeant dit « pas maintenant », et c'est une raison sérieuse.
+> « Ce n'est pas le moment, la trésorerie est trop juste. » Vous nous l'avez dit hier sans détour, et merci pour ça : la plupart des dirigeants le pensent sans oser le dire.
 >
-> Je voudrais vous laisser une idée, une seule : la trésorerie n'est pas un chiffre, c'est un résultat. Elle est la conséquence de trois choses que vous pilotez déjà : votre marge, le moment où vous encaissez et le moment où vous payez.
+> C'est aussi la phrase que nous entendons le plus. Presque toujours de la part de dirigeants qui travaillent beaucoup, qui facturent, et qui ne comprennent pas pourquoi il reste si peu sur le compte à la fin du mois.
 >
-> Dans les prochains jours, je vous envoie quelques pistes concrètes sur chacun de ces trois leviers. Rien à acheter, juste de quoi y voir plus clair.
+> >> La trésorerie n'est pas un chiffre. C'est un résultat.
+>
+> Elle découle de trois choses que vous avez déjà entre les mains :
+>
+> - **votre marge** : ce qui reste vraiment sur chaque vente ;
+> - **le moment où vous encaissez** ;
+> - **le moment où vous payez**.
+>
+> Dans les prochains jours, nous vous envoyons une piste concrète sur chacun de ces trois leviers. Rien à acheter : de quoi y voir plus clair, que nous travaillions ensemble ou non.
 >
 > Adrien & Emily
+>
+> P.S. Une question en attendant : savez-vous, à la semaine près, à quel moment du mois votre compte est au plus bas ? Si la réponse est « à peu près », le premier levier est là.
 
 **E2 (J+4) : La marge qui disparaît sans bruit**
 *Pré-en-tête : Le chiffre d'affaires monte, la trésorerie ne suit pas. Pourquoi ?*
 
 > Bonjour %FIRSTNAME%,
 >
-> Beaucoup de dirigeants que nous accompagnons font le même constat : « Je travaille plus, je facture plus, et pourtant il ne reste rien à la fin du mois. »
+> « Je travaille plus, je facture plus, et il ne reste rien. »
 >
-> La réponse se cache presque toujours dans la marge, chantier par chantier, client par client ou produit par produit. Une prestation vendue trop bas, un poste de dépense qui a glissé, du temps non facturé… Pris un par un, c'est peu. Mis bout à bout, c'est souvent ce qui manque en trésorerie.
+> Si cette phrase pourrait être la vôtre, le problème ne vient probablement pas de votre chiffre d'affaires. Il vient de ce qui s'échappe entre la facture et le compte en banque.
 >
-> Un exercice simple pour cette semaine : prenez vos trois derniers gros dossiers et demandez-vous lequel vous a vraiment rapporté de l'argent, une fois tout compté, votre temps compris.
+> Une prestation vendue un peu trop bas. Un fournisseur qui a augmenté sans que vos devis suivent. Du temps passé et jamais facturé. Pris un par un, c'est peu. Mis bout à bout, c'est souvent exactement ce qui manque en fin de mois.
 >
-> Vous serez peut-être surpris.
+> **L'exercice de la semaine (10 minutes)**
+>
+> Prenez vos trois derniers gros dossiers, chantiers ou clients. Pour chacun, comptez tout : les achats, les heures de l'équipe et **vos** heures. Puis classez-les du plus rentable au moins rentable.
+>
+> >> Le dossier dont on est le plus fier est rarement celui qui rapporte le plus.
+>
+> Si le classement vous surprend, vous venez de trouver votre premier chantier.
+>
+> [[ Envie d'en parler avec vos chiffres ? Reprenez un créneau ici ]]
 >
 > Adrien & Emily
 
@@ -63,27 +83,49 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 
 > Bonjour %FIRSTNAME%,
 >
-> À activité égale, deux entreprises peuvent avoir une trésorerie très différente. La différence tient souvent au calendrier, plus qu'au chiffre d'affaires :
+> Deux entreprises, même activité, même chiffre d'affaires. Dans l'une, le dirigeant dort bien. Dans l'autre, il regarde son compte tous les matins. La différence tient rarement au talent : elle tient au calendrier.
 >
-> - **Encaisser plus tôt** : acompte à la commande, facturation dès la fin du travail, relance systématique à J+1 de l'échéance.
-> - **Payer au bon moment** : négocier ses délais fournisseurs autant que ses délais clients, et étaler ce qui peut l'être.
+> **Encaisser plus tôt**
 >
-> Rien de spectaculaire, mais appliqué avec rigueur, c'est parfois plusieurs semaines de respiration retrouvées.
+> - un acompte à la commande, systématique ;
+> - la facture envoyée le jour où le travail est terminé, pas à la fin du mois ;
+> - une relance dès le lendemain de l'échéance, sans attendre « de voir ».
+>
+> **Payer au bon moment**
+>
+> - négocier vos délais fournisseurs avec le même sérieux que vos délais clients ;
+> - étaler ce qui peut l'être, plutôt que tout régler d'un coup.
+>
+> Rien de spectaculaire. Mais appliqué avec rigueur pendant deux mois, c'est souvent plusieurs semaines d'air retrouvées, sans vendre davantage.
+>
+> >> À faire dès lundi : choisissez une seule de ces cinq lignes, et appliquez-la à tous vos dossiers en cours.
 >
 > Adrien & Emily
+>
+> P.S. La semaine prochaine : l'histoire de Franck, boulanger, parti d'un bilan dans le rouge.
 
 **E4 (J+14) : Ce que coûte le fait d'attendre**
 *Pré-en-tête : Une question honnête, à vous poser au calme.*
 
 > Bonjour %FIRSTNAME%,
 >
-> Quand la trésorerie est tendue, le réflexe naturel est de tout geler, y compris ce qui pourrait la débloquer. C'est compréhensible. C'est aussi le piège dans lequel beaucoup de dirigeants restent coincés plusieurs années.
+> Quand la trésorerie se tend, le réflexe est de tout geler. Y compris ce qui pourrait la débloquer. C'est humain, et c'est le piège dans lequel beaucoup de dirigeants restent coincés pendant des années.
 >
-> La question n'est donc pas « est-ce que j'ai le budget aujourd'hui ? ». La vraie question, c'est : « combien me coûte chaque mois où rien ne change ? »
+> La question utile n'est pas « ai-je le budget aujourd'hui ? ». C'est celle-ci :
 >
-> Franck, boulanger, a commencé avec un bilan dans le rouge. Cinq mois plus tard, il était revenu à l'équilibre, avec 7 000 euros de bénéfice en plus chaque mois. Ce qu'il en dit : « Avant, j'étais inconscient et j'avais peur. Aujourd'hui, je suis conscient et je n'ai plus peur. »
+> >> Combien me coûte chaque mois où rien ne change ?
+>
+> Franck est boulanger. Quand il a commencé avec nous, son bilan était dans le rouge. Cinq mois plus tard, il était revenu à l'équilibre, avec 7 000 euros de bénéfice en plus chaque mois.
+>
+> Ce qu'il en dit :
+>
+> >> « Avant, j'étais inconscient et j'avais peur. Aujourd'hui, je suis conscient et je n'ai plus peur. »
 >
 > [ Voir le témoignage de Franck ](https://vimeo.com/1204547163)
+>
+> Son résultat lui appartient, et ce n'est pas une promesse pour votre entreprise. Mais son point de départ ressemble peut-être au vôtre.
+>
+> [[ Refaire le point avec vos chiffres d'aujourd'hui ]]
 >
 > Adrien & Emily
 
@@ -92,13 +134,23 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 
 > Bonjour %FIRSTNAME%,
 >
-> Cela fait trois semaines que nous avons échangé. Je ne sais pas où vous en êtes, mais si la question de la trésorerie vous occupe toujours l'esprit, nous pouvons refaire le point ensemble : où vous en êtes aujourd'hui, ce qui a bougé et ce qui reste bloqué.
+> Trois semaines ont passé depuis notre échange.
 >
-> Il n'y a aucune obligation : juste un échange pour y voir clair.
+> Peut-être avez-vous testé une ou deux pistes de ces e-mails. Peut-être que le quotidien a repris le dessus : c'est le cas le plus fréquent, et il n'y a rien à se reprocher.
+>
+> Si la trésorerie vous occupe toujours l'esprit, nous vous proposons de refaire le point, 45 minutes, avec vos chiffres d'aujourd'hui :
+>
+> - ce qui a bougé depuis notre échange ;
+> - ce qui reste bloqué ;
+> - les deux ou trois actions qui auraient le plus d'effet maintenant.
+>
+> Vous repartez avec ces priorités, que nous travaillions ensemble ou non.
 >
 > [ Reprendre un rendez-vous ]
 >
 > Adrien & Emily
+>
+> P.S. Ce n'est plus d'actualité ? Répondez simplement « plus tard » : nous lisons toutes les réponses.
 
 ---
 
@@ -109,24 +161,40 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 
 > Bonjour %FIRSTNAME%,
 >
-> Merci pour notre échange d'hier. Vous m'avez dit que ce n'était pas le bon moment, et je le respecte : vous connaissez votre agenda mieux que personne.
+> Vous nous avez dit hier que ce n'était pas le bon moment. C'est noté, et nous le respectons : personne ne connaît votre agenda mieux que vous.
 >
-> Je vous partage simplement une observation. Chez les dirigeants que nous accompagnons, le « bon moment » arrive rarement de lui-même. Il y a toujours une saison chargée, un projet en cours, une échéance. Ceux qui avancent sont ceux qui décident d'un moment, plutôt que de l'attendre.
+> Nous vous laissons seulement une observation, tirée de ce que nous voyons chaque semaine.
 >
-> D'ici là, je vous envoie quelques idées utiles, sans rien vous demander.
+> >> Le bon moment ne se présente presque jamais tout seul.
+>
+> Il y a toujours une saison chargée, un salarié à remplacer, un projet à finir. Les dirigeants qui avancent n'ont pas plus de temps que les autres : ils ont décidé d'un moment, au lieu de l'attendre.
+>
+> Nous n'allons pas vous relancer pour vous faire changer d'avis. Dans les prochaines semaines, nous vous envoyons simplement quelques idées courtes, utilisables tout de suite, même en pleine période chargée.
 >
 > Adrien & Emily
+>
+> P.S. Première idée dans trois jours : comment reconnaître une « période chargée » qui n'en est pas une.
 
 **E2 (J+4) : Le piège de la période chargée**
 *Pré-en-tête : Plus on est débordé, plus on a besoin de lever la tête.*
 
 > Bonjour %FIRSTNAME%,
 >
-> « Je verrai quand ça se calmera. » Nous l'avons tous dit. Le problème, c'est que dans une entreprise qui tourne, ça ne se calme jamais vraiment : chaque période chargée est suivie d'une autre.
+> « Je verrai quand ça se calmera. »
 >
-> Le signe qu'il est temps de s'organiser autrement, ce n'est pas le calme. C'est quand les mêmes problèmes reviennent à chaque saison haute : les mêmes nuits courtes, les mêmes urgences, les mêmes décisions prises dans la précipitation.
+> Nous l'avons tous dit. Le souci, c'est que dans une entreprise qui tourne, ça ne se calme jamais vraiment : chaque période chargée en cache une autre.
 >
-> Si vous vous reconnaissez là-dedans, ce n'est pas un hasard de calendrier. C'est une organisation à revoir.
+> Pour faire la différence entre un vrai pic d'activité et un problème d'organisation, posez-vous trois questions :
+>
+> 1. Les mêmes urgences reviennent-elles à chaque saison haute ?
+> 2. Est-ce toujours vous qui rattrapez les retards, le soir ou le week-end ?
+> 3. Vous êtes-vous déjà dit « l'an prochain, on s'organisera autrement »… l'an dernier ?
+>
+> >> Trois « oui » : ce n'est pas le calendrier. C'est l'organisation.
+>
+> Et une organisation, ça se revoit. Pas forcément en grand : deux ou trois décisions suffisent souvent à changer une saison entière.
+>
+> [[ En parler 45 minutes, au moment qui vous arrange ]]
 >
 > Adrien & Emily
 
@@ -135,28 +203,42 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 
 > Bonjour %FIRSTNAME%,
 >
-> Voici un rituel que beaucoup de nos dirigeants gardent, même après notre accompagnement : 15 minutes, le vendredi, pour répondre à trois questions.
+> Pas le temps de prendre du recul ? Voici un rituel qui tient en 15 minutes, et que beaucoup de dirigeants gardent même après notre accompagnement.
 >
-> 1. Qu'est-ce qui m'a pris le plus de temps cette semaine, et qui aurait pu être fait par quelqu'un d'autre ?
-> 2. Quelle décision ai-je repoussée ?
-> 3. Quel chiffre dois-je regarder lundi matin ?
+> **Le vendredi, avant de fermer, trois questions**
 >
-> C'est court, mais c'est souvent le début d'une semaine où l'on pilote au lieu de subir.
+> 1. **Qu'est-ce qui m'a pris le plus de temps cette semaine**, et qu'un autre aurait pu faire ?
+> 2. **Quelle décision ai-je repoussée ?**
+> 3. **Quel chiffre dois-je regarder lundi matin ?**
+>
+> Notez vos réponses, toujours au même endroit. C'est tout.
+>
+> Au bout d'un mois, relisez vos quatre vendredis. Si la même tâche ou la même décision revient à chaque fois, vous tenez votre priorité.
+>
+> >> On ne reprend pas la main sur son entreprise en un grand soir. On la reprend un vendredi après l'autre.
 >
 > Adrien & Emily
+>
+> P.S. Essayez dès cette semaine, et dites-nous ce qui en est ressorti : répondez à cet e-mail, nous lisons tout.
 
 **E4 (J+14) : Ce qui se passe quand on attend**
 *Pré-en-tête : Le statu quo a un coût, même quand il ne se voit pas.*
 
 > Bonjour %FIRSTNAME%,
 >
-> Attendre a l'air neutre. En réalité, chaque mois où rien ne change prolonge les mêmes difficultés : le même temps passé sur l'opérationnel, la même marge qui s'effrite, la même fatigue.
+> Attendre a l'air neutre. Ça ne l'est pas : chaque mois où rien ne change prolonge les mêmes soirées trop longues, la même marge qui s'effrite, la même fatigue.
 >
-> Alexandre, boucher-charcutier-traiteur, avait un chiffre d'affaires en hausse et « la tête dans le guidon ». Un soir, une fois tout le monde payé, il a fait le constat : « J'ai fait plaisir à tout le monde, sauf à moi-même. » Aujourd'hui, ses marges sont reprises, ses fiches de production calées, et à 19 h 30 il passe à table avec toute sa famille.
+> Alexandre est boucher-charcutier-traiteur. Son chiffre d'affaires montait et il avait, selon ses mots, « la tête dans le guidon ». Un soir, une fois tout le monde payé, il a fait ce constat :
+>
+> >> « J'ai fait plaisir à tout le monde, sauf à moi-même. »
+>
+> Aujourd'hui, ses marges sont reprises, ses fiches de production sont calées, et à 19 h 30 il passe à table avec toute sa famille.
 >
 > Son conseil à ceux qui hésitent : demandez-vous plutôt combien vous allez perdre à attendre.
 >
 > [ Voir le témoignage d'Alexandre ](https://drive.google.com/file/d/1tPEoSaGRAGXZmo_h0x16eb8gWfl3aDBK/view)
+>
+> Son parcours n'est pas une promesse pour le vôtre. Mais sa situation de départ, beaucoup de dirigeants la reconnaissent.
 >
 > Adrien & Emily
 
@@ -165,11 +247,17 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 
 > Bonjour %FIRSTNAME%,
 >
-> Vous m'aviez dit que ce n'était pas le bon moment. Si une période plus calme se profile, le plus simple est de bloquer dès maintenant un créneau pour refaire le point : il sera dans votre agenda, et vous n'aurez pas à y repenser.
+> Vous nous aviez dit que ce n'était pas le bon moment. Trois semaines plus tard, il n'est peut-être toujours pas venu. C'est normal : il ne vient pas tout seul.
+>
+> Voici donc une façon simple de ne plus y penser : **choisissez la date vous-même.** Dans deux semaines, dans un mois, après votre saison : le calendrier est ouvert.
+>
+> Le créneau sera dans votre agenda. D'ici là, vous n'avez rien à faire ni à préparer.
 >
 > [ Choisir un créneau ]
 >
 > Adrien & Emily
+>
+> P.S. Une date posée, même lointaine, c'est déjà une décision. Et si elle ne convient plus le moment venu, il suffira de nous le dire.
 
 ---
 
@@ -180,24 +268,36 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 
 > Bonjour %FIRSTNAME%,
 >
-> Merci pour notre échange d'hier. Vous souhaitez en parler avant de décider, et c'est sain : une décision qui engage votre entreprise mérite d'être partagée.
+> Vous souhaitez en parler avant de décider. C'est sain : une décision qui engage votre entreprise ne se prend pas seul, sur un coin de table.
 >
-> Pour vous faciliter la tâche, je vous envoie dans les prochains jours de quoi présenter simplement notre démarche à la personne concernée : comment se déroule l'accompagnement et ce qu'il change concrètement.
+> Seulement, vous l'avez sans doute déjà vécu : raconter un échange à quelqu'un qui n'y était pas, c'est compliqué. On oublie la moitié, l'autre pose une question à laquelle on n'a pas la réponse, et la discussion tourne court.
+>
+> Nous allons donc vous faciliter la tâche. Dans les prochains jours, vous recevrez :
+>
+> - **notre démarche en trois phrases**, à reprendre telles quelles ;
+> - **les réponses aux questions** que se posent le plus souvent un associé ou un conjoint ;
+> - **une façon simple d'en parler à deux**, directement avec nous.
+>
+> Vous pourrez transférer ces e-mails tels quels.
 >
 > Adrien & Emily
+>
+> P.S. La personne concernée a déjà une question précise ? Répondez à cet e-mail : nous vous aidons à y répondre.
 
 **E2 (J+4) : L'accompagnement en trois phrases**
 *Pré-en-tête : De quoi le présenter simplement, sans jargon.*
 
 > Bonjour %FIRSTNAME%,
 >
-> Si vous deviez résumer notre démarche à votre associé ou à votre conjoint, voici trois phrases que vous pouvez reprendre telles quelles :
+> Comment expliquer notre démarche à votre associé ou à votre conjoint, sans jargon et sans y passer la soirée ? Voici trois phrases, à reprendre telles quelles.
 >
-> 1. **On part de la situation réelle de l'entreprise** : les chiffres, l'organisation, ce qui bloque aujourd'hui.
-> 2. **On définit ensemble les priorités** : peu de chantiers, ceux qui ont le plus d'effet.
-> 3. **On avance avec un accompagnement dans la durée**, pour que les changements tiennent au lieu de s'essouffler au bout de trois semaines.
+> 1. **« On part de la situation réelle de l'entreprise. »** Les chiffres, l'organisation, ce qui bloque aujourd'hui. Pas une méthode plaquée de l'extérieur.
+> 2. **« On choisit peu de priorités. »** Deux ou trois chantiers, ceux qui ont le plus d'effet, plutôt qu'une liste de quarante bonnes idées.
+> 3. **« On est accompagnés dans la durée. »** Pour que les changements tiennent, au lieu de s'essouffler au bout de trois semaines.
 >
-> N'hésitez pas à lui transférer cet e-mail.
+> >> Le plus simple : transférez-lui cet e-mail.
+>
+> Et si une question revient après votre discussion, notez-la. Nous répondons aux plus fréquentes dans le prochain e-mail, et à la vôtre si vous nous l'écrivez.
 >
 > Adrien & Emily
 
@@ -206,11 +306,23 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 
 > Bonjour %FIRSTNAME%,
 >
-> Voici les questions qui reviennent le plus souvent quand un dirigeant en parle autour de lui :
+> Quand un dirigeant parle de notre accompagnement autour de lui, trois questions reviennent presque à chaque fois. Les voici, avec nos réponses.
 >
-> - **« Combien de temps ça demande ? »** Un rythme régulier, calé sur votre activité.
-> - **« Est-ce que c'est adapté à une entreprise comme la nôtre ? »** Nous accompagnons des TPE et PME de tous secteurs, et chaque accompagnement part de la situation de l'entreprise.
-> - **« Et si ça ne marche pas pour nous ? »** C'est précisément ce que l'audit sert à vérifier avant tout engagement.
+> **« Combien de temps ça demande ? »**
+>
+> Un rythme régulier, calé sur votre activité. Le but est de vous rendre du temps, pas de vous en prendre.
+>
+> **« Est-ce adapté à une entreprise comme la nôtre ? »**
+>
+> Nous accompagnons des TPE et des PME de tous secteurs : boulangerie, boucherie, restauration, institut de beauté… Chaque accompagnement part de la situation de l'entreprise, jamais d'un modèle tout fait.
+>
+> **« Et si ça ne marche pas pour nous ? »**
+>
+> C'est précisément ce que l'audit sert à vérifier, avant tout engagement. S'il n'y a pas de quoi avancer ensemble, nous vous le disons.
+>
+> Une autre question ? Répondez à cet e-mail.
+>
+> [[ Ou venez la poser à deux, de vive voix ]]
 >
 > Adrien & Emily
 
@@ -219,22 +331,38 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 
 > Bonjour %FIRSTNAME%,
 >
-> Expliquer une démarche à quelqu'un qui n'était pas là n'est pas toujours simple. Beaucoup de dirigeants choisissent de refaire un échange **à deux**, avec leur associé ou leur conjoint : chacun pose ses questions, et la décision se prend en connaissance de cause.
+> Vous avez peut-être essayé d'en parler. Et vous avez peut-être constaté que résumer 45 minutes d'échange en cinq minutes au dîner, ça ne marche pas très bien.
 >
-> Si c'est plus simple pour vous, choisissez un créneau où vous êtes disponibles tous les deux.
+> C'est pour cela que beaucoup de dirigeants choisissent de refaire un échange **à deux**, avec leur associé ou leur conjoint :
+>
+> - chacun pose ses propres questions ;
+> - personne n'a à « défendre » le projet devant l'autre ;
+> - la décision se prend ensemble, en connaissance de cause, dans un sens ou dans l'autre.
+>
+> Choisissez simplement un créneau où vous êtes disponibles tous les deux.
 >
 > [ Réserver un échange à deux ]
 >
 > Adrien & Emily
+>
+> P.S. Un « non » décidé à deux vaut mieux qu'une décision qui traîne : au moins, le sujet est réglé.
 
 **E5 (J+21) : Où en êtes-vous ?**
 *Pré-en-tête : Juste pour savoir si vous avez pu en parler.*
 
 > Bonjour %FIRSTNAME%,
 >
-> Avez-vous pu en parler ? Quelle que soit votre décision, je serais content de la connaître : répondez simplement à cet e-mail, même en un mot.
+> Avez-vous pu en parler ?
 >
-> Et si vous souhaitez refaire le point, le lien est ici :
+> Quelle que soit votre décision, nous serions contents de la connaître. Vraiment : un « non » clair nous aide autant qu'un « oui ».
+>
+> **Répondez à cet e-mail, même en un mot**
+>
+> - « oui » : nous revenons vers vous pour la suite ;
+> - « pas encore » : nous vous laissons le temps ;
+> - « non » : c'est noté, sans rancune.
+>
+> Et si vous préférez refaire le point de vive voix, seul ou à deux :
 >
 > [ Reprendre un rendez-vous ]
 >
@@ -249,24 +377,46 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 
 > Bonjour %FIRSTNAME%,
 >
-> Merci pour notre échange d'hier. Vous voulez voir des résultats concrets avant de vous engager, et vous avez raison : ne vous engagez jamais sur une promesse.
+> Vous voulez voir du concret avant de vous engager. Vous avez raison, et nous vous dirions la même chose à votre place :
 >
-> Dans les prochains jours, je vous partage donc des cas réels de dirigeants que nous avons accompagnés : leur situation de départ, ce qu'ils ont mis en place et où ils en sont.
+> >> Ne vous engagez jamais sur une promesse.
+>
+> Dans notre métier, les belles promesses ne manquent pas. Ce qui compte, ce sont des dirigeants réels, avec un point de départ, des décisions, et un résultat qu'ils racontent eux-mêmes.
+>
+> C'est ce que nous allons vous montrer dans les prochains jours :
+>
+> - **Margaux**, épicerie fine et restaurant ;
+> - **Delphine**, esthéticienne depuis 25 ans ;
+> - et, entre les deux, **ce que nous ne promettons pas**. Autant être clairs.
+>
+> Chaque témoignage est en vidéo, avec leurs mots à eux, pas les nôtres.
 >
 > Adrien & Emily
+>
+> P.S. Vous avez un secteur ou une situation en tête ? Répondez à cet e-mail : si nous avons accompagné un dirigeant proche de votre cas, nous vous le dirons.
 
 **E2 (J+4) : Margaux, épicerie fine et restaurant**
 *Pré-en-tête : Trois mois plus tard : +20 % de chiffre d'affaires, +8 % de marge.*
 
 > Bonjour %FIRSTNAME%,
 >
-> Margaux a ouvert sa première entreprise, une épicerie fine avec un restaurant italien, en 2023. Elle se sentait seule face à toutes les décisions.
+> Margaux a ouvert sa première entreprise en 2023 : une épicerie fine avec un restaurant italien.
 >
-> Avec nous, elle a restructuré son équipe, recruté et appris à déléguer. Trois mois plus tard : « Mon chiffre d'affaires a augmenté de 20 %, mes marges ont augmenté de 8 %. » Et surtout : « Je peux enfin déléguer. »
+> **Son point de départ.** Elle se sentait seule face à toutes les décisions.
+>
+> **Ce qu'elle a fait.** Elle a restructuré son équipe, recruté et appris à déléguer.
+>
+> **Trois mois plus tard**, avec ses mots :
+>
+> >> « Mon chiffre d'affaires a augmenté de 20 %, mes marges ont augmenté de 8 %. »
+>
+> Et surtout : « Je peux enfin déléguer. »
 >
 > [ Voir le témoignage de Margaux ](https://vimeo.com/1204547192)
 >
-> Ce qui nous frappe dans son parcours, c'est que rien de tout ça n'est venu d'un effort commercial de plus : tout est venu de l'organisation.
+> Ce qui nous frappe dans son parcours : rien de tout cela n'est venu d'un effort commercial de plus. Tout est venu de l'organisation.
+>
+> Son résultat lui appartient, et nous ne vous promettons pas le même. Mais si vous vous sentez seul face aux décisions, son histoire mérite d'être regardée.
 >
 > Adrien & Emily
 
@@ -275,13 +425,27 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 
 > Bonjour %FIRSTNAME%,
 >
-> Vous avez peut-être déjà été déçu par un prestataire. Alors autant être clair sur ce que nous ne faisons pas :
+> Vous avez peut-être déjà été déçu par un prestataire, un consultant ou une formation. Alors autant être clairs, avant d'aller plus loin.
 >
-> - nous ne promettons pas de miracle en trois semaines ;
-> - nous ne faisons pas le travail à votre place ;
-> - nous ne vous vendons pas une méthode toute faite qui ignore votre entreprise.
+> **Ce que nous ne faisons pas**
 >
-> Ce que nous faisons, c'est vous aider à prendre les bonnes décisions, dans le bon ordre, et à les tenir dans la durée.
+> - promettre un miracle en trois semaines ;
+> - faire le travail à votre place ;
+> - vous vendre une méthode toute faite, qui ignore votre entreprise.
+>
+> **Ce que nous faisons**
+>
+> - partir de vos chiffres et de votre organisation ;
+> - vous aider à prendre les bonnes décisions, dans le bon ordre ;
+> - vous accompagner pour les tenir dans la durée.
+>
+> Une boulangère que nous accompagnons nous a dit un jour :
+>
+> >> « Vous ne m'avez pas vendu du rêve. »
+>
+> C'est le compliment qui nous fait le plus plaisir.
+>
+> [[ Voir ce que cela donnerait pour votre entreprise ]]
 >
 > Adrien & Emily
 
@@ -290,11 +454,19 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 
 > Bonjour %FIRSTNAME%,
 >
-> Delphine est esthéticienne depuis 25 ans. Seule dans son institut, elle faisait tout elle-même, de 9 h à 19 h, avec « l'angoisse de la tréso permanente ».
+> Delphine est esthéticienne depuis 25 ans. Vingt-cinq ans de métier, et pourtant, chaque mois, ce qu'elle appelle « l'angoisse de la tréso permanente ».
 >
-> Ensemble, elle a revu ses charges, renégocié ses contrats, recalculé ses prestations et organisé ses tâches. Résultat, selon ses mots : « J'ai économisé 15 000 euros sur l'année », et elle termine désormais vers 18 h.
+> **Son point de départ.** Seule dans son institut, elle faisait tout elle-même, de 9 h à 19 h.
 >
-> Elle avait, elle aussi, un doute au départ, celui de « l'arnaque ». Il n'a pas tenu longtemps.
+> **Ce qu'elle a fait.** Elle a revu ses charges, renégocié ses contrats, recalculé ses prestations et organisé ses tâches.
+>
+> **Le résultat**, selon ses mots :
+>
+> >> « J'ai économisé 15 000 euros sur l'année. »
+>
+> Et elle termine désormais vers 18 h.
+>
+> Elle avait, elle aussi, un doute au départ : celui de « l'arnaque ». Il n'a pas tenu longtemps.
 >
 > [ Voir le témoignage de Delphine ](https://drive.google.com/file/d/1_HaqWTqx2SE-x6F7bOHf0LyI3kfpgvbQ/view)
 >
@@ -305,9 +477,15 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 
 > Bonjour %FIRSTNAME%,
 >
-> Les témoignages donnent une idée, mais la seule preuve qui compte vraiment, c'est ce que cela donnerait **pour votre entreprise**.
+> Margaux, Delphine : leurs histoires donnent une idée. Mais la seule preuve qui compte vraiment, c'est ce que cela donnerait **pour votre entreprise**.
 >
-> Si vous voulez refaire le point avec vos chiffres d'aujourd'hui, réservez un créneau :
+> C'est ce que nous vous proposons de regarder ensemble, 45 minutes, avec vos chiffres d'aujourd'hui :
+>
+> 1. où part réellement votre marge ;
+> 2. ce qui vous prend le plus de temps ;
+> 3. les deux ou trois actions qui auraient le plus d'effet chez vous.
+>
+> Vous repartez avec ces priorités, que nous travaillions ensemble ou non. Et si nous pensons ne pas pouvoir vous aider, nous vous le dirons.
 >
 > [ Reprendre un rendez-vous ]
 >
@@ -322,11 +500,21 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 
 > Bonjour %FIRSTNAME%,
 >
-> Merci pour notre échange d'hier. Vous préférez avancer par vous-même pour l'instant, et c'est tout à fait légitime.
+> Merci pour le temps que vous nous avez accordé hier. Vous préférez avancer par vous-même pour l'instant : c'est tout à fait légitime, et beaucoup de dirigeants solides fonctionnent ainsi.
 >
-> Je vous laisse une question pour la semaine : **qu'est-ce qui vous prend le plus d'énergie aujourd'hui, et qui sera encore là dans un an si rien ne change ?**
+> Nous vous laissons une seule question pour la semaine :
 >
-> Dans les prochains e-mails, je partage quelques outils utiles pour avancer seul. Gardez-les, même si nous ne travaillons jamais ensemble.
+> >> Qu'est-ce qui vous prend le plus d'énergie aujourd'hui, et qui sera encore là dans un an si rien ne change ?
+>
+> Ne répondez pas trop vite. La première réponse est souvent « le manque de temps ». La vraie se trouve en général juste derrière.
+>
+> Dans les prochains e-mails, nous partageons trois outils simples pour avancer seul :
+>
+> - un test pour savoir si l'entreprise dépend trop de vous ;
+> - les trois chiffres à suivre chaque mois ;
+> - ce que font différemment les dirigeants qui avancent.
+>
+> Gardez-les, même si nous ne travaillons jamais ensemble.
 >
 > Adrien & Emily
 
@@ -335,39 +523,65 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 
 > Bonjour %FIRSTNAME%,
 >
-> Dans beaucoup d'entreprises, tout finit par remonter au dirigeant : les décisions, les problèmes, les questions des équipes. Au début, c'est normal. Au bout de quelques années, c'est ce qui empêche l'entreprise de grandir et le dirigeant de souffler.
+> Imaginez : vous partez deux semaines, sans téléphone.
 >
-> Un test simple : si vous partiez deux semaines sans téléphone, qu'est-ce qui s'arrêterait ?
+> Qu'est-ce qui s'arrête ? Les devis ? Les commandes ? Les décisions du quotidien ? Les réponses aux questions de l'équipe ?
 >
-> La réponse dit beaucoup de ce qu'il reste à organiser.
+> >> Tout ce qui s'arrêterait sans vous, c'est ce qui vous empêche aujourd'hui de souffler.
+>
+> Dans beaucoup d'entreprises, tout finit par remonter au dirigeant. Au début, c'est normal : c'est même ce qui fait décoller l'activité. Au bout de quelques années, c'est ce qui bloque l'entreprise, et ce qui épuise celui qui la porte.
+>
+> Ce n'est pas un problème de motivation, ni de compétence de l'équipe. C'est une question d'organisation : qui décide quoi, avec quelles consignes, sans passer par vous.
+>
+> **L'exercice de la semaine**
+>
+> Pendant trois jours, notez chaque question qu'on vous pose. Vendredi, entourez celles auxquelles quelqu'un d'autre aurait pu répondre avec une consigne claire.
 >
 > Adrien & Emily
+>
+> P.S. La liste est presque toujours plus longue qu'on ne le pensait.
 
 **E3 (J+8) : Trois chiffres à suivre chaque mois**
 *Pré-en-tête : Pas besoin d'un tableau de bord compliqué.*
 
 > Bonjour %FIRSTNAME%,
 >
-> Pour piloter sans y passer des heures, trois chiffres suffisent souvent :
+> Un tableau de bord de quarante lignes, personne ne le regarde. Trois chiffres, notés une fois par mois, suffisent souvent pour piloter.
 >
-> 1. **la marge**, et pas seulement le chiffre d'affaires ;
-> 2. **la trésorerie disponible en fin de mois** ;
-> 3. **le temps que vous passez sur l'opérationnel**, comparé à celui que vous passez à développer l'entreprise.
+> 1. **Votre marge.** Pas le chiffre d'affaires : ce qui reste une fois vos coûts payés.
+> 2. **Votre trésorerie disponible en fin de mois.** Le chiffre qui dit si vous dormez bien.
+> 3. **Votre temps.** La part de vos semaines passée dans l'opérationnel, comparée à celle passée à développer l'entreprise.
 >
-> Notez-les le premier de chaque mois. Au bout de trois mois, vous verrez la tendance, et vous saurez où agir.
+> **Comment faire**
+>
+> Le premier de chaque mois, notez ces trois chiffres au même endroit. Dix minutes, pas plus.
+>
+> >> Au bout de trois mois, vous ne verrez plus des chiffres : vous verrez une tendance. Et vous saurez où agir.
 >
 > Adrien & Emily
+>
+> P.S. Le troisième chiffre est celui que presque personne ne suit. C'est souvent lui qui explique les deux autres.
 
 **E4 (J+14) : Ce que nous voyons chez les dirigeants qui avancent**
 *Pré-en-tête : Ce n'est pas une question de talent.*
 
 > Bonjour %FIRSTNAME%,
 >
-> Chez les dirigeants que nous accompagnons, ceux qui progressent le plus vite ont rarement plus de talent que les autres. Ils ont simplement arrêté de tout porter seuls et se sont donné un cadre pour décider.
+> Les dirigeants qui progressent le plus vite ont rarement plus de talent que les autres. Ils ont fait deux choses : arrêter de tout porter seuls, et se donner un cadre pour décider.
 >
-> Une boulangère que nous accompagnons, ouverte sept jours sur sept, le résume mieux que nous : « J'avais une équipe de vente qui me bouffait littéralement. » Nouvelle équipe, plannings revus, horaires d'ouverture repensés : plus d'arrêts maladie, et des milliers d'euros de masse salariale économisés. Son mot pour nous : « Vous ne m'avez pas vendu du rêve. »
+> Une boulangère que nous accompagnons, ouverte sept jours sur sept, le raconte mieux que nous :
+>
+> >> « J'avais une équipe de vente qui me bouffait littéralement. »
+>
+> **Ce qu'elle a changé.** Une nouvelle équipe, des plannings revus, des horaires d'ouverture repensés.
+>
+> **Ce que ça a donné.** Plus d'arrêts maladie, et des milliers d'euros de masse salariale économisés.
+>
+> Son mot pour nous : « Vous ne m'avez pas vendu du rêve. »
 >
 > [ Voir son témoignage ](https://drive.google.com/file/d/1cyMcufjFmvVe5VwgXgP1Q0YwN4Y0Xjyh/view)
+>
+> Son résultat n'est pas une promesse pour votre entreprise. Mais si votre équipe vous prend plus d'énergie qu'elle ne vous en rend, son histoire vous parlera.
 >
 > Adrien & Emily
 
@@ -376,13 +590,23 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 
 > Bonjour %FIRSTNAME%,
 >
-> Trois semaines ont passé depuis notre échange. Avez-vous pu avancer sur ce qui vous occupait ?
+> Trois semaines ont passé. Vous vouliez avancer par vous-même : où en êtes-vous ?
 >
-> Si vous voulez faire un point sur la situation de votre entreprise aujourd'hui, réservez un créneau :
+> Si vous avez essayé le test des deux semaines sans téléphone ou les trois chiffres du mois, vous avez peut-être déjà repéré ce qui coince. C'est le plus difficile, et vous l'avez fait seul.
+>
+> Pour aller plus vite sur la suite, nous pouvons refaire le point, 45 minutes :
+>
+> - ce que vous avez repéré ;
+> - ce qu'il vaut mieux traiter en premier ;
+> - deux ou trois actions concrètes pour les semaines qui viennent.
+>
+> Vous repartez avec, que nous travaillions ensemble ou non.
 >
 > [ Reprendre un rendez-vous ]
 >
 > Adrien & Emily
+>
+> P.S. Tout roule de votre côté ? Dites-le-nous d'un mot : cela nous fera plaisir de le savoir.
 
 ---
 
@@ -391,17 +615,48 @@ Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de
 Quatre e-mails seulement, à J+1, J+5, J+12 et J+21.
 
 **E1 (J+1) : Merci pour notre échange**
+*Pré-en-tête : Trois idées utiles, sans rien vous demander.*
+
 > Bonjour %FIRSTNAME%,
 >
-> Merci pour le temps que vous nous avez accordé. Dans les prochaines semaines, je vous partage quelques idées utiles pour piloter votre entreprise plus sereinement, sans rien vous demander en retour.
+> Merci pour le temps que vous nous avez accordé hier.
+>
+> Quelle que soit la suite, nous ne voulons pas que cet échange reste sans rien pour vous. Dans les prochaines semaines, nous vous envoyons donc trois idées courtes, utilisables tout de suite :
+>
+> - un test pour savoir si votre entreprise dépend trop de vous ;
+> - les trois chiffres à suivre chaque mois ;
+> - puis un point d'étape, si vous le souhaitez.
+>
+> Rien à acheter, rien à préparer.
 >
 > Adrien & Emily
+>
+> P.S. Une question vous est venue après notre échange ? Répondez à cet e-mail : nous lisons tout.
 
 **E2 (J+5)** reprend **E2 « Le dirigeant goulot d'étranglement »** de la séquence 5.
 
 **E3 (J+12)** reprend **E3 « Trois chiffres à suivre chaque mois »** de la séquence 5.
 
-**E4 (J+21)** reprend **E5 « Où en êtes-vous ? »** de la séquence 5.
+**E4 (J+21) : Où en êtes-vous ?**
+*Pré-en-tête : Si vous voulez faire le point, c'est par ici.*
+
+> Bonjour %FIRSTNAME%,
+>
+> Trois semaines ont passé depuis notre échange. Où en êtes-vous ?
+>
+> Si le test des deux semaines sans téléphone ou les trois chiffres du mois vous ont fait repérer quelque chose, c'est le bon moment pour en faire une action.
+>
+> Nous pouvons refaire le point ensemble, 45 minutes :
+>
+> - ce que vous avez repéré ;
+> - ce qu'il vaut mieux traiter en premier ;
+> - deux ou trois actions concrètes pour les semaines qui viennent.
+>
+> Vous repartez avec, que nous travaillions ensemble ou non.
+>
+> [ Reprendre un rendez-vous ]
+>
+> Adrien & Emily
 
 ---
 
@@ -417,24 +672,34 @@ Le prospect quitte le nurturing dès sa réservation. Si le rendez-vous n'a pas 
 
 > Bonjour %FIRSTNAME%,
 >
-> Notre rendez-vous n'a pas pu avoir lieu. Une urgence, un client, une journée qui déborde : ça arrive à tous les dirigeants, il n'y a rien à justifier.
+> Notre rendez-vous n'a pas pu avoir lieu.
 >
-> Si le sujet vous occupe toujours, le plus simple est de choisir un nouveau créneau, au moment qui vous arrange :
+> Un client qui débarque, un salarié absent, une journée qui déborde : c'est le quotidien d'un dirigeant, et vous n'avez rien à justifier.
+>
+> Mais ce qui vous avait poussé à réserver est sans doute toujours là. Alors plutôt que de laisser filer, reprenez simplement un créneau, au moment qui vous arrange vraiment :
 >
 > [ Choisir un nouveau créneau ]
 >
+> Cela prend une minute, et vous n'avez toujours rien à préparer.
+>
 > Adrien & Emily
+>
+> P.S. Un conseil : choisissez un moment où vous êtes sûr d'être au calme, tôt le matin ou en fin de journée. C'est là que l'échange est le plus utile.
 
 **E2 (J+3) : Ce que vous auriez retiré de l'audit**
 *Pré-en-tête : 45 minutes pour y voir clair sur votre entreprise.*
 
 > Bonjour %FIRSTNAME%,
 >
-> Pour que vous sachiez ce que vous auriez retiré de notre échange, voici comment se déroule l'audit :
+> Vous aviez réservé un audit, et il n'a pas eu lieu. Voici concrètement ce qui s'y passe en 45 minutes, pour que vous sachiez ce que vous y gagnez.
 >
-> 1. **On commence par vous** : ce qui vous prend le plus de temps et d'énergie aujourd'hui, avec vos mots.
-> 2. **On met le doigt sur ce qui bloque** : souvent la marge ou l'organisation, plus que le commercial.
-> 3. **Vous repartez avec vos priorités** : deux ou trois actions concrètes, que nous travaillions ensemble ou non.
+> 1. **On commence par vous.** Ce qui vous prend le plus de temps et d'énergie aujourd'hui, avec vos mots.
+> 2. **On met le doigt sur ce qui bloque.** Le plus souvent la marge ou l'organisation, bien plus que le commercial.
+> 3. **Vous repartez avec vos priorités.** Deux ou trois actions concrètes, que nous travaillions ensemble ou non.
+>
+> Franck, boulanger, résume ce que cela change d'y voir clair :
+>
+> >> « Avant, j'étais inconscient et j'avais peur. Aujourd'hui, je suis conscient et je n'ai plus peur. »
 >
 > Vous n'avez rien à préparer.
 >
@@ -447,10 +712,16 @@ Le prospect quitte le nurturing dès sa réservation. Si le rendez-vous n'a pas 
 
 > Bonjour %FIRSTNAME%,
 >
-> Je ne veux pas vous encombrer. Si ce n'est plus d'actualité, répondez simplement « plus tard » à cet e-mail et je ne vous relancerai pas sur ce sujet.
+> Nous ne voulons pas vous encombrer. Voici donc notre dernier message sur ce sujet, avec deux options.
 >
-> Si c'est toujours d'actualité, votre créneau vous attend :
+> **C'est toujours d'actualité ?** Votre créneau vous attend :
 >
 > [ Choisir un créneau ]
 >
+> **Ce n'est plus le moment ?** Répondez simplement « plus tard » à cet e-mail. C'est noté, et nous n'insistons pas.
+>
+> Dans les deux cas, merci de vous être intéressé à notre travail.
+>
 > Adrien & Emily
+>
+> P.S. Quelque chose vous a retenu, une question, un doute ? Dites-le-nous en une ligne : nous préférons le savoir.
