@@ -109,6 +109,8 @@ const TEXTES = {
   h1_sms: '{{prenom}}, votre audit avec {{expert}} commence à {{heure}}. Votre lien : {{lien}} À tout de suite ! Adrien & Emily',
   h1_sms_sans_lien: '{{prenom}}, votre audit avec {{expert}} commence à {{heure}}. Le lien est dans votre e-mail de confirmation. À tout de suite ! Adrien & Emily',
   rattrapage_sms: '{{prenom}}, {{expert}} vous attend en visio : {{lien}} En cas d\'imprévu, {{expert}} vous appelle dans quelques minutes pour trouver un autre créneau.',
+  // Repli du WhatsApp de la veille (numéro sans WhatsApp, envoi refusé).
+  veille_sms: 'Bonsoir {{prenom}}, on se retrouve demain à {{heure}} en visio pour votre audit avec {{expert}}. Le lien est dans votre e-mail de confirmation. À demain ! Adrien & Emily',
   deplacer_whatsapp: 'Bien noté {{prenom}}, merci de nous avoir prévenus. Nous vous recontactons aujourd\'hui pour trouver un nouveau créneau qui vous convient.',
 };
 
@@ -422,11 +424,15 @@ async function envoyerEmail(to, mail, cfg) {
 }
 
 function telE164(v) {
-  const d = chiffres(v);
+  let d = chiffres(v);
   if (!d) return null;
-  if (String(v).trim().charAt(0) === '+') return '+' + d;
-  if (d.length === 10 && d.charAt(0) === '0') return '+33' + d.slice(1);
-  if (d.length === 11 && d.slice(0, 2) === '33') return '+' + d;
+  const plus = String(v).trim().charAt(0) === '+';
+  // « 0033… » = « +33… »
+  if (!plus && d.slice(0, 2) === '00') d = d.slice(2);
+  else if (!plus && d.length === 10 && d.charAt(0) === '0') d = '33' + d.slice(1);
+  else if (!plus && d.length < 10) return null;
+  // « +33 06… » : le 0 national saisi derrière l'indicatif.
+  if (/^330\d{9}$/.test(d)) d = '33' + d.slice(3);
   return d.length >= 10 ? '+' + d : null;
 }
 
@@ -525,6 +531,7 @@ function dateFr() { return new Date().toLocaleString('fr-FR', { timeZone: 'Europ
 const LIBELLES = {
   confirmation_email: 'e-mail de confirmation', confirmation_sms: 'SMS de confirmation',
   valeur_email: 'e-mail « ce que vous allez retirer de votre audit »', wa_veille: 'WhatsApp de confirmation de la veille',
+  sms_veille: 'SMS de la veille (WhatsApp non remis)',
   sms_h1: 'SMS une heure avant', rattrapage: 'SMS de rattrapage (prospect absent)',
 };
 
@@ -598,9 +605,18 @@ async function reserver(ref, etape, opts) {
     // Un RDV annulé ne reçoit plus rien… sauf la suite ActiveCampaign, qui
     // existe justement à cause de l'annulation (opts.memeAnnule).
     if (d.status === 'cancelled' && !(opts && opts.memeAnnule)) return 'annule';
-    if (((d.parcoursRdv || {}).etapes || {})[etape]) return 'deja';
+    const ex = ((d.parcoursRdv || {}).etapes || {})[etape];
     const patch = { parcoursRdv: { etapes: {} } };
     patch.parcoursRdv.etapes[etape] = { reserveA: Date.now() };
+    if (ex) {
+      // Une étape ActiveCampaign en échec (ou interrompue) est rejouée :
+      // poser / retirer une étiquette deux fois ne change rien. Au plus 6
+      // essais, espacés de 10 min. Un MESSAGE n'est jamais rejoué.
+      const dernier = Math.max(ex.at || 0, ex.reserveA || 0);
+      const rejouable = !!(opts && opts.rejouable) && ex.ok !== true && (ex.essais || 1) < 6 && Date.now() - dernier > 10 * 60000;
+      if (!rejouable) return 'deja';
+      patch.parcoursRdv.etapes[etape].essais = (ex.essais || 1) + 1;
+    }
     tx.set(ref, patch, { merge: true });
     return 'ok';
   });
@@ -646,6 +662,9 @@ async function versActiveCampaign(cfg, evenement, b, extra) {
     } else if (evenement === 'rdv_libere') {
       await pas(await AC.retirerTag(c.id, A.tagRdv || 'rdv_a_venir'), '-' + (A.tagRdv || 'rdv_a_venir'));
       await pas(await AC.ajouterTag(c.id, A.tagManque || 'rdv_manque'), '+' + (A.tagManque || 'rdv_manque'));
+    } else if (evenement === 'rdv_equipe') {
+      // Annulé par NOUS : pas de « rendez-vous manqué », l'équipe reprend la main.
+      await pas(await AC.retirerTag(c.id, A.tagRdv || 'rdv_a_venir'), '-' + (A.tagRdv || 'rdv_a_venir'));
     } else if (evenement === 'nurturing_stop') {
       await pas(await AC.ajouterTag(c.id, A.tagStop || 'stop_autom'), '+' + (A.tagStop || 'stop_autom'));
       await pas(await AC.retirerTag(c.id, A.tagRdv || 'rdv_a_venir'), '-' + (A.tagRdv || 'rdv_a_venir'));
@@ -664,7 +683,8 @@ async function versActiveCampaign(cfg, evenement, b, extra) {
 /* Le même prospect (e-mail, sinon téléphone) a-t-il un AUTRE RDV commercial
    non annulé, à venir ? Renvoie « date heure » ou null. Index simple
    automatique de Firestore sur prospect.email / prospect.telephone. */
-async function autreRdvAVenir(b, id, now) {
+async function autreRdvAVenir(b, id, now, typeMap) {
+  if (!typeMap) typeMap = await lireTypes();
   const p = b.prospect || {};
   const auj = Dispo.parisStamp(new Date(now)).ymd;
   const essais = [];
@@ -676,7 +696,9 @@ async function autreRdvAVenir(b, id, now) {
     snap.forEach(function (d) {
       if (trouve || d.id === id) return;
       const x = d.data() || {};
-      if (x.status === 'cancelled' || x.isCoaching === true || !x.date || x.date < auj) return;
+      if (x.status === 'cancelled' || x.outcome || !x.date || x.date < auj) return;
+      const tx = typeDe(x, typeMap);
+      if (!tx || (tx.notifications || {}).parcoursRdv !== true || !estCommercial(x, tx)) return;
       const debut = MT.bookingStartMs(x);
       if (debut && debut < now) return;
       trouve = x.date + ' ' + (x.time || '');
@@ -693,6 +715,7 @@ async function autreRdvAVenir(b, id, now) {
 function suiteNurturing(b) {
   if (b.rescheduled === true || (b.cancellation && b.cancellation.via === 'reschedule')) return null;
   const o = b.outcome || null;
+  if ((b.status === 'cancelled' || o === 'annule') && (b.cancellation || {}).origin === 'equipe') return 'rdv_equipe';
   if (b.status === 'cancelled' && !o) return 'rdv_libere';
   if (o === 'no_show' || o === 'annule') return 'rdv_libere';
   // non_close : c'est api/parcours-frein.js qui, à J+1, lit l'appel, choisit
@@ -719,9 +742,12 @@ function etapesDues(o) {
   if (avant > 0 && sansIssue) {
     // ① ② : dès que possible, en journée ; la nuit, au matin (si le RDV
     // n'est pas déjà passé). Un RDV pris dans l'heure n'a besoin que de ⑤.
-    if (journee && avant > 75 * 60000) {
+    // L'e-mail part à toute heure et quel que soit le délai (c'est lui qui
+    // porte le lien) ; le SMS seulement en journée et à plus de 75 min.
+    // `lienPret` : on laisse à l'agenda le temps de créer la visio.
+    if (o.lienPret !== false) {
       if (!fait.confirmation_email) out.push('confirmation_email');
-      if (!fait.confirmation_sms) out.push('confirmation_sms');
+      if (journee && avant > 75 * 60000 && !fait.confirmation_sms) out.push('confirmation_sms');
     }
     // ③ : seulement si le RDV a été pris à plus de 36 h, au moins 3 h après
     // la réservation, et à plus de 20 h du RDV.
@@ -732,6 +758,10 @@ function etapesDues(o) {
     // ④ : la veille, de 18 h à 21 h ; jamais si la présence est déjà confirmée.
     if (!fait.wa_veille && o.estDemain && nowMin >= cfg.whatsapp.heure && nowMin < FERMETURE && !o.presenceConfirmee) {
       out.push('wa_veille');
+    }
+    // ④ bis : le WhatsApp de la veille n'est pas arrivé → SMS, même soir.
+    if (!fait.sms_veille && o.waEchec && o.estDemain && nowMin >= OUVERTURE && nowMin < FERMETURE && !o.presenceConfirmee) {
+      out.push('sms_veille');
     }
     // ⑤ : entre 60 et 20 min avant.
     if (!fait.sms_h1 && avant <= cfg.h1.avantMin * 60000 && avant > cfg.h1.auPlusTardMin * 60000) {
@@ -748,20 +778,19 @@ function etapesDues(o) {
 
 /* ═══ Réponse au WhatsApp de la veille ══════════════════════════════════ */
 
-const RE_OUI = /^\s*(oui|ouais|yes|ok|okay|d'?accord|dac|parfait|top|super|tr[eè]s bien|c'?est (bon|not[eé]|parfait)|je (serai|suis) (bien )?(l[aà]|pr[eé]sente?)|je confirme|confirm[eé]?|pr[eé]sente?|bien re[cç]u|avec plaisir|[👍✅🙏👌])/i;
-const RE_DEPLACER = /(d[eé]placer|d[eé]caler|reporter|report|reprogram|emp[eê]ch|annul|pas (dispo|disponible|libre)|ne (pourrai|peux) pas|autre (cr[eé]neau|date|jour|heure)|changer)/i;
+const RE_OUI = /^\s*(?:(?:oui|ouais|yes|ok|okay|d'?accord|dac|parfait|top|super|tr[eè]s bien|c'?est (?:bon|not[eé]|parfait)|je (?:serai|suis) (?:bien )?(?:l[aà]|pr[eé]sente?)|je confirme|confirm[eé]e?|pr[eé]sente?|bien re[cç]u|avec plaisir)(?![a-zà-ÿ])|👍|✅|🙏|👌)/iu;
+const RE_DEPLACER = /(d[eé]placer|d[eé]caler|reporter|report|reprogram|emp[eê]ch|annul|indisponible|(pas|plus) (dispo|disponible|libre)|ne (pourrai|peux|serai|viendrai|viens) (pas|plus)|autre (cr[eé]neau|date|jour|heure)|changer)/i;
+// Le moindre doute (négation, « mais », question) → on ne confirme pas.
+const RE_DOUTE = /\?|(^|[^a-zà-ÿ])(ne|pas|plus|non|mais|sauf|finalement|absente?|impossible|malheureusement|d[eé]sol[eé]e?)(?![a-zà-ÿ])|(^|[^a-zà-ÿ])n'/i;
 
 function lireReponse(texte, payload) {
-  const t = String(texte || '').trim();
+  const t = String(texte || '').replace(/[’`]/g, "'").trim();
   const pl = String(payload || '').trim();
   const tout = (pl + ' ' + t).trim();
   if (!tout) return 'autre';
   if (RE_DEPLACER.test(tout)) return 'deplacer';
-  if (RE_OUI.test(t) || RE_OUI.test(pl)) {
-    // « oui mais … » ou une question : on ne confirme pas sur un doute.
-    if (/\?|\bmais\b/i.test(t) && t.length > 12) return 'autre';
-    return 'oui';
-  }
+  // Confirmer seulement une réponse courte et sans le moindre doute.
+  if ((RE_OUI.test(t) || RE_OUI.test(pl)) && tout.length <= 60 && !RE_DOUTE.test(tout)) return 'oui';
   return 'autre';
 }
 
@@ -771,7 +800,7 @@ function lireReponse(texte, payload) {
 async function rdvDeLaReponse(de, contextId) {
   if (contextId) {
     const s = await db.collection('bookings').where('parcoursRdv.waVeilleWamid', '==', String(contextId)).limit(1).get();
-    if (!s.empty) return { id: s.docs[0].id, ref: s.docs[0].ref, data: s.docs[0].data() || {} };
+    if (!s.empty && (s.docs[0].data() || {}).status !== 'cancelled') return { id: s.docs[0].id, ref: s.docs[0].ref, data: s.docs[0].data() || {} };
   }
   const n = fin9(de);
   if (!n) return null;
@@ -834,8 +863,16 @@ async function surReponseWhatsapp(o) {
     const b = rdv.data;
     const et = (b.parcoursRdv || {}).etapes || {};
     if (!et.wa_veille || !et.wa_veille.ok) return { traite: false };
+    // Une réponse au rappel = un message reçu ENTRE le rappel et le RDV.
+    // Après l'heure du RDV, le prospect parle d'autre chose (au closer).
+    const debutRdv = MT.bookingStartMs(b);
+    if (b.status === 'cancelled' || b.outcome || (debutRdv && Date.now() > debutRdv)) return { traite: false };
+    // Réaction sans texte, pièce jointe sans légende : rien à lire.
+    if (!String(o.texte || '').trim() && !String(o.payload || '').trim()) return { traite: false };
     const sens = lireReponse(o.texte, o.payload);
     const deja = (b.parcoursRdv || {}).reponse;
+    // Présence déjà confirmée : un second « ok merci » n'apprend rien.
+    if (sens === 'oui' && b.presenceConfirmed) return { traite: false, dejaConfirme: true };
     // Meta rejoue parfois un webhook : le même message n'est traité qu'une fois.
     if (o.wamid && deja && deja.wamid === o.wamid) return { traite: false, doublon: true };
     const trace = { at: Date.now(), sens: sens, texte: String(o.texte || o.payload || '').slice(0, 300), wamid: o.wamid || null };
@@ -874,7 +911,9 @@ async function surReponseWhatsapp(o) {
 
 /* ═══ Présence dans le Meet (rattrapage) ════════════════════════════════ */
 
-/* 'present' | 'absent' | 'inconnu'. Inconnu = on n'envoie rien. */
+/* 'present' | 'absent' | 'salle_fermee' | 'inconnu'. Seul 'absent' (équipe
+   dans la visio, prospect non) envoie le SMS. 'salle_fermee' alerte le
+   closer sans écrire au prospect. Inconnu = rien. */
 async function presenceProspect(b, cache) {
   try {
     const TP = require('./team-pilotage');
@@ -884,9 +923,13 @@ async function presenceProspect(b, cache) {
     if (!cache.meet) cache.meet = {};
     const pr = await TP.fetchPresence(b, cache.R, cache.persons, cache.meet);
     if (!pr || !pr.ok) return 'inconnu';
+    // Visio jamais ouverte : le prospect est peut-être en salle d'attente.
+    if (pr.started === false) return 'salle_fermee';
     const s = TP.presenceSummary(pr);
     if (!s) return 'inconnu';
-    return s.prospectJoined ? 'present' : 'absent';
+    if (s.prospectJoined) return 'present';
+    // « X vous attend en visio » n'est vrai que si X y est.
+    return s.teamInRoom ? 'absent' : 'salle_fermee';
   } catch (e) {
     console.warn('[parcours-rdv] présence', e && e.message);
     return 'inconnu';
@@ -913,8 +956,9 @@ async function executerEtape(etape, it, ctx) {
   } else if (etape === 'valeur_email') {
     manque = ['prenom', 'expert', 'date', 'heure'].find(function (k) { return !v[k]; }) || (p.email ? null : 'email');
     envoi = function () { return envoyerEmail(p.email, emailValeur(v, cfg), cfg); };
-  } else if (etape === 'confirmation_sms' || etape === 'sms_h1' || etape === 'rattrapage') {
+  } else if (etape === 'confirmation_sms' || etape === 'sms_h1' || etape === 'rattrapage' || etape === 'sms_veille') {
     let modele = etape === 'confirmation_sms' ? (cfg.textes.confirmation_sms || TEXTES.confirmation_sms)
+      : etape === 'sms_veille' ? (cfg.textes.veille_sms || TEXTES.veille_sms)
       : etape === 'sms_h1' ? (v.lien ? (cfg.textes.h1_sms || TEXTES.h1_sms) : (cfg.textes.h1_sms_sans_lien || TEXTES.h1_sms_sans_lien))
       : (cfg.textes.rattrapage_sms || TEXTES.rattrapage_sms);
     manque = variableVide(modele, v) || (telE164(p.telephone || p.tel) ? null : 'telephone');
@@ -955,6 +999,15 @@ async function executerEtape(etape, it, ctx) {
   if (etape === 'rattrapage') {
     const pres = await presenceProspect(b, ctx.cache);
     ligne.presence = pres;
+    if (pres === 'salle_fermee') {
+      ligne.resultat = 'salle_fermee';
+      if (!ctx.simulation && ctx.estTest(b) && (await reserver(it.ref, 'rattrapage_alerte')) === 'ok') {
+        await noter(it.ref, 'rattrapage_alerte', { ok: true, canal: 'alerte' });
+        await alerter(await destinatairesAlerte(b, 'closer'), { type: 'rattrapage', leadId: b.leadId, leadName: leadName,
+          texte: '🚨 Personne de l\'équipe dans la visio de ' + v.heure + ' avec ' + (leadName || 'le prospect') + ' — il attend peut-être : ouvrez la visio ou appelez-le.' });
+      }
+      return ligne;
+    }
     if (pres !== 'absent') { ligne.resultat = pres === 'present' ? 'prospect_present' : 'presence_illisible'; return ligne; }
   }
 
@@ -973,6 +1026,127 @@ async function executerEtape(etape, it, ctx) {
       texte: '🚨 ' + (leadName || 'Le prospect') + ' n\'est pas dans la visio de ' + v.heure + ' — appelez-le maintenant' + (r.ok ? ' (SMS avec le lien envoyé).' : ' (le SMS n\'a pas pu partir).') });
   }
   return ligne;
+}
+
+/* ═══ Un RDV, un passage ════════════════════════════════════════════════ */
+
+/* Le WhatsApp de la veille a-t-il échoué ? Refus immédiat (étape notée en
+   échec) ou refus différé de Meta (numéro sans WhatsApp…), lu dans le
+   journal des messages que tient whatsapp-webhook.js. */
+async function waVeilleEchoue(b, et, o) {
+  const w = et.wa_veille;
+  if (!w || !w.at || et.sms_veille || b.date !== o.demain || b.presenceConfirmed) return false;
+  if (w.ok === false) return true;
+  if (!w.id) return false;
+  try {
+    const m = await db.collection('whatsapp_messages').doc(String(w.id)).get();
+    return m.exists && String((m.data() || {}).statut || '') === 'failed';
+  } catch (e) { return false; }
+}
+
+function annuleA(b) {
+  const c = b.cancellation || {};
+  const t = c.at ? Date.parse(c.at) : NaN;
+  return !isNaN(t) ? t : (msDe(b.cancelledAt) || msDe(b.statusUpdatedAt) || null);
+}
+
+async function traiterRdv(it, ctx, sortie, o) {
+  const b = it.data;
+  const cfg = ctx.cfg, typeMap = ctx.typeMap, simulation = ctx.simulation;
+  const now = o.now;
+  const reel = !simulation && ctx.estTest(b);
+
+  // ── ActiveCampaign : suite du nurturing une fois l'issue connue ──
+  // (un RDV annulé sort du parcours mais libère quand même le nurturing)
+  const etapesAc = ((b.parcoursRdv || {}).etapes) || {};
+  if (etapesAc.ac_rdv_pris) {
+    const suite = suiteNurturing(b);
+    const faite = suite ? etapesAc['ac_' + suite] : null;
+    if (suite && !(faite && faite.ok === true)) {
+      const lAc = { id: it.id, etape: 'ac_' + suite };
+      const cle = 'ac_' + suite;
+      const R = { memeAnnule: true, rejouable: true };
+      // Un autre RDV est déjà pris (le prospect a déplacé lui-même, ou un
+      // second RDV est posé) : aucune séquence d'après-RDV, et on ne retire
+      // pas l'étiquette « RDV à venir » qui appartient au nouveau RDV.
+      const autre = await autreRdvAVenir(b, it.id, now, typeMap);
+      const ann = annuleA(b);
+      if (autre) {
+        lAc.resultat = 'autre_rdv_a_venir';
+        if (reel && (await reserver(it.ref, cle, R)) === 'ok') {
+          await noter(it.ref, cle, { ok: true, canal: 'ac', motif: 'autre_rdv_a_venir:' + autre });
+        }
+      }
+      // Annulation toute fraîche : on laisse 45 min au prospect pour
+      // reprendre un créneau avant de le dire « rendez-vous manqué ».
+      else if (suite === 'rdv_libere' && b.status === 'cancelled' && ann && now - ann < 45 * 60000) lAc.resultat = 'attente_45_min';
+      else if (!reel) lAc.resultat = 'simule';
+      else if ((await reserver(it.ref, cle, R)) === 'ok') {
+        const r = await versActiveCampaign(cfg, suite, b, { outcome: b.outcome || null });
+        await noter(it.ref, cle, r);
+        lAc.resultat = r.ok ? 'envoye' : 'echec';
+        if (!r.ok) lAc.erreur = r.erreur;
+      } else lAc.resultat = 'deja';
+      if (lAc.resultat !== 'deja') sortie.ac.push(lAc);
+    }
+  }
+
+  const motif = horsParcours(b, typeMap, cfg);
+  if (motif) return;
+  sortie.rdv++;
+  const debut = MT.bookingStartMs(b);
+  if (!debut || now > debut + 60 * 60000) return;
+
+  // ── ActiveCampaign : RDV pris → nurturing en pause (rejoué si échec) ──
+  if (!(etapesAc.ac_rdv_pris && etapesAc.ac_rdv_pris.ok === true) && now < debut) {
+    const lAc = { id: it.id, etape: 'ac_rdv_pris' };
+    if (!reel) lAc.resultat = 'simule';
+    else if ((await reserver(it.ref, 'ac_rdv_pris', { rejouable: true })) === 'ok') {
+      const r = await versActiveCampaign(cfg, 'rdv_pris', b, { dateRdv: b.date, heureRdv: b.time });
+      await noter(it.ref, 'ac_rdv_pris', r);
+      lAc.resultat = r.ok ? 'envoye' : 'echec';
+      if (!r.ok) lAc.erreur = r.erreur;
+    } else lAc.resultat = 'deja';
+    if (lAc.resultat !== 'deja') sortie.ac.push(lAc);
+  }
+
+  const ets = ((b.parcoursRdv || {}).etapes) || {};
+
+  // ── Repli : un SMS « adrienemily » non livré repart une fois du 09 ──
+  if (reel) {
+    const smsEtapes = ['confirmation_sms', 'sms_veille', 'sms_h1', 'rattrapage'];
+    for (let k = 0; k < smsEtapes.length; k++) {
+      const e = ets[smsEtapes[k]];
+      if (!e || !e.ok || e.expediteur !== 'adrienemily' || !e.id || !e.texteSms || ets[smsEtapes[k] + '_repli']) continue;
+      if (now - (e.at || 0) < 3 * 60000 || now - (e.at || 0) > 3 * 3600000) continue;
+      const stS = await statutSmsAlpha(e.id);
+      if (stS !== 'undelivered' && stS !== 'failed') continue;
+      if ((await reserver(it.ref, smsEtapes[k] + '_repli')) !== 'ok') continue;
+      const r2 = await envoyerSms((b.prospect || {}).telephone || (b.prospect || {}).tel, e.texteSms, 'numero');
+      await noter(it.ref, smsEtapes[k] + '_repli', Object.assign({ motif: 'non_livre_' + stS }, r2));
+      sortie.detail.push({ id: it.id, etape: smsEtapes[k] + '_repli', resultat: r2.ok ? 'envoye' : 'echec', motif: stS });
+    }
+  }
+
+  const cree = msDe(b.createdAt);
+  const dues = etapesDues({
+    cfg: cfg, now: now, debut: debut, cree: cree, nowMin: o.st.min,
+    faites: ets, outcome: b.outcome || null,
+    estDemain: b.date === o.demain, presenceConfirmee: !!b.presenceConfirmed,
+    // Le lien de visio est posé par l'agenda quelques secondes après la
+    // réservation : on l'attend (3 min au plus) avant de confirmer.
+    lienPret: !!lienVisio(b) || !cree || now - cree > 3 * 60000,
+    waEchec: await waVeilleEchoue(b, ets, o),
+  });
+  for (let k = 0; k < dues.length; k++) {
+    const l = await executerEtape(dues[k], it, ctx);
+    sortie.detail.push(l);
+    // Modèle WhatsApp inutilisable ce soir (repassé en relecture chez Meta) :
+    // le rappel de la veille part en SMS plutôt que pas du tout.
+    if (dues[k] === 'wa_veille' && l.resultat === 'modele_inutilisable' && !ets.sms_veille && dues.indexOf('sms_veille') < 0) {
+      sortie.detail.push(await executerEtape('sms_veille', it, ctx));
+    }
+  }
 }
 
 /* ═══ Passage du cron ═══════════════════════════════════════════════════ */
@@ -997,89 +1171,25 @@ async function passage(opts) {
     estTest: function (b) { return cfg.modeTest === false ? true : estRdvDeTest(b, T); },
   };
 
-  // RDV d'hier (issue → ActiveCampaign), d'aujourd'hui et des 3 jours suivants.
-  const jours = [Dispo.addDays(auj, -1), auj, demain, Dispo.addDays(auj, 2), Dispo.addDays(auj, 3)];
-  const snap = await db.collection('bookings').where('date', '>=', jours[0]).where('date', '<=', jours[jours.length - 1]).get();
+  // Tous les RDV à venir (un RDV pris à 10 jours reçoit sa confirmation tout
+  // de suite, pas à J-3) et ceux des 14 derniers jours (une issue saisie
+  // tard — no-show noté le lundi — libère quand même le nurturing).
+  const snap = await db.collection('bookings').where('date', '>=', Dispo.addDays(auj, -14)).get();
   const items = [];
   snap.forEach(function (d) { items.push({ id: d.id, ref: d.ref, data: Object.assign({ _id: d.id }, d.data() || {}) }); });
 
   for (let i = 0; i < items.length; i++) {
+    // Budget de temps : la fonction est coupée à 60 s. On s'arrête
+    // proprement, le passage suivant (5 min) reprend où on en est.
+    if (Date.now() - now > 45000) { sortie.interrompu = 'budget_temps'; break; }
     const it = items[i];
-    const b = it.data;
-    const t = typeDe(b, typeMap);
-
-    // ── ActiveCampaign : suite du nurturing une fois l'issue connue ──
-    // (un RDV annulé sort du parcours mais libère quand même le nurturing)
-    const etapesAc = ((b.parcoursRdv || {}).etapes) || {};
-    if (etapesAc.ac_rdv_pris && etapesAc.ac_rdv_pris.ok) {
-      const suite = suiteNurturing(b);
-      if (suite && !etapesAc['ac_' + suite]) {
-        const lAc = { id: it.id, etape: 'ac_' + suite };
-        // Annulé ou manqué MAIS un autre RDV est déjà pris (le prospect a
-        // déplacé lui-même) : pas de séquence « rendez-vous manqué », et on
-        // ne retire pas l'étiquette « RDV à venir » posée par le nouveau RDV.
-        const autre = suite === 'rdv_libere' ? await autreRdvAVenir(b, it.id, now) : null;
-        if (autre) {
-          lAc.resultat = 'autre_rdv_a_venir';
-          if (!simulation && ctx.estTest(b) && (await reserver(it.ref, 'ac_' + suite, { memeAnnule: true })) === 'ok') {
-            await noter(it.ref, 'ac_' + suite, { ok: true, canal: 'ac', saute: 'autre_rdv_a_venir', texte: 'non envoyé : nouveau RDV ' + autre });
-          }
-        }
-        else if (simulation || !ctx.estTest(b)) lAc.resultat = 'simule';
-        else if ((await reserver(it.ref, 'ac_' + suite, { memeAnnule: true })) === 'ok') {
-          const r = await versActiveCampaign(cfg, suite, b, { outcome: b.outcome || null });
-          await noter(it.ref, 'ac_' + suite, r);
-          lAc.resultat = r.ok ? 'envoye' : 'echec';
-        }
-        sortie.ac.push(lAc);
-      }
+    // Un RDV défectueux ne doit jamais priver les suivants de leur message.
+    try {
+      await traiterRdv(it, ctx, sortie, { now: now, st: st, demain: demain });
+    } catch (e) {
+      console.error('[parcours-rdv] RDV', it.id, e && e.stack ? e.stack : e);
+      sortie.detail.push({ id: it.id, resultat: 'erreur', erreur: (e && e.message) || 'erreur' });
     }
-
-    const motif = horsParcours(b, typeMap, cfg);
-    if (motif) continue;
-    sortie.rdv++;
-    const debut = MT.bookingStartMs(b);
-    if (!debut || now > debut + 60 * 60000) continue;
-
-    // ── ActiveCampaign : RDV pris → nurturing en pause ──
-    if (!etapesAc.ac_rdv_pris && now < debut) {
-      const lAc = { id: it.id, etape: 'ac_rdv_pris' };
-      if (simulation || !ctx.estTest(b)) lAc.resultat = 'simule';
-      else if ((await reserver(it.ref, 'ac_rdv_pris')) === 'ok') {
-        const r = await versActiveCampaign(cfg, 'rdv_pris', b, { dateRdv: b.date, heureRdv: b.time });
-        await noter(it.ref, 'ac_rdv_pris', r);
-        lAc.resultat = r.ok ? 'envoye' : 'echec';
-      }
-      sortie.ac.push(lAc);
-    }
-
-    // ── Repli : un SMS « adrienemily » non livré repart une fois du 09 ──
-    if (!simulation && ctx.estTest(b)) {
-      const ets = ((b.parcoursRdv || {}).etapes) || {};
-      const smsEtapes = ['confirmation_sms', 'sms_h1', 'rattrapage'];
-      for (let k = 0; k < smsEtapes.length; k++) {
-        const e = ets[smsEtapes[k]];
-        if (!e || !e.ok || e.expediteur !== 'adrienemily' || !e.id || !e.texteSms || ets[smsEtapes[k] + '_repli']) continue;
-        if (now - (e.at || 0) < 3 * 60000 || now - (e.at || 0) > 3 * 3600000) continue;
-        const st = await statutSmsAlpha(e.id);
-        if (st !== 'undelivered' && st !== 'failed') continue;
-        if ((await reserver(it.ref, smsEtapes[k] + '_repli')) !== 'ok') continue;
-        const r2 = await envoyerSms((b.prospect || {}).telephone || (b.prospect || {}).tel, e.texteSms, 'numero');
-        await noter(it.ref, smsEtapes[k] + '_repli', Object.assign({ motif: 'non_livre_' + st }, r2));
-        sortie.detail.push({ id: it.id, etape: smsEtapes[k] + '_repli', resultat: r2.ok ? 'envoye' : 'echec', motif: st });
-      }
-    }
-
-    const dues = etapesDues({
-      cfg: cfg, now: now, debut: debut, cree: msDe(b.createdAt), nowMin: st.min,
-      faites: ((b.parcoursRdv || {}).etapes) || {}, outcome: b.outcome || null,
-      estDemain: b.date === demain, presenceConfirmee: !!b.presenceConfirmed,
-    });
-    for (let k = 0; k < dues.length; k++) {
-      // ① ② ③ n'ont plus de sens une fois l'heure du H-1 venue.
-      sortie.detail.push(await executerEtape(dues[k], it, ctx));
-    }
-    void t;
   }
   if (ctx.cache.modele) sortie.modeleWhatsapp = ctx.cache.modele;
   return sortie;
@@ -1145,7 +1255,7 @@ module.exports = {
   lireConfig: lireConfig, passage: passage, envoyerTest: envoyerTest, apercuEmails: apercuEmails,
   surReponseWhatsapp: surReponseWhatsapp, lireModeleWhatsapp: lireModeleWhatsapp,
   // Exposés pour les tests
-  etapesDues: etapesDues, lireReponse: lireReponse, suiteNurturing: suiteNurturing, horsParcours: horsParcours,
+  etapesDues: etapesDues, lireReponse: lireReponse, suiteNurturing: suiteNurturing, horsParcours: horsParcours, autreRdvAVenir: autreRdvAVenir, traiterRdv: traiterRdv,
   variablesDe: variablesDe, remplir: remplir, variableVide: variableVide, heureLisible: heureLisible, dateLisible: dateLisible,
   telE164: telE164, estRdvDeTest: estRdvDeTest, emailConfirmation: emailConfirmation, emailValeur: emailValeur,
 };

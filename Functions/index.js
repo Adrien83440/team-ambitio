@@ -2333,8 +2333,11 @@ async function getBookingTypeNotifications(booking) {
     if (!typesDoc.exists) return { emailOnBook: true, smsOnBook: false, emailJ1: true, smsJ1: false, emailH1: true, smsH1: false, emailAccount: "strategie" };
     const types = typesDoc.data().list || [];
     const typeLabel = booking.typeLabel || "";
-    const typeId = booking.typeId || "";
-    let found = types.find(function(t) { return t.id === typeId; });
+    // booking.html écrit l'identifiant de la consultation dans `type`
+    // (`typeId` : anciens RDV). Même ordre que api/_parcoursRdv.js (typeDe),
+    // sinon un libellé renommé donnerait deux réponses différentes.
+    const typeId = booking.type || booking.typeId || "";
+    let found = typeId ? types.find(function(t) { return t.id === typeId; }) : null;
     if (!found) found = types.find(function(t) { return t.label === typeLabel; });
     if (!found) return { emailOnBook: true, smsOnBook: false, emailJ1: true, smsJ1: false, emailH1: true, smsH1: false, emailAccount: "strategie" };
     return found.notifications || {};

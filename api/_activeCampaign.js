@@ -31,6 +31,8 @@ async function appel(methode, chemin, corps) {
       method: methode,
       headers: { 'Api-Token': c.key, 'Content-Type': 'application/json', Accept: 'application/json' },
       body: corps ? JSON.stringify(corps) : undefined,
+      // Jamais d'attente sans fin : le passage du parcours n'a que 60 s.
+      signal: AbortSignal.timeout(12000),
     });
     let data = null;
     try { data = await r.json(); } catch (_) { data = null; }
@@ -75,7 +77,7 @@ async function ajouterTag(contactId, nom) {
 async function retirerTag(contactId, nom) {
   const tid = await idTag(nom);
   if (!tid) return { ok: false, erreur: 'tag_introuvable:' + nom };
-  const l = await appel('GET', '/contacts/' + encodeURIComponent(contactId) + '/contactTags');
+  const l = await appel('GET', '/contacts/' + encodeURIComponent(contactId) + '/contactTags?limit=100');
   if (!l.ok) return l;
   const liens = ((l.data && l.data.contactTags) || []).filter(function (x) { return String(x.tag) === tid; });
   for (let i = 0; i < liens.length; i++) {
@@ -89,7 +91,7 @@ async function retirerTag(contactId, nom) {
 async function sortirDesAutomatisations(contactId, ids) {
   const voulu = (ids || []).map(String);
   if (!voulu.length) return { ok: true, sortis: [] };
-  const l = await appel('GET', '/contacts/' + encodeURIComponent(contactId) + '/contactAutomations');
+  const l = await appel('GET', '/contacts/' + encodeURIComponent(contactId) + '/contactAutomations?limit=100');
   if (!l.ok) return l;
   const runs = ((l.data && l.data.contactAutomations) || []).filter(function (x) {
     return voulu.indexOf(String(x.automation)) >= 0 && String(x.status) === '1';
