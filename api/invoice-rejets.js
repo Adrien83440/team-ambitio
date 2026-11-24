@@ -17,7 +17,12 @@
  * prélèvement — sinon il est signalé, rien n'est créé). « cancelled » est
  * exclu (annulation de notre côté, en général).
  *
- * Jamais de brouillon quand :
+ * Prélèvement encaissé PUIS rejeté (échec tardif, contestation) : son
+ * brouillon d'encaissement (« Paiement reçu ») est CONVERTI en brouillon de
+ * rejet ; s'il a déjà été émis, il est seulement signalé
+ * (facture_emise_rejet : correction / avoir = décision humaine).
+ *
+ * Jamais de nouveau brouillon quand :
  *   - une facture (non archivée) porte déjà ce gcPaymentId ;
  *   - le client est facturé sur l'EI (_config/billing.eiCustomerIds ou
  *     fiche invoice_clients billingScope 'ei') ;
@@ -301,14 +306,56 @@ async function traiterRejet(ctx, gp) {
 
   const existing = await findInvoiceByGcPayment(gp.id);
   if (existing) {
-    if (existing._rejetGc) return Object.assign(base, { action: 'deja_cree', invoiceId: existing.id, number: existing.number || null });
-    return Object.assign(base, {
-      action: 'facture_existante',
-      invoiceId: existing.id, number: existing.number || null, invoiceStatus: existing.status,
-      note: gp.status === 'charged_back'
-        ? 'Encaissé puis contesté : la facture existe déjà (' + (existing.number || 'brouillon') + ').'
-        : 'Une facture porte déjà ce prélèvement.',
+    const cs = existing.clientSnapshot || {};
+    base.clientName = cs.companyName || ((cs.contactFirstName || '') + ' ' + (cs.contactLastName || '')).trim() || cs.email || '?';
+    base.clientId = existing.clientId || null;
+    base.invoiceId = existing.id;
+    base.number = existing.number || null;
+    base.invoiceStatus = existing.status;
+    if (existing._rejetGc) return Object.assign(base, { action: 'deja_cree' });
+
+    /* Prélèvement encaissé (paid_out → brouillon d'encaissement créé), puis
+       rejeté après coup (échec tardif / contestation). Le brouillon dit
+       « Paiement reçu » : le valider tel quel le marquerait encaissé à tort.
+       Encore brouillon → il devient un brouillon de rejet. Déjà émise →
+       signalé seulement (avoir ou correction : décision humaine). */
+    const causeE = await causeOf(gp);
+    base.motif = motifFr(gp, causeE);
+    if (existing.status !== 'draft') {
+      return Object.assign(base, {
+        action: 'facture_emise_rejet',
+        note: 'Facture ' + (existing.number || '') + ' (' + existing.status + ') émise comme encaissée, mais le prélèvement est ' +
+          (STATUS_FR[gp.status] || 'rejeté') + ' : à corriger à la main.',
+      });
+    }
+    if (!ctx.apply) return Object.assign(base, { action: 'brouillon_a_convertir' });
+    const chargeDateE = gp.charge_date || existing.gcChargeDate || ymd(new Date());
+    const nowE = new Date().toISOString();
+    await db.collection('invoices').doc(existing.id).update({
+      notesPublic: 'Prélèvement SEPA du ' + frDate(chargeDateE) + ' ' + (STATUS_FR[gp.status] || 'rejeté') +
+        ' — motif : ' + base.motif + '. Montant restant dû.',
+      notesInternal: String(existing.notesInternal || '') + ' | Converti en facture de prélèvement rejeté le ' + nowE.substring(0, 10) +
+        ' — GoCardless ' + gp.id + ' (' + gp.status + ')' + (causeE.reasonCode ? ', code ' + causeE.reasonCode : ''),
+      _notesPublicAvantRejet: existing.notesPublic || '',
+      _pendingValidation: true,
+      gcChargeDate: chargeDateE,
+      _rejetGc: {
+        etat: 'actif',
+        gcStatus: gp.status,
+        chargeDate: chargeDateE,
+        cause: causeE.cause,
+        motif: base.motif,
+        reasonCode: causeE.reasonCode,
+        detail: causeE.detail,
+        rejeteLe: causeE.at,
+        detecteLe: nowE,
+        convertiDepuisEncaissement: true,
+        historique: [{ at: nowE, etat: 'actif', par: ctx.by, note: 'brouillon d\'encaissement converti' }],
+      },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedBy: ctx.by,
     });
+    return Object.assign(base, { action: 'converti' });
   }
 
   const mandateId = gp.links && gp.links.mandate;
@@ -478,7 +525,8 @@ async function rapprocher(ctx, inv) {
         upd._pendingValidation = true;
       }
       await db.collection('invoices').doc(inv.id).update(upd);
-      await compterEncaissement(inv, gp);
+      /* Brouillon converti : son paid_out initial a déjà été compté. */
+      if (!(inv._rejetGc && inv._rejetGc.convertiDepuisEncaissement)) await compterEncaissement(inv, gp);
     }
     return out;
   }
@@ -523,7 +571,7 @@ async function run(opts) {
   const result = {
     ok: true, apply: ctx.apply, window: { since: opts.since, until: opts.until },
     rejets: [], rapprochements: [], warnings: [],
-    totaux: { scannes: 0, aCreer: 0, crees: 0, dejaCrees: 0, facturesExistantes: 0, rattrapes: 0, ei: 0, erreurs: 0 },
+    totaux: { scannes: 0, aCreer: 0, crees: 0, aConvertir: 0, convertis: 0, facturesEmisesRejet: 0, dejaCrees: 0, rattrapes: 0, ei: 0, erreurs: 0 },
   };
 
   /* Rapprochement d'abord : un rattrapage déjà connu « consomme » son
@@ -563,14 +611,16 @@ async function run(opts) {
     if (r.action === 'cree') { crees++; result.totaux.crees++; }
     else if (r.action === 'a_creer') result.totaux.aCreer++;
     else if (r.action === 'deja_cree') result.totaux.dejaCrees++;
-    else if (r.action === 'facture_existante') result.totaux.facturesExistantes++;
+    else if (r.action === 'brouillon_a_convertir') result.totaux.aConvertir++;
+    else if (r.action === 'converti') result.totaux.convertis++;
+    else if (r.action === 'facture_emise_rejet') result.totaux.facturesEmisesRejet++;
     else if (r.action === 'rattrape') result.totaux.rattrapes++;
     else if (r.action === 'ignore_ei') result.totaux.ei++;
     else if (r.action === 'erreur') result.totaux.erreurs++;
   }
 
   result.durationMs = Date.now() - ctx.startedAt;
-  const ecrit = ctx.apply && (result.totaux.crees > 0 || result.rapprochements.some(function (x) { return x.action !== 'representation_en_cours' && x.action !== 'erreur'; }));
+  const ecrit = ctx.apply && (result.totaux.crees > 0 || result.totaux.convertis > 0 || result.rapprochements.some(function (x) { return x.action !== 'representation_en_cours' && x.action !== 'erreur'; }));
   if (ctx.apply) {
     try {
       await db.collection('_config').doc('billing').set({

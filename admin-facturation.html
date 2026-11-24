@@ -5961,7 +5961,8 @@ var _rjLast = null;
 var _rjAuto = null;
 var RJ_ACTIONS = {
   a_creer: '🆕 Brouillon à créer', cree: '✅ Brouillon créé', deja_cree: '• Déjà créé',
-  facture_existante: '• Facture existante', rattrape: '↩️ Rattrapé', ignore_ei: '• Client EI',
+  brouillon_a_convertir: '🔁 Brouillon « encaissé » à convertir en rejet', converti: '🔁 Converti en rejet',
+  facture_emise_rejet: '⚠️ Facture émise comme encaissée — à corriger', rattrape: '↩️ Rattrapé', ignore_ei: '• Client EI',
   erreur: '⚠️ Erreur'
 };
 var RJ_RAPPRO = {
@@ -6020,7 +6021,7 @@ async function runRejetsScan(apply) {
   var applyBtn = document.getElementById('rjApplyBtn');
   if (apply) {
     if (!_rjLast) return toast('Lance d\'abord l\'aperçu', true);
-    if (!confirm('Créer ' + _rjLast.totaux.aCreer + ' brouillon(s) de prélèvement rejeté et appliquer ' + _rjLast.rapprochements.length + ' rapprochement(s) ?\n\nAucune facture n\'est numérotée : tout reste en brouillon dans « À valider ».')) return;
+    if (!confirm('Créer ' + _rjLast.totaux.aCreer + ' brouillon(s) de prélèvement rejeté, en convertir ' + _rjLast.totaux.aConvertir + ' et appliquer ' + _rjLast.rapprochements.length + ' rapprochement(s) ?\n\nAucune facture n\'est numérotée : tout reste en brouillon dans « À valider ».')) return;
   }
   scanBtn.disabled = true; applyBtn.disabled = true;
   out.innerHTML = '<div class="bill-loader"><span class="bill-spinner"></span> ' + (apply ? 'Création des brouillons…' : 'Scan GoCardless en cours (jusqu\'à 1 min)…') + '</div>';
@@ -6028,9 +6029,9 @@ async function runRejetsScan(apply) {
     var d = await rjCall({ action: 'scan', since: since, until: until, apply: apply });
     if (!apply) _rjLast = d; else _rjLast = null;
     out.innerHTML = renderRejetsResults(d);
-    if (!apply && (d.totaux.aCreer > 0 || d.rapprochements.some(function(x){ return x.action !== 'representation_en_cours' && x.action !== 'erreur'; }))) {
+    if (!apply && (d.totaux.aCreer > 0 || d.totaux.aConvertir > 0 || d.rapprochements.some(function(x){ return x.action !== 'representation_en_cours' && x.action !== 'erreur'; }))) {
       applyBtn.disabled = false;
-      applyBtn.textContent = '✅ Créer ' + d.totaux.aCreer + ' brouillon(s)';
+      applyBtn.textContent = '✅ Créer ' + d.totaux.aCreer + ' brouillon(s)' + (d.totaux.aConvertir ? ' et en convertir ' + d.totaux.aConvertir : '');
     } else {
       applyBtn.textContent = apply ? '✅ Fait' : '✅ Rien à créer';
     }
@@ -6046,7 +6047,7 @@ function renderRejetsResults(d) {
   var t = d.totaux || {};
   var html = '<div style="font-size:13px;margin-bottom:10px">' + (d.apply ? '<strong>Exécuté</strong>' : '<strong>Aperçu à blanc</strong> — rien n\'a été écrit')
     + ' · ' + t.scannes + ' rejet(s) GoCardless · ' + (d.apply ? t.crees + ' créé(s)' : t.aCreer + ' à créer')
-    + ' · ' + t.dejaCrees + ' déjà créé(s) · ' + t.rattrapes + ' rattrapé(s) · ' + t.facturesExistantes + ' facture(s) existante(s) · ' + t.ei + ' EI · ' + t.erreurs + ' erreur(s)</div>';
+    + ' · ' + (d.apply ? t.convertis + ' converti(s)' : t.aConvertir + ' brouillon(s) à convertir') + ' · ' + t.facturesEmisesRejet + ' facture(s) émise(s) à corriger · ' + t.dejaCrees + ' déjà créé(s) · ' + t.rattrapes + ' rattrapé(s) · ' + t.ei + ' EI · ' + t.erreurs + ' erreur(s)</div>';
   (d.warnings || []).forEach(function(w){ html += '<div style="color:#f59e0b;font-size:12px">⚠️ ' + escapeHtml(w) + '</div>'; });
   if ((d.rejets || []).length) {
     html += '<table class="bill-table"><thead><tr><th>Client</th><th>Prélèvement</th><th style="text-align:right">Montant</th><th>Statut GC</th><th>Résultat</th></tr></thead><tbody>';
