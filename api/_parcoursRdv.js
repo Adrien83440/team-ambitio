@@ -1086,6 +1086,14 @@ async function traiterRdv(it, ctx, sortie, o) {
         await noter(it.ref, cle, r);
         lAc.resultat = r.ok ? 'envoye' : 'echec';
         if (!r.ok) lAc.erreur = r.erreur;
+        // « Rendez-vous manqué » : les 3 e-mails partent de Team
+        // (api/_parcoursSuite.js), plus d'ActiveCampaign.
+        if (suite === 'rdv_libere') {
+          try {
+            const su = await require('./_parcoursSuite').creer({ bookingId: it.id, booking: b, sequence: 'rdv_manque' });
+            lAc.suite = su.ok ? (su.deja ? 'deja' : 'creee') : su.erreur;
+          } catch (e) { lAc.suite = 'erreur:' + (e && e.message); }
+        }
       } else lAc.resultat = 'deja';
       if (lAc.resultat !== 'deja') sortie.ac.push(lAc);
     }

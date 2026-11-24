@@ -386,7 +386,14 @@ async function run(opts) {
         await found.doc.ref.update(upd);
       }
 
-      if (notify) {
+      /* Séquence d'après-RDV (api/_parcoursSuite.js) : un « non » ou un
+         « plus tard » arrête la séquence SANS cloche (c'est noté sur la
+         fiche) ; toute autre réponse sonne, avec un résumé d'une ligne. */
+      let suiteRep = null;
+      if (!firstRun) {
+        suiteRep = await require('./_parcoursSuite').surReponseEmail({ leadId: leadId, texte: text });
+      }
+      if (notify && !(suiteRep && suiteRep.silence)) {
         const owner = l.assignedTo ? members.find(function (m) { return m && m.slug === l.assignedTo; }) : null;
         const ownerOk = owner && isActive(owner) && owner.firebaseUid ? owner : null;
         const closer = await closerOf(leadId, members);
@@ -395,7 +402,9 @@ async function run(opts) {
           leadId: leadId, leadName: nom,
           fromEmail: from.email, fromNumber: null, toNumber: null,
           subject: subject.slice(0, 200) || null,
-          preview: ((subject ? subject + ' — ' : '') + text.replace(/\s+/g, ' ')).slice(0, 200),
+          preview: (suiteRep && suiteRep.suite && suiteRep.resume)
+            ? ('Réponse à la séquence après RDV — ' + suiteRep.resume).slice(0, 200)
+            : ((subject ? subject + ' — ' : '') + text.replace(/\s+/g, ' ')).slice(0, 200),
           deepLinkUrl: 'sales-leads.html?leadId=' + encodeURIComponent(leadId),
           source: 'gmail', providerMessageSid: id,
           readBy: {}, createdAt: new Date(atMs),
@@ -417,7 +426,7 @@ async function run(opts) {
       if (!firstRun) {
         await require('./_relances-hooks').surEntrant({
           leadId: leadId, canal: 'email', texte: (subject ? subject + ' — ' : '') + text,
-          leadName: nom, dejaNotifieSetter: notify, cle: 'mail_' + id,
+          leadName: nom, dejaNotifieSetter: notify || !!(suiteRep && suiteRep.silence), cle: 'mail_' + id,
         });
       }
       await db.collection('email_inbound').doc(id).set(Object.assign({

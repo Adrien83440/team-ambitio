@@ -131,6 +131,7 @@ async function passage(opts) {
       if ((await P.reserver(d.ref, 'frein', { rejouable: true })) === 'ok') {
         const rr = await P.versActiveCampaign(cfg, 'frein', b, { frein: blocDeja.frein, tag: blocDeja.tag });
         await P.noter(d.ref, 'frein', Object.assign({ canal: 'ac' }, rr));
+        await require('./_parcoursSuite').creer({ bookingId: d.id, booking: b, sequence: blocDeja.tag }).catch(function () {});
         out.detail.push({ id: d.id, date: b.date, frein: blocDeja.frein, resultat: rr.ok ? 'rejoue' : 'echec', erreur: rr.ok ? undefined : rr.erreur });
       }
       continue;
@@ -168,6 +169,13 @@ async function passage(opts) {
     }
     const r = await P.versActiveCampaign(cfg, 'frein', b, { frein: c.frein, tag: F.tag });
     await P.noter(ref, 'frein', Object.assign({ canal: 'ac' }, r));
+    // La séquence elle-même est envoyée par Team (api/_parcoursSuite.js) :
+    // dans ActiveCampaign, l'étiquette du frein n'est plus qu'une information.
+    try {
+      const su = await require('./_parcoursSuite').creer({ bookingId: d.id, booking: b, sequence: F.tag });
+      ligne.suite = su.ok ? (su.deja ? 'deja' : 'creee') : su.erreur;
+      if (su.douleur) ligne.douleur = su.douleur;
+    } catch (e) { ligne.suite = 'erreur:' + (e && e.message); }
     ligne.resultat = r.ok ? 'envoye' : 'echec';
     if (!r.ok) ligne.erreur = r.erreur;
     out.detail.push(ligne);
