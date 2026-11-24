@@ -282,6 +282,7 @@ body.bk-embed .bk-panel-right{padding:4px 16px 16px}
   .bk-sc-next{right:-10px}
   .bk-sc-prev{left:-10px}
   .bk-scroller.more::after{content:'';position:absolute;top:0;right:0;bottom:0;width:64px;background:linear-gradient(90deg,rgba(255,255,255,0),#fff 70%);pointer-events:none;z-index:1}
+  .bk-scroller.less::before{content:'';position:absolute;top:0;left:0;bottom:0;width:64px;background:linear-gradient(270deg,rgba(255,255,255,0),#fff 70%);pointer-events:none;z-index:1}
   .bk-slots-list.grouped .bk-slots-line::-webkit-scrollbar{display:none}
   .bk-slots-list.grouped .bk-slot-row{flex:none;width:86px}
   .bk-slots-list.grouped .bk-slots-group{padding-top:2px}
@@ -1742,6 +1743,9 @@ function bkScSync(scroller) {
   prev.hidden = line.scrollLeft <= 4;
   next.hidden = !more;
   if (more) scroller.classList.add('more'); else scroller.classList.remove('more');
+  /* Même fondu à gauche qu'à droite : l'horaire à moitié sorti s'estompe sous
+     la flèche au lieu d'être coupé net par elle. */
+  if (line.scrollLeft > 4) scroller.classList.add('less'); else scroller.classList.remove('less');
 }
 function bkScSyncAll() {
   var all = document.querySelectorAll('.bk-scroller');
