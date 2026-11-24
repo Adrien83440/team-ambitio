@@ -1,27 +1,39 @@
 // ============================================================================
 // api/calendar-followup-event.js
 // ----------------------------------------------------------------------------
-// Crée ou supprime un événement Google Calendar "Stratégie" sur le calendrier
-// primary du closer assigné à un lead, quand un follow-up est programmé
-// depuis Leads Live.
+// Crée ou supprime un événement Google Calendar "Stratégie" dans l'agenda de
+// la personne QUI PROGRAMME le follow-up depuis Leads Live.
+//
+// Fix 24/11/2026 (retour de Claire, closeuse) : avant, l'événement partait
+// dans l'agenda du membre ASSIGNÉ au lead (lead.assignedTo), et dans le
+// calendrier "primary" de son compte Google. Résultat : les rappels de
+// Claire tombaient dans l'agenda d'Anthony (lead attribué à Anthony, et
+// fiche de Claire branchée sur une boîte partagée) et y bloquaient des
+// créneaux réservables. Désormais :
+//   - la cible est l'auteur du rappel (auth.uid → booking_config.firebaseUid),
+//     jamais le membre assigné ;
+//   - le calendrier est celui que Booking utilise pour créer SES RDV
+//     (calendarList[].createEvents, même règle que getEventCalendarId de
+//     Functions/index.js), "primary" seulement à défaut.
 //
 // Actions :
-//   POST { action: 'create', leadId, fuId, assignedToSlug, fuDateTime,
+//   POST { action: 'create', leadId, fuId, fuDateTime,
 //          duration, note, leadName, leadPhone, leadEmail }
-//     → crée l'event, écrit calendarEventId + calendarEventLink dans le FU
-//     → retourne { ok, eventId, eventLink, memberName }
+//     → crée l'event, écrit calendarEventId + calendarEventLink
+//       + calendarPersonId + calendarId dans le FU
+//     → retourne { ok, eventId, eventLink, memberName, personId, calendarId }
 //
-//   POST { action: 'delete', eventId, personId?, assignedToSlug? }
+//   POST { action: 'delete', eventId, personId?, calendarId?, assignedToSlug? }
 //     → supprime l'event Google. 404/410 sont traités comme succès (event
 //       déjà disparu). Le frontend a déjà retiré le FU du lead avant
 //       d'appeler ça, donc on ne touche pas Firestore ici.
+//       calendarId absent (FU créé avant le 24/11/2026) → "primary".
 //     → retourne { ok: true }
 //
-// Résolution du personId cible :
-//   1. Lit _meta/team_members → trouve le member ayant slug === assignedToSlug
-//   2. Récupère son firebaseUid
-//   3. Query booking_config where firebaseUid == uid → personId = doc.id
-//   4. Lit calendar_tokens/{personId} pour l'OAuth client
+// Résolution du personId cible (create) :
+//   1. Query booking_config where firebaseUid == auth.uid
+//   2. Préfère la fiche dont l'agenda Google est connecté (calendar_tokens)
+//   3. Lit calendar_tokens/{personId} pour l'OAuth client
 //
 // Côté frontend :
 //   const token = await firebase.auth().currentUser.getIdToken();
@@ -144,6 +156,50 @@ async function resolvePersonIdFromSlug(assignedToSlug) {
   };
 }
 
+// ─── Fiche Booking de l'auteur du rappel (auth.uid) ─────────────────────────
+// Un compte peut avoir plusieurs fiches booking_config (ex. fiche « 🎯 Coach »
+// d'une double casquette) : on prend la première dont l'agenda Google est
+// connecté, sinon la première tout court (l'erreur "calendar_not_connected"
+// sera alors explicite).
+async function resolvePersonIdFromUid(uid) {
+  if (!uid) {
+    return { error: 'no_booking_config', message: 'Utilisateur non identifié.' };
+  }
+  const bcSnap = await db.collection('booking_config')
+    .where('firebaseUid', '==', uid)
+    .limit(5)
+    .get();
+  if (bcSnap.empty) {
+    return {
+      error: 'no_booking_config',
+      message: "Pas de fiche Booking reliée à ton compte — ton agenda Google n'est pas configuré."
+    };
+  }
+  let chosen = bcSnap.docs[0];
+  for (let i = 0; i < bcSnap.docs.length; i++) {
+    const tok = await db.collection('calendar_tokens').doc(bcSnap.docs[i].id).get();
+    if (tok.exists && ((tok.data() || {}).refreshToken || (tok.data() || {}).accessToken)) {
+      chosen = bcSnap.docs[i];
+      break;
+    }
+  }
+  const data = chosen.data() || {};
+  return {
+    personId: chosen.id,
+    memberName: data.name || data.displayName || 'toi',
+    calendarId: eventCalendarIdOf(data)
+  };
+}
+
+// Calendrier cible des événements de cet expert : même règle que
+// getEventCalendarId() de Functions/index.js (picker Booking « Calendrier
+// pour créer les événements »), "primary" à défaut.
+function eventCalendarIdOf(bookingConfigData) {
+  const list = (bookingConfigData && bookingConfigData.calendarList) || [];
+  const target = list.find(function (c) { return c && c.createEvents === true && c.id; });
+  return target ? target.id : 'primary';
+}
+
 // ─── Helpers date ────────────────────────────────────────────────────────────
 function pad2(n) { return String(n).padStart(2, '0'); }
 
@@ -203,7 +259,6 @@ module.exports = async (req, res) => {
     if (action === 'create') {
       const leadId = body.leadId;
       const fuId = body.fuId;
-      const assignedToSlug = body.assignedToSlug;
       const fuDateTime = normalizeStartIso(body.fuDateTime);
       const durationMin = Math.max(5, Math.min(240, parseInt(body.duration, 10) || 30));
       const note = (body.note || '').toString();
@@ -211,20 +266,20 @@ module.exports = async (req, res) => {
       const leadPhone = (body.leadPhone || '').toString();
       const leadEmail = (body.leadEmail || '').toString();
 
-      if (!leadId || !fuId || !assignedToSlug || !fuDateTime) {
+      if (!leadId || !fuId || !fuDateTime) {
         res.status(400).json({
           error: 'missing_fields',
-          message: 'leadId, fuId, assignedToSlug et fuDateTime sont requis.'
+          message: 'leadId, fuId et fuDateTime sont requis.'
         });
         return;
       }
 
-      const resolved = await resolvePersonIdFromSlug(assignedToSlug);
+      // Agenda de l'AUTEUR du rappel, jamais du membre assigné au lead.
+      const resolved = await resolvePersonIdFromUid(auth.uid);
       if (resolved.error) {
         res.status(404).json({
           error: resolved.error,
-          message: resolved.message,
-          memberName: resolved.memberName || assignedToSlug
+          message: resolved.message
         });
         return;
       }
@@ -259,7 +314,7 @@ module.exports = async (req, res) => {
 
       const calendar = google.calendar({ version: 'v3', auth: client });
       const resp = await calendar.events.insert({
-        calendarId: 'primary',
+        calendarId: resolved.calendarId,
         sendUpdates: 'none',
         requestBody: {
           summary: summary,
@@ -287,6 +342,7 @@ module.exports = async (req, res) => {
               fus[i].calendarEventId = eventId;
               fus[i].calendarEventLink = eventLink;
               fus[i].calendarPersonId = resolved.personId;
+              fus[i].calendarId = resolved.calendarId;
               changed = true;
               break;
             }
@@ -308,7 +364,8 @@ module.exports = async (req, res) => {
         eventId: eventId,
         eventLink: eventLink,
         memberName: resolved.memberName,
-        personId: resolved.personId
+        personId: resolved.personId,
+        calendarId: resolved.calendarId
       });
       return;
     }
@@ -321,9 +378,10 @@ module.exports = async (req, res) => {
         return;
       }
 
-      // Le frontend nous passe de préférence le personId stocké dans le FU
-      // au moment de la création. Fallback sur la résolution via slug si
-      // cette info manque (cas d'un FU ancien créé avant cette feature).
+      // Le frontend nous passe de préférence le personId (et, depuis le
+      // 24/11/2026, le calendarId) stockés dans le FU au moment de la
+      // création. Fallback sur la résolution via slug si cette info manque
+      // (cas d'un FU ancien créé avant cette feature).
       let targetPersonId = (body.personId || '').toString();
       if (!targetPersonId && body.assignedToSlug) {
         const resolved = await resolvePersonIdFromSlug(body.assignedToSlug);
@@ -349,7 +407,7 @@ module.exports = async (req, res) => {
       const calendar = google.calendar({ version: 'v3', auth: client });
       try {
         await calendar.events.delete({
-          calendarId: 'primary',
+          calendarId: (body.calendarId || '').toString() || 'primary',
           eventId: eventId,
           sendUpdates: 'none'
         });
