@@ -548,12 +548,14 @@ async function destinatairesAlerte(b, mode) {
 
 /* ═══ Réservation transactionnelle d'une étape ══════════════════════════ */
 
-async function reserver(ref, etape) {
+async function reserver(ref, etape, opts) {
   return db.runTransaction(async function (tx) {
     const s = await tx.get(ref);
     if (!s.exists) return 'disparu';
     const d = s.data() || {};
-    if (d.status === 'cancelled') return 'annule';
+    // Un RDV annulé ne reçoit plus rien… sauf la suite ActiveCampaign, qui
+    // existe justement à cause de l'annulation (opts.memeAnnule).
+    if (d.status === 'cancelled' && !(opts && opts.memeAnnule)) return 'annule';
     if (((d.parcoursRdv || {}).etapes || {})[etape]) return 'deja';
     const patch = { parcoursRdv: { etapes: {} } };
     patch.parcoursRdv.etapes[etape] = { reserveA: Date.now() };
@@ -944,7 +946,7 @@ async function passage(opts) {
       if (suite && !etapesAc['ac_' + suite]) {
         const lAc = { id: it.id, etape: 'ac_' + suite };
         if (simulation || !ctx.estTest(b)) lAc.resultat = 'simule';
-        else if ((await reserver(it.ref, 'ac_' + suite)) === 'ok') {
+        else if ((await reserver(it.ref, 'ac_' + suite, { memeAnnule: true })) === 'ok') {
           const r = await versActiveCampaign(cfg, suite, b, { outcome: b.outcome || null });
           await noter(it.ref, 'ac_' + suite, r);
           lAc.resultat = r.ok ? 'envoye' : 'echec';
