@@ -10,6 +10,12 @@ IMG='https://team.alteore.com/media/parcours/'
 LOCAL=len(sys.argv)>1 and sys.argv[1]=='local'
 if LOCAL: IMG='file://'+ROOT+'media/parcours/'
 BOOK='{{lien_rdv}}'
+import hashlib
+def empreinte(nom):
+    # Adresse propre à chaque version d'une image : une messagerie qui a gardé
+    # en mémoire une image absente ou ancienne recharge la bonne.
+    if LOCAL: return ''
+    return '?v='+hashlib.md5(open(ROOT+'media/parcours/'+nom,'rb').read()).hexdigest()[:8]
 def inline(t):
     t=html.escape(t, quote=False)
     return re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', t)
@@ -38,7 +44,7 @@ def render(lines):
             parts.append('<!--M:'+m.group(1)+'--><p style="margin:0 0 16px;padding:10px 14px;background:#fffbeb;border-radius:10px;color:#92400e">{{'+m.group(1)+'}}</p><!--/M-->'); txt.append('{{'+m.group(1)+'}}'); continue
         m=re.match(r'^!\[(.*?)\]\((.+?)\)(?:\((https?://[^)]+)\))?$', l)
         if m:
-            im='<img src="'+IMG+m.group(2)+'" alt="'+html.escape(m.group(1))+'" width="528" style="display:block;width:100%;max-width:528px;height:auto;border:0;border-radius:12px">'
+            im='<img src="'+IMG+m.group(2)+empreinte(m.group(2))+'" alt="'+html.escape(m.group(1))+'" width="528" style="display:block;width:100%;max-width:528px;height:auto;border:0;border-radius:12px">'
             if m.group(3): im='<a href="'+html.escape(m.group(3))+'" style="text-decoration:none">'+im+'</a>'; txt.append(m.group(1)+' : '+m.group(3))
             parts.append('<div style="margin:6px 0 22px">'+im+'</div>'); continue
         if l.startswith('>> '):
