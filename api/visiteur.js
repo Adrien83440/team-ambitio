@@ -168,10 +168,33 @@ async function geoOfRequest(doc) {
   return txt ? V.fromGeoText(txt, 'signature') : null;
 }
 
+/* Fiche lead d'une demande de signature : leadId, sinon même e-mail client,
+   sinon même téléphone (E.164) — fiches fusionnées ignorées, une seule
+   fiche vivante exigée (sinon ambigu : on ne pose rien). */
+async function leadOfRequest(R) {
+  if (R.leadId) {
+    const d = await db.collection('leads').doc(String(R.leadId)).get();
+    return d.exists ? d : null;
+  }
+  const s0 = Array.isArray(R.signers) && R.signers[0];
+  const email = String(R.clientEmail || (s0 && s0.email) || '').trim().toLowerCase();
+  const tel = String(R.clientPhone || (s0 && s0.phone) || '').replace(/[\s.-]/g, '');
+  const tries = [];
+  if (email) tries.push(['email', email]);
+  if (/^\+\d{8,15}$/.test(tel)) tries.push(['telephone', tel]);
+  for (const t of tries) {
+    const q = await db.collection('leads').where(t[0], '==', t[1]).limit(5).get();
+    const alive = q.docs.filter(function (d) { return (d.data() || {})._merged !== true; });
+    if (alive.length === 1) return alive[0];
+    if (alive.length > 1) return 'ambigu';
+  }
+  return null;
+}
+
 async function signatures(req, res) {
   const apply = req.query && (req.query.apply === '1' || req.query.apply === 'true');
   const snap = await db.collection('signature_requests').where('status', '==', 'signed').get();
-  const out = { ok: true, job: 'signatures', apply: !!apply, signees: snap.size, sansLead: 0, sansLieu: 0,
+  const out = { ok: true, job: 'signatures', apply: !!apply, signees: snap.size, sansLead: 0, parEmailOuTel: 0, ambigus: 0, sansLieu: 0,
     dejaLocalises: 0, leadIntrouvable: 0, aEcrire: 0, ecrits: 0, parZone: {} };
   const FC = require('../funnel-core.js');
   const seen = {};
@@ -181,15 +204,16 @@ async function signatures(req, res) {
     const chunk = docs.slice(i, i + 20);
     const res2 = await Promise.all(chunk.map(async function (doc) {
       const R = doc.data() || {};
-      if (!R.leadId) return { k: 'sansLead' };
-      if (seen[R.leadId]) return null;
-      seen[R.leadId] = 1;
+      const ls = await leadOfRequest(R);
+      if (ls === 'ambigu') return { k: 'ambigus' };
+      if (!ls) return { k: R.leadId ? 'leadIntrouvable' : 'sansLead' };
+      if (seen[ls.id]) return null;
+      seen[ls.id] = 1;
       const geo = await geoOfRequest(doc);
       if (!geo) return { k: 'sansLieu' };
-      const lref = db.collection('leads').doc(String(R.leadId));
-      const ls = await lref.get();
-      if (!ls.exists) return { k: 'leadIntrouvable' };
+      const lref = ls.ref;
       const l = ls.data() || {};
+      if (!R.leadId) out.parEmailOuTel++;
       if (V.hasGeo(l.visiteur)) return { k: 'dejaLocalises' };
       return { k: 'aEcrire', ref: lref, lead: l, geo: geo };
     }));
