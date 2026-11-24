@@ -376,7 +376,7 @@ function emailValeur(v, cfg) {
   const corps = p('Bonjour <strong>' + esc(v.prenom) + '</strong>,')
     + p('Vous avez rendez-vous avec ' + esc(v.expertComplet || v.expert) + ' le ' + esc(v.date) + ' à ' + esc(v.heure) + '. Voici comment se déroule l\'audit, pour que vous arriviez sans surprise.')
     + '<div style="margin:22px 0 8px">'
-    + etape(1, 'On vous écoute.', 'Ce qui vous prend le plus de temps et d\'énergie aujourd\'hui, avec vos mots.')
+    + etape(1, 'On commence par vous.', 'Ce qui vous prend le plus de temps et d\'énergie aujourd\'hui, avec vos mots.')
     + etape(2, 'On met le doigt sur ce qui bloque.', 'La plupart des dirigeants pensent que leur problème est commercial. Souvent, c\'est la marge ou l\'organisation qui bloque.')
     + etape(3, 'Vous repartez avec vos priorités.', 'Deux ou trois actions concrètes, que nous travaillions ensemble ou non.')
     + '</div>'
@@ -390,7 +390,7 @@ function emailValeur(v, cfg) {
       preheader: 'Comment se déroule l\'audit, en trois temps.', corpsHtml: corps, signature: cfg.signature }),
     texte: 'Bonjour ' + v.prenom + ',\n\nVous avez rendez-vous avec ' + (v.expertComplet || v.expert) + ' le ' + v.date + ' à ' + v.heure
       + '. Voici comment se déroule l\'audit, pour que vous arriviez sans surprise.\n\n'
-      + '1. On vous écoute. Ce qui vous prend le plus de temps et d\'énergie aujourd\'hui, avec vos mots.\n'
+      + '1. On commence par vous. Ce qui vous prend le plus de temps et d\'énergie aujourd\'hui, avec vos mots.\n'
       + '2. On met le doigt sur ce qui bloque. La plupart des dirigeants pensent que leur problème est commercial. Souvent, c\'est la marge ou l\'organisation qui bloque.\n'
       + '3. Vous repartez avec vos priorités. Deux ou trois actions concrètes, que nous travaillions ensemble ou non.\n\n'
       + 'D\'ici là, une seule question à garder en tête : si rien ne change dans les douze prochains mois, où en sera votre entreprise ?\n\n'

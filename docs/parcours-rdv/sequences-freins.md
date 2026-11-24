@@ -414,7 +414,7 @@ Le prospect quitte le nurturing dès sa réservation. Si le rendez-vous n'a pas 
 >
 > Pour que vous sachiez ce que vous auriez retiré de notre échange, voici comment se déroule l'audit :
 >
-> 1. **On vous écoute** : ce qui vous prend le plus de temps et d'énergie aujourd'hui, avec vos mots.
+> 1. **On commence par vous** : ce qui vous prend le plus de temps et d'énergie aujourd'hui, avec vos mots.
 > 2. **On met le doigt sur ce qui bloque** : souvent la marge ou l'organisation, plus que le commercial.
 > 3. **Vous repartez avec vos priorités** : deux ou trois actions concrètes, que nous travaillions ensemble ou non.
 >
