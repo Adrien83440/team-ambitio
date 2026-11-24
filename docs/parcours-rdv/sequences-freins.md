@@ -24,7 +24,7 @@ Règles appliquées partout :
 Bouton de reprise de rendez-vous, sur le lien public (Self Booking) :
 `https://team.alteore.com/booking.html?type=call_strat_phenix_all&utm_source=activecampaign&utm_campaign=<tag du frein>`
 
-Les passages entre crochets `[…]` sont à fournir. Je n'invente aucun cas client : les témoignages doivent être réels.
+Témoignages : uniquement des clients réels, avec leurs propres mots, tirés de leurs vidéos (Drive et adrienemily.com).
 
 ---
 
@@ -81,7 +81,9 @@ Les passages entre crochets `[…]` sont à fournir. Je n'invente aucun cas clie
 >
 > La question n'est donc pas « est-ce que j'ai le budget aujourd'hui ? ». La vraie question, c'est : « combien me coûte chaque mois où rien ne change ? »
 >
-> [Témoignage client réel à insérer : un dirigeant qui avait la même hésitation, avec ce qui a changé pour lui.]
+> Franck, boulanger, a commencé avec un bilan dans le rouge. Cinq mois plus tard, il était revenu à l'équilibre, avec 7 000 euros de bénéfice en plus chaque mois. Ce qu'il en dit : « Avant, j'étais inconscient et j'avais peur. Aujourd'hui, je suis conscient et je n'ai plus peur. »
+>
+> [ Voir le témoignage de Franck ](https://vimeo.com/1204547163)
 >
 > Adrien & Emily
 
@@ -150,7 +152,11 @@ Les passages entre crochets `[…]` sont à fournir. Je n'invente aucun cas clie
 >
 > Attendre a l'air neutre. En réalité, chaque mois où rien ne change prolonge les mêmes difficultés : le même temps passé sur l'opérationnel, la même marge qui s'effrite, la même fatigue.
 >
-> [Témoignage client réel à insérer : un dirigeant qui avait repoussé, et ce que ce report lui a coûté, ou ce qu'il aurait fait plus tôt.]
+> Alexandre, boucher-charcutier-traiteur, avait un chiffre d'affaires en hausse et « la tête dans le guidon ». Un soir, une fois tout le monde payé, il a fait le constat : « J'ai fait plaisir à tout le monde, sauf à moi-même. » Aujourd'hui, ses marges sont reprises, ses fiches de production calées, et à 19 h 30 il passe à table avec toute sa famille.
+>
+> Son conseil à ceux qui hésitent : demandez-vous plutôt combien vous allez perdre à attendre.
+>
+> [ Voir le témoignage d'Alexandre ](https://drive.google.com/file/d/1tPEoSaGRAGXZmo_h0x16eb8gWfl3aDBK/view)
 >
 > Adrien & Emily
 
@@ -249,14 +255,18 @@ Les passages entre crochets `[…]` sont à fournir. Je n'invente aucun cas clie
 >
 > Adrien & Emily
 
-**E2 (J+4) : [Prénom du client], [secteur]**
-*Pré-en-tête : [Une phrase sur le résultat obtenu.]*
+**E2 (J+4) : Margaux, épicerie fine et restaurant**
+*Pré-en-tête : Trois mois plus tard : +20 % de chiffre d'affaires, +8 % de marge.*
 
 > Bonjour %FIRSTNAME%,
 >
-> [Témoignage client réel n° 1 : situation de départ, ce qui a été fait, résultat. Lien vers la vidéo si elle existe.]
+> Margaux a ouvert sa première entreprise, une épicerie fine avec un restaurant italien, en 2023. Elle se sentait seule face à toutes les décisions.
 >
-> Ce qui nous frappe dans son parcours, c'est que [enseignement à tirer, en une phrase].
+> Avec nous, elle a restructuré son équipe, recruté et appris à déléguer. Trois mois plus tard : « Mon chiffre d'affaires a augmenté de 20 %, mes marges ont augmenté de 8 %. » Et surtout : « Je peux enfin déléguer. »
+>
+> [ Voir le témoignage de Margaux ](https://vimeo.com/1204547192)
+>
+> Ce qui nous frappe dans son parcours, c'est que rien de tout ça n'est venu d'un effort commercial de plus : tout est venu de l'organisation.
 >
 > Adrien & Emily
 
@@ -275,12 +285,18 @@ Les passages entre crochets `[…]` sont à fournir. Je n'invente aucun cas clie
 >
 > Adrien & Emily
 
-**E4 (J+14) : [Prénom du client], [secteur]**
-*Pré-en-tête : [Une phrase sur le résultat obtenu.]*
+**E4 (J+14) : Delphine, institut de beauté**
+*Pré-en-tête : 25 ans de métier, et pourtant l'angoisse de la trésorerie chaque mois.*
 
 > Bonjour %FIRSTNAME%,
 >
-> [Témoignage client réel n° 2 : un secteur ou une taille proche de celle du prospect, si possible.]
+> Delphine est esthéticienne depuis 25 ans. Seule dans son institut, elle faisait tout elle-même, de 9 h à 19 h, avec « l'angoisse de la tréso permanente ».
+>
+> Ensemble, elle a revu ses charges, renégocié ses contrats, recalculé ses prestations et organisé ses tâches. Résultat, selon ses mots : « J'ai économisé 15 000 euros sur l'année », et elle termine désormais vers 18 h.
+>
+> Elle avait, elle aussi, un doute au départ, celui de « l'arnaque ». Il n'a pas tenu longtemps.
+>
+> [ Voir le témoignage de Delphine ](https://drive.google.com/file/d/1_HaqWTqx2SE-x6F7bOHf0LyI3kfpgvbQ/view)
 >
 > Adrien & Emily
 
@@ -349,7 +365,9 @@ Les passages entre crochets `[…]` sont à fournir. Je n'invente aucun cas clie
 >
 > Chez les dirigeants que nous accompagnons, ceux qui progressent le plus vite ont rarement plus de talent que les autres. Ils ont simplement arrêté de tout porter seuls et se sont donné un cadre pour décider.
 >
-> [Témoignage client réel à insérer : un dirigeant qui voulait d'abord avancer seul.]
+> Une boulangère que nous accompagnons, ouverte sept jours sur sept, le résume mieux que nous : « J'avais une équipe de vente qui me bouffait littéralement. » Nouvelle équipe, plannings revus, horaires d'ouverture repensés : plus d'arrêts maladie, et des milliers d'euros de masse salariale économisés. Son mot pour nous : « Vous ne m'avez pas vendu du rêve. »
+>
+> [ Voir son témoignage ](https://drive.google.com/file/d/1cyMcufjFmvVe5VwgXgP1Q0YwN4Y0Xjyh/view)
 >
 > Adrien & Emily
 

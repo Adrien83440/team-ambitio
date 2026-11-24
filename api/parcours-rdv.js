@@ -47,7 +47,7 @@ function cron(req) {
 }
 
 /* Champs modifiables par `reglage` (jamais le reste du document). */
-const REGLAGES = ['actif', 'modeTest', 'testMembres', 'testTelephones', 'testEmails', 'whatsapp', 'activeCampaign', 'textes', 'rattrapage', 'emailCompte'];
+const REGLAGES = ['actif', 'modeTest', 'testMembres', 'testTelephones', 'testEmails', 'whatsapp', 'activeCampaign', 'textes', 'rattrapage', 'emailCompte', 'syncTextesAC'];
 
 async function reglage(body, par) {
   const ref = db.collection('_config').doc('parcours_rdv');
@@ -133,6 +133,19 @@ module.exports = async function (req, res) {
       const estCron = cron(req);
       if (!estCron && !cleChantier(req)) { res.status(401).json({ ok: false, error: 'Non autorisé' }); return; }
       const sim = !estCron || q.dry === '1';
+      /* Une fois, à la demande (_config/parcours_rdv.syncTextesAC = 'dry' ou
+         true) : le texte validé des séquences ActiveCampaign est posé par
+         l'API (seul le cron de production a la clé). Le drapeau retombe à
+         false après le passage, le résultat est gardé. */
+      if (estCron) {
+        const cfgSync = await P.lireConfig();
+        if (cfgSync.syncTextesAC === true || cfgSync.syncTextesAC === 'dry') {
+          const ref = db.collection('_config').doc('parcours_rdv');
+          await ref.set({ syncTextesAC: false }, { merge: true });
+          const r = await require('./_acSequences').synchroniser({ apply: cfgSync.syncTextesAC === true });
+          await ref.set({ syncTextesResultat: r }, { merge: true });
+        }
+      }
       const out = await P.passage({ simulation: sim });
       res.status(200).json(out);
       return;
