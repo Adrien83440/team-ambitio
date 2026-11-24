@@ -88,6 +88,11 @@ const DEFAUTS = {
     tagRdv: 'rdv_a_venir', tagStop: 'stop_autom', tagManque: 'rdv_manque',
   },
   textes: {},
+  // SMS au nom « adrienemily » (choix d'Adrien du 24/11/2026) : service
+  // d'envoi Twilio de l'agenda (_config/twilio.messagingServiceSid, expéditeur
+  // alphanumérique). Non livré → renvoyé une fois depuis le 09 (repliSms).
+  // 'numero' = tout depuis le 09.
+  sms: { expediteur: 'adrienemily' },
 };
 
 /* ── Textes par défaut (validés par Adrien le 24/11/2026) ─────────────────
@@ -422,21 +427,55 @@ function telE164(v) {
   return d.length >= 10 ? '+' + d : null;
 }
 
-async function envoyerSms(tel, texte) {
+/* Client Twilio du service d'envoi au nom « adrienemily » : celui de
+   l'agenda (_config/twilio : accountSid, authToken, messagingServiceSid),
+   le même que les SMS des Cloud Functions. */
+let _twilioAlpha = null;
+async function clientAlpha() {
+  if (_twilioAlpha) return _twilioAlpha;
+  const s = await db.collection('_config').doc('twilio').get();
+  const d = s.exists ? (s.data() || {}) : {};
+  if (!d.accountSid || !d.authToken || !d.messagingServiceSid) return null;
+  const twilio = require('twilio');
+  _twilioAlpha = { client: twilio(d.accountSid, d.authToken), service: d.messagingServiceSid };
+  return _twilioAlpha;
+}
+
+/* mode : 'adrienemily' (service d'envoi, nom affiché) | 'numero' (le 09). */
+async function envoyerSms(tel, texte, mode) {
   const to = telE164(tel);
   if (!to) return { ok: false, canal: 'sms', erreur: 'telephone_absent' };
   if (RelancesCore.contientPrix(texte)) return { ok: false, canal: 'sms', erreur: 'texte_contient_un_prix' };
   try {
+    if (mode === 'adrienemily') {
+      const a = await clientAlpha();
+      if (a) {
+        const m = await a.client.messages.create({ messagingServiceSid: a.service, to: to, body: texte, statusCallback: BASE_URL + '/api/twilio-sms-status' });
+        return { ok: true, canal: 'sms', id: m.sid, texte: texte, from: 'adrienemily', expediteur: 'adrienemily' };
+      }
+      // Service absent : on ne perd pas le SMS, il part du 09.
+    }
     const { getTwilioClient, getTwilioCreds } = require('./_twilioClient');
     const creds = await getTwilioCreds();
     const from = creds.smsFromNumber || creds.smsFrom;
     if (!from) return { ok: false, canal: 'sms', erreur: 'smsFromNumber_absent' };
     const client = await getTwilioClient();
     const m = await client.messages.create({ from: from, to: to, body: texte, statusCallback: BASE_URL + '/api/twilio-sms-status' });
-    return { ok: true, canal: 'sms', id: m.sid, texte: texte, from: from };
+    return { ok: true, canal: 'sms', id: m.sid, texte: texte, from: from, expediteur: 'numero' };
   } catch (e) {
     return { ok: false, canal: 'sms', erreur: (e && e.message) || 'echec_twilio' };
   }
+}
+
+/* Statut Twilio d'un SMS envoyé au nom « adrienemily » ('delivered',
+   'undelivered', 'failed', 'sent'…), ou null si illisible. */
+async function statutSmsAlpha(sid) {
+  try {
+    const a = await clientAlpha();
+    if (!a || !sid) return null;
+    const m = await a.client.messages(sid).fetch();
+    return String(m.status || '').toLowerCase() || null;
+  } catch (e) { return null; }
 }
 
 /* Le modèle WhatsApp tel que Meta l'a validé : statut, nombre de variables
@@ -570,6 +609,7 @@ async function noter(ref, etape, r) {
     at: Date.now(), ok: !!r.ok, canal: r.canal || null, id: r.id || r.wamid || null,
     erreur: r.erreur || null, motif: r.motif || null,
   };
+  if (r.expediteur) { patch.parcoursRdv.etapes[etape].expediteur = r.expediteur; patch.parcoursRdv.etapes[etape].texteSms = r.texte || null; }
   if (r.wamid) patch.parcoursRdv.waVeilleWamid = r.wamid;
   await ref.set(patch, { merge: true }).catch(function (e) { console.warn('[parcours-rdv] trace', e && e.message); });
 }
@@ -849,7 +889,7 @@ async function executerEtape(etape, it, ctx) {
       : (cfg.textes.rattrapage_sms || TEXTES.rattrapage_sms);
     manque = variableVide(modele, v) || (telE164(p.telephone || p.tel) ? null : 'telephone');
     const texte = remplir(modele, v);
-    envoi = function () { return envoyerSms(p.telephone || p.tel, texte); };
+    envoi = function () { return envoyerSms(p.telephone || p.tel, texte, (cfg.sms || {}).expediteur || 'adrienemily'); };
   } else if (etape === 'wa_veille') {
     const mod = await lireModeleWhatsapp(cfg, ctx.cache);
     if (!mod.ok) { ligne.resultat = 'modele_inutilisable'; ligne.erreur = mod.erreur; return ligne; }
@@ -973,6 +1013,23 @@ async function passage(opts) {
       sortie.ac.push(lAc);
     }
 
+    // ── Repli : un SMS « adrienemily » non livré repart une fois du 09 ──
+    if (!simulation && ctx.estTest(b)) {
+      const ets = ((b.parcoursRdv || {}).etapes) || {};
+      const smsEtapes = ['confirmation_sms', 'sms_h1', 'rattrapage'];
+      for (let k = 0; k < smsEtapes.length; k++) {
+        const e = ets[smsEtapes[k]];
+        if (!e || !e.ok || e.expediteur !== 'adrienemily' || !e.id || !e.texteSms || ets[smsEtapes[k] + '_repli']) continue;
+        if (now - (e.at || 0) < 3 * 60000 || now - (e.at || 0) > 3 * 3600000) continue;
+        const st = await statutSmsAlpha(e.id);
+        if (st !== 'undelivered' && st !== 'failed') continue;
+        if ((await reserver(it.ref, smsEtapes[k] + '_repli')) !== 'ok') continue;
+        const r2 = await envoyerSms((b.prospect || {}).telephone || (b.prospect || {}).tel, e.texteSms, 'numero');
+        await noter(it.ref, smsEtapes[k] + '_repli', Object.assign({ motif: 'non_livre_' + st }, r2));
+        sortie.detail.push({ id: it.id, etape: smsEtapes[k] + '_repli', resultat: r2.ok ? 'envoye' : 'echec', motif: st });
+      }
+    }
+
     const dues = etapesDues({
       cfg: cfg, now: now, debut: debut, cree: msDe(b.createdAt), nowMin: st.min,
       faites: ((b.parcoursRdv || {}).etapes) || {}, outcome: b.outcome || null,
@@ -1020,9 +1077,9 @@ async function envoyerTest(o) {
   let r;
   if (quoi === 'confirmation_email') r = await envoyerEmail(email, emailConfirmation(v, cfg), cfg);
   else if (quoi === 'valeur_email') r = await envoyerEmail(email, emailValeur(v, cfg), cfg);
-  else if (quoi === 'confirmation_sms') r = await envoyerSms(tel, remplir(cfg.textes.confirmation_sms || TEXTES.confirmation_sms, v));
-  else if (quoi === 'sms_h1') r = await envoyerSms(tel, remplir(cfg.textes.h1_sms || TEXTES.h1_sms, v));
-  else if (quoi === 'rattrapage') r = await envoyerSms(tel, remplir(cfg.textes.rattrapage_sms || TEXTES.rattrapage_sms, v));
+  else if (quoi === 'confirmation_sms') r = await envoyerSms(tel, remplir(cfg.textes.confirmation_sms || TEXTES.confirmation_sms, v), (cfg.sms || {}).expediteur);
+  else if (quoi === 'sms_h1') r = await envoyerSms(tel, remplir(cfg.textes.h1_sms || TEXTES.h1_sms, v), (cfg.sms || {}).expediteur);
+  else if (quoi === 'rattrapage') r = await envoyerSms(tel, remplir(cfg.textes.rattrapage_sms || TEXTES.rattrapage_sms, v), (cfg.sms || {}).expediteur);
   else if (quoi === 'wa_veille') {
     const mod = await lireModeleWhatsapp(cfg, {});
     if (!mod.ok) return { ok: false, erreur: mod.erreur, modele: mod };
