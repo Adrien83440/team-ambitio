@@ -24,7 +24,7 @@
 const AC = require('./_activeCampaign');
 const DATA = require('./_acSequencesData.json');
 
-const EXPEDITEUR = { fromname: 'Adrien & Emily', email: 'contact@adrienemily.com', reply2: 'contact@adrienemily.com' };
+const EXPEDITEUR = { fromname: 'Adrien & Emily', fromemail: 'contact@adrienemily.com', reply2: 'contact@adrienemily.com' };
 
 function norm(s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
 
