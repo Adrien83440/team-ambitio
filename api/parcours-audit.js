@@ -95,7 +95,7 @@ async function lireTypes() {
 }
 
 async function lireConfig() {
-  const ids = ['booking_reminders', 'twilio', 'telco_credentials', 'team_pilotage', 'relances', 'whatsapp_credentials'];
+  const ids = ['booking_reminders', 'twilio', 'telco_credentials', 'team_pilotage', 'relances', 'whatsapp_credentials', 'gmail_inbound'];
   const out = {};
   for (const id of ids) {
     const s = await db.collection('_config').doc(id).get();
@@ -107,6 +107,7 @@ async function lireConfig() {
         alphaSender: d.alphaSender || d.senderId || null, cles: Object.keys(d) };
     } else if (id === 'team_pilotage') out[id] = { meetTracking: d.meetTracking === true, cles: Object.keys(d) };
     else if (id === 'relances') out[id] = { modeTest: d.modeTest, cles: Object.keys(d) };
+    else if (id === 'gmail_inbound') out[id] = { enabled: d.enabled === true, account: d.account || null, lastRunAt: d.lastRunAt || null, lastError: d.lastError || null };
     else out[id] = { cles: Object.keys(d) };
   }
   const tok = {};
