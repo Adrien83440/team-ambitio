@@ -569,14 +569,17 @@ async function versActiveCampaign(cfg, evenement, b, extra) {
 }
 
 /* Après le RDV : que fait le nurturing ?
-   - no-show / annulé (hors report) / non-close → reprend (tag retiré) —
-     le non-close basculera vers la séquence personnalisée (partie B) ;
+   - no-show / annulé (hors report) → reprend (tag retiré) ;
+   - non-close → séquence personnalisée selon le frein (parcours-frein.js) ;
    - offre / close / disqualifié → arrêt (le closer suit, ou client). */
 function suiteNurturing(b) {
   if (b.rescheduled === true || (b.cancellation && b.cancellation.via === 'reschedule')) return null;
   const o = b.outcome || null;
   if (b.status === 'cancelled' && !o) return 'rdv_libere';
-  if (o === 'no_show' || o === 'annule' || o === 'non_close') return 'rdv_libere';
+  if (o === 'no_show' || o === 'annule') return 'rdv_libere';
+  // non_close : c'est api/parcours-frein.js qui, à J+1, lit l'appel, choisit
+  // le frein et bascule le prospect vers la séquence qui y répond (au plus
+  // tard J+3, séquence « générale » à défaut d'enregistrement).
   if (o === 'offre' || o === 'close' || o === 'disqualifie') return 'nurturing_stop';
   return null;
 }
@@ -987,6 +990,8 @@ function apercuEmails() {
 }
 
 module.exports = {
+  versActiveCampaign: versActiveCampaign, reserver: reserver, noter: noter, lireTypes: lireTypes, typeDe: typeDe,
+  estCommercial: estCommercial, destinatairesTest: destinatairesTest, alerter: alerter,
   DEFAUTS: DEFAUTS, TEXTES: TEXTES,
   lireConfig: lireConfig, passage: passage, envoyerTest: envoyerTest, apercuEmails: apercuEmails,
   surReponseWhatsapp: surReponseWhatsapp, lireModeleWhatsapp: lireModeleWhatsapp,
