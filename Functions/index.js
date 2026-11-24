@@ -2382,6 +2382,11 @@ async function _abParcoursConfig() {
       });
       (out.cfg.testTelephones || []).forEach(function (t) { if (fin9(t)) out.tel[fin9(t)] = true; });
       (out.cfg.testEmails || []).forEach(function (e) { if (e) out.email[String(e).trim().toLowerCase()] = true; });
+      // Numéro et e-mail de test d'Adrien : _config/relances (même source que _parcoursRdv.js).
+      const rel = await db.collection('_config').doc('relances').get();
+      const rd = rel.exists ? (rel.data() || {}) : {};
+      if (fin9(rd.testTelephone)) out.tel[fin9(rd.testTelephone)] = true;
+      if (rd.testEmail && /@/.test(String(rd.testEmail))) out.email[String(rd.testEmail).trim().toLowerCase()] = true;
     }
   } catch (e) {
     console.warn('[parcoursRdv] config illisible :', e.message);

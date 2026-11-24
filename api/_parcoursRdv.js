@@ -69,7 +69,10 @@ const DEFAUTS = {
     langue: 'fr',
     // Variables du modèle, dans l'ordre {{1}}, {{2}}… — vérifiées contre le
     // modèle validé chez Meta avant CHAQUE passage (nombre exact exigé).
-    variables: ['prenom', 'date', 'heure'],
+    // rappel_rdv_closing (lu le 24/11/2026) : « Bonsoir {{1}}, c'est {{2}}
+    // de l'équipe d'Adrien et Emily… On se retrouve demain à {{3}} en visio »
+    // → prénom du prospect, prénom du closer, heure.
+    variables: ['prenom', 'expert', 'heure'],
     heure: 18 * 60,
   },
   valeur: { ecartMinH: 36, apresReservationMin: 180 },
@@ -239,6 +242,15 @@ async function destinatairesTest(cfg) {
   });
   (cfg.testTelephones || []).forEach(function (t) { if (fin9(t)) out.tel[fin9(t)] = true; });
   (cfg.testEmails || []).forEach(function (e) { if (e) out.email[String(e).trim().toLowerCase()] = true; });
+  // Le numéro et l'e-mail de test d'Adrien vivent déjà dans _config/relances
+  // (sa fiche d'équipe n'a pas de téléphone) : on les reprend, un seul endroit.
+  try {
+    const r = await db.collection('_config').doc('relances').get();
+    const d = r.exists ? (r.data() || {}) : {};
+    if (fin9(d.testTelephone)) out.tel[fin9(d.testTelephone)] = true;
+    if (d.testEmail && /@/.test(String(d.testEmail))) out.email[String(d.testEmail).trim().toLowerCase()] = true;
+    out.relances = { tel: d.testTelephone || null, email: d.testEmail || null };
+  } catch (e) { console.warn('[parcours-rdv] relances test', e && e.message); }
   return out;
 }
 
@@ -263,7 +275,9 @@ function variablesDe(b, t) {
     heure: heureLisible(b.time),
     duree: duree ? String(duree) + ' min' : '',
     lien: lienVisio(b),
-    typeLabel: String(b.typeLabel || (t && (t.label || t.name)) || 'Audit Stratégique').trim(),
+    // « Audit Stratégique Personnalisé (claire) » : le nom entre parenthèses
+    // sert à l'équipe (une consultation par closer), jamais au prospect.
+    typeLabel: String(b.typeLabel || (t && (t.label || t.name)) || 'Audit Stratégique').replace(/\s*\([^)]*\)\s*$/, '').trim(),
   };
 }
 
@@ -957,6 +971,12 @@ async function envoyerTest(o) {
     if (!email && /mail/i.test(k) && /@/.test(String(m[k] || ''))) email = m[k];
   });
   if (o.email) email = o.email;
+  if (!tel || !email) {
+    const r = await db.collection('_config').doc('relances').get();
+    const d = r.exists ? (r.data() || {}) : {};
+    if (!tel) tel = d.testTelephone || null;
+    if (!email) email = d.testEmail || null;
+  }
   const demain = Dispo.addDays(Dispo.parisStamp(new Date()).ymd, 1);
   const b = {
     date: demain, time: '14:30', personName: o.expert || 'Claire Martin', typeLabel: 'Audit Stratégique Personnalisé',

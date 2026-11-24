@@ -12,6 +12,9 @@
 //               | wa_veille | sms_h1 | rattrapage
 //   POST { action:'reglage', ... }                     → modifie _config/parcours_rdv
 //        (champs autorisés uniquement, trace dans `historique`)
+//   POST { action:'types', ids:[…], parcoursRdv, displayDuration, apply }
+//        → coche le parcours / la durée annoncée sur ces consultations
+//          (à blanc sans apply:true)
 //
 // Accès : cron (CRON_SECRET), admin connecté (POST), ou clé temporaire
 // PARCOURS_AUDIT_KEY (en-tête x-audit-key ou ?k=) pour le chantier.
@@ -67,6 +70,44 @@ async function reglage(body, par) {
   return { ok: true, modifie: trace.champs };
 }
 
+/* Coche le parcours (et la durée annoncée) sur des consultations précises de
+   booking_config/_types. Transaction ; seuls `notifications.parcoursRdv` et
+   `displayDuration` changent, sur les seuls identifiants demandés. À blanc
+   tant que `apply` n'est pas vrai. L'état d'avant est gardé dans
+   _config/parcours_rdv.historiqueTypes. */
+async function types(body, par) {
+  const ids = Array.isArray(body.ids) ? body.ids.map(String) : [];
+  if (!ids.length) return { ok: false, erreur: 'ids requis' };
+  const parcours = body.parcoursRdv === undefined ? null : body.parcoursRdv === true;
+  const duree = body.displayDuration === undefined ? undefined : (body.displayDuration === null ? null : Number(body.displayDuration));
+  const ref = db.collection('booking_config').doc('_types');
+  const apply = body.apply === true;
+  const resultat = await db.runTransaction(async function (tx) {
+    const s = await tx.get(ref);
+    const list = (s.exists && Array.isArray((s.data() || {}).list)) ? s.data().list : [];
+    const avant = [], apres = [];
+    const inconnus = ids.filter(function (id) { return !list.some(function (t) { return t && t.id === id; }); });
+    if (inconnus.length) return { ok: false, erreur: 'consultations inconnues : ' + inconnus.join(', ') };
+    const nouvelle = list.map(function (t) {
+      if (!t || ids.indexOf(t.id) < 0) return t;
+      avant.push({ id: t.id, parcoursRdv: !!(t.notifications && t.notifications.parcoursRdv), displayDuration: t.displayDuration == null ? null : t.displayDuration });
+      const c = Object.assign({}, t);
+      if (parcours !== null) c.notifications = Object.assign({}, t.notifications || {}, { parcoursRdv: parcours });
+      if (duree !== undefined) c.displayDuration = duree;
+      apres.push({ id: c.id, label: c.label, parcoursRdv: !!(c.notifications && c.notifications.parcoursRdv), displayDuration: c.displayDuration == null ? null : c.displayDuration });
+      return c;
+    });
+    if (apply) tx.update(ref, { list: nouvelle });
+    return { ok: true, applique: apply, avant: avant, apres: apres };
+  });
+  if (resultat.ok && apply) {
+    await db.collection('_config').doc('parcours_rdv').set({
+      historiqueTypes: admin.firestore.FieldValue.arrayUnion({ at: Date.now(), par: par, avant: resultat.avant, apres: resultat.apres }),
+    }, { merge: true });
+  }
+  return resultat;
+}
+
 module.exports = async function (req, res) {
   res.setHeader('Cache-Control', 'no-store');
   try {
@@ -78,6 +119,15 @@ module.exports = async function (req, res) {
         const m = q.apercu === 'valeur' ? a.valeur : a.confirmation;
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.status(200).send(m.html);
+        return;
+      }
+      // Actions par GET (clé du chantier seulement) : l'outil qui lit la
+      // preview ne sait faire que des GET. Paramètres dans ?json=…
+      if (q.action && cleChantier(req)) {
+        let corps = {};
+        try { corps = q.json ? JSON.parse(String(q.json)) : {}; } catch (e) { res.status(400).json({ ok: false, error: 'json illisible' }); return; }
+        corps.action = String(q.action);
+        await actionner(corps, 'cle_chantier', res);
         return;
       }
       const estCron = cron(req);
@@ -96,6 +146,14 @@ module.exports = async function (req, res) {
       if (!auth) return;
       par = auth.email || auth.uid;
     }
+    await actionner(body, par, res);
+  } catch (e) {
+    console.error('[parcours-rdv]', e && e.stack ? e.stack : e);
+    res.status(500).json({ ok: false, error: 'server_error', detail: e && e.message });
+  }
+};
+
+async function actionner(body, par, res) {
     const action = String(body.action || '');
 
     if (action === 'etat') {
@@ -112,14 +170,15 @@ module.exports = async function (req, res) {
       res.status(200).json(r);
       return;
     }
+    if (action === 'types') {
+      const r = await types(body, par);
+      res.status(r.ok ? 200 : 400).json(r);
+      return;
+    }
     if (action === 'reglage') {
       const r = await reglage(body, par);
       res.status(r.ok ? 200 : 400).json(r);
       return;
     }
     res.status(400).json({ ok: false, error: 'action inconnue' });
-  } catch (e) {
-    console.error('[parcours-rdv]', e && e.stack ? e.stack : e);
-    res.status(500).json({ ok: false, error: 'server_error', detail: e && e.message });
-  }
-};
+}
