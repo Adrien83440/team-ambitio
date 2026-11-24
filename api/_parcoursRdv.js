@@ -85,6 +85,9 @@ const DEFAUTS = {
   activeCampaign: {
     actif: true,
     nurturing: ['35', '26', '32'],
+    // Séquences d'APRÈS le RDV (43-48 freins, 49 rendez-vous manqué) : un
+    // nouveau RDV en fait sortir le prospect, comme du nurturing.
+    apresRdv: ['43', '44', '45', '46', '47', '48', '49'],
     tagRdv: 'rdv_a_venir', tagStop: 'stop_autom', tagManque: 'rdv_manque',
   },
   textes: {},
@@ -636,8 +639,10 @@ async function versActiveCampaign(cfg, evenement, b, extra) {
   try {
     if (evenement === 'rdv_pris') {
       await pas(await AC.ajouterTag(c.id, A.tagRdv || 'rdv_a_venir'), '+' + (A.tagRdv || 'rdv_a_venir'));
-      const s = await AC.sortirDesAutomatisations(c.id, A.nurturing || []);
-      await pas(s, 'sortie nurturing ' + ((s.sortis || []).join(',') || 'aucune en cours'));
+      // Un nouveau RDV efface un « rendez-vous manqué » précédent.
+      await pas(await AC.retirerTag(c.id, A.tagManque || 'rdv_manque'), '-' + (A.tagManque || 'rdv_manque'));
+      const s = await AC.sortirDesAutomatisations(c.id, (A.nurturing || []).concat(A.apresRdv || []));
+      await pas(s, 'sortie nurturing / après-RDV ' + ((s.sortis || []).join(',') || 'aucune en cours'));
     } else if (evenement === 'rdv_libere') {
       await pas(await AC.retirerTag(c.id, A.tagRdv || 'rdv_a_venir'), '-' + (A.tagRdv || 'rdv_a_venir'));
       await pas(await AC.ajouterTag(c.id, A.tagManque || 'rdv_manque'), '+' + (A.tagManque || 'rdv_manque'));
@@ -654,6 +659,31 @@ async function versActiveCampaign(cfg, evenement, b, extra) {
     return { ok: false, canal: 'ac', erreur: e.message, texte: faits.join(' ; '), id: c.id };
   }
   return { ok: true, canal: 'ac', id: c.id, texte: evenement + ' : ' + faits.join(' ; ') };
+}
+
+/* Le même prospect (e-mail, sinon téléphone) a-t-il un AUTRE RDV commercial
+   non annulé, à venir ? Renvoie « date heure » ou null. Index simple
+   automatique de Firestore sur prospect.email / prospect.telephone. */
+async function autreRdvAVenir(b, id, now) {
+  const p = b.prospect || {};
+  const auj = Dispo.parisStamp(new Date(now)).ymd;
+  const essais = [];
+  if (p.email) essais.push(['prospect.email', String(p.email).trim()]);
+  if (p.telephone) essais.push(['prospect.telephone', String(p.telephone).trim()]);
+  for (let i = 0; i < essais.length; i++) {
+    const snap = await db.collection('bookings').where(essais[i][0], '==', essais[i][1]).get();
+    let trouve = null;
+    snap.forEach(function (d) {
+      if (trouve || d.id === id) return;
+      const x = d.data() || {};
+      if (x.status === 'cancelled' || x.isCoaching === true || !x.date || x.date < auj) return;
+      const debut = MT.bookingStartMs(x);
+      if (debut && debut < now) return;
+      trouve = x.date + ' ' + (x.time || '');
+    });
+    if (trouve) return trouve;
+  }
+  return null;
 }
 
 /* Après le RDV : que fait le nurturing ?
@@ -985,7 +1015,17 @@ async function passage(opts) {
       const suite = suiteNurturing(b);
       if (suite && !etapesAc['ac_' + suite]) {
         const lAc = { id: it.id, etape: 'ac_' + suite };
-        if (simulation || !ctx.estTest(b)) lAc.resultat = 'simule';
+        // Annulé ou manqué MAIS un autre RDV est déjà pris (le prospect a
+        // déplacé lui-même) : pas de séquence « rendez-vous manqué », et on
+        // ne retire pas l'étiquette « RDV à venir » posée par le nouveau RDV.
+        const autre = suite === 'rdv_libere' ? await autreRdvAVenir(b, it.id, now) : null;
+        if (autre) {
+          lAc.resultat = 'autre_rdv_a_venir';
+          if (!simulation && ctx.estTest(b) && (await reserver(it.ref, 'ac_' + suite, { memeAnnule: true })) === 'ok') {
+            await noter(it.ref, 'ac_' + suite, { ok: true, canal: 'ac', saute: 'autre_rdv_a_venir', texte: 'non envoyé : nouveau RDV ' + autre });
+          }
+        }
+        else if (simulation || !ctx.estTest(b)) lAc.resultat = 'simule';
         else if ((await reserver(it.ref, 'ac_' + suite, { memeAnnule: true })) === 'ok') {
           const r = await versActiveCampaign(cfg, suite, b, { outcome: b.outcome || null });
           await noter(it.ref, 'ac_' + suite, r);
