@@ -192,6 +192,7 @@ function peindreVue() {
     + '<button class="sq-act" type="button" data-action="plafond">Enregistrer</button>'
     + '<span style="font-size:12.5px;color:var(--muted)">Envoyés aujourd\'hui : <b style="color:var(--text)">' + cj + '</b></span></div>'
     + '<div class="sq-hint">Le passage du mode test au mode réel se fait pour tout le parcours RDV, pas ici.</div></div>';
+  if (st.problemes) h += '<div class="sq-card" style="border-color:rgba(239,68,68,.5)"><h2 style="color:#ef4444">' + st.problemes + ' prospect' + (st.problemes > 1 ? 's' : '') + ' à regarder</h2><small>Un e-mail n\'est pas parti, ou ActiveCampaign n\'a pas pu être mis à jour. Ouvre l\'onglet Prospects : la ligne concernée porte une pastille rouge ou la mention du problème.</small></div>';
   h += '<div class="sq-card"><h2>Chiffres</h2><small>Depuis le début, sur ' + st.total + ' prospect' + (st.total > 1 ? 's' : '') + ' entré' + (st.total > 1 ? 's' : '') + ' en séquence.</small><div class="sq-kpis">'
     + kpi('En cours', st.active) + kpi('En pause', st.pause) + kpi('Terminées', st.terminee) + kpi('Arrêtées', st.arretee)
     + kpi('E-mails envoyés', st.envoyes) + kpi('Ont cliqué', st.clics) + kpi('Ont choisi une suite', st.choix)
@@ -260,7 +261,8 @@ function peindreProspects() {
       + '<td>' + esc(p.sequenceLibelle) + '<small>' + (p.douleurLibelle ? 'histoire : ' + esc(p.douleurLibelle) : 'sans histoire') + ' · RDV du ' + ymdFr(p.rdvDate) + '</small></td>'
       + '<td>' + points(p) + '</td><td>' + esc(proch) + '</td>'
       + '<td>' + (fait.length ? fait.join('<br>') : '<span style="color:var(--muted)">—</span>') + '</td>'
-      + '<td><span class="sq-bad ' + esc(p.etat) + '">' + esc(LIB_ETAT[p.etat] || p.etat) + '</span>' + (p.motifLibelle ? '<small>' + esc(p.motifLibelle) + '</small>' : '') + '</td>'
+      + '<td><span class="sq-bad ' + esc(p.etat) + '">' + esc(LIB_ETAT[p.etat] || p.etat) + '</span>' + (p.motifLibelle ? '<small>' + esc(p.motifLibelle) + '</small>' : '')
+        + (p.probleme ? '<small style="color:#ef4444">⚠ ' + esc({ email_non_parti: 'un e-mail n\'est pas parti', contenu_indisponible: 'e-mail introuvable', activecampaign_desinscription: 'désinscription ActiveCampaign à refaire', activecampaign_newsletter: 'entrée newsletter à refaire' }[p.probleme] || p.probleme) + '</small>' : '') + '</td>'
       + '<td style="white-space:nowrap">' + act + '</td></tr>';
   }
   $('sqProspects').innerHTML = h + '</tbody></table></div></div>';
@@ -281,6 +283,10 @@ function peindreArbre() {
     for (var k = 0; k < s.emails.length; k++) {
       var m = s.emails[k];
       h += boutonMail({ sequence: s.cle, douleur: '', etape: m.k, choix: 'a', cle: m.cle }, 'J+' + m.jour, m.objet, m.off);
+    }
+    for (var q = 0; q < (s.histoire || []).length; q++) {
+      var hm = s.histoire[q];
+      h += boutonMail({ sequence: s.cle, douleur: 'rentabilite', etape: hm.e === 'E1' ? 1 : 5, choix: 'a', cle: hm.cle }, hm.e === 'E1' ? '1 hist.' : '5 hist.', hm.objet + ' (avec histoire)', hm.off);
     }
     h += '</div>';
   }

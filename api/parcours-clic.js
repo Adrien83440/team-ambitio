@@ -17,6 +17,8 @@
 const parseBody = require('./_parseBody');
 const S = require('./_parcoursSuite');
 
+const DEMO = '000000000000000000000000000000000000';
+
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
 function page(titre, corps, script) {
@@ -48,6 +50,7 @@ module.exports = async function (req, res) {
       const body = (await parseBody(req)) || {};
       const a = String(body.a || '');
       if (['a', 'b', 'rdv', 'stop'].indexOf(a) < 0) { res.status(400).json({ ok: false }); return; }
+      if (String(body.j || '') === DEMO) { res.status(200).json({ ok: true, demo: true }); return; }
       const r = await S.enregistrerClic(body.j, a, body.e);
       res.status(r.ok ? 200 : 404).json({ ok: !!r.ok });
       return;
@@ -57,7 +60,11 @@ module.exports = async function (req, res) {
     const jeton = String(q.j || '');
     const a = String(q.a || '');
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    const x = await S.parJeton(jeton);
+    /* Jeton des e-mails de TEST (« M'envoyer cet e-mail », jeton tout en
+       zéros) : la page s'affiche comme pour un prospect, sur un exemple, et
+       n'enregistre rien. */
+    const demo = jeton === DEMO;
+    const x = demo ? { data: S.suiteFictive({ sequence: 'frein_tresorerie', douleur: String(q.d || 'rentabilite'), email: 'exemple@exemple.fr', prenom: '' }) } : await S.parJeton(jeton);
     if (!x || ['a', 'b', 'rdv', 'stop'].indexOf(a) < 0) {
       res.status(404).send(page('Lien expiré', '<h1>Ce lien n\'est plus valable</h1><p>Vous pouvez nous écrire directement en répondant à l\'un de nos e-mails.</p>'));
       return;
@@ -76,11 +83,14 @@ module.exports = async function (req, res) {
       res.status(200).send(page('Se désinscrire',
         '<div id="av"><h1>Ne plus recevoir nos e-mails ?</h1><p>Un clic suffit. Vous ne recevrez plus aucun e-mail de notre part.</p>'
         + '<p><button class="btn" id="ok" type="button">Me désinscrire</button></p></div>'
-        + '<div id="ap" style="display:none"><h1>C\'est fait</h1><p>Vous ne recevrez plus nos e-mails. Merci pour le temps que vous nous avez accordé.</p></div>',
-        'document.getElementById("ok").addEventListener("click",function(){var b=this;b.disabled=true;'
+        + '<div id="ap" style="display:none"><h1>C\'est fait</h1><p>Vous ne recevrez plus nos e-mails. Merci pour le temps que vous nous avez accordé.</p></div>'
+        + '<div id="ko" style="display:none"><h1>Un souci de notre côté</h1><p>Votre demande n\'a pas pu être enregistrée. Réessayez dans un instant, ou répondez « stop » à l\'un de nos e-mails : le résultat est le même.</p><p><button class="btn" id="re" type="button">Réessayer</button></p></div>',
+        'function envoi(){var b=document.getElementById("ok");b.disabled=true;'
         + 'var x=new XMLHttpRequest();x.open("POST","/api/parcours-clic",true);x.setRequestHeader("Content-Type","application/json");'
-        + 'x.onloadend=function(){document.getElementById("av").style.display="none";document.getElementById("ap").style.display="block";};'
-        + 'x.send(JSON.stringify({j:' + JSON.stringify(jeton) + ',a:"stop"}));});'));
+        + 'x.onloadend=function(){var bon=x.status===200;document.getElementById("av").style.display="none";'
+        + 'document.getElementById("ap").style.display=bon?"block":"none";document.getElementById("ko").style.display=bon?"none":"block";};'
+        + 'x.send(JSON.stringify({j:' + JSON.stringify(jeton) + ',a:"stop"}));}'
+        + 'document.getElementById("ok").addEventListener("click",envoi);document.getElementById("re").addEventListener("click",envoi);'));
       return;
     }
     // Choix de la suite.

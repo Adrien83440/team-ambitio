@@ -139,7 +139,7 @@ async function passage(opts) {
     if (et.frein) continue;
     // Un autre RDV est déjà posé : pas de séquence « après un non », et
     // l'étiquette « RDV à venir » reste (elle appartient au nouveau RDV).
-    if (await P.autreRdvAVenir(b, d.id, Date.now(), typeMap)) { out.detail.push({ id: d.id, date: b.date, resultat: 'autre_rdv_a_venir' }); continue; }
+    if (await P.rdvPlusRecent(b, d.id, typeMap)) { out.detail.push({ id: d.id, date: b.date, resultat: 'rdv_plus_recent' }); continue; }
     // Seuls les RDV entrés dans le parcours (tag « RDV à venir » posé).
     if (!(et.ac_rdv_pris && et.ac_rdv_pris.ok) && !simulation) continue;
     out.examines++;

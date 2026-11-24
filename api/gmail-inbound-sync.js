@@ -391,7 +391,8 @@ async function run(opts) {
          fiche) ; toute autre réponse sonne, avec un résumé d'une ligne. */
       let suiteRep = null;
       if (!firstRun) {
-        suiteRep = await require('./_parcoursSuite').surReponseEmail({ leadId: leadId, texte: text });
+        try { suiteRep = await require('./_parcoursSuite').surReponseEmail({ leadId: leadId, texte: text, sujet: subject }); }
+        catch (e) { console.warn('[gmail-inbound-sync] séquence après RDV', e && e.message); suiteRep = null; }
       }
       if (notify && !(suiteRep && suiteRep.silence)) {
         const owner = l.assignedTo ? members.find(function (m) { return m && m.slug === l.assignedTo; }) : null;

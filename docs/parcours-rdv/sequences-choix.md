@@ -4,17 +4,14 @@
 
 ## Principe
 
+- Les réponses de l'ancien formulaire (« Quel est votre principal défi ? ») n'ouvrent pas d'histoire : les textes citent la question et les mots du nouveau questionnaire.
 - La **douleur** vient de la première question du questionnaire (« Qu'est-ce qui vous pèse le plus dans votre entreprise aujourd'hui ? »). Cinq réponses, cinq histoires : `rentabilite`, `operationnel`, `vie`, `equipe`, `plafond`.
-- Le **frein** (trésorerie, timing, décision, preuves, priorité) garde son e-mail 1 et son e-mail 5 (`sequences-freins.md`). L'e-mail 1 reçoit en plus le paragraphe miroir ci-dessous.
+- Le **frein** (trésorerie, timing, décision, preuves, priorité, général) ouvre et ferme la séquence. Quand le prospect suit une histoire, ses e-mails 1 et 5 sont ceux de la section « 0. Freins avec histoire » : ils citent sa réponse et n'annoncent pas les e-mails du frein, qui ne partiront pas.
 - Les e-mails 2, 3 et 4 sont ceux de la douleur. L'e-mail 2 se termine par deux boutons ; l'e-mail 3 est la suite choisie (sans clic : la suite A).
 - Chaque e-mail dit **ce qui se passe** et **pourquoi**, jamais **comment** le régler. Le comment, c'est l'audit.
 - Vouvoiement, aucun prix, aucune garantie, témoignages réels avec leurs propres mots.
 
 Syntaxe : `>> phrase` = encadré ; `[ Libellé ]` = bouton de réservation (ou lien entre parenthèses) ; `[[ Libellé ]]` = lien discret ; `[A] Libellé` et `[B] Libellé` = les deux boutons de choix ; `![texte](image)` = image ; `{{m_…}}` = phrase miroir, tirée d'une réponse à choix du prospect (la ligne disparaît si la réponse manque).
-
-## Paragraphe miroir de l'e-mail 1 (tous les freins)
-
-> Avant notre échange, à la question « Qu'est-ce qui vous pèse le plus dans votre entreprise ? », vous aviez répondu : **« {{douleur_citation}} »** Nous ne l'avons pas oublié : c'est de là que partiront nos prochains e-mails.
 
 ## Phrases miroir
 
@@ -57,6 +54,256 @@ Syntaxe : `>> phrase` = encadré ; `[ Libellé ]` = bouton de réservation (ou l
 
 ---
 
+## 0. Freins avec histoire (`freins`)
+
+E-mails 1 et 5 de chaque frein quand le prospect suit une histoire. `{{douleur_citation}}` = sa réponse, mot pour mot.
+
+**[frein_tresorerie] E1 : Merci pour votre franchise**
+*Pré-en-tête : La trésorerie, c'est le sujet de tous les dirigeants. Vraiment.*
+
+> Bonjour %FIRSTNAME%,
+>
+> « Ce n'est pas le moment, la trésorerie est trop juste. » Vous nous l'avez dit sans détour lors de notre échange, et merci pour ça : la plupart des dirigeants le pensent sans oser le dire.
+>
+> Nous n'allons pas essayer de vous faire changer d'avis. Nous voulons revenir sur autre chose, que vous nous aviez écrit avant même de nous parler. À la question « Qu'est-ce qui vous pèse le plus dans votre entreprise ? », vous aviez répondu :
+>
+> >> « {{douleur_citation}}. »
+>
+> Cette phrase et votre trésorerie sont rarement deux sujets séparés. Le plus souvent, l'une explique l'autre.
+>
+> Dans les prochains jours, nous vous envoyons quelques e-mails courts qui partent de cette phrase : ce qui se passe réellement derrière, et pourquoi. Rien à acheter, juste de quoi y voir plus clair.
+>
+> Adrien & Emily
+>
+> P.S. Le premier arrive dans trois jours, et il commence par votre réponse.
+
+**[frein_tresorerie] E5 : On en reparle ?**
+*Pré-en-tête : Si le sujet est toujours d'actualité, notre porte est ouverte.*
+
+> Bonjour %FIRSTNAME%,
+>
+> Quelques semaines ont passé depuis notre échange. Ces derniers jours, nous sommes partis d'une phrase, la vôtre :
+>
+> >> « {{douleur_citation}}. »
+>
+> Si elle est toujours vraie aujourd'hui, et si la trésorerie vous occupe encore l'esprit, nous vous proposons de refaire le point, 45 minutes, avec vos chiffres :
+>
+> - ce qui a bougé depuis notre échange ;
+> - ce qui reste bloqué ;
+> - les deux ou trois actions qui auraient le plus d'effet maintenant.
+>
+> Vous repartez avec ces priorités, que nous travaillions ensemble ou non.
+>
+> [ Reprendre un rendez-vous ]
+>
+> Adrien & Emily
+>
+> P.S. Ce n'est plus d'actualité ? Répondez simplement « plus tard » : nous lisons toutes les réponses.
+
+**[frein_timing] E1 : Bien noté pour le timing**
+*Pré-en-tête : Le bon moment ne se présente presque jamais tout seul.*
+
+> Bonjour %FIRSTNAME%,
+>
+> Vous nous avez dit, lors de notre échange, que ce n'était pas le bon moment. C'est noté, et nous le respectons : personne ne connaît votre agenda mieux que vous.
+>
+> Nous n'allons pas vous relancer pour vous faire changer d'avis. Nous voulons revenir sur autre chose, que vous nous aviez écrit avant même de nous parler. À la question « Qu'est-ce qui vous pèse le plus dans votre entreprise ? », vous aviez répondu :
+>
+> >> « {{douleur_citation}}. »
+>
+> C'est souvent cette phrase-là qui fait qu'il n'y a jamais de bon moment.
+>
+> Dans les prochains jours, nous vous envoyons quelques e-mails courts qui partent d'elle : ce qui se passe réellement derrière, et pourquoi. Ils se lisent en deux minutes, même en pleine période chargée.
+>
+> Adrien & Emily
+>
+> P.S. Le premier arrive dans trois jours, et il commence par votre réponse.
+
+**[frein_timing] E5 : Et si on fixait la date maintenant ?**
+*Pré-en-tête : Même pour plus tard, autant la bloquer dès aujourd'hui.*
+
+> Bonjour %FIRSTNAME%,
+>
+> Vous nous aviez dit que ce n'était pas le bon moment. Quelques semaines plus tard, il n'est peut-être toujours pas venu. C'est normal : il ne vient pas tout seul.
+>
+> Et pendant ce temps, votre phrase est sans doute toujours vraie :
+>
+> >> « {{douleur_citation}}. »
+>
+> Voici donc une façon simple de ne plus y penser : **choisissez la date vous-même.** Dans deux semaines, dans un mois, après votre saison : le calendrier est ouvert.
+>
+> Le créneau sera dans votre agenda. D'ici là, vous n'avez rien à faire ni à préparer.
+>
+> [ Choisir un créneau ]
+>
+> Adrien & Emily
+>
+> P.S. Une date posée, même lointaine, c'est déjà une décision. Et si elle ne convient plus le moment venu, il suffira de nous le dire.
+
+**[frein_decision] E1 : Pour en parler à deux**
+*Pré-en-tête : Une décision qui engage l'entreprise se prend rarement seul.*
+
+> Bonjour %FIRSTNAME%,
+>
+> Vous souhaitez en parler avant de décider. C'est sain : une décision qui engage votre entreprise ne se prend pas seul, sur un coin de table.
+>
+> Pour vous aider à en parler, le plus simple est de repartir de ce que vous nous aviez écrit avant notre échange. À la question « Qu'est-ce qui vous pèse le plus dans votre entreprise ? », vous aviez répondu :
+>
+> >> « {{douleur_citation}}. »
+>
+> C'est le vrai point de départ, bien plus que notre accompagnement. Et c'est une phrase que la personne à qui vous en parlerez reconnaîtra sans doute.
+>
+> Dans les prochains jours, nous vous envoyons quelques e-mails courts qui partent d'elle : ce qui se passe réellement derrière, et pourquoi. Vous pourrez les transférer tels quels.
+>
+> Adrien & Emily
+>
+> P.S. La personne concernée a déjà une question précise ? Répondez à cet e-mail : nous vous aidons à y répondre.
+
+**[frein_decision] E5 : Où en êtes-vous ?**
+*Pré-en-tête : Juste pour savoir si vous avez pu en parler.*
+
+> Bonjour %FIRSTNAME%,
+>
+> Avez-vous pu en parler ?
+>
+> Quelle que soit votre décision, nous serions contents de la connaître. Vraiment : un « non » clair nous aide autant qu'un « oui ».
+>
+> **Répondez à cet e-mail, même en un mot**
+>
+> - « oui » : nous revenons vers vous pour la suite ;
+> - « pas encore » : nous vous laissons le temps ;
+> - « non » : c'est noté, sans rancune.
+>
+> Et si votre phrase est toujours d'actualité, « {{douleur_citation}} », le plus simple est peut-être d'en parler de vive voix, seul ou à deux :
+>
+> [ Reprendre un rendez-vous ]
+>
+> Adrien & Emily
+
+**[frein_preuves] E1 : Vous avez raison de vouloir des preuves**
+*Pré-en-tête : Ne vous engagez jamais sur une promesse.*
+
+> Bonjour %FIRSTNAME%,
+>
+> Vous voulez voir du concret avant de vous engager. Vous avez raison, et nous vous dirions la même chose à votre place : ne vous engagez jamais sur une promesse.
+>
+> Alors plutôt que de vous parler de nous, nous allons repartir de vous. Avant notre échange, à la question « Qu'est-ce qui vous pèse le plus dans votre entreprise ? », vous aviez répondu :
+>
+> >> « {{douleur_citation}}. »
+>
+> Dans les prochains jours, nous vous envoyons quelques e-mails courts qui partent de cette phrase : ce qui se passe réellement derrière, pourquoi, et l'histoire de dirigeants qui disaient la même chose. En vidéo, avec leurs mots à eux, pas les nôtres.
+>
+> Adrien & Emily
+>
+> P.S. Vous avez un secteur ou une situation en tête ? Répondez à cet e-mail : si nous avons accompagné un dirigeant proche de votre cas, nous vous le dirons.
+
+**[frein_preuves] E5 : Voir par vous-même**
+*Pré-en-tête : La meilleure preuve reste celle qui vous concerne.*
+
+> Bonjour %FIRSTNAME%,
+>
+> Les histoires des autres donnent une idée. Mais la seule preuve qui compte vraiment, c'est ce que cela donnerait **pour votre entreprise**, à partir de votre phrase :
+>
+> >> « {{douleur_citation}}. »
+>
+> C'est ce que nous vous proposons de regarder ensemble, 45 minutes, avec vos chiffres d'aujourd'hui :
+>
+> 1. ce qui se passe réellement derrière cette phrase, chez vous ;
+> 2. ce qui pèse le plus ;
+> 3. les deux ou trois actions qui auraient le plus d'effet.
+>
+> Vous repartez avec ces priorités, que nous travaillions ensemble ou non. Et si nous pensons ne pas pouvoir vous aider, nous vous le dirons.
+>
+> [ Reprendre un rendez-vous ]
+>
+> Adrien & Emily
+
+**[frein_priorite] E1 : Merci pour notre échange**
+*Pré-en-tête : Une phrase à garder en tête cette semaine.*
+
+> Bonjour %FIRSTNAME%,
+>
+> Merci pour le temps que vous nous avez accordé. Vous préférez avancer par vous-même pour l'instant : c'est tout à fait légitime, et beaucoup de dirigeants solides fonctionnent ainsi.
+>
+> Nous vous laissons seulement une phrase. Elle n'est pas de nous : c'est la vôtre. Avant notre échange, à la question « Qu'est-ce qui vous pèse le plus dans votre entreprise ? », vous aviez répondu :
+>
+> >> « {{douleur_citation}}. »
+>
+> La question pour la semaine : sera-t-elle encore vraie dans un an, si rien ne change ?
+>
+> Dans les prochains jours, nous vous envoyons quelques e-mails courts qui partent de cette phrase : ce qui se passe réellement derrière, et pourquoi. Gardez-les, même si nous ne travaillons jamais ensemble.
+>
+> Adrien & Emily
+
+**[frein_priorite] E5 : Où en êtes-vous ?**
+*Pré-en-tête : Si vous voulez faire le point, c'est par ici.*
+
+> Bonjour %FIRSTNAME%,
+>
+> Quelques semaines ont passé. Vous vouliez avancer par vous-même : où en êtes-vous ?
+>
+> Reprenez votre phrase :
+>
+> >> « {{douleur_citation}}. »
+>
+> Si elle est moins vraie qu'avant, bravo : c'est le plus difficile, et vous l'avez fait seul.
+>
+> Si elle l'est toujours autant, nous pouvons refaire le point, 45 minutes :
+>
+> - ce qui se passe réellement derrière, chez vous ;
+> - ce qu'il vaut mieux traiter en premier ;
+> - deux ou trois actions concrètes pour les semaines qui viennent.
+>
+> Vous repartez avec, que nous travaillions ensemble ou non.
+>
+> [ Reprendre un rendez-vous ]
+>
+> Adrien & Emily
+>
+> P.S. Tout roule de votre côté ? Dites-le-nous d'un mot : cela nous fera plaisir de le savoir.
+
+**[frein_general] E1 : Merci pour notre échange**
+*Pré-en-tête : Une phrase à garder en tête cette semaine.*
+
+> Bonjour %FIRSTNAME%,
+>
+> Merci pour le temps que vous nous avez accordé.
+>
+> Quelle que soit la suite, nous ne voulons pas que cet échange reste sans rien pour vous. Alors nous allons repartir de ce que vous nous aviez écrit avant même de nous parler. À la question « Qu'est-ce qui vous pèse le plus dans votre entreprise ? », vous aviez répondu :
+>
+> >> « {{douleur_citation}}. »
+>
+> Dans les prochains jours, nous vous envoyons quelques e-mails courts qui partent de cette phrase : ce qui se passe réellement derrière, et pourquoi. Rien à acheter, rien à préparer.
+>
+> Adrien & Emily
+>
+> P.S. Une question vous est venue après notre échange ? Répondez à cet e-mail : nous lisons tout.
+
+**[frein_general] E5 : Où en êtes-vous ?**
+*Pré-en-tête : Si vous voulez faire le point, c'est par ici.*
+
+> Bonjour %FIRSTNAME%,
+>
+> Quelques semaines ont passé depuis notre échange. Où en êtes-vous ?
+>
+> Reprenez votre phrase :
+>
+> >> « {{douleur_citation}}. »
+>
+> Si elle est toujours vraie, nous pouvons refaire le point ensemble, 45 minutes :
+>
+> - ce qui se passe réellement derrière, chez vous ;
+> - ce qu'il vaut mieux traiter en premier ;
+> - deux ou trois actions concrètes pour les semaines qui viennent.
+>
+> Vous repartez avec, que nous travaillions ensemble ou non.
+>
+> [ Reprendre un rendez-vous ]
+>
+> Adrien & Emily
+
+---
+
 ## 1. Rentabilité (`rentabilite`)
 
 Citation : « Je fais du chiffre, mais il ne me reste presque rien à la fin du mois »
@@ -96,14 +343,14 @@ Citation : « Je fais du chiffre, mais il ne me reste presque rien à la fin du 
 >
 > Adrien & Emily
 >
-> P.S. Sans clic de votre part, vous recevrez les trois endroits. Mais choisissez : la suite est écrite pour vous.
+> P.S. Sans clic de votre part, vous recevrez les trois endroits. Mais choisissez : les deux suites sont écrites pour vous.
 
 **E3A : Les trois endroits où l'argent s'échappe**
 *Pré-en-tête : Un seul fait presque tout le dégât. Lequel, chez vous ?*
 
 > Bonjour %FIRSTNAME%,
 >
-> Vous avez voulu savoir où part l'argent. Voici les trois endroits. Lisez-les en pensant à vos trois derniers mois.
+> Nous vous avions laissé sur une question : où part l'argent ? Voici les trois endroits. Lisez-les en pensant à vos trois derniers mois.
 >
 > **1. Ce que vous vendez à perte sans le savoir**
 >
@@ -226,14 +473,14 @@ Citation : « Je suis noyé dans l'opérationnel, je n'ai plus une minute pour p
 >
 > Adrien & Emily
 >
-> P.S. Sans clic de votre part, vous recevrez la première suite. Mais choisissez : elle est écrite pour vous.
+> P.S. Sans clic de votre part, vous recevrez la première suite. Mais choisissez : les deux sont écrites pour vous.
 
 **E3A : Pourquoi rien de ce que vous avez tenté n'a tenu**
 *Pré-en-tête : Le travail revient toujours vers la même personne.*
 
 > Bonjour %FIRSTNAME%,
 >
-> Vous avez voulu comprendre pourquoi rien n'a tenu. Voici ce que nous voyons, presque à chaque fois.
+> Nous vous avions laissé sur une question : pourquoi rien de ce que vous avez tenté n'a tenu ? Voici ce que nous voyons, presque à chaque fois.
 >
 > Dans une entreprise, le travail va vers celui qui sait. Et celui qui sait, c'est vous.
 >
@@ -362,14 +609,14 @@ Citation : « Mon entreprise a avalé ma vie : soirées, week-ends et vacances y
 >
 > Adrien & Emily
 >
-> P.S. Sans clic de votre part, vous recevrez la première suite. Mais choisissez : elle est écrite pour vous.
+> P.S. Sans clic de votre part, vous recevrez la première suite. Mais choisissez : les deux sont écrites pour vous.
 
 **E3A : Ce qui vous retient vraiment le soir**
 *Pré-en-tête : Ce n'est ni la charge, ni les clients.*
 
 > Bonjour %FIRSTNAME%,
 >
-> Vous avez voulu savoir ce qui vous retient. Faites le test : repensez à votre dernière soirée passée au travail. Que faisiez-vous, précisément ?
+> Nous vous avions laissé sur une question : qu'est-ce qui vous retient vraiment au travail le soir ? Faites le test : repensez à votre dernière soirée passée au travail. Que faisiez-vous, précisément ?
 >
 > Dans presque tous les cas, la réponse tombe dans l'une de ces trois cases.
 >
@@ -492,14 +739,14 @@ Citation : « Mes salariés viennent me voir pour tout : rien n'avance sans moi 
 >
 > Adrien & Emily
 >
-> P.S. Sans clic de votre part, vous recevrez la première suite. Mais choisissez : elle est écrite pour vous.
+> P.S. Sans clic de votre part, vous recevrez la première suite. Mais choisissez : les deux sont écrites pour vous.
 
 **E3A : Pourquoi tout remonte jusqu'à vous**
 *Pré-en-tête : Il manque trois choses à votre équipe, et aucune n'est la compétence.*
 
 > Bonjour %FIRSTNAME%,
 >
-> Vous avez voulu comprendre pourquoi tout remonte. Voici ce qui manque à une équipe qui demande tout. Trois choses, et aucune n'est la compétence.
+> Nous vous avions laissé sur une question : pourquoi tout remonte-t-il jusqu'à vous ? Voici ce qui manque à une équipe qui demande tout. Trois choses, et aucune n'est la compétence.
 >
 > **1. Savoir ce qui est attendu**
 >
@@ -620,14 +867,14 @@ Citation : « Mon chiffre d'affaires plafonne, malgré tous mes efforts »
 >
 > Adrien & Emily
 >
-> P.S. Sans clic de votre part, vous recevrez la première suite. Mais choisissez : elle est écrite pour vous.
+> P.S. Sans clic de votre part, vous recevrez la première suite. Mais choisissez : les deux sont écrites pour vous.
 
 **E3A : D'où vient vraiment un plafond**
 *Pré-en-tête : Votre entreprise vend exactement ce qu'elle peut absorber.*
 
 > Bonjour %FIRSTNAME%,
 >
-> Vous avez voulu savoir d'où vient le plafond. Voici ce que nous constatons, presque à chaque fois.
+> Nous vous avions laissé sur une question : d'où vient ce plafond ? Voici ce que nous constatons, presque à chaque fois.
 >
 > >> Une entreprise ne vend pas ce que le marché peut acheter. Elle vend ce qu'elle est capable d'absorber.
 >

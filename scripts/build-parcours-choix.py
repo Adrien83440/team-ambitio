@@ -70,7 +70,15 @@ def page(titre, pre, body):
      '<tr><td style="background:#f9fafb;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 18px 18px;padding:18px 36px;text-align:center"><div style="font-size:12px;color:#9ca3af;line-height:1.6">Adrien &amp; Emily · Accompagnement des dirigeants · <a href="https://www.adrienemily.com" style="color:#3b82f6;text-decoration:none">adrienemily.com</a><br><a href="{{lien_desinscription}}" style="color:#9ca3af">Se désinscrire</a></div></td></tr>'
      '</table></td></tr></table></body></html>')
 out={}
+FREINS={}
 for sec in re.split(r'\n## (?=\d\. )', s)[1:]:
+    if sec.startswith('0. '):
+        for m in re.finditer(r'\n\*\*\[([a-z_]+)\] (E1|E5) : (.+?)\*\*\n\*Pré-en-tête : (.+?)\*\n((?:\n?>.*)+)', sec):
+            quote=[re.sub(r'^> ?','',l) for l in m.group(5).split('\n') if l.startswith('>')]
+            body,txt=render(quote)
+            FREINS.setdefault(m.group(1),{})[m.group(2)]={'subject':m.group(3).strip(),'preheader':m.group(4).strip(),'html':page(m.group(3).strip(),m.group(4).strip(),body),'text':txt+'\n\n--\nAdrien & Emily · adrienemily.com\nSe désinscrire : {{lien_desinscription}}\n'}
+            print(m.group(1),m.group(2),len(re.findall(r'\w+',txt)),'mots')
+        continue
     key=re.search(r'\(`([a-z]+)`\)', sec.split('\n',1)[0]).group(1)
     cit=re.search(r'\nCitation : « (.+?) »', sec).group(1)
     ems={}
@@ -85,6 +93,7 @@ for sec in re.split(r'\n## (?=\d\. )', s)[1:]:
     assert sorted(ems)==['E2','E3A','E3B','E4'],(key,sorted(ems))
     out[key]={'citation':cit,'emails':ems}
 assert sorted(out)==['equipe','operationnel','plafond','rentabilite','vie']
+assert sorted(FREINS)==['frein_decision','frein_general','frein_preuves','frein_priorite','frein_timing','frein_tresorerie'] and all(sorted(v)==['E1','E5'] for v in FREINS.values()),FREINS.keys()
 if LOCAL:
     V=(sys.argv[2] if len(sys.argv)>2 else '/tmp/')+'/'
     ex={'m_marge':"Vous nous avez dit ne pas connaître précisément la marge de chacune de vos offres.",'m_sommeil':"Vous nous avez aussi dit qu'il vous arrive de mal dormir en pensant à la trésorerie des semaines à venir.",'m_duree':"Cela dure depuis plus de trois ans.",'m_rythme':"Et quand nous vous avons demandé comment vous viviez ce rythme, vous avez répondu : « C'est tendu, mais je tiens. »",'m_consignes':"Vous nous avez dit avoir l'impression de répéter les mêmes consignes, encore et encore.",'m_autonome':"Vous nous avez dit qu'un nouveau salarié ne devient pas autonome sans que vous le formiez vous-même.",'m_tente':"Vous avez déjà essayé de déléguer, avant de tout reprendre vous-même."}
@@ -95,5 +104,5 @@ if LOCAL:
         h=re.sub(r'<!--M:(m_[a-z0-9_]+)-->(.*?)<!--/M-->',rm,h)
         open(V+k+'_'+e+'.html','w').write(h)
 else:
-    json.dump(out,open(ROOT+'api/_parcoursChoixData.json','w'),ensure_ascii=False,indent=1)
+    json.dump({'douleurs':out,'freins':FREINS},open(ROOT+'api/_parcoursChoixData.json','w'),ensure_ascii=False,indent=1)
 print('ok')

@@ -708,6 +708,34 @@ async function autreRdvAVenir(b, id, now, typeMap) {
   return null;
 }
 
+/* Le même prospect (fiche, e-mail ou téléphone) a-t-il un RDV commercial du
+   parcours, non annulé, PLUS RÉCENT que celui-ci (passé ou à venir) ?
+   Une séquence d'après-RDV ne concerne que son DERNIER rendez-vous. */
+async function rdvPlusRecent(b, id, typeMap) {
+  if (!typeMap) typeMap = await lireTypes();
+  const p = b.prospect || {};
+  const essais = [];
+  if (b.leadId) essais.push(['leadId', String(b.leadId)]);
+  if (p.email) essais.push(['prospect.email', String(p.email).trim()]);
+  if (p.telephone) essais.push(['prospect.telephone', String(p.telephone).trim()]);
+  const moi = String(b.date || '') + ' ' + String(b.time || '');
+  for (let i = 0; i < essais.length; i++) {
+    const snap = await db.collection('bookings').where(essais[i][0], '==', essais[i][1]).get();
+    let trouve = null;
+    snap.forEach(function (d) {
+      if (trouve || d.id === id) return;
+      const x = d.data() || {};
+      if (x.status === 'cancelled' || !x.date) return;
+      const tx = typeDe(x, typeMap);
+      if (!tx || (tx.notifications || {}).parcoursRdv !== true || !estCommercial(x, tx)) return;
+      const lui = String(x.date) + ' ' + String(x.time || '');
+      if (lui > moi) trouve = lui;
+    });
+    if (trouve) return trouve;
+  }
+  return null;
+}
+
 /* Après le RDV : que fait le nurturing ?
    - no-show / annulé (hors report) → séquence « rendez-vous manqué » ;
    - non-close → séquence personnalisée selon le frein (parcours-frein.js) ;
@@ -1263,7 +1291,7 @@ module.exports = {
   lireConfig: lireConfig, passage: passage, envoyerTest: envoyerTest, apercuEmails: apercuEmails,
   surReponseWhatsapp: surReponseWhatsapp, lireModeleWhatsapp: lireModeleWhatsapp,
   // Exposés pour les tests
-  etapesDues: etapesDues, lireReponse: lireReponse, suiteNurturing: suiteNurturing, horsParcours: horsParcours, autreRdvAVenir: autreRdvAVenir, traiterRdv: traiterRdv,
+  etapesDues: etapesDues, lireReponse: lireReponse, suiteNurturing: suiteNurturing, horsParcours: horsParcours, autreRdvAVenir: autreRdvAVenir, rdvPlusRecent: rdvPlusRecent, traiterRdv: traiterRdv,
   variablesDe: variablesDe, remplir: remplir, variableVide: variableVide, heureLisible: heureLisible, dateLisible: dateLisible,
   telE164: telE164, estRdvDeTest: estRdvDeTest, emailConfirmation: emailConfirmation, emailValeur: emailValeur,
 };
