@@ -969,6 +969,7 @@
           <option value="paid">Payées</option>
           <option value="cancelled">Annulées</option>
           <option value="standby">⏸ En standby</option>
+          <option value="rejet">❌ Prélèvement rejeté (impayé)</option>
         </select>
         <span style="display:inline-flex;align-items:center;gap:6px;margin-left:4px">
           <input type="date" class="bill-input" id="expFrom" style="width:auto;padding:8px 10px" title="Exporter du"/>
@@ -990,7 +991,8 @@
       <div class="bill-card" style="background:rgba(245,158,11,.04);border-color:rgba(245,158,11,.25);margin-bottom:16px">
         <div class="bill-card-h"><div><h3>✅ Factures à valider</h3></div></div>
         <div style="font-size:13px;line-height:1.7;color:var(--muted)">
-          <p>Chaque prélèvement GoCardless encaissé génère ici un <strong>brouillon pré-rempli</strong>. Rien n'est facturé ni envoyé tant que <strong>tu</strong> ne valides pas — si un paiement ne passe pas, il n'apparaît simplement pas ici.</p>
+          <p>Chaque prélèvement GoCardless encaissé génère ici un <strong>brouillon pré-rempli</strong>. Rien n'est facturé ni envoyé tant que <strong>tu</strong> ne valides pas.</p>
+          <p>Chaque prélèvement <strong>rejeté</strong> génère aussi un brouillon, rangé à part dans « ❌ Prélèvements rejetés » : <strong>Valider (impayée)</strong> le numérote à la date du prélèvement, avec son PDF, sans le marquer encaissé — c'est la pièce à transmettre au cabinet de recouvrement. Si GoCardless finit par encaisser ce prélèvement, le brouillon redevient un encaissement normal tout seul.</p>
           <p>Pour chaque ligne : vérifie/ajuste la <strong>date d'encaissement</strong> (utile en cas de représentation), puis <strong>Valider + encaisser</strong> (numérote la facture à cette date et la marque payée), et enfin <strong>Envoyer</strong> au client.</p>
         </div>
       </div>
@@ -1170,6 +1172,33 @@
         </div>
 
         <div id="gcSyncResults" class="bill-hscroll" style="margin-top:14px"></div>
+      </div>
+
+      <!-- ════ Card 1b : Prélèvements rejetés (24/11/2026) ════ -->
+      <div class="bill-card" style="margin-top:18px;border-color:rgba(239,68,68,.3)">
+        <div class="bill-card-h">
+          <div>
+            <h3>❌ Prélèvements rejetés → factures impayées</h3>
+            <p>Scanne les prélèvements GoCardless <code>failed</code>, <code>customer_approval_denied</code> et <code>charged_back</code> et crée un brouillon par rejet dans « À valider ». Jamais de brouillon si une facture existe déjà, pour un client EI, ou si le rejet a été rattrapé par un autre prélèvement du même montant. Rapproche aussi les rejets déjà créés (prélèvement finalement encaissé, rattrapage).</p>
+          </div>
+        </div>
+        <div class="bill-form-grid" style="margin-top:14px">
+          <div class="bill-form-row">
+            <div class="bill-label">Depuis</div>
+            <input class="bill-input" type="date" id="rjSince" value="2026-01-01"/>
+          </div>
+          <div class="bill-form-row">
+            <div class="bill-label">Jusqu'au</div>
+            <input class="bill-input" type="date" id="rjUntil"/>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center">
+          <button class="bill-btn" id="rjScanBtn" data-rj-act="scan">🔍 Aperçu (à blanc)</button>
+          <button class="bill-btn bill-btn-primary" id="rjApplyBtn" data-rj-act="apply" disabled>✅ Créer les brouillons</button>
+          <button class="bill-btn bill-btn-ghost" id="rjAutoBtn" data-rj-act="auto">…</button>
+        </div>
+        <div id="rjAutoInfo" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
+        <div id="rjResults" class="bill-hscroll" style="margin-top:14px"></div>
       </div>
 
       <!-- ════ Card 2 : Purge totale ════ -->
@@ -4009,6 +4038,7 @@ function renderInvoicesList() {
   let list = invoicesCache;
   if (clientIdFilter) list = list.filter(function(i){ return i.clientId === clientIdFilter; });
   if (statusFilter === 'standby') list = list.filter(function(i){ return !!standbyOf(i); });
+  else if (statusFilter === 'rejet') list = list.filter(function(i){ return isRejetImpaye(i); });
   else if (statusFilter !== 'all') list = list.filter(function(i){ return i.status === statusFilter; });
   if (q) {
     list = list.filter(function(i) {
@@ -4086,7 +4116,7 @@ function renderInvoicesList() {
     html += '</td>';
     html += '<td class="bill-nowrap"><span style="font-size:12px;color:var(--muted)">' + dateStr + '</span></td>';
     html += '<td class="bill-nowrap" style="text-align:right;font-weight:700;font-family:var(--font-m)">' + formatEur(inv.totalTtc || 0) + '</td>';
-    html += '<td>' + statusBadge + standbyBadge(inv) + qontoBadgeOf(inv) + qontoPaidBadgeOf(inv) + '</td>';
+    html += '<td>' + statusBadge + rejetBadgeOf(inv) + standbyBadge(inv) + qontoBadgeOf(inv) + qontoPaidBadgeOf(inv) + '</td>';
     html += '<td class="col-actions">';
     html += '<button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();editInvoice(\'' + inv.id + '\')">' + (inv.status === 'draft' ? '✏️ Éditer' : '👁️ Voir') + '</button>';
     /* Standby (contentieux, difficultés…) : toute facture non payée peut être
@@ -4637,12 +4667,42 @@ function pendingValidationInvoices() {
   });
 }
 
+/* ── Prélèvements rejetés (24/11/2026, api/invoice-rejets.js) ──
+   _rejetGc.etat : 'actif' (rejet non rattrapé), 'encaisse_apres_rejet'
+   (même prélèvement finalement passé, brouillon redevenu normal),
+   'encaisse_apres_validation' / 'rattrape_apres_validation' (facture déjà
+   émise impayée, encaissement constaté ensuite : à marquer encaissée),
+   'rattrape' (brouillon archivé), 'suivi_traite' (signalement traité). */
+function isRejetActif(i) {
+  return !!(i && i._rejetGc && i._rejetGc.etat === 'actif');
+}
+function isRejetImpaye(i) {
+  return !!(i && i._rejetGc && i.status !== 'paid' && i.status !== 'cancelled' &&
+    (i._rejetGc.etat === 'actif' || i._rejetGc.etat === 'encaisse_apres_validation' || i._rejetGc.etat === 'rattrape_apres_validation'));
+}
+function rejetSuiviInvoices() {
+  return invoicesCache.filter(function(i) {
+    return i._rejetGc && i.status !== 'draft' && i.status !== 'paid' && i.status !== 'cancelled' &&
+      (i._rejetGc.etat === 'encaisse_apres_validation' || i._rejetGc.etat === 'rattrape_apres_validation');
+  });
+}
+function rejetBadgeOf(inv) {
+  if (!isRejetImpaye(inv)) return '';
+  var r = inv._rejetGc;
+  var t = 'Prélèvement du ' + rjFrDate(r.chargeDate) + ' ' + (r.gcStatus === 'charged_back' ? 'contesté' : 'rejeté') + (r.motif ? ' — ' + r.motif : '');
+  return ' <span title="' + escapeHtml(t) + '" style="font-size:10px;padding:2px 7px;margin-left:4px;background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.3);border-radius:4px;font-weight:700">❌ Rejet</span>';
+}
+function rjFrDate(s) {
+  var p = String(s || '').substring(0, 10).split('-');
+  return p.length === 3 ? (p[2] + '/' + p[1] + '/' + p[0]) : String(s || '—');
+}
+
 function updateValidateBadge() {
   var badge = document.getElementById('sideBadgeValidate');
   if (!badge) return;
   /* Les factures en standby ne sont pas des actions à faire : le badge ne
-     compte que la file active. */
-  var n = pendingValidationInvoices().filter(function(i){ return !standbyOf(i); }).length;
+     compte que la file active (encaissements + rejets) et les rejets à suivre. */
+  var n = pendingValidationInvoices().filter(function(i){ return !standbyOf(i); }).length + rejetSuiviInvoices().length;
   badge.textContent = n;
   badge.style.display = n > 0 ? 'inline-block' : 'none';
 }
@@ -4694,12 +4754,16 @@ function renderValidateQueue() {
   var wrap = document.getElementById('validateTableWrap');
   if (!wrap) return;
   var all = pendingValidationInvoices();
-  var active = all.filter(function(i){ return !standbyOf(i); });
+  var active = all.filter(function(i){ return !standbyOf(i) && !isRejetActif(i); });
+  var rejets = all.filter(function(i){ return !standbyOf(i) && isRejetActif(i); });
+  var suivi = rejetSuiviInvoices();
   var standby = all.filter(function(i){ return !!standbyOf(i); });
 
-  var html = '';
+  var html = rejetQueueHtml(rejets, suivi);
 
-  if (!active.length) {
+  if (!active.length && (rejets.length || suivi.length)) {
+    html += '<div style="font-size:12px;color:var(--muted);padding:8px 2px">Aucun encaissement à valider.</div>';
+  } else if (!active.length) {
     html += '<div class="bill-empty"><div class="bill-empty-icon">✅</div><h4>Aucune facture à valider</h4><p>Les nouveaux encaissements GoCardless apparaîtront ici automatiquement.</p></div>';
   } else {
     html += '<table class="bill-table"><thead><tr>' +
@@ -4727,6 +4791,153 @@ function renderValidateQueue() {
 
   wrap.innerHTML = html;
 }
+
+/* Section « ❌ Prélèvements rejetés » + « 💶 Rejets finalement encaissés ».
+   Boutons en data-rj-act (délégation plus bas), aucun onclick inline. */
+function rejetQueueHtml(rejets, suivi) {
+  var html = '';
+  if (rejets.length) {
+    var tot = rejets.reduce(function(s, i){ return s + (i.totalTtc || 0); }, 0);
+    html += '<div class="bill-card" style="border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.04);margin-bottom:18px">';
+    html += '<div class="bill-card-h"><div><h3 style="color:#ef4444">❌ Prélèvements rejetés — ' + rejets.length + ' brouillon(s), ' + formatEur(tot) + '</h3>'
+      + '<p>Valider numérote la facture à la date choisie (par défaut, celle du prélèvement), produit le PDF et la laisse <strong>impayée</strong>. Rien n\'est envoyé au client depuis ici.</p></div></div>';
+    html += '<table class="bill-table"><thead><tr><th>Client</th><th>Description / motif du rejet</th><th style="text-align:right">Montant TTC</th><th>Date de la facture</th><th class="col-actions"></th></tr></thead><tbody>';
+    rejets.forEach(function(inv) {
+      var cs = inv.clientSnapshot || {};
+      var r = inv._rejetGc || {};
+      var cli = cs.companyName || ((cs.contactFirstName || '') + ' ' + (cs.contactLastName || '')).trim() || cs.email || '—';
+      var fl = inv.lines && inv.lines.length ? (inv.lines[0].description || '') : '';
+      if (fl.length > 70) fl = fl.substring(0, 67) + '…';
+      html += '<tr>';
+      html += '<td class="bill-col-main"><div style="font-weight:600">' + escapeHtml(cli) + '</div>' + (cs.email ? '<div style="font-size:11px;color:var(--muted)">' + escapeHtml(cs.email) + '</div>' : '') + '</td>';
+      html += '<td class="bill-col-main" style="font-size:12px">' + escapeHtml(fl)
+        + '<div style="font-size:11px;color:#ef4444;margin-top:3px">Prélèvement du ' + rjFrDate(r.chargeDate) + ' ' + (r.gcStatus === 'charged_back' ? 'contesté' : 'rejeté') + ' — ' + escapeHtml(r.motif || 'motif inconnu') + '</div></td>';
+      html += '<td class="bill-nowrap" style="text-align:right;font-weight:700;font-family:var(--font-m)">' + formatEur(inv.totalTtc || 0) + '</td>';
+      html += '<td><input type="date" class="bill-input" id="rjDate_' + inv.id + '" value="' + escapeHtml(r.chargeDate || inv.gcChargeDate || '') + '" style="min-width:150px;padding:6px 8px"/></td>';
+      html += '<td class="col-actions" style="white-space:nowrap">'
+        + '<button class="bill-btn bill-btn-primary" id="rjBtn_' + inv.id + '" data-rj-act="valider" data-id="' + inv.id + '">🧾 Valider (impayée)</button> '
+        + '<button class="bill-btn bill-btn-ghost" data-rj-act="voir" data-id="' + inv.id + '" title="Ouvrir le brouillon">👁️</button> '
+        + '<button class="bill-btn bill-btn-ghost" data-rj-act="standby" data-id="' + inv.id + '" title="Mettre en standby">⏸</button>'
+        + '</td></tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+  if (suivi.length) {
+    html += '<div class="bill-card" style="border-color:rgba(16,185,129,.3);background:rgba(16,185,129,.04);margin-bottom:18px">';
+    html += '<div class="bill-card-h"><div><h3 style="color:#10b981">💶 Rejets finalement encaissés — ' + suivi.length + ' facture(s) émise(s) encore impayée(s)</h3>'
+      + '<p>GoCardless a encaissé après la validation de la facture de rejet. Marque-la encaissée (à prévenir le cabinet si le dossier lui a été transmis).</p></div></div>';
+    html += '<table class="bill-table"><thead><tr><th>Facture</th><th>Situation</th><th style="text-align:right">Montant TTC</th><th class="col-actions"></th></tr></thead><tbody>';
+    suivi.forEach(function(inv) {
+      var cs = inv.clientSnapshot || {};
+      var r = inv._rejetGc || {};
+      var cli = cs.companyName || ((cs.contactFirstName || '') + ' ' + (cs.contactLastName || '')).trim() || cs.email || '—';
+      var sit = r.etat === 'encaisse_apres_validation'
+        ? 'Le même prélèvement a été encaissé le ' + rjFrDate(r.encaisseLe) + '.'
+        : 'Rattrapé par un autre prélèvement (' + escapeHtml(r.rattrapePar || '') + ') encaissé le ' + rjFrDate(r.rattrapeLe) + '. Ce prélèvement a son propre brouillon dans la file : ne le valide PAS (mets-le en standby), sinon double facture.';
+      html += '<tr><td class="bill-col-main"><div style="font-weight:700;font-family:var(--font-m)">' + escapeHtml(inv.number || '') + '</div><div style="font-size:12px">' + escapeHtml(cli) + '</div></td>';
+      html += '<td class="bill-col-main" style="font-size:12px">' + sit + '</td>';
+      html += '<td class="bill-nowrap" style="text-align:right;font-weight:700;font-family:var(--font-m)">' + formatEur(inv.totalTtc || 0) + '</td>';
+      html += '<td class="col-actions" style="white-space:nowrap">'
+        + '<button class="bill-btn bill-btn-primary" data-rj-act="encaisser" data-id="' + inv.id + '">💶 Marquer encaissée</button> '
+        + '<button class="bill-btn bill-btn-ghost" data-rj-act="voir" data-id="' + inv.id + '">👁️</button> '
+        + '<button class="bill-btn bill-btn-ghost" data-rj-act="traite" data-id="' + inv.id + '" title="Retirer de cette liste sans rien changer à la facture">Traité</button>'
+        + '</td></tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+  return html;
+}
+
+async function validateRejet(invoiceId) {
+  var inv = invoicesCache.filter(function(x){ return x.id === invoiceId; })[0];
+  if (!inv) return toast('Facture introuvable', true);
+  var input = document.getElementById('rjDate_' + invoiceId);
+  var issueDate = input ? input.value : '';
+  if (!issueDate || !/^\d{4}-\d{2}-\d{2}$/.test(issueDate)) return toast('Date de facture invalide', true);
+  var ok = confirm('Valider la facture de ' + formatEur(inv.totalTtc || 0) + ' au ' +
+    new Date(issueDate + 'T12:00:00').toLocaleDateString('fr-FR') + ' ?\n\n' +
+    'Elle sera numérotée (définitif, irréversible), avec son PDF, et restera IMPAYÉE.\n' +
+    'Comme toute facture validée, elle est transmise à Qonto (et au réseau de facturation électronique si le client a un SIRET).');
+  if (!ok) return;
+  var btn = document.getElementById('rjBtn_' + invoiceId);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Validation…'; }
+  try {
+    var idToken = await firebase.auth().currentUser.getIdToken();
+    var vResp = await fetch('/api/invoice-validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({ invoiceId: invoiceId, issueDate: issueDate })
+    });
+    var vData = await vResp.json().catch(function(){ return {}; });
+    var sansPdf = false;
+    if (!vResp.ok) {
+      var em = vData.error || ('HTTP ' + vResp.status);
+      if (em.indexOf('Facture validée') < 0) throw new Error(em);
+      sansPdf = true;
+    }
+    try {
+      await db.collection('invoices').doc(invoiceId).update({
+        _pendingValidation: false,
+        '_rejetGc.valideeLe': new Date().toISOString()
+      });
+    } catch (_) {}
+    if (sansPdf) {
+      alert('Facture ' + (vData.number || '') + ' validée (impayée), mais son PDF n\'a pas pu être produit.\n\nRelance ⚡ Synchroniser avec Qonto sur cette facture (onglet Factures).');
+    } else {
+      toast('✅ Facture ' + (vData.number || '') + ' validée — impayée');
+    }
+  } catch (err) {
+    console.error('[validateRejet]', err);
+    toast('Erreur : ' + err.message, true);
+    if (btn) { btn.disabled = false; btn.textContent = '🧾 Valider (impayée)'; }
+  }
+}
+
+async function encaisserRejet(invoiceId) {
+  var inv = invoicesCache.filter(function(x){ return x.id === invoiceId; })[0];
+  if (!inv) return toast('Facture introuvable', true);
+  var r = inv._rejetGc || {};
+  var paidAt = r.etat === 'encaisse_apres_validation' ? r.encaisseLe : r.rattrapeLe;
+  var paidRef = r.etat === 'encaisse_apres_validation' ? inv.gcPaymentId : r.rattrapePar;
+  if (!paidAt || !/^\d{4}-\d{2}-\d{2}$/.test(paidAt)) return toast('Date d\'encaissement inconnue', true);
+  if (!confirm('Marquer la facture ' + (inv.number || '') + ' encaissée le ' + rjFrDate(paidAt) + ' (' + formatEur(inv.totalTtc || 0) + ') ?')) return;
+  try {
+    var idToken = await firebase.auth().currentUser.getIdToken();
+    var resp = await fetch('/api/invoice-mark-paid', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({ invoiceId: invoiceId, paidAmount: inv.totalTtc || 0, paidAt: paidAt, paidVia: 'gocardless', paymentRef: paidRef || null })
+    });
+    var data = await resp.json().catch(function(){ return {}; });
+    if (!resp.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+    try { await db.collection('invoices').doc(invoiceId).update({ '_rejetGc.etat': 'suivi_traite', '_rejetGc.traiteLe': new Date().toISOString() }); } catch (_) {}
+    toast('✅ Facture marquée encaissée');
+  } catch (err) {
+    toast('Erreur : ' + err.message, true);
+  }
+}
+
+async function rejetSuiviTraite(invoiceId) {
+  if (!confirm('Retirer cette facture de la liste « Rejets finalement encaissés » sans la marquer encaissée ?')) return;
+  try {
+    await db.collection('invoices').doc(invoiceId).update({ '_rejetGc.etat': 'suivi_traite', '_rejetGc.traiteLe': new Date().toISOString() });
+  } catch (err) { toast('Erreur : ' + err.message, true); }
+}
+
+document.addEventListener('click', function(ev) {
+  var el = ev.target && ev.target.closest ? ev.target.closest('[data-rj-act]') : null;
+  if (!el) return;
+  var id = el.getAttribute('data-id');
+  var act = el.getAttribute('data-rj-act');
+  if (act === 'valider') validateRejet(id);
+  else if (act === 'voir') editInvoice(id);
+  else if (act === 'standby') openStandbyDrawer(id);
+  else if (act === 'encaisser') encaisserRejet(id);
+  else if (act === 'traite') rejetSuiviTraite(id);
+  else if (act === 'scan') runRejetsScan(false);
+  else if (act === 'apply') runRejetsScan(true);
+  else if (act === 'auto') toggleRejetsAuto();
+});
 
 async function validateAndCollect(invoiceId) {
   var inv = invoicesCache.filter(function(x){ return x.id === invoiceId; })[0];
@@ -5744,6 +5955,124 @@ function initSyncTab() {
 }
 
 /* ─── SYNC GOCARDLESS ─── */
+
+/* ── Prélèvements rejetés : aperçu / création / passage automatique ── */
+var _rjLast = null;
+var _rjAuto = null;
+var RJ_ACTIONS = {
+  a_creer: '🆕 Brouillon à créer', cree: '✅ Brouillon créé', deja_cree: '• Déjà créé',
+  brouillon_a_convertir: '🔁 Brouillon « encaissé » à convertir en rejet', converti: '🔁 Converti en rejet',
+  facture_emise_rejet: '⚠️ Facture émise comme encaissée — à corriger', rattrape: '↩️ Rattrapé', ignore_ei: '• Client EI',
+  erreur: '⚠️ Erreur'
+};
+var RJ_RAPPRO = {
+  encaisse_brouillon_normal: '💶 Finalement encaissé → brouillon d\'encaissement normal',
+  encaisse_apres_validation: '💶 Finalement encaissé → facture à marquer encaissée',
+  rattrape_archive: '↩️ Rattrapé par un autre prélèvement → brouillon archivé',
+  rattrape_apres_validation: '↩️ Rattrapé après validation → à traiter',
+  representation_en_cours: '⏳ Représentation en cours',
+  erreur: '⚠️ Erreur'
+};
+
+async function rjCall(payload) {
+  var idToken = await firebase.auth().currentUser.getIdToken();
+  var resp = await fetch('/api/invoice-rejets', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+    body: JSON.stringify(payload)
+  });
+  var data = await resp.json().catch(function(){ return {}; });
+  if (!resp.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+  return data;
+}
+
+async function loadRejetsEtat() {
+  var btn = document.getElementById('rjAutoBtn');
+  var info = document.getElementById('rjAutoInfo');
+  if (!btn) return;
+  try {
+    var d = await rjCall({ action: 'etat' });
+    _rjAuto = d.rejetsAuto;
+    btn.textContent = _rjAuto ? '⏸ Couper le passage automatique' : '▶️ Activer le passage automatique (chaque nuit)';
+    var txt = 'Passage automatique : ' + (_rjAuto ? '<strong style="color:#10b981">activé</strong> (chaque nuit, 60 derniers jours)' : '<strong>désactivé</strong>');
+    if (d.dernierPassage) {
+      var t = d.dernierPassage.totaux || {};
+      txt += ' · dernier passage le ' + new Date(d.dernierPassage.at).toLocaleString('fr-FR') + ' : ' + (t.crees || 0) + ' brouillon(s) créé(s), ' + (d.dernierPassage.rapprochements || 0) + ' rapprochement(s)';
+    }
+    info.innerHTML = txt;
+  } catch (err) {
+    info.textContent = 'État indisponible : ' + err.message;
+  }
+}
+
+async function toggleRejetsAuto() {
+  if (_rjAuto === null) return;
+  var target = !_rjAuto;
+  if (!confirm(target ? 'Activer le passage automatique chaque nuit ?\n\nIl crée les brouillons des nouveaux rejets (60 derniers jours) et rapproche ceux déjà créés.' : 'Couper le passage automatique ?')) return;
+  try { await rjCall({ action: 'auto', enabled: target }); await loadRejetsEtat(); toast(target ? '✅ Passage automatique activé' : 'Passage automatique coupé'); }
+  catch (err) { toast('Erreur : ' + err.message, true); }
+}
+
+async function runRejetsScan(apply) {
+  var since = document.getElementById('rjSince').value || '2026-01-01';
+  var until = document.getElementById('rjUntil').value || new Date().toISOString().substring(0, 10);
+  var out = document.getElementById('rjResults');
+  var scanBtn = document.getElementById('rjScanBtn');
+  var applyBtn = document.getElementById('rjApplyBtn');
+  if (apply) {
+    if (!_rjLast) return toast('Lance d\'abord l\'aperçu', true);
+    if (!confirm('Créer ' + _rjLast.totaux.aCreer + ' brouillon(s) de prélèvement rejeté, en convertir ' + _rjLast.totaux.aConvertir + ' et appliquer ' + _rjLast.rapprochements.length + ' rapprochement(s) ?\n\nAucune facture n\'est numérotée : tout reste en brouillon dans « À valider ».')) return;
+  }
+  scanBtn.disabled = true; applyBtn.disabled = true;
+  out.innerHTML = '<div class="bill-loader"><span class="bill-spinner"></span> ' + (apply ? 'Création des brouillons…' : 'Scan GoCardless en cours (jusqu\'à 1 min)…') + '</div>';
+  try {
+    var d = await rjCall({ action: 'scan', since: since, until: until, apply: apply });
+    if (!apply) _rjLast = d; else _rjLast = null;
+    out.innerHTML = renderRejetsResults(d);
+    if (!apply && (d.totaux.aCreer > 0 || d.totaux.aConvertir > 0 || d.rapprochements.some(function(x){ return x.action !== 'representation_en_cours' && x.action !== 'erreur'; }))) {
+      applyBtn.disabled = false;
+      applyBtn.textContent = '✅ Créer ' + d.totaux.aCreer + ' brouillon(s)' + (d.totaux.aConvertir ? ' et en convertir ' + d.totaux.aConvertir : '');
+    } else {
+      applyBtn.textContent = apply ? '✅ Fait' : '✅ Rien à créer';
+    }
+    if (apply) { toast('✅ ' + d.totaux.crees + ' brouillon(s) créé(s)'); loadRejetsEtat(); }
+  } catch (err) {
+    out.innerHTML = '<div style="padding:12px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;color:#ef4444">❌ ' + escapeHtml(err.message) + '</div>';
+  } finally {
+    scanBtn.disabled = false;
+  }
+}
+
+function renderRejetsResults(d) {
+  var t = d.totaux || {};
+  var html = '<div style="font-size:13px;margin-bottom:10px">' + (d.apply ? '<strong>Exécuté</strong>' : '<strong>Aperçu à blanc</strong> — rien n\'a été écrit')
+    + ' · ' + t.scannes + ' rejet(s) GoCardless · ' + (d.apply ? t.crees + ' créé(s)' : t.aCreer + ' à créer')
+    + ' · ' + (d.apply ? t.convertis + ' converti(s)' : t.aConvertir + ' brouillon(s) à convertir') + ' · ' + t.facturesEmisesRejet + ' facture(s) émise(s) à corriger · ' + t.dejaCrees + ' déjà créé(s) · ' + t.rattrapes + ' rattrapé(s) · ' + t.ei + ' EI · ' + t.erreurs + ' erreur(s)</div>';
+  (d.warnings || []).forEach(function(w){ html += '<div style="color:#f59e0b;font-size:12px">⚠️ ' + escapeHtml(w) + '</div>'; });
+  if ((d.rejets || []).length) {
+    html += '<table class="bill-table"><thead><tr><th>Client</th><th>Prélèvement</th><th style="text-align:right">Montant</th><th>Statut GC</th><th>Résultat</th></tr></thead><tbody>';
+    d.rejets.forEach(function(r) {
+      var det = r.motif ? escapeHtml(r.motif) : '';
+      if (r.rattrapage) det = 'par ' + escapeHtml(r.rattrapage.gcPaymentId) + ' le ' + rjFrDate(r.rattrapage.chargeDate);
+      if (r.note) det = escapeHtml(r.note);
+      if (r.error) det = escapeHtml(r.error);
+      html += '<tr><td class="bill-col-main">' + escapeHtml(r.clientName || '?') + '</td>'
+        + '<td class="bill-nowrap" style="font-size:12px">' + rjFrDate(r.chargeDate) + '<div style="font-size:10px;color:var(--muted)">' + escapeHtml(r.gcPaymentId) + '</div></td>'
+        + '<td class="bill-nowrap" style="text-align:right;font-family:var(--font-m)">' + formatEur(r.amount || 0) + '</td>'
+        + '<td style="font-size:12px">' + escapeHtml(r.gcStatus || '') + '</td>'
+        + '<td style="font-size:12px">' + (RJ_ACTIONS[r.action] || escapeHtml(r.action)) + (det ? '<div style="font-size:11px;color:var(--muted)">' + det + '</div>' : '') + '</td></tr>';
+    });
+    html += '</tbody></table>';
+  }
+  if ((d.rapprochements || []).length) {
+    html += '<div style="font-weight:700;margin:14px 0 6px">Rapprochements</div><table class="bill-table"><tbody>';
+    d.rapprochements.forEach(function(x) {
+      html += '<tr><td class="bill-col-main">' + escapeHtml(x.clientName || '') + ' ' + escapeHtml(x.number || '(brouillon)') + '</td><td style="font-size:12px">' + (RJ_RAPPRO[x.action] || escapeHtml(x.action)) + (x.error ? ' — ' + escapeHtml(x.error) : '') + '</td></tr>';
+    });
+    html += '</tbody></table>';
+  }
+  return html;
+}
 
 async function runGcSyncDryRun() {
   const since = document.getElementById('syncSince').value || '2026-01-01';

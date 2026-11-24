@@ -360,6 +360,25 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   `api/invoice-*.js`, `api/subscription-generate-invoice.js`,
   helpers `api/_billing-*.js` — **admin uniquement**
 - **Paiements** : `payments.html`, `api/gocardless-*.js`
+- **Prélèvements rejetés → factures impayées (24/11/2026)** : `api/invoice-rejets.js`. Avant, seule la Cloud Function
+  sur `paid_out` créait une facture : un rejet ne laissait aucune pièce pour le cabinet de recouvrement. Chaque prélèvement
+  GoCardless `failed` / `customer_approval_denied` / `charged_back` (sans facture existante) crée un BROUILLON
+  `_pendingValidation` portant `_rejetGc` (`etat`, `gcStatus`, `chargeDate`, `cause`, `motif` FR, `reasonCode`, `historique`),
+  rangé dans « À valider » → « ❌ Prélèvements rejetés » ; « 🧾 Valider (impayée) » = `invoice-validate` seul (numéro + PDF
+  à la date du prélèvement), JAMAIS `invoice-mark-paid`. Exclus : facture déjà sur ce `gcPaymentId`, client EI, rejet RATTRAPÉ
+  par un autre prélèvement encaissé du même mandat et même montant (sa facture naît de celui-là). Prélèvement encaissé PUIS
+  rejeté (échec tardif, contestation) : son brouillon « Paiement reçu » est CONVERTI en brouillon de rejet
+  (`_rejetGc.convertiDepuisEncaissement`, ancienne mention gardée dans `_notesPublicAvantRejet`) ; déjà émis → signalé seulement
+  (`facture_emise_rejet`). Rapprochement à chaque passage
+  (`_rejetGc.etat === 'actif'`) : même prélèvement finalement `paid_out` → brouillon redevenu encaissement normal
+  (`encaisse_apres_rejet`) ou facture émise à marquer encaissée (`encaisse_apres_validation`, liste « 💶 Rejets finalement
+  encaissés ») ; compteurs `payments.paidCount/paymentsHistory` et `subscriptions.installmentsPaidOnGC` posés ici car la Cloud
+  Function s'arrête dès qu'une facture porte le `gcPaymentId`. Rattrapé par un autre prélèvement → brouillon archivé
+  (`_archived`, motif) ou `rattrape_apres_validation` (risque de double facture, signalé). Cron quotidien 05:25 UTC, n'écrit que si
+  `_config/billing.rejetsAuto === true` (bouton de l'onglet Synchro, 60 derniers jours) ; trace `_config/billing.rejetsDernierPassage`
+  + `audit_log` type `gocardless_rejets`. Aperçu / création manuels dans Synchro (à blanc d'abord). Accès manuel temporaire :
+  clé Vercel `REJETS_KEY` (`GET ?key=…[&apply=1]`). Filtre « ❌ Prélèvement rejeté » + badge dans la liste des factures.
+  Non couverts : mandats en échec SANS aucun prélèvement (rien à rejeter chez GoCardless) → facture manuelle.
 - **Dialer** : `sales-dialer.html/.css/.js`, `dialer-bridge.js`, `api/dialer-*.js` —
   visible **uniquement** pour les rôles `sales` et `admin`, **jamais** pour `coach`
 - **AlteoForms** : `alteoforms.html` (builder), `alteoforms-render.html` (rendu public),
