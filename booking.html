@@ -11,7 +11,7 @@ var q=location.search.replace(/^\?/,'');
 location.replace('/sandbox-frame.html?page=booking.html'+(q?'&'+q:'')+location.hash);
 document.write('<plaintext style="display:none">');})();</script>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Réserver un rendez-vous — Alteore</title>
+<title>Réserver un rendez-vous — Adrien &amp; Emily</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -68,7 +68,7 @@ body.bk-embed .bk-card{max-width:none;border:0;border-radius:0;box-shadow:none;g
 
 /* ── COLONNE D'INFO ── */
 .bk-brand{display:flex;align-items:center;gap:10px;margin-bottom:24px}
-.bk-brand-logo{width:32px;height:32px;border-radius:10px;background:var(--navy);display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-size:15px;font-weight:800;color:#fff}
+.bk-brand-logo{width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#3b82f6 0%,#22d3ee 100%);display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-size:13px;font-weight:800;letter-spacing:-.3px;color:var(--navy)}
 .bk-brand-name{font-family:var(--fh);font-size:16px;font-weight:800;color:var(--text)}
 .bk-i-title{font-family:var(--fh);font-size:22px;font-weight:800;letter-spacing:-.3px;line-height:1.2;color:var(--text)}
 .bk-i-meta{display:flex;flex-direction:column;gap:8px;margin:16px 0;font-size:14px;font-weight:500;color:var(--text2)}
@@ -333,8 +333,8 @@ body.bk-embed .bk-panel-right{padding:4px 16px 16px}
   <!-- INFO : colonne en page seule, une ligne en iframe et sur petit écran -->
   <div class="bk-panel-left">
     <div class="bk-brand">
-      <div class="bk-brand-logo">A</div>
-      <div class="bk-brand-name">Alteore</div>
+      <div class="bk-brand-logo">AE</div>
+      <div class="bk-brand-name">Adrien &amp; Emily</div>
     </div>
     <div class="bk-info" id="infoPanel"></div>
     <div class="bk-tz" id="tzDisplay">🌍 <span id="tzLabel"></span></div>
@@ -3338,12 +3338,12 @@ document.getElementById('icsBtn').addEventListener('click', function() {
     if (phone) descLines.push('Téléphone : ' + phone);
   }
   descLines.push('');
-  descLines.push('Réservé via Ambitio Booking');
+  descLines.push('Réservé auprès d\'Adrien & Emily');
   var description = descLines.join('\n');
 
   // Organisateur : Ambitio (ou personEmail si dispo)
   var orgEmail = personEmail || 'contact@adrienemily.com';
-  var orgName = personName || 'Ambitio';
+  var orgName = personName || 'Adrien & Emily';
 
   // UID stable basé sur bookingId si dispo, sinon timestamp
   var uid = (S.confirmedBookingId || ('booking-' + Date.now())) + '@team.alteore.com';
@@ -3393,7 +3393,7 @@ document.getElementById('icsBtn').addEventListener('click', function() {
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
   a.href = url;
-  a.download = 'rdv-ambitio.ics';
+  a.download = 'rdv-adrien-emily.ics';
   a.click();
   URL.revokeObjectURL(url);
 });
