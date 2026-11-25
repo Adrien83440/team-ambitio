@@ -1334,6 +1334,28 @@
     return t;
   }
 
+  /* « PRÉLEVÉ SUR LA PÉRIODE » (glossaire `preleve_periode`) — l'argent
+     réellement rentré pendant la période : tous les prélèvements passés dont
+     la DATE tombe entre startMs et endMs, TOUS clients (anciens compris),
+     hors taxes, brouillons exclus. Ce n'est PAS le « Collecté », qui suit les
+     clients gagnés pendant la période, jusqu'à aujourd'hui. Une seule
+     fonction pour Qualité leads, Projections et le funnel.
+     → { total, lignes: [{ p (le paiement), ht }] } — une ligne par paiement
+     ayant au moins un prélèvement dans la période. */
+  function cashInPeriod(payments, startMs, endMs) {
+    var total = 0, lignes = [];
+    (payments || []).forEach(function (p) {
+      if (!p || p.status === 'draft') return;
+      var amt = 0;
+      revPaidEntries(p).forEach(function (e) { if (e.ms != null && e.ms >= startMs && e.ms <= endMs) amt += e.ht; });
+      if (amt <= 0.005) return;
+      amt = Math.round(amt * 100) / 100;
+      total += amt;
+      lignes.push({ p: p, ht: amt });
+    });
+    return { total: Math.round(total * 100) / 100, lignes: lignes };
+  }
+
   /* Bilan d'UN client à partir de SES paiements (déjà rattachés).
      lead = fiche CRM (ou null) · decl = { contracte, collecte } des cartes.
      → { cancelled, reason, paid, con, pending, hasPay, declCol } — HT. */
@@ -1906,7 +1928,11 @@
       if (p.leadId) {
         pr = db.collection('leads').doc(p.leadId).get().then(function (snap) {
           if (!snap.exists) return [];
-          var d = snap.data(); d._id = snap.id; return [d];
+          var d = snap.data(); d._id = snap.id;
+          /* Fiche fusionnée : ce n'est plus un client — on cherche la fiche
+             gardée par e-mail puis téléphone (audit 25/11/2026). */
+          if (d._merged === true) return [];
+          return [d];
         }).catch(function () { return []; });
       } else pr = Promise.resolve([]);
       return pr.then(function (list) {
@@ -2750,6 +2776,12 @@
     k.collecteParClose = k.closes.collecteParClose;   /* collecté ÷ closes (l'ancien « AOV ») */
     k.collecteMissing = k.closes.sansPaiement;
     k.closesNoPayment = k.closes.sansPaiement;
+    /* « Prélevé sur la période » (argent rentré pendant la période, tous
+       clients) n'est PAS posé dans K : K part tel quel vers le lien Agence
+       (liste d'exclusion dans api/agency-funnel.js), et ce chiffre-là — tout
+       l'argent rentré, anciens clients compris — n'a pas à sortir de la
+       maison. Une page interne l'obtient par
+       FunnelCore.cashInPeriod(DATA.payments, début, fin). */
     k.collecteMissingNames = [];
     k.payCloseNames = [];
     /* Canal du close : d'où vient l'information (RDV, réponse du closer,
@@ -3224,7 +3256,10 @@
        total soit lisible sans être déguisé en ratio.
        Le second ROAS est calculé plus bas, une fois les coûts connus. */
     k.cacAds  = (k.spend > 0 && closesAds > 0) ? k.spend / closesAds : null;
+    /* k.aovAds = « Collecté / close » des clients venus de la pub (le mot
+       « AOV » disparaît) ; leur panier moyen (contracté ÷ closes) est à part. */
     k.aovAds  = (closesAds > 0 && wonColAds > 0) ? wonColAds / closesAds : null;
+    k.panierMoyenAds = closesAds > 0 ? wonConAds / closesAds : null;
 
     /* Conservé pour l'historique et la vue agence, mais ce n'est PAS un
        ROAS : c'est le rapport de tout le chiffre à la seule dépense pub. */
@@ -3489,6 +3524,8 @@
     /* REVENUE — close annulé / encaissé réel (SET NB, Close SB, Projections) */
     revHT: revHT, revIndex: revIndex, revPaymentsFor: revPaymentsFor,
     revPaidEntries: revPaidEntries, revPaidHT: revPaidHT, revClient: revClient,
+    /* « Prélevé sur la période » : prélèvements datés dans la période, tous clients. */
+    cashInPeriod: cashInPeriod,
     /* CLOSES — la liste unique (25/11/2026) */
     buildCloses: buildCloses, sumCloses: sumCloses, loadCloses: loadCloses, loadCloseBookings: loadCloseBookings,
     CLOSED_LEADS_LIMIT: CLOSED_LEADS_LIMIT,

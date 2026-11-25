@@ -502,7 +502,19 @@
     taux_set: { mot: 'Sets / décrochés', texte: 'Sets de la période ÷ appels décrochés de la période : efficacité du setting au téléphone.' },
     /* ── Chiffres saisis à la main ── */
     declare: { mot: 'Déclaré', texte: 'Chiffre saisi à la main par le membre, non vérifié. Le chiffre officiel est celui calculé à partir des RDV et des paiements.' },
-    ancienne_saisie: { mot: 'Ancienne saisie', texte: 'Chiffres de l’ancienne saisie hebdomadaire, arrêtée en juillet 2026. Depuis, les chiffres sont calculés à partir des RDV et des paiements.' }
+    ancienne_saisie: { mot: 'Ancienne saisie', texte: 'Chiffres de l’ancienne saisie hebdomadaire, arrêtée en juillet 2026. Depuis, les chiffres sont calculés à partir des RDV et des paiements.' },
+    /* ── Contrôles et cas particuliers (ajoutés à la demande des écrans) ── */
+    deplaces_sans_suite: { mot: 'Déplacés sans nouveau créneau', texte: 'RDV pris pendant la période puis déplacés, dont le nouveau créneau n’est pas connu. Ils ne sont ni annulés ni maintenus : comptés dans RDV pris, pas dans le Kept ni dans le show-up.' },
+    taux_no_show: { mot: 'Taux de no-show', texte: 'No-show ÷ RDV maintenus déjà passés (Kept moins les RDV à venir). Show-up + taux de no-show + part des RDV à statuer = 100 %.' },
+    kept_pct: { mot: 'Kept %', texte: 'Kept ÷ RDV de la période : part des RDV qui n’ont pas été annulés. Les RDV déplacés n’y entrent pas.' },
+    doublons_supprimes: { mot: 'Doublons supprimés', texte: 'RDV créés deux fois pour le même prospect, dont un exemplaire a été supprimé par le nettoyage. Ils ne sont comptés nulle part.' },
+    clientes_sans_vente: { mot: 'Fiches clientes sans vente enregistrée', texte: 'Fiches marquées clientes pendant la période sans aucune trace de vente : ni étape « gagné », ni RDV au résultat Close, ni paiement, ni contrat signé. Elles ne comptent pas dans Closes : à vérifier sur la fiche.' },
+    ecart_canal: { mot: 'Écarts de canal', texte: 'Closes dont le RDV dit Self Booking et la réponse du closer dit Setting (ou l’inverse). Le close est compté selon le RDV ; la commission suit la réponse du closer.' },
+    canal_inconnu: { mot: 'Canal inconnu', texte: 'Closes sans RDV closé, sans réponse du closer et sans étape « gagné » : on ne sait pas s’ils viennent du Self Booking ou du Setting. Ils sont rangés en Setting.' },
+    rdv_closes_hors_periode: { mot: 'RDV closés sans close sur la période', texte: 'RDV de la période au résultat Close dont le client n’est pas un close de la période : il a été gagné à une autre date, ou sa fiche n’est jamais passée cliente.' },
+    doublons_rdv_closes: { mot: 'Clients à deux RDV closés', texte: 'Clients qui ont deux RDV au résultat Close. Un seul close est compté ; son canal, son closer et son setter sont ceux du premier RDV.' },
+    rdv_pris_hors_tunnel: { mot: 'RDV pris hors tunnel', texte: 'RDV pris pendant la période par un lead plus ancien ou sans fiche : il n’est rangé ni en Élite ni en Business. Élite + Business + hors tunnel = RDV pris.' },
+    lecture_incomplete: { mot: 'Lecture incomplète', texte: 'Une lecture a échoué ou a atteint son plafond : les chiffres concernés sont partiels. Recharge la page ou réduis la période.' }
   };
 
   function mot(cle) { return G[cle] ? G[cle].mot : ''; }
