@@ -275,7 +275,7 @@
       });
 
       // 2. Tél : matching robuste sur les 9 derniers chiffres
-      //    (gère +33631212932 / 0631212932 / 33631212932 / 0033631212932 → tous match)
+      //    (gère +33600000000 / 0600000000 / 33600000000 / 0033600000000 → tous match)
       var byTel = {};
       leads.forEach(function(l){
         var t = l.telephone || l.phone;
@@ -389,6 +389,85 @@
       return best;
     }
 
+    /* leads.clientSince à la fusion (25/11/2026). La date de gain s'écrit en
+       Timestamp (en texte, la fiche est invisible des requêtes par date : Stats
+       funnel, closes) et n'est JAMAIS réécrite si la fiche principale en a déjà
+       une (référentiel du 25/11/2026). Avant, la fusion générique recopiait le
+       texte d'un doublon tel quel, et un Timestamp choisi dans un conflit
+       repartait en simple map {seconds, nanoseconds} (aller-retour JSON).
+       Règle de lecture du texte = celle de api/reprise-donnees.js (analyser) et
+       des pages CSM : 'AAAA-MM-JJ' et 'JJ/MM/AAAA' → midi à UTC+1 de ce jour ;
+       date-heure ISO → l'instant (sans fuseau = heure de Paris) ; autre → null. */
+    function heureParisMs(y, m0, d, hh, mi, ss){
+      var guess = Date.UTC(y, m0, d, hh, mi, ss);
+      function commeParis(ms){
+        var o = {};
+        new Intl.DateTimeFormat('en-GB', { timeZone:'Europe/Paris', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hourCycle:'h23' })
+          .formatToParts(new Date(ms)).forEach(function(p){ o[p.type] = p.value; });
+        return Date.UTC(+o.year, +o.month - 1, +o.day, o.hour === '24' ? 0 : +o.hour, +o.minute, ss);
+      }
+      try {
+        var out = guess - (commeParis(guess) - guess);
+        var r = commeParis(out);
+        if(r !== guess) out = out - (r - guess);
+        return out;
+      } catch(e){ return guess - 3600000; }
+    }
+    function dateEntreeVersMs(v){
+      if(typeof v !== 'string') return null;
+      var s = v.trim(), m;
+      function jourOk(y, mo, d){
+        if(!(y >= 2000 && y <= 2100) || !(mo >= 1 && mo <= 12) || !(d >= 1 && d <= 31)) return false;
+        var t = new Date(Date.UTC(y, mo - 1, d));
+        return t.getUTCFullYear() === y && t.getUTCMonth() === mo - 1 && t.getUTCDate() === d;
+      }
+      m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+      if(m) return jourOk(+m[1], +m[2], +m[3]) ? Date.UTC(+m[1], +m[2] - 1, +m[3], 11) : null;
+      m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+      if(m) return jourOk(+m[3], +m[2], +m[1]) ? Date.UTC(+m[3], +m[2] - 1, +m[1], 11) : null;
+      m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/.exec(s);
+      if(!m || !jourOk(+m[1], +m[2], +m[3]) || +m[4] > 23 || +m[5] > 59 || (m[6] != null && +m[6] > 59)) return null;
+      if(m[7]){ var z = Date.parse(s); if(!isNaN(z)) return z; }
+      return heureParisMs(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0));
+    }
+    /* Map {seconds, nanoseconds} (Timestamp passé par JSON) → vrai Timestamp. */
+    function estMapTimestamp(v){
+      if (!v || typeof v !== 'object' || Array.isArray(v) || typeof v.toDate === 'function') return false;
+      var ks = Object.keys(v).sort();
+      return ks.length === 2 && ks[0] === 'nanoseconds' && ks[1] === 'seconds' &&
+        typeof v.seconds === 'number' && typeof v.nanoseconds === 'number';
+    }
+    function versTimestamp(v){
+      return estMapTimestamp(v) ? new firebase.firestore.Timestamp(v.seconds, v.nanoseconds) : v;
+    }
+    function clientSinceMs(v){
+      if (v && typeof v.toMillis === 'function') return v.toMillis();
+      if (estMapTimestamp(v)) return v.seconds * 1000 + Math.floor(v.nanoseconds / 1e6);
+      return dateEntreeVersMs(v);
+    }
+    /* Ce que la fusion écrit pour clientSince : null = rien (la fiche principale
+       a déjà un Timestamp, ou aucune date lisible dans le groupe — un texte
+       illisible reste tel quel et sera signalé par la reprise des données).
+       Sinon le PLUS ANCIEN instant lisible du groupe, en Timestamp ; si la
+       principale portait un texte, il est gardé dans clientSinceTexte (même
+       champ voisin que la reprise : rien n'est perdu). */
+    function clientSinceFusion(cluster, primary){
+      var pv = primary.clientSince;
+      if (pv && typeof pv.toDate === 'function') return null;
+      var best = null;
+      cluster.forEach(function(l){
+        var ms = clientSinceMs(l.clientSince);
+        if (ms != null && isFinite(ms) && (best == null || ms < best)) best = ms;
+      });
+      if (best == null) return null;
+      var out = { clientSince: firebase.firestore.Timestamp.fromMillis(best) };
+      if (pv != null && pv !== '' && !estMapTimestamp(pv) &&
+          !Object.prototype.hasOwnProperty.call(primary, 'clientSinceTexte')) {
+        out.clientSinceTexte = pv;
+      }
+      return out;
+    }
+
     function buildMergePlan(cluster, primaryId){
       var primary = null, secondaries = [];
       cluster.forEach(function(l){
@@ -406,6 +485,14 @@
 
       Object.keys(allKeys).forEach(function(k){
         if (SKIP_KEYS.indexOf(k) >= 0) return;
+        if (k === 'clientSince') {
+          var cs = clientSinceFusion(cluster, primary);
+          if (cs) Object.keys(cs).forEach(function(kk){ autoFields[kk] = cs[kk]; });
+          return;
+        }
+        /* Trace de la reprise : posée seulement par clientSinceFusion, jamais
+           recopiée d'un doublon (qui garde la sienne). */
+        if (k === 'clientSinceTexte') return;
 
         // Collecter les valeurs non-vides depuis tous les docs
         var values = [];
@@ -748,7 +835,8 @@
         html += '<h4>✓ '+autoCount+' champ'+(autoCount > 1 ? 's' : '')+' auto-fusionné'+(autoCount > 1 ? 's' : '')+' (valeur unique non-vide ou union de tableaux)</h4>';
         Object.keys(plan.autoFields).forEach(function(k){
           var v = plan.autoFields[k];
-          var display = typeof v === 'object' ? JSON.stringify(v).substring(0, 100) : String(v).substring(0, 100);
+          var display = (v && typeof v.toDate === 'function') ? v.toDate().toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' }) :
+            typeof v === 'object' ? JSON.stringify(v).substring(0, 100) : String(v).substring(0, 100);
           html += '<div class="auto-field"><strong>'+escapeHtml(k)+'</strong> = '+escapeHtml(display)+'</div>';
         });
         html += '</div>';
@@ -918,7 +1006,9 @@
             var v = JSON.parse(raw);
             // Skip if same as current primary value
             if (JSON.stringify(plan.primary[k]) !== JSON.stringify(v)) {
-              patch[k] = v;
+              /* Un Timestamp choisi revient de JSON en map {seconds,
+                 nanoseconds} : le réécrire en vrai Timestamp. */
+              patch[k] = versTimestamp(v);
             }
           } catch(e) {}
         });

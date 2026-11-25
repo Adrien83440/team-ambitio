@@ -47,3 +47,20 @@ patch_firestore_longpolling.py
 # Dump de dates issu de l'ancien CRM Bigin : 202 Ko d'identifiants et
 # d'horodatages, uniquement utile aux outils d'import ponctuels.
 bigin_dates.json
+
+# Anciens outils d'import ponctuels et ancienne page « Suivi client » (25/11/2026).
+# Ils portent en dur des noms, e-mails et telephones de prospects et de clients
+# (exports CRM de plusieurs milliers de lignes). Une page statique est servie a
+# tout le monde, SANS connexion : ces fichiers restent dans le depot (rien n'est
+# supprime) mais ne sont plus deployes. Aucune page du menu ne les charge :
+# - import-bigin.html, migrate-clients.html, retargeting-migrate.html : imports
+#   deja joues (les donnees sont en base, collection leads) ;
+# - retargeting-data.js : ne servait plus qu'a l'import ponctuel de la page
+#   Retargeting, masque des que _meta/retargeting_migrated existe ;
+# - sales-suivi-client.html : ancienne page hors menu, remplacee par les fiches
+#   clients (ses modifications ne vivaient que dans le navigateur).
+import-bigin.html
+migrate-clients.html
+retargeting-migrate.html
+retargeting-data.js
+sales-suivi-client.html

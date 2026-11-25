@@ -3,6 +3,25 @@
    sales-crm-app.js
    ═══════════════════════════════════════════ */
 var db = firebase.firestore();
+/* leads.clientSince = jour où le client est GAGNÉ : posé UNE fois, jamais
+   réécrit s'il existe (référentiel du 25/11/2026, comme alteore-flow.js et
+   csmMarkLeadAsClient). Avant, chaque passage en closed_won_* (glisser-déposer,
+   mise à jour groupée, modale, « Marquer client ») le remettait à aujourd'hui :
+   un client gagné en septembre et reclassé en novembre quittait septembre dans
+   le Stats funnel. Relu dans une transaction (la copie locale peut être en
+   retard) ; une date déjà là, même en texte, n'est pas touchée (la reprise des
+   données la convertit). Sans isClient dans upd : simple update, comme avant. */
+function majLeadClient(ref,upd){
+  if(upd.isClient!==true)return ref.update(upd);
+  return db.runTransaction(function(tx){
+    return tx.get(ref).then(function(sn){
+      var u={},k,cur=sn.exists?(sn.data()||{}):{};
+      for(k in upd){if(Object.prototype.hasOwnProperty.call(upd,k)&&k!=='clientSince')u[k]=upd[k];}
+      if(cur.clientSince==null||cur.clientSince==='')u.clientSince=firebase.firestore.FieldValue.serverTimestamp();
+      tx.update(ref,u);
+    });
+  });
+}
 
 /* ═══ CONFIG ═══ */
 var STAGES=[
@@ -774,8 +793,9 @@ document.getElementById('bulkStageDD').addEventListener('click',function(e){
   var ids=Object.keys(selectedIds).filter(function(k){return selectedIds[k];});if(!ids.length)return;
   /* Un close = un contrat + des commissions : ça se valide lead par lead. */
   if(ns==='closing'){toast('🏆 Le close se valide lead par lead — ouvre le lead et clique « Closing » (cartes)');document.getElementById('bulkStageDD').classList.remove('open');return;}
-  var batch=db.batch();ids.forEach(function(id){var upd={stage:ns,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};if(S2S[ns])upd.status=S2S[ns];if(ns==='closed_won_setting'||ns==='closed_won_self'){upd.isClient=true;upd.clientSince=firebase.firestore.FieldValue.serverTimestamp();}batch.update(db.collection('leads').doc(id),upd);for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===id){allLeads[i].stage=ns;break;}}});
-  batch.commit().then(function(){toast('✅ '+ids.length+' → '+(SM[ns]?SM[ns].label:ns));clearSelection();renderAll();});
+  var batch=db.batch(),proms=[],won=(ns==='closed_won_setting'||ns==='closed_won_self');ids.forEach(function(id){var upd={stage:ns,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};if(S2S[ns])upd.status=S2S[ns];if(won){upd.isClient=true;proms.push(majLeadClient(db.collection('leads').doc(id),upd));}else batch.update(db.collection('leads').doc(id),upd);for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===id){allLeads[i].stage=ns;break;}}});
+  proms.push(batch.commit());
+  Promise.all(proms).then(function(){toast('✅ '+ids.length+' → '+(SM[ns]?SM[ns].label:ns));clearSelection();renderAll();}).catch(function(err){toast('❌ '+(err&&err.message?err.message:err));});
   document.getElementById('bulkStageDD').classList.remove('open');
 });
 document.getElementById('bulkSetterBtn').addEventListener('click',function(){
@@ -813,7 +833,7 @@ board.addEventListener('dragleave',function(e){var d=e.target.closest('[data-dro
 board.addEventListener('drop',function(e){e.preventDefault();var d=e.target.closest('[data-drop]');if(!d||!draggedLeadId)return;d.classList.remove('drag-over');var ns=d.dataset.drop,lid=draggedLeadId;draggedLeadId=null;
 /* Déposer sur « Closing » → cartes du close (le wizard écrit tout). */
 if(ns==='closing'){openCloseWizard(lid);return;}
-for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===lid){allLeads[i].stage=ns;break;}}renderAll();var upd={stage:ns,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};if(S2S[ns])upd.status=S2S[ns];if(ns==='closed_won_setting'||ns==='closed_won_self'){upd.isClient=true;upd.clientSince=firebase.firestore.FieldValue.serverTimestamp();}db.collection('leads').doc(lid).update(upd).then(function(){toast('→ '+(SM[ns]?SM[ns].label:ns));}).catch(function(err){toast('❌ '+err.message);});});
+for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===lid){allLeads[i].stage=ns;break;}}renderAll();var upd={stage:ns,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};if(S2S[ns])upd.status=S2S[ns];if(ns==='closed_won_setting'||ns==='closed_won_self'){upd.isClient=true;}majLeadClient(db.collection('leads').doc(lid),upd).then(function(){toast('→ '+(SM[ns]?SM[ns].label:ns));}).catch(function(err){toast('❌ '+err.message);});});
 
 /* ═══ CLICKS ═══ */
 board.addEventListener('click',function(e){var eye=e.target.closest('[data-action="quickview"]');if(eye){e.stopPropagation();openQV(eye.dataset.id,eye);return;}if(e.target.closest('.crm-card')&&!draggedLeadId)openModal(e.target.closest('.crm-card').dataset.id);});
@@ -829,7 +849,7 @@ function saveSheetRow(tr){var lid=tr.dataset.sid,upd={};tr.querySelectorAll('[da
    écrit ici — le wizard s'en charge) ; les AUTRES champs de la ligne sont
    quand même sauvegardés. */
 if(upd.stage==='closing'){var _l0=null;for(var z=0;z<allLeads.length;z++){if(allLeads[z].id===lid){_l0=allLeads[z];break;}}delete upd.stage;if(!_l0||effStage(_l0)!=='closing'){if(sheetTimer){clearTimeout(sheetTimer);sheetTimer=null;}openCloseWizard(lid);}}
-upd.updatedAt=firebase.firestore.FieldValue.serverTimestamp();if(upd.stage&&S2S[upd.stage])upd.status=S2S[upd.stage];if(upd.stage&&(upd.stage==='closed_won_setting'||upd.stage==='closed_won_self')){upd.isClient=true;upd.clientSince=firebase.firestore.FieldValue.serverTimestamp();}for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===lid){for(var k in upd){if(k!=='updatedAt')allLeads[i][k]=upd[k];}break;}}db.collection('leads').doc(lid).update(upd).then(function(){toast('✅ Sauvegardé');}).catch(function(err){toast('❌ '+err.message);});}
+upd.updatedAt=firebase.firestore.FieldValue.serverTimestamp();if(upd.stage&&S2S[upd.stage])upd.status=S2S[upd.stage];if(upd.stage&&(upd.stage==='closed_won_setting'||upd.stage==='closed_won_self')){upd.isClient=true;}for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===lid){for(var k in upd){if(k!=='updatedAt')allLeads[i][k]=upd[k];}break;}}majLeadClient(db.collection('leads').doc(lid),upd).then(function(){toast('✅ Sauvegardé');}).catch(function(err){toast('❌ '+err.message);});}
 
 /* ═══ QUICK VIEW ═══ */
 var qvTimer=null,qvLid=null;
@@ -873,7 +893,7 @@ function mF(l,k,v){return'<div class="crm-modal-field"><span class="crm-modal-fi
 
 document.getElementById('modalBg').addEventListener('click',function(e){var dcT=e.target.closest('[data-action="dialerCall"]');if(dcT){e.stopPropagation();e.preventDefault();if(window.DialerBridge&&dcT.dataset.phone){window.DialerBridge.callLead(this._leadId||null,dcT.dataset.phone,dcT.dataset.name||null);}else if(!window.DialerBridge){console.warn('[DialerBridge] non chargé');}return;}var cdT=e.target.closest('[data-action="callDetail"]');if(cdT){e.stopPropagation();var ccid=cdT.dataset.cid;if(ccid&&window.CallDetailModal)window.CallDetailModal.open(ccid);return;}if(e.target===this)this.classList.remove('open');if(e.target.closest('[data-action="closeModal"]'))this.classList.remove('open');var sp=e.target.closest('[data-action="setStage"]');if(sp){var ns=sp.dataset.stage,lid=this._leadId;
 if(ns==='closing'){this.classList.remove('open');openCloseWizard(lid);return;}
-for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===lid){allLeads[i].stage=ns;break;}}document.querySelectorAll('.crm-stage-pill').forEach(function(p){p.classList.remove('active');p.style.color='';p.style.borderColor='';p.style.background='';});sp.classList.add('active');var sO=SM[ns];if(sO){sp.style.color=sO.color;sp.style.borderColor=sO.color;sp.style.background=sO.color+'18';}renderAll();var upd={stage:ns,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};if(S2S[ns])upd.status=S2S[ns];if(ns==='closed_won_setting'||ns==='closed_won_self'){upd.isClient=true;upd.clientSince=firebase.firestore.FieldValue.serverTimestamp();}db.collection('leads').doc(lid).update(upd).then(function(){toast('→ '+(sO?sO.label:ns));});}var nb=e.target.closest('[data-action="addNote"]');if(nb){var inp=document.getElementById('modalNoteInput');var txt=inp?inp.value.trim():'';if(!txt)return;var lid2=this._leadId,nn={text:txt,date:fmtNow()};for(var j=0;j<allLeads.length;j++){if(allLeads[j].id===lid2){if(!allLeads[j].notesHistory)allLeads[j].notesHistory=[];allLeads[j].notesHistory.push(nn);db.collection('leads').doc(lid2).update({notesHistory:allLeads[j].notesHistory,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast('✅ Note ajoutée');});break;}}openModal(lid2);}var addTagBtn=e.target.closest('[data-action="addTag"]');if(addTagBtn){var tagInput=document.getElementById('modalTagInput');var newTag=tagInput?tagInput.value.trim():'';if(!newTag)return;var lid3=this._leadId;for(var x=0;x<allLeads.length;x++){if(allLeads[x].id===lid3){if(!allLeads[x].tags)allLeads[x].tags=[];if(allLeads[x].tags.indexOf(newTag)<0){allLeads[x].tags.push(newTag);db.collection('leads').doc(lid3).update({tags:allLeads[x].tags,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast('🏷 Tag ajouté');collectTags();});}break;}}saveCustomTag(newTag);openModal(lid3);}var rmTag=e.target.closest('[data-action="removeTag"]');if(rmTag){var tv=rmTag.dataset.tagval;var lid4=this._leadId;for(var y=0;y<allLeads.length;y++){if(allLeads[y].id===lid4){if(allLeads[y].tags){var ti=allLeads[y].tags.indexOf(tv);if(ti>=0)allLeads[y].tags.splice(ti,1);db.collection('leads').doc(lid4).update({tags:allLeads[y].tags,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast('🏷 Tag retiré');collectTags();});}break;}}openModal(lid4);}});
+for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===lid){allLeads[i].stage=ns;break;}}document.querySelectorAll('.crm-stage-pill').forEach(function(p){p.classList.remove('active');p.style.color='';p.style.borderColor='';p.style.background='';});sp.classList.add('active');var sO=SM[ns];if(sO){sp.style.color=sO.color;sp.style.borderColor=sO.color;sp.style.background=sO.color+'18';}renderAll();var upd={stage:ns,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};if(S2S[ns])upd.status=S2S[ns];if(ns==='closed_won_setting'||ns==='closed_won_self'){upd.isClient=true;}majLeadClient(db.collection('leads').doc(lid),upd).then(function(){toast('→ '+(sO?sO.label:ns));}).catch(function(err){toast('❌ '+(err&&err.message?err.message:err));});}var nb=e.target.closest('[data-action="addNote"]');if(nb){var inp=document.getElementById('modalNoteInput');var txt=inp?inp.value.trim():'';if(!txt)return;var lid2=this._leadId,nn={text:txt,date:fmtNow()};for(var j=0;j<allLeads.length;j++){if(allLeads[j].id===lid2){if(!allLeads[j].notesHistory)allLeads[j].notesHistory=[];allLeads[j].notesHistory.push(nn);db.collection('leads').doc(lid2).update({notesHistory:allLeads[j].notesHistory,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast('✅ Note ajoutée');});break;}}openModal(lid2);}var addTagBtn=e.target.closest('[data-action="addTag"]');if(addTagBtn){var tagInput=document.getElementById('modalTagInput');var newTag=tagInput?tagInput.value.trim():'';if(!newTag)return;var lid3=this._leadId;for(var x=0;x<allLeads.length;x++){if(allLeads[x].id===lid3){if(!allLeads[x].tags)allLeads[x].tags=[];if(allLeads[x].tags.indexOf(newTag)<0){allLeads[x].tags.push(newTag);db.collection('leads').doc(lid3).update({tags:allLeads[x].tags,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast('🏷 Tag ajouté');collectTags();});}break;}}saveCustomTag(newTag);openModal(lid3);}var rmTag=e.target.closest('[data-action="removeTag"]');if(rmTag){var tv=rmTag.dataset.tagval;var lid4=this._leadId;for(var y=0;y<allLeads.length;y++){if(allLeads[y].id===lid4){if(allLeads[y].tags){var ti=allLeads[y].tags.indexOf(tv);if(ti>=0)allLeads[y].tags.splice(ti,1);db.collection('leads').doc(lid4).update({tags:allLeads[y].tags,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast('🏷 Tag retiré');collectTags();});}break;}}openModal(lid4);}});
 
 var mSaveTimer=null;
 document.getElementById('modalBg').addEventListener('input',function(e){if(!e.target.closest('[data-medit]'))return;if(mSaveTimer)clearTimeout(mSaveTimer);mSaveTimer=setTimeout(saveModal,2000);});
@@ -2638,10 +2658,9 @@ db.collection('leads').where('isClient', '==', true).onSnapshot(function(sn) {
 /* ═══ Mark as Client (depuis le modal lead) ═══ */
 window.markAsClient = function(leadId) {
   if (!confirm('Marquer ce lead comme client actif ?')) return;
-  db.collection('leads').doc(leadId).update({
+  majLeadClient(db.collection('leads').doc(leadId), {
     isClient: true,
     clientStatus: 'active',
-    clientSince: firebase.firestore.FieldValue.serverTimestamp(),
     timeline_history: firebase.firestore.FieldValue.arrayUnion({
       text: '👥 Passé en client actif (manuel)',
       date: new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }),

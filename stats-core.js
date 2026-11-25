@@ -116,6 +116,70 @@
   function debutJourParis(iso) { var p = String(iso).split('-'); return dateParis(+p[0], +p[1] - 1, +p[2], 0, 0, 0, 0); }
   function finJourParis(iso) { var p = String(iso).split('-'); return dateParis(+p[0], +p[1] - 1, +p[2], 23, 59, 59, 999); }
 
+  /* ── Une date écrite en TEXTE → un instant (25/11/2026) ────────────────
+     LA règle de lecture d'une date de gain ou d'entrée écrite en texte
+     (leads.clientSince posé par d'anciennes pages CSM, clients.dateEntree
+     des fiches coaching, imports). Pages et reprise des données passent par
+     ici : la même milliseconde partout, sur tout appareil.
+       'AAAA-MM-JJ' et 'JJ/MM/AAAA'  → midi à UTC+1 de ce jour : le même jour
+                                        à Paris en hiver comme en été ;
+       date-heure 'AAAA-MM-JJTHH:MM[:SS[.mmm]][Z|±HH:MM]' (T et Z en
+       majuscules, une espace admise à la place du T) → l'instant ; sans
+       fuseau, c'est une heure de PARIS (règle de FunnelCore.parseFlexMs) ;
+       jour impossible (31/02), année hors 2000-2100, tout autre texte,
+       toute valeur qui n'est pas un texte → null.
+     Aucun Date.parse : le calcul part des composants, donc le résultat ne
+     dépend pas du navigateur (Safari refuse l'espace à la place du T). */
+  function jourExiste(y, mo, d) {
+    if (!(y >= 2000 && y <= 2100) || !(mo >= 1 && mo <= 12) || !(d >= 1 && d <= 31)) return false;
+    var t = new Date(Date.UTC(y, mo - 1, d));
+    return t.getUTCFullYear() === y && t.getUTCMonth() === mo - 1 && t.getUTCDate() === d;
+  }
+  function dateTexteMs(v) {
+    if (typeof v !== 'string') return null;
+    var s = v.trim(), m;
+    m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    if (m) return jourExiste(+m[1], +m[2], +m[3]) ? Date.UTC(+m[1], +m[2] - 1, +m[3], 11) : null;
+    m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+    if (m) return jourExiste(+m[3], +m[2], +m[1]) ? Date.UTC(+m[3], +m[2] - 1, +m[1], 11) : null;
+    m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|[+-]\d{2}:?\d{2})?$/.exec(s);
+    if (!m || !jourExiste(+m[1], +m[2], +m[3]) || +m[4] > 23 || +m[5] > 59 || (m[6] != null && +m[6] > 59)) return null;
+    var ss = +(m[6] || 0), milli = m[7] ? +((m[7] + '00').slice(0, 3)) : 0;
+    if (m[8]) {
+      var dec = 0;
+      if (m[8] !== 'Z') {
+        var t = m[8].replace(':', '');
+        dec = (t.charAt(0) === '-' ? -1 : 1) * (parseInt(t.slice(1, 3), 10) * 60 + parseInt(t.slice(3, 5), 10));
+      }
+      return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], ss, milli) - dec * 60000;
+    }
+    return dateParis(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], ss, milli).getTime();
+  }
+  /* L'instant (ms) d'une date sous TOUTES ses formes : texte (dateTexteMs),
+     Timestamp des deux SDK, map { seconds, nanoseconds } (un Timestamp passé
+     par JSON), Date, nombre (secondes sous 1e12, sinon millisecondes — comme
+     FunnelCore.parseFlexMs). null si vide ou illisible. */
+  function instantMs(v) {
+    var t;
+    if (v == null || v === '') return null;
+    if (typeof v === 'string') return dateTexteMs(v);
+    if (typeof v === 'number') return isFinite(v) ? (v < 1e12 ? v * 1000 : v) : null;
+    if (typeof v !== 'object') return null;
+    if (typeof v.toMillis === 'function') { try { t = v.toMillis(); } catch (e) { return null; } return isFinite(t) ? t : null; }
+    if (typeof v.toDate === 'function') { try { t = v.toDate().getTime(); } catch (e2) { return null; } return isFinite(t) ? t : null; }
+    if (typeof v.seconds === 'number') return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
+    if (typeof v._seconds === 'number') return v._seconds * 1000 + (v._nanoseconds ? Math.floor(v._nanoseconds / 1e6) : 0);
+    if (typeof v.getTime === 'function') { t = v.getTime(); return isFinite(t) ? t : null; }
+    return null;
+  }
+  /* Le JOUR DE PARIS ('AAAA-MM-JJ') de cette date, la même chaîne que la date
+     soit en texte ou en Timestamp, sur tout appareil. null si illisible. */
+  function jourDe(v) {
+    var ms = instantMs(v);
+    if (ms == null || !isFinite(ms) || !isFinite(new Date(ms).getTime())) return null;
+    return jourParis(new Date(ms));
+  }
+
   /* Un RDV est « passé » quand son créneau est terminé — le même seuil que le
      bouton Résultat de l'Agenda. Sans heure lisible : passé dès le lendemain. */
   function estPasse(b, now) {
@@ -898,6 +962,7 @@
     /* Temps */
     parisParts: parisParts, jourParis: jourParis, moisParis: moisParis,
     dateParis: dateParis, debutJourParis: debutJourParis, finJourParis: finJourParis,
+    dateTexteMs: dateTexteMs, instantMs: instantMs, jourDe: jourDe,
     debutMs: debutMs, finMs: finMs, estPasse: estPasse, toDate: toDate, pad2: pad2,
     /* Classe d'un RDV */
     classifyBooking: classifyBooking, CLASSES: CLASSES, estRdvVente: estRdvVente, estRdvPris: estRdvPris,

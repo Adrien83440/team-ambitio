@@ -736,33 +736,30 @@ function _finalPayOpen(uid) {
   return _jourParisNow() <= until;
 }
 
+/* RETRAIT DES LIGNES EN DUR (25/11/2026, reprise de données) : jusque-là,
+   les deux entrées ci-dessous portaient dans `data` leurs lignes de
+   commission de janvier à avril 2026, avec les noms et e-mails des clients,
+   servies à quiconque ouvrait ce fichier (page statique, sans connexion).
+   migrateCommToFirestore DEVAIT les avoir recopiées en base à chaque
+   ouverture (commissions/{uid}/mois/{AAAA-MM}), et la base fait foi dès que
+   le document du mois porte un tableau `deals` (loadAllCommFromFirestore
+   ignore un document sans ce champ : l'ancienne page retombait alors sur le
+   dur). Si c'est le cas pour chaque mois en dur, le bloc ne servait plus que
+   de repli et les montants, points et paliers affichés ne bougent pas.
+   À VÉRIFIER sur la vraie base avant mise en production :
+   api/reprise-donnees.js?job=commissions&uids=guillaume,elodie puis
+   compare.js (empreintes sans nom) en code de sortie 0 — contrôle fait le :
+   (pas encore fait au 25/11/2026). Un mois absent, ou présent sans tableau
+   `deals`, s'afficherait désormais vide (aucune ligne écrite en base).
+   `data` reste un objet vide : uid, rôle, couleur, departed, careerPtsBase
+   et bonus sont toujours lus par la page. */
 const MEMBERS_COMM = [
   {
     uid: 'guillaume', name: 'Guillaume', surname: 'Bilcke',
     role: 'Closing + Setting', color: '#ef4444',
     departed: true, // n'appartient plus à la société (07/2026)
     careerPtsBase: 10, // Points bonus historiques (avant données trackées)
-    data: {
-      'Janvier 2026': [
-        { client:'Julie Berchoux',     email:'julieberchoux@icloud.com',          offre:'BP 12', type:'Closing', subtype:'mensualise', date:'24/01/2026', contracteHT:6000, collecteHT:0,   comm:0,   bonus:0, notes:'Setting après self booking', ok:false },
-        { client:'Belinda Giangiulio', email:'lesdemoisellesduvrac@gmail.com',     offre:'BP 12', type:'Closing', subtype:'mensualise', date:'30/01/2026', contracteHT:6000, collecteHT:0,   comm:0,   bonus:0, notes:'Setting no-booking',         ok:false },
-      ],
-      'Février 2026': [
-        { client:'Julie Berchoux',     email:'julieberchoux@icloud.com',          offre:'BP 12', type:'Closing', subtype:'mensualise', date:'24/01/2026', contracteHT:6000, collecteHT:500, comm:500, bonus:0,   notes:'Setting après self booking', ok:true },
-        { client:'Corinne Alaga',      email:'contact@lestabliersgourmands.com',  offre:'BP 12', type:'Setting', subtype:'selfBooking', date:'27/01/2026', contracteHT:0,    collecteHT:0,   comm:125, bonus:0,   notes:"Setting d'un close d'Elodie", ok:true },
-        { client:'Belinda Giangiulio', email:'lesdemoisellesduvrac@gmail.com',    offre:'BP 12', type:'Closing', subtype:'mensualise', date:'30/01/2026', contracteHT:6000, collecteHT:500, comm:500, bonus:0,   notes:'Setting no-booking',         ok:true },
-        { client:'Cecile Auneau',      email:'domcecile@gmail.com',              offre:'BP 12', type:'Closing', subtype:'mensualise', date:'09/02/2026', contracteHT:6000, collecteHT:500, comm:500, bonus:0,   notes:'Setting no-booking',         ok:true },
-        { client:'Justine Biton',      email:'lephildesidees@hotmail.com',       offre:'BP 12', type:'Closing', subtype:'mensualise', date:'09/02/2026', contracteHT:6000, collecteHT:500, comm:500, bonus:0,   notes:'Setting no-booking',         ok:true },
-      ],
-      'Mars 2026': [
-        { client:'Julie Berchoux',     email:'julieberchoux@icloud.com',          offre:'BP 12', type:'Setting', subtype:'selfBooking', date:'24/01/2026', contracteHT:0, collecteHT:0, comm:125, bonus:0, notes:'Setting après self booking', ok:false },
-        { client:'Belinda Giangiulio', email:'lesdemoisellesduvrac@gmail.com',    offre:'BP 12', type:'Setting', subtype:'noBooking',   date:'30/01/2026', contracteHT:0, collecteHT:0, comm:250, bonus:0, notes:'Setting no-booking',         ok:false },
-        { client:'Cecile Auneau',      email:'domcecile@gmail.com',              offre:'BP 12', type:'Setting', subtype:'noBooking',   date:'09/02/2026', contracteHT:0, collecteHT:0, comm:250, bonus:0, notes:'Setting no-booking',         ok:false },
-        { client:'Justine Biton',      email:'lephildesidees@hotmail.com',       offre:'BP 12', type:'Setting', subtype:'noBooking',   date:'09/02/2026', contracteHT:0, collecteHT:0, comm:250, bonus:0, notes:'Setting no-booking',         ok:false },
-        { client:'Fabienne Theres',    email:'theres.fabienne64@gmail.com',      offre:'BP 12', type:'Setting', subtype:'noBooking',   date:'23/02/2026', contracteHT:0, collecteHT:0, comm:250, bonus:0, notes:'Rattrapage échec self booking (enc. 04/03)', ok:false },
-        { client:'Fabienne Theres',    email:'theres.fabienne64@gmail.com',      offre:'BP 12', type:'Closing', subtype:'mensualise', date:'23/02/2026', contracteHT:6000, collecteHT:0, comm:500, bonus:0, notes:'Encaissement le 04/03/2026', ok:true },
-      ],
-    }
+    data: {} // lignes historiques retirées du code le 25/11/2026 : elles vivent en base (commissions/{uid}/mois/*)
   },
   {
     uid: 'elodie', name: 'Elodie', surname: '',
@@ -770,36 +767,7 @@ const MEMBERS_COMM = [
     departed: true, // fin de mission le 10/10/2026 — visible de l'admin jusqu'à FINAL_PAY_UNTIL
     bonus: true, // programme de bonus vente (points / paliers) — closers uniquement
     careerPtsBase: 13.5, // Points bonus historiques (avant données trackées)
-    data: {
-      'Janvier 2026': [
-        { client:'Céline Louvel',       email:'cblanchet40@orange.fr',            offre:'BP 12', type:'Closing', subtype:'mensualise', date:'06/01/2026', contracteHT:4797, collecteHT:479.7, comm:479.7, bonus:0, notes:'', ok:true },
-        { client:'Céline Gyongyosi',    email:'cecilegyongyosi@gmail.com',        offre:'BP 12', type:'Closing', subtype:'mensualise', date:'07/01/2026', contracteHT:4797, collecteHT:479.7, comm:479.7, bonus:0, notes:'', ok:true },
-        { client:'Soumia Aouidat',      email:'masoum@hotmail.fr',               offre:'BP 12', type:'Closing', subtype:'mensualise', date:'12/01/2026', contracteHT:4797, collecteHT:479.7, comm:479.7, bonus:0, notes:'', ok:true },
-        { client:'Céline Louvel',       email:'cblanchet40@orange.fr',            offre:'BP 12', type:'Setting', subtype:'selfBooking', date:'06/01/2026', contracteHT:0,    collecteHT:0,     comm:239.85,bonus:0, notes:'', ok:true },
-        { client:'Céline Gyongyosi',    email:'cecilegyongyosi@gmail.com',        offre:'BP 12', type:'Setting', subtype:'selfBooking', date:'07/01/2026', contracteHT:0,    collecteHT:0,     comm:239.85,bonus:0, notes:'', ok:true },
-        { client:'Soumia Aouidat',      email:'masoum@hotmail.fr',               offre:'BP 12', type:'Setting', subtype:'selfBooking', date:'12/01/2026', contracteHT:0,    collecteHT:0,     comm:239.85,bonus:0, notes:'', ok:true },
-        { client:'Véronique Berger',    email:'ivoire-mongeron@orange.fr',        offre:'BP 6',  type:'Closing', subtype:'mensualise', date:'19/01/2026', contracteHT:2000, collecteHT:800,   comm:200,   bonus:0, notes:'', ok:true },
-        { client:'Isabelle Mittard',    email:'lejardindezazou@gmail.com',        offre:'BP 12', type:'Closing', subtype:'pif',        date:'21/01/2026', contracteHT:6000, collecteHT:600,   comm:500,   bonus:0, notes:'', ok:true },
-        { client:'Laurence Lannoy',     email:'belleensoi@gmx.fr',               offre:'BP 12', type:'Closing', subtype:'pif',        date:'23/01/2026', contracteHT:6000, collecteHT:600,   comm:500,   bonus:0, notes:'', ok:true },
-        { client:'Corinne Alaga',       email:'contact@lestabliersgourmands.com', offre:'BP 12', type:'Closing', subtype:'mensualise', date:'27/01/2026', contracteHT:6000, collecteHT:0,     comm:0,     bonus:0, notes:'Non encaissé', ok:false },
-      ],
-      'Février 2026': [
-        { client:'Véronique Berger',    email:'ivoire-montgeron@orange.fr',       offre:'BP 6',  type:'Setting', subtype:'selfBooking', date:'19/01/2026', contracteHT:0,    collecteHT:0,     comm:100,   bonus:0,   notes:'', ok:true },
-        { client:'Isabelle Mittard',    email:'lejardindezazou@gmail.com',        offre:'BP 12', type:'Setting', subtype:'selfBooking', date:'21/01/2026', contracteHT:0,    collecteHT:0,     comm:125,   bonus:0,   notes:'', ok:true },
-        { client:'Laurence Lannoy',     email:'belleensoi@gmx.fr',               offre:'BP 12', type:'Setting', subtype:'noBooking',  date:'23/01/2026', contracteHT:0,    collecteHT:0,     comm:250,   bonus:0,   notes:'', ok:true },
-        { client:'Corinne Alaga',       email:'contact@lestabliersgourmands.com', offre:'BP 12', type:'Closing', subtype:'mensualise', date:'28/01/2026', contracteHT:6000, collecteHT:600,   comm:500,   bonus:0,   notes:'', ok:true },
-        { client:'Franck Dulong',       email:'lebienvenu.franck@gmail.com',      offre:'BP 12', type:'Closing', subtype:'pif',        date:'19/02/2026', contracteHT:5000, collecteHT:5000,  comm:500,   bonus:100, notes:'Bonus PIF', ok:true },
-        { client:'Julie Moreau',        email:'julita.connexion@hotmail.fr',      offre:'BP 6',  type:'Closing', subtype:'mensualise', date:'24/02/2026', contracteHT:2000, collecteHT:666.6, comm:200,   bonus:0,   notes:'', ok:true },
-      ],
-      'Mars 2026': [
-        { client:'Franck Dulong',       email:'lebienvenu.franck@gmail.com',      offre:'BP 12', type:'Setting', subtype:'noBooking',  date:'19/02/2026', contracteHT:0,    collecteHT:0,     comm:250,   bonus:0, notes:'', ok:false },
-        { client:'Houlaimatou Saw',     email:'sodikaguinexo@gmail.com',          offre:'BP 12', type:'Closing', subtype:'mensualise', date:'23/02/2026', contracteHT:6000, collecteHT:600,   comm:500,   bonus:0, notes:'', ok:false },
-        { client:'Julie Moreau',        email:'julita.connexion@hotmail.fr',      offre:'BP 6',  type:'Setting', subtype:'selfBooking', date:'24/02/2026', contracteHT:0,    collecteHT:0,     comm:50,    bonus:0, notes:'', ok:false },
-      ],
-      'Avril 2026': [
-        { client:'Houlaimatou Saw',     email:'sodikaguinexo@gmail.com',          offre:'BP 12', type:'Setting', subtype:'noBooking',  date:'23/02/2026', contracteHT:0,    collecteHT:0,     comm:250,   bonus:0, notes:'', ok:false },
-      ],
-    }
+    data: {} // lignes historiques retirées du code le 25/11/2026 : elles vivent en base (commissions/{uid}/mois/*)
   },
 ];
 
@@ -880,7 +848,8 @@ function getDeals(uid, month) {
   const cacheKey = uid + '_' + month;
   // 1. Firestore cache (source de verite si dispo)
   if (_fsDealsCache[cacheKey]) return _fsDealsCache[cacheKey].map(d => ({...d}));
-  // 2. localStorage fallback
+  // 2. localStorage fallback (puis `data`, vide depuis le 25/11/2026 :
+  //    plus aucune ligne de commission n'est écrite dans le code)
   const m = MEMBERS_COMM.find(m => m.uid === uid);
   if (!m) return [];
   const key = `comm_deals_${uid}_${month}`;
@@ -995,7 +964,8 @@ function _ptsLabel(uid) {
 
 function calcTotalPoints(uid) {
   // Total carrière = base historique + points de TOUS les mois connus :
-  //   - mois hardcodés (MEMBERS_COMM[].data)
+  //   - mois de MEMBERS_COMM[].data (vide depuis le 25/11/2026 : les
+  //     anciennes lignes en dur sont en base, donc dans _fsDealsCache)
   //   - mois chargés depuis Firestore (_fsDealsCache, rempli intégralement
   //     par loadAllCommFromFirestore au boot)
   //   - mois présents dans le localStorage de ce navigateur
@@ -2017,7 +1987,9 @@ async function migrateCommToFirestore() {
     /* Ancien membre ajouté depuis le roster pour les totaux (25/11/2026) :
        lecture seule, cette page ne lui écrit rien. */
     if (m._ancienRoster) continue;
-    // Migrer les données hardcodées + localStorage
+    /* Recopie en base les mois de CE navigateur (localStorage) absents de
+       la base. Depuis le 25/11/2026, `data` est vide : plus aucune ligne en
+       dur à recopier (elles l'ont été les mois précédents). */
     var allMonths = Object.keys(m.data || {});
     // Ajouter les mois connus dans localStorage
     for (var mi = 0; mi < MONTHS_FR.length; mi++) {

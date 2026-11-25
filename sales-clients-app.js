@@ -141,12 +141,79 @@ function EUROc(v){ return new Intl.NumberFormat('fr-FR',{style:'currency',curren
 function fmtDate(d){
   if(!d) return '—';
   if(d.toDate) d = d.toDate();
-  if(typeof d === 'string') d = new Date(d);
-  if(!d || isNaN(d.getTime())) return '—';
+  if(typeof d === 'string' || typeof d === 'number') d = new Date(d);
+  if(!d || typeof d.getTime !== 'function' || isNaN(d.getTime())) return '—';
   var dd=String(d.getDate()).padStart(2,'0');
   var mm=String(d.getMonth()+1).padStart(2,'0');
   return dd+'/'+mm+'/'+d.getFullYear();
 }
+/* Date d'entrée écrite en TEXTE → instant (ms), MÊME règle que analyser() de
+   api/reprise-donnees.js (25/11/2026), pour que pages et reprise donnent le
+   même jour : 'AAAA-MM-JJ' et 'JJ/MM/AAAA' → midi à UTC+1 de ce jour (même
+   jour à Paris en hiver comme en été, quel que soit le fuseau de l'appareil) ;
+   date-heure ISO 'AAAA-MM-JJTHH:MM[:SS][fuseau]' → l'instant (fuseau écrit lu
+   tel quel, sans fuseau = heure de Paris) ; jour impossible, année hors
+   2000-2100 ou autre texte → null. */
+function heureParisMs(y, m0, d, hh, mi, ss){
+  var guess = Date.UTC(y, m0, d, hh, mi, ss);
+  function commeParis(ms){
+    var o = {};
+    new Intl.DateTimeFormat('en-GB', { timeZone:'Europe/Paris', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hourCycle:'h23' })
+      .formatToParts(new Date(ms)).forEach(function(p){ o[p.type] = p.value; });
+    return Date.UTC(+o.year, +o.month - 1, +o.day, o.hour === '24' ? 0 : +o.hour, +o.minute, ss);
+  }
+  try {
+    var out = guess - (commeParis(guess) - guess);
+    var r = commeParis(out);
+    if(r !== guess) out = out - (r - guess);
+    return out;
+  } catch(e){ return guess - 3600000; }
+}
+function dateEntreeVersMs(v){
+  if(typeof v !== 'string') return null;
+  var s = v.trim(), m;
+  function jourOk(y, mo, d){
+    if(!(y >= 2000 && y <= 2100) || !(mo >= 1 && mo <= 12) || !(d >= 1 && d <= 31)) return false;
+    var t = new Date(Date.UTC(y, mo - 1, d));
+    return t.getUTCFullYear() === y && t.getUTCMonth() === mo - 1 && t.getUTCDate() === d;
+  }
+  m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if(m) return jourOk(+m[1], +m[2], +m[3]) ? Date.UTC(+m[1], +m[2] - 1, +m[3], 11) : null;
+  m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+  if(m) return jourOk(+m[3], +m[2], +m[1]) ? Date.UTC(+m[3], +m[2] - 1, +m[1], 11) : null;
+  m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/.exec(s);
+  if(!m || !jourOk(+m[1], +m[2], +m[3]) || +m[4] > 23 || +m[5] > 59 || (m[6] != null && +m[6] > 59)) return null;
+  if(m[7]){ var z = Date.parse(s); if(!isNaN(z)) return z; }
+  return heureParisMs(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0));
+}
+/* Jour de PARIS ('AAAA-MM-JJ') de leads.clientSince (25/11/2026) : la date
+   est en texte sur d'anciennes fiches ('AAAA-MM-JJ', parfois 'JJ/MM/AAAA' ou
+   date-heure ISO) et en Timestamp sur les autres (la reprise des données
+   convertit le texte par la règle de dateEntreeVersMs). Lue au
+   jour de Paris, elle s'affiche PAREIL sous les deux formes et sur tout
+   appareil (le texte lu comme minuit UTC tombait la veille à l'ouest de
+   l'Europe, le Timestamp le lendemain en Nouvelle-Zélande). null si illisible. */
+function jourClientCle(v){
+  if(v == null || v === '') return null;
+  var dt;
+  if(typeof v === 'string'){
+    var ms = dateEntreeVersMs(v);
+    if(ms == null) return null;
+    dt = new Date(ms);
+  } else {
+    dt = (typeof v.toDate === 'function') ? v.toDate() : (v instanceof Date ? v : null);
+  }
+  if(!dt || isNaN(dt.getTime())) return null;
+  try {
+    var o = {};
+    new Intl.DateTimeFormat('en-GB', { timeZone:'Europe/Paris', year:'numeric', month:'2-digit', day:'2-digit' })
+      .formatToParts(dt).forEach(function(p){ o[p.type] = p.value; });
+    if(o.year && o.month && o.day) return o.year + '-' + o.month + '-' + o.day;
+  } catch(e){}
+  return dt.getFullYear() + '-' + ('0' + (dt.getMonth() + 1)).slice(-2) + '-' + ('0' + dt.getDate()).slice(-2);
+}
+/* « Client depuis » : date du jour de Paris (voir jourClientCle). */
+function fmtJourClient(v){ var k = jourClientCle(v); if(!k) return fmtDate(v); var p = k.split('-'); return p[2] + '/' + p[1] + '/' + p[0]; }
 function fmtDateTime(d){
   if(!d) return '—';
   if(d.toDate) d = d.toDate();
@@ -565,8 +632,12 @@ function getFiltered(){
       var kb = sortKey === 'accompagnementEnd' ? (b.accompagnementEnd || b.accompagnementFin)
               : sortKey === 'accompagnementStart' ? (b.accompagnementStart || b.accompagnementDebut)
               : b.clientSince;
+      /* clientSince en texte : même instant que la reprise des données
+         (dateEntreeVersMs), donc même ordre avant et après la reprise. */
+      var ma = sortKey === 'clientSince' ? dateEntreeVersMs(ka) : null;
+      var mb = sortKey === 'clientSince' ? dateEntreeVersMs(kb) : null;
       va = toDateObj(ka); vb = toDateObj(kb);
-      va = va ? va.getTime() : 0; vb = vb ? vb.getTime() : 0;
+      va = ma != null ? ma : (va ? va.getTime() : 0); vb = mb != null ? mb : (vb ? vb.getTime() : 0);
     } else if (sortKey === 'temoignages'){
       va = (temoCache[a.id]||[]).length;
       vb = (temoCache[b.id]||[]).length;
@@ -757,7 +828,7 @@ function renderGrid(list, container){
       '</div>'+
       '<div class="cl-card-meta">'+
         (c.telephone?'<div>📞 '+esc(c.telephone)+'</div>':'')+
-        (c.clientSince?'<div>📅 '+fmtDate(c.clientSince)+'</div>':'')+
+        (c.clientSince?'<div>📅 '+fmtJourClient(c.clientSince)+'</div>':'')+
         (c.formule?'<div>🎓 '+esc(c.formule)+'</div>':'')+
         (slug?'<div>👤 '+esc(c.closeurName||slug)+'</div>':'')+
       '</div>'+
@@ -1062,7 +1133,7 @@ function refreshPanel(){
   h += renderEditRow('🎯','Problématique', renderTxa('problematique', client.problematique));
   h += renderEditRow('📋','Pb. secondaires', renderTxa('pbSecondaires', client.pbSecondaires));
   h += renderEditRow('✨','Résultats',    renderTxa('resultats',   client.resultats));
-  h += '<div style="font-size:10px;color:var(--muted);padding:5px 0;display:flex;align-items:center;gap:8px"><span style="width:18px;text-align:center">📅</span><span style="min-width:115px">Client depuis</span><span style="font-size:12px;font-weight:600;color:var(--text)">'+fmtDate(client.clientSince)+'</span></div>';
+  h += '<div style="font-size:10px;color:var(--muted);padding:5px 0;display:flex;align-items:center;gap:8px"><span style="width:18px;text-align:center">📅</span><span style="min-width:115px">Client depuis</span><span style="font-size:12px;font-weight:600;color:var(--text)">'+fmtJourClient(client.clientSince)+'</span></div>';
 
   // Programme & Contrat
   h += '<div class="cl-sec-h mt">📋 Programme & Contrat</div>';

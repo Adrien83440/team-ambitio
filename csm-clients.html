@@ -700,6 +700,7 @@ body {
 <script src="bp-credits.js"></script>
 <script src="demarrage-core.js"></script>
 <script src="demarrage-widget.js"></script>
+<script src="stats-core.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════════════════════
    csm-dashboard.html — Customer Success Manager
@@ -783,9 +784,71 @@ function fmtDateTime(d){
   return dt.toLocaleDateString('fr-FR', { day:'2-digit', month:'short' }) +
          ' à ' + dt.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
 }
-function timeAgo(d){
-  var dt = toDate(d); if(!dt) return '—';
+/* « Client depuis » (25/11/2026). c.clientSince vient de la date d'entrée de
+   la fiche coaching (texte 'AAAA-MM-JJ', parfois 'JJ/MM/AAAA' ou date-heure
+   ISO d'un import) ou de leads.clientSince (Timestamp, repris en Timestamp
+   depuis le texte le 25/11/2026). Un même jour doit s'afficher, se trier et
+   se compter PAREIL sous les deux formes. La règle de lecture d'une date en
+   texte vit à UN seul endroit : StatsCore.dateTexteMs (stats-core.js, la même
+   que la reprise des données). Sans stats-core.js (script bloqué), l'affichage
+   retombe sur la lecture simple de la page et AUCUNE date n'est écrite. */
+function outilDates(){ return (typeof window !== 'undefined' && window.StatsCore && typeof window.StatsCore.dateTexteMs === 'function') ? window.StatsCore : null; }
+function jourEntreeDate(v){
+  var sc = outilDates(); if(!sc) return null;
+  var ms = sc.dateTexteMs(v);
+  return ms == null ? null : new Date(ms);
+}
+function sinceDate(v){
+  return jourEntreeDate(v) || toDate(v);
+}
+/* Écrire leads.clientSince exige la règle commune : une date d'entrée en
+   texte ne part jamais telle quelle ni remplacée par l'heure du serveur.
+   Renvoie le message de refus, ou null si l'écriture peut partir. */
+function clientSinceRefus(v){
+  if(typeof v === 'string' && v.trim() !== '' && !outilDates()){
+    return "Lecture des dates indisponible (stats-core.js non chargé) : recharge la page. Rien n'a été écrit.";
+  }
+  return null;
+}
+/* leads.clientSince s'écrit en Timestamp Firestore (en texte, la fiche est
+   invisible des requêtes par date : Stats funnel, closes). Date d'entrée en
+   texte → l'instant de StatsCore.dateTexteMs (règle de la reprise) ;
+   Timestamp déjà là : gardé tel quel ; vide ou vraiment illisible : l'heure
+   du serveur, comme avant. Sans StatsCore : exception (voir clientSinceRefus).
+   Même fonction dans csm-diagnostic.html. */
+function clientSinceDepuisDateEntree(v){
+  if(v && typeof v.toDate === 'function') return v;
+  var refus = clientSinceRefus(v);
+  if(refus) throw new Error(refus);
+  var dt = jourEntreeDate(v);
+  if(dt) return firebase.firestore.Timestamp.fromDate(dt);
+  return firebase.firestore.FieldValue.serverTimestamp();
+}
+/* 'AAAA-MM-JJ' du jour de Paris (StatsCore.jourParis ; sans stats-core.js :
+   jour de l'appareil). */
+function jourParisCle(dt){
+  var sc = outilDates();
+  if(sc){ try { return sc.jourParis(dt); } catch(e){} }
+  return dt.getFullYear() + '-' + ('0' + (dt.getMonth() + 1)).slice(-2) + '-' + ('0' + dt.getDate()).slice(-2);
+}
+/* « Client depuis » affiché au jour de PARIS, quel que soit le fuseau de
+   l'appareil : le texte 'AAAA-MM-JJ' tel quel, un Timestamp ramené à son
+   jour de Paris (midi UTC+1 tomberait le lendemain en Nouvelle-Zélande). */
+function fmtJourClient(v){
+  var dt = sinceDate(v); if(!dt) return '—';
+  var p = jourParisCle(dt).split('-');
+  return fmtDate(new Date(+p[0], +p[1] - 1, +p[2], 12));
+}
+/* parJour : écart compté en jours de calendrier de Paris (date sans heure,
+   comme « Client depuis ») au lieu de tranches de 24 h — sinon une date
+   posée à midi afficherait « il y a -1 jours » le matin même. */
+function timeAgo(d, parJour){
+  var dt = parJour ? sinceDate(d) : toDate(d); if(!dt) return '—';
   var diffDays = Math.floor((Date.now() - dt.getTime()) / 86400000);
+  if(parJour){
+    var pa = jourParisCle(new Date()).split('-'), pb = jourParisCle(dt).split('-');
+    diffDays = Math.round((Date.UTC(+pa[0], +pa[1] - 1, +pa[2]) - Date.UTC(+pb[0], +pb[1] - 1, +pb[2])) / 86400000);
+  }
   if(diffDays === 0) return "aujourd'hui";
   if(diffDays === 1) return 'hier';
   if(diffDays < 7) return 'il y a ' + diffDays + ' jours';
@@ -1148,9 +1211,9 @@ function loadCoachingClients(){
 /* ─── Listener enrichissement : leads (tous, pas seulement isClient=true) ───
    Initialement on filtrait sur `isClient==true` mais ça ratait des matches
    où le lead correspondait à un coaching mais n'avait pas (encore) le flag
-   isClient. Exemple concret : un lead "sebastien" converti en client (visible
+   isClient. Exemple concret : un lead converti en client (visible
    dans sa timeline) mais dont le flag isClient n'avait pas été propagé →
-   le coaching BELLE ANNE (même email contact@climabitat.net) apparaissait
+   le coaching du même client (même e-mail) apparaissait
    comme "Pas de lead CRM lié" alors que le lead existait bel et bien.
 
    On charge donc maintenant TOUS les leads (skip _merged===true) pour le
@@ -1290,8 +1353,8 @@ function buildAllClients(){
 
   // Tri : plus récents (entrée coaching) d'abord
   allClients.sort(function(a,b){
-    var da = toDate(a.clientSince) || new Date(0);
-    var db_ = toDate(b.clientSince) || new Date(0);
+    var da = sinceDate(a.clientSince) || new Date(0);
+    var db_ = sinceDate(b.clientSince) || new Date(0);
     return db_ - da;
   });
 
@@ -1761,7 +1824,7 @@ function renderSidebarRow(c){
   if(c.lastCsmFollowupAt){
     timeText = timeAgo(c.lastCsmFollowupAt);
   } else if(c.clientSince){
-    timeText = '+' + timeAgo(c.clientSince);
+    timeText = '+' + timeAgo(c.clientSince, true);
   }
 
   // Tags : on prend les 1-2 raisons les plus prioritaires
@@ -2079,7 +2142,7 @@ function computeSignals(c){
       if(nPct > 0){
         var avgPct = Math.round(sumPct/nPct);
         // Si client présent depuis >30j et progression < 20% → signal
-        var since = c.clientSince ? toDate(c.clientSince) : null;
+        var since = c.clientSince ? sinceDate(c.clientSince) : null;
         if(since && (Date.now() - since.getTime()) > 30*86400000 && avgPct < 20){
           signals.push({
             level: 'att', icon: '🎓',
@@ -2275,7 +2338,7 @@ function renderClientCard(c){
     followCell += '<div class="csm2-cell-empty">Jamais relancé</div>';
   }
   if(c.clientSince){
-    followCell += '<div class="csm2-cell-sub muted">📅 Depuis ' + fmtDate(c.clientSince) + '</div>';
+    followCell += '<div class="csm2-cell-sub muted">📅 Depuis ' + fmtJourClient(c.clientSince) + '</div>';
   }
   followCell += '</div>';
 
@@ -2536,7 +2599,7 @@ function renderTemoignages(){
       h += '<div class="csm-card-meta">';
       if(c.email) h += '<span>📧 ' + esc(c.email) + '</span>';
       if(c.telephone) h += '<span>📞 ' + esc(c.telephone) + '</span>';
-      if(c.clientSince) h += '<span>📅 Depuis ' + fmtDate(c.clientSince) + '</span>';
+      if(c.clientSince) h += '<span>📅 Depuis ' + fmtJourClient(c.clientSince) + '</span>';
       h += '</div></div><div></div><div class="csm-actions">';
       if(c.email)     h += '<button class="csm-act-btn" title="Email" onclick="event.stopPropagation();quickEmail(\'' + c.id + '\')">📧</button>';
       if(c.telephone) h += '<button class="csm-act-btn" title="SMS" onclick="event.stopPropagation();quickSms(\'' + c.id + '\')">📱</button>';
@@ -2601,7 +2664,7 @@ function renderModal(){
   h += '<div class="modal-contact-line">';
   if(c.email)     h += '<span title="Email">📧 ' + esc(c.email) + '</span>';
   if(c.telephone) h += '<span title="Téléphone">📞 ' + esc(c.telephone) + '</span>';
-  if(c.clientSince) h += '<span title="Client depuis">📅 ' + fmtDate(c.clientSince) + '</span>';
+  if(c.clientSince) h += '<span title="Client depuis">📅 ' + fmtJourClient(c.clientSince) + '</span>';
   if(c.type || c.secteur) h += '<span title="Type/Secteur">🏷 ' + esc((c.type||'') + (c.secteur ? ' · ' + c.secteur : '')) + '</span>';
   h += '</div>';
   h += '<div class="modal-quick-actions">';
@@ -3327,9 +3390,11 @@ function csmCreateLeadForClient(clientId){
     showToast('❌ Impossible de créer un lead sans email', 'error');
     return;
   }
+  var co = c._coaching || {};
+  var refus = clientSinceRefus(co.dateEntree);
+  if(refus){ showToast('❌ ' + refus, 'error'); return; }
   if(!confirm('Créer un lead CRM lié pour ' + (c.nom||'?') + ' ?\n\nEmail : ' + (c.email||'—') + '\nTel : ' + (c.telephone||'—'))) return;
 
-  var co = c._coaching || {};
   var leadData = {
     nom: (c.nom||'').trim(),
     email: (c.email||'').toLowerCase().trim(),
@@ -3339,7 +3404,7 @@ function csmCreateLeadForClient(clientId){
     secteur: c.secteur || '',
     isClient: true,
     clientStatus: c.clientStatus || 'active',
-    clientSince: co.dateEntree || firebase.firestore.FieldValue.serverTimestamp(),
+    clientSince: clientSinceDepuisDateEntree(co.dateEntree),
     source: 'coaching_migration',
     sourceCoachingId: co._id || c._coachingId,
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -3395,13 +3460,25 @@ function csmMarkLeadAsClient(clientId){
     showToast('Ce lead est déjà marqué client', 'error');
     return;
   }
+  var refusM = clientSinceRefus(c._coaching && c._coaching.dateEntree);
+  if(refusM){ showToast('❌ ' + refusM, 'error'); return; }
   if(!confirm('Marquer le lead "' + esc(c._lead.nom||c._lead.email) + '" comme client ?\n\nIl apparaîtra alors dans le module sales-clients.')) return;
 
-  db.collection('leads').doc(c._leadId).update({
-    isClient: true,
-    clientStatus: c.clientStatus || 'active',
-    clientSince: c._lead.clientSince || (c._coaching && c._coaching.dateEntree) || firebase.firestore.FieldValue.serverTimestamp(),
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  /* clientSince n'est JAMAIS réécrit s'il existe (référentiel du 25/11/2026) :
+     relu dans la transaction — la copie locale du lead peut dater d'avant la
+     reprise (texte devenu Timestamp) et la réécrire la remettrait en texte. */
+  var leadRef = db.collection('leads').doc(c._leadId);
+  db.runTransaction(function(tx){
+    return tx.get(leadRef).then(function(snap){
+      var cur = snap.exists ? (snap.data() || {}) : {};
+      var upd = {
+        isClient: true,
+        clientStatus: c.clientStatus || 'active',
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      if(!cur.clientSince) upd.clientSince = clientSinceDepuisDateEntree(c._coaching && c._coaching.dateEntree);
+      tx.update(leadRef, upd);
+    });
   }).then(function(){
     showToast('✅ Lead marqué client');
     // Le snapshot leads se rafraîchit auto, buildAllClients va remonter

@@ -78,9 +78,28 @@
   }
 </script>
 <script src="nav.js"></script>
+<script src="stats-core.js"></script>
 
 <script>
 function esc(s){ return String(s||'').replace(/[<>&"']/g, function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c];}); }
+/* Dates de leads.clientSince (25/11/2026). La règle de lecture d'une date
+   écrite en texte ('AAAA-MM-JJ', 'JJ/MM/AAAA', date-heure ISO) vit à UN seul
+   endroit : StatsCore.dateTexteMs (stats-core.js), la même que la reprise des
+   données. Sans stats-core.js (script bloqué) : affichage simple de la page,
+   et aucune date n'est écrite (voir clientSinceRefus). */
+function outilDates(){ return (typeof window !== 'undefined' && window.StatsCore && typeof window.StatsCore.dateTexteMs === 'function') ? window.StatsCore : null; }
+/* Jour de PARIS ('AAAA-MM-JJ') de leads.clientSince : en texte sur d'anciennes
+   fiches, en Timestamp sur les autres ; lue au jour de Paris, elle s'affiche
+   PAREIL sous les deux formes et sur tout appareil. Seuls le texte, le
+   Timestamp et la Date sont lus ici ; null sinon ou si illisible. */
+function jourClient(v){
+  var sc = outilDates();
+  if(!sc || v == null || v === '') return null;
+  if(typeof v !== 'string' && typeof v.toDate !== 'function' && !(v instanceof Date)) return null;
+  try { return sc.jourDe(v); } catch(e){ return null; }
+}
+/* « Client depuis » : date du jour de Paris (voir jourClient). */
+function fmtJourClient(v){ var k = jourClient(v); if(!k) return fmtDate(v); var p = k.split('-'); return fmtDate(new Date(+p[0], +p[1] - 1, +p[2], 12)); }
 function fmtDate(d){ if(!d) return '—'; var dt = d.toDate ? d.toDate() : new Date(d); if(isNaN(dt.getTime())) return '—'; return dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}); }
 
 var db = firebase.firestore();
@@ -206,7 +225,7 @@ function renderDiagnostic(d){
       h += '<td><strong>' + esc(c.nom||c.name||'?') + '</strong></td>';
       h += '<td style="color:var(--ink-muted)">' + esc(c.email||'—') + '</td>';
       h += '<td><span class="tag tag-muted">' + esc(c.source||'—') + '</span></td>';
-      h += '<td>' + fmtDate(c.clientSince) + '</td>';
+      h += '<td>' + fmtJourClient(c.clientSince) + '</td>';
       h += '</tr>';
     });
     if(d.leadsNoCoaching.length > 80){
@@ -260,6 +279,8 @@ function exportCsv(kind){
 window.createLeadFromCoaching = async function(coachingId){
   var co = (window._coachingsNoLead || []).find(function(x){ return x._id === coachingId; });
   if(!co){ alert('Coaching introuvable'); return; }
+  var refus = clientSinceRefus(co.dateEntree);
+  if(refus){ alert('❌ ' + refus); return; }
   if(!confirm('Créer un lead client pour ' + (co.nom||'?') + ' ?\n\nEmail : ' + (co.email||'—') + '\nTel : ' + (co.telephone||'—'))) return;
   await createLeadDoc(co);
   alert('✅ Lead créé. Recharger la page pour voir le diagnostic mis à jour.');
@@ -268,6 +289,9 @@ window.createLeadFromCoaching = async function(coachingId){
 window.confirmCreateAllLeads = async function(){
   var rows = window._coachingsNoLead || [];
   if(!rows.length) return;
+  var refusTous = null;
+  rows.forEach(function(r){ if(!refusTous) refusTous = clientSinceRefus(r.dateEntree); });
+  if(refusTous){ alert('❌ ' + refusTous); return; }
   if(!confirm('⚠️ Créer ' + rows.length + ' nouveaux leads clients depuis les fiches coaching ?\n\nCette action :\n• ajoute les leads dans la collection leads avec isClient=true\n• reprend nom/email/tel/programme depuis le coaching\n• ne crée PAS de doublons (skip si email déjà présent)\n• marque la source = coaching_migration\n\nContinuer ?')) return;
 
   var btn = document.querySelector('button[onclick="confirmCreateAllLeads()"]');
@@ -299,6 +323,28 @@ function phoneNormalized(raw) {
   return d.length >= 9 ? d.slice(-9) : d;
 }
 
+/* leads.clientSince est un Timestamp Firestore (reprise du 25/11/2026) : en
+   texte, la fiche est invisible des requêtes par date (Stats funnel, closes).
+   Date d'entrée en texte → l'instant de StatsCore.dateTexteMs, même règle que
+   la reprise des données. Timestamp déjà là : gardé tel quel. Vide ou
+   vraiment illisible : l'heure du serveur, comme avant. Sans stats-core.js :
+   refus (exception), jamais de texte ni d'heure du serveur à la place d'une
+   date d'entrée connue. Même fonction dans csm-clients.html. */
+function clientSinceRefus(v){
+  if(typeof v === 'string' && v.trim() !== '' && !outilDates()){
+    return "Lecture des dates indisponible (stats-core.js non chargé) : recharge la page. Rien n'a été écrit.";
+  }
+  return null;
+}
+function clientSinceDepuisDateEntree(v){
+  if(v && typeof v.toDate === 'function') return v;
+  var refus = clientSinceRefus(v);
+  if(refus) throw new Error(refus);
+  var ms = outilDates().dateTexteMs(v);
+  if(ms != null) return firebase.firestore.Timestamp.fromDate(new Date(ms));
+  return firebase.firestore.FieldValue.serverTimestamp();
+}
+
 async function createLeadDoc(co){
   // Conversion d'une fiche coaching en lead client
   var nom = co.nom || co.name || '';
@@ -313,7 +359,7 @@ async function createLeadDoc(co){
     secteur: co.secteur || co.activite || '',
     isClient: true,
     clientStatus: co.statut === 'inactif' ? 'paused' : 'active',
-    clientSince: co.dateEntree || firebase.firestore.FieldValue.serverTimestamp(),
+    clientSince: clientSinceDepuisDateEntree(co.dateEntree),
     source: 'coaching_migration',
     sourceCoachingId: co._id,
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),

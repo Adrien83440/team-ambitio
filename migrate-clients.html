@@ -178,6 +178,11 @@ async function runMigrate() {
       if (r.matchedLead) {
         // Update existing lead
         leadId = r.matchedLead.id;
+        /* clientSince (jour où le client est gagné) n'est JAMAIS réécrit s'il
+           existe (référentiel du 25/11/2026) : relu juste avant l'écriture. */
+        var curSnap = await db.collection('leads').doc(leadId).get();
+        var cur = curSnap.exists ? (curSnap.data() || {}) : {};
+        if (cur.clientSince != null && cur.clientSince !== '') delete clientFields.clientSince;
         await db.collection('leads').doc(leadId).update(clientFields);
         log('✅ [' + (i+1) + '] ENRICHI: ' + base.client + ' → ' + leadId);
       } else {

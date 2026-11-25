@@ -87,7 +87,9 @@ function _monthKeyToFirestore(monthKey) {
 }
 
 function _getDb() {
-  // Fire.db est défini dans chaque page (sales-data.js inlined)
+  // Fire.db : défini par la copie en ligne de l'ancien sales-data.js
+  // (sales-saisie.html) ; le fichier sales-data.js lui-même a été supprimé le
+  // 25/11/2026 (il portait des noms de clients en dur et aucune page ne le chargeait).
   if (typeof Fire !== 'undefined' && Fire.db) return Fire.db;
   if (typeof firebase !== 'undefined' && firebase.firestore) return firebase.firestore();
   return null;
