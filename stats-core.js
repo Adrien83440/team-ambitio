@@ -713,7 +713,9 @@
     annules_plus_no_show: { mot: 'Annulés + no-show', texte: 'Somme des RDV notés « Annulé » et « No-show » dans la liste déclarée. Ce n’est pas le Taux d’annulation (annulés ÷ RDV, sans les no-show).' },
     sept_derniers_jours: { mot: '7 derniers jours', texte: 'Aujourd’hui et les 6 jours précédents, week-end compris (fenêtre glissante). Différent d’une semaine du lundi au dimanche.' },
     rdv_type_suivi: { mot: 'RDV du type suivi', texte: 'RDV d’un seul type de consultation choisi dans le Data Center, RDV de coaching exclus, annulés, RDV déplacés et leurs nouveaux créneaux compris. Ni les RDV ni les RDV pris des autres écrans.' },
-    non_annules_type_suivi: { mot: 'Non annulés (type suivi)', texte: 'RDV du type suivi dont le statut n’est pas « annulé » : no-show et RDV à venir compris ; un RDV déplacé en sort, son nouveau créneau y entre. Proche du Kept sans en suivre la règle.' }
+    non_annules_type_suivi: { mot: 'Non annulés (type suivi)', texte: 'RDV du type suivi dont le statut n’est pas « annulé » : no-show et RDV à venir compris ; un RDV déplacé en sort, son nouveau créneau y entre. Proche du Kept sans en suivre la règle.' },
+    closes_rdv_hors_periode: { mot: 'Closes au RDV closé hors période', texte: 'Closes de la période dont le RDV au résultat Close est daté avant ou après la période (ex. RDV du 28/10 closé le 05/11), ou hors du filtre affiché : comptés dans Closes, absents de RDV closés.' },
+    montants_masques_non_attribue: { mot: 'Montants masqués', texte: 'Cette ligne contient des ventes d’un membre de l’équipe sans onglet ici (admin, autre rôle) ou antérieures à son arrivée : ses montants ne sont visibles que par lui et par un admin. Les totaux de l’équipe restent visibles de tous.' }
   };
 
   function mot(cle) { return G[cle] ? G[cle].mot : ''; }

@@ -190,7 +190,9 @@
     return frDay(R.days[0]) + ' → ' + frDay(R.days[R.days.length - 1]);
   }
   function periodMot() {
-    return S.mode === 'month' ? 'du mois' : S.mode === 'day' ? 'du jour' : (S.mode === '3d' ? 'des 3 jours' : 'des 7 jours');
+    /* Vocabulaire §6 : « de la période » (même mot que le Stats funnel),
+       quel que soit le découpage (mois, jour, 3 ou 7 jours). */
+    return 'de la période';
   }
   function fmtPct(v) { return SC.fmtPct(v); }
 
@@ -241,14 +243,18 @@
   }
   /* Seau d'un closer pour un jour : son onglet, sinon « Non attribué » avec
      la raison (référentiel §3). */
+  /* Règle UNIQUE du projet : StatsCore.rangPersonne (référentiel §11) ; les
+     membres partis passent par AlteoreFlow.isDeparted (liste commune). */
+  var RANG_OPTS = {
+    parti: function (slug) { return AF.isDeparted(slug); },
+    aOnglet: function (slug) { return !!tabMember(slug); },
+    prenom: function (slug) { return plainName(slug); },
+    debut: function (slug) { var m = tabMember(slug); return m ? AF.memberStartDate(m) : null; }
+  };
   function bucketOf(slug, dk) {
-    if (!slug) return { key: NA, label: SC.mot('non_attribue') };
-    if (AF.isDeparted(slug)) return { key: NA, label: SC.mot('anciens_membres') };
-    var m = tabMember(slug);
-    if (!m) return { key: NA, label: plainName(slug) + ' (hors onglets)' };
-    var sd = AF.memberStartDate(m);
-    if (sd && dk && dk < sd) return { key: NA, label: plainName(slug) + ' (avant son arrivée)' };
-    return { key: slug, label: plainName(slug) };
+    var r = SC.rangPersonne(slug, dk, RANG_OPTS);
+    if (r.key !== NA) return { key: r.key, label: plainName(r.key) };
+    return { key: NA, label: r.precision || SC.mot('non_attribue') };
   }
   function allKeys() { return S.members.map(function (m) { return m.slug; }).concat([NA]); }
   function selKeys(sel) { return sel === '_all' ? allKeys() : [sel]; }

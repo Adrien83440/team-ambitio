@@ -380,6 +380,28 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
   }
   /* D26 : montants par personne visibles d'un admin et de la personne. */
   function argentVisible(key) { return S.isAdmin || (!!key && key === moi()); }
+  /* Ligne « Non attribué » (D26, revue D01 / D11) : pour un non-admin, ses
+     montants sont masqués dès qu'elle contient un close d'une personne
+     identifiable autre que lui (« hors onglets », « avant son arrivée ») ;
+     inconnus et anciens membres (sans nom, D10) ne la masquent pas. */
+  function argentNaVisible(argentNomin) {
+    if (S.isAdmin) return true;
+    var me = moi();
+    return !Object.keys(argentNomin || {}).some(function (sl) { return sl !== me; });
+  }
+  function cadenasNa() {
+    return SC.infoLibre('Montants masqués', 'Cette ligne contient des ventes d’un membre de l’équipe sans onglet ici (admin, autre rôle) ou antérieures à son arrivée : ses montants ne sont visibles que par lui et par un admin. Les totaux de l’équipe restent visibles de tous.');
+  }
+  /* Sous-libellé de « Non attribué » : les prénoms (« hors onglets »,
+     « avant son arrivée ») ne sont montrés qu'à un admin ; un non-admin lit
+     au plus « Anciens membres ». sousCas : précision → cas. */
+  function sousNaHtml(sous, sousCas) {
+    var keys = Object.keys(sous || {}).filter(function (k) { return S.isAdmin || (sousCas || {})[k] === 'ancien'; }).sort();
+    if (!keys.length) return '';
+    var anciens = keys.some(function (k) { return (sousCas || {})[k] === 'ancien'; });
+    return '<br/><span class="dash-mut" style="font-size:11px">' + keys.map(function (k) { return esc(k === 'inconnu' ? 'personne inconnue' : k); }).join(' · ') +
+      (anciens ? info('anciens_membres') : '') + '</span>';
+  }
 
   /* ══ PÉRIODE ═════════════════════════════════════════════════════════ */
   function periode() {
@@ -775,6 +797,8 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
       if (nEc) out.push('↔️ ' + clic('<b>' + nEc + ' écart' + (nEc > 1 ? 's' : '') + ' de canal</b>', 'c|_all|ecarts', nEc) + info('ecart_canal') + '.');
       if (nStat) out.push('⏳ ' + clic('<b>' + nStat + ' RDV à statuer</b>', 'b|_all|b:a_statuer', nStat) + info('a_statuer') + ' — à saisir depuis l’<a href="booking-admin.html?vue=mes-rdv" style="color:inherit;text-decoration:underline">Agenda</a> pour des chiffres exacts.');
       if (S.isAdmin && C.callsNoAuthor) out.push('📞 ' + C.callsNoAuthor + ' ' + esc(SC.mot('appels_sans_auteur').toLowerCase()) + info('appels_sans_auteur') + ' : comptés dans l’équipe, ligne « Non attribué ».');
+      if (S.isAdmin && C.hors && C.hors.calls) out.push('📞 ' + fmtNum(C.hors.calls) + ' appel' + (C.hors.calls > 1 ? 's' : '') + ' sortant' + (C.hors.calls > 1 ? 's' : '') + ' ' + esc(SC.mot('hors_equipe_sales').toLowerCase()) + info('hors_equipe_sales') +
+        ' (dont ' + fmtNum(C.hors.decroches) + ' ' + esc(SC.mot('decroches').toLowerCase()) + ') : non comptés dans les Appels ni les Décrochés de l’équipe, comme au Stats funnel.');
     }
     return out.length ? '<div class="dash-notes">' + out.join('<br/>') + '</div>' : '';
   }
@@ -821,7 +845,7 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
 
     /* Setting */
     var ap = appelsEquipe(C);
-    h += '<div class="section-title">Setting <span class="dash-mut">— RDV posés par les setters</span></div>';
+    h += '<div class="section-title">Setting (NB) <span class="dash-mut">— Sets et RDV du setting</span></div>';
     h += '<div class="yr-grid">';
     h += carte(motInfo('appels'), ap.val,
       ap.ok ? (fmtNum(T.decroches) + ' ' + esc(SC.mot('decroches').toLowerCase()) + info('decroches') + ' · ' + esc(SC.mot('taux_decroche')) + ' ' + fmtPct(SC.pct(T.decroches, T.calls)) + info('taux_decroche')) : ap.sub, '#60a5fa');
@@ -918,7 +942,8 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
     var tot = { rdv: 0, presents: 0, pitches: 0, closes: 0, con: 0, paid: 0, calls: 0, decroches: 0, sets: 0, nbRdv: 0, nbPresents: 0, nbKept: 0, nbAVenir: 0 };
     function ligne(s, nomHtml, cls) {
       var key = s.key;
-      var argent = key === '_na' || argentVisible(key);
+      var argent = key === '_na' ? argentNaVisible(s.argentNomin) : argentVisible(key);
+      var verrou = '<span class="dash-mut">🔒</span>' + (key === '_na' ? cadenasNa() : '');
       var appels = appelsOk && (S.isAdmin || (key !== '_na' && key === me));
       tot.rdv += s.rdv.rdv; tot.presents += s.rdv.presents; tot.pitches += s.rdv.pitches; tot.closes += s.money.closes;
       tot.con += s.money.con; tot.paid += s.money.paid; tot.calls += s.calls; tot.decroches += s.decroches;
@@ -928,8 +953,8 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
         '<td>' + clic(fmtNum(s.rdv.presents), 'b|' + key + '|b:present', s.rdv.presents) + '</td>' +
         '<td>' + clic(fmtNum(s.rdv.pitches), 'b|' + key + '|b:pitche', s.rdv.pitches) + '</td>' +
         '<td>' + clic(fmtNum(s.money.closes), 'c|' + key + '|closes', s.money.closes) + '</td>' +
-        '<td>' + (argent ? fmtEuro(s.money.con) : '<span class="dash-mut">🔒</span>') + '</td>' +
-        '<td>' + (argent ? fmtEuro(s.money.paid) : '<span class="dash-mut">🔒</span>') + '</td>' +
+        '<td>' + (argent ? fmtEuro(s.money.con) : verrou) + '</td>' +
+        '<td>' + (argent ? fmtEuro(s.money.paid) : verrou) + '</td>' +
         '<td>' + (appels ? fmtNum(s.calls) : '<span class="dash-mut">—</span>') + '</td>' +
         '<td>' + (appels ? fmtNum(s.decroches) : '<span class="dash-mut">—</span>') + '</td>' +
         '<td>' + clic(fmtNum(s.sets), 'b|' + key + '|b:sets', s.sets) + '</td>' +
@@ -943,9 +968,8 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
         ' <span class="dash-mut">' + esc(AF.roleLabel(m.role)) + '</span>');
     });
     if (!C.naVide) {
-      var sous = Object.keys(C.B._na.sous).sort().map(function (k) { return esc(k === 'inconnu' ? 'personne inconnue' : k); });
       h += ligne(C.B._na, '<span class="member-dot" style="background:#6b7280"></span>' + esc(SC.mot('non_attribue')) + info('non_attribue') +
-        (sous.length ? '<br/><span class="dash-mut" style="font-size:11px">' + sous.join(' · ') + (Object.prototype.hasOwnProperty.call(C.B._na.sous, SC.mot('anciens_membres')) ? info('anciens_membres') : '') + '</span>' : ''));
+        sousNaHtml(C.B._na.sous, C.B._na.sousCas));
     }
     var appTot = (appelsOk && S.isAdmin) ? fmtNum(tot.calls) : '—' + (appelsOk ? info('appels_equipe_non_lisibles') : '');
     var decTot = (appelsOk && S.isAdmin) ? fmtNum(tot.decroches) : '—';
@@ -975,8 +999,11 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
       Object.keys(lm.bySlug).forEach(function (slug) {
         var r = lm.bySlug[slug];
         var rg = ranger(slug, null, idx);
-        var s = parSeau[rg.key] || (parSeau[rg.key] = { key: rg.key, sous: {}, closing: {}, setting: {} });
-        if (rg.key === '_na') s.sous[rg.sous] = 1;
+        var s = parSeau[rg.key] || (parSeau[rg.key] = { key: rg.key, sous: {}, sousCas: {}, argentNomin: {}, closing: {}, setting: {} });
+        if (rg.key === '_na') {
+          s.sous[rg.sous] = 1; s.sousCas[rg.sous] = rg.cas;
+          if (CAS_NOMINATIF[rg.cas] && rg.slug && r.closing && ((r.closing.contracte || 0) || (r.closing.collecte || 0))) s.argentNomin[rg.slug] = 1;
+        }
         CH_CLOSING.forEach(function (k) { var v = r.closing ? r.closing[k] : 0; tot.closing[k] += v; s.closing[k] = (s.closing[k] || 0) + v; });
         CH_SETTING.forEach(function (k) { var v = r.setting ? r.setting[k] : 0; tot.setting[k] += v; s.setting[k] = (s.setting[k] || 0) + v; });
       });
@@ -1015,11 +1042,12 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
       '<th>Contracté' + decl() + cad + '</th><th>Collecté' + decl() + cad + '</th><th>Appels' + decl() + '</th><th>Sets' + decl() + '</th></tr></thead><tbody>';
     var tt = { calls: 0, lives: 0, offres: 0, closes: 0, contracte: 0, collecte: 0, sCalls: 0, sets: 0 };
     function ligne(sx, nomHtml) {
-      var cl = sx.closing, st = sx.setting, arg = sx.key === '_na' || argentVisible(sx.key);
+      var cl = sx.closing, st = sx.setting, arg = sx.key === '_na' ? argentNaVisible(sx.argentNomin) : argentVisible(sx.key);
+      var verrou = '<span class="dash-mut">🔒</span>' + (sx.key === '_na' ? cadenasNa() : '');
       tt.calls += cl.calls || 0; tt.lives += cl.lives || 0; tt.offres += cl.offres || 0; tt.closes += cl.closes || 0;
       tt.contracte += cl.contracte || 0; tt.collecte += cl.collecte || 0; tt.sCalls += st.calls || 0; tt.sets += st.sets || 0;
       return '<tr class="dash-legacy"><td>' + nomHtml + '</td><td>' + fmtNum(cl.calls || 0) + '</td><td>' + fmtNum(cl.lives || 0) + '</td><td>' + fmtNum(cl.offres || 0) + '</td><td>' + fmtNum(cl.closes || 0) + '</td>' +
-        '<td>' + (arg ? fmtEuro(cl.contracte || 0) : '<span class="dash-mut">🔒</span>') + '</td><td>' + (arg ? fmtEuro(cl.collecte || 0) : '<span class="dash-mut">🔒</span>') + '</td>' +
+        '<td>' + (arg ? fmtEuro(cl.contracte || 0) : verrou) + '</td><td>' + (arg ? fmtEuro(cl.collecte || 0) : verrou) + '</td>' +
         '<td>' + fmtNum(st.calls || 0) + '</td><td>' + fmtNum(st.sets || 0) + '</td></tr>';
     }
     membres().forEach(function (m) {
@@ -1027,8 +1055,7 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
       if (sx) t += ligne(sx, esc(nomMembre(m, m.slug)));
     });
     if (G.parSeau._na) {
-      var sous = Object.keys(G.parSeau._na.sous).sort().map(function (k) { return esc(k === 'inconnu' ? 'personne inconnue' : k); });
-      t += ligne(G.parSeau._na, esc(SC.mot('non_attribue')) + info('non_attribue') + (sous.length ? '<br/><span class="dash-mut" style="font-size:11px">' + sous.join(' · ') + '</span>' : ''));
+      t += ligne(G.parSeau._na, esc(SC.mot('non_attribue')) + info('non_attribue') + sousNaHtml(G.parSeau._na.sous, G.parSeau._na.sousCas));
     }
     t += '<tr class="tr-total" data-total="1"><td>Total ' + esc(SC.mot('equipe')) + '</td><td>' + fmtNum(tt.calls) + '</td><td>' + fmtNum(tt.lives) + '</td><td>' + fmtNum(tt.offres) + '</td><td>' + fmtNum(tt.closes) + '</td>' +
       '<td>' + fmtEuro(tt.contracte) + '</td><td>' + fmtEuro(tt.collecte) + '</td><td>' + fmtNum(tt.sCalls) + '</td><td>' + fmtNum(tt.sets) + '</td></tr></tbody></table></div>';
@@ -1223,17 +1250,41 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
     var ents = ((C.L[portee] || {})[genre]) || [];
     var g = GENRES[p[0] === 'c' ? p[2] : p[2]] || [];
     var me = moi();
-    var montrerArgent = S.isAdmin || portee === me || portee.indexOf('m:') === 0 || portee === '_all' || portee === '_na';
+    /* D26 : montants des totaux d'équipe (Équipe, un mois) visibles de tous ;
+       ceux d'une personne réservés à l'admin et à elle-même ; « Non attribué »
+       masqué pour un non-admin dès qu'il contient une personne identifiable. */
+    var montrerArgent = S.isAdmin || portee === me || portee.indexOf('m:') === 0 || portee === '_all' ||
+      (portee === '_na' && argentNaVisible(C.B._na.argentNomin));
+    /* Noms des listes pour un non-admin : jamais le prénom d'une personne sans
+       onglet (« hors onglets ») ; dans la liste « Non attribué », aucun nom
+       d'une autre personne (au plus « Anciens membres »). */
+    function nomListe(slug) {
+      if (!slug) return '';
+      if (S.isAdmin || slug === me) return nomDe(slug);
+      var r = ranger(slug, null, C.idx);
+      if (r.cas === 'ancien') return SC.mot('anciens_membres');
+      if (r.key === '_na' || portee === '_na') return SC.mot('non_attribue');
+      return nomDe(slug);
+    }
     var items = ents.map(function (e) {
       if (e.t === 'c') {
-        var it = SD.closeItem(e.row, { nomDe: nomDe });
-        /* D26 : pour un non-admin, pas de montant rattaché au nom d'une autre personne. */
-        if (!S.isAdmin && e.row.closer !== me && e.row.setter !== me) { it.closer = ''; it.setter = ''; }
+        var it = SD.closeItem(e.row, { nomDe: nomListe });
+        if (!S.isAdmin) {
+          if (montrerArgent) {
+            /* Pas de montant à côté du nom d'une autre personne : seul son propre nom reste. */
+            if (e.row.closer !== me) it.closer = '';
+            if (e.row.setter !== me) it.setter = '';
+          } else {
+            /* Montants masqués : aucune mention chiffrée dans les précisions non plus. */
+            it.flags = (it.flags || []).filter(function (f) { return String(f).indexOf('€') < 0; });
+            it.flag = it.flags.join(' · ');
+          }
+        }
         return it;
       }
       var b = e.b;
-      var it2 = SD.bookingItem(b, { now: C.now, classe: e.cls, closer: nomDe(e.closer) || SC.mot('non_attribue'),
-        setter: e.cls === 'setter' ? (nomDe(e.setter) || SC.mot('non_attribue')) : '' });
+      var it2 = SD.bookingItem(b, { now: C.now, classe: e.cls, closer: nomListe(e.closer) || SC.mot('non_attribue'),
+        setter: e.cls === 'setter' ? (nomListe(e.setter) || SC.mot('non_attribue')) : '' });
       if (e.pose) it2.info = 'posé le ' + SD.frDate(e.pose) + ((b.date || '') !== e.pose ? ' · RDV le ' + SD.frDate(b.date) : '');
       return it2;
     });
@@ -1619,19 +1670,26 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
     return m + ' min ' + pad2(s) + ' s';
   }
 
-  /* ── Personnes : uid → ligne (référentiel §3, D10) ── */
-  function ligneDeUid(uid) {
-    if (!uid) return { key: '_na', name: SC.mot('non_attribue'), color: '#6b7280', sous: SC.mot('appels_sans_auteur') };
+  /* ── Personnes (référentiel §3, D10) — auteur d'un appel par LA règle du
+     Stats funnel (FunnelCore.callerOf : compte relié, sinon prénom Ringover),
+     sur le roster complet (anciens membres compris). ── */
+  function rosterComplet() {
+    var seen = {}, out = [];
+    function add(m) { var k = m && (m.slug || m.firebaseUid); if (k && !seen[k]) { seen[k] = 1; out.push(m); } }
+    (window.TEAM_MEMBERS_LIST || []).forEach(add);
     var map = window.TEAM_MEMBERS || {};
-    var keys = Object.keys(map);
-    for (var i = 0; i < keys.length; i++) {
-      var m = map[keys[i]];
-      if (!m || (m.firebaseUid !== uid && m.uid !== uid)) continue;
-      var slug = m.slug || keys[i];
-      if (AF.isDeparted(slug)) return { key: '_anciens', name: SC.mot('anciens_membres'), color: '#6b7280', sous: '' };
-      return { key: uid, name: m.shortName || m.displayName || slug, color: m.color || '#6b7280', active: m.active !== false, sous: '' };
-    }
-    return { key: '_na', name: SC.mot('non_attribue'), color: '#6b7280', sous: 'poste inconnu' };
+    Object.keys(map).forEach(function (k) {
+      var m = map[k];
+      if (m && !m.slug) { var c = { slug: k }; Object.keys(m).forEach(function (f) { c[f] = m[f]; }); m = c; }
+      add(m);
+    });
+    return out;
+  }
+  function ligneDe(who) {
+    if (!who) return { key: '_na', name: SC.mot('non_attribue'), color: '#6b7280', sous: SC.mot('appels_sans_auteur') };
+    if (who.departed || (who.slug && AF.isDeparted(who.slug))) return { key: '_anciens', name: SC.mot('anciens_membres'), color: '#6b7280', sous: '' };
+    var m = (who.slug && (window.TEAM_MEMBERS || {})[who.slug]) || {};
+    return { key: 'p:' + who.key, name: who.name || who.slug || '', color: m.color || '#6b7280', active: m.active !== false, sous: '' };
   }
 
   /* ── Lecture ── */
@@ -1642,15 +1700,26 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
   }
 
   /* ── Agrégat : sortants, décrochés par la règle commune ── */
+  /* Vue « Toute l'équipe » (admin) : périmètre du Stats funnel (revue D17,
+     FunnelCore.perimetreAppel) — équipe sales + appels sans auteur ; les
+     appels de la CSM et des coachs sont à part (hors), jamais dans le total.
+     Vue d'une personne (filtre admin, ou « Mes appels ») : tous ses appels. */
   function aggregate(logs) {
-    var byRow = {}, byDay = {}, tot = { calls: 0, decroches: 0, talk: 0 };
+    var byRow = {}, byDay = {}, tot = { calls: 0, decroches: 0, talk: 0 }, hors = { calls: 0, decroches: 0, talk: 0 };
+    var equipe = state.role === 'admin' && state.filterUid === 'all';
+    var CIDX = FC.callerIndex(rosterComplet());
     (logs || []).forEach(function (c) {
       if (!c || c.direction !== 'outbound') return;
       if (state.role === 'admin' && state.filterUid !== 'all' && c.userId !== state.filterUid) return;
       var ms = c.initiatedAt && c.initiatedAt.toMillis ? c.initiatedAt.toMillis() : null;
       if (ms == null) return;
       var dk = SC.jourParis(ms);
-      var L = ligneDeUid(c.userId || null);
+      if (equipe && FC.perimetreAppel(c, CIDX) === 'hors') {
+        var dh = AF.isAnswered(c);
+        hors.calls++; if (dh) { hors.decroches++; hors.talk += Number(c.durationSec) || 0; }
+        return;
+      }
+      var L = ligneDe(FC.callerOf(c, CIDX));
       var r = byRow[L.key] || (byRow[L.key] = { key: L.key, name: L.name, color: L.color, active: L.active, sous: {}, calls: 0, decroches: 0, talk: 0 });
       if (L.sous) r.sous[L.sous] = 1;
       var d = byDay[dk] || (byDay[dk] = { calls: 0, decroches: 0, talk: 0 });
@@ -1658,7 +1727,7 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
       r.calls++; d.calls++; tot.calls++;
       if (dec) { r.decroches++; d.decroches++; tot.decroches++; r.talk += talk; d.talk += talk; tot.talk += talk; }
     });
-    return { byRow: byRow, byDay: byDay, tot: tot };
+    return { byRow: byRow, byDay: byDay, tot: tot, hors: hors };
   }
 
   /* ── Rendu ── */
@@ -1759,6 +1828,13 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
         html += '<tr class="cr-total"><td>Total équipe' + SC.info('equipe') + '</td><td class="num">' + fmtNum(tt.calls) + '</td><td class="num">' + fmtNum(tt.decroches) + '</td>' +
           '<td class="num">' + SC.fmtPct(SC.pct(tt.decroches, tt.calls)) + '</td><td class="num">' + fmtDuration(tt.talk) + '</td>' +
           '<td class="num">' + (tt.decroches > 0 ? fmtDuration(tt.talk / tt.decroches) : '—') + '</td></tr>';
+      }
+      if (agg.hors.calls) {
+        var hz = agg.hors;
+        html += '<tr><td><span class="cr-dot" style="background:#6b7280"></span>' + esc(SC.mot('hors_equipe_sales')) + SC.info('hors_equipe_sales') +
+          ' <span class="cr-archived">hors du total</span></td><td class="num">' + fmtNum(hz.calls) + '</td><td class="num">' + fmtNum(hz.decroches) + '</td>' +
+          '<td class="num">' + SC.fmtPct(SC.pct(hz.decroches, hz.calls)) + '</td><td class="num">' + fmtDuration(hz.talk) + '</td>' +
+          '<td class="num">' + (hz.decroches > 0 ? fmtDuration(hz.talk / hz.decroches) : '—') + '</td></tr>';
       }
       html += '</tbody></table></div>';
     }

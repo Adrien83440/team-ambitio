@@ -5,9 +5,14 @@
    uniquement. Deux règles :
      • Leads (opt-in, quiz, tunnels…) : round-robin, 100 % à une personne,
        ou pourcentages (total 100) ;
-     • Self-bookings (RDV pris par le prospect) : une personne, ou
-       round-robin entre plusieurs.
-   À côté : la répartition RÉELLE des 30 derniers jours pour vérifier.
+     • Fiches en Self Booking (fiches nées d'un RDV pris par le prospect, ou
+       à l'étape Self booking) : une personne, ou round-robin entre plusieurs.
+   À côté : la répartition RÉELLE pour vérifier la règle. Ce sont des FICHES
+   créées (leads.createdAt) depuis 30 × 24 h glissants, rangées par personne
+   attribuée (assignedTo) — ni les « Leads NB reçus » de Set NB (date d'entrée
+   réelle, setter de la fiche), ni des RDV Self Booking (Close SB). Libellés
+   et « i » seulement (25/11/2026, référentiel des chiffres) : le calcul de
+   api/lead-routing.js et la règle de répartition ne changent pas.
    Données : api/lead-routing.js. La page ne charge pas Firebase : la carte
    charge le SDK compat elle-même si besoin (session restaurée depuis le
    navigateur). ES5.
@@ -72,9 +77,25 @@
     document.head.appendChild(s);
   }
 
+  /* Nom affiché : membre actif, « Non attribué », sinon « Anciens membres »
+     (la liste ne contient que les membres actifs : un slug absent est celui
+     d'un membre parti ou archivé — jamais nommé, décision du 25/11/2026). */
   function nameOf(slug) {
     var m = (data.members || []).filter(function (x) { return x.slug === slug; })[0];
-    return m ? m.name : (slug === '(non attribué)' ? 'Non attribué' : slug);
+    return m ? m.name : (slug === '(non attribué)' ? 'Non attribué' : 'Anciens membres');
+  }
+  /* « i » d'explication : celui de stats-core.js quand la page le charge
+     (Équipe Sales le charge), sinon une info-bulle title. */
+  var INFO = {
+    leads: ['Fiches opt-in créées', 'Fiches créées (date de création de la fiche) dans les 30 derniers jours glissants (30 × 24 h jusqu’à maintenant), hors fiches fusionnées et hors fiches en Self Booking, rangées par personne attribuée : sert à vérifier la règle de répartition. Ce ne sont pas les « Leads » du Stats funnel ni les « Leads NB reçus » de Set NB (date d’entrée réelle, setter de la fiche).'],
+    selfBooking: ['Fiches en Self Booking', 'Fiches créées dans les 30 derniers jours glissants (30 × 24 h jusqu’à maintenant) qui sont aujourd’hui à l’étape Self booking ou nées d’une réservation directe, rangées par personne attribuée. Ce n’est pas le nombre de RDV Self Booking (voir Close SB) : une fiche plus ancienne qui réserve n’y est pas, et une fiche change de bloc si son étape change.'],
+    anciens: ['Anciens membres', 'Fiches attribuées à des personnes qui ont quitté l’équipe : elles restent comptées, sans nom.']
+  };
+  function lrInfo(k) {
+    var it = INFO[k]; if (!it) return '';
+    var SC = window.StatsCore;
+    if (SC && typeof SC.infoLibre === 'function') return SC.infoLibre(it[0], it[1]);
+    return ' <span title="' + esc(it[1]) + '" style="cursor:help;opacity:.6">ⓘ</span>';
   }
 
   function ruleHtml(kind, rule, allowWeighted) {
@@ -100,10 +121,13 @@
     if (rule.mode === 'weighted') h += '<div class="lr-tot ' + (total === 100 ? 'ok' : 'bad') + '">Total : ' + total + ' %' + (total === 100 ? ' ✓' : ' (doit faire 100 %)') + '</div>';
     if (rule.mode === 'round_robin') h += '<div class="lr-tot" style="opacity:.65">À tour de rôle entre les personnes cochées (une absente est sautée).</div>';
     var st = data.stats[kind] || { total: 0, by: {} };
-    h += '<div class="lr-stat"><b>30 derniers jours :</b> ' + st.total + ' lead' + (st.total > 1 ? 's' : '');
-    Object.keys(st.by).sort(function (a, b) { return st.by[b] - st.by[a]; }).forEach(function (k) {
-      var pct = st.total ? Math.round(st.by[k] / st.total * 100) : 0;
-      h += '<div class="bar"><span style="min-width:110px">' + esc(nameOf(k)) + '</span><i style="width:' + Math.max(4, pct * 1.6) + 'px"></i><span>' + st.by[k] + ' · ' + pct + ' %</span></div>';
+    h += '<div class="lr-stat"><b>30 derniers jours glissants :</b> ' + st.total + ' fiche' + (st.total > 1 ? 's' : '') + ' créée' + (st.total > 1 ? 's' : '') + lrInfo(kind);
+    /* Regroupement par nom affiché : plusieurs anciens membres = une ligne. */
+    var byName = {};
+    Object.keys(st.by).forEach(function (k) { var nm = nameOf(k); byName[nm] = (byName[nm] || 0) + st.by[k]; });
+    Object.keys(byName).sort(function (a, b) { return byName[b] - byName[a]; }).forEach(function (nm) {
+      var pct = st.total ? Math.round(byName[nm] / st.total * 100) : 0;
+      h += '<div class="bar"><span style="min-width:110px">' + esc(nm) + (nm === 'Anciens membres' ? lrInfo('anciens') : '') + '</span><i style="width:' + Math.max(4, pct * 1.6) + 'px"></i><span>' + byName[nm] + ' · ' + pct + ' %</span></div>';
     });
     h += '</div>';
     return h;
@@ -113,8 +137,8 @@
     var cfgInfo = data.config && data.config.updatedAt ? 'Modifiée le ' + new Date(data.config.updatedAt).toLocaleString('fr-FR') : 'Aucune règle enregistrée — comportement actuel conservé';
     var h = '<div class="lr"><h3>🎯 Répartition des leads<span class="sp"></span><button type="button" class="lr-btn" data-lr="save">Enregistrer</button></h3>';
     h += '<div class="sub">' + esc(cfgInfo) + ' · s\'applique aux NOUVEAUX leads non attribués ; un lead qui revient garde sa personne.' + (msg ? '<span class="lr-msg" style="color:' + (err ? '#f87171' : '#34d399') + '">' + esc(msg) + '</span>' : '') + '</div>';
-    h += '<div class="lr-grid"><div class="lr-box"><h4>📥 Leads (opt-in, quiz, tunnels…)</h4>' + ruleHtml('leads', draft.leads, true) + '</div>';
-    h += '<div class="lr-box"><h4>📅 Self-bookings (RDV pris par le prospect)</h4>' + ruleHtml('selfBooking', draft.selfBooking, false) + '</div></div></div>';
+    h += '<div class="lr-grid"><div class="lr-box"><h4>📥 Fiches opt-in (quiz, tunnels…)</h4>' + ruleHtml('leads', draft.leads, true) + '</div>';
+    h += '<div class="lr-box"><h4>📅 Fiches en Self Booking</h4>' + ruleHtml('selfBooking', draft.selfBooking, false) + '</div></div></div>';
     mount.innerHTML = h;
   }
 

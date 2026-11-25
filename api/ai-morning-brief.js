@@ -74,8 +74,9 @@ async function collect(today) {
   /* Contexte commun (types de RDV, fiches d'agenda, équipe) : une lecture. */
   const ctxP = T.contexte().catch(function (e) {
     out.errors.push('contexte: ' + (e && e.message));
-    return { typeMap: {}, persons: {}, team: [], bySlug: {}, resoudre: function () { return null; },
-      nomDe: function (slug) { return slug ? String(slug) : SC.mot('non_attribue'); }, avert: [] };
+    /* Équipe illisible : tout le monde est « Non attribué » (« Anciens
+       membres » pour la liste historique), jamais un identifiant brut. */
+    return T.construireContexte({}, {}, [], []);
   });
 
   await Promise.all([
@@ -98,6 +99,7 @@ async function collect(today) {
       /* Leads des 7 derniers jours (jours de Paris, date d'entrée réelle). */
       const since = SC.debutJourParis(shiftDate(today, -7));
       const s = await db.collection('leads').where('createdAt', '>=', since).get();
+      const ctx = await ctxP;
       const hot = [];
       let untouched24 = 0;
       s.forEach(function (d) {
@@ -109,7 +111,7 @@ async function collect(today) {
         const st = l.status || 'nouveau';
         if (st === 'nouveau' && !comms.length && Date.now() - entree > 24 * 3600 * 1000) untouched24++;
         if (l.aiLead && l.aiLead.proba >= 60 && (st === 'nouveau' || st === 'appele') && !(l.bookingsHistory || []).length) {
-          hot.push({ nom: l.nom || '?', proba: l.aiLead.proba, statut: st, assigne: l.setterSlug || l.assignedTo || null, raison: cap(l.aiLead.raison, 160), tentatives: comms.length });
+          hot.push({ nom: l.nom || '?', proba: l.aiLead.proba, statut: st, assigne: (l.setterSlug || l.assignedTo) ? ctx.nomDe(l.setterSlug || l.assignedTo) : null, raison: cap(l.aiLead.raison, 160), tentatives: comms.length });
         }
       });
       hot.sort(function (a, b) { return b.proba - a.proba; });
@@ -123,12 +125,13 @@ async function collect(today) {
          auteur = compte relié à l'appel (FunnelCore.callerOf). */
       const ctx = await ctxP;
       const s = await db.collection('call_logs').where('initiatedAt', '>=', yStart).where('initiatedAt', '<=', yEnd).get();
-      const idx = FC.callerIndex(ctx.team);
+      /* Périmètre du Stats funnel (T.contexte().auteurAppel) : équipe sales
+         et appels sans auteur par personne, CSM / coachs sur la seule ligne
+         « Hors équipe sales » (jamais additionnée à l'équipe). */
       const groupes = {};
       s.forEach(function (d) {
         const c = d.data() || {};
-        const who = FC.callerOf(c, idx);
-        const k = !who ? SC.mot('non_attribue') : (who.departed ? SC.mot('anciens_membres') : who.name);
+        const k = ctx.auteurAppel(c).key;
         (groupes[k] = groupes[k] || []).push(c);
       });
       const by = {};
@@ -137,7 +140,7 @@ async function collect(today) {
         by[k] = { appels: st.out, decroches: st.answered, tempsAppelMin: Math.round(st.talkSec / 60), appelsRecus: st.inbound };
       });
       out.callsYesterday = by;
-      Object.assign(defs, T.definitions({ appels: 'appels', decroches: 'decroches', tempsAppelMin: ['temps_appel', 'En minutes.'], appelsRecus: 'appels_recus' }));
+      Object.assign(defs, T.definitions({ appels: 'appels', decroches: 'decroches', tempsAppelMin: ['temps_appel', 'En minutes.'], appelsRecus: 'appels_recus', horsEquipeSales: 'hors_equipe_sales' }));
     }),
     safe('bookings', async function () {
       const ctx = await ctxP;
@@ -159,7 +162,8 @@ async function collect(today) {
       const aStatuerParCloser = {};
       venteHier.forEach(function (b) {
         if (SC.etat(b, now) !== 'a_statuer') return;
-        const k = ctx.nomDe(SC.closerDuRdv(b, ctx.resoudre));
+        /* Rangé comme Global closing (StatsCore.rangPersonne, jour = date du RDV). */
+        const k = ctx.rang(SC.closerDuRdv(b, ctx.resoudre), b.date, 'closer').key;
         aStatuerParCloser[k] = (aStatuerParCloser[k] || 0) + 1;
       });
       if (Object.keys(aStatuerParCloser).length) rdv.aStatuerParCloser = aStatuerParCloser;
@@ -213,9 +217,11 @@ async function collect(today) {
       out.opportunitesClients = opps;
     }),
     safe('setterFeedback', async function () {
+      const ctx = await ctxP;
       const s = await db.collection('ai_feedback').where('date', '==', yesterday).get();
       const list = [];
-      s.forEach(function (d) { const f = d.data() || {}; list.push({ setter: f.name, appelsNotes: f.calls, moyenne: f.avg, conseilPrincipal: cap((f.conseils || [])[0] || '', 160) }); });
+      /* Un ancien membre n'est jamais nommé (« Anciens membres »). */
+      s.forEach(function (d) { const f = d.data() || {}; list.push({ setter: ctx.nomEnClair(f.name) || SC.mot('non_attribue'), appelsNotes: f.calls, moyenne: f.avg, conseilPrincipal: cap((f.conseils || [])[0] || '', 160) }); });
       out.feedbackSetters = list;
     }),
     /* Mesure des quiz (10/11/2026, brief « chiffres justes », T5) : contrôle

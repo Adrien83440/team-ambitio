@@ -144,8 +144,7 @@
   /* Notes de lecture qui ne sont pas (encore) des termes du glossaire commun
      (StatsCore.infoLibre) — signalées pour ajout centralisé. */
   var TXT = {
-    temps: ['Temps d’appel', 'Temps passé en conversation sur les appels sortants décrochés (au moins 5 secondes, répondeurs écartés). Les appels reçus ne sont pas comptés.'],
-    arrondiTemps: ['Durées arrondies', 'Chaque case de la colonne Temps arrondit ses secondes à la minute. La ligne TOTAL (et l’onglet Équipe) arrondit la somme des secondes : elle peut différer d’une ou deux minutes de la somme des cases affichées.'],
+    temps: ['Temps d’appel', 'Temps passé en conversation sur les appels sortants décrochés (au moins 5 secondes, répondeurs écartés). Les appels reçus ne sont pas comptés. Affiché en minutes et secondes, sans arrondi : le total est la somme exacte des lignes.'],
     nrp1: ['NRP 1', 'Fiches passées au statut NRP 1 (premier appel sans réponse) ce jour-là, d’après le journal d’actions de Leads Live.'],
     nrp2: ['NRP 2', 'Fiches passées au statut NRP 2 (deuxième appel sans réponse) ce jour-là, d’après le journal d’actions de Leads Live.'],
     nrp3: ['NRP 3', 'Fiches passées au statut NRP 3 (troisième appel sans réponse) ce jour-là, d’après le journal d’actions de Leads Live.'],
@@ -329,6 +328,16 @@
   }
   function fmtEuro(n) { return (Math.round(Number(n) || 0)).toLocaleString('fr-FR') + ' €'; }
   function fmtPct(n) { return SC.fmtPct(n); }
+  /* Durée exacte en heures, minutes et secondes (« 2 min 30 s ») : jamais
+     d'arrondi à la minute, pour que le total soit la somme des lignes. */
+  function fmtDurSec(sec) {
+    sec = Math.round(Number(sec) || 0);
+    if (sec <= 0) return '0 s';
+    var h = Math.floor(sec / 3600), mi = Math.floor((sec % 3600) / 60), se = sec % 60;
+    if (h > 0) return h + ' h ' + pad2(mi) + ' min' + (se ? ' ' + pad2(se) + ' s' : '');
+    if (mi > 0) return mi + ' min' + (se ? ' ' + pad2(se) + ' s' : '');
+    return se + ' s';
+  }
   function fmtN(n) { return (Number(n) || 0).toLocaleString('fr-FR'); }
   function frOfIso(iso) { var d = calOf(iso); return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear(); }
   function isAdmin() { return S.role === 'admin'; }
@@ -1086,7 +1095,7 @@
 
   /* ══ RENDER ═══════════════════════════════════════════════════════════ */
   function fmtCell(c, val) {
-    if (c.fmt === 'dur') return val > 0 ? AF.fmtDuration(val) : '<span class="z">·</span>';
+    if (c.fmt === 'dur') return val > 0 ? fmtDurSec(val) : '<span class="z">·</span>';
     if (c.fmt === 'eur') return val > 0 ? '<span class="eur">' + fmtEuro(val) + '</span>' : '<span class="z">·</span>';
     if (val === 0) return '<span class="z">·</span>';
     if (c.fmt === 'hot' || c.fmt === 'warn') return '<span class="hot">' + val + '</span>';
@@ -1262,7 +1271,7 @@
       var saTxt = D.sansAuteur > 0 ? '<br/>' + D.sansAuteur + ' ' + plural(D.sansAuteur, 'appel') + ' sans auteur' + SC.info('appels_sans_auteur') + (team ? ' (ligne Non attribué)' : ' (dans aucun onglet)') : '';
       if (team && D.horsOut > 0) saTxt += '<br/>' + SC.mot('hors_equipe_sales') + ' : ' + fmtN(D.horsOut) + ' ' + plural(D.horsOut, 'appel') + ' (' + fmtN(D.horsAns) + ' ' + plural(D.horsAns, 'décroché') + '), non comptés' + SC.info('hors_equipe_sales');
       kpis =
-        kpi(telOk ? AF.fmtDuration(tot.tempsAppelSec) : '—', esc(TXT.temps[0]) + SC.infoLibre(TXT.temps[0], TXT.temps[1]), telOk ? 'appels sortants décrochés' : 'non affiché' + telWhy, '#2dd4bf') +
+        kpi(telOk ? fmtDurSec(tot.tempsAppelSec) : '—', esc(TXT.temps[0]) + SC.infoLibre(TXT.temps[0], TXT.temps[1]), telOk ? 'appels sortants décrochés' : 'non affiché' + telWhy, '#2dd4bf') +
         kpi(telOk ? fmtN(tot.calls) : '—', lbl('appels'),
           telOk ? fmtN(tot.decroches) + ' décrochés' + SC.info('decroches') + ' · ' + fmtPct(SC.pct(tot.decroches, tot.calls)) + SC.info('taux_decroche') + saTxt : 'non affiché' + telWhy, '#5b7cfa') +
         kpi(kv(tot.leads, String(tot.leads), 'leads'), lbl('leads_travailles', team ? 'Équipe : chaque fiche compte une fois, même travaillée par deux setters.' : null), leadsSub, '#5b7cfa') +
@@ -1305,7 +1314,6 @@
     }
     notes.push('RDV NB = Annulés + No-show + À statuer + À venir + Présents · Replan. hors RDV NB' + SC.info('rdv_nb') +
       ' · Montants HT arrondis à l’euro' + SC.info('ht') + ' · jours à l’heure de Paris' + SC.infoLibre(TXT.paris[0], TXT.paris[1]));
-    if (!ecrit && telOk) notes.push('Temps : durées arrondies à la minute sur chaque ligne ; la ligne TOTAL et l’Équipe arrondissent la somme des secondes (écart possible d’une ou deux minutes avec la somme des cases)' + SC.infoLibre(TXT.arrondiTemps[0], TXT.arrondiTemps[1]));
     if (nOv > 0) notes.push('<span style="color:var(--gold)">●</span> ' + nOv + ' ' + plural(nOv, 'case corrigée', 'cases corrigées') + ' à la main (téléphone, messages, actions de fiche)' + SC.info('correction'));
     if (nOld > 0) notes.push('✎ ' + nOld + ' ' + plural(nOld, 'ancienne correction', 'anciennes corrections') + ' de colonnes calculées (RDV, sets, reçus, closes, montants) ne ' + (nOld > 1 ? 'sont' : 'est') + ' plus ' + plural(nOld, 'appliquée') + ' : le tableau montre le chiffre de la base' + SC.info('correction_ancienne'));
     var notesH = '<div style="padding:0 18px 14px">' + notes.map(function (t) { return '<div style="font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.55">' + t + '</div>'; }).join('') + '</div>';
@@ -1583,7 +1591,7 @@
       if (!corrigeable(c)) return;
       var ovKey = c.ovKey || c.key;
       var auto = (S.data.days[dk] && S.data.days[dk][c.key]) || 0;
-      var autoLbl = c.fmt === 'dur' ? AF.fmtDuration(auto) : (c.fmt === 'eur' ? fmtEuro(auto) : auto);
+      var autoLbl = c.fmt === 'dur' ? fmtDurSec(auto) : (c.fmt === 'eur' ? fmtEuro(auto) : auto);
       var cur = ov[ovKey] != null ? ov[ovKey] : '';
       h += '<div class="au-modal-f"><label>' + esc(c.ovLabel || c.label) + '</label>' +
         '<input type="number" step="any" min="0" data-ovkey="' + esc(ovKey) + '" value="' + esc(cur) + '" placeholder="auto"/>' +

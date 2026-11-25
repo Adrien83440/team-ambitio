@@ -1229,14 +1229,21 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
      Le calcul est identique, au champ près, à celui que sert l'API agence :
      c'est tout l'intérêt du module commun.
      ════════════════════════════════════════════════════════════════ */
+  /* Hôte d'un RDV → membre (revue D13) : le résolveur du moteur
+     (fiches d'agenda lues par loadAll + roster complet), le même que Close
+     SB, Global closing, Qualité leads et l'assistant. Passé à computeKpis
+     (closer des closes) ET aux listes cliquables (closer d'un RDV). */
+  var RESOUDRE_HOTE = null;
   function compute() {
+    RESOUDRE_HOTE = FC.resoudrePersonneDe(DATA, window.TEAM_MEMBERS_LIST || []);
     K = FC.computeKpis({
       DATA: DATA,
       P: P,
       tunnelFilter: tunnelFilter,
       sourceFilter: sourceFilter,
       teamMembers: window.TEAM_MEMBERS_LIST || [],
-      typeMap: TYPE_MAP
+      typeMap: TYPE_MAP,
+      resoudrePersonne: RESOUDRE_HOTE
     });
   }
 
@@ -1740,7 +1747,12 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     sansSignal: ['Fiches clientes sans vente enregistrée', 'clientes_sans_vente', 'Marquée cliente le'],
     annules: ['Closes annulés', 'closes_annules', 'Jour du close'],
     rdvClosesHorsListe: ['RDV closés sans close sur la période', 'rdv_closes_hors_periode', 'RDV'],
-    doublonsRdv: ['Clients à deux RDV closés', 'doublons_rdv_closes', 'Dernier RDV']
+    doublonsRdv: ['Clients à deux RDV closés', 'doublons_rdv_closes', 'Dernier RDV'],
+    /* Terme absent du glossaire commun : « i » au texte libre (FD_COH_LIBRE). */
+    closesRdvHorsPeriode: ['Closes au RDV closé hors période', '', 'Jour du close']
+  };
+  var FD_COH_LIBRE = {
+    closesRdvHorsPeriode: 'Closes de la période dont le RDV au résultat Close est daté avant ou après la période (ex. RDV du 28/10 closé le 05/11), ou hors du filtre affiché : comptés dans Closes, absents de RDV closés.'
   };
 
   /* Personnes : membre du roster (anciens membres compris, DATA.teamFull).
@@ -1764,20 +1776,23 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
   }
 
   function fdRdvItem(b, now) {
-    return SDF.bookingItem(b, { now: now, classe: b._class, closer: nomDe(SC.closerDuRdv(b)) });
+    return SDF.bookingItem(b, { now: now, classe: b._class, closer: nomDe(SC.closerDuRdv(b, RESOUDRE_HOTE || undefined)) });
   }
   function fdResolve(ref) {
     if (!K || !SDF) return null;
     var noLink = window.FUNNEL_READONLY === true;
     var per = ' · ' + periodLabel();
-    var now = Date.now();
+    /* L'état d'un RDV se relit avec le « maintenant » du calcul des
+       compteurs (K.now), jamais avec l'heure de l'ouverture de la liste
+       (revue D27) : un RDV compté « À venir » reste « À venir ». */
+    var now = (typeof K.now === 'number' && isFinite(K.now)) ? K.now : Date.now();
     /* Contrôle de cohérence */
     if (ref.indexOf('coh:') === 0) {
       var ck = ref.slice(4), def = FD_COH[ck];
       var src = ((K.coh || {})[ck]) || [];
       if (!def) return null;
       return {
-        title: def[0] + per, info: def[1],
+        title: def[0] + per, info: def[1], infoPlus: FD_COH_LIBRE[ck] || '',
         items: src.map(function (x) {
           return { name: x.name, leadId: x.leadId || null, date: x.date || '', info: x.why,
             canal: ck === 'sansSignal' ? '' : (x.sb ? FD_PART.sb : FD_PART.nb) };
@@ -1840,6 +1855,9 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
   function erreursBanner(k) {
     var e = (k.erreursLecture || []).slice();
     if (TYPES_ERR) e.push('Types de RDV illisibles (' + TYPES_ERR + ') : la répartition Self Booking / Setting (NB) peut être fausse.');
+    if (DATA && DATA.personsError && !e.some(function (t) { return String(t).indexOf('fiches d’agenda') >= 0; })) {
+      e.push('Lecture des fiches d’agenda impossible (' + DATA.personsError + ') : le closer d’un RDV ou d’un close sans closer validé peut manquer (« Non attribué »).');
+    }
     if (!e.length) return '';
     return '<div class="fn-alert" style="margin-bottom:14px">⚠️ <strong>' + esc(SC.mot('lecture_incomplete')) + '</strong>' + SC.info('lecture_incomplete') +
       '<br>' + e.map(function (t) { return '⚠️ ' + esc(t); }).join('<br>') +
@@ -1881,9 +1899,13 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     function n(x) { return (x || []).length; }
     var nInconnu = (k.closesCanalSrc && k.closesCanalSrc.inconnu) || 0;
     var aVerifier = n(c.ecartsCanal) + nInconnu + n(c.sansSignal) + n(c.rdvClosesHorsListe) + n(c.doublonsRdv);
-    function ligne(nb, ref, txt, cle, suite) {
+    var eqRdv = Number(c.rdvCloses) || 0;
+    var eqCalc = eqRdv + n(c.closesSansRdv) + n(c.closesRdvHorsPeriode) - n(c.annules) - n(c.doublonsRdv) - n(c.rdvClosesHorsListe);
+    var eqCloses = Number((k.closes || {}).closes) || 0;
+    if (eqCalc !== eqCloses) aVerifier += 1;
+    function ligne(nb, ref, txt, cle, suite, infoHtml) {
       return '<li style="margin:0 0 6px">' + (nb > 0 ? SDF.cell('<strong>' + fmtNum(nb) + '</strong> ' + txt, ref) : '<strong>0</strong> ' + txt) +
-        SC.info(cle) + (suite ? ' — ' + suite : '') + '</li>';
+        (infoHtml || (cle ? SC.info(cle) : '')) + (suite ? ' — ' + suite : '') + '</li>';
     }
     var cl = k.closes || {}, cSB = k.closesSB || {}, cNB = k.closesNB || {};
     var h = '<details class="fn-help"' + (aVerifier ? ' open' : '') + '><summary>' + (aVerifier ? '🔎' : '✅') + ' Contrôle de cohérence des closes — ' +
@@ -1895,6 +1917,8 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       ' (mêmes règles que la colonne RDV de Close SB et la colonne RDV NB de Set NB).</p>';
     h += '<ul style="margin:0 0 10px;padding-left:18px">';
     h += ligne(n(c.closesSansRdv), 'coh:closesSansRdv', 'close(s) sans RDV closé', 'closes_sans_rdv', 'comptés dans Closes (vente validée sur la fiche ou repérée par le paiement)');
+    h += ligne(n(c.closesRdvHorsPeriode), 'coh:closesRdvHorsPeriode', 'close(s) dont le RDV closé est hors période', '', 'comptés dans Closes, absents de RDV closés (ex. RDV du 28/10 closé le 05/11)',
+      SC.infoLibre('Closes au RDV closé hors période', FD_COH_LIBRE.closesRdvHorsPeriode));
     h += ligne(n(c.ecartsCanal), 'coh:ecartsCanal', 'écart(s) de canal', 'ecart_canal', 'comptés au canal du RDV ; la commission suit la réponse du closer');
     h += ligne(nInconnu, 'canalInconnu', 'close(s) au canal inconnu', 'canal_inconnu', 'rangés en Setting (NB) faute d’information');
     h += ligne(n(c.sansSignal), 'coh:sansSignal', 'fiche(s) cliente(s) sans vente enregistrée', 'clientes_sans_vente', 'NON comptées dans Closes');
@@ -1902,6 +1926,14 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     h += ligne(n(c.rdvClosesHorsListe), 'coh:rdvClosesHorsListe', 'RDV closé(s) sans close sur la période', 'rdv_closes_hors_periode', '');
     h += ligne(n(c.doublonsRdv), 'coh:doublonsRdv', 'client(s) à deux RDV closés', 'doublons_rdv_closes', 'un seul close compté');
     h += '</ul>';
+    /* L'égalité, refaisable à la main (revue D07) : chaque terme est une
+       ligne ci-dessus. Écarts de canal, canal inconnu et fiches sans vente
+       n'y entrent pas (ils ne changent ni Closes ni RDV closés). */
+    h += '<p>RDV closés ' + fmtNum(eqRdv) + ' + sans RDV closé ' + fmtNum(n(c.closesSansRdv)) + ' + RDV closé hors période ' + fmtNum(n(c.closesRdvHorsPeriode)) +
+      ' − closes annulés ' + fmtNum(n(c.annules)) + ' − 2e RDV closé ' + fmtNum(n(c.doublonsRdv)) + ' − RDV closés sans close ' + fmtNum(n(c.rdvClosesHorsListe)) +
+      ' = <strong>' + fmtNum(eqCalc) + '</strong> ' + (eqCalc === eqCloses
+        ? '= Closes ' + fmtNum(eqCloses) + ' ✅'
+        : '≠ Closes ' + fmtNum(eqCloses) + ' ⚠️ — écart de ' + fmtNum(Math.abs(eqCloses - eqCalc)) + ' non expliqué : à signaler') + '</p>';
     if (tunnelFilter !== 'all' || sourceFilter !== 'all') {
       h += '<p style="color:var(--muted)">Filtre de tunnel ou de source actif : les pages équipe n’ont pas de filtre, leurs totaux ne retombent sur ceux-ci que sur « Tous ».</p>';
     }
@@ -1932,7 +1964,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
        15/07), réécrit le 25/11/2026 pour dire les règles ACTUELLES. */
     h += '<details class="fn-help"><summary>❓ Comment lire ce funnel — les 8 règles (clique pour déplier)</summary><div class="hb">'
       + '<p><strong>1 · Un RDV a deux dates</strong> — le jour où on le <strong>prend</strong> et le jour où il <strong>a lieu</strong>. La <strong>Ligne 1</strong> et « Prise de RDV » comptent les <strong>RDV pris</strong> pendant la période (ce que la pub et le setting ont produit : LTB, CPR), avec le résultat de leur dernier RDV, même s’il arrive après la période. La <strong>Ligne 2</strong> et « Tenue » comptent les <strong>RDV de la période</strong>, ceux qui ont lieu pendant la période. Le pont chiffré entre les deux est dans « Prise de RDV ».</p>'
-      + '<p><strong>2 · Self Booking (SB), Setting (NB), Manuels.</strong> SB : le prospect réserve seul sur le lien public. Setting (NB) : RDV posé par un setter sur le lien setter (le type de consultation fait foi). Manuels : RDV créés à la main dans l’Agenda, comptés à leur date (Ligne 2, Tenue) mais jamais dans les RDV pris, les Sets ni le LTB. Sous chaque carte, Self Booking + Setting (NB) (+ Manuels) = le total.</p>'
+      + '<p><strong>2 · Self Booking (SB), Setting (NB), Manuels.</strong> SB : le prospect réserve seul sur le lien public. Setting (NB) : RDV pris par un setter sur le lien setter (le type de consultation fait foi). Manuels : RDV créés à la main dans l’Agenda, comptés à leur date (Ligne 2, Tenue) mais jamais dans les RDV pris, les Sets ni le LTB. Sous chaque carte, Self Booking + Setting (NB) (+ Manuels) = le total.</p>'
       + '<p><strong>3 · Un RDV n’a qu’un état</strong> : annulé, no-show, présent, à statuer ou à venir (les replanifiés comptent à leur nouvelle date, les doublons supprimés nulle part). <strong>Kept = RDV − annulés</strong> : le no-show reste dedans, sur les deux lignes. <strong>Show-up = présents ÷ (Kept − à venir)</strong>.</p>'
       + '<p><strong>4 · Closes = clients gagnés pendant la période</strong>, un par client, comptés le jour de la vente. C’est la même liste que Set NB, Close SB, Global closing et Qualité leads. Un close annulé est retiré partout. Le canal d’un close est celui de son RDV closé ; à défaut, la réponse du closer, puis l’étape de la fiche.</p>'
       + '<p><strong>5 · Les montants sont HT et lus dans le module Paiements.</strong> Contracté = valeur des contrats ; Collecté = prélèvements déjà passés, à ce jour, sur ces mêmes clients ; Reste à encaisser = contracté − collecté. Un close sans paiement : contracté = tarif déclaré au close, collecté à 0, signalé « sans paiement ». Le collecté déclaré par le closer n’est jamais compté.</p>'
@@ -1991,7 +2023,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       'Taux de pitch ' + SC.fmtPct(ch.tauxPitch) + ' = ' + fmtNum(ch.pitched) + ' ÷ ' + fmtNum(ch.present) + ' présents' + SC.info('taux_pitch') +
       (ch.disqua ? '<br>' + fmtNum(ch.disqua) + ' disqua. (présents non pitchés)' + SC.info('disqua') : ''),
       split3({ v: fmtNum(cS.pitched), p: SC.fmtPct(cS.tauxPitch) }, { v: fmtNum(cN.pitched), p: SC.fmtPct(cN.tauxPitch) }, null));
-    h += '<div class="fn-stage-note" style="grid-column:1/-1;margin-top:2px">Sous chaque carte : la part <strong>Self Booking</strong> (le prospect réserve seul) et la part <strong>Setting (NB)</strong> (RDV posé par un setter) ; elles s’additionnent au total, et les deux LTB donnent le LTB global. Le % à droite : LTB sous RDV pris, show-up sous Présents, taux de pitch sous Pitchés, chacun sur sa part. Les RDV manuels ne sont jamais des RDV pris.' + SC.info('rdv_manuels') + '</div>';
+    h += '<div class="fn-stage-note" style="grid-column:1/-1;margin-top:2px">Sous chaque carte : la part <strong>Self Booking</strong> (le prospect réserve seul) et la part <strong>Setting (NB)</strong> (RDV pris par un setter) ; elles s’additionnent au total, et les deux LTB donnent le LTB global. Le % à droite : LTB sous RDV pris, show-up sous Présents, taux de pitch sous Pitchés, chacun sur sa part. Les RDV manuels ne sont jamais des RDV pris.' + SC.info('rdv_manuels') + '</div>';
     h += '</div>';
 
     /* ── Ligne 2 : RDV DE LA PÉRIODE + closes de la période ── */
@@ -2268,7 +2300,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     h += cprCard(k.cprOffre, 'Coût / pitché SB', 'cout_pitche_sb', cS.pitched, 'pitchés SB');
     h += '</div>';
     /* — Ligne 2 : SETTING (NB) — */
-    h += '<div style="font-size:10.5px;color:#c4b5fd;font-weight:800;letter-spacing:0.7px;margin:16px 0 8px">📞 Setting (NB) — RDV posés par un setter (lien setter)</div>';
+    h += '<div style="font-size:10.5px;color:#c4b5fd;font-weight:800;letter-spacing:0.7px;margin:16px 0 8px">📞 Setting (NB) — RDV pris par un setter (lien setter)</div>';
     h += '<div class="fn-grid">';
     var nbRecus = k.leadsNbRecus != null ? k.leadsNbRecus : k.leadsNoSB;
     h += kpiCard(fmtNum(nbRecus), SC.mot('leads_nb_recus') + SC.info('leads_nb_recus'),
@@ -2388,7 +2420,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     if (k.callsIn > 0) h += kpiCard(fmtNum(k.callsIn), 'Appels reçus' + infoL('appels_recus'), fmtNum(k.callsInAnswered) + ' pris · hors Appels');
     var provTag = k.ttxProvisional ? ' · <span style="color:var(--gold)">provisoire</span>' : '';
     h += kpiCard(fmtDelay(k.ttcMedian), '⚡ Lead to speech médian' + infoL('lead_to_speech'), fmtNum(k.leadsCalled) + ' leads appelés sous 14 j après leur entrée · ' + fmtNum(k.leadsNeverCalled) + ' jamais appelés' + provTag, null, k.ttcMedian == null);
-    h += kpiCard(fmtDelay(k.ttbSetMedian), '⏱ Time-to-book setting' + infoL('time_to_book'), 'entrée du lead → RDV posé par le setting · ' + fmtNum(k.ttbSetCount) + ' leads' + provTag, null, k.ttbSetMedian == null);
+    h += kpiCard(fmtDelay(k.ttbSetMedian), '⏱ Time-to-book setting' + infoL('time_to_book'), 'entrée du lead → RDV pris par le setting · ' + fmtNum(k.ttbSetCount) + ' leads' + provTag, null, k.ttbSetMedian == null);
     h += kpiCard(fmtDelay(k.ttbSelfMedian), '⏱ Time-to-book Self Booking' + infoL('time_to_book'), 'entrée du lead → RDV pris seul · ' + fmtNum(k.ttbSelfCount) + ' leads' + provTag, null, k.ttbSelfMedian == null);
     h += kpiCard(fmtPct(k.reachRate), 'Taux de joignabilité' + infoL('joignabilite'), fmtNum(k.leadsReached) + ' joints ÷ ' + fmtNum(k.leadsCalled) + ' appelés · ' + fmtNum(k.leadsNeverCalled) + ' jamais appelés', targetBadge('reach', k.reachRate));
     h += kpiCard(k.attemptsAvg != null ? (Math.round(k.attemptsAvg * 10) / 10).toLocaleString('fr-FR') : '—', 'Tentatives / lead appelé' + infoL('tentatives'), 'appels vers les ' + fmtNum(k.leadsCalled) + ' leads appelés, sous 14 j ÷ ' + fmtNum(k.leadsCalled));
@@ -2542,7 +2574,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       if (!prev || prev === head) break;
       head = prev;
     }
-    return { head: head || last, term: term, lib: SC.libelle(term, Date.now()) };
+    return { head: head || last, term: term, lib: SC.libelle(term, (K && typeof K.now === 'number') ? K.now : Date.now()) };
   }
   function canalLabel(b) { return b && b._class === 'self' ? 'Self Booking' : (b && b._class === 'admin' ? 'Manuel' : 'Setting (NB)'); }
 

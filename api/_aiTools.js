@@ -189,6 +189,21 @@ function construireContexte(typeMap, persons, team, avert) {
     if (parti(slug)) return SC.mot('anciens_membres');
     return prenom(slug) || SC.mot('non_attribue');
   }
+  /* Nom en clair déjà écrit sur un document (ex. payments.closerName) : un
+     ancien membre n'est jamais nommé — même prénom qu'un membre parti ou
+     qu'un slug de la liste historique → « Anciens membres ». */
+  function tok(v) {
+    let t = String(v || '');
+    try { t = t.normalize('NFD').replace(/[\u0300-\u036F]/g, ''); } catch (e) { /* rien */ }
+    return t.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').trim().split(' ')[0];
+  }
+  const prenomsPartis = {};
+  Object.keys(SC.PARTIS_HISTORIQUES || {}).forEach(function (k) { prenomsPartis[tok(k)] = 1; });
+  team.forEach(function (m) { if (m && m.slug && parti(m.slug)) prenomsPartis[tok(m.shortName || m.displayName || m.fullName || m.slug)] = 1; });
+  function nomEnClair(nom) {
+    if (!nom) return null;
+    return prenomsPartis[tok(nom)] ? SC.mot('anciens_membres') : String(nom);
+  }
   /* Qui a un onglet dans la vue : membre actif, non parti, au rôle de la vue
      (Set NB : à défaut de tout setter, toute l'équipe sales). */
   const onglets = { setter: {}, closer: {} };
@@ -223,19 +238,20 @@ function construireContexte(typeMap, persons, team, avert) {
     if (r.key !== SC.NON_ATTRIBUE) return { key: nomDe(r.key), precision: '' };
     return { key: SC.mot('non_attribue'), precision: r.precision || (vue === 'closer' ? 'Closer inconnu' : 'Setter inconnu') };
   }
-  /* Auteur d'un appel et périmètre (règle du Stats funnel : FunnelCore.callerOf,
-     rôles de l'équipe sales = FunnelCore SALES_CALL_ROLES) :
+  /* Auteur d'un appel et périmètre : LE prédicat du Stats funnel
+     (FunnelCore.perimetreAppel, auteur = FunnelCore.callerOf) —
      'sales' | 'sans_auteur' | 'hors' (CSM, coachs → « Hors équipe sales »). */
   const idxAppels = FC.callerIndex(team);
   function auteurAppel(c) {
-    const who = FC.callerOf(c, idxAppels);
-    if (!who) return { perim: 'sans_auteur', key: SC.mot('non_attribue') };
-    if (!who.sales) return { perim: 'hors', key: SC.mot('hors_equipe_sales') };
+    const perim = FC.perimetreAppel(c, idxAppels);
+    if (perim === 'sans_auteur') return { perim: perim, key: SC.mot('non_attribue') };
+    if (perim === 'hors') return { perim: perim, key: SC.mot('hors_equipe_sales') };
+    const who = FC.callerOf(c, idxAppels) || {};
     const depart = who.departed || parti(who.slug);
-    return { perim: 'sales', key: depart ? SC.mot('anciens_membres') : (who.name || SC.mot('non_attribue')) };
+    return { perim: perim, key: depart ? SC.mot('anciens_membres') : (who.name || SC.mot('non_attribue')) };
   }
   return { typeMap: typeMap || {}, persons: persons, team: team, bySlug: bySlug, resoudre: resoudre, nomDe: nomDe,
-    parti: parti, rang: rang, auteurAppel: auteurAppel, avert: avert || [] };
+    nomEnClair: nomEnClair, parti: parti, rang: rang, auteurAppel: auteurAppel, avert: avert || [] };
 }
 
 /* Regroupement par ligne d'une vue par personne : la ligne « Non attribué »
@@ -375,7 +391,7 @@ const DEF_CLOSES = {
   canalInconnu: 'canal_inconnu', ecartsCanal: 'ecart_canal', fichesClientesSansVente: 'clientes_sans_vente',
   tauxCloseSurPitches: 'taux_close_pitches', tauxCloseSurPresents: 'taux_close_presents', tauxCloseSurRdv: 'taux_close_rdv',
   montants: 'ht', canal: 'canal', closer: 'closer', setter: 'setter', nonAttribue: 'non_attribue', anciensMembres: 'anciens_membres',
-  declare: 'declare_au_close',
+  declare: 'declare_au_close', detail: 'non_attribue_contenu',
 };
 
 /* Liste unique des closes d'une période → champs renvoyés (HT, arrondis à
@@ -579,23 +595,25 @@ const TOOLS = [
   },
   {
     name: 'calls_stats',
-    description: 'Appels téléphoniques (Ringover) sur la période, par membre de l\'équipe (auteur = compte relié à l\'appel ; appels sans auteur sur la ligne « Non attribué », anciens membres sur « Anciens membres ») : appels (SORTANTS seulement), décrochés (au moins 5 s de conversation, répondeurs écartés — même règle que Set NB et le Stats funnel), taux de décroché, temps d\'appel (conversation des sortants décrochés, en minutes), appels reçus (entrants, à part), note IA moyenne des appels analysés. `equipe` = somme des lignes. Champ `definitions`.',
+    description: 'Appels téléphoniques (Ringover) sur la période, même périmètre que le Stats funnel : équipe sales (setters, closers, admins, anciens membres compris) + appels sans auteur. Par membre (auteur = compte relié à l\'appel, sinon prénom Ringover ; appels sans auteur sur la ligne « Non attribué », anciens membres sur « Anciens membres ») : appels (SORTANTS seulement), décrochés (au moins 5 s de conversation, répondeurs écartés), taux de décroché, temps d\'appel (conversation des sortants décrochés, en minutes), appels reçus (entrants, à part), note IA moyenne des appels analysés. `equipe` = somme des lignes de parPersonne. Les appels de la CSM et des coachs sont à part dans `horsEquipeSales` : jamais dans equipe. Champ `definitions`.',
     input_schema: { type: 'object', properties: RANGE_PROPS, additionalProperties: false },
     run: async function (i) {
       const r = range(i);
       const ctx = await contexte();
       const s = await db.collection('call_logs').where('initiatedAt', '>=', r.start).where('initiatedAt', '<=', r.end).get();
-      const idx = FC.callerIndex(ctx.team);
+      /* Périmètre du Stats funnel (ctx.auteurAppel) : équipe sales + sans
+         auteur dans equipe ; CSM / coachs à part (horsEquipeSales). */
       const groupes = {}, notes = {};
       let sansSens = 0;
-      const tous = [];
+      const tous = [], hors = [];
       s.forEach(function (d) {
         const c = d.data() || {};
-        const who = FC.callerOf(c, idx);
-        const k = !who ? SC.mot('non_attribue') : (who.departed ? SC.mot('anciens_membres') : who.name);
+        if (c.direction !== 'outbound' && c.direction !== 'inbound') sansSens++;
+        const a = ctx.auteurAppel(c);
+        if (a.perim === 'hors') { hors.push(c); return; }
+        const k = a.key;
         (groupes[k] = groupes[k] || []).push(c);
         tous.push(c);
-        if (c.direction !== 'outbound' && c.direction !== 'inbound') sansSens++;
         if (c.aiCall && c.aiCall.notation) { inc(notes, k, 'n'); inc(notes, k, 'somme', Number(c.aiCall.notation.score) || 0); }
       });
       function bloc(list, k) {
@@ -609,12 +627,13 @@ const TOOLS = [
       const parPersonne = {};
       Object.keys(groupes).forEach(function (k) { parPersonne[k] = bloc(groupes[k], k); });
       const out = { periode: r.label, equipe: bloc(tous, null), parPersonne: parPersonne };
+      if (hors.length) out.horsEquipeSales = bloc(hors, null);
       const avert = ctx.avert.slice();
       if (sansSens) avert.push(sansSens + ' appel(s) sans sens (entrant / sortant) enregistré : comptés nulle part.');
       if (avert.length) out.avertissements = avert;
       out.definitions = definitions({ appels: 'appels', decroches: 'decroches', tauxDecroche: 'taux_decroche', tempsAppelMin: ['temps_appel', 'En minutes.'],
         dureeMoyenneMin: ['duree_moyenne_appel', 'En minutes.'], appelsRecus: 'appels_recus', appelsRecusDecroches: 'appels_recus_decroches',
-        noteIAMoyenne: 'note_ia_appel', equipe: 'equipe', nonAttribue: 'appels_sans_auteur', anciensMembres: 'anciens_membres', sansSens: 'appels_sens_inconnu' });
+        noteIAMoyenne: 'note_ia_appel', equipe: ['equipe', 'Ici : équipe sales et appels sans auteur, comme le Stats funnel.'], horsEquipeSales: 'hors_equipe_sales', nonAttribue: 'appels_sans_auteur', anciensMembres: 'anciens_membres', sansSens: 'appels_sens_inconnu' });
       return out;
     },
   },
@@ -630,6 +649,7 @@ const TOOLS = [
       if (digits.length >= 9) snap = await db.collection('leads').where('phoneNormalized', '==', digits.slice(-9)).limit(10).get();
       else if (q.indexOf('@') > 0) snap = await db.collection('leads').where('email', '==', q).limit(10).get();
       else snap = await db.collection('leads').orderBy('createdAt', 'desc').limit(3000).get();
+      const eq = construireContexte({}, {}, await FC.loadTeamMembers(db), []);
       const out = [];
       snap.forEach(function (d) {
         if (out.length >= 30) return;
@@ -638,7 +658,7 @@ const TOOLS = [
         if (digits.length < 9 && q.indexOf('@') < 0 && String(l.nom || '').toLowerCase().indexOf(q) < 0) return;
         const entree = FC.realEntryMs(l) || tsToMs(l.createdAt);
         out.push({ id: d.id, nom: l.nom, email: l.email, telephone: l.telephone, statut: l.status || 'nouveau', etape: l.stage || null, provenance: srcOf(l),
-          scoreIA: l.aiLead ? l.aiLead.proba : null, assigne: l.setterSlug || l.assignedTo || null, entree: entree ? parisDate(entree) : null, client: !!l.isClient,
+          scoreIA: l.aiLead ? l.aiLead.proba : null, assigne: (l.setterSlug || l.assignedTo) ? eq.nomDe(l.setterSlug || l.assignedTo) : null, entree: entree ? parisDate(entree) : null, client: !!l.isClient,
           ficheDeTest: l.interne === true || undefined });
       });
       const res = { resultats: out };
@@ -698,6 +718,7 @@ const TOOLS = [
     run: async function () {
       const today = parisDate(Date.now());
       const avert = [];
+      const eq = construireContexte({}, {}, await FC.loadTeamMembers(db), []);
       const [s, ic] = await Promise.all([
         db.collection('payments').get(),
         db.collection('invoice_clients').where('clientStatus', '==', 'procedure').get().catch(function (e) {
@@ -746,7 +767,7 @@ const TOOLS = [
         dueTTC += restTTC; dueHT += restHT; if (enRetard) retardTTC += enRetard;
         out.push({ client: p.leadName, statut: p.status, motifs: motifs, resteDuTTC: arrondi(restTTC), resteDuHT: arrondi(restHT),
           echeancesEnRetard: retard || 0, montantEnRetardTTC: arrondi(enRetard),
-          dernierRejet: f && f.at ? parisDate(tsToMs(f.at)) : null, recouvrement: rec, closer: p.closerName });
+          dernierRejet: f && f.at ? parisDate(tsToMs(f.at)) : null, recouvrement: rec, closer: p.closerSlug ? eq.nomDe(p.closerSlug) : eq.nomEnClair(p.closerName) });
       });
       out.sort(function (a, b) { return b.resteDuTTC - a.resteDuTTC; });
       const res = { dossiers: out.length, resteDuTotalTTC: arrondi(dueTTC), resteDuTotalHT: arrondi(dueHT), montantEnRetardTotalTTC: arrondi(retardTTC), liste: out.slice(0, 40) };
@@ -830,6 +851,6 @@ module.exports = {
   TOOLS: TOOLS, claudeTools: claudeTools, runTool: runTool,
   /* Partagés avec le brief du matin (api/ai-morning-brief.js) : mêmes
      règles, mêmes mots. */
-  contexte: contexte, lireRdvDates: lireRdvDates, blocRdv: blocRdv, blocCloses: blocCloses, avertCloses: avertCloses,
+  contexte: contexte, construireContexte: construireContexte, lireRdvDates: lireRdvDates, blocRdv: blocRdv, blocCloses: blocCloses, avertCloses: avertCloses,
   definitions: definitions, DEF_RDV: DEF_RDV, DEF_CLOSES: DEF_CLOSES, range: range, decaler: decaler,
 };

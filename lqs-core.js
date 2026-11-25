@@ -740,7 +740,40 @@
       if (typeof window !== 'undefined' && typeof window.isDepartedMember === 'function') {
         try { if (window.isDepartedMember(m || slug)) return true; } catch (e) {}
       }
-      return !!(m && m.departed === true);
+      if (m && m.departed === true) return true;
+      /* Même règle que AlteoreFlow.isDeparted : drapeau de la fiche, fiche
+         archivée avec une date de fin, ou liste historique (StatsCore). */
+      return !!(SC.estParti && SC.estParti(m || null, slug));
+    }
+    /* VUE CLOSERS — rangement d'une personne (revue D10, 25/11/2026) : LA
+       règle commune StatsCore.rangPersonne, comme Global closing
+       (sales-closing.html, bucketOf). Onglet = closer de l'équipe sales
+       (rôle closer / closer_setter, actif, pas parti) ; sinon « Non
+       attribué » avec la précision : « Anciens membres », « Prénom (hors
+       onglets) » (admin, setter, autre rôle), « Prénom (avant son arrivée) »
+       (élément daté avant sa startDate). jour = date du RDV pour un RDV,
+       jour du close pour un close. ctx.rangCloser(slug, jour) peut fournir
+       la règle de la page (même retour { key, precision, cas }). */
+    var CLOSER_ROLES = { closer: 1, closer_setter: 1 };
+    function aOngletCloser(slug) {
+      var m = slug ? bySlug[slug] : null;
+      return !!(m && m.active !== false && CLOSER_ROLES[m.role] && !isDeparted(slug));
+    }
+    function debutDe(slug) {
+      var m = bySlug[slug], v = m && m.startDate;
+      return (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) ? v : null;
+    }
+    function rangLocal(slug, jour) {
+      return SC.rangPersonne(slug || null, jour || null, { parti: isDeparted, aOnglet: aOngletCloser, prenom: memberName, debut: debutDe });
+    }
+    var rangCloser = typeof ctx.rangCloser === 'function' ? ctx.rangCloser : rangLocal;
+    /* Pose rangKey / rangPrecision sur une entrée (RDV ou close). */
+    function ranger(o, jour) {
+      var r = rangCloser(o.closer || null, jour || null) || {};
+      o.rangKey = r.key || SC.NON_ATTRIBUE;
+      o.rangPrecision = r.precision || '';
+      o.rangCas = r.cas || (o.closer ? 'onglet' : 'inconnu');
+      return o;
     }
     /* Hôte d'un RDV : fiche d'agenda reliée au membre par son slug ou son
        compte (firebaseUid) — même règle que Close SB. Le repli « même
@@ -1052,7 +1085,9 @@
 
     /* Closers présents dans les données (sélecteur) */
     var closerSet = {};
-    function noteCloser(slug) { if (slug && !isDeparted(slug)) closerSet[slug] = 1; }
+    /* Sélecteur 🎯 : seulement les closers qui ont un onglet (D10) — un
+       admin, un setter ou un ancien membre n'y apparaissent pas. */
+    function noteCloser(slug) { if (slug && aOngletCloser(slug)) closerSet[slug] = 1; }
     rows.forEach(function (r) { noteCloser(r.closer); });
 
     /* ── Closes de la période (cartes Closes / Contracté / Collecté) ── */
@@ -1060,9 +1095,9 @@
     var periodSigned = CLp.rows.map(function (row) {
       var l = leadObjOf(row);
       var lr = l ? rowOfLead(l) : null;
-      return closeEntry(row, { lead: l, leadRow: lr, note: lr ? lr.note : null, offer: offerOfRow(row, l) });
+      return ranger(closeEntry(row, { lead: l, leadRow: lr, note: lr ? lr.note : null, offer: offerOfRow(row, l) }), row.day);
     });
-    var periodAnnules = CLp.annules.map(function (row) { var l = leadObjOf(row); return closeEntry(row, { lead: l, note: l ? scoreLead(l).note : null }); });
+    var periodAnnules = CLp.annules.map(function (row) { var l = leadObjOf(row); return ranger(closeEntry(row, { lead: l, note: l ? scoreLead(l).note : null }), row.day); });
     periodSigned.forEach(function (ps) { noteCloser(ps.closer); });
 
     /* ── Vue Closers : RDV DATÉS dans la plage (StatsCore) ── */
@@ -1079,7 +1114,7 @@
       var slug = closerOfRdv(b);
       noteCloser(slug);
       var d = SC.detail(b);
-      rdvRows.push({
+      rdvRows.push(ranger({
         b: b, now: now, date: b.date, month: monthKey(b.date), closer: slug, closerName: slug ? memberName(slug) : 'Non attribué',
         classe: b._class, etat: e, detailRdv: d,
         note: lr ? lr.note : null, team: lr ? lr.team : null, leadRow: lr,
@@ -1091,7 +1126,7 @@
         rdvClose: d === 'close', close: d === 'close', cash: 0, con: 0,
         name: (l && (l.nom || l.email)) || (b.prospect && (b.prospect.nom || b.prospect.email)) || '—',
         leadId: l ? l._id : null
-      });
+      }, b.date));
     });
 
     /* ── Closes de la plage Closers : la même liste unique, bornée à la
@@ -1113,11 +1148,12 @@
       var l = leadObjOf(row) || (row.leadId ? plageLeads[row.leadId] : null);
       var note = l ? scoreLead(l).note : null;
       noteCloser(row.closer);
-      return closeEntry(row, { lead: l, note: note, month: String(row.day || '').slice(0, 7), offer: offerOfRow(row, l),
-        closerName: row.closer ? memberName(row.closer) : 'Non attribué' });
+      return ranger(closeEntry(row, { lead: l, note: note, month: String(row.day || '').slice(0, 7), offer: offerOfRow(row, l),
+        closerName: row.closer ? memberName(row.closer) : 'Non attribué' }), row.day);
     });
     rdvRows.closesPlage = closesPlage;
     rdvRows.estParti = isDeparted;
+    rdvRows.rangCloser = rangCloser;
 
     /* ── « Prélevé sur la période » (glossaire preleve_periode) :
        FunnelCore.cashInPeriod — prélèvements DATÉS dans la période, tous
@@ -1179,7 +1215,9 @@
       quiz: buildQuizFunnel(D.quizDocs || []), quizErr: D.quizErr || null,
       adsByAd: D.adsByAd || [], creIdx: CRE_IDX, views: D.views || [],
       tunnels: D.tunnelsErr ? null : (D.tunnels || null),
-      leadsTruncated: !!D.leadsTruncated, memberName: memberName, isDeparted: isDeparted
+      leadsTruncated: !!D.leadsTruncated, memberName: memberName, isDeparted: isDeparted,
+      /* Vue Closers (D10) : règle de rangement et test « a un onglet ». */
+      rangCloser: rangCloser, aOngletCloser: aOngletCloser
     };
   }
 
@@ -1504,12 +1542,18 @@
     return a;
   }
   function closesOfRows(rdvRows, closes) { return closes || (rdvRows && rdvRows.closesPlage) || []; }
+  /* Clé de rangement d'une entrée de la vue Closers : rangKey posé par
+     buildModel (StatsCore.rangPersonne, D10) ; à défaut (entrées fabriquées
+     ailleurs) le slug du closer. */
+  function rangKeyOf(x) { return x.rangKey != null ? x.rangKey : (x.closer || null); }
   /* byCloser(rdvRows, slug[, closes]) — slug '' = toute l'équipe (Non
-     attribué et anciens membres compris). closes : lignes de closes de la
-     plage (par défaut rdvRows.closesPlage). */
+     attribué et anciens membres compris) ; '_na' = la ligne « Non
+     attribué ». Un closer = les RDV et closes RANGÉS dans son onglet
+     (rangKey, D10 : rien d'avant son arrivée). closes : lignes de closes de
+     la plage (par défaut rdvRows.closesPlage). */
   function byCloser(rdvRows, slug, closes) {
-    var list = rdvRows.filter(function (x) { return !slug || x.closer === slug; });
-    var cl = closesOfRows(rdvRows, closes).filter(function (c) { return !c.cancelled && (!slug || c.closer === slug); });
+    var list = rdvRows.filter(function (x) { return !slug || rangKeyOf(x) === slug; });
+    var cl = closesOfRows(rdvRows, closes).filter(function (c) { return !c.cancelled && (!slug || rangKeyOf(c) === slug); });
     var months = {}, notes = {}, tot = newRdvAgg();
     NOTE_KEYS.forEach(function (k) { notes[k] = newRdvAgg(); });
     list.forEach(function (x) {
@@ -1530,32 +1574,57 @@
     return { months: mList, byNote: notes, total: finRdv(tot), list: list, closes: cl };
   }
   /* closerBoard(rdvRows, memberName[, closes, estParti]) — une ligne par
-     closer, plus « Non attribué » (closer inconnu, slug null) et « Anciens
-     membres » (membres partis réunis, sans nom, slug null, anciens: true) :
-     la somme des lignes = « Toute l'équipe » (byCloser(rdvRows, '')). */
+     closer qui a un onglet, plus UNE ligne « Non attribué » (slug null,
+     nonAttribue: true), comme Global closing (D10) : closer inconnu, ancien
+     membre (« Anciens membres », sans nom), personne sans onglet
+     (« Prénom (hors onglets) ») ou élément d'avant son arrivée
+     (« Prénom (avant son arrivée) »). a.precisions = [{ precision, rdv,
+     closes, con }] détaille cette ligne. La somme des lignes = « Toute
+     l'équipe » (byCloser(rdvRows, '')).
+     Entrées sans rangKey (fabriquées hors buildModel) : ancienne règle —
+     slug, membre parti → « Non attribué » / « Anciens membres ». */
   function closerBoard(rdvRows, memberName, closes, estParti) {
     var parti = typeof estParti === 'function' ? estParti : (rdvRows && rdvRows.estParti) || function () { return false; };
-    var m = {};
-    function keyOf2(slug) { return !slug ? '_none' : (parti(slug) ? '_anciens' : slug); }
+    var NA = SC.NON_ATTRIBUE || '_na';
+    var m = {}, prec = {}, precOrder = [];
+    function rangOf(x) {
+      if (x.rangKey != null) return { key: x.rangKey, precision: x.rangPrecision || '' };
+      if (!x.closer) return { key: NA, precision: '' };
+      if (parti(x.closer)) return { key: NA, precision: 'Anciens membres' };
+      return { key: x.closer, precision: '' };
+    }
+    function precOf(r) {
+      if (r.key !== NA) return null;
+      var p = r.precision || 'Closer inconnu';
+      if (!prec[p]) { prec[p] = { precision: p, rdv: 0, closes: 0, con: 0 }; precOrder.push(p); }
+      return prec[p];
+    }
     rdvRows.forEach(function (x) {
-      var k = keyOf2(x.closer);
-      (m[k] = m[k] || newRdvAgg());
-      addRdv(m[k], x);
+      var r = rangOf(x);
+      (m[r.key] = m[r.key] || newRdvAgg());
+      addRdv(m[r.key], x);
+      var pp = precOf(r); if (pp) pp.rdv++;
     });
     closesOfRows(rdvRows, closes).forEach(function (c) {
       if (c.cancelled) return;
-      var k = keyOf2(c.closer);
-      (m[k] = m[k] || newRdvAgg());
-      addClose(m[k], c);
+      var r = rangOf(c);
+      (m[r.key] = m[r.key] || newRdvAgg());
+      addClose(m[r.key], c);
+      var pp = precOf(r); if (pp) { pp.closes++; pp.con = r2(pp.con + (Number(c.con) || 0)); }
     });
     return Object.keys(m).map(function (k) {
       var a = finRdv(m[k]);
-      a.slug = (k === '_none' || k === '_anciens') ? null : k;
-      a.anciens = k === '_anciens';
-      a.nonAttribue = k === '_none';
-      a.name = k === '_none' ? 'Non attribué' : (k === '_anciens' ? 'Anciens membres' : memberName(k));
+      var na = k === NA;
+      a.slug = na ? null : k;
+      a.nonAttribue = na;
+      a.anciens = false;
+      a.precisions = na ? precOrder.map(function (p) { return prec[p]; }) : [];
+      a.name = na ? 'Non attribué' : memberName(k);
       return a;
-    }).sort(function (a, b) { return (b.rdv - a.rdv) || (b.closes - a.closes); });
+    }).sort(function (a, b) {
+      if (a.nonAttribue !== b.nonAttribue) return a.nonAttribue ? 1 : -1;   // « Non attribué » en dernier, comme Global closing
+      return (b.rdv - a.rdv) || (b.closes - a.closes);
+    });
   }
 
   /* ══ 7. QUIZ — abandon question par question (quiz_funnel_daily) ═══════

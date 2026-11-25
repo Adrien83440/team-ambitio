@@ -179,8 +179,15 @@
        rangées au mois du jour de la vente (ligne.day, heure de Paris) et au
        closer de la ligne (ligne.closer). Plus aucune copie locale des chemins
        de close, du rattachement des paiements ni des fiches gagnées.
-     · Onglet Équipe = somme des onglets des closers + « Non attribué »
-       (anciens membres sans nom, closer inconnu).
+     · Onglets = closers de l'équipe sales (même liste que Global closing) ;
+       rangement par StatsCore.rangPersonne au jour du close (ou du
+       prélèvement). Onglet Équipe = somme des onglets + « Non attribué »
+       (closer inconnu, « Prénom (hors onglets) », « Prénom (avant son
+       arrivée) », « Anciens membres » sans nom).
+     · « Closes » ouvre la liste des closes comptés ; les closes annulés ont
+       leur propre liste.
+     · Partie de l'année lue une fois par année (S.anneeCache), vidée par
+       « Actualiser ».
      · « Prélevé sur la période » = FunnelCore.cashInPeriod (tous clients).
      · RDV et taux : StatsCore (classe, état, compter, tauxClose) ; LTB = RDV
        pris ÷ leads entrés (FunnelCore.loadLeads).
@@ -211,7 +218,8 @@
     year: 0, month: 0,                   // mois affiché (month 0-11), heure de Paris
     slug: '_all',
     objectives: {}, objErreur: null,     // { 'YYYY': { annual, months: { '1'..'12': n|null } } }
-    data: null, loading: false, token: 0
+    data: null, loading: false, token: 0,
+    anneeCache: {}                       // { 'AAAA': Promise } — partie de l'année, vidée par « Actualiser »
   };
   (function initPeriod() {
     var mp = SC.moisParis(Date.now()).split('-');
@@ -258,26 +266,71 @@
     if (typeof window.isDepartedMember === 'function' && (window.isDepartedMember(slug) || (m && window.isDepartedMember(m)))) return true;
     return !!(window.TEAM_DEPARTED && window.TEAM_DEPARTED[slug]);
   }
-  /* Onglet d'une personne : son slug, ou « Non attribué » (closer inconnu,
-     ancien membre, slug qui n'est pas un membre de l'équipe). */
-  function bucket(slug) {
-    if (!slug) return NA;
-    if (isDeparted(slug)) return NA;
+  function memberOf(slug) {
+    if (!slug) return null;
     var map = teamMap();
-    if (Object.keys(map).length && !has(map, slug)) return NA;
-    return slug;
+    if (has(map, slug)) return map[slug];
+    var list = window.TEAM_MEMBERS_LIST || [];
+    for (var i = 0; i < list.length; i++) if (list[i] && list[i].slug === slug) return list[i];
+    return null;
+  }
+  /* Ancien membre : règle commune StatsCore.estParti (drapeau de la fiche,
+     fiche archivée avec date de fin, liste historique), plus les repères de
+     nav.js. */
+  function estPartiSlug(slug) {
+    if (!slug) return false;
+    return SC.estParti(memberOf(slug), slug) || isDeparted(slug);
+  }
+  /* Onglets = closers de l'équipe sales (rôles closer / closer_setter,
+     actifs, partis exclus) : la même liste que Global closing
+     (sales-closing.html, computeMembers). Un admin, un coach, une CSM n'ont
+     pas d'onglet. Roster pas encore chargé → aucun onglet (tout en « Non
+     attribué » jusqu'à l'événement team-members-loaded). */
+  var CLOSER_ROLES = { closer: 1, closer_setter: 1 };
+  function closersEquipe() {
+    return (window.TEAM_MEMBERS_LIST || []).filter(function (m) {
+      return m && m.slug && !estPartiSlug(m.slug) && m.active !== false && CLOSER_ROLES[m.role];
+    });
+  }
+  function aOnglet(slug) {
+    var l = closersEquipe();
+    for (var i = 0; i < l.length; i++) if (l[i].slug === slug) return true;
+    return false;
+  }
+  function debutDe(slug) {
+    var v = (memberOf(slug) || {}).startDate;
+    return (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) ? v : null;
   }
   function memberName(slug) {
-    var m = teamMap()[slug];
+    var m = memberOf(slug);
     return m ? (m.shortName || m.displayName || slug) : (slug || '');
   }
+  /* Rangement d'une personne pour un jour donné (jour du close, ou date du
+     prélèvement) : LA règle commune StatsCore.rangPersonne — inconnu, ancien
+     membre (« Anciens membres »), « Prénom (hors onglets) », « Prénom (avant
+     son arrivée) » → « Non attribué » ; sinon l'onglet du closer. */
+  function rangDe(slug, jourIso) {
+    return SC.rangPersonne(slug, jourIso, { parti: estPartiSlug, aOnglet: aOnglet, prenom: memberName, debut: debutDe });
+  }
+  function bucket(slug, jourIso) { return rangDe(slug, jourIso).key; }
   /* Nom affiché dans une liste : jamais le nom d'un ancien membre (D10). */
   function nomDe(slug) {
     if (!slug) return '';
-    if (isDeparted(slug)) return SC.mot('anciens_membres');
-    var map = teamMap();
-    if (Object.keys(map).length && !has(map, slug)) return slug + ' (hors onglets)';
+    if (estPartiSlug(slug)) return SC.mot('anciens_membres');
     return memberName(slug);
+  }
+  /* Nom du CLOSER d'un close dans une liste : la précision de rangPersonne
+     (« Prénom (hors onglets) », « Prénom (avant son arrivée) », « Anciens
+     membres ») au jour du close. */
+  function nomCloser(slug, jourIso) {
+    if (!slug) return '';
+    var r = rangDe(slug, jourIso);
+    return r.cas === 'onglet' ? memberName(slug) : (r.precision || nomDe(slug));
+  }
+  /* Contexte de StatsDrill.closeItem pour UNE ligne : le closer est nommé au
+     jour du close, les autres personnes (setter) par nomDe. */
+  function ctxLigne(r) {
+    return { nomDe: function (slug) { return (r && slug === r.closer) ? nomCloser(slug, r.day) : nomDe(slug); } };
   }
 
   /* ── Objectifs ── */
@@ -376,28 +429,60 @@
     };
   }
 
-  function loadAll() {
-    var y = S.year;
-    var tIso = todayIso();
-    var err = [];
+  /* PARTIE DE L'ANNÉE (D28) : types de RDV, fiches d'agenda, closes de la
+     partie calculée (FunnelCore.loadCloses) et ancienne saisie ne dépendent
+     que de l'année — lus UNE fois par année, gardés en mémoire (S.anneeCache)
+     jusqu'à « ⟳ Actualiser ». Une lecture en échec n'est pas gardée : le
+     prochain chargement la retente. Seuls les taux (fenêtre de 90 jours) et
+     les RDV à venir dépendent du mois affiché. */
+  function chargerAnnee(y) {
+    var k = String(y);
+    if (S.anneeCache[k]) return S.anneeCache[k];
+    var errY = [];
     var yStartIso = y + '-01-01', yEndIso = y + '-12-31';
     var calcStartIso = (y + '-01' >= AUTO_FROM) ? yStartIso : (AUTO_FROM + '-01');
     var hasCalc = yEndIso >= calcStartIso;
-    var mKey = moisCle(y, S.month), mEndIso = lastDayIso(y, S.month);
-    /* Taux et pipeline : seulement quand le mois affiché est calculé et pas
-       encore terminé (ailleurs ils ne sont pas affichés). */
-    var needRates = mKey >= AUTO_FROM && mEndIso >= tIso;
-    var win = { startIso: isoAdd(tIso, -RATE_WINDOW_DAYS), endIso: isoAdd(tIso, -1) };
     var legacyMonths = [];
     for (var m = 0; m < 12; m++) { if (moisCle(y, m) < AUTO_FROM) legacyMonths.push(m); }
-
-    return Promise.all([loadTypes(err), loadPersons(err)]).then(function (r0) {
+    /* Roster vide au moment de la lecture : le closer d'un close repéré par
+       l'hôte du RDV ne peut pas être résolu — la lecture sera refaite quand
+       nav.js aura chargé l'équipe. */
+    var rosterVide = !Object.keys(teamMap()).length;
+    var p = Promise.all([loadTypes(errY), loadPersons(errY)]).then(function (r0) {
       var typeMap = r0[0], resoudre = resoudreAvec(r0[1]);
       var pYear = hasCalc
         ? FC.loadCloses(db, { start: SC.debutJourParis(calcStartIso), end: SC.finJourParis(yEndIso), typeMap: typeMap, resoudrePersonne: resoudre })
         : db.collection('payments').get().then(function (snap) {
           return { rows: [], annules: [], sansSignal: [], ecartsCanal: [], autres: [], toutes: [], tronque: false, erreur: null, payments: snapList(snap) };
         }, function (e) { return { rows: [], annules: [], sansSignal: [], ecartsCanal: [], autres: [], toutes: [], tronque: false, erreur: 'paiements : ' + msgErr(e), payments: [] }; });
+      var pLegacy = Promise.all(legacyMonths.map(function (mm) { return loadLegacyMonth(y, mm); }));
+      return Promise.all([pYear, pLegacy]).then(function (res) {
+        var legErr = 0;
+        res[1].forEach(function (r) { legErr += r.erreurs || 0; });
+        return { y: y, typeMap: typeMap, resoudre: resoudre, calcStartIso: calcStartIso, yEndIso: yEndIso, hasCalc: hasCalc,
+          yr: res[0], legacyList: res[1], legErr: legErr, erreurs: errY.slice(), rosterVide: rosterVide };
+      });
+    });
+    S.anneeCache[k] = p;
+    function oublier() { if (S.anneeCache[k] === p) delete S.anneeCache[k]; }
+    p.then(function (a) { if (a.erreurs.length || a.yr.erreur || a.legErr || a.rosterVide) oublier(); }, oublier);
+    return p;
+  }
+  function viderCache() { S.anneeCache = {}; }
+
+  function loadAll() {
+    var y = S.year;
+    var tIso = todayIso();
+    var mKey = moisCle(y, S.month), mEndIso = lastDayIso(y, S.month);
+    /* Taux et pipeline : seulement quand le mois affiché est calculé et pas
+       encore terminé (ailleurs ils ne sont pas affichés). */
+    var needRates = mKey >= AUTO_FROM && mEndIso >= tIso;
+    var win = { startIso: isoAdd(tIso, -RATE_WINDOW_DAYS), endIso: isoAdd(tIso, -1) };
+
+    return chargerAnnee(y).then(function (A) {
+      var err = A.erreurs.slice();
+      var typeMap = A.typeMap, resoudre = A.resoudre, calcStartIso = A.calcStartIso, yEndIso = A.yEndIso, hasCalc = A.hasCalc;
+      var pYear = Promise.resolve(A.yr);
       /* Fenêtre des taux contenue dans la partie calculée de l'année : mêmes
          lignes. Sinon (début d'année, année passée), un appel pour elle. */
       var winInYear = hasCalc && win.startIso >= calcStartIso && win.endIso <= yEndIso;
@@ -420,7 +505,7 @@
       var pLeads = needRates
         ? FC.loadLeads(db, { start: SC.debutJourParis(win.startIso), end: SC.finJourParis(win.endIso) }, DL).then(function () { return DL; }, function (e) { DL.leadsError = DL.leadsError || msgErr(e); return DL; })
         : Promise.resolve(null);
-      var pLegacy = Promise.all(legacyMonths.map(function (mm) { return loadLegacyMonth(y, mm); }));
+      var pLegacy = Promise.resolve(A.legacyList);
       return Promise.all([pYear, pWinCloses, pBkDate, pBkCreated, pLeads, pLegacy]).then(function (res) {
         var yr = res[0];
         if (yr.erreur) err.push('closes : ' + yr.erreur);
@@ -435,7 +520,7 @@
           y: y, tIso: tIso, typeMap: typeMap, calcStartIso: calcStartIso, hasCalc: hasCalc,
           year: yr, winCloses: winRes, winInYear: winInYear, win: win, needRates: needRates,
           bkDate: res[2], bkCreated: res[3], leads: leads, legacy: legacy,
-          tronque: !!yr.tronque || !!(winRes && winRes.tronque),
+          tronque: !!yr.tronque || !!(winRes && winRes.tronque), rosterVide: A.rosterVide,
           leadsTronque: !!(leads && leads.leadsTruncated),
           erreurs: err
         };
@@ -468,7 +553,33 @@
     };
   }
 
-  function inSlug(slug, closer) { return slug === '_all' || bucket(closer) === slug; }
+  function inSlug(slug, closer, jourIso) { return slug === '_all' || bucket(closer, jourIso) === slug; }
+
+  /* « Prélevé sur la période » rangé par personne : chaque prélèvement au
+     closer du client, AU JOUR du prélèvement (rangPersonne). Une ligne de
+     cashInPeriod (un paiement) peut couvrir plusieurs prélèvements du mois :
+     répartis par jour, le dernier seau reçoit l'arrondi pour que la somme
+     des seaux soit exactement le montant de la ligne. → { seau: montant } */
+  function prelevesParSeau(cash, sMs, eMs, payCloser) {
+    var out = {};
+    cash.lignes.forEach(function (l) {
+      var closer = payCloser(l.p);
+      var parts = {}, ordre = [], deja = 0;
+      (FC.revPaidEntries(l.p) || []).forEach(function (e) {
+        if (e.ms == null || e.ms < sMs || e.ms > eMs) return;
+        var k = bucket(closer, SC.jourParis(e.ms));
+        if (!Object.prototype.hasOwnProperty.call(parts, k)) { parts[k] = 0; ordre.push(k); }
+        parts[k] += e.ht;
+      });
+      if (!ordre.length) ordre.push(bucket(closer, SC.jourParis(eMs)));
+      ordre.forEach(function (k, i) {
+        var v = i === ordre.length - 1 ? l.ht - deja : Math.round((parts[k] || 0) * 100) / 100;
+        deja += v;
+        out[k] = (out[k] || 0) + v;
+      });
+    });
+    return out;
+  }
 
   /* Agrégat par mois de l'année affichée, pour un onglet. */
   function computeYear(pack, slug) {
@@ -486,7 +597,7 @@
       if (auto) {
         all.forEach(function (r) {
           if (String(r.day).slice(0, 7) !== key) return;
-          if (!inSlug(slug, r.closer)) return;
+          if (!inSlug(slug, r.closer, r.day)) return;
           row.list.push(r);
         });
         var t = FC.sumCloses(row.list);
@@ -497,14 +608,16 @@
         var lg = pack.legacy[m];
         if (lg && lg.has) {
           Object.keys(lg.bySlug).forEach(function (s) {
-            if (slug !== '_all' && bucket(s) !== slug) return;
+            if (slug !== '_all' && bucket(s, eIso) !== slug) return;
             row.closes += lg.bySlug[s].closes; row.contracte += lg.bySlug[s].contracte;
           });
           row.has = row.closes > 0 || row.contracte > 0;
         }
       }
-      var cash = FC.cashInPeriod(payments, SC.debutJourParis(sIso).getTime(), SC.finJourParis(eIso).getTime());
-      cash.lignes.forEach(function (l) { if (inSlug(slug, payCloser(l.p))) row.preleve += l.ht; });
+      var sMs = SC.debutJourParis(sIso).getTime(), eMs = SC.finJourParis(eIso).getTime();
+      var cash = FC.cashInPeriod(payments, sMs, eMs);
+      if (slug === '_all') row.preleve = cash.total;
+      else { var ps = prelevesParSeau(cash, sMs, eMs, payCloser); row.preleve = ps[slug] || 0; }
       if (row.preleve > 0) row.has = true;
       months.push(row);
     }
@@ -564,6 +677,9 @@
     Promise.all([loadObjectives(), loadAll()]).then(function (res) {
       if (token !== S.token) return;
       var pack = res[1];
+      /* L'équipe est arrivée pendant la lecture : relire (la partie de
+         l'année lue sans roster n'a pas été gardée en cache). */
+      if (pack.rosterVide && Object.keys(teamMap()).length) { refresh(); return; }
       if (S.objErreur) pack.erreurs.push('objectifs (repli sur l’objectif par défaut) : ' + S.objErreur);
       S.data = { pack: pack, rates: computeRates(pack) };
       S.loading = false;
@@ -576,22 +692,28 @@
     });
   }
 
-  /* Onglets : Équipe, chaque closer actif qui a des closes (ou une ancienne
-     saisie) dans l'année, et « Non attribué » s'il n'est pas vide. */
+  /* Onglets : Équipe, chaque closer de l'équipe sales (même liste que Global
+     closing), et « Non attribué » s'il n'est pas vide sur l'année (closes,
+     ancienne saisie ou prélèvements rangés là par rangPersonne). */
   function tabSlugs(pack) {
-    var seen = {}, out = [], na = false;
-    function add(b) { if (b === NA) { na = true; return; } if (!seen[b]) { seen[b] = 1; out.push(b); } }
-    (pack.year.toutes || []).forEach(function (r) { add(bucket(r.closer)); });
-    Object.keys(pack.legacy).forEach(function (m) {
-      var lg = pack.legacy[m];
-      Object.keys(lg.bySlug || {}).forEach(function (s) { var v = lg.bySlug[s]; if (v.closes > 0 || v.contracte > 0) add(bucket(s)); });
-    });
+    var out = closersEquipe().map(function (m) { return m.slug; });
+    out.sort(function (a, b) { return memberName(a).localeCompare(memberName(b)); });
+    var na = (pack.year.toutes || []).some(function (r) { return bucket(r.closer, r.day) === NA; });
+    if (!na) {
+      Object.keys(pack.legacy).forEach(function (m) {
+        var lg = pack.legacy[m];
+        var eIso = lastDayIso(pack.y, +m);
+        Object.keys(lg.bySlug || {}).forEach(function (s) { var v = lg.bySlug[s]; if ((v.closes > 0 || v.contracte > 0) && bucket(s, eIso) === NA) na = true; });
+      });
+    }
     if (!na) {
       var payCloser = payCloserIndex(pack.year.toutes || []);
-      var ys = SC.debutJourParis(pack.y + '-01-01').getTime(), ye = SC.finJourParis(pack.y + '-12-31').getTime();
-      na = FC.cashInPeriod(pack.year.payments || [], ys, ye).lignes.some(function (l) { return bucket(payCloser(l.p)) === NA; });
+      for (var m = 0; m < 12 && !na; m++) {
+        var sMs = SC.debutJourParis(moisCle(pack.y, m) + '-01').getTime(), eMs = SC.finJourParis(lastDayIso(pack.y, m)).getTime();
+        var ps = prelevesParSeau(FC.cashInPeriod(pack.year.payments || [], sMs, eMs), sMs, eMs, payCloser);
+        if ((ps[NA] || 0) > 0.005) na = true;
+      }
     }
-    out.sort(function (a, b) { return memberName(a).localeCompare(memberName(b)); });
     return { slugs: out, na: na };
   }
 
@@ -610,7 +732,7 @@
     });
     if (t.na) {
       h += '<button class="au-member' + (S.slug === NA ? ' active' : '') + '" style="--au-mc:#8f97b2" data-slug="' + NA + '"><span class="au-member-av">?</span>' +
-        '<span><span class="au-member-n">' + esc(SC.mot('non_attribue')) + info('non_attribue_contenu') + '</span><br/><span class="au-member-r">anciens membres, closer inconnu</span></span></button>';
+        '<span><span class="au-member-n">' + esc(SC.mot('non_attribue')) + info('non_attribue_contenu') + '</span><br/><span class="au-member-r">closer inconnu, hors onglets, anciens membres</span></span></button>';
     }
     $('#memberTabs').innerHTML = h;
   }
@@ -804,7 +926,7 @@
     h += '<div class="au-twrap" style="border:none;border-radius:0"><table class="au-table"><thead><tr><th>Jour du close' + info('closes') + '</th><th>Client</th><th>' + SC.motInfo('closer') + '</th><th>' + SC.motInfo('canal') + '</th>' +
       '<th>' + SC.motInfo('contracte') + '</th><th>' + SC.motInfo('collecte') + '</th><th>1er prélèvement en attente' + info('premiers_prelevements') + '</th><th>Statut</th></tr></thead><tbody>';
     cur.list.slice().sort(function (a, b) { return b.ms - a.ms; }).forEach(function (c) {
-      var it = SD ? SD.closeItem(c, { nomDe: nomDe }) : { closer: nomDe(c.closer) || SC.mot('non_attribue'), canal: c.sb ? 'Self Booking' : 'Setting (NB)', flags: [] };
+      var it = SD ? SD.closeItem(c, ctxLigne(c)) : { closer: nomCloser(c.closer, c.day) || SC.mot('non_attribue'), canal: c.sb ? 'Self Booking' : 'Setting (NB)', flags: [] };
       var link = c.leadId ? '<a href="sales-contact.html?id=' + encodeURIComponent(c.leadId) + '" target="_blank" rel="noopener" style="color:#b6c3ff">' + esc(c.name) + '</a>' : esc(c.name);
       var flags = '';
       (it.flags || []).forEach(function (f) { flags += '<span class="pj-flag">· ' + esc(f) + '</span>'; });
@@ -851,7 +973,7 @@
 
     var h = '<div class="pj-hero">' +
       kpi(esc(SC.mot('contracte')) + ' ' + y + info('contracte'), cellSd(fmtEuro(ytd), 'y:all'),
-        fmtNum(closesY) + ' closes' + (cancelledY ? ' · ' + cancelledY + ' annulé(s) retiré(s)' : '') + (team ? ' · ' + fmtPct(pct, 1) + ' de l’objectif' : '') +
+        fmtNum(closesY) + ' closes' + info('closes') + (cancelledY ? ' · <span style="color:var(--red)">' + cellSd(cancelledY + ' annulé' + (cancelledY > 1 ? 's' : '') + ' retiré' + (cancelledY > 1 ? 's' : ''), 'ya:all') + '</span>' + info('closes_annules') : '') + (team ? ' · ' + fmtPct(pct, 1) + ' de l’objectif' : '') +
         (ancY > 0 ? '<br/>dont ' + fmtEuro(ancY) + ' d’ancienne saisie' + info('ancienne_saisie', ANC_X) : ''), '#5b7cfa', team ? pct : null) +
       kpi(esc(SC.mot('objectif')) + ' ' + y + info('objectif'), fmtEuro(objY),
         (team ? 'reste ' + fmtEuro(Math.max(0, objY - ytd)) : 'objectif d’équipe') + (diffObj ? '<br/>somme des objectifs mensuels : ' + fmtEuro(sumObjM) : ''), '#fbbf24') +
@@ -888,7 +1010,7 @@
       }
       return '<tr' + (r.m === curIdx ? ' class="today"' : future ? ' class="future"' : '') + '><td>' + MONTHS_FR[r.m] + '</td>' +
         '<td>' + (r.auto ? '<span class="pj-tag ok">calculé</span>' : '<span class="pj-tag legacy">ancienne saisie</span>') + '</td>' +
-        '<td>' + (r.has || r.closes ? (r.auto ? cellSd(fmtNum(r.closes), 'y:' + r.m) : fmtNum(r.closes)) : '·') + '</td><td>' + (r.cancelled ? '<span style="color:var(--red)">' + r.cancelled + '</span>' : '·') + '</td>' +
+        '<td>' + (r.has || r.closes ? (r.auto ? cellSd(fmtNum(r.closes), 'y:' + r.m) : fmtNum(r.closes)) : '·') + '</td><td>' + (r.cancelled ? '<span style="color:var(--red)">' + cellSd(fmtNum(r.cancelled), 'ya:' + r.m) + '</span>' : '·') + '</td>' +
         '<td>' + (r.contracte ? fmtEuro(r.contracte) : '·') + '</td><td>' + fmtEuro(r.obj) + '</td>' +
         '<td>' + (d == null || !team ? '·' : '<span style="color:' + (d >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (d >= 0 ? '+' : '−') + fmtEuro(Math.abs(d)) + '</span>') + '</td>' +
         '<td>' + (r.auto ? (r.collecte ? fmtEuro(r.collecte) : '·') : '—') + '</td><td>' + (r.preleve ? fmtEuro(r.preleve) : '·') + '</td></tr>';
@@ -914,7 +1036,7 @@
       calc.forEach(function (r) { h += row(r); });
       if (anc.length) h += sub('Sous-total calculé', calc);
     }
-    h += '<tr class="au-total"><td>Total</td><td></td><td>' + fmtNum(closesY) + '</td><td>' + (cancelledY || '·') + '</td><td>' + fmtEuro(ytd) + '</td><td>' + fmtEuro(sumObjM) +
+    h += '<tr class="au-total"><td>Total</td><td></td><td>' + fmtNum(closesY) + '</td><td>' + (cancelledY ? cellSd(fmtNum(cancelledY), 'ya:all') : '·') + '</td><td>' + fmtEuro(ytd) + '</td><td>' + fmtEuro(sumObjM) +
       (diffObj ? infoLibre('Total des objectifs', 'Somme des objectifs mensuels affichés (' + fmtEuro(sumObjM) + '). L’objectif annuel enregistré est de ' + fmtEuro(objY) + ' : des mois ont un objectif propre.') : '') +
       '</td><td></td><td>' + (calc.length ? fmtEuro(collecteY) : '—') + '</td><td>' + fmtEuro(preleveY) + '</td></tr>';
     h += '</tbody></table></div></div>';
@@ -922,35 +1044,50 @@
   }
 
   /* ══ LISTES CLIQUABLES (stats-drill.js) ══════════════════════════════════ */
+  /* Le chiffre « Closes » ouvre la liste des closes COMPTÉS (nombre de lignes
+     = chiffre affiché) ; les closes annulés ont leur propre liste
+     (m:annules, ya:N, ya:all), ouverte par leur propre chiffre. */
+  function estAnnule(r) { return !!(r && r.rv && r.rv.cancelled); }
+  function comptes(list) { return list.filter(function (r) { return !estAnnule(r); }); }
+  function annules(list) { return list.filter(estAnnule); }
   function drill(ref) {
     if (!S.data || !SD) return null;
     var pack = S.data.pack, slug = S.slug;
     var months = computeYear(pack, slug);
-    var ctx = { nomDe: nomDe };
     var who = slugLabel(slug);
-    function items(list) { return list.map(function (r) { return SD.closeItem(r, ctx); }); }
+    function items(list) { return list.map(function (r) { return SD.closeItem(r, ctxLigne(r)); }); }
+    var NOTE_ANC = 'Les mois de l’ancienne saisie n’ont pas de liste nominative : seuls leurs totaux déclarés existent.';
     if (ref === 'm:closes' || ref === 'm:annules') {
       var cur = months[S.month];
-      var list = ref === 'm:annules' ? cur.list.filter(function (r) { return r.rv && r.rv.cancelled; }) : cur.list;
-      return { title: (ref === 'm:annules' ? SC.mot('closes_annules') : SC.mot('closes')) + ' — ' + MONTHS_FR[S.month] + ' ' + S.year, sub: who,
-        info: ref === 'm:annules' ? 'closes_annules' : 'closes', items: items(list),
-        note: ref === 'm:closes' && cur.cancelled ? 'Les closes annulés figurent dans la liste, barrés de leurs montants : ils ne sont pas comptés.' : '' };
+      var an = ref === 'm:annules';
+      return { title: (an ? SC.mot('closes_annules') : SC.mot('closes')) + ' — ' + MONTHS_FR[S.month] + ' ' + S.year, sub: who,
+        info: an ? 'closes_annules' : 'closes', items: items(an ? annules(cur.list) : comptes(cur.list)),
+        note: !an && cur.cancelled ? cur.cancelled + ' close' + (cur.cancelled > 1 ? 's' : '') + ' annulé' + (cur.cancelled > 1 ? 's' : '') + ' ce mois-ci : non compté' + (cur.cancelled > 1 ? 's' : '') + ', listé' + (cur.cancelled > 1 ? 's' : '') + ' à part (chiffre « annulé » de la carte Closes).' : '' };
     }
     if (ref === 'm:sans') {
       var key = moisCle(S.year, S.month);
       var sans = (pack.year.sansSignal || []).filter(function (x) { return String(x.day).slice(0, 7) === key; });
       return { title: SC.mot('clientes_sans_vente') + ' — ' + MONTHS_FR[S.month] + ' ' + S.year, info: 'clientes_sans_vente', items: items(sans) };
     }
-    if (ref === 'y:all') {
+    if (ref === 'y:all' || ref === 'ya:all') {
       var all = [];
       months.forEach(function (r) { if (r.auto) all = all.concat(r.list); });
-      return { title: SC.mot('closes') + ' ' + S.year + ' (mois calculés)', sub: who, info: 'closes', items: items(all),
-        note: months.some(function (r) { return !r.auto && r.has; }) ? 'Les mois de l’ancienne saisie n’ont pas de liste nominative : seuls leurs totaux déclarés existent.' : '' };
+      var anY = ref === 'ya:all';
+      var nAn = annules(all).length;
+      var notes = [];
+      if (months.some(function (r) { return !r.auto && r.has; })) notes.push(NOTE_ANC);
+      if (!anY && nAn) notes.push(nAn + ' close' + (nAn > 1 ? 's' : '') + ' annulé' + (nAn > 1 ? 's' : '') + ' sur l’année : non compté' + (nAn > 1 ? 's' : '') + ', listé' + (nAn > 1 ? 's' : '') + ' à part (colonne « Closes annulés » du détail).');
+      return { title: (anY ? SC.mot('closes_annules') : SC.mot('closes')) + ' ' + S.year + ' (mois calculés)', sub: who, info: anY ? 'closes_annules' : 'closes',
+        items: items(anY ? annules(all) : comptes(all)), note: notes.join(' ') };
     }
-    var mm = /^y:(\d+)$/.exec(ref);
+    var mm = /^(y|ya):(\d+)$/.exec(ref);
     if (mm) {
-      var r = months[+mm[1]];
-      return { title: SC.mot('closes') + ' — ' + MONTHS_FR[r.m] + ' ' + S.year, sub: who, info: 'closes', items: items(r.list) };
+      var r = months[+mm[2]];
+      if (!r) return null;
+      var anM = mm[1] === 'ya';
+      return { title: (anM ? SC.mot('closes_annules') : SC.mot('closes')) + ' — ' + MONTHS_FR[r.m] + ' ' + S.year, sub: who, info: anM ? 'closes_annules' : 'closes',
+        items: items(anM ? annules(r.list) : comptes(r.list)),
+        note: !anM && r.cancelled ? r.cancelled + ' close' + (r.cancelled > 1 ? 's' : '') + ' annulé' + (r.cancelled > 1 ? 's' : '') + ' ce mois-là : non compté' + (r.cancelled > 1 ? 's' : '') + ', listé' + (r.cancelled > 1 ? 's' : '') + ' à part (colonne « Closes annulés »).' : '' };
     }
     return null;
   }
@@ -991,8 +1128,8 @@
   }
 
   /* ══ ÉVÉNEMENTS ══════════════════════════════════════════════════════════ */
-  /* Rechargement complet à chaque mois : le pipeline (RDV à venir jusqu'à
-     la fin du mois affiché) dépend du mois. */
+  /* Changement de mois : la partie de l'année vient du cache (D28) ; seuls
+     les taux et les RDV à venir (fin du mois affiché) sont relus. */
   function shiftMonth(delta) {
     var m = S.month + delta, y = S.year;
     while (m < 0) { m += 12; y--; }
@@ -1003,7 +1140,7 @@
   $('#btnPrev').addEventListener('click', function () { shiftMonth(-1); });
   $('#btnNext').addEventListener('click', function () { shiftMonth(1); });
   $('#btnToday').addEventListener('click', function () { var mp = SC.moisParis(Date.now()).split('-'); S.year = +mp[0]; S.month = +mp[1] - 1; refresh(); });
-  $('#btnRefresh').addEventListener('click', refresh);
+  $('#btnRefresh').addEventListener('click', function () { viderCache(); refresh(); });
   $('#memberTabs').addEventListener('click', function (e) {
     var b = e.target.closest ? e.target.closest('.au-member') : null;
     if (!b) return;
@@ -1019,7 +1156,10 @@
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') $('#objModal').classList.remove('show'); });
   if (SD) SD.bind($('#content'), function (ref) { return drill(ref); });
   /* Noms / couleurs des closers et membres partis : nav.js charge l'équipe après coup. */
-  window.addEventListener('team-members-loaded', function () { if (S.data) render(); });
+  window.addEventListener('team-members-loaded', function () {
+    if (S.data && S.data.pack.rosterVide) { viderCache(); refresh(); return; }
+    if (S.data) render();
+  });
 
   /* ══ INIT : attendre l'auth Firebase ══ */
   var hi = document.getElementById('hdrInfo');

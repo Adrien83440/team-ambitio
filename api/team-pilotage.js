@@ -55,8 +55,15 @@
 //     doublons, rangés chez StatsCore.setterDuRdv (setter de la fiche) : même
 //     nombre que Set NB. « Posés par lui (clic) » = RDV que la personne a
 //     créés elle-même (bookedBySlug), compte d'activité distinct.
-//   · Appels = sortants ; Décrochés = StatsCore.estDecroche (sortants) ;
-//     appels reçus à part. Temps d'appel = conversation des sortants décrochés.
+//   · Appels = sortants (direction === 'outbound', règle du funnel) ;
+//     Décrochés = StatsCore.estDecroche (sortants) ; appels reçus à part ;
+//     appels SANS sens comptés nulle part, signalés (warnings). Tous les
+//     call_logs comptent, sans fusion ; la fusion des lancements « sans
+//     suite » ne sert qu'aux listes (nombre dit dans `notes`). Temps d'appel
+//     = conversation des sortants décrochés.
+//   · Actions de fiche : jour de Paris de createdAt (repli : champ day).
+//   · Membres partis : StatsCore.estParti ; rangement d'une personne dans
+//     l'Activité : StatsCore.rangPersonne (« Non attribué » + unassignedDetail).
 //   · Jours : heure de Paris (StatsCore.jourParis) ; dates en texte lues à
 //     l'heure de Paris (FunnelCore.parseFlexMs).
 //   · Plafond de lecture atteint : nommé dans la réponse (`plafonds`), affiché.

@@ -270,10 +270,14 @@
   }
   /* Closes de la période (liste unique). Filtre closer : le closer DU CLOSE
      (row.closer, règle du référentiel §4) — comme Global closing. */
+  /* Clé de rangement d'un close (D10, StatsCore.rangPersonne posé par
+     LqsCore.buildModel) : un close d'avant l'arrivée du closer n'est pas
+     dans son onglet, comme Global closing. */
+  function rangKeyDe(p) { return p && p.rangKey != null ? p.rangKey : (p ? p.closer : null); }
   function periodSigned() {
     var list = S.M ? (S.M.periodSigned || []) : [];
     if (!S.closer) return list;
-    return list.filter(function (p) { return p.closer === S.closer; });
+    return list.filter(function (p) { return rangKeyDe(p) === S.closer; });
   }
   function toast(msg, bad) { if (S.ctx && typeof S.ctx.toast === 'function') S.ctx.toast(msg, bad); }
 
@@ -461,7 +465,7 @@
   }
   function annulesPeriode() {
     var list = (S.M && S.M.periodCloses && S.M.periodCloses.annules) || [];
-    return S.closer ? list.filter(function (a) { return a.closer === S.closer; }) : list;
+    return S.closer ? list.filter(function (a) { return rangKeyDe(a) === S.closer; }) : list;
   }
 
   function viewOverview() {
@@ -537,7 +541,7 @@
       + '<th>' + (per ? MG('closes', 'Ici : clients gagnés pendant la période, rangés selon la note du lead.') : MG('closes_cohorte')) + '</th>'
       + '<th>Élite / Business' + IN('Élite / Business', 'Offre vendue (closeData.offre) : Élite / Business Phénix. « sans offre » = close sans offre renseignée.') + '</th>'
       + thTaux
-      + '<th>' + (per ? MG('contracte') : ML('contracte_cohorte')) + ' · collecté</th><th class="l" style="min-width:140px">' + ML('part_contracte') + '</th><th>' + MG('panier_moyen') + '</th><th>' + ML('contracte_par_lead') + '</th>'
+      + '<th>' + (per ? MG('contracte') : ML('contracte_cohorte')) + ' · collecté</th><th class="l" style="min-width:140px">' + ML('part_contracte') + '</th><th>' + (per ? MG('panier_moyen') : MG('panier_moyen', 'Ici : contracté des leads entrés ÷ closes des leads entrés (même base que les deux colonnes voisines), pas les closes de la période.')) + '</th><th>' + ML('contracte_par_lead') + '</th>'
       + (per ? '<th>' + MG('preleve_periode') + '</th>' : '')
       + '<th>' + ML('note_equipe') + '</th></tr></thead><tbody>';
     function rowCells(a, k, isTot) {
@@ -1210,6 +1214,17 @@
       + '<th>' + MG('contracte') + ' · collecté</th>';
   }
   function showUpSub(a) { return sub('show-up ' + fPct(a.showUp != null ? a.showUp : a.showRate)); }
+  /* Détail de la ligne « Non attribué » (note sous le tableau) : pourquoi
+     chaque RDV / close y est rangé. */
+  function naDetail(a) {
+    if (!a || !a.precisions || !a.precisions.length) return '';
+    return '<div class="fn-stage-note" style="margin-top:8px">« Non attribué », détail : ' + a.precisions.map(function (p) {
+      var parts = [];
+      if (p.rdv) parts.push(fNum(p.rdv) + ' RDV');
+      if (p.closes) parts.push(fNum(p.closes) + ' close' + (p.closes > 1 ? 's' : '') + ' (' + fEur(p.con) + ' contracté)');
+      return esc(p.precision) + ' : ' + parts.join(', ');
+    }).join(' · ') + '.</div>';
+  }
   function viewClosers() {
     var cr = closerRange();
     var h = '<div class="fn-seg" style="margin-bottom:14px;width:fit-content">'
@@ -1221,15 +1236,20 @@
     var team = LC.byCloser(S.M.rdvRows, '');
     var body = '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr><th class="l">Closer' + I('closer') + '</th>' + closerHead() + '</tr></thead><tbody>';
     board.forEach(function (a) {
-      if (a.slug && S.M.isDeparted && S.M.isDeparted(a.slug)) return;   // réunis dans « Anciens membres » par closerBoard
+      /* Ligne nominative seulement pour un closer qui a un onglet (D10) ;
+         tout le reste est dans « Non attribué », détaillé dessous. */
+      if (a.slug && S.M.aOngletCloser && !S.M.aOngletCloser(a.slug)) return;
       var sel = a.slug && a.slug === S.closer;
-      var nm = a.anciens ? MG('anciens_membres') : (a.nonAttribue ? MG('non_attribue') : '<strong>' + esc(a.name) + '</strong>');
+      var nm = a.nonAttribue
+        ? MG('non_attribue', 'Ici : closer inconnu, « Anciens membres », « Prénom (hors onglets) » (admin ou autre rôle que closer) ou « Prénom (avant son arrivée) » — comme Global closing.')
+        : '<strong>' + esc(a.name) + '</strong>';
       body += '<tr class="' + (a.slug ? 'lq-click' : '') + (sel ? ' lq-sel' : '') + '"' + (a.slug ? ' data-lq-pick="' + esc(a.slug) + '"' : '') + '><td class="l">' + nm + '</td><td>' + fNum(a.rdv) + '</td><td>' + fPct(a.pct45) + '</td><td>' + avgBadge(a.avgNote) + '</td><td class="l">' + distBar(a.dist) + '</td>'
         + '<td>' + fNum(a.presents) + showUpSub(a) + '</td><td><strong>' + fNum(a.closes) + '</strong></td><td>' + fPct(a.tauxClosePresents) + '</td><td>' + fPct(a.tauxCloseRdv) + '</td><td>' + money(a.con, a.cash) + '</td></tr>';
     });
+    var naRow = board.filter(function (a) { return a.nonAttribue; })[0];
     var tt = team.total;
     body += '<tr class="tot"><td class="l">Toute l\'équipe' + I('equipe') + '</td><td>' + fNum(tt.rdv) + '</td><td>' + fPct(tt.pct45) + '</td><td>' + avgBadge(tt.avgNote) + '</td><td class="l">' + distBar(tt.dist) + '</td><td>' + fNum(tt.presents) + showUpSub(tt) + '</td><td>' + fNum(tt.closes) + '</td><td>' + fPct(tt.tauxClosePresents) + '</td><td>' + fPct(tt.tauxCloseRdv) + '</td><td>' + money(tt.con, tt.cash) + '</td></tr>';
-    body += '</tbody></table></div><div class="fn-stage-note" style="margin-top:8px">RDV de vente datés dans la plage (Self Booking, Setting et RDV créés à la main dans l\'Agenda ; un RDV déplacé compte une fois, à sa nouvelle date ; un doublon supprimé nulle part) · closer d\'un RDV = celui qui a validé le close, sinon l\'hôte du RDV · Closes = clients gagnés pendant la plage, même liste que le Stats funnel, rangés chez le closer du close et comptés une fois · « Non attribué » = closer inconnu · « Anciens membres » = membres partis, sans nom · les lignes s\'additionnent pour donner « Toute l\'équipe » · les corrections manuelles ✎ de Set NB / Close SB ne sont pas reprises · clique un closer pour son détail.</div>';
+    body += '</tbody></table></div><div class="fn-stage-note" style="margin-top:8px">RDV de vente datés dans la plage (Self Booking, Setting et RDV créés à la main dans l\'Agenda ; un RDV déplacé compte une fois, à sa nouvelle date ; un doublon supprimé nulle part) · closer d\'un RDV = celui qui a validé le close, sinon l\'hôte du RDV · Closes = clients gagnés pendant la plage, même liste que le Stats funnel, rangés chez le closer du close et comptés une fois · une ligne par closer de l\'équipe sales (comme Global closing) ; un RDV est rangé au jour du RDV, un close au jour du close · « Non attribué » = closer inconnu, membres partis (« Anciens membres », sans nom), personne sans onglet (« Prénom (hors onglets) ») ou élément daté avant son arrivée (« Prénom (avant son arrivée) ») · les lignes s\'additionnent pour donner « Toute l\'équipe » · les corrections manuelles ✎ de Set NB / Close SB ne sont pas reprises · clique un closer pour son détail.</div>' + naDetail(naRow);
     h += card('🎯 Closers — qualité reçue et résultats', fMonth(FC.isoDate(cr.start).slice(0, 7)) + ' → ' + fMonth(FC.isoDate(cr.end).slice(0, 7)), body);
 
     if (!S.closer) {

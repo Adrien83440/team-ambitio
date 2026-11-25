@@ -758,10 +758,42 @@ function bkScopeBadge(b){
   if(bkScope(b)==='coaching'){
     return ' <span style="display:inline-block;font-size:9px;font-weight:800;letter-spacing:.4px;padding:1px 7px;border-radius:999px;background:rgba(167,139,250,.14);color:#c4b5fd;border:1px solid rgba(167,139,250,.35);vertical-align:middle">🎓 COACHING</span>';
   }
-  var sb=b.source!=='setter_booking';
-  var tO=T.find(function(t){return t.id===b.type;});
-  if(!b.source&&tO&&tO.isSetterOnly===true)sb=false;
-  return ' <span style="display:inline-block;font-size:9px;font-weight:800;letter-spacing:.4px;padding:1px 7px;border-radius:999px;background:'+(sb?'rgba(251,191,36,.12)':'rgba(167,139,250,.12)')+';color:'+(sb?'#fbbf24':'#c4b5fd')+';border:1px solid '+(sb?'rgba(251,191,36,.35)':'rgba(167,139,250,.35)')+';vertical-align:middle">'+(sb?'SB':'NB')+'</span>';
+  /* Badge du canal (25/11/2026, référentiel des chiffres) : la règle unique
+     StatsCore.classifyBooking, avec la table des types de consultation — la
+     même que Set NB, Close SB, Global closing et le Stats funnel. « Manuel » =
+     RDV créé à la main dans l'Agenda ; rien pour un RDV hors vente. Affichage
+     seul : rien n'est écrit. */
+  var cls=bkClasseRdv(b);
+  if(cls!=='self'&&cls!=='setter'&&cls!=='admin')return '';
+  var sb=cls==='self',man=cls==='admin';
+  var bg=man?'rgba(148,163,184,.12)':(sb?'rgba(251,191,36,.12)':'rgba(167,139,250,.12)');
+  var fg=man?'#cbd5e1':(sb?'#fbbf24':'#c4b5fd');
+  var bd=man?'rgba(148,163,184,.35)':(sb?'rgba(251,191,36,.35)':'rgba(167,139,250,.35)');
+  var lb=man?'Manuel':(sb?'SB':'NB');
+  var tip=(window.StatsCore&&window.StatsCore.CLASSES&&window.StatsCore.CLASSES[cls]?window.StatsCore.CLASSES[cls]+' — ':'')+(window.StatsCore?window.StatsCore.titre('canal'):'');
+  return ' <span title="'+escA(tip)+'" style="display:inline-block;font-size:9px;font-weight:800;letter-spacing:.4px;padding:1px 7px;border-radius:999px;background:'+bg+';color:'+fg+';border:1px solid '+bd+';vertical-align:middle">'+lb+'</span>';
+}
+/* Classe d'un RDV pour l'affichage : 'self' | 'setter' | 'admin' | 'excluded'.
+   Table des types construite depuis T (booking_config/_types). Repli sur
+   l'ancienne lecture si stats-core.js n'a pas chargé. */
+function bkClasseRdv(b){
+  var map={};(T||[]).forEach(function(t){if(t&&t.id)map[t.id]=t;});
+  if(window.StatsCore&&typeof window.StatsCore.classifyBooking==='function')return window.StatsCore.classifyBooking(b,map);
+  if(bkScope(b)==='coaching')return 'excluded';
+  if(b.source==='admin_manual')return 'admin';
+  if(b.source==='setter_booking')return 'setter';
+  var tO=map[b.type];return (tO&&tO.isSetterOnly===true)?'setter':'self';
+}
+/* « Présent (sans détail) » : RDV de vente marqué « Terminé » sans résultat
+   saisi (StatsCore.estSansDetail). Il compte comme présent dans les rapports ;
+   la pastille le dit et invite à saisir le résultat. Affichage seul. */
+function bkSansDetailChip(b){
+  if(!b||b.outcome||bkScope(b)!=='sales')return '';
+  var SC=window.StatsCore;
+  var sd=SC&&typeof SC.estSansDetail==='function'?SC.estSansDetail(b):b.status==='completed';
+  if(!sd)return '';
+  var mot=SC&&SC.DETAILS&&SC.DETAILS.sans_detail?SC.DETAILS.sans_detail.mot:'Présent (sans détail)';
+  return '<span class="rv-flag rv-flag-ok" title="'+escA(SC?SC.titre('sans_detail'):'')+'">'+esc(mot)+'</span>';
 }
 function syncScopeUI(){
   if(!aScopeChosen)aScope=(window._currentRole==='csm')?'all':'sales';
@@ -834,7 +866,7 @@ function rvRowHTML(b) {
   var pN = b.prospect ? ((b.prospect.prenom || '') + ' ' + (b.prospect.nom || '')).trim() : '';
   var du = b.duration || 30, hm = (b.time || '09:00').split(':'), sm = parseInt(hm[0]) * 60 + parseInt(hm[1]);
   var rs = rvRowState(b, sm, du), sales = bkScope(b) === 'sales', id = escA(b._id);
-  var tags = rs.badge + rvExtraFlags(b) + (b.outcome && sales && window.RdvOutcome ? window.RdvOutcome.chip(b) : '');
+  var tags = rs.badge + rvExtraFlags(b) + (b.outcome && sales && window.RdvOutcome ? window.RdvOutcome.chip(b) : '') + bkSansDetailChip(b);
   var h = '<div class="rv-r' + rs.cls + '" data-rv-open="' + id + '">';
   h += '<div class="rv-t"><b>' + esc(b.time || '—') + '</b><span>→ ' + mToT(sm + du) + '</span></div>';
   h += '<div class="rv-main"><div class="rv-nm"><span title="' + escA(pN) + '">' + esc(pN || 'Inconnu') + '</span>' + bkScopeBadge(b) + '</div>';
@@ -938,9 +970,14 @@ function rvIsImminent(b){
   var d=rvStartDate(b);if(!d)return false;
   var h=(d.getTime()-Date.now())/3600000;return h>0&&h<4;
 }
+/* « À statuer » (25/11/2026, référentiel des chiffres) : créneau terminé
+   (fin du RDV, heure de Paris — StatsCore.estPasse, même règle que les
+   rapports) et aucun résultat. La marge de 10 min (RV_LATE_MS) ne sert plus
+   qu'à la couleur de la ligne (rvRowState). */
 function rvTodo(b){
   if(b.outcome||bkScope(b)!=='sales')return false;
   if(b.status!=='confirmed'&&b.status!=='pending')return false;
+  if(window.StatsCore&&typeof window.StatsCore.estPasse==='function')return window.StatsCore.estPasse(b,Date.now());
   var e=rvEndDate(b,rvStartMin(b),b.duration||30);
   return !!e&&Date.now()>=e.getTime()+RV_LATE_MS;
 }
@@ -954,7 +991,7 @@ function rvStatsHTML(fl,up,ca,tl,tw){
     +st(imm,'Imminents (&lt; 4 h)','#60a5fa',imm>0,'RDV qui commencent dans moins de 4 heures')
     +st(tw.length,'Cette semaine','#60a5fa')
     +st(open,'Créneaux ouverts','#fdba74',false,'RDV dont le créneau est rouvert à d\'autres réservations')
-    +st(todo,'Résultat à saisir','#34d399',todo>0,'RDV terminés sans résultat d\'appel')
+    +st(todo,'À statuer'+(window.StatsCore?window.StatsCore.info('a_statuer','Ici : RDV de vente de la liste affichée (filtres compris), à saisir par le bouton 🎯 Résultat.'):''),'#34d399',todo>0,window.StatsCore?'':'RDV terminés sans résultat d\'appel')
     +st(ca.length,'Annulés','#fca5a5');
 }
 function rvDoubleMap(list){
@@ -2044,7 +2081,7 @@ h+='<div class="rdv-p-client"><div class="rdv-p-client-av">'+clientName[0].toUpp
 if(bkScope(b)==='coaching'){
 h+='<div style="margin:10px 2px 0;font-size:11px;color:#c4b5fd">🎓 <strong>RDV Coaching / Client</strong> — hors périmètre Setting &amp; Sales (pas de résultat d\'appel ni de commission).</div>';
 }else{
-h+='<div style="margin:10px 2px 0">'+bkScopeBadge(b)+(b.outcome&&window.RdvOutcome?' '+window.RdvOutcome.chip(b):'')+(b.outcomeNote?' <span style="font-size:11px;color:rgba(255,255,255,.5);font-style:italic">'+esc(b.outcomeNote)+'</span>':'')+'</div>';
+h+='<div style="margin:10px 2px 0">'+bkScopeBadge(b)+(b.outcome&&window.RdvOutcome?' '+window.RdvOutcome.chip(b):'')+(bkSansDetailChip(b)?' '+bkSansDetailChip(b):'')+(b.outcomeNote?' <span style="font-size:11px;color:rgba(255,255,255,.5);font-style:italic">'+esc(b.outcomeNote)+'</span>':'')+'</div>';
 var _ps=bkPres(b);
 if(_ps==='ok')h+='<div class="bk-pres ok"><b>✅ Présence confirmée par le prospect</b><span>'+esc(bkPresDetail(b))+'</span></div>';
 else if(_ps==='todo')h+='<div class="bk-pres todo"><b>⚠️ Présence pas encore confirmée</b><span>Le setter la confirme depuis Leads Live (fiche du lead → « Confirmer la présence »).</span></div>';

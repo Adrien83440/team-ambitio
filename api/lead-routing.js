@@ -2,8 +2,13 @@
 // api/lead-routing.js — RÉPARTITION DES LEADS (09/10/2026)
 // ----------------------------------------------------------------------------
 // GET  (admin)  → { config, members, stats }
-//      stats : répartition RÉELLE des leads entrés sur 30 jours, par personne,
-//              séparément leads / self-bookings.
+//      stats : répartition RÉELLE des FICHES créées (leads.createdAt) depuis
+//              30 × 24 h glissants, hors fusionnées, rangées par personne
+//              attribuée (assignedTo), séparément fiches opt-in / fiches en
+//              Self Booking (R.isSelfBorn : étape ACTUELLE ou source).
+//              Sert à vérifier la règle de répartition : ce ne sont ni les
+//              « Leads » du Stats funnel, ni les « Leads NB reçus » de Set NB,
+//              ni des RDV Self Booking. Libellés : lead-routing-card.js.
 // POST (admin)  { action:'save', config:{ leads, selfBooking } }
 // POST (admin / sales) { action:'assign', leadId }
 //      → attribue un lead non attribué selon la règle (secours navigateur
@@ -77,6 +82,8 @@ module.exports = async function (req, res) {
       R.loadConfig(), R.roster(),
       db.collection('leads').where('createdAt', '>=', new Date(Date.now() - 30 * 86400000)).get(),
     ]);
+    // Fenêtre GLISSANTE de 30 × 24 h (pas 30 jours calendaires de Paris) :
+    // la carte l'écrit « 30 derniers jours glissants ». Calcul inchangé.
     const stats = { leads: { total: 0, by: {} }, selfBooking: { total: 0, by: {} } };
     snap.forEach(function (d) {
       const l = d.data() || {};
