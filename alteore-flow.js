@@ -16,8 +16,17 @@
                               (setter) idempotents par dealKey
 
    Dépendances : firebase compat (app/auth/firestore) initialisé,
-   window.TEAM_MEMBERS_LIST (nav.js) pour résoudre le membre courant.
+   window.TEAM_MEMBERS_LIST (nav.js) pour résoudre le membre courant,
+   stats-core.js chargé AVANT ce fichier (règles de lecture uniques :
+   classe et état d'un RDV, décroché, jour et mois à l'heure de Paris).
    Aucune dépendance UI — rdv-outcome.js fournit la modale.
+
+   LECTURE ≠ ÉCRITURE (audit de cohérence du 25/11/2026). Ce fichier ÉCRIT
+   en production (résultats, closes, commissions) et prête aussi quelques
+   chargeurs aux pages de statistiques. Les règles de LECTURE ne vivent pas
+   ici : stats-core.js (RDV, taux, glossaire) et funnel-core.js (liste
+   unique des closes, FunnelCore.loadCloses). Les chargeurs ne retirent
+   aucune donnée et ne se taisent plus : voir « LECTURES — rien de muet ».
    ═══════════════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
@@ -25,8 +34,8 @@
   /* ── Résultats d'appel (RDV) ─────────────────────────────────────────── */
   var OUTCOMES = {
     close:       { key: 'close',       label: 'Close',       icon: '🏆', color: '#34d399', desc: 'Vente conclue — génère les commissions' },
-    non_close:   { key: 'non_close',   label: 'Non close',   icon: '❌', color: '#f87171', desc: 'RDV tenu, offre refusée' },
-    offre:       { key: 'offre',       label: 'Offre',       icon: '💬', color: '#5b7cfa', desc: 'Offre pitchée — en réflexion / follow-up' },
+    non_close:   { key: 'non_close',   label: 'Non close',   icon: '❌', color: '#f87171', desc: 'Prospect présent, offre présentée puis refusée' },
+    offre:       { key: 'offre',       label: 'Offre',       icon: '💬', color: '#5b7cfa', desc: 'Offre présentée — en attente de réponse (réflexion / follow-up)' },
     disqualifie: { key: 'disqualifie', label: 'Disqua',      icon: '🚫', color: '#94a3b8', desc: 'Présent mais hors cible — pas d’offre' },
     no_show:     { key: 'no_show',     label: 'No-show',     icon: '👻', color: '#fbbf24', desc: 'Prospect absent au RDV' },
     annule:      { key: 'annule',      label: 'Annulé',      icon: '🔴', color: '#ef4444', desc: 'RDV annulé — lead à récupérer côté Setting' },
@@ -34,22 +43,32 @@
   };
   var OUTCOME_ORDER = ['close', 'non_close', 'offre', 'disqualifie', 'no_show', 'annule', 'replanifie'];
 
-  /* Dérivés métier (échelle CPR validée Adrien 07/2026) :
-     présent (live) = le prospect était là, même sans offre / disqualifié.
-     pitché = une offre a été faite. kept = non annulé (replanifié exclu :
-     le RDV de remplacement le compte à sa place). */
-  var PRESENT_SET = { disqualifie: 1, offre: 1, close: 1, non_close: 1 };
-  var PITCHED_SET = { offre: 1, close: 1, non_close: 1 };
+  /* Dérivés métier — RÈGLES DE LECTURE : elles vivent dans stats-core.js
+     (audit de cohérence du 25/11/2026), plus aucune copie ici.
+       Présents = disqualifiés + pitchés + « terminés » sans résultat ;
+       Pitchés  = offres en attente + non closes + RDV closés ;
+       Kept     = RDV − annulés (le no-show reste DEDANS) ; les replanifiés et
+                  les doublons supprimés sont hors RDV (le RDV de remplacement
+                  compte à sa propre date).
+     Les statistiques passent par StatsCore.etat(rdv) / compter(liste) ; ce
+     fichier n'expose que des passe-plats (isPresent, isPitched, etatRdv,
+     libelleRdv). Les anciennes tables PRESENT_SET / PITCHED_SET ont été
+     retirées : aucune écriture ne s'en servait. */
 
-  /* Sync du champ legacy bookings.status — l'existant (funnel « Tenue »,
-     sales-rdv, booking-admin) continue de fonctionner sans modification. */
+  /* Sync du champ legacy bookings.status (ÉCRITURE) — l'existant (sales-rdv,
+     booking-admin) continue de fonctionner sans modification. */
   var OUTCOME_TO_BOOKING_STATUS = {
     annule: 'cancelled', no_show: 'no_show', replanifie: 'cancelled',
     disqualifie: 'completed', offre: 'completed', close: 'completed', non_close: 'completed'
   };
 
   /* ── Commissions (source : contrat Full Cycle Art.3 + avenant Elite) ──
-     Miroir de sales-commissions.html / sync-bridge.js — garder aligné. */
+     BARÈME DE RÉFÉRENCE : c'est CE barème (complété par le contrat du membre,
+     closingRule / settingRule / pifBonusRule plus bas) qui écrit les lignes de
+     commission. sales-commissions.html en porte une copie identique à garder
+     alignée. Les copies de sync-bridge.js et de sales-equipe.html DIFFÈRENT
+     (BP 6, primes PIF — audit du 25/11/2026) : elles ne sont affichées nulle
+     part et ne doivent jamais servir à un calcul. */
   var COMM_RULES = {
     closing: {
       'BP 6':  { mensualise: 200,  pif: 200 },
@@ -145,10 +164,17 @@
     return fam;
   }
 
-  /* Statuts fiche comptés comme « SET » dans le rapport Setting.
-     set_booking = action posée quand un RDV setter est réellement créé. */
+  /* Actions du journal qui marquent un passage au statut « Set » sur la fiche.
+     set_booking = action posée quand un RDV setter est réellement créé.
+     ⚠ Ce ne sont PAS les Sets (référentiel du 25/11/2026) : un set = un RDV du
+     setting réellement créé, compté une fois, le jour où il est posé. Ces
+     actions ne servent plus qu'à lister à part les « statuts Set sans RDV ». */
   var SET_ACTIONS = { set: 1, set_booking: 1, rdv_pose: 1 };
-  var ANSWERED_MIN_SEC = 5; // même seuil décroché que dashboard + funnel
+  /* Durée minimale de conversation d'un appel décroché (secondes). Ce seuil
+     SEUL ne suffit pas : la règle complète (répondeurs écartés) est
+     StatsCore.estDecroche, exposée ici par isAnswered(appel). Ne jamais
+     compter un décroché en comparant une durée à cette constante. */
+  var ANSWERED_MIN_SEC = (typeof window !== 'undefined' && window.StatsCore && Number(window.StatsCore.DECROCHE_MIN_SEC)) || 5;
 
   /* ═══ Helpers génériques ═══════════════════════════════════════════════ */
   function db() { return firebase.firestore(); }
@@ -156,8 +182,33 @@
   function arrayUnion(v) { return firebase.firestore.FieldValue.arrayUnion(v); }
 
   function pad2(n) { return String(n).padStart(2, '0'); }
-  function dayKey(d) { d = d || new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
-  function monthKey(d) { d = d || new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1); }
+  /* Clés de jour ('AAAA-MM-JJ') et de mois ('AAAA-MM') : TOUJOURS l'heure de
+     Paris (StatsCore.jourParis / moisParis), plus jamais celle de l'appareil
+     (audit du 25/11/2026). Elles servent au jour du résultat d'un RDV
+     (outcomeDay), au journal d'actions (lead_actions.day / month) et au mois
+     de rangement d'une commission : un membre à l'étranger rangeait son
+     action ou son close sur un autre jour, voire un autre mois, que celui lu
+     par l'équipe. Les clés déjà écrites ne sont pas modifiées.
+     Repli de sûreté : ces clés partent dans des ÉCRITURES — si stats-core.js
+     manquait sur une page, le même calcul (Intl, Europe/Paris) est fait ici
+     plutôt que d'échouer ou d'écrire une clé à l'heure de l'appareil.
+     Date illisible (new Date(NaN)) → chaîne vide, jamais une exception :
+     l'ancienne version rendait 'NaN-NaN-NaN', une clé qui ne range rien. */
+  function dateIllisible(d) { return !!d && typeof d.getTime === 'function' && isNaN(d.getTime()); }
+  function dayKey(d) {
+    if (dateIllisible(d)) return '';
+    var SC = (typeof window !== 'undefined' && window.StatsCore) || null;
+    if (SC && typeof SC.jourParis === 'function') return SC.jourParis(d);
+    var o = parisParts(d);
+    return o.year + '-' + o.month + '-' + o.day;
+  }
+  function monthKey(d) {
+    if (dateIllisible(d)) return '';
+    var SC = (typeof window !== 'undefined' && window.StatsCore) || null;
+    if (SC && typeof SC.moisParis === 'function') return SC.moisParis(d);
+    var o = parisParts(d);
+    return o.year + '-' + o.month;
+  }
   /* Toujours l'heure de Paris, quel que soit le fuseau de l'appareil (un
      setter à l'étranger datait ses notes et sa timeline à son heure locale,
      20/10/2026). */
@@ -276,8 +327,15 @@
      Les modules SET NB / Close SB / Commissions et les sélecteurs
      closer/setter ne concernent QUE l'équipe sales : rôles setter, closer,
      closer_setter, membres actifs. Les admins, coachs et la CSM n'y
-     apparaissent jamais. DEPARTED : membres partis de la société, exclus en
-     dur même si le roster _meta/team_members n'est pas encore à jour. */
+     apparaissent jamais.
+     MEMBRES PARTIS (décision D10 du 25/11/2026) : plus d'onglet, de sélecteur
+     ni de nom à l'écran — mais leur activité passée RESTE dans les totaux
+     Équipe (ligne « Anciens membres »). Ce fichier dit seulement QUI est parti
+     (isDeparted, departedSlugs) : aucun chargeur ne retire leurs données, ce
+     sont les pages qui les rangent.
+     DEPARTED : liste HISTORIQUE en dur, gardée comme REPLI (roster pas encore
+     chargé, fiche du roster pas encore marquée). La source est la fiche
+     _meta/team_members du membre — voir isDeparted(). */
   var DEPARTED = { guillaume: 1, guillaumes: 1, elodie: 1 }; // Guillaume Bilcke — parti (07/2026) ; slug réel du roster : guillaumes · Élodie — fin de mission 10/10/2026
   /* setter_ecrit (10/09/2026) : setter « écrit » — travaille les prospects
      par messages (DM Instagram / Meta), jamais au téléphone. Membre de
@@ -296,25 +354,61 @@
     return role || '';
   }
 
-  function salesMembers() {
-    var list = (window.TEAM_MEMBERS_LIST || []).filter(function (m) {
-      return m && m.slug && !DEPARTED[m.slug] && m.active !== false && SALES_ROLES[m.role];
+  /* Date de fin d'un membre (endDate 'AAAA-MM-JJ' sur sa fiche du roster,
+     même format que startDate). null si absente ou illisible. */
+  function memberEndDate(m) {
+    var v = m && m.endDate;
+    return (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) ? v : null;
+  }
+  /* Un membre est « parti » si sa fiche _meta/team_members (window.TEAM_MEMBERS,
+     chargé par nav.js — les partis y restent, hors de TEAM_MEMBERS_LIST) porte
+     departed === true, ou active === false AVEC une date de fin (un membre
+     seulement désactivé, sans date de fin, n'est pas « parti ») ; à défaut,
+     s'il figure dans la liste historique DEPARTED. */
+  function isDeparted(slug) {
+    if (!slug) return false;
+    slug = String(slug);
+    var map = window.TEAM_MEMBERS || {};
+    var m = Object.prototype.hasOwnProperty.call(map, slug) ? map[slug] : null;
+    if (m && (m.departed === true || (m.active === false && !!memberEndDate(m)))) return true;
+    return Object.prototype.hasOwnProperty.call(DEPARTED, slug);
+  }
+  /* Tous les slugs des membres partis (roster + liste historique), triés.
+     Sert aux pages pour ranger leur activité passée sur la ligne « Anciens
+     membres » de l'Équipe — jamais pour la retirer d'un total. */
+  function departedSlugs() {
+    var seen = {}, out = [];
+    var map = window.TEAM_MEMBERS || {};
+    Object.keys(map).forEach(function (k) {
+      var slug = (map[k] && map[k].slug) || k;
+      if (!seen[slug] && isDeparted(slug)) { seen[slug] = 1; out.push(slug); }
     });
-    if (!list.length) {
-      /* Repli : Élodie — seule membre sales connue si le roster est vide ou
-         si les rôles n'y sont pas renseignés. */
-      list = [{ slug: 'elodie', shortName: 'Elodie', displayName: 'Elodie Vidotto Siarri', role: 'closer_setter', color: '#60a5fa', firebaseUid: 'IrL8bfOrUfMH2fEPFzuojPT8bQh1', active: true }];
-    }
-    return list;
+    Object.keys(DEPARTED).forEach(function (slug) { if (!seen[slug]) { seen[slug] = 1; out.push(slug); } });
+    out.sort();
+    return out;
+  }
+
+  /* Équipe sales ACTIVE. Roster vide (pas encore chargé, rôles non
+     renseignés) → liste VIDE : plus jamais de repli sur un membre nommé en
+     dur (l'ancien repli renvoyait Élodie, partie le 10/10/2026 — elle
+     réapparaissait dans les onglets, les sélecteurs et les commissions).
+     À l'appelant d'attendre l'événement « team-members-loaded ». */
+  function salesMembers() {
+    return (window.TEAM_MEMBERS_LIST || []).filter(function (m) {
+      return m && m.slug && !isDeparted(m.slug) && m.active !== false && SALES_ROLES[m.role];
+    });
   }
   /* Le setter de la fiche (verrou setterSlug) ou, à défaut, le poseur du RDV
-     est un membre parti → vrai. */
+     est un membre parti → vrai. ÉCRITURE (commission de setting, décision du
+     10/10/2026) : ce test lit toujours la liste historique DEPARTED seule —
+     le faire suivre isDeparted() changerait qui est commissionné, hors du
+     périmètre du chantier « chiffres cohérents » (à décider par Adrien). */
   function departedSetter(lead, booking) {
     if (lead && lead.setterSlug) return !!DEPARTED[lead.setterSlug];
     return !!(booking && booking.bookedBySlug && DEPARTED[booking.bookedBySlug]);
   }
   function isSalesMember(slug) {
-    if (!slug || DEPARTED[slug]) return false;
+    if (!slug || isDeparted(slug)) return false;
     return salesMembers().some(function (m) { return m.slug === slug; });
   }
   function memberByFirebaseUid(uid) {
@@ -402,14 +496,14 @@
     });
   }
 
-  /* Classification d'un booking — MÊME règle que sales-funnel.html.
-     Règle « deux liens » (Adrien 15/07) : le TYPE prime sur un vieux
-     source 'self_booking' — un RDV pris sur le lien setter
-     (type isSetterOnly, ex. call_strat_phenix_elodie) est No Booking,
-     même si booking.html n'avait pas encore posé le bon source à l'époque.
-     typeMap optionnel : { typeId: {isSetterOnly, isCoaching} } */
-  /* RÈGLE UNIQUE (audit de cohérence du 25/11/2026) : la classe d'un RDV vit
-     dans stats-core.js, chargé avant ce fichier sur toutes les pages. */
+  /* ═══ RÈGLES DE LECTURE — passe-plats vers stats-core.js ═══════════════
+     Audit de cohérence du 25/11/2026 : la classe d'un RDV (Self Booking /
+     Setting / Manuel / exclu — règle « deux liens » du 15/07 : le TYPE de
+     consultation prime sur un ancien source 'self_booking'), son état
+     (replanifié, annulé, no-show, présent, à statuer, à venir) et la règle
+     du « décroché » vivent dans stats-core.js, chargé AVANT ce fichier sur
+     toutes les pages. Ce fichier n'en recode aucune.
+     typeMap : { typeId: { isSetterOnly, isCoaching } } (loadTypeMap). */
   function statsCore() {
     var SC = (typeof window !== 'undefined' && window.StatsCore) || null;
     if (!SC) throw new Error('alteore-flow.js : stats-core.js doit être chargé avant ce fichier');
@@ -417,11 +511,61 @@
   }
   function classifyBooking(b, typeMap) { return statsCore().classifyBooking(b, typeMap); }
   function isSB(b, typeMap) { return classifyBooking(b, typeMap) === 'self'; }
-  function isPresent(outcome) { return !!PRESENT_SET[outcome]; }
-  function isPitched(outcome) { return !!PITCHED_SET[outcome]; }
+  /* isPresent / isPitched reçoivent un RÉSULTAT (bookings.outcome), pas un
+     RDV : signature conservée pour les pages qui les appellent. Elles ne
+     savent donc rien d'un RDV passé à « terminé » sans résultat.
+     ⚠ Les STATISTIQUES passent par StatsCore.estPresent(rdv) /
+     StatsCore.estPitche(rdv) — ou StatsCore.etat(rdv), exposé ici par
+     etatRdv — qui lisent aussi le statut du RDV. */
+  function isPresent(outcome) { return !!statsCore().PRESENT[outcome]; }
+  function isPitched(outcome) { return !!statsCore().PITCHE[outcome]; }
+  /* État et libellé d'un RDV entier : simples passe-plats pour les pages qui
+     n'ont que AlteoreFlow sous la main.
+       etatRdv(rdv, now)    → 'doublon' | 'replanifie' | 'annule' | 'no_show'
+                              | 'present' | 'a_statuer' | 'a_venir'
+       libelleRdv(rdv, now) → { etat, mot, couleur } */
+  function etatRdv(b, now) { return statsCore().etat(b, now); }
+  function libelleRdv(b, now) { return statsCore().libelle(b, now); }
   /* Décroché : règle unique de stats-core.js (≥ 5 s, répondeurs écartés) —
      avant le 25/11/2026 cette copie comptait les répondeurs. */
   function isAnswered(call) { return statsCore().estDecroche(call); }
+
+  /* ═══ LECTURES — rien de muet (audit du 25/11/2026) ═════════════════════
+     Un chargeur de lecture garde son type de retour (tableau, table) pour ne
+     casser aucun appelant, mais ne se tait plus :
+       · lecture en échec  → résultat VIDE portant `_erreur` (le message) ;
+       · plafond atteint   → ce qui a été lu, portant `_tronque = true`.
+     Ces propriétés ne sont pas énumérables : invisibles pour forEach,
+     Object.keys et JSON — une table de types ou de corrections ne gagne pas
+     une fausse clé. Elles ne survivent PAS à une copie (slice, filter,
+     Object.assign) : l'appelant les lit sur la valeur reçue, puis AFFICHE le
+     message (« lecture impossible », « liste tronquée »), jamais un zéro muet. */
+  function marquer(cible, nom, valeur) {
+    try {
+      Object.defineProperty(cible, nom, { value: valeur, enumerable: false, writable: true, configurable: true });
+    } catch (e) { cible[nom] = valeur; }
+    return cible;
+  }
+  function messageErreur(e) {
+    return (e && (e.message || e.code)) ? String(e.message || e.code) : 'lecture impossible';
+  }
+  /* Lit une requête Firestore par pages jusqu'à épuisement.
+     → Promise<{ docs: [DocumentSnapshot…], tronque }> — tronque = vrai quand
+     le garde-fou `max` a arrêté la lecture avant la fin. */
+  function lirePages(requete, taillePage, max) {
+    var docs = [];
+    function page(curseur) {
+      var q = curseur ? requete.startAfter(curseur) : requete;
+      return q.limit(taillePage).get().then(function (snap) {
+        var dernier = null;
+        snap.forEach(function (doc) { docs.push(doc); dernier = doc; });
+        if (snap.size < taillePage || !dernier) return { docs: docs, tronque: false };
+        if (docs.length >= max) return { docs: docs, tronque: true };
+        return page(dernier);
+      });
+    }
+    return page(null);
+  }
 
   /* ═══ 1. JOURNAL D'ACTIONS SETTING ═════════════════════════════════════
      Une action = un événement immuable dans lead_actions/{slug}/items.
@@ -699,8 +843,10 @@
         status = 'client';
         extra.isClient = true;
         /* clientSince = date du PREMIER close — jamais réécrit quand on
-           modifie/re-valide un close (le funnel compte par clientSince) :
-           RDV déjà closé (✎ Modifier) ou fiche déjà cliente → on n'y touche pas. */
+           modifie/re-valide un close (tous les écrans datent le close par
+           clientSince) : RDV déjà closé (✎ Modifier) ou fiche déjà cliente →
+           on n'y touche pas. Ce premier tri lit la copie de la page ; le
+           verrou définitif est posé plus bas, sur la fiche RELUE. */
         if (booking.outcome !== 'close' && !(opts.lead && (opts.lead.isClient === true || opts.lead.clientSince))) extra.clientSince = ts();
         /* Copie du closeData sur la fiche : le funnel retrouve l'encaissé
            déclaré même quand le RDV closé est hors de la période chargée. */
@@ -735,6 +881,14 @@
        l'état d'origine par un état déjà pollué par le premier clic). */
     return _db.collection('leads').doc(leadId).get().then(function (snap) {
       var before = snap.exists ? (snap.data() || {}) : {};
+      /* clientSince (référentiel du 25/11/2026, §8) : JAMAIS réécrit. La
+         décision se prend sur la fiche RELUE à l'instant, pas sur la copie de
+         la page (absente depuis l'Agenda, parfois périmée ailleurs) : une
+         fiche déjà cliente — signature du contrat, premier close — garde sa
+         date, sinon la vente changeait de jour, voire de mois, sur tous les
+         écrans. Retiré AVANT la photo : un champ non modifié n'a pas à être
+         restauré par clearOutcome. */
+      if (updates.clientSince !== undefined && before.clientSince) delete updates.clientSince;
       var undo = {};
       LEAD_OUTCOME_FIELDS.forEach(function (f) {
         if (updates[f] !== undefined) undo[f] = before[f] === undefined ? null : before[f];
@@ -850,6 +1004,11 @@
        · la fiche n'est PAS repassée en rdv_pose / rdv_self_booking : le
          remplaçant a déjà fait vivre la fiche (et peut être déjà statué) ;
        · rescheduleLinked:true → le rattachement se défait par Réinitialiser. */
+  /* GARDE D'ÉCRITURE, pas une règle de statistique : dit seulement si un RDV
+     peut encore servir de remplaçant dans un rattachement (un RDV dont le
+     drapeau de report est resté posé est refusé, même re-statué). L'état d'un
+     RDV pour les chiffres est StatsCore.etat(rdv) — ne pas réutiliser ce test
+     dans un compteur. */
   function isDeadBooking(b) {
     return !b || b.status === 'cancelled' || b.outcome === 'annule' || b.outcome === 'replanifie' || b.rescheduled === true;
   }
@@ -1117,7 +1276,11 @@
     var sb = closeData.sb === true;
     /* Mois du deal = mois du PREMIER close : re-valider en août un close de
        juillet ne recrée pas les deals dans un doc d'août vierge (l'anti-
-       doublon par dealKey ne regarde qu'un seul doc mensuel). */
+       doublon par dealKey ne regarde qu'un seul doc mensuel).
+       Mois ET date à l'heure de PARIS (25/11/2026) : avant, le mois suivait
+       l'horloge de l'appareil et la date celle de Paris — un close validé de
+       l'étranger le dernier soir du mois était daté du 1er et rangé dans le
+       mois d'avant. Les documents déjà écrits ne sont pas déplacés. */
     var mk = monthKey();
     var dateFr = frDate();
     if (booking.outcome === 'close' && booking.outcomeDay && /^\d{4}-\d{2}/.test(String(booking.outcomeDay))) {
@@ -1185,7 +1348,15 @@
      Résolution automatique closer/setter pour les commissions — plus aucun
      sélecteur à remplir : closer = membre sales connecté (sinon le seul
      closer actif) · setter = poseur du RDV, sinon gestionnaire de la fiche,
-     sinon le seul setter actif. Jamais un membre hors équipe sales. */
+     sinon le seul setter actif. Jamais un membre hors équipe sales.
+     ⚠ RÈGLE DE COMMISSION (écriture), volontairement inchangée par l'audit du
+     25/11/2026. Pour les STATISTIQUES, le setter et le closer d'un RDV sont
+     StatsCore.setterDuRdv(rdv, fiche) / StatsCore.closerDuRdv(rdv, …) — sans
+     filtre « équipe sales » ni repli « le seul setter / closer actif » — et
+     ceux d'un close viennent de FunnelCore.buildCloses (row.setter,
+     row.closer). Le canal d'un close (Self Booking / Setting) y est lu sur le
+     RDV porteur ; la commission, elle, suit la réponse du closer
+     (closeData.sb) : un écart est signalé (row.canalEcart), jamais corrigé. */
   function resolveClosingActors(lead, booking) {
     var team = salesMembers();
     var m = me();
@@ -1300,8 +1471,23 @@
           date: frDateTime(), color: '#10b981'
         })
       };
-      if (!alreadyClient) updates.clientSince = ts();
-      return _db.collection('leads').doc(leadId).update(updates).then(function () {
+      /* clientSince (référentiel du 25/11/2026, §8) : JAMAIS réécrit — posé
+         seulement s'il manque. Avant, un close validé en direct sur une fiche
+         déjà passée cliente par la SIGNATURE du contrat (pas encore de
+         closedData ni de RDV closé) re-datait la vente au jour du clic : elle
+         changeait de jour, voire de mois, sur tous les écrans. La décision se
+         prend sur la fiche RELUE à l'instant ; si la relecture échoue (hors
+         ligne), sur la copie de la page — le close n'est jamais bloqué. */
+      var leadRef = _db.collection('leads').doc(leadId);
+      return leadRef.get().then(function (snap) {
+        return snap.exists ? (snap.data() || {}) : {};
+      }, function (e) {
+        console.warn('[AlteoreFlow] close fiche : relecture impossible, décision sur la copie de la page :', e && e.message);
+        return lead || {};
+      }).then(function (fiche) {
+        if (!alreadyClient && !fiche.clientSince) updates.clientSince = ts();
+        return leadRef.update(updates);
+      }).then(function () {
         var pseudo = { id: 'lead_' + leadId, prospect: {}, leadId: leadId };
         if (opts.skipCommissions || alreadyClient) return { ok: true, sb: sb, deals: [], direct: true, updated: alreadyClient };
         return createCommissionDeals(pseudo, cd, lead || null).then(function (deals) {
@@ -1325,6 +1511,13 @@
     return db().collection('rapport_overrides').doc(slug).collection('jours').doc(day)
       .set(patch, { mergeFields: fields });
   }
+  /* Corrections ✎ d'un membre sur une plage de jours → { 'AAAA-MM-JJ': doc }.
+     Lecture en échec → table VIDE portant `_erreur` (les chiffres affichés
+     seraient alors ceux de la base, sans les corrections : à dire à l'écran).
+     Rappel du référentiel (décision D9) : une correction ne s'applique plus
+     qu'aux groupes téléphone, messages et actions de fiche
+     (StatsCore.correctionAutorisee) ; ce chargeur rend TOUT ce qui est
+     enregistré, c'est la page qui trie. */
   function loadOverrides(slug, fromDay, toDay) {
     return db().collection('rapport_overrides').doc(slug).collection('jours')
       .where('day', '>=', fromDay).where('day', '<=', toDay).get()
@@ -1332,10 +1525,19 @@
         var out = {};
         snap.forEach(function (doc) { out[doc.id] = doc.data(); });
         return out;
-      }).catch(function (e) { console.warn('[AlteoreFlow] overrides:', e && e.message); return {}; });
+      }).catch(function (e) {
+        console.warn('[AlteoreFlow] overrides:', e && e.message);
+        return marquer({}, '_erreur', 'corrections manuelles : ' + messageErreur(e));
+      });
   }
 
   /* ═══ Loaders communs des rapports ═════════════════════════════════════ */
+  /* Table des types de consultation { typeId: { isSetterOnly, isCoaching,
+     label, formFields, slug } }. Lecture en échec → table VIDE portant
+     `_erreur` : sans elle, un RDV du lien setter resté en source
+     'self_booking' est classé Self Booking et un RDV coaching reconnu par son
+     seul type entre dans les RDV de vente — la répartition Self Booking /
+     Setting affichée peut être fausse, la page doit le dire. */
   function loadTypeMap() {
     return db().collection('booking_config').doc('_types').get().then(function (snap) {
       var map = {};
@@ -1346,10 +1548,17 @@
         if (t && t.id) map[t.id] = { isSetterOnly: t.isSetterOnly === true, isCoaching: t.isCoaching === true, label: t.label || t.id, formFields: t.formFields || [], slug: t.slug || '' };
       });
       return map;
-    }).catch(function () { return {}; });
+    }).catch(function (e) {
+      console.warn('[AlteoreFlow] types de RDV illisibles :', e && e.message);
+      return marquer({}, '_erreur', 'types de RDV : ' + messageErreur(e));
+    });
   }
 
-  /* Actions d'un membre sur une plage de jours (bornes incluses). */
+  /* Actions d'un membre sur une plage de jours (bornes incluses). Le champ
+     `day` est le jour de PARIS de l'action (dayKey) depuis la mise en ligne de
+     l'audit du 25/11/2026 ; les actions plus anciennes gardent le jour de
+     l'appareil qui les a écrites (rien n'est réécrit).
+     Lecture en échec → tableau VIDE portant `_erreur`. */
   function loadActions(slug, fromDay, toDay) {
     return db().collection('lead_actions').doc(slug).collection('items')
       .where('day', '>=', fromDay).where('day', '<=', toDay).get()
@@ -1357,37 +1566,85 @@
         var out = [];
         snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; out.push(d); });
         return out;
-      }).catch(function (e) { console.warn('[AlteoreFlow] actions:', e && e.message); return []; });
+      }).catch(function (e) {
+        console.warn('[AlteoreFlow] actions:', e && e.message);
+        return marquer([], '_erreur', 'journal d’actions : ' + messageErreur(e));
+      });
   }
 
-  /* Appels d'un membre sur une plage — même stratégie que le dashboard :
-     admin = requête par plage (single-field) filtrée par uid côté client,
-     sales = requête par userId filtrée par dates côté client. */
+  /* Appels (call_logs) d'un membre, ou de toute l'équipe (fUid null, admin),
+     sur une plage [from, to]. Renvoie TOUS les sens : c'est la page qui garde
+     les sortants (« Appels » = sortants) et compte les décrochés par
+     isAnswered. Les appels d'un ancien membre ne sont jamais retirés ici.
+
+     Plus de plafond muet (audit du 25/11/2026) : lecture par pages de
+     CALLS_PAGE jusqu'à épuisement ; au-delà de CALLS_MAX documents la lecture
+     s'arrête et le tableau porte `_tronque = true`. Lecture en échec (droits,
+     réseau) → tableau VIDE portant `_erreur` : une erreur n'est pas « zéro
+     appel ».
+       · admin (ou droit d'écoute) : plage de dates, triée, filtrée par uid ici ;
+         le tableau porte `_sansAuteur` = nombre de sortants de la plage SANS
+         userId (utilisateur Ringover non relié à un compte), qu'aucun onglet
+         de personne ne peut donc recevoir ;
+       · sales : ses propres appels sur la plage (userId + dates, index déjà
+         utilisé par l'historique du Dialer et la page Appels). Si cet index
+         manque, repli sur l'ancienne lecture « tous ses appels, filtrés par
+         date ici » — désormais complète, plus coupée aux 5 000 premiers. */
+  var CALLS_PAGE = 5000;
+  var CALLS_MAX = 30000;
+  var _callsIndexAbsent = false;   // mémorisé pour la session : pas de 2ᵉ essai voué à l'échec
   function loadCallsForMember(fUid, from, to, isAdminRole) {
     var _db = db();
-    function post(snap) {
-      var out = [];
-      snap.forEach(function (doc) {
+    var fromMs = from.getTime(), toMs = to.getTime();
+    var fromTs = firebase.firestore.Timestamp.fromDate(from);
+    var toTs = firebase.firestore.Timestamp.fromDate(to);
+    function fini(res) {
+      var out = [], sansAuteur = 0;
+      res.docs.forEach(function (doc) {
         var d = doc.data();
         var ms = d.initiatedAt && d.initiatedAt.toMillis ? d.initiatedAt.toMillis() : null;
-        if (ms == null || ms < from.getTime() || ms > to.getTime()) return;
-        if (fUid && d.userId !== fUid) return;
+        if (ms == null || ms < fromMs || ms > toMs) return;
+        if (fUid && d.userId !== fUid) {
+          if (!d.userId && d.direction === 'outbound') sansAuteur++;
+          return;
+        }
         out.push(d);
       });
+      if (res.tronque) marquer(out, '_tronque', true);
+      if (sansAuteur) marquer(out, '_sansAuteur', sansAuteur);
       return out;
     }
-    if (isAdminRole) {
-      return _db.collection('call_logs')
-        .where('initiatedAt', '>=', firebase.firestore.Timestamp.fromDate(from))
-        .where('initiatedAt', '<=', firebase.firestore.Timestamp.fromDate(to))
-        .limit(5000).get().then(post)
-        .catch(function (e) { console.warn('[AlteoreFlow] calls:', e && e.message); return []; });
+    function echec(e) {
+      console.warn('[AlteoreFlow] calls:', e && e.message);
+      return marquer([], '_erreur', 'appels : ' + messageErreur(e));
     }
-    return _db.collection('call_logs').where('userId', '==', fUid).limit(5000).get().then(post)
-      .catch(function (e) { console.warn('[AlteoreFlow] calls:', e && e.message); return []; });
+    if (!isAdminRole && !fUid) return Promise.resolve(marquer([], '_erreur', 'appels : aucun compte relié à ce membre'));
+    if (isAdminRole) {
+      return lirePages(_db.collection('call_logs')
+        .where('initiatedAt', '>=', fromTs).where('initiatedAt', '<=', toTs)
+        .orderBy('initiatedAt', 'asc'), CALLS_PAGE, CALLS_MAX).then(fini).catch(echec);
+    }
+    var siens = _db.collection('call_logs').where('userId', '==', fUid);
+    function toutSonHistorique() { return lirePages(siens, CALLS_PAGE, CALLS_MAX).then(fini); }
+    if (_callsIndexAbsent) return toutSonHistorique().catch(echec);
+    return lirePages(siens.where('initiatedAt', '>=', fromTs).where('initiatedAt', '<=', toTs)
+      .orderBy('initiatedAt', 'desc'), CALLS_PAGE, CALLS_MAX)
+      .then(fini, function (e) {
+        var txt = String((e && (e.code || '')) + ' ' + (e && e.message || ''));
+        if (!/failed-precondition|index/i.test(txt)) throw e;
+        _callsIndexAbsent = true;
+        console.warn('[AlteoreFlow] calls : index (userId, initiatedAt) indisponible — lecture de tout l’historique du membre.', e && e.message);
+        return toutSonHistorique();
+      }).catch(echec);
   }
 
-  /* Bookings dont le RDV (date) OU la création tombe dans la plage. */
+  /* RDV dont la DATE (d._inDue) OU la CRÉATION (d._inCreated) tombe dans la
+     plage — les deux axes du référentiel : « RDV » se compte à la date du RDV,
+     « RDV pris » / « Sets » à sa création. Aucun filtre ici (classe, état,
+     membre parti) : la page applique StatsCore. Pas de plafond de lecture.
+     Lecture en échec → tableau VIDE portant `_erreur`. Tout ou rien, exprès :
+     une seule des deux requêtes donnerait des chiffres plausibles mais faux
+     (des RDV sans leurs prises, ou l'inverse). */
   function loadBookingsRange(fromDay, toDay, fromDate, toDate) {
     var _db = db();
     var byId = {};
@@ -1404,11 +1661,16 @@
         });
       });
       return Object.keys(byId).map(function (k) { return byId[k]; });
-    }).catch(function (e) { console.warn('[AlteoreFlow] bookings:', e && e.message); return []; });
+    }).catch(function (e) {
+      console.warn('[AlteoreFlow] bookings:', e && e.message);
+      return marquer([], '_erreur', 'RDV : ' + messageErreur(e));
+    });
   }
 
   /* Map personId (booking_config) → { firebaseUid, name } pour rattacher
-     les RDV aux membres (closer). */
+     les RDV aux membres (closer). Lecture en échec → table VIDE portant
+     `_erreur` : sans elle, l'hôte d'un RDV n'est plus résolu et ses RDV
+     tombent en « Non attribué ». */
   function loadPersonsMap() {
     return db().collection('booking_config').get().then(function (snap) {
       var map = {};
@@ -1417,55 +1679,117 @@
         if (d && d.__type === 'person') map[doc.id] = { firebaseUid: d.firebaseUid || null, name: d.name || doc.id };
       });
       return map;
-    }).catch(function () { return {}; });
+    }).catch(function (e) {
+      console.warn('[AlteoreFlow] fiches d’agenda illisibles :', e && e.message);
+      return marquer({}, '_erreur', 'fiches d’agenda : ' + messageErreur(e));
+    });
   }
 
-  /* ── Closes : annulés + encaissé réel (13/10/2026) ──
+  /* ── Verdict REVENUE d'un RDV closé (13/10/2026) — ANCIENNE LECTURE ──
+     ⚠ La liste unique des closes est FunnelCore.loadCloses (référentiel du
+     25/11/2026 : un close = un client gagné, daté du jour de la vente). Les
+     écrans comptent Closes / Contracté / Collecté à partir d'elle. Cette
+     fonction reste exportée pour les pages qui l'appellent encore ; elle ne
+     doit plus servir à sommer des closes ni des montants.
+
      Règle REVENUE de funnel-core.js (FunnelCore.revClient) — jamais recopiée
-     ici. Charge les paiements (collection entière : quelques dizaines de
-     docs) et les fiches des RDV closés, puis renvoie revOf(booking) →
-     { cancelled, reason, paid, con, pending, hasPay, declCol } en HT, ou
-     null quand funnel-core.js n'est pas chargé ou que les paiements sont
-     illisibles (la page retombe alors sur les montants des cartes).
+     ici. Charge les paiements (collection entière) et les fiches des RDV
+     closés, puis renvoie revOf(booking) →
+     { cancelled, reason, paid, con, pending, hasPay, declCol } en HT.
      Un client n'est chiffré qu'UNE fois : un 2ᵉ RDV closé du même client
-     renvoie le même verdict avec des montants à 0. */
+     renvoie le même verdict avec des montants à 0 (dup: true).
+
+     Rien de muet (audit du 25/11/2026) :
+       · plus de plafond : TOUTES les fiches des RDV closés sont lues, par
+         lots (avant : les 200 premières, les suivantes chiffrées sans fiche) ;
+       · une fiche FUSIONNÉE (_merged) n'est jamais utilisée : le verdict suit
+         la fiche gardée (_mergedInto, 3 sauts au plus) — deux RDV closés
+         portés par les deux fiches d'un même client ne font qu'un client ;
+         sans fiche gardée lisible, le RDV est chiffré comme un RDV sans fiche ;
+       · une lecture en échec se VOIT : la fonction renvoyée porte `_erreur`
+         (texte à afficher, null si tout a été lu). Paiements illisibles ou
+         funnel-core.js absent → revOf(b) renvoie null pour tout RDV : la
+         page affiche « — » et le message, JAMAIS les montants déclarés aux
+         cartes du close à la place. Fiches illisibles → verdict calculé sans
+         la fiche (comme un RDV sans fiche), `_erreur` dit combien. */
+  var CLOSE_REV_LOT = 30;   // fiches lues en parallèle par lot
   function loadCloseRevenue(bookings) {
     var FC = window.FunnelCore;
-    var none = function () { return null; };
-    if (!FC || typeof FC.revClient !== 'function') return Promise.resolve(none);
+    function indisponible(message) {
+      var f = function () { return null; };
+      f._erreur = message;
+      return f;
+    }
+    if (!FC || typeof FC.revClient !== 'function') {
+      return Promise.resolve(indisponible('montants indisponibles : funnel-core.js n’est pas chargé sur cette page'));
+    }
     var _db = db();
-    var leadIds = {};
-    (bookings || []).forEach(function (b) { if (b && b.outcome === 'close' && b.leadId) leadIds[b.leadId] = 1; });
-    var ids = Object.keys(leadIds).slice(0, 200);
-    return Promise.all([
-      _db.collection('payments').get().then(function (snap) {
-        var out = [];
-        snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; out.push(d); });
-        return out;
-      }).catch(function (e) { console.warn('[AlteoreFlow] payments:', e && e.message); return null; }),
-      Promise.all(ids.map(function (id) {
-        return _db.collection('leads').doc(id).get().catch(function () { return null; });
-      }))
-    ]).then(function (res) {
-      if (!res[0]) return none;
+    var voulues = {};
+    (bookings || []).forEach(function (b) { if (b && b.outcome === 'close' && b.leadId) voulues[b.leadId] = 1; });
+    var ids = Object.keys(voulues);
+    var cache = {}, leads = {}, illisibles = 0;
+    function lire(id) {
+      if (!cache[id]) {
+        cache[id] = _db.collection('leads').doc(id).get().then(function (s) {
+          if (!s.exists) return null;
+          var d = s.data() || {}; d._id = s.id; return d;
+        }, function (e) {
+          illisibles++;
+          console.warn('[AlteoreFlow] fiche illisible (' + id + ') :', e && e.message);
+          return null;
+        });
+      }
+      return cache[id];
+    }
+    /* La fiche VIVANTE derrière un identifiant (motif pickAlive). */
+    function vivante(id, sauts) {
+      return lire(id).then(function (d) {
+        if (!d || d._merged !== true) return d;
+        if (!d._mergedInto || sauts >= 3) return null;
+        return vivante(String(d._mergedInto), sauts + 1);
+      });
+    }
+    function lots(i) {
+      if (i >= ids.length) return Promise.resolve();
+      return Promise.all(ids.slice(i, i + CLOSE_REV_LOT).map(function (id) {
+        return vivante(id, 0).then(function (d) { if (d) leads[id] = d; });
+      })).then(function () { return lots(i + CLOSE_REV_LOT); });
+    }
+    var pPayments = _db.collection('payments').get().then(function (snap) {
+      var out = [];
+      snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; out.push(d); });
+      return out;
+    });
+    return Promise.all([pPayments, lots(0)]).then(function (res) {
       var idx = FC.revIndex(res[0]);
-      var leads = {};
-      res[1].forEach(function (s) { if (s && s.exists) { var d = s.data() || {}; d._id = s.id; leads[s.id] = d; } });
       var memo = {};
-      return function revOf(b) {
+      var revOf = function (b) {
         if (!b || b.outcome !== 'close') return null;
         var lead = b.leadId ? (leads[b.leadId] || null) : null;
+        /* Client = la fiche gardée quand celle du RDV a été fusionnée. */
+        var clientId = lead ? lead._id : (b.leadId || null);
         var pr = b.prospect || {};
         var email = (lead && lead.email) || pr.email || '';
         var emKey = String(email || '').toLowerCase().trim();
-        var key = b.leadId || (emKey ? 'em_' + emKey : 'bk_' + b.id);
+        var key = clientId || (emKey ? 'em_' + emKey : 'bk_' + b.id);
         if (memo[key]) return { cancelled: memo[key].cancelled, reason: memo[key].reason, paid: 0, con: 0, pending: 0, hasPay: memo[key].hasPay, declCol: 0, dup: true };
-        var pays = FC.revPaymentsFor(idx, b.leadId || null, email, (lead && (lead.telephone || lead.phone)) || pr.telephone || pr.phone);
+        var pays = FC.revPaymentsFor(idx, clientId, email, (lead && (lead.telephone || lead.phone)) || pr.telephone || pr.phone);
+        /* Paiements restés rattachés à l'identifiant de la fiche absorbée. */
+        if (b.leadId && clientId !== b.leadId) {
+          FC.revPaymentsFor(idx, b.leadId, null, null).forEach(function (p) { if (pays.indexOf(p) < 0) pays.push(p); });
+        }
         var rv = FC.revClient(pays, lead, b.closeData || (lead && lead.closedData) || null);
         memo[key] = rv;
         return rv;
       };
-    }).catch(function (e) { console.warn('[AlteoreFlow] revenue:', e && e.message); return none; });
+      revOf._erreur = illisibles
+        ? illisibles + ' fiche' + (illisibles > 1 ? 's' : '') + ' illisible' + (illisibles > 1 ? 's' : '') + ' : verdict calculé sans la fiche (client stoppé non détecté)'
+        : null;
+      return revOf;
+    }).catch(function (e) {
+      console.warn('[AlteoreFlow] revenue:', e && e.message);
+      return indisponible('module Paiements illisible : ' + messageErreur(e));
+    });
   }
 
   function fmtDuration(sec) {
@@ -1496,12 +1820,15 @@
     salesMembers: salesMembers,
     isSalesMember: isSalesMember,
     departedSetter: departedSetter,
+    isDeparted: isDeparted,
+    departedSlugs: departedSlugs,
     isSetterRole: isSetterRole,
     isCloserRole: isCloserRole,
     roleLabel: roleLabel,
     memberContract: memberContract,
     contractFixe: contractFixe,
     memberStartDate: memberStartDate,
+    memberEndDate: memberEndDate,
     isBeforeStart: isBeforeStart,
     patchTeamMember: patchTeamMember,
     DEPARTED: DEPARTED,
@@ -1515,6 +1842,8 @@
     isSB: isSB,
     isPresent: isPresent,
     isPitched: isPitched,
+    etatRdv: etatRdv,
+    libelleRdv: libelleRdv,
     isAnswered: isAnswered,
 
     recordLeadAction: recordLeadAction,

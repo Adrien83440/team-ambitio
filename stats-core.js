@@ -231,6 +231,24 @@
      « RDV pris » : la prise a été comptée à la création du premier. */
   function estRemplacant(b) { return !!(b && (b.rescheduledFromId || b.transferredFrom)); }
 
+  /* Origine d'une annulation : 'prospect' | 'equipe' | 'systeme' | 'inconnu'.
+     Bloc `cancellation` posé par tous les chemins d'annulation depuis le
+     28/09/2026 ; repli sur les champs d'avant. « inconnu » = annulé avant la
+     traçabilité, jamais estimé. */
+  function origineAnnulation(b) {
+    b = b || {};
+    var c = b.cancellation || null;
+    var o = (c && c.origin) || b.cancelledOrigin || null;
+    if (!o && b.cancelledReason) o = 'systeme';
+    return (o === 'prospect' || o === 'equipe' || o === 'systeme') ? o : 'inconnu';
+  }
+  /* « RDV non honoré par l'équipe » : personne de chez nous au RDV. */
+  function estNonHonore(b) {
+    var c = (b && b.cancellation) || null;
+    return !!(c && c.kind === 'non_honore' && c.origin === 'equipe');
+  }
+  var ORIGINES = { prospect: 'par le prospect', equipe: 'par l’équipe', systeme: 'par le système', inconnu: 'origine inconnue' };
+
   var ETATS = {
     doublon:    { mot: 'Doublon supprimé', couleur: '#596180' },
     replanifie: { mot: 'Replanifié',       couleur: '#a78bfa' },
@@ -424,6 +442,8 @@
     a_venir: { mot: 'À venir', texte: 'RDV de la période qui n’ont pas encore eu lieu.' },
     poses_avant: { mot: 'Posés avant la période', texte: 'RDV de la période qui avaient été posés avant son début.' },
     reportes: { mot: 'Reportés à une nouvelle date', texte: 'RDV de la période qui sont le nouveau créneau d’un RDV déplacé.' },
+    canal: { mot: 'Canal', texte: 'Self Booking : le prospect a réservé seul. Setting (NB) : le RDV a été posé par un setter. Manuel : RDV créé à la main dans l’Agenda. Pour un close, c’est le canal de son RDV closé ; sans RDV closé, la réponse du closer au moment du close, puis l’étape de la fiche.' },
+    origine_annulation: { mot: 'Origine de l’annulation', texte: 'Qui a annulé : le prospect, l’équipe (dont « non honoré » quand personne de chez nous n’était au RDV) ou le système (contact bloqué, client désactivé). Les RDV annulés avant octobre 2026 n’ont pas d’origine connue.' },
     /* ── Présence ── */
     presents: { mot: 'Présents', texte: 'RDV où le prospect est venu : résultat Offre, Close, Non close ou Disqualifié (ou RDV marqué « terminé » sans résultat). Comptés à la date du RDV.' },
     pitches: { mot: 'Pitchés', texte: 'RDV où l’offre a été présentée : résultat Offre, Close ou Non close. Un prospect présent mais disqualifié n’est pas pitché.' },
@@ -474,6 +494,8 @@
     leads_travailles: { mot: 'Leads travaillés', texte: 'Fiches contactées pour la première fois pendant la période, quelle que soit leur date d’entrée. Dans l’onglet d’un setter : celles que LUI a contactées pour la première fois. Dans Équipe : fiches distinctes.' },
     pas_encore_travailles: { mot: 'Pas encore travaillés', texte: 'Leads reçus pendant la période sur lesquels aucune action de l’équipe n’a encore été enregistrée.' },
     appels: { mot: 'Appels', texte: 'Appels sortants passés pendant la période.' },
+    appels_sans_auteur: { mot: 'Appels sans auteur', texte: 'Appels sortants passés depuis un poste téléphonique qui n’est relié à aucun compte de l’équipe. Ils ne peuvent être rangés dans l’onglet de personne.' },
+    appels_equipe_non_lisibles: { mot: 'Appels de l’équipe', texte: 'Ton compte ne peut lire que tes propres appels : le total de l’équipe n’est pas affiché plutôt que d’être faux. Un admin le voit.' },
     decroches: { mot: 'Décrochés', texte: 'Appels sortants où quelqu’un a répondu : au moins 5 secondes de conversation, répondeurs écartés.' },
     taux_decroche: { mot: 'Taux de décroché', texte: 'Décrochés ÷ appels sortants de la période.' },
     ltb: { mot: 'LTB', texte: 'Lead to booking : RDV pris pendant la période ÷ leads entrés pendant la période. Les RDV pris par d’anciens leads comptent au numérateur.' },
@@ -661,6 +683,7 @@
     estDoublon: estDoublon, estReplanifie: estReplanifie, estAnnule: estAnnule, estNoShow: estNoShow,
     estPresent: estPresent, estPitche: estPitche, estSansDetail: estSansDetail,
     suivantId: suivantId, estRemplacant: estRemplacant,
+    origineAnnulation: origineAnnulation, estNonHonore: estNonHonore, ORIGINES: ORIGINES,
     /* Agrégat et taux */
     vide: vide, ajouter: ajouter, finir: finir, compter: compter, sommer: sommer,
     pct: pct, showUp: showUp, tauxClose: tauxClose, fmtPct: fmtPct,
