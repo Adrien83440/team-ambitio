@@ -693,6 +693,8 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
      deux vues divergent, ce que ce partage existe précisément pour éviter.
      ════════════════════════════════════════════════════════════════ */
   var FC = window.FunnelCore;
+  /* Règles et glossaire communs (« i » à côté de chaque chiffre) — stats-core.js. */
+  var SC = window.StatsCore;
   var LEADS_QUERY_LIMIT = FC.LEADS_QUERY_LIMIT;
   var CALLS_QUERY_LIMIT = FC.CALLS_QUERY_LIMIT;
   var ANSWERED_MIN_SEC  = FC.ANSWERED_MIN_SEC;
@@ -702,7 +704,12 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
 
   /* ── Formats ── */
   function pad2(n) { return String(n).padStart(2, '0'); }
-  function isoDate(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+  /* Clé de jour 'AAAA-MM-JJ' TOUJOURS à l'heure de Paris (référentiel §7) :
+     les bornes de période sont des minuits de Paris. */
+  function isoDate(d) { return FC.isoDate(d); }
+  function todayIso() { return SC.jourParis(Date.now()); }
+  /* Jour voisin d'une clé 'AAAA-MM-JJ' (calendrier pur, aucun fuseau). */
+  function isoShift(iso, n) { var p = String(iso).split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2] + n)).toISOString().slice(0, 10); }
   function frDate(ms) { if (ms == null) return '—'; var d = new Date(ms); return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + String(d.getFullYear()).slice(2) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
   function frDay(iso) { if (!iso) return '—'; var p = iso.split('-'); return p[2] + '/' + p[1]; }
   function fmtNum(v) { if (v == null || isNaN(v) || !isFinite(v)) return '—'; return Math.round(v).toLocaleString('fr-FR'); }
@@ -784,8 +791,8 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     ltb:         { min: 10, max: null, label: 'LTB — Lead to Booking (%)' },
     selfShare:   { min: 60, max: 70,   label: 'Part self-booking / VSL (%)' },
     recovery:    { min: 15, max: 35,   label: 'Taux de récupération setting (%)' },
-    kept:        { min: 80, max: null, label: 'Kept — RDV maintenus (%)' },
-    showup:      { min: 75, max: null, label: 'Show-up (%)' },
+    kept:        { min: 80, max: null, label: 'Kept % — Kept ÷ RDV de la période (%)' },
+    showup:      { min: 75, max: null, label: 'Show-up — présents ÷ (Kept − à venir) (%)' },
     /* Relevée de 10 à 40 le 17/08 : l'ancienne valeur avait été posée quand
        une messagerie comptait pour un décroché, et le taux affiché tournait
        à 81 %. Un plancher à 10 % était alors toujours vert, donc muet.
@@ -793,7 +800,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
        40 % est un plancher qui alerte vraiment. */
     decroche:    { min: 40, max: null, label: 'Taux de décroché (%)' },
     reach:       { min: 40, max: null, label: 'Joignabilité — leads joints (%)' },
-    closingLive: { min: 20, max: null, label: 'Closing live (%)' }
+    closingLive: { min: 20, max: null, label: 'Close / présents (%)' }
   };
 
   function targetBadge(key, val) {
@@ -820,41 +827,29 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
   /* ════════════════════════════════════════════════════════════════
      PÉRIODE
      ════════════════════════════════════════════════════════════════ */
-  function applyMonth(y, m) {
-    P.mode = 'month'; P.y = y; P.m = m;
-    P.start = new Date(y, m, 1, 0, 0, 0, 0);
-    P.end   = new Date(y, m + 1, 0, 23, 59, 59, 999);
+  /* Bornes de période : début / fin de jour à l'heure de PARIS, construites
+     par funnel-core.js (FC.periodMonth / periodDay / periodPreset /
+     periodCustom) — plus de new Date(y, m, 1) à l'heure de l'appareil. */
+  function setPeriod(np) {
+    P.mode = np.mode; P.start = np.start; P.end = np.end;
+    if (np.y != null) { P.y = np.y; P.m = np.m; }
+    P.day = np.day || null;
   }
-  function applyPreset(days) {
-    P.mode = days + 'd';
-    var now = new Date();
-    P.end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-    var s = new Date(P.end.getTime() - (days - 1) * 86400000);
-    P.start = new Date(s.getFullYear(), s.getMonth(), s.getDate(), 0, 0, 0, 0);
-  }
+  function applyMonth(y, m) { setPeriod(FC.periodMonth(y, m)); }
+  function applyPreset(days) { setPeriod(FC.periodPreset(days)); }
   /* Vue « par jour » (demande Adrien 14/07/2026) : tout le funnel sur une
      seule journée — mêmes sources, mêmes calculs, plage start=end=jour. */
-  function applyDay(iso) {
-    var p = iso.split('-');
-    P.mode = 'day';
-    P.day = iso;
-    P.start = new Date(+p[0], +p[1] - 1, +p[2], 0, 0, 0, 0);
-    P.end   = new Date(+p[0], +p[1] - 1, +p[2], 23, 59, 59, 999);
-  }
-  function applyCustom(aIso, bIso) {
-    var a = aIso.split('-'), b = bIso.split('-');
-    P.mode = 'custom';
-    P.start = new Date(+a[0], +a[1] - 1, +a[2], 0, 0, 0, 0);
-    P.end   = new Date(+b[0], +b[1] - 1, +b[2], 23, 59, 59, 999);
-  }
+  function applyDay(iso) { setPeriod(FC.periodDay(iso)); }
+  function applyCustom(aIso, bIso) { setPeriod(FC.periodCustom(aIso, bIso)); }
   function periodIsCalendarMonth() { return P.mode === 'month'; }
   function periodLabel() {
     if (P.mode === 'month') return MONTHS_FR[P.m] + ' ' + P.y;
     if (P.mode === 'day') {
-      try { return P.start.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
+      try { return P.start.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Paris' }); }
       catch (e) { return P.day || isoDate(P.start); }
     }
-    return frDay(isoDate(P.start)) + '/' + String(P.start.getFullYear()).slice(2) + ' → ' + frDay(isoDate(P.end)) + '/' + String(P.end.getFullYear()).slice(2);
+    var sIso = isoDate(P.start), eIso = isoDate(P.end);
+    return frDay(sIso) + '/' + sIso.slice(2, 4) + ' → ' + frDay(eIso) + '/' + eIso.slice(2, 4);
   }
   function updateToolbar() {
     $$('#fnModeSeg button').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-mode') === (P.mode === 'month' ? 'month' : P.mode === 'day' ? 'day' : P.mode === 'custom' ? 'custom' : P.mode === '7d' ? '7d' : '30d')); });
@@ -864,7 +859,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     $('#fnMonthLabel').textContent = P.mode === 'month' ? (MONTHS_FR[P.m] + ' ' + P.y) : '—';
     if (P.mode === 'day') {
       var dl = $('#fnDayLabel'), dp = $('#fnDayPick');
-      if (dl) { try { dl.textContent = P.start.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }); } catch (e) { dl.textContent = P.day || '—'; } }
+      if (dl) { try { dl.textContent = P.start.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/Paris' }); } catch (e) { dl.textContent = P.day || '—'; } }
       if (dp && P.day) dp.value = P.day;
     }
   }
@@ -1142,7 +1137,8 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       P: P,
       tunnelFilter: tunnelFilter,
       sourceFilter: sourceFilter,
-      teamMembers: window.TEAM_MEMBERS_LIST || []
+      teamMembers: window.TEAM_MEMBERS_LIST || [],
+      typeMap: TYPE_MAP
     });
   }
 
@@ -1581,90 +1577,203 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     return h;
   }
 
-  /* ══ Chiffres cliquables de la ligne 2 du héro (21/11/2026) ══════════════
-     Les listes viennent de K.drill / K.closeRows (funnel-core.js) : mêmes
-     ensembles que les compteurs, aucune requête. Lecteur du lien d'accès :
-     mêmes listes, sans lien vers la fiche (il n'a pas accès à Leads Live). */
+  /* ══ Chiffres cliquables de l'onglet Funnel (21/11/2026, refondu le 25/11/2026) ══
+     Les listes viennent de K (funnel-core.js) : K.drill (RDV, un RDV dans UN
+     seul état, mêmes ensembles que les compteurs de K.tenue), K.closeRows (la
+     liste UNIQUE des closes, FunnelCore.buildCloses), K.coh (contrôle de
+     cohérence) — aucune requête. Référence d'une liste : « base » ou
+     « base|part » (part = self | setter | admin pour un RDV, sb | nb pour un
+     close) : le nombre de lignes de la liste = le chiffre cliqué. Lecteur du
+     lien d'accès : mêmes listes, sans lien vers la fiche (pas d'accès à Leads
+     Live). Glossaire et « i » : stats-core.js (StatsCore). */
   var SDF = window.StatsDrill;
   function fd(val, html, key) { return (SDF && val > 0) ? SDF.cell(html, key) : html; }
-  function fdToday() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
-  function fdClassLbl(sb) { return sb ? 'Self Booking' : 'Setting (NB)'; }
-  var FD_LBL = { rdvMois: 'RDV du mois', kept: 'Kept Call', live: 'Live du mois (présents)', pitched: 'Pitchés du mois' };
-  var FD_SUB = {
-    rdvMois: 'RDV Self Booking et setting dont la date tombe dans la période, replanifiés déduits.',
-    kept: 'RDV du mois moins les annulés, les no-show et les replanifiés.',
-    live: 'RDV du mois où le prospect était présent (offre, close, non close, disqualifié — ou « tenu » sans détail).',
-    pitched: 'RDV du mois avec une offre faite (offre, close, non close).'
+  var FD_PART = { self: 'Self Booking', setter: 'Setting (NB)', admin: 'Manuels', sb: 'Self Booking', nb: 'Setting (NB)' };
+  /* base → [titre, clé du glossaire] */
+  var FD_RDV = {
+    rdvMois: ['RDV de la période', 'rdv'], kept: ['Kept', 'kept'], live: ['Présents', 'presents'], pitched: ['Pitchés', 'pitches'],
+    annules: ['Annulés', 'annules'], noshow: ['No-show', 'no_show'], aStatuer: ['À statuer', 'a_statuer'], aVenir: ['À venir', 'a_venir'],
+    replan: ['Replanifiés', 'replanifie'], disqua: ['Disqua.', 'disqua'], sansDetail: ['Présents sans détail', 'sans_detail'],
+    offres: ['Offres en attente', 'offres_attente'], nonCloses: ['Non closes', 'non_closes'], rdvCloses: ['RDV closés', 'rdv_closes'],
+    manuels: ['RDV manuels', 'rdv_manuels'], doublons: ['Doublons supprimés', 'doublons_supprimes']
   };
+  var FD_RDV_PART_INFO = { self: 'rdv_sb', setter: 'rdv_nb', admin: 'rdv_manuels' };
+  var FD_CLOSES = {
+    closes: ['Closes', 'closes'], money: ['Contracté et Collecté par client', 'contracte'],
+    annulesCl: ['Closes annulés', 'closes_annules'], sansPay: ['Closes sans paiement', 'close_sans_paiement'],
+    pending: ['1ers prélèvements en attente', 'premiers_prelevements'], canalInconnu: ['Canal inconnu', 'canal_inconnu']
+  };
+  /* coh:clé → [titre, clé du glossaire, en-tête de date] */
+  var FD_COH = {
+    closesSansRdv: ['Closes sans RDV closé', 'closes_sans_rdv', 'Jour du close'],
+    ecartsCanal: ['Écarts de canal', 'ecart_canal', 'Jour du close'],
+    sansSignal: ['Fiches clientes sans vente enregistrée', 'clientes_sans_vente', 'Marquée cliente le'],
+    annules: ['Closes annulés', 'closes_annules', 'Jour du close'],
+    rdvClosesHorsListe: ['RDV closés sans close sur la période', 'rdv_closes_hors_periode', 'RDV'],
+    doublonsRdv: ['Clients à deux RDV closés', 'doublons_rdv_closes', 'Dernier RDV']
+  };
+
+  /* Personnes : membre du roster (anciens membres compris, DATA.teamFull).
+     Un ancien membre n'a plus de nom à l'écran (décision D10). */
+  function memberBySlug(slug) {
+    if (!slug) return null;
+    var map = window.TEAM_MEMBERS || {};
+    if (Object.prototype.hasOwnProperty.call(map, slug) && map[slug]) return map[slug];
+    var lists = [window.TEAM_MEMBERS_LIST || [], (DATA && DATA.teamFull) || []];
+    for (var i = 0; i < lists.length; i++) {
+      for (var j = 0; j < lists[i].length; j++) if (lists[i][j] && lists[i][j].slug === slug) return lists[i][j];
+    }
+    return null;
+  }
+  function nomDe(slug) {
+    if (!slug) return '';
+    var m = memberBySlug(slug);
+    if (m && FC.isDeparted(m)) return SC.mot('anciens_membres');
+    if (!m) return String(slug);
+    return m.shortName || m.displayName || m.name || m.label || String(slug);
+  }
+
+  function fdRdvItem(b, now) {
+    return SDF.bookingItem(b, { now: now, classe: b._class, closer: nomDe(SC.closerDuRdv(b)) });
+  }
   function fdResolve(ref) {
     if (!K || !SDF) return null;
     var noLink = window.FUNNEL_READONLY === true;
-    var per = (P && P.label) ? ' · ' + P.label : '';
+    var per = ' · ' + periodLabel();
+    var now = Date.now();
+    /* Contrôle de cohérence */
     if (ref.indexOf('coh:') === 0) {
-      var c = K.coh || {};
-      var src = (c[ref.slice(4)] || []);
+      var ck = ref.slice(4), def = FD_COH[ck];
+      var src = ((K.coh || {})[ck]) || [];
+      if (!def) return null;
       return {
-        title: 'Écart funnel ↔ pages équipe' + per,
-        sub: 'Chaque ligne est un close compté d\'un côté et pas de l\'autre, avec la raison.',
-        items: src.map(function (x) { return { name: x.name, leadId: x.leadId || null, date: x.date || '', info: x.why }; }),
-        noLink: noLink, dateLabel: 'RDV'
-      };
-    }
-    if (ref === 'closes' || ref === 'money') {
-      var rows = (K.closeRows || []).filter(function (r) { return ref === 'money' || !(r.rv && r.rv.cancelled); });
-      return {
-        title: (ref === 'money' ? 'Montants par client — contracté, encaissé, en attente' : 'Closes') + per,
-        sub: 'Montants HT, règle du module Paiements : encaissé = prélèvements réellement passés ; « en attente » = premier prélèvement pas encore passé ; contracté − encaissé = reste à encaisser.',
-        items: rows.map(function (r) {
-          var rv = r.rv || {};
-          var it = { name: r.name, leadId: r.leadId || null, date: r.date || '', status: rv.cancelled ? 'Close annulé' : 'Close', statusColor: rv.cancelled ? '#ef4444' : '#34d399',
-            info: fdClassLbl(r.sb) + (r.src === 'paiement' ? ' · détecté par Paiements' : (r.src === 'rdv' ? ' · RDV sans fiche' : '')), con: 0, paid: 0, pending: 0, flag: '' };
-          if (rv.cancelled) it.flag = 'Retiré des closes et des montants (' + (rv.reason || '') + ')';
-          else {
-            it.con = rv.con || 0; it.paid = rv.paid || 0; it.pending = rv.pending || 0;
-            if (!rv.hasPay) it.flag = 'Aucun paiement dans le module Paiements' + (rv.declCol > 0 ? ' — encaissé déclaré ' + fmtEuro(rv.declCol) + ', non compté' : '');
-          }
-          return it;
+        title: def[0] + per, info: def[1],
+        items: src.map(function (x) {
+          return { name: x.name, leadId: x.leadId || null, date: x.date || '', info: x.why,
+            canal: ck === 'sansSignal' ? '' : (x.sb ? FD_PART.sb : FD_PART.nb) };
         }),
-        money: true, noLink: noLink, dateLabel: 'RDV'
+        noLink: noLink, dateLabel: def[2]
       };
     }
-    var list = (K.drill && K.drill[ref]) || null;
-    if (!list) return null;
-    var today = fdToday();
+    /* Statuts « Set » cliqués sans RDV créé */
+    if (ref === 'statutsSet') {
+      return {
+        title: SC.mot('statuts_set_sans_rdv') + per, info: 'statuts_set_sans_rdv',
+        items: (K.statutsSetSansRdvListe || []).map(function (x) {
+          return { name: x.name, leadId: x.leadId || null, date: x.day || '', setter: nomDe(x.slug) || SC.mot('non_attribue') };
+        }),
+        noLink: noLink, dateLabel: 'Statut posé le'
+      };
+    }
+    var parts = ref.split('|'), base = parts[0], part = parts[1] || '';
+    /* Closes : la liste unique (lignes de FunnelCore.buildCloses) */
+    if (FD_CLOSES[base]) {
+      var cdef = FD_CLOSES[base];
+      var rows = (K.closeRows || []).filter(function (r) {
+        var rv = r.rv || {};
+        if (base === 'annulesCl') return !!rv.cancelled;
+        if (rv.cancelled) return false;
+        if (part === 'sb' && !r.sb) return false;
+        if (part === 'nb' && r.sb) return false;
+        if (base === 'sansPay') return !rv.hasPay;
+        if (base === 'pending') return (Number(rv.pending) || 0) > 0;
+        if (base === 'canalInconnu') return r.canalSrc === 'inconnu';
+        return true;
+      });
+      var ttl = cdef[0], cle = cdef[1];
+      if (base === 'closes' && part) { ttl = part === 'sb' ? SC.mot('closes_sb') : SC.mot('closes_nb'); cle = part === 'sb' ? 'closes_sb' : 'closes_nb'; }
+      else if (part) ttl += ' — ' + FD_PART[part];
+      return {
+        title: ttl + per, info: cle,
+        infoPlus: base === 'money' ? SC.texte('collecte') : '',
+        items: rows.map(function (r) { return SDF.closeItem(r, { nomDe: nomDe }); }),
+        noLink: noLink
+      };
+    }
+    /* RDV : K.drill (mêmes états que K.tenue) */
+    var rdef = FD_RDV[base];
+    var list = (K.drill && K.drill[base]) || null;
+    if (!rdef || !list) return null;
+    if (part) list = list.filter(function (b) { return b._class === part; });
+    var rcle = rdef[1], rttl = rdef[0];
+    if (part && base === 'rdvMois') { rcle = FD_RDV_PART_INFO[part] || rcle; rttl = SC.mot(rcle); }
+    else if (part) rttl += ' — ' + FD_PART[part];
     return {
-      title: (FD_LBL[ref] || ref) + per,
-      sub: FD_SUB[ref] || '',
-      items: list.map(function (b) { return SDF.bookingItem(b, { todayIso: today, info: fdClassLbl(b._class === 'self') }); }),
-      noLink: noLink, dateLabel: 'RDV'
+      title: rttl + per, info: rcle,
+      items: list.map(function (b) { return fdRdvItem(b, now); }),
+      noLink: noLink, dateLabel: 'Date du RDV'
     };
   }
 
-  /* Contrôle de cohérence avec Set NB / Close SB (décision Adrien 21/11/2026 :
-     les deux règles de close restent, chaque écart est nommé). */
+  /* Lecture en échec ou plafond atteint : dit en tête d'onglet, jamais un
+     zéro muet (phrases prêtes, posées par funnel-core.js). */
+  function erreursBanner(k) {
+    var e = k.erreursLecture || [];
+    if (!e.length) return '';
+    return '<div class="fn-alert" style="margin-bottom:14px">⚠️ <strong>' + esc(SC.mot('lecture_incomplete')) + '</strong>' + SC.info('lecture_incomplete') +
+      '<br>' + e.map(function (t) { return '⚠️ ' + esc(t); }).join('<br>') +
+      ' <button class="fn-btn" data-fn-reload="1" style="margin-left:8px">⟳ Recharger</button></div>';
+  }
+
+  /* Closes annulés / 1ers prélèvements en attente / closes sans paiement —
+     même bandeau que Close SB et Set NB, lu dans la liste unique. */
+  function revBanner(k) {
+    var rows = k.closeRows || [];
+    var ann = rows.filter(function (r) { return r.rv && r.rv.cancelled; });
+    var noPay = rows.filter(function (r) { return r.rv && !r.rv.cancelled && !r.rv.hasPay; });
+    var pend = (k.closes && k.closes.pending) || 0;
+    var parts = [];
+    if (ann.length) {
+      parts.push('🚫 ' + SDF.cell('<strong>' + ann.length + ' close(s) annulé(s)</strong>', 'annulesCl') + SC.info('closes_annules') + ' — ' +
+        esc(ann.map(function (r) { return r.name + ((r.rv && r.rv.reason) ? ' (' + r.rv.reason + ')' : ''); }).join(', ')) + ' : retirés des Closes, du Contracté et du Collecté.');
+    }
+    if (pend > 0) {
+      parts.push('⏳ ' + SDF.cell('<strong>' + esc(fmtEuro(pend)) + ' de 1ers prélèvements en attente</strong>', 'pending') + SC.info('premiers_prelevements') +
+        ' — compris dans le Contracté, pas encore dans le Collecté.');
+    }
+    if (noPay.length) {
+      parts.push('💶 ' + SDF.cell('<strong>' + noPay.length + ' close(s) sans paiement</strong>', 'sansPay') + SC.info('close_sans_paiement') + ' — ' +
+        esc(noPay.map(function (r) { return r.name; }).join(', ')) + ' : contracté = tarif déclaré au close, collecté à 0 (le collecté déclaré par le closer n’est jamais compté). Crée le paiement dans le module Paiements.');
+    }
+    if (!parts.length) return '';
+    return '<div class="fn-alert" style="margin:-4px 0 16px">' + parts.join('<br>') + '</div>';
+  }
+
+  /* Contrôle de cohérence des closes (décision D1 du 25/11/2026) : tous les
+     écrans lisent la MÊME liste de closes, il n'y a plus deux règles à
+     comparer. Le bloc nomme ce qui sépare Closes (clients gagnés, jour de la
+     vente) et RDV closés (résultat Close, jour du RDV), et ce qui mérite une
+     vérification. Chaque ligne s'ouvre en liste nominative. */
   function cohBlock(k) {
     var c = k.coh;
     if (!c || !SDF) return '';
-    var nNB = k.dueNB - k.reschedNB, nSB = k.dueSB - k.reschedSB;
-    var ecarts = c.onlyPages.length + c.onlyFunnel.length + c.dup.length;
-    var ok = ecarts === 0 && c.pagesCloses === k.closesWonTotal;
-    function lien(n, key, txt) { return n > 0 ? SDF.cell('<strong>' + n + '</strong> ' + txt, 'coh:' + key) : ''; }
-    var h = '<details class="fn-help"' + (ok ? '' : ' open') + '><summary>' + (ok ? '✅' : '🔎') + ' Contrôle de cohérence avec Set NB et Close SB — ' +
-      (ok ? 'mêmes closes des deux côtés' : ecarts + ' écart' + (ecarts > 1 ? 's' : '') + ' sur les closes, nommé' + (ecarts > 1 ? 's' : '')) + '</summary><div class="hb">';
-    h += '<p><strong>RDV du mois : ' + fmtNum(k.rdvMois) + '</strong> = ' + fmtNum(nNB) + ' du setting + ' + fmtNum(nSB) + ' Self Booking. ' +
-      'À retrouver dans <strong>Set NB → onglet Équipe, colonne « RDV NB »</strong> (' + fmtNum(nNB) + ') et dans <strong>Close SB → Équipe, « RDV SB » moins « Replan. »</strong> (' + fmtNum(nSB) + '). ' +
-      'Les <em>Sets</em> de Set NB comptent les RDV <em>posés</em> sur la période : ce n\'est pas le même chiffre.</p>';
-    h += '<p><strong>Live ' + fmtNum(k.ocDue.present) + ' · Pitchés ' + fmtNum(k.ocDue.pitched) + '</strong> = « Présents » et « Pitchés » de Set NB (Équipe) + « Présents » et « Offres » de Close SB (Équipe).</p>';
-    h += '<p><strong>Closes : ' + fmtNum(k.closesWonTotal) + ' dans le funnel</strong> (fiches gagnées sur la période) · <strong>' + fmtNum(c.pagesCloses) + ' sur les pages équipe</strong> (RDV au résultat « close » : ' + fmtNum(c.pagesNB) + ' Set NB + ' + fmtNum(c.pagesSB) + ' Close SB).</p>';
-    if (ecarts || c.split.length) {
-      var parts = [];
-      if (c.onlyFunnel.length) parts.push(lien(c.onlyFunnel.length, 'onlyFunnel', 'compté(s) par le funnel seulement'));
-      if (c.onlyPages.length) parts.push(lien(c.onlyPages.length, 'onlyPages', 'compté(s) par les pages équipe seulement'));
-      if (c.dup.length) parts.push(lien(c.dup.length, 'dup', 'client(s) avec deux RDV closés'));
-      if (c.split.length) parts.push(lien(c.split.length, 'split', 'classé(s) SB d\'un côté et NB de l\'autre'));
-      h += '<p>Écarts, clique pour voir les noms : ' + parts.join(' · ') + '.</p>';
+    function n(x) { return (x || []).length; }
+    var nInconnu = (k.closesCanalSrc && k.closesCanalSrc.inconnu) || 0;
+    var aVerifier = n(c.ecartsCanal) + nInconnu + n(c.sansSignal) + n(c.rdvClosesHorsListe) + n(c.doublonsRdv);
+    function ligne(nb, ref, txt, cle, suite) {
+      return '<li style="margin:0 0 6px">' + (nb > 0 ? SDF.cell('<strong>' + fmtNum(nb) + '</strong> ' + txt, ref) : '<strong>0</strong> ' + txt) +
+        SC.info(cle) + (suite ? ' — ' + suite : '') + '</li>';
     }
-    h += '<p style="color:var(--muted)">Comparaison valable sans filtre de tunnel ni de source (les pages équipe n\'en ont pas) et sans correction manuelle ✎ sur les pages équipe. Les closes annulés sont retirés des deux côtés.</p>';
+    var cl = k.closes || {}, cSB = k.closesSB || {}, cNB = k.closesNB || {};
+    var h = '<details class="fn-help"' + (aVerifier ? ' open' : '') + '><summary>' + (aVerifier ? '🔎' : '✅') + ' Contrôle de cohérence des closes — ' +
+      (aVerifier ? aVerifier + ' point' + (aVerifier > 1 ? 's' : '') + ' à vérifier, nommé' + (aVerifier > 1 ? 's' : '') : 'rien à vérifier') + '</summary><div class="hb">';
+    h += '<p><strong>Une seule liste de closes.</strong> Le Stats funnel, Set NB, Close SB, Global closing et Qualité leads comptent désormais les mêmes clients, au jour de la vente : il n’y a plus de « funnel » et de « pages équipe » à comparer. Ce bloc explique l’écart entre <strong>Closes</strong> (' + fmtNum(cl.closes) + ')' + SC.info('closes') +
+      ' et <strong>RDV closés</strong> (' + fd(c.rdvCloses, fmtNum(c.rdvCloses), 'rdvCloses') + ')' + SC.info('rdv_closes') + ', et nomme ce qui mérite une vérification.</p>';
+    h += '<p>Closes ' + fmtNum(cl.closes) + ' = Self Booking ' + fmtNum(cSB.closes) + ' + Setting (NB) ' + fmtNum(cNB.closes) + SC.info('canal') +
+      ' · RDV de la période ' + fmtNum(k.rdvMois) + ' = Self Booking ' + fmtNum(k.rdvSB) + ' + Setting (NB) ' + fmtNum(k.rdvNB) + (k.rdvMan > 0 ? ' + Manuels ' + fmtNum(k.rdvMan) : '') +
+      ' (mêmes règles que la colonne RDV de Close SB et la colonne RDV NB de Set NB).</p>';
+    h += '<ul style="margin:0 0 10px;padding-left:18px">';
+    h += ligne(n(c.closesSansRdv), 'coh:closesSansRdv', 'close(s) sans RDV closé', 'closes_sans_rdv', 'comptés dans Closes (vente validée sur la fiche ou repérée par le paiement)');
+    h += ligne(n(c.ecartsCanal), 'coh:ecartsCanal', 'écart(s) de canal', 'ecart_canal', 'comptés au canal du RDV ; la commission suit la réponse du closer');
+    h += ligne(nInconnu, 'canalInconnu', 'close(s) au canal inconnu', 'canal_inconnu', 'rangés en Setting (NB) faute d’information');
+    h += ligne(n(c.sansSignal), 'coh:sansSignal', 'fiche(s) cliente(s) sans vente enregistrée', 'clientes_sans_vente', 'NON comptées dans Closes');
+    h += ligne(n(c.annules), 'coh:annules', 'close(s) annulé(s)', 'closes_annules', 'retirés des Closes, du Contracté et du Collecté');
+    h += ligne(n(c.rdvClosesHorsListe), 'coh:rdvClosesHorsListe', 'RDV closé(s) sans close sur la période', 'rdv_closes_hors_periode', '');
+    h += ligne(n(c.doublonsRdv), 'coh:doublonsRdv', 'client(s) à deux RDV closés', 'doublons_rdv_closes', 'un seul close compté');
+    h += '</ul>';
+    if (tunnelFilter !== 'all' || sourceFilter !== 'all') {
+      h += '<p style="color:var(--muted)">Filtre de tunnel ou de source actif : les pages équipe n’ont pas de filtre, leurs totaux ne retombent sur ceux-ci que sur « Tous ».</p>';
+    }
     return h + '</div></details>';
   }
 
@@ -1675,82 +1784,138 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     var k = K;
     var h = '';
 
-    /* Hero — DEUX LIGNES (retour Vincent + Adrien 14/07) :
-       L1 = les leads de la période et LEURS RDV (axe « RDV créés », chaînes
-            de replanification dédupliquées, résultat de fin de chaîne) ;
-       L2 = le mois en TOTALITÉ (axe « date de RDV » + business gagné) — se
-            recoupe exactement avec la section « Tenue des RDV ».
-       + bandeau des taux de close. Chaque carte porte sa formule. */
-    function numOrDash(v, unknown) { return (v === 0 && unknown > 0) ? '—' : fmtNum(v); }
-    var ch = k.chAll;
+    /* Héro — DEUX LIGNES, deux axes toujours nommés (référentiel §2) :
+       L1 = les RDV PRIS pendant la période (date de création), résultat lu
+            sur le dernier RDV de la chaîne de reports ;
+       L2 = les RDV de la période (date du RDV) + les closes de la période
+            (jour de la vente) — se recoupe avec la section « Tenue ».
+       Même mot, même calcul sur les deux lignes : Kept = RDV − annulés
+       (no-show dedans), Show-up = présents ÷ (Kept − à venir). Chaque
+       chiffre porte son « i » (glossaire commun, stats-core.js). */
+    var ch = k.chAll || {};
+    var tn = k.tenue || {};
 
-    /* ❓ Mode d'emploi — SUR la page, pas dans la tête de quelqu'un.
-       Replié par défaut, statique, zéro jargon (demande Adrien 15/07). */
+    h += erreursBanner(k);
+
+    /* ❓ Mode d'emploi — SUR la page, replié par défaut (demande Adrien
+       15/07), réécrit le 25/11/2026 pour dire les règles ACTUELLES. */
     h += '<details class="fn-help"><summary>❓ Comment lire ce funnel — les 6 règles (clique pour déplier)</summary><div class="hb">'
-      + '<p><strong>1 · Un RDV a deux dates</strong> — le jour où on le <strong>prend</strong> et le jour où il <strong>a lieu</strong> (comme une résa de resto prise le 28/06 pour dîner le 03/07). D\'où deux totaux, tous les deux justes : la <strong>Ligne 1</strong> et « Prise de RDV » comptent les RDV <strong>pris</strong> sur la période → ce que la pub et le setting du mois ont produit (LTB, CPR). La <strong>Ligne 2</strong> et « Tenue » comptent les RDV qui <strong>ont lieu</strong> sur la période → l\'agenda réel du mois (kept, live, closes). Le pont chiffré entre les deux s\'affiche dans « Prise de RDV ».</p>'
-      + '<p><strong>2 · Self Booking / No Booking = les deux liens.</strong> SB : le lead prend RDV seul sur le lien public. NB : RDV posé par le setting sur le lien setter (type marqué « RDV setter » dans Booking admin). Le type de consultation fait foi, même sur les vieux RDV.</p>'
-      + '<p><strong>3 · « Leads » = les leads entrés sur la période.</strong> Mais des leads plus anciens et des ré-optins prennent aussi RDV pendant la période → « RDV pris » peut dépasser le nombre de leads de la période self-bookés. Chaque carte RDV affiche la ventilation (« dont X leads de la période · Y plus anciens »).</p>'
-      + '<p><strong>4 · Les € (collecté / contracté), en HT.</strong> Priorité au module <strong>Paiements</strong> : prélèvements réels, sinon 1 mensualité pour un fractionné / la totalité pour un intégral — marqué « à prélever (mandat) ». Sinon l\'encaissé déclaré aux <strong>cartes du Close</strong>. Sinon le close est compté « <strong>sans montant</strong> » avec une alerte nominative — jamais un zéro muet. TTC → HT ÷ 1,2.</p>'
-      + '<p><strong>5 · Kept, deux définitions, écrites sur les cartes.</strong> Lignes SB/NB : kept = pris − annulés (le no-show reste dedans : le RDV était maintenu). Tenue et Ligne 2 : Kept Call = planifiés − annulés − no-show − replanifiés.</p>'
-      + '<p><strong>6 · « — » = pas de donnée, jamais un chiffre inventé.</strong> RDV passés non statués, journal d\'actions inexistant avant le 14/07/2026, coûts non renseignés (💶) : le funnel affiche un tiret et l\'explication, et les chiffres se remplissent tout seuls dès que la donnée existe (statuer les RDV via 🎯 Résultat).</p>'
+      + '<p><strong>1 · Un RDV a deux dates</strong> — le jour où on le <strong>prend</strong> et le jour où il <strong>a lieu</strong>. La <strong>Ligne 1</strong> et « Prise de RDV » comptent les <strong>RDV pris</strong> pendant la période (ce que la pub et le setting ont produit : LTB, CPR), avec le résultat de leur dernier RDV, même s’il arrive après la période. La <strong>Ligne 2</strong> et « Tenue » comptent les <strong>RDV de la période</strong>, ceux qui ont lieu pendant la période. Le pont chiffré entre les deux est dans « Prise de RDV ».</p>'
+      + '<p><strong>2 · Self Booking (SB), Setting (NB), Manuels.</strong> SB : le prospect réserve seul sur le lien public. Setting (NB) : RDV posé par un setter sur le lien setter (le type de consultation fait foi). Manuels : RDV créés à la main dans l’Agenda, comptés à leur date (Ligne 2, Tenue) mais jamais dans les RDV pris, les Sets ni le LTB. Sous chaque carte, Self Booking + Setting (NB) (+ Manuels) = le total.</p>'
+      + '<p><strong>3 · Un RDV n’a qu’un état</strong> : annulé, no-show, présent, à statuer ou à venir (les replanifiés comptent à leur nouvelle date, les doublons supprimés nulle part). <strong>Kept = RDV − annulés</strong> : le no-show reste dedans, sur les deux lignes. <strong>Show-up = présents ÷ (Kept − à venir)</strong>.</p>'
+      + '<p><strong>4 · Closes = clients gagnés pendant la période</strong>, un par client, comptés le jour de la vente. C’est la même liste que Set NB, Close SB, Global closing et Qualité leads. Un close annulé est retiré partout. Le canal d’un close est celui de son RDV closé ; à défaut, la réponse du closer, puis l’étape de la fiche.</p>'
+      + '<p><strong>5 · Les montants sont HT et lus dans le module Paiements.</strong> Contracté = valeur des contrats ; Collecté = prélèvements déjà passés, à ce jour, sur ces mêmes clients ; Reste à encaisser = contracté − collecté. Un close sans paiement : contracté = tarif déclaré au close, collecté à 0, signalé « sans paiement ». Le collecté déclaré par le closer n’est jamais compté.</p>'
+      + '<p><strong>6 · « — » = pas de donnée, ou un taux qui n’a pas de sens</strong> (par exemple plus de closes que de pitchés sur une période courte) : jamais un chiffre inventé. Une lecture en échec ou tronquée s’affiche en rouge en haut de l’onglet. Le petit « i » à côté de chaque chiffre donne sa règle ; un chiffre souligné s’ouvre en liste nominative.</p>'
       + '</div></details>';
 
-    /* Global / Self Booking / Setting sous chaque carte (23/11/2026, demande
-       Vincent) : le chiffre du haut reste le global, les deux lignes dessous
-       disent d'où il vient. `pct` = part calculée par l'appelant, ou null. */
-    function split3(sb, nb, pSb, pNb) {
-      function one(lbl, v, p, col) {
-        return '<div style="display:flex;justify-content:space-between;gap:8px"><span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + col + ';margin-right:5px"></span>' + lbl + '</span>' +
-          '<span><strong style="color:var(--text)">' + v + '</strong>' + (p != null ? ' <span class="pct">' + p + '</span>' : '') + '</span></div>';
+    /* Self Booking / Setting (NB) / Manuels sous chaque carte (23/11/2026,
+       demande Vincent ; Manuels le 25/11/2026) : le chiffre du haut est le
+       total, les lignes dessous s'y additionnent. Chaque part :
+       { n (nombre, pour le clic), v (HTML), p (précision), ref, info }.
+       La part Manuels n'est affichée que si elle porte quelque chose. */
+    function split3(sb, nb, man) {
+      function one(lbl, x, col) {
+        if (!x) return '';
+        var v = (x.ref && x.n > 0 && SDF) ? SDF.cell(x.v, x.ref) : x.v;
+        return '<div style="display:flex;justify-content:space-between;gap:8px"><span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + col + ';margin-right:5px"></span>' + lbl + (x.info || '') + '</span>' +
+          '<span><strong style="color:var(--text)">' + v + '</strong>' + (x.p ? ' <span class="pct">' + x.p + '</span>' : '') + '</span></div>';
       }
       return '<div class="s" style="margin-top:7px;padding-top:6px;border-top:1px solid var(--border)">' +
-        one('Self Booking', sb, pSb, '#fbbf24') + one('Setting (NB)', nb, pNb, '#a78bfa') + '</div>';
+        one('Self Booking', sb, '#fbbf24') + one('Setting (NB)', nb, '#a78bfa') + one('Manuels', man, '#94a3b8') + '</div>';
     }
-    function pc(a, b) { return b > 0 ? fmtPct(a / b * 100, 0) : null; }
+    function heroKpi(v, l, s, sp) {
+      return '<div class="fn-hero-kpi"><div class="v">' + v + '</div><div class="l">' + l + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + (sp || '') + '</div>';
+    }
+    function pctOf(a, b) { return SC.fmtPct(SC.pct(a, b)); }
+    /* LTB écrit en division (un taux = deux chiffres affichés) ; sans lead
+       entré, pas de taux. */
+    function ltbTxt(lbl, nRdv) {
+      return k.leads > 0 ? lbl + ' ' + pctOf(nRdv, k.leads) + ' = ' + fmtNum(nRdv) + ' ÷ ' + fmtNum(k.leads) + ' leads' + SC.info('ltb')
+        : lbl + ' — (aucun lead entré pendant la période)' + SC.info('ltb');
+    }
     var cS = k.chSB || {}, cN = k.chNB || {};
+
+    /* ── Ligne 1 : RDV PRIS ── */
     h += '<div class="fn-hero">';
-    h += '<div class="fn-hero-lbl">📥 Ligne 1 — Leads entrés sur la période → les RDV PRIS sur la période</div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.leads) + '</div><div class="l">Leads</div><div class="s">' + (k.reoptins ? '+ ' + k.reoptins + ' ré-optins 🔄' : 'entrés sur la période') + '</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(ch.n) + '</div><div class="l">RDV pris</div><div class="s">' + (k.ltb != null ? 'LTB global ' + fmtPct(k.ltb) + ' (RDV ÷ leads)' : 'SB + NB, replanif. dédupliqués') + '</div>' +
-      split3(fmtNum(cS.n), fmtNum(cN.n), k.leads > 0 ? 'LTB ' + fmtPct(cS.n / k.leads * 100) : null, k.leads > 0 ? 'LTB ' + fmtPct(cN.n / k.leads * 100) : null) + '</div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(ch.kept) + '</div><div class="l">Kept</div><div class="s">pris − ' + fmtNum(ch.cancelled) + ' annulés' + (ch.n > 0 ? ' · <span class="pct">' + fmtPct(ch.kept / ch.n * 100, 0) + '</span>' : '') + '</div>' +
-      split3(fmtNum(cS.kept), fmtNum(cN.kept), pc(cS.kept, cS.n), pc(cN.kept, cN.n)) + '</div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + numOrDash(ch.present, ch.sansDetail) + '</div><div class="l">Live (présents)</div><div class="s">' + (ch.kept > 0 && ch.present > 0 ? '<span class="pct">' + fmtPct(ch.present / ch.kept * 100, 0) + '</span> des kept' : 'résultats RDV') + (ch.aVenir ? ' · ' + ch.aVenir + ' à venir' : '') + '</div>' +
-      split3(fmtNum(cS.present), fmtNum(cN.present), pc(cS.present, cS.kept), pc(cN.present, cN.kept)) + '</div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + numOrDash(ch.pitched, ch.sansDetail) + '</div><div class="l">Pitchés (offres)</div><div class="s">' + (ch.pitched > 0 && ch.present > 0 ? '<span class="pct">' + fmtPct(ch.pitched / ch.present * 100, 0) + '</span> des live' : 'offre · close · non close') + (ch.sansDetail ? ' · ⚠ ' + ch.sansDetail + ' tenus sans détail' : '') + '</div>' +
-      split3(fmtNum(cS.pitched), fmtNum(cN.pitched), pc(cS.pitched, cS.present), pc(cN.pitched, cN.present)) + '</div>';
-    h += '<div class="fn-stage-note" style="grid-column:1/-1;margin-top:2px">Sous chaque carte : la part <strong>Self Booking</strong> (le prospect réserve seul depuis la page) et la part <strong>Setting</strong> (RDV posé par un setter). Les deux LTB s\'additionnent pour donner le LTB global ; les pourcentages suivants se lisent sur l\'étape précédente de la même ligne.</div>';
+    h += '<div class="fn-hero-lbl">📥 Ligne 1 — Leads entrés pendant la période → les RDV PRIS pendant la période' + SC.info('rdv_pris') + '</div>';
+    h += heroKpi(fmtNum(k.leads), 'Leads' + SC.info('leads'), k.reoptins ? '+ ' + fmtNum(k.reoptins) + ' ré-optins 🔄' + SC.info('reoptins') : 'entrés pendant la période');
+    h += heroKpi(fmtNum(ch.n), 'RDV pris' + SC.info('rdv_pris'),
+      ltbTxt('LTB', ch.n),
+      split3({ v: fmtNum(cS.n), p: k.leads > 0 ? 'LTB ' + pctOf(cS.n, k.leads) : '' },
+             { v: fmtNum(cN.n), p: k.leads > 0 ? 'LTB ' + pctOf(cN.n, k.leads) : '',
+               info: SC.info('sets', 'Les RDV pris du setting sont les Sets de Set NB : même nombre, même règle.') }, null));
+    var keptSub1 = fmtNum(ch.n) + ' RDV pris − ' + fmtNum(ch.cancelled) + ' annulés' +
+      (ch.sansSuite ? ' − ' + fmtNum(ch.sansSuite) + ' déplacé(s) sans nouveau créneau' + SC.info('deplaces_sans_suite') : '') +
+      '<br>dont ' + fmtNum(ch.noshow) + ' no-show' + SC.info('no_show') + ' · dont ' + fmtNum(ch.aVenir) + ' à venir' + SC.info('a_venir');
+    h += heroKpi(fmtNum(ch.kept), 'Kept' + SC.info('kept', 'Ligne 1 : sur les RDV pris pendant la période, état de leur dernier RDV.'), keptSub1,
+      split3({ v: fmtNum(cS.kept) }, { v: fmtNum(cN.kept) }, null));
+    var showSub1 = 'Show-up ' + SC.fmtPct(ch.showUp) + ' = ' + fmtNum(ch.present) + ' ÷ (' + fmtNum(ch.kept) + ' − ' + fmtNum(ch.aVenir) + ' à venir)' + SC.info('show_up') +
+      (ch.aStatuer ? '<br>' + fmtNum(ch.aStatuer) + ' à statuer' + SC.info('a_statuer') : '') +
+      (ch.sansDetail ? '<br>⚠ ' + fmtNum(ch.sansDetail) + ' présent(s) sans détail' + SC.info('sans_detail') : '');
+    h += heroKpi(fmtNum(ch.present), 'Présents' + SC.info('presents'), showSub1,
+      split3({ v: fmtNum(cS.present), p: SC.fmtPct(cS.showUp) }, { v: fmtNum(cN.present), p: SC.fmtPct(cN.showUp) }, null));
+    h += heroKpi(fmtNum(ch.pitched), 'Pitchés' + SC.info('pitches'),
+      'Taux de pitch ' + SC.fmtPct(ch.tauxPitch) + ' = ' + fmtNum(ch.pitched) + ' ÷ ' + fmtNum(ch.present) + ' présents' + SC.info('taux_pitch') +
+      (ch.disqua ? '<br>' + fmtNum(ch.disqua) + ' disqua. (présents non pitchés)' + SC.info('disqua') : ''),
+      split3({ v: fmtNum(cS.pitched), p: SC.fmtPct(cS.tauxPitch) }, { v: fmtNum(cN.pitched), p: SC.fmtPct(cN.tauxPitch) }, null));
+    h += '<div class="fn-stage-note" style="grid-column:1/-1;margin-top:2px">Sous chaque carte : la part <strong>Self Booking</strong> (le prospect réserve seul) et la part <strong>Setting (NB)</strong> (RDV posé par un setter) ; elles s’additionnent au total, et les deux LTB donnent le LTB global. Le % à droite : LTB sous RDV pris, show-up sous Présents, taux de pitch sous Pitchés, chacun sur sa part. Les RDV manuels ne sont jamais des RDV pris.' + SC.info('rdv_manuels') + '</div>';
     h += '</div>';
 
+    /* ── Ligne 2 : RDV DE LA PÉRIODE + closes de la période ── */
+    var hasMan = (k.rdvMan || 0) > 0;
+    var tS = k.tenueSB || {}, tN = k.tenueNB || {}, tM = k.tenueMan || {};
+    function man(o) { return hasMan ? o : null; }
     h += '<div class="fn-hero" style="margin-top:-8px">';
-    h += '<div class="fn-hero-lbl">📆 Ligne 2 — Le mois en totalité : RDV qui ONT LIEU dans la période + business gagné</div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fd(k.rdvMois, fmtNum(k.rdvMois), 'rdvMois') + '</div><div class="l">RDV du mois</div><div class="s">SB ' + fmtNum(k.dueSB - k.reschedSB) + ' · NB ' + fmtNum(k.dueNB - k.reschedNB) + (k.dueCreatedBefore ? ' · dont ' + fmtNum(k.dueCreatedBefore) + ' posés avant la période' : '') + (k.dueRescheduled ? ' · ' + k.dueRescheduled + ' replanifiés déduits' : '') + '</div>' +
-      split3(fmtNum(k.dueSB - k.reschedSB), fmtNum(k.dueNB - k.reschedNB), pc(k.dueSB - k.reschedSB, k.rdvMois), pc(k.dueNB - k.reschedNB, k.rdvMois)) + '</div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fd(k.kept, fmtNum(k.kept), 'kept') + '</div><div class="l">Kept Call</div><div class="s">RDV − annulés − no-show − replanifiés' + (k.keptPct != null ? ' · <span class="pct">' + fmtPct(k.keptPct, 0) + '</span>' : '') + '</div>' +
-      split3(fmtNum(k.keptSB), fmtNum(k.keptNB), pc(k.keptSB, k.dueSB), pc(k.keptNB, k.dueNB)) + '</div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fd(k.ocDue.present, numOrDash(k.ocDue.present, k.ocDue.sansDetail), 'live') + '</div><div class="l">Live du mois</div><div class="s">présents (résultats RDV)' + (k.ocDue.sansDetail ? ' · ⚠ ' + k.ocDue.sansDetail + ' sans détail' : '') + '</div>' +
-      split3(fmtNum((k.ocDueSB || {}).present), fmtNum((k.ocDueNB || {}).present), pc((k.ocDueSB || {}).present, k.keptSB), pc((k.ocDueNB || {}).present, k.keptNB)) + '</div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fd(k.ocDue.pitched, numOrDash(k.ocDue.pitched, k.ocDue.sansDetail), 'pitched') + '</div><div class="l">Pitchés du mois</div><div class="s">offres faites (résultats RDV)</div>' +
-      split3(fmtNum((k.ocDueSB || {}).pitched), fmtNum((k.ocDueNB || {}).pitched), pc((k.ocDueSB || {}).pitched, (k.ocDueSB || {}).present), pc((k.ocDueNB || {}).pitched, (k.ocDueNB || {}).present)) + '</div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fd(k.closesWonTotal, fmtNum(k.closesWonTotal), 'closes') + '</div><div class="l">Closes</div><div class="s">clients gagnés — fiches + RDV + Paiements' + (k.closesCancelled ? ' · <span style="color:var(--orange,#e8a13c)">' + k.closesCancelled + ' annulé(s) déduit(s)</span>' : '') + '</div>' +
-      split3(fmtNum(k.wonSelf), fmtNum(k.wonSetting), pc(k.wonSelf, (k.ocDueSB || {}).pitched), pc(k.wonSetting, (k.ocDueNB || {}).pitched)) + '</div>';
-    var heroColSub = 'prélèvements réellement passés';
-    /* Libellés distincts (21/11/2026) : « 1ers prélèvements en attente » n'est
-       qu'une PARTIE du « reste à encaisser » du contracté — les deux portaient
-       le même nom et semblaient se contredire (7 000 € vs 22 000 €). */
-    if (k.collecteMandat > 0) heroColSub += ' · ⏳ ' + fmtEuro(k.collecteMandat) + ' de 1ers prélèvements en attente (mandat signé, rien de passé)';
-    if (k.collecteMissing > 0) heroColSub += ' · <span style="color:var(--orange,#e8a13c)">⚠ ' + k.collecteMissing + ' close(s) sans paiement</span>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fd((k.closeRows || []).length, fmtEuro(k.wonCollecte), 'money') + '</div><div class="l">Collecté (HT)</div><div class="s">' + heroColSub + '</div>' +
-      split3(fmtEuro(k.wonCollecteSB), fmtEuro(k.wonCollecteNB), null, null) + '</div>';
-    /* Contracté = valeur totale des contrats signés sur la période (module
-       Paiements : totalAmount, repli tarif des cartes du Close). Le collecté
-       n'en est que la part déjà encaissée — d'où le reste affiché ici. */
-    var heroConSub = 'valeur des contrats signés sur la période';
-    var resteAEnc = (k.wonContracte || 0) - (k.wonCollecte || 0);
-    if (k.wonContracte > 0 && resteAEnc > 0) heroConSub += ' · reste à encaisser ' + fmtEuro(resteAEnc) + ' = contracté − collecté, toutes échéances à venir' + (k.collecteMandat > 0 ? ' (dont ' + fmtEuro(k.collecteMandat) + ' de 1ers prélèvements en attente)' : '');
-    h += '<div class="fn-hero-kpi"><div class="v">' + fd((k.closeRows || []).length, fmtEuro(k.wonContracte), 'money') + '</div><div class="l">Contracté (HT)</div><div class="s">' + heroConSub + '</div>' +
-      split3(fmtEuro(k.wonContracteSB), fmtEuro(k.wonContracteNB), null, null) + '</div>';
+    h += '<div class="fn-hero-lbl">📆 Ligne 2 — Les RDV de la période (date du RDV) et les closes de la période (jour de la vente)</div>';
+    var rdvSub = [];
+    if (k.dueCreatedBefore) rdvSub.push('dont ' + fmtNum(k.dueCreatedBefore) + ' posés avant la période' + SC.info('poses_avant'));
+    if (k.dueReplacement) rdvSub.push('dont ' + fmtNum(k.dueReplacement) + ' reportés à une nouvelle date' + SC.info('reportes'));
+    if (k.dueRescheduled) rdvSub.push(fd(k.dueRescheduled, fmtNum(k.dueRescheduled), 'replan') + ' replanifiés hors compte' + SC.info('replanifie'));
+    h += heroKpi(fd(k.rdvMois, fmtNum(k.rdvMois), 'rdvMois'), 'RDV de la période' + SC.info('rdv'), rdvSub.join('<br>'),
+      split3({ n: k.rdvSB, v: fmtNum(k.rdvSB), ref: 'rdvMois|self', info: SC.info('rdv_sb') },
+             { n: k.rdvNB, v: fmtNum(k.rdvNB), ref: 'rdvMois|setter', info: SC.info('rdv_nb') },
+             man({ n: k.rdvMan, v: fmtNum(k.rdvMan), ref: 'rdvMois|admin', info: SC.info('rdv_manuels') })));
+    var keptSub2 = fmtNum(k.rdvMois) + ' RDV − ' + fd(k.dueCancelled, fmtNum(k.dueCancelled), 'annules') + ' annulés' + SC.info('annules') +
+      ' · Kept % ' + SC.fmtPct(k.keptPct) + SC.info('kept_pct') +
+      '<br>dont ' + fd(k.dueNoShow, fmtNum(k.dueNoShow), 'noshow') + ' no-show' + SC.info('no_show') +
+      ' · dont ' + fd(k.dueUpcoming, fmtNum(k.dueUpcoming), 'aVenir') + ' à venir' + SC.info('a_venir');
+    h += heroKpi(fd(k.kept, fmtNum(k.kept), 'kept'), 'Kept' + SC.info('kept'), keptSub2,
+      split3({ n: k.keptSB, v: fmtNum(k.keptSB), ref: 'kept|self' }, { n: k.keptNB, v: fmtNum(k.keptNB), ref: 'kept|setter' },
+             man({ n: k.keptMan, v: fmtNum(k.keptMan), ref: 'kept|admin' })));
+    var showSub2 = 'Show-up ' + SC.fmtPct(k.showUp) + ' = ' + fmtNum(tn.presents) + ' ÷ (' + fmtNum(k.kept) + ' − ' + fmtNum(k.dueUpcoming) + ' à venir)' + SC.info('show_up') +
+      (tn.aStatuer ? '<br>' + fd(tn.aStatuer, fmtNum(tn.aStatuer), 'aStatuer') + ' à statuer' + SC.info('a_statuer') : '') +
+      (tn.sansDetail ? '<br>⚠ ' + fd(tn.sansDetail, fmtNum(tn.sansDetail), 'sansDetail') + ' présent(s) sans détail' + SC.info('sans_detail') : '');
+    h += heroKpi(fd(tn.presents, fmtNum(tn.presents), 'live'), 'Présents' + SC.info('presents'), showSub2,
+      split3({ n: tS.presents, v: fmtNum(tS.presents), ref: 'live|self', p: SC.fmtPct(k.showUpSB) },
+             { n: tN.presents, v: fmtNum(tN.presents), ref: 'live|setter', p: SC.fmtPct(k.showUpNB) },
+             man({ n: tM.presents, v: fmtNum(tM.presents), ref: 'live|admin', p: SC.fmtPct(k.showUpMan) })));
+    h += heroKpi(fd(tn.pitches, fmtNum(tn.pitches), 'pitched'), 'Pitchés' + SC.info('pitches'),
+      'Taux de pitch ' + SC.fmtPct(tn.tauxPitch) + ' = ' + fmtNum(tn.pitches) + ' ÷ ' + fmtNum(tn.presents) + ' présents' + SC.info('taux_pitch') +
+      (tn.disqua ? '<br>' + fd(tn.disqua, fmtNum(tn.disqua), 'disqua') + ' disqua. (présents non pitchés)' + SC.info('disqua') : ''),
+      split3({ n: tS.pitches, v: fmtNum(tS.pitches), ref: 'pitched|self', p: SC.fmtPct(tS.tauxPitch) },
+             { n: tN.pitches, v: fmtNum(tN.pitches), ref: 'pitched|setter', p: SC.fmtPct(tN.tauxPitch) },
+             man({ n: tM.pitches, v: fmtNum(tM.pitches), ref: 'pitched|admin', p: SC.fmtPct(tM.tauxPitch) })));
+    var cl = k.closes || {}, clS = k.closesSB || {}, clN = k.closesNB || {};
+    var tc = k.tauxClose || {}, tcS = k.tauxCloseSB || {}, tcN = k.tauxCloseNB || {};
+    var nAnn = k.closesCancelled || 0;
+    h += heroKpi(fd(cl.closes, fmtNum(cl.closes), 'closes'), 'Closes' + SC.info('closes'),
+      'Close / pitchés ' + SC.fmtPct(tc.pitches) + ' = ' + fmtNum(cl.closes) + ' ÷ ' + fmtNum(tn.pitches) + SC.info('taux_close_pitches') +
+      (nAnn ? '<br><span style="color:var(--orange,#e8a13c)">' + fd(nAnn, fmtNum(nAnn), 'annulesCl') + ' close(s) annulé(s) retiré(s)</span>' + SC.info('closes_annules') : ''),
+      split3({ n: clS.closes, v: fmtNum(clS.closes), ref: 'closes|sb', p: SC.fmtPct(tcS.pitches), info: SC.info('closes_sb') },
+             { n: clN.closes, v: fmtNum(clN.closes), ref: 'closes|nb', p: SC.fmtPct(tcN.pitches), info: SC.info('closes_nb') }, null));
+    var conSub = 'Panier moyen ' + fmtEuro(k.panierMoyen) + ' = contracté ÷ ' + fmtNum(cl.closes) + ' closes' + SC.info('panier_moyen') +
+      '<br>Reste à encaisser ' + fmtEuro(k.resteAEncaisser) + ' = contracté − collecté' + SC.info('reste_a_encaisser') +
+      (cl.pending > 0 ? '<br>dont ' + fd(cl.pending, fmtEuro(cl.pending), 'pending') + ' de 1ers prélèvements en attente' + SC.info('premiers_prelevements') : '');
+    h += heroKpi(fd(cl.closes, fmtEuro(cl.con), 'money'), 'Contracté (HT)' + SC.info('contracte'), conSub,
+      split3({ n: clS.closes, v: fmtEuro(clS.con), ref: 'money|sb' }, { n: clN.closes, v: fmtEuro(clN.con), ref: 'money|nb' }, null));
+    var colSub = 'Collecté / close ' + fmtEuro(k.collecteParClose) + ' = collecté ÷ ' + fmtNum(cl.closes) + ' closes' + SC.info('collecte_par_close') +
+      (cl.sansPaiement > 0 ? '<br><span style="color:var(--orange,#e8a13c)">⚠ ' + fd(cl.sansPaiement, fmtNum(cl.sansPaiement), 'sansPay') + ' close(s) sans paiement</span>' + SC.info('close_sans_paiement') : '');
+    h += heroKpi(fd(cl.closes, fmtEuro(cl.paid), 'money'), 'Collecté (HT)' + SC.info('collecte'), colSub,
+      split3({ n: clS.closes, v: fmtEuro(clS.paid), ref: 'money|sb' }, { n: clN.closes, v: fmtEuro(clN.paid), ref: 'money|nb' }, null));
+    h += '<div class="fn-stage-note" style="grid-column:1/-1;margin-top:2px">Sous chaque carte, Self Booking + Setting (NB)' + (hasMan ? ' + Manuels' : '') + ' = le total ; le % à droite se lit sur sa part (show-up sous Présents, taux de pitch sous Pitchés, close / pitchés sous Closes). Un close est rangé Self Booking ou Setting (NB) selon le canal de son RDV' + SC.info('canal') +
+      ' : il n’a pas de part Manuels. Montants hors taxes' + SC.info('ht') + '.</div>';
     h += '</div>';
+    h += revBanner(k);
     h += cohBlock(k);
 
     /* ── Bandeau ROAS (demande Adrien 17/08) ─────────────────────────
@@ -1771,7 +1936,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
         + (k.wonCollecteHorsPub > 0 ? ' · ' + fmtEuro(k.wonCollecteHorsPub) + ' hors pub exclus' : '') + ')</span></div>';
       if (k.roasGlobal != null) {
         h += '<div class="rt"><strong style="color:var(--gold)">' + roasFmt(k.roasGlobal) + '</strong>ROAS <strong style="font-size:11.5px;color:var(--text);margin:0">GLOBAL</strong> <span style="color:var(--muted2)">('
-          + fmtEuro(k.wonCollecte) + ' encaissés ÷ ' + fmtEuro(k.coutTotal) + ' de coûts — pub ' + fmtEuro(k.spend)
+          + fmtEuro(k.wonCollecte) + ' collectés ÷ ' + fmtEuro(k.coutTotal) + ' de coûts — pub ' + fmtEuro(k.spend)
           + ' + setting ' + fmtEuro(k.costSetting) + ' · marge ' + fmtEuro(k.margeGlobale) + ')</span></div>';
       } else {
         h += '<div class="rt"><strong style="color:var(--muted2)">—</strong>ROAS <strong style="font-size:11.5px;color:var(--text);margin:0">GLOBAL</strong> <span style="color:var(--muted2)">(coûts setting non renseignés sur toute la période — renseigne-les via <strong>💶 Coûts</strong> pour l\'obtenir)</span></div>';
@@ -1779,11 +1944,14 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       h += '</div>';
     }
 
-    /* Bandeau — taux de close du mois (demande Vincent 14/07) */
+    /* Bandeau — taux de close de la période (demande Vincent 14/07, aligné le
+       25/11/2026) : ceux de K (StatsCore.tauxClose), jamais recalculés ici ;
+       « — » quand K rend null (plus de closes que la base sur la période). */
+    var tcB = k.tauxClose || {}, clB = k.closes || {}, tnB = k.tenue || {};
     h += '<div class="fn-rates">';
-    h += '<div class="rt"><strong>' + fmtPct(k.closeRateRdv, 1) + '</strong>Taux de close / RDV du mois <span style="color:var(--muted2)">(' + fmtNum(k.closesWonTotal) + ' closes ÷ ' + fmtNum(k.rdvMois) + ' RDV)</span></div>';
-    h += '<div class="rt"><strong>' + fmtPct(k.closeRateLive, 1) + '</strong>Taux de close / live <span style="color:var(--muted2)">(' + fmtNum(k.closesWonTotal) + ' ÷ ' + fmtNum(k.ocDue.present) + ' présents)</span></div>';
-    h += '<div class="rt"><strong>' + fmtPct(k.closeRateOffre, 1) + '</strong>Taux de close / offre <span style="color:var(--muted2)">(' + fmtNum(k.closesWonTotal) + ' ÷ ' + fmtNum(k.ocDue.pitched) + ' pitchés)</span></div>';
+    h += '<div class="rt"><strong>' + SC.fmtPct(tcB.pitches) + '</strong>' + esc(SC.mot('taux_close_pitches')) + SC.info('taux_close_pitches') + ' <span style="color:var(--muted2)">(' + fmtNum(clB.closes) + ' closes ÷ ' + fmtNum(tnB.pitches) + ' pitchés)</span></div>';
+    h += '<div class="rt"><strong>' + SC.fmtPct(tcB.presents) + '</strong>' + esc(SC.mot('taux_close_presents')) + SC.info('taux_close_presents') + ' <span style="color:var(--muted2)">(' + fmtNum(clB.closes) + ' ÷ ' + fmtNum(tnB.presents) + ' présents)</span>' + targetBadge('closingLive', tcB.presents) + '</div>';
+    h += '<div class="rt"><strong>' + SC.fmtPct(tcB.rdv) + '</strong>' + esc(SC.mot('taux_close_rdv')) + SC.info('taux_close_rdv') + ' <span style="color:var(--muted2)">(' + fmtNum(clB.closes) + ' ÷ ' + fmtNum(k.rdvMois) + ' RDV de la période)</span></div>';
     h += '</div>';
 
     /* Capacité & dispos — combien de créneaux l'équipe a ouverts sur la
@@ -1888,80 +2056,106 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     h += renderCreativeSection(k);
     h += '<div class="fn-arrow">▼</div>';
 
-    /* 4. Prise de RDV — DEUX LIGNES Self Booking / No Booking.
-       Refonte 14/07 (retour Vincent) : TOUT est sur l'axe « RDV créés sur
-       la période », chaînes de replanification dédupliquées, résultat de
-       FIN DE CHAÎNE — kept ne peut plus dépasser pris. Plus aucune saisie
-       manuelle : données logiciel uniquement, « — » + explication sinon. */
-    h += stageOpen('📅', 'Prise de RDV — Self Booking / No Booking', 'RDV <strong>pris</strong> sur la période, peu importe quand ils ont lieu (replanif. dédupliqués, résultat de fin de chaîne) · collecté = prélèvements GoCardless réellement passés (HT), closes annulés déduits · coaching &amp; CSM exclus');
-    if (k.dueCreatedBefore > 0 || k.createdDueLater > 0) {
-      h += '<div class="fn-stage-note" style="margin-top:6px">🔁 <strong>Deux questions, deux totaux — les deux sont justes.</strong> « Combien de RDV a-t-on <strong>pris</strong> sur la période ? » → ' + fmtNum(k.chAll.n) + (k.createdDueLater ? ' (dont ' + fmtNum(k.createdDueLater) + ' qui auront lieu après)' : '') + ' · « Combien de RDV <strong>ont lieu</strong> sur la période ? » (héro L2 · Tenue) → ' + fmtNum(k.rdvMois) + ', dont ' + fmtNum(k.dueCreatedBefore) + ' pris avant la période. Un RDV pris le mois dernier pour cette période compte dans le 2ᵉ total, pas dans le 1ᵉʳ.</div>';
+    /* 4. Prise de RDV — Self Booking / Setting (NB), axe « RDV pris pendant
+       la période » (date de création), résultat lu sur le DERNIER RDV de la
+       chaîne de reports, même s'il arrive après la période (refonte 14/07,
+       alignée le 25/11/2026). Les closes et les montants n'y figurent plus :
+       ils suivent le jour de la vente (Ligne 2 du héro) ; ici, l'issue de ces
+       RDV s'appelle « RDV closés ». */
+    h += stageOpen('📅', 'Prise de RDV — Self Booking / Setting (NB)', 'RDV <strong>pris</strong> pendant la période' + SC.info('rdv_pris') + ', quel que soit le jour où ils ont lieu · résultat final de leur dernier RDV (reports suivis), même s’il arrive après la période · RDV manuels, coaching et CSM exclus');
+    if (k.dueCreatedBefore > 0 || k.createdDueLater > 0 || k.dueReplacement > 0) {
+      h += '<div class="fn-stage-note" style="margin-top:6px">🔁 <strong>Deux questions, deux totaux — les deux sont justes.</strong> « Combien de RDV a-t-on <strong>pris</strong> pendant la période ? » → ' + fmtNum(ch.n) + (k.createdDueLater ? ' (dont ' + fmtNum(k.createdDueLater) + ' qui ont lieu après la période)' : '') +
+        ' · « Combien de RDV <strong>ont lieu</strong> pendant la période ? » (Ligne 2 · Tenue) → ' + fmtNum(k.rdvMois) + ', dont ' + fmtNum(k.dueCreatedBefore) + ' posés avant la période' + SC.info('poses_avant') +
+        (k.dueReplacement ? ' et ' + fmtNum(k.dueReplacement) + ' reportés à une nouvelle date' + SC.info('reportes') : '') +
+        (k.rdvMan ? ' et ' + fmtNum(k.rdvMan) + ' manuels' + SC.info('rdv_manuels') : '') + '.</div>';
     }
     if (!k.ocHasData) {
-      h += '<div class="fn-stage-note" style="margin-top:6px">ℹ Aucun résultat d\'appel saisi sur la période — statue les RDV (Close, Non close, Offre, Disqua, No-show, Annulé, Replanifié) depuis <a href="booking-admin.html?vue=mes-rdv" style="color:var(--blue)">Agenda</a> ou la fiche prospect : kept / live / closes / collecté se rempliront tout seuls.</div>';
+      h += '<div class="fn-stage-note" style="margin-top:6px">ℹ Aucun résultat de RDV saisi sur la période — statue les RDV (Close, Non close, Offre, Disqua., No-show, Annulé, Replanifié) depuis <a href="booking-admin.html?vue=mes-rdv" style="color:var(--blue)">Agenda</a> ou la fiche du prospect : Kept, Présents, Pitchés et RDV closés se rempliront tout seuls.</div>';
+    }
+    /* Cartes d'une ligne (Self Booking ou Setting) : mêmes mots, mêmes
+       formules que la Ligne 1 du héro. */
+    function chainCards(c, suf) {
+      var o = '';
+      o += kpiCard(fmtNum(c.kept), 'Kept ' + suf + SC.info('kept', 'Ici : RDV pris pendant la période, état de leur dernier RDV.'),
+        fmtNum(c.n) + ' RDV pris − <span style="color:var(--red3)">' + fmtNum(c.cancelled) + ' annulés</span>' +
+        (c.sansSuite ? ' − ' + fmtNum(c.sansSuite) + ' déplacé(s) sans nouveau créneau' + SC.info('deplaces_sans_suite') : '') +
+        ' · dont <span style="color:var(--gold)">' + fmtNum(c.noshow) + ' no-show</span>' + SC.info('no_show') + ' · dont ' + fmtNum(c.aVenir) + ' à venir' + SC.info('a_venir'));
+      o += kpiCard(fmtNum(c.present), 'Présents ' + suf + SC.info('presents'),
+        'show-up ' + SC.fmtPct(c.showUp) + ' = ' + fmtNum(c.present) + ' ÷ (' + fmtNum(c.kept) + ' − ' + fmtNum(c.aVenir) + ' à venir)' + SC.info('show_up') +
+        (c.aStatuer ? ' · ' + fmtNum(c.aStatuer) + ' à statuer' + SC.info('a_statuer') : '') +
+        (c.sansDetail ? ' · ⚠ ' + fmtNum(c.sansDetail) + ' sans détail' + SC.info('sans_detail') : ''));
+      o += kpiCard(fmtNum(c.pitched), 'Pitchés ' + suf + SC.info('pitches'),
+        'taux de pitch ' + SC.fmtPct(c.tauxPitch) + ' = ' + fmtNum(c.pitched) + ' ÷ ' + fmtNum(c.present) + ' présents' + SC.info('taux_pitch') +
+        ' · ' + fmtNum(c.offres) + ' offres en attente' + SC.info('offres_attente') + ' · ' + fmtNum(c.nonCloses) + ' non closes' + SC.info('non_closes') +
+        (c.disqua ? ' · ' + fmtNum(c.disqua) + ' disqua. (présents non pitchés)' + SC.info('disqua') : ''));
+      o += kpiCard(fmtNum(c.closesOc), 'RDV closés ' + suf + SC.info('rdv_closes', 'Ici : parmi les RDV pris pendant la période, ceux dont le dernier RDV a le résultat Close, même s’il a lieu après la période. Les Closes (clients gagnés, jour de la vente) sont dans la Ligne 2 du héro.'),
+        SC.fmtPct(SC.pct(c.closesOc, c.pitched)) + ' des ' + fmtNum(c.pitched) + ' pitchés de ces RDV');
+      return o;
     }
     /* — Ligne 1 : SELF BOOKING — */
-    h += '<div style="font-size:10.5px;color:var(--gold);font-weight:800;letter-spacing:0.7px;margin:12px 0 8px">🔗 Self Booking — le lead prend RDV seul (lien public)</div>';
+    h += '<div style="font-size:10.5px;color:var(--gold);font-weight:800;letter-spacing:0.7px;margin:12px 0 8px">🔗 Self Booking — le prospect prend RDV seul (lien public)</div>';
     h += '<div class="fn-grid">';
-    h += kpiCard(fmtNum(k.leads), 'Leads (total)', 'entrés sur la période');
-    h += kpiCard(fmtNum(k.chSB.n), 'RDV pris SB', 'LTB (SB) ' + fmtPct(k.ltbSB) + ' · ' + 'dont ' + fmtNum(k.orgSB.cohort) + ' leads de la période' + (k.orgSB.reopt ? ' · ' + k.orgSB.reopt + ' ré-optins' : '') + (k.orgSB.old ? ' · ' + k.orgSB.old + ' leads plus anciens' : ''), targetBadge('selfShare', k.selfShare));
-    h += kpiCard(fmtNum(k.chSB.kept), 'Kept SB', 'pris − <span style="color:var(--red3)">' + fmtNum(k.chSB.cancelled) + ' annulés</span>' + (k.chSB.noshow ? ' · <span style="color:var(--gold)">' + fmtNum(k.chSB.noshow) + ' no-show</span> (dans kept)' : '') + (k.chSB.aVenir ? ' · ' + k.chSB.aVenir + ' à venir' : ''));
-    h += kpiCard(numOrDash(k.chSB.present, k.chSB.sansDetail), 'Live SB (présents)', (k.chSB.kept > 0 && k.chSB.present > 0 ? 'show-up ' + fmtPct(k.chSB.present / k.chSB.kept * 100, 0) + ' (live ÷ kept)' : 'résultats RDV') + (k.chSB.sansDetail ? ' · ⚠ ' + k.chSB.sansDetail + ' sans détail' : ''));
-    h += kpiCard(numOrDash(k.chSB.pitched, k.chSB.sansDetail), 'Pitchés SB', 'offres faites' + (k.chSB.disqua ? ' · ' + k.chSB.disqua + ' disqualifiés' : '') + (k.chSB.nonCloses ? ' · ' + k.chSB.nonCloses + ' non closes' : ''));
-    h += kpiCard(fmtNum(k.wonSelf), 'Closes SB', 'clients gagnés SB' + (k.chSB.pitched > 0 ? ' · ' + fmtPct(k.wonSelf / k.chSB.pitched * 100, 0) + ' des offres' : ''));
-    h += kpiCard(fmtEuro(k.wonCollecteSB), 'Collecté SB (HT)', 'contracté ' + fmtEuro(k.wonContracteSB) + ' · prélèvements réellement passés');
-    h += kpiCard(fmtEuro2(k.cprSB), 'CPR', 'dépense ÷ ' + fmtNum(k.chSB.n) + ' RDV SB pris (annulés inclus)');
-    h += kpiCard(fmtEuro2(k.cprKept), 'CPR KEPT', 'dépense ÷ ' + fmtNum(k.chSB.kept) + ' RDV SB kept');
-    h += kpiCard(fmtEuro2(k.cprLive), 'CPR Live', 'dépense ÷ ' + fmtNum(k.chSB.present) + ' RDV SB présents');
-    h += kpiCard(fmtEuro2(k.cprOffre), 'CPR Offre', 'dépense ÷ ' + fmtNum(k.chSB.pitched) + ' RDV SB pitchés');
+    h += kpiCard(fmtNum(k.leads), 'Leads (total)' + SC.info('leads'), 'entrés pendant la période');
+    h += kpiCard(fmtNum(cS.n), 'RDV pris SB' + SC.info('rdv_pris'), ltbTxt('LTB (SB)', cS.n) + ' · dont ' + fmtNum(k.orgSB.cohort) + ' leads de la période' + (k.orgSB.reopt ? ' · ' + k.orgSB.reopt + ' ré-optins' : '') + (k.orgSB.old ? ' · ' + k.orgSB.old + ' leads plus anciens' : ''), targetBadge('selfShare', k.selfShare));
+    h += chainCards(cS, 'SB');
+    h += kpiCard(fmtEuro2(k.cprSB), 'CPR', 'dépense ÷ ' + fmtNum(cS.n) + ' RDV pris SB (annulés inclus)');
+    h += kpiCard(fmtEuro2(k.cprKept), 'CPR KEPT', 'dépense ÷ ' + fmtNum(cS.kept) + ' Kept SB');
+    h += kpiCard(fmtEuro2(k.cprLive), 'CPR Présent', 'dépense ÷ ' + fmtNum(cS.present) + ' présents SB');
+    h += kpiCard(fmtEuro2(k.cprOffre), 'CPR Pitché', 'dépense ÷ ' + fmtNum(cS.pitched) + ' pitchés SB');
     h += '</div>';
-    /* — Ligne 2 : NO BOOKING (setting) — */
-    h += '<div style="font-size:10.5px;color:#c4b5fd;font-weight:800;letter-spacing:0.7px;margin:16px 0 8px">📞 No Booking — RDV posés par le setting (lien setter)</div>';
+    /* — Ligne 2 : SETTING (NB) — */
+    h += '<div style="font-size:10.5px;color:#c4b5fd;font-weight:800;letter-spacing:0.7px;margin:16px 0 8px">📞 Setting (NB) — RDV posés par un setter (lien setter)</div>';
     h += '<div class="fn-grid">';
-    h += kpiCard(fmtNum(k.leadsNoSB), 'Leads à travailler', fmtNum(k.leads) + ' leads de la période − ' + fmtNum(k.cohortSelf) + ' self-bookés');
+    var nbRecus = k.leadsNbRecus != null ? k.leadsNbRecus : k.leadsNoSB;
+    h += kpiCard(fmtNum(nbRecus), SC.mot('leads_nb_recus') + SC.info('leads_nb_recus'),
+      fmtNum(k.leads) + ' leads de la période − ' + fmtNum(k.cohortSelf) + ' ayant réservé seuls' +
+      (k.leadsNbRecusNonTravailles > 0 ? ' · dont ' + fmtNum(k.leadsNbRecusNonTravailles) + ' pas encore travaillés' + SC.info('pas_encore_travailles') : ''));
     var lwVal, lwSub;
-    if (!k.journalLive) { lwVal = '—'; lwSub = 'journal d\'actions inexistant avant le 14/07/2026 — le passé n\'est pas reconstituable'; }
+    if (!k.journalLive) { lwVal = '—'; lwSub = 'journal d’actions inexistant avant le 14/07/2026 — le passé n’est pas reconstituable'; }
     else if (k.actLeadsWorked === 0) {
       lwVal = '0';
-      lwSub = 'journal actif depuis le 14/07/2026 — aucune action enregistrée (si les clics de statut ne remontent pas : déploie les rules lead_actions)';
+      lwSub = 'journal actif depuis le 14/07/2026 — aucune action enregistrée sur la période';
     } else {
       lwVal = fmtNum(k.actLeadsWorked);
-      var lwParts = ['1ʳᵉ action fiche (journal)'];
-      if (k.actWorkedOld) lwParts.push(k.actWorkedOld + ' hors période');
+      var lwParts = ['fiches distinctes, 1ʳᵉ action de la période'];
+      if (k.actWorkedReprisParUnAutre) lwParts.push(fmtNum(k.actWorkedSommeOnglets) + ' dans les onglets de Set NB − ' + fmtNum(k.actWorkedReprisParUnAutre) + ' repris par un 2ᵉ setter' + SC.info('repris_2e_setter'));
+      if (k.actWorkedOld) lwParts.push(k.actWorkedOld + ' entrés avant la période');
       if (k.actWorkedReopt) lwParts.push(k.actWorkedReopt + ' ré-optins');
-      if (k.actWorkedSelf) lwParts.push(k.actWorkedSelf + ' self-bookés');
+      if (k.actWorkedSelf) lwParts.push(k.actWorkedSelf + ' ayant réservé seuls');
       lwSub = lwParts.join(' · ');
     }
-    h += kpiCard(lwVal, 'Leads travaillés', lwSub);
-    h += kpiCard(fmtNum(k.chNB.n), 'RDV pris NB', 'posés par le setting · ' + 'dont ' + fmtNum(k.orgNB.cohort) + ' leads de la période' + (k.orgNB.reopt ? ' · ' + k.orgNB.reopt + ' ré-optins' : '') + (k.orgNB.old ? ' · ' + k.orgNB.old + ' leads plus anciens' : '') + (k.journalLive && k.actSets > 0 ? ' · sets journal : ' + fmtNum(k.actSets) : ''));
+    h += kpiCard(lwVal, SC.mot('leads_travailles') + SC.info('leads_travailles'), lwSub);
+    h += kpiCard(fmtNum(cN.n), 'RDV pris NB (Sets)' + SC.info('sets', 'Même nombre que la colonne Sets de Set NB (onglet Équipe) : un set = un RDV du setting réellement créé.'),
+      ltbTxt('LTB (NB)', cN.n) +
+      ' · dont ' + fmtNum(k.orgNB.cohort) + ' leads de la période' + (k.orgNB.reopt ? ' · ' + k.orgNB.reopt + ' ré-optins' : '') + (k.orgNB.old ? ' · ' + k.orgNB.old + ' leads plus anciens' : '') +
+      (k.statutsSetSansRdv > 0 ? '<br>+ ' + fd(k.statutsSetSansRdv, fmtNum(k.statutsSetSansRdv), 'statutsSet') + ' statut(s) « Set » sans RDV, hors Sets' + SC.info('statuts_set_sans_rdv') : ''));
     h += kpiCard(fmtPct(k.recovery), 'Taux de récupération', cohortLabelRecovery(k), targetBadge('recovery', k.recovery));
-    h += kpiCard(fmtNum(k.chNB.kept), 'Kept NB', 'pris − <span style="color:var(--red3)">' + fmtNum(k.chNB.cancelled) + ' annulés</span>' + (k.chNB.noshow ? ' · <span style="color:var(--gold)">' + fmtNum(k.chNB.noshow) + ' no-show</span> (dans kept)' : '') + (k.chNB.aVenir ? ' · ' + k.chNB.aVenir + ' à venir' : ''));
-    h += kpiCard(numOrDash(k.chNB.present, k.chNB.sansDetail), 'Live NB (présents)', (k.chNB.kept > 0 && k.chNB.present > 0 ? 'show-up ' + fmtPct(k.chNB.present / k.chNB.kept * 100, 0) + ' (live ÷ kept)' : 'résultats RDV') + (k.chNB.sansDetail ? ' · ⚠ ' + k.chNB.sansDetail + ' sans détail' : ''));
-    h += kpiCard(fmtNum(k.wonSetting), 'Closes NB', fmtEuro(k.wonCollecteNB) + ' collecté HT · contracté ' + fmtEuro(k.wonContracteNB));
+    h += chainCards(cN, 'NB');
     var csSub;
     var csRep = (k.costSetting != null && !k.costOwnEntry && k.costSrcMonth) ? ' · <span style="color:var(--orange,#e8a13c)">⚠ fixe/outils reportés de ' + esc(k.costSrcMonth) + ' — ajuste via 💶 (outils variables)</span>' : '';
     var csNa = DATA && DATA.settingDealsUnavailable ? '<span style="color:var(--orange,#e8a13c)">⚠ commissions indisponibles</span> · ' : '';
-    if (k.costPerRdvNB != null) csSub = csNa + '(fixe ' + fmtEuro(k.costFixe) + ' + comm ' + fmtEuro(k.commSetting) + (k.commSettingN ? ' — ' + k.commSettingN + ' deal(s)' : '') + ' + outils ' + fmtEuro(k.costOutils) + ') ÷ ' + fmtNum(k.chNB.n) + ' RDV NB' + csRep;
-    else if (k.costSetting != null) csSub = 'coût setting ' + fmtEuro(k.costSetting) + ' — aucun RDV NB créé sur la période' + csRep;
+    if (k.costPerRdvNB != null) csSub = csNa + '(fixe ' + fmtEuro(k.costFixe) + ' + comm ' + fmtEuro(k.commSetting) + (k.commSettingN ? ' — ' + k.commSettingN + ' deal(s)' : '') + ' + outils ' + fmtEuro(k.costOutils) + ') ÷ ' + fmtNum(cN.n) + ' RDV pris NB' + csRep;
+    else if (k.costSetting != null) csSub = 'coût setting ' + fmtEuro(k.costSetting) + ' — aucun RDV pris NB sur la période' + csRep;
     else csSub = 'salaire fixe setter + outils non renseignés — bouton 💶 Coûts (les commissions, elles, remontent toutes seules du module Commissions)';
-    h += kpiCard(k.costPerRdvNB != null ? fmtEuro2(k.costPerRdvNB) : '—', 'Coût / RDV NB (réel)', csSub, null, k.costPerRdvNB == null);
+    h += kpiCard(k.costPerRdvNB != null ? fmtEuro2(k.costPerRdvNB) : '—', 'Coût / RDV pris NB (réel)', csSub, null, k.costPerRdvNB == null);
     h += kpiCard(fmtEuro2(k.cpl), 'CPL', 'dépense ÷ ' + fmtNum(k.leads) + ' leads', targetBadge('cpl', k.cpl));
     h += '</div>';
-    if (k.bookedAdmin > 0) h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + k.bookedAdmin + ' RDV manuels (admin) — hors LTB / hors funnel.</div>';
-    if (k.unknownLeadBookings > 0 && tunnelFilter === 'all') h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + k.unknownLeadBookings + ' RDV de leads hors période (non rattachés à la cohorte) — inclus dans les totaux « Tous », hors taux de récupération.</div>';
-    if (k.ocDue.aStatuer > 0) h += '<div class="fn-alert">⏳ <strong>' + k.ocDue.aStatuer + ' RDV passé(s) sans résultat</strong> — à statuer dans <a href="booking-admin.html?vue=mes-rdv">Agenda</a> ou depuis la fiche prospect pour des lignes SB / NB exactes.</div>';
-    if (k.closesCancelled > 0) h += '<div class="fn-alert">🚫 <strong>' + k.closesCancelled + ' close(s) annulé(s)</strong>' + (k.closesCancelledNames && k.closesCancelledNames.length ? ' (' + esc(k.closesCancelledNames.join(', ')) + ')' : '') + ' — paiement annulé ou client stoppé sans aucun prélèvement : retiré(s) des closes, du contracté et du collecté.</div>';
-    if (k.collecteMissing > 0) h += '<div class="fn-alert">💶 <strong>' + k.collecteMissing + ' close(s) sans paiement</strong>' + (k.collecteMissingNames.length ? ' (' + esc(k.collecteMissingNames.join(', ')) + ')' : '') + ' — le client est compté mais aucun paiement GoCardless (module Paiements) ne lui correspond : son encaissé déclaré n\'est PAS compté dans le collecté. Crée le paiement : le collecté remontera automatiquement.</div>';
-    if (k.payCloseNames && k.payCloseNames.length) h += '<div class="fn-alert">💳 <strong>' + k.payCloseNames.length + ' close(s) compté(s) via le module Paiements</strong> (' + esc(k.payCloseNames.join(', ')) + ') — paiement créé dans la période sans fiche gagnée correspondante. Valide les cartes du close sur la fiche pour un rattachement propre.</div>';
+    if (k.bookedAdmin > 0) h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + fmtNum(k.bookedAdmin) + ' RDV manuels créés pendant la période' + SC.info('rdv_manuels') + ' — jamais des RDV pris, des Sets ni du LTB ; comptés à leur date dans la Ligne 2 et la Tenue (part Manuels).</div>';
+    if (k.unknownLeadBookings > 0 && tunnelFilter === 'all') h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + fmtNum(k.unknownLeadBookings) + ' RDV pris par des leads entrés avant la période ou sans fiche' + SC.info('rdv_pris_hors_tunnel') + ' — compris dans les RDV pris, hors taux de récupération.</div>';
     h += '</div>';
     h += '<div class="fn-arrow">▼</div>';
 
-    /* 5. Tenue des RDV — ventilation SB/NB, replanifiés à part (14/07/2026) */
-    h += stageOpen('✅', 'Tenue des RDV', 'RDV setting/closing qui ont lieu dans la période (par date) · coaching &amp; CSM exclus');
+    /* 5. Tenue des RDV — RDV de vente qui ONT LIEU pendant la période, un
+       état par RDV (StatsCore) : RDV = annulés + no-show + présents + à
+       statuer + à venir ; replanifiés et doublons supprimés hors compte.
+       Chaque chiffre s'ouvre en liste (K.drill). */
+    function tenueParts(nSB, nNB, nMan, base) {
+      return '<br>SB ' + fd(nSB, fmtNum(nSB), base + '|self') + ' · NB ' + fd(nNB, fmtNum(nNB), base + '|setter') + (nMan > 0 ? ' · Manuels ' + fd(nMan, fmtNum(nMan), base + '|admin') : '');
+    }
+    h += stageOpen('✅', 'Tenue des RDV', 'RDV de vente qui ont lieu pendant la période (date du RDV) · Self Booking, Setting (NB) et Manuels · coaching &amp; CSM exclus');
     h += '<div class="fn-grid">';
-    h += kpiCard(fmtNum(k.due), 'RDV planifiés', 'date dans la période · SB ' + fmtNum(k.dueSB) + ' · NB ' + fmtNum(k.dueNB));
-    h += kpiCard(fmtNum(k.kept), 'Kept Call', 'planifiés − annulés − no-show − replanifiés', targetBadge('kept', k.keptPct));
-    h += kpiCard(fmtPct(k.keptPct, 0), 'Kept %', null);
+    h += kpiCard(fd(k.rdvMois, fmtNum(k.rdvMois), 'rdvMois'), 'RDV' + SC.info('rdv'),
+      'annulés + no-show + présents + à statuer + à venir' + tenueParts(k.rdvSB, k.rdvNB, k.rdvMan, 'rdvMois'));
     var cancOriginSub = '';
     if (k.cancByOrigin) {
       var cbo = k.cancByOrigin, cboParts = [];
@@ -1969,15 +2163,28 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       if (cbo.equipe) cboParts.push('<span style="color:var(--gold)">' + fmtNum(cbo.equipe) + ' équipe</span>');
       if (cbo.systeme) cboParts.push(fmtNum(cbo.systeme) + ' système');
       if (cbo.inconnu) cboParts.push(fmtNum(cbo.inconnu) + ' sans origine');
-      if (cboParts.length) cancOriginSub = '<br>' + cboParts.join(' · ');
+      if (cboParts.length) cancOriginSub = '<br>' + cboParts.join(' · ') + SC.info('origine_annulation');
     }
-    h += kpiCard('<span style="color:var(--red3)">' + fmtNum(k.dueCancelled) + '</span>', '🔴 Annulés', 'SB ' + fmtNum(k.cancSB) + ' · NB ' + fmtNum(k.cancNB) + cancOriginSub);
-    h += kpiCard('<span style="color:var(--gold)">' + fmtNum(k.dueNoShow) + '</span>', '🚫 No-show', 'SB ' + fmtNum(k.noshowSB) + ' · NB ' + fmtNum(k.noshowNB));
-    h += kpiCard(fmtNum(k.dueRescheduled), '📅 Replanifiés', k.dueRescheduled ? 'SB ' + fmtNum(k.reschedSB) + ' · NB ' + fmtNum(k.reschedNB) + ' — remplacés, hors annulés' : 'remplacés, hors annulés', null, k.dueRescheduled === 0);
-    h += kpiCard(fmtNum(k.dueCompleted), 'Tenus (statués)', k.dueUpcoming ? '+ ' + k.dueUpcoming + ' à venir' : null);
-    if (k.showup != null) h += kpiCard(fmtPct(k.showup, 0), 'Show-up', 'présents du mois ÷ kept (résultats RDV)', targetBadge('showup', k.showup));
+    h += kpiCard('<span style="color:var(--red3)">' + fd(k.dueCancelled, fmtNum(k.dueCancelled), 'annules') + '</span>', '🔴 Annulés' + SC.info('annules'),
+      'taux d’annulation ' + SC.fmtPct(k.cancelRate) + ' = ' + fmtNum(k.dueCancelled) + ' ÷ ' + fmtNum(k.rdvMois) + ' RDV' + SC.info('taux_annulation') +
+      tenueParts(k.cancSB, k.cancNB, k.cancMan, 'annules') + cancOriginSub);
+    h += kpiCard('<span style="color:var(--gold)">' + fd(k.dueNoShow, fmtNum(k.dueNoShow), 'noshow') + '</span>', '🚫 No-show' + SC.info('no_show'),
+      'taux de no-show ' + SC.fmtPct(k.noShowRate) + ' = ' + fmtNum(k.dueNoShow) + ' ÷ (' + fmtNum(k.kept) + ' − ' + fmtNum(k.dueUpcoming) + ' à venir)' + SC.info('taux_no_show') +
+      tenueParts(k.noshowSB, k.noshowNB, k.noshowMan, 'noshow'));
+    h += kpiCard(fd(tn.presents, fmtNum(tn.presents), 'live'), 'Présents' + SC.info('presents'),
+      fd(tn.disqua, fmtNum(tn.disqua), 'disqua') + ' disqua.' + SC.info('disqua') + ' + ' + fd(tn.pitches, fmtNum(tn.pitches), 'pitched') + ' pitchés' + SC.info('pitches') + ' + ' + fd(tn.sansDetail, fmtNum(tn.sansDetail), 'sansDetail') + ' sans détail' + SC.info('sans_detail') +
+      '<br>pitchés = ' + fd(tn.offres, fmtNum(tn.offres), 'offres') + ' offres en attente' + SC.info('offres_attente') + ' + ' + fd(tn.nonCloses, fmtNum(tn.nonCloses), 'nonCloses') + ' non closes' + SC.info('non_closes') + ' + ' + fd(tn.rdvCloses, fmtNum(tn.rdvCloses), 'rdvCloses') + ' RDV closés' + SC.info('rdv_closes'));
+    h += kpiCard(fd(tn.aStatuer, fmtNum(tn.aStatuer), 'aStatuer'), 'À statuer' + SC.info('a_statuer'), 'créneau passé, aucun résultat saisi', null, !tn.aStatuer);
+    h += kpiCard(fd(k.dueUpcoming, fmtNum(k.dueUpcoming), 'aVenir'), 'À venir' + SC.info('a_venir'), 'créneau pas encore passé', null, !k.dueUpcoming);
+    h += kpiCard(fd(k.kept, fmtNum(k.kept), 'kept'), 'Kept' + SC.info('kept'), fmtNum(k.rdvMois) + ' RDV − ' + fmtNum(k.dueCancelled) + ' annulés (no-show dedans)' + tenueParts(k.keptSB, k.keptNB, k.keptMan, 'kept'));
+    h += kpiCard(SC.fmtPct(k.keptPct), 'Kept %' + SC.info('kept_pct'), fmtNum(k.kept) + ' Kept ÷ ' + fmtNum(k.rdvMois) + ' RDV', targetBadge('kept', k.keptPct));
+    h += kpiCard(SC.fmtPct(k.showUp), 'Show-up' + SC.info('show_up'), fmtNum(tn.presents) + ' présents ÷ (' + fmtNum(k.kept) + ' Kept − ' + fmtNum(k.dueUpcoming) + ' à venir)', targetBadge('showup', k.showUp), k.showUp == null);
+    h += kpiCard(fd(k.dueRescheduled, fmtNum(k.dueRescheduled), 'replan'), '📅 Replanifiés' + SC.info('replanifie'),
+      'hors RDV : comptés à leur nouvelle date' + (k.dueRescheduled ? tenueParts(k.reschedSB, k.reschedNB, k.reschedMan, 'replan') : ''), null, k.dueRescheduled === 0);
+    if (k.dueDoublons > 0) h += kpiCard(fd(k.dueDoublons, fmtNum(k.dueDoublons), 'doublons'), 'Doublons supprimés' + SC.info('doublons_supprimes'), 'comptés nulle part', null, true);
     h += '</div>';
-    if (k.dueToStatus > 0) h += '<div class="fn-alert">⚠ <strong>' + k.dueToStatus + ' RDV passé(s) sans statut</strong> — à marquer Tenu / Annulé / No-show dans l\'<a href="booking-admin.html?vue=mes-rdv">Agenda</a> pour des stats fiables.</div>';
+    h += '<div class="fn-stage-note" style="margin-top:8px">Un no-show ou un annulé qui reprend RDV devient « replanifié » : les chiffres d’une période passée peuvent donc baisser après coup.' + SC.info('replanifie') + '</div>';
+    if (tn.aStatuer > 0) h += '<div class="fn-alert">⏳ <strong>' + fd(tn.aStatuer, fmtNum(tn.aStatuer), 'aStatuer') + ' RDV à statuer</strong>' + SC.info('a_statuer') + ' — créneau passé sans résultat : à saisir dans l’<a href="booking-admin.html?vue=mes-rdv">Agenda</a> (bouton Résultat) ou depuis la fiche du prospect.</div>';
     h += '</div>';
     h += '<div class="fn-arrow">▼</div>';
 
@@ -2039,7 +2246,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     /* 8. Rentabilité — l'échelle CPR vit dans la ligne SB de « Prise de
        RDV », le ROAS dans « Publicité » : ici, uniquement ce qui n'existe
        nulle part ailleurs (CPL, CAC Market Only, AOV, coût setting). */
-    h += stageOpen('💶', 'Coûts &amp; rentabilité', 'collecté = module Paiements (HT), repli encaissé déclaré aux cartes du Close — 100 % logiciel, zéro saisie manuelle');
+    h += stageOpen('💶', 'Coûts &amp; rentabilité', 'collecté = prélèvements réellement passés à ce jour (module Paiements, HT) · dépense pub et coûts du setting : onglet Données Ads et bouton 💶 Coûts');
     h += '<div class="fn-grid">';
     h += kpiCard(fmtEuro2(k.cpl), 'CPL', 'dépense ÷ ' + fmtNum(k.leads) + ' leads', targetBadge('cpl', k.cpl));
     /* Même correction que le ROAS : le CAC divisait la dépense pub par TOUS
@@ -2048,20 +2255,19 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     h += kpiCard(fmtEuro2(k.cacAds), 'CAC pub', 'dépense pub ÷ ' + fmtNum(k.closesWonAds) + ' client(s) venus de la pub'
       + (k.closesWonHorsPub > 0 ? ' · ' + fmtNum(k.closesWonHorsPub) + ' client(s) hors pub exclus' : '')
       + ' — ≠ « CPA » Meta (achat, RDV ou lead selon la campagne)', null, k.cacAds == null);
-    var aovHint;
-    if (k.closesWonTotal > 0 && !k.wonCollecte) {
-      aovHint = fmtNum(k.closesWonTotal) + ' client(s) mais aucun prélèvement passé pour l\'instant' + (k.collecteMandat > 0 ? ' — ' + fmtEuro(k.collecteMandat) + ' à encaisser' : '');
-    } else {
-      aovHint = 'collecté ' + fmtEuro(k.wonCollecte) + ' ÷ ' + fmtNum(k.closesWonTotal) + ' client(s)';
-      if (k.collecteMissing > 0 || k.collecteMandat > 0) aovHint += ' · <span style="color:var(--orange,#e8a13c)">⚠ prélèvements à venir non comptés (AOV sous-estimé)</span>';
-    }
-    h += kpiCard(k.aovAll != null ? fmtEuro2(k.aovAll) : '—', 'AOV', aovHint, null, k.aovAll == null);
+    /* « AOV » disparaît (référentiel §4) : Panier moyen = contracté ÷ closes,
+       Collecté / close = collecté ÷ closes — valeurs de K, pas recalculées. */
+    var clE = k.closes || {};
+    h += kpiCard(fmtEuro2(k.panierMoyen), SC.mot('panier_moyen') + SC.info('panier_moyen'), 'contracté ' + fmtEuro(clE.con) + ' ÷ ' + fmtNum(clE.closes) + ' closes', null, k.panierMoyen == null);
+    var cpcHint = 'collecté ' + fmtEuro(clE.paid) + ' ÷ ' + fmtNum(clE.closes) + ' closes — monte à chaque mensualité';
+    if (clE.pending > 0) cpcHint += ' · ' + fmtEuro(clE.pending) + ' de 1ers prélèvements en attente' + SC.info('premiers_prelevements');
+    h += kpiCard(fmtEuro2(k.collecteParClose), SC.mot('collecte_par_close') + SC.info('collecte_par_close'), cpcHint, null, k.collecteParClose == null);
     var cs2;
     if (k.costSetting != null) cs2 = (DATA && DATA.settingDealsUnavailable ? '<span style="color:var(--orange,#e8a13c)">⚠ commissions indisponibles</span> · ' : '') + 'fixe ' + fmtEuro(k.costFixe) + ' + commissions ' + fmtEuro(k.commSetting) + ' + outils ' + fmtEuro(k.costOutils) + (!k.costOwnEntry && k.costSrcMonth ? ' · <span style="color:var(--orange,#e8a13c)">⚠ reporté de ' + esc(k.costSrcMonth) + '</span>' : '');
     else cs2 = 'fixe &amp; outils non renseignés — bouton 💶 Coûts';
     h += kpiCard(k.costSetting != null ? fmtEuro2(k.costSetting) : '—', 'Coût setting (période)', cs2, null, k.costSetting == null);
     h += '</div>';
-    if (k.payCloseOther && k.payCloseOther.length) h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + k.payCloseOther.length + ' paiement(s) de la période rattaché(s) à un client gagné dans une AUTRE période (' + esc(k.payCloseOther.join(', ')) + ') — encaissement tardif, le close reste compté à sa propre période.</div>';
+    if (k.payCloseOther && k.payCloseOther.length) h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + k.payCloseOther.length + ' paiement(s) de la période rattaché(s) à un client gagné dans une AUTRE période (' + esc(k.payCloseOther.join(', ')) + ') — prélèvement tardif, le close reste compté à sa propre période.</div>';
     h += '</div>';
 
     /* Journal de la période */
@@ -3329,7 +3535,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     var el = $('#fnTabJournal');
     var h = '';
     h += '<div class="fn-jform">';
-    h += '<input type="date" id="fnJDate" value="' + isoDate(new Date()) + '">';
+    h += '<input type="date" id="fnJDate" value="' + todayIso() + '">';
     h += '<select id="fnJCat">';
     JCATS.forEach(function (c) { h += '<option value="' + c[0] + '">' + c[1] + '</option>'; });
     h += '</select>';
@@ -3437,7 +3643,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
      MODAL COÛTS SETTING — _config/funnel_costs (report auto mois suivants)
      ════════════════════════════════════════════════════════════════ */
   function openCostsModal() {
-    var mk = P.start.getFullYear() + '-' + pad2(P.start.getMonth() + 1);
+    var mk = SC.moisParis(P.start);
     var months = DATA.costs || {};
     var cur = months[mk] || null;
     var eff = effectiveCosts(mk);
@@ -3866,17 +4072,17 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     $$('#fnModeSeg button').forEach(function (b) {
       b.onclick = function () {
         var mode = b.getAttribute('data-mode');
-        if (mode === 'month') { var now = new Date(); applyMonth(P.mode === 'month' ? P.y : now.getFullYear(), P.mode === 'month' ? P.m : now.getMonth()); refresh(); }
-        else if (mode === 'day') { applyDay(P.mode === 'day' && P.day ? P.day : isoDate(new Date())); refresh(); }
+        if (mode === 'month') { var tp = todayIso().split('-'); applyMonth(P.mode === 'month' ? P.y : +tp[0], P.mode === 'month' ? P.m : +tp[1] - 1); refresh(); }
+        else if (mode === 'day') { applyDay(P.mode === 'day' && P.day ? P.day : todayIso()); refresh(); }
         else if (mode === '7d') { applyPreset(7); refresh(); }
         else if (mode === '30d') { applyPreset(30); refresh(); }
         else { P.mode = 'custom'; $('#fnCustA').value = isoDate(P.start); $('#fnCustB').value = isoDate(P.end); updateToolbar(); }
       };
     });
-    $('#fnPrevM').onclick = function () { var d = new Date(P.y, P.m - 1, 1); applyMonth(d.getFullYear(), d.getMonth()); refresh(); };
-    $('#fnNextM').onclick = function () { var d = new Date(P.y, P.m + 1, 1); applyMonth(d.getFullYear(), d.getMonth()); refresh(); };
-    $('#fnPrevD').onclick = function () { var d = new Date(P.start.getFullYear(), P.start.getMonth(), P.start.getDate() - 1); applyDay(isoDate(d)); refresh(); };
-    $('#fnNextD').onclick = function () { var d = new Date(P.start.getFullYear(), P.start.getMonth(), P.start.getDate() + 1); applyDay(isoDate(d)); refresh(); };
+    $('#fnPrevM').onclick = function () { if (P.m === 0) applyMonth(P.y - 1, 11); else applyMonth(P.y, P.m - 1); refresh(); };
+    $('#fnNextM').onclick = function () { if (P.m === 11) applyMonth(P.y + 1, 0); else applyMonth(P.y, P.m + 1); refresh(); };
+    $('#fnPrevD').onclick = function () { applyDay(isoShift(P.day || isoDate(P.start), -1)); refresh(); };
+    $('#fnNextD').onclick = function () { applyDay(isoShift(P.day || isoDate(P.start), 1)); refresh(); };
     $('#fnDayPick').onchange = function () { if (this.value) { applyDay(this.value); refresh(); } };
     $('#fnCustOk').onclick = function () {
       var a = $('#fnCustA').value, b = $('#fnCustB').value;
@@ -3898,7 +4104,9 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       var bSio = e.target.closest ? e.target.closest('[data-sio-toggle]') : null;
       if (bSio) { sioShow = !sioShow; renderFunnel(); }
       var bOld = e.target.closest ? e.target.closest('[data-fpt-old]') : null;
-      if (bOld) { FunnelPagesTable.toggleOld(bOld.getAttribute('data-fpt-old')); renderFunnel(); }
+      if (bOld) { FunnelPagesTable.toggleOld(bOld.getAttribute('data-fpt-old')); renderFunnel(); return; }
+      var bRl = e.target.closest ? e.target.closest('[data-fn-reload]') : null;
+      if (bRl) refresh();
     });
     $('#fnRefreshBtn').onclick = refresh;
     $('#fnTargetsBtn').onclick = openTargetsModal;
@@ -3921,8 +4129,8 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
   function init() {
     if (typeof firebase === 'undefined') { console.error('[funnel] Firebase non chargé'); return; }
     db = firebase.firestore();
-    var now = new Date();
-    applyMonth(now.getFullYear(), now.getMonth());
+    var tp0 = todayIso().split('-');
+    applyMonth(+tp0[0], +tp0[1] - 1);
 
     firebase.auth().onAuthStateChanged(function (user) {
       if (!user) { window.location.href = 'login.html'; return; }

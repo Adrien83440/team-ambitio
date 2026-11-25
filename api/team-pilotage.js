@@ -17,9 +17,10 @@
 //     - qui est connecté à Team (user_activity, alimenté par nav.js).
 //
 // POST { action: 'activity', from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' }  (31 j max)
-//   → Par personne et par jour : appels passés / reçus / décrochés, temps de
-//     parole, RDV posés, RDV tenus et leurs résultats, SMS / e-mails / WhatsApp
-//     envoyés, actions sur les fiches (lead_actions) et notes.
+//   → Par personne et par jour : appels (sortants), décrochés, temps d'appel,
+//     appels reçus, Sets et RDV posés par clic, RDV de la période (closer) et
+//     leur état, SMS / e-mails / WhatsApp envoyés (envois automatiques à
+//     part), actions sur les fiches (lead_actions) et notes.
 //
 //   + Lead to speech (23/10/2026) : par personne et par jour, délai entre
 //     l'arrivée d'un lead et son 1er appel sortant, compté pour l'auteur de
@@ -39,6 +40,27 @@
 // appels, RDV, messages, DM Instagram (ig_dm_events, attribués au setter écrit
 // comme dans Set NB), actions et notes.
 //
+// CHIFFRES — audit de cohérence du 25/11/2026 (référentiel des chiffres
+// commerciaux). Plus aucune règle locale : tout vient de stats-core.js.
+//   · RDV d'une journée : UN compte, le même dans En direct, Activité et
+//     Journal (rdvDelta → StatsCore.ajouter) : RDV (hors replanifiés et
+//     doublons), annulés, no-show, présents, à statuer (fin du créneau passée,
+//     heure de Paris), à venir, Kept (RDV − annulés), pitchés, RDV closés.
+//     Population : StatsCore.estRdvVente (Self Booking, Setting, Manuel).
+//     Le mot « tenus » n'existe plus. Closer : StatsCore.closerDuRdv.
+//   · « RDV closés » = RDV au résultat close, à la date du RDV. Ce n'est PAS
+//     le « Closes » des écrans de résultat (clients gagnés, closes annulés
+//     retirés) : Pilotage ne lit pas les paiements.
+//   · « Sets » = RDV du setting créés ce jour, un par RDV, hors remplaçants et
+//     doublons, rangés chez StatsCore.setterDuRdv (setter de la fiche) : même
+//     nombre que Set NB. « Posés par lui (clic) » = RDV que la personne a
+//     créés elle-même (bookedBySlug), compte d'activité distinct.
+//   · Appels = sortants ; Décrochés = StatsCore.estDecroche (sortants) ;
+//     appels reçus à part. Temps d'appel = conversation des sortants décrochés.
+//   · Jours : heure de Paris (StatsCore.jourParis) ; dates en texte lues à
+//     l'heure de Paris (FunnelCore.parseFlexMs).
+//   · Plafond de lecture atteint : nommé dans la réponse (`plafonds`), affiché.
+//
 // Présence Meet — compte utilisé : les RDV de closing sont dans l'agenda
 // strategie@adrienemily.com, organisateur de la réunion ; c'est le compte
 // « Meet Closing » (email_tokens/meet_closing, scope meetings.space.readonly)
@@ -52,6 +74,7 @@ const { requireAdmin } = require('./_verifyFirebaseAuth');
 const parseBody = require('./_parseBody');
 const MT = require('./_meetTranscript');
 const Core = require('../funnel-core.js');
+const SC = require('../stats-core.js');
 
 const SALES_ROLES = { setter: 1, setter_ecrit: 1, closer: 1, closer_setter: 1, sales: 1 };
 const HIDDEN_ROLES = { coach: 1, csm: 1 };
@@ -64,14 +87,8 @@ const MEET_AFTER_MS = 15 * 60 * 1000;
 const PRESENCE_TTL_MS = 45 * 1000;
 const MAX_LIVE_MEETS = 6;
 const MAX_DAYS = 31;
-const CONVO_SEC = 60;                     // « vraie conversation » : 1 min et plus
+const CONVO_SEC = 60;                     // décroché d'1 min et plus
 
-// « Décroché » = règle du Funnel (funnel-core.js isAnsweredCall) : Ringover
-// pose answeredAt même sur une messagerie, donc au moins 5 s de conversation,
-// et une longue sonnerie suivie de moins de 15 s de parole = répondeur.
-const ANSWERED_MIN_SEC = 5;
-const VOICEMAIL_MIN_RING_SEC = 15;
-const VOICEMAIL_MAX_TALK_SEC = 15;
 const CALL_STATUS_FR = {
   initiated: 'sans suite', ringing: 'sans suite', 'in-progress': 'en cours', completed: 'non décroché',
   busy: 'occupé', failed: 'échec', canceled: 'annulé',
@@ -116,41 +133,122 @@ function dedupeSnap(snap, R) {
   return keep.map(function (x) { return { id: x.id, data: function () { return x.c; } }; });
 }
 
+// Durée de conversation d'un appel : celle que lit la règle du décroché
+// (StatsCore.estDecroche), pour que « Temps d'appel » et « Décrochés »
+// parlent des mêmes secondes.
 function talkSecOf(c) {
-  return Number(c.talkDurationSec || c.durationSec) || 0;
+  return Number(c.durationSec) || 0;
 }
+// Décroché = StatsCore.estDecroche (au moins 5 s de conversation, répondeurs
+// écartés) — la même règle que Set NB et le Stats funnel.
 function isAnsweredCall(c) {
-  const talk = Number(c.durationSec) || 0;
-  if (talk < ANSWERED_MIN_SEC) return false;
-  let ring = Number(c.ringingDurationSec);
-  if (!isFinite(ring) || ring < 0 || c.ringingDurationSec == null) {
-    const a = toMs(c.answeredAt), i = toMs(c.initiatedAt);
-    ring = a && i && a >= i ? Math.round((a - i) / 1000) : null;
-  }
-  if (ring == null) return true;
-  return !(ring >= VOICEMAIL_MIN_RING_SEC && talk < VOICEMAIL_MAX_TALK_SEC);
+  return SC.estDecroche(c);
 }
-
-const OUTCOME_KEYS = ['close', 'non_close', 'offre', 'disqualifie', 'no_show', 'annule', 'replanifie'];
+function isInbound(c) { return c.direction === 'inbound'; }
 
 const CALL_FIELDS = [
   'direction', 'status', 'leadId', 'leadNameSnapshot', 'leadName',
   'fromNumber', 'toNumber', 'initiatedAt', 'answeredAt', 'endedAt',
-  'durationSec', 'talkDurationSec', 'ringingDurationSec', 'userId', 'userName', 'ringoverUserName', 'provider',
+  'durationSec', 'talkDurationSec', 'ringingDurationSec', 'totalDurationSec', 'userId', 'userName', 'ringoverUserName', 'provider',
 ];
+// Champs lus par StatsCore (état, classe, remplaçant, setter / closer).
 const BOOKING_FIELDS = [
-  'date', 'time', 'duration', 'personId', 'personName', 'expertSlug', 'closeData.closerSlug',
+  'date', 'time', 'duration', 'personId', 'personName', 'expertSlug', 'closeData',
   'bookedBySlug', 'outcome', 'status', 'source', 'type', 'typeLabel', 'isCoaching', 'clientId',
   'skipLeadCreation', 'prospect.nom', 'prospect.prenom', 'leadId', 'meetLink', 'createdAt',
+  'rescheduled', 'rescheduledFromId', 'rescheduledToId', 'transferredFrom', 'transferredTo',
+  'duplicateOf', 'cancellation', 'cancelledReason',
 ];
+
+// ─── RDV : un seul compte (StatsCore) ──────────────────────────────────────
+// Clés d'un agrégat de RDV (StatsCore.vide / ajouter / finir). Un RDV n'a
+// qu'un état : RDV = annulés + no-show + présents + à statuer + à venir ;
+// Kept = RDV − annulés ; Présents = disqua. + pitchés + sans détail ;
+// Pitchés = offres en attente + non closes + RDV closés. Toutes ces clés
+// s'additionnent d'un RDV à l'autre et d'un jour à l'autre.
+const RDV_KEYS = ['rdv', 'annules', 'noshow', 'presents', 'aStatuer', 'aVenir', 'kept',
+  'pitches', 'disqua', 'sansDetail', 'offres', 'nonCloses', 'rdvCloses', 'replan', 'doublons'];
+function rdvClasse(b, typeMap) { return SC.classifyBooking(b, typeMap || {}); }
+function estRdvVente(b, typeMap) { return SC.estRdvVente(rdvClasse(b, typeMap)); }
+// Contribution d'UN RDV à l'agrégat : StatsCore.ajouter sur un agrégat vide.
+function rdvDelta(b, now) {
+  const a = SC.vide();
+  SC.ajouter(a, b, now);
+  SC.finir(a);
+  return a;
+}
+// Agrégat d'une liste de RDV, réduit aux clés additives (renvoyé à la page).
+function rdvAgg(list, now) {
+  const a = SC.compter(list || [], now);
+  const o = {};
+  RDV_KEYS.forEach(function (k) { o[k] = a[k] || 0; });
+  return o;
+}
+// Résolution d'une fiche d'agenda → membre (StatsCore.closerDuRdv).
+function resoudrePersonneFn(R, persons) {
+  return function (personId) {
+    const p = persons[personId];
+    if (p && p.firebaseUid && R.byUid[p.firebaseUid]) return R.byUid[p.firebaseUid].slug;
+    if (personId && R.bySlug[personId]) return personId;
+    return null;
+  };
+}
+// « Sets » : RDV du setting réellement créé (un par RDV), hors remplaçant
+// (report, transfert) et doublon supprimé — règle de Set NB.
+function estSet(b, typeMap) {
+  return rdvClasse(b, typeMap) === 'setter' && !SC.estRemplacant(b) && !SC.estDoublon(b);
+}
+// « Posés par lui (clic) » : RDV de vente créé par un membre (bookedBySlug),
+// hors remplaçant (booking.html recopie bookedBySlug sur un RDV reporté).
+function estPoseClic(b, typeMap) {
+  return !!b.bookedBySlug && estRdvVente(b, typeMap) && !SC.estRemplacant(b) && !SC.estDoublon(b);
+}
+function memberOfSlug(R, s) {
+  if (!s) return null;
+  return R.bySlug[s] || R.byUid[s] || null;
+}
+// Fiches des RDV du setting (setterSlug / assignedTo) pour StatsCore.setterDuRdv.
+// Lecture par lots ; une fiche fusionnée renvoie à la fiche gardée.
+const SETTER_FICHE_FIELDS = ['setterSlug', 'assignedTo', '_merged', '_mergedInto'];
+async function fichesSetter(ids) {
+  const out = {};
+  const uniq = ids.filter(function (id, i) { return id && /^[A-Za-z0-9_-]{1,80}$/.test(id) && ids.indexOf(id) === i; });
+  async function lire(list) {
+    const got = {};
+    for (let i = 0; i < list.length; i += 200) {
+      const refs = list.slice(i, i + 200).map(function (id) { return db.collection('leads').doc(id); });
+      const snaps = await db.getAll.apply(db, refs.concat([{ fieldMask: SETTER_FICHE_FIELDS }]));
+      snaps.forEach(function (s) { if (s.exists) got[s.id] = s.data() || {}; });
+    }
+    return got;
+  }
+  const first = await lire(uniq);
+  const survivants = {};
+  Object.keys(first).forEach(function (id) {
+    const f = first[id];
+    if (f._merged === true && f._mergedInto) survivants[id] = String(f._mergedInto);
+    else out[id] = f;
+  });
+  const ids2 = Object.keys(survivants).map(function (k) { return survivants[k]; });
+  if (ids2.length) {
+    const second = await lire(ids2);
+    Object.keys(survivants).forEach(function (id) { if (second[survivants[id]]) out[id] = second[survivants[id]]; });
+  }
+  return out;
+}
+function setterOf(b, fiches, R) {
+  return memberOfSlug(R, SC.setterDuRdv(b, b.leadId ? (fiches[b.leadId] || null) : null));
+}
 
 // ─── Dates ──────────────────────────────────────────────────────────────────
 function todayIsoParis(d) {
-  return (d || new Date()).toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
+  return SC.jourParis(d || new Date());
 }
 function parisDayOfMs(ms) {
-  return ms ? todayIsoParis(new Date(ms)) : null;
+  return ms ? SC.jourParis(ms) : null;
 }
+// Début d'un jour 'AAAA-MM-JJ' à Paris, en ms (bornes de période).
+function dayStartMs(iso) { return SC.debutJourParis(iso).getTime(); }
 function addDays(iso, n) {
   const d = new Date(iso + 'T12:00:00Z');
   d.setUTCDate(d.getUTCDate() + n);
@@ -173,8 +271,10 @@ function toMs(v) {
     const iso = fr[3] + '-' + ('0' + fr[2]).slice(-2) + '-' + ('0' + fr[1]).slice(-2);
     return MT.parisToUtcMs(iso, fr[4] ? (('0' + fr[4]).slice(-2) + ':' + fr[5]) : '12:00');
   }
-  const t = Date.parse(s);
-  return isNaN(t) ? 0 : t;
+  // Texte ISO sans fuseau = heure de PARIS (FunnelCore.parseFlexMs), quel
+  // que soit le fuseau du serveur (les Vercel Functions tournent en UTC).
+  const t = Core.parseFlexMs(s);
+  return t == null || isNaN(t) ? 0 : t;
 }
 function isoOf(ms) {
   return ms ? new Date(ms).toISOString() : null;
@@ -238,17 +338,14 @@ function callMember(c, R) {
   return (n && R.byFirst[n]) || null;
 }
 
-// Closeur d'un RDV — même ordre que memberMatchesBooking (sales-closing.html),
-// la fiche expert (booking_config) passant avant l'égalité personId == slug :
-// la fiche « elodie » est reprise par Anthony depuis le 10/10/2026.
+// Closeur d'un RDV — StatsCore.closerDuRdv, la règle de Close SB / Global
+// closing : closer qui a validé le close → hôte figé sur le RDV (expertSlug)
+// → hôte de la fiche d'agenda (firebaseUid de booking_config, AVANT l'égalité
+// personId == slug : la fiche « elodie » est reprise par Anthony depuis le
+// 10/10/2026). Personne d'identifiable (ou slug hors roster) : null → ligne
+// « Non attribué », jamais « le seul closer ».
 function bookingCloser(b, R, persons) {
-  const cd = b.closeData || {};
-  if (cd.closerSlug && R.bySlug[cd.closerSlug]) return R.bySlug[cd.closerSlug];
-  if (b.expertSlug && R.bySlug[b.expertSlug]) return R.bySlug[b.expertSlug];
-  const p = persons[b.personId];
-  if (p && p.firebaseUid && R.byUid[p.firebaseUid]) return R.byUid[p.firebaseUid];
-  if (b.personId && R.bySlug[b.personId]) return R.bySlug[b.personId];
-  return null;
+  return memberOfSlug(R, SC.closerDuRdv(b, resoudrePersonneFn(R, persons)));
 }
 
 function prospectName(b) {
@@ -428,12 +525,13 @@ function presenceSummary(pr) {
 async function handleLive(req, res) {
   const now = Date.now();
   const today = todayIsoParis();
-  const dayStart = MT.parisToUtcMs(today, '00:00');
+  const dayStart = dayStartMs(today);
   const fromMs = Math.min(dayStart, now - 4 * 3600 * 1000);
+  const LIVE_CALLS_LIMIT = 1500;
 
   const callQ = db.collection('call_logs')
     .where('initiatedAt', '>=', admin.firestore.Timestamp.fromMillis(fromMs))
-    .orderBy('initiatedAt', 'desc').limit(1500);
+    .orderBy('initiatedAt', 'desc').limit(LIVE_CALLS_LIMIT);
   const [R, persons, typeMap, callSnap, bookSnap, actSnap] = await Promise.all([
     loadRoster(),
     loadPersons(),
@@ -455,14 +553,20 @@ async function handleLive(req, res) {
     if (!rows[m.slug]) {
       rows[m.slug] = Object.assign(publicMember(m), {
         status: 'offline', call: null, meet: null, online: null,
-        today: { calls: 0, answered: 0, talkSec: 0, lastCallAt: null, activeMs: 0, sessions: 0, firstSeenAt: null, dmOut: 0, dmIn: 0, lastDmAt: null },
+        // calls = appels SORTANTS ; answered = sortants décrochés ; talkSec =
+        // temps d'appel (conversation des sortants décrochés) ; callsIn = reçus.
+        today: { calls: 0, answered: 0, talkSec: 0, callsIn: 0, lastCallAt: null, activeMs: 0, sessions: 0, firstSeenAt: null, dmOut: 0, dmIn: 0, lastDmAt: null,
+          rdv: rdvAgg([], now) },
       });
     }
     return rows[m.slug];
   }
   R.list.forEach(function (m) { if (m.sales) row(m); });
 
-  // Appels
+  // Appels — le total d'équipe compte TOUS les appels du jour (appels sans
+  // auteur et membres sans carte compris) : c'est le même total que l'onglet
+  // Activité réglé sur aujourd'hui (ligne « Non attribué » comprise).
+  const team = { calls: 0, answered: 0, talkSec: 0, callsIn: 0, sansCarte: 0 };
   const liveCalls = [];
   const phonesToResolve = [];
   dedupeSnap(callSnap, R).forEach(function (d) {
@@ -471,11 +575,20 @@ async function handleLive(req, res) {
     const ini = toMs(c.initiatedAt);
     const ans = toMs(c.answeredAt);
     const r = row(m);
-    if (r && ini >= dayStart) {
-      r.today.calls += 1;
-      if (isAnsweredCall(c)) r.today.answered += 1;
-      r.today.talkSec += talkSecOf(c);
-      if (!r.today.lastCallAt || ini > Date.parse(r.today.lastCallAt)) r.today.lastCallAt = isoOf(ini);
+    if (ini >= dayStart) {
+      const inb = isInbound(c);
+      const ok = !inb && isAnsweredCall(c);
+      if (inb) team.callsIn += 1;
+      else { team.calls += 1; if (ok) { team.answered += 1; team.talkSec += talkSecOf(c); } }
+      if (!r && !inb) team.sansCarte += 1;
+      if (r) {
+        if (inb) r.today.callsIn += 1;
+        else {
+          r.today.calls += 1;
+          if (ok) { r.today.answered += 1; r.today.talkSec += talkSecOf(c); }
+        }
+        if (!r.today.lastCallAt || ini > Date.parse(r.today.lastCallAt)) r.today.lastCallAt = isoOf(ini);
+      }
     }
     let state = null;
     if (!c.endedAt) {
@@ -504,13 +617,27 @@ async function handleLive(req, res) {
     } catch (e) { console.warn('[team-pilotage] noms des appels', e.message); }
   }
 
-  // RDV de closing du jour
+  // RDV de vente du jour (StatsCore.estRdvVente). Le compte du jour vient de
+  // StatsCore.compter sur TOUS les RDV de vente du jour (doublons et
+  // replanifiés comptés à part, hors RDV) ; la liste affichée montre les RDV
+  // comptés dans « RDV » (annulés compris, avec leur état).
   const bookings = [];
+  const venteDuJour = [];
   bookSnap.forEach(function (d) {
     const b = Object.assign({ id: d.id }, d.data() || {});
-    if (!MT.isClosingBooking(b, typeMap)) return;
-    if (b.status === 'cancelled' && !b.outcome) return;
+    if (!estRdvVente(b, typeMap)) return;
+    venteDuJour.push(b);
+    const e = SC.etat(b, now);
+    if (e === 'doublon' || e === 'replanifie') return;
     bookings.push(b);
+  });
+  const rdvTeam = rdvAgg(venteDuJour, now);
+  venteDuJour.forEach(function (b) {
+    const cm = bookingCloser(b, R, persons);
+    const r = row(cm);
+    if (!r) return;
+    const dl = rdvDelta(b, now);
+    RDV_KEYS.forEach(function (k) { r.today.rdv[k] += dl[k] || 0; });
   });
   const meetDocs = bookings.length
     ? await db.getAll.apply(db, bookings.map(function (b) { return db.collection('booking_meet').doc(b.id); }))
@@ -528,20 +655,27 @@ async function handleLive(req, res) {
     const closer = bookingCloser(b, R, persons);
     const setter = b.bookedBySlug ? R.bySlug[b.bookedBySlug] : null;
     const bm = meetById[b.id] || {};
+    const lib = SC.libelle(b, now);
     const o = {
       id: b.id, time: b.time || '', duration: Number(b.duration) || 30, start: isoOf(start), end: isoOf(end),
       phase: phase, prospect: prospectName(b), leadId: b.leadId || null, typeLabel: b.typeLabel || '',
+      classe: rdvClasse(b, typeMap),
       closerSlug: closer ? closer.slug : null, closerName: closer ? closer.name : (b.personName || null),
+      // Personne qui a créé le RDV (clic) — pas forcément le setter de la fiche.
       setterSlug: setter ? setter.slug : null, setterName: setter ? setter.name : null,
-      outcome: b.outcome || null, status: b.status || null, hasMeet: !!b.meetLink, tracked: !!(b.meetLink && b.meetTrackedLink),
+      outcome: b.outcome || null, status: b.status || null,
+      // État unique du RDV (StatsCore.etat / detail) : la pastille de la page.
+      etat: lib.etat, detail: SC.detail(b), etatMot: lib.mot,
+      hasMeet: !!b.meetLink, tracked: !!(b.meetLink && b.meetTrackedLink),
       clicks: Number(bm.clicks) || 0, firstClickAt: isoOf(toMs(bm.firstClickAt)), lastClickAt: isoOf(toMs(bm.lastClickAt)),
       presence: bm.presence || null, presenceCheckedAt: isoOf(toMs(bm.presenceCheckedAt)),
       reminders: b.remindersSent || {}, waReminders: [],
     };
-    if (phase === 'live' && b.meetLink && !b.outcome) {
+    const ouvert = lib.etat === 'a_venir' || lib.etat === 'a_statuer';
+    if (phase === 'live' && b.meetLink && !b.outcome && ouvert) {
       const age = now - toMs(bm.presenceCheckedAt);
       if (!bm.presence || age > PRESENCE_TTL_MS) liveOnes.push({ b: b, o: o, prio: 0 });
-    } else if (phase === 'past' && b.meetLink && (!bm.presence || toMs(bm.presenceCheckedAt) < MT.bookingEndMs(b) + MEET_AFTER_MS)) {
+    } else if (phase === 'past' && b.meetLink && lib.etat !== 'annule' && (!bm.presence || toMs(bm.presenceCheckedAt) < MT.bookingEndMs(b) + MEET_AFTER_MS)) {
       // RDV terminé jamais relu après son créneau : une lecture définitive.
       liveOnes.push({ b: b, o: o, prio: 1 });
     }
@@ -652,9 +786,16 @@ async function handleLive(req, res) {
 
   const meetConn = await MT.connectionStatus().catch(function () { return null; });
 
+  // Plafonds de lecture atteints : nommés, jamais tus.
+  const plafonds = [];
+  if (callSnap && callSnap.size >= LIVE_CALLS_LIMIT) plafonds.push('appels du jour (' + LIVE_CALLS_LIMIT + ' lus)');
+  if (ltsRes && ltsRes.truncated) plafonds.push('lead to speech (fiches ou appels)');
+
   res.status(200).json({
     ok: true, now: isoOf(now), today: today,
     members: Object.keys(rows).map(function (k) { return rows[k]; }),
+    // Totaux d'équipe du jour : appels (tous auteurs) et RDV (StatsCore).
+    team: team, rdv: rdvTeam, plafonds: plafonds,
     calls: liveCalls, bookings: outB, lts: ltsTeam,
     meet: { connected: !!(meetConn && meetConn.connected), email: meetConn ? meetConn.email : '', error: meetStatus },
   });
@@ -662,8 +803,9 @@ async function handleLive(req, res) {
 
 // ─── LEAD TO SPEECH (23/10/2026) ────────────────────────────────────────────
 // Délai entre l'arrivée d'un lead et son 1er appel sortant, compté pour la
-// personne qui a passé ce 1er appel — un lead = une personne. Mêmes règles
-// que le Time-to-contact du Funnel (funnel-core.js) :
+// personne qui a passé ce 1er appel — un lead = une personne. Un seul nom :
+// « Lead to speech » (le Stats funnel l'appelle aussi ainsi). Mêmes règles
+// que le funnel (funnel-core.js) :
 //   - arrivée = date effective (realEntryMs : la plus ancienne de
 //     dateWebinaire / importedCreatedAt / createdAt), nouveaux leads
 //     seulement (un ré-optin garde sa date d'origine, donc sort de la fenêtre) ;
@@ -675,7 +817,7 @@ async function handleLive(req, res) {
 // base froide. Les appels sont lus depuis (début − 14 j) pour être sûr
 // qu'aucun appel antérieur n'existe.
 const LTS_LOOKBACK_MS = 14 * 86400000;
-const LTS_LEAD_FIELDS = ['nom', 'prenom', 'telephone', 'phone', 'dateWebinaire', 'importedCreatedAt', 'createdAt', '_merged'];
+const LTS_LEAD_FIELDS = ['nom', 'prenom', 'telephone', 'phone', 'dateWebinaire', 'importedCreatedAt', 'createdAt', '_merged', 'interne'];
 const LTS_CALL_FIELDS = ['direction', 'toNumber', 'initiatedAt', 'userId', 'userName', 'ringoverUserName'];
 const LTS_LIVE_TTL_MS = 2 * 60 * 1000;
 let ltsLiveCache = null;
@@ -703,7 +845,9 @@ async function computeLeadSpeech(R, fromMs, toMs_) {
   const items = [];
   snaps[0].forEach(function (d) {
     const l = d.data() || {};
-    if (l._merged === true) return;
+    // Fiche comptée comme lead : ni fusionnée, ni fiche de test (règle commune).
+    if (!Core.isCountedLead(l)) return;
+    // Date d'entrée réelle ; une date en texte est lue à l'heure de Paris.
     const entry = Core.realEntryMs(l);
     if (entry == null || entry < fromMs - LTS_LOOKBACK_MS || entry >= toMs_) return;
     const list = byP9[Core.phone9(l.telephone || l.phone)];
@@ -741,14 +885,46 @@ async function leadSpeechToday(R, dayStart, now) {
 }
 
 // ─── ACTIVITÉ PAR PERSONNE ET PAR JOUR ──────────────────────────────────────
+// Téléphone : callsOut = appels SORTANTS ; answered = sortants décrochés
+// (StatsCore.estDecroche) ; convos = sortants décrochés d'1 min et plus ;
+// talkSec = temps d'appel (conversation des sortants décrochés) ; callsIn /
+// answeredIn / talkInSec = appels reçus, décrochés, temps — toujours à part.
+// RDV (closer, date du RDV) : RDV_KEYS (StatsCore). sets = Sets (setter de la
+// fiche, jour de création) ; posesClic = RDV créés par la personne (clic).
+// msgAuto = envois automatiques (relances, parcours RDV, rappels WhatsApp).
 const STAT_KEYS = [
-  'callsOut', 'callsIn', 'answered', 'convos', 'talkSec',
-  'rdvSet', 'rdvHeld', 'pending'].concat(OUTCOME_KEYS).concat([
-  'sms', 'email', 'whatsapp', 'dmOut', 'dmIn', 'actStatus', 'actBooking', 'actAssign', 'notes',
+  'callsOut', 'answered', 'convos', 'talkSec', 'callsIn', 'answeredIn', 'talkInSec',
+].concat(RDV_KEYS).concat([
+  'sets', 'posesClic',
+  'sms', 'email', 'whatsapp', 'dmOut', 'dmIn', 'msgAuto', 'actStatus', 'actBooking', 'actAssign', 'notes',
   'activeMs', 'sessions', 'clicks', 'pages', 'rapDue', 'rapDone', 'rapLate', 'rapChecked',
   // Lead to speech : ltsN s'additionne, ltsMed (médiane en ms) est posé à part.
   'ltsN', 'ltsMed',
 ]);
+
+// Envoi automatique (relance, parcours RDV, robot) : jamais un message d'une
+// personne, jamais un « vrai contact » pour un rappel (règle contactReel de
+// relances-core.js).
+function estEnvoiAuto(c) {
+  return !!c && (c.auto === true || c.source === 'relance' || c.source === 'parcours_rdv');
+}
+// Contribution d'un appel aux compteurs téléphone : [clé, valeur]…
+function callKeys(c) {
+  const out = [];
+  const talk = talkSecOf(c);
+  if (isInbound(c)) {
+    out.push(['callsIn', 1]);
+    if (isAnsweredCall(c)) { out.push(['answeredIn', 1]); if (talk) out.push(['talkInSec', talk]); }
+    return out;
+  }
+  out.push(['callsOut', 1]);
+  if (isAnsweredCall(c)) {
+    out.push(['answered', 1]);
+    if (talk) out.push(['talkSec', talk]);
+    if (talk >= CONVO_SEC) out.push(['convos', 1]);
+  }
+  return out;
+}
 
 function emptyStats() {
   const o = {};
@@ -775,8 +951,8 @@ async function handleActivity(req, res, body) {
   let from = validIso(body.from) ? body.from : to;
   if (from > to) { const t = from; from = to; to = t; }
   if (addDays(from, MAX_DAYS - 1) < to) from = addDays(to, -(MAX_DAYS - 1));
-  const fromMs = MT.parisToUtcMs(from, '00:00');
-  const toMs_ = MT.parisToUtcMs(addDays(to, 1), '00:00');
+  const fromMs = dayStartMs(from);
+  const toMs_ = dayStartMs(addDays(to, 1));
   const fromTs = admin.firestore.Timestamp.fromMillis(fromMs);
   const toTs = admin.firestore.Timestamp.fromMillis(toMs_);
   const now = Date.now();
@@ -784,17 +960,18 @@ async function handleActivity(req, res, body) {
   const R = await loadRoster();
   const slugs = R.list.filter(function (m) { return !m.hidden; }).map(function (m) { return m.slug; });
 
-  const callQ = db.collection('call_logs').where('initiatedAt', '>=', fromTs).where('initiatedAt', '<', toTs).limit(8000);
-  const heldQ = db.collection('bookings').where('date', '>=', from).where('date', '<=', to).limit(3000);
-  const setQ = db.collection('bookings').where('createdAt', '>=', fromTs).where('createdAt', '<', toTs).limit(3000);
+  const LIM = { calls: 8000, rdv: 3000, rdvCrees: 3000, leads: 5000, wa: 5000, dm: 8000, ua: 5000 };
+  const callQ = db.collection('call_logs').where('initiatedAt', '>=', fromTs).where('initiatedAt', '<', toTs).limit(LIM.calls);
+  const heldQ = db.collection('bookings').where('date', '>=', from).where('date', '<=', to).limit(LIM.rdv);
+  const setQ = db.collection('bookings').where('createdAt', '>=', fromTs).where('createdAt', '<', toTs).limit(LIM.rdvCrees);
   // Messages et notes vivent dans les tableaux des fiches : on relit les
   // fiches touchées sur la période (updatedAt posé par les notes et les envois,
   // lastContactAt par les SMS / e-mails — deux requêtes, fusionnées par id).
-  const leadQ = db.collection('leads').where('updatedAt', '>=', fromTs).limit(5000);
-  const leadQ2 = db.collection('leads').where('lastContactAt', '>=', fromTs).limit(5000);
-  const waQ = db.collection('whatsapp_messages').where('at', '>=', fromMs).where('at', '<', toMs_).limit(5000);
-  const dmQ = db.collection('ig_dm_events').where('date', '>=', from).where('date', '<=', to).limit(8000);
-  const uaQ = db.collection('user_activity').where('date', '>=', from).where('date', '<=', to).limit(5000);
+  const leadQ = db.collection('leads').where('updatedAt', '>=', fromTs).limit(LIM.leads);
+  const leadQ2 = db.collection('leads').where('lastContactAt', '>=', fromTs).limit(LIM.leads);
+  const waQ = db.collection('whatsapp_messages').where('at', '>=', fromMs).where('at', '<', toMs_).limit(LIM.wa);
+  const dmQ = db.collection('ig_dm_events').where('date', '>=', from).where('date', '<=', to).limit(LIM.dm);
+  const uaQ = db.collection('user_activity').where('date', '>=', from).where('date', '<=', to).limit(LIM.ua);
 
   const settled = await Promise.allSettled([
     loadPersons(),
@@ -808,7 +985,7 @@ async function handleActivity(req, res, body) {
     ]).then(function (snaps) {
       const docs = {};
       snaps.forEach(function (sn) { if (sn) sn.forEach(function (d) { docs[d.id] = d; }); });
-      return { size: snaps[0].size, forEach: function (fn) { Object.keys(docs).forEach(function (k) { fn(docs[k]); }); } };
+      return { size: Math.max(snaps[0].size, snaps[1] ? snaps[1].size : 0), forEach: function (fn) { Object.keys(docs).forEach(function (k) { fn(docs[k]); }); } };
     }),
     waQ.select('contexte', 'statut', 'at', 'to').get(),
     Promise.all(slugs.map(function (s) {
@@ -822,7 +999,7 @@ async function handleActivity(req, res, body) {
     computeLeadSpeech(R, fromMs, toMs_),
   ]);
   const warnings = [];
-  const SOURCES = ['fiches experts', 'types de RDV', 'appels', 'RDV tenus', 'RDV posés', 'messages et notes', 'WhatsApp', 'actions sur les fiches', 'DM Instagram', 'temps de connexion', 'rappels', 'lead to speech'];
+  const SOURCES = ['fiches experts', 'types de RDV', 'appels', 'RDV de la période', 'RDV créés (sets)', 'messages et notes', 'WhatsApp', 'actions sur les fiches', 'DM Instagram', 'temps de connexion', 'rappels', 'lead to speech'];
   function val(i) {
     if (settled[i].status === 'fulfilled') return settled[i].value;
     console.error('[team-pilotage] activité —', SOURCES[i], settled[i].reason && settled[i].reason.message);
@@ -854,29 +1031,41 @@ async function handleActivity(req, res, body) {
     const c = d.data() || {};
     const m = callMember(c, R);
     const day = parisDayOfMs(toMs(c.initiatedAt));
-    add(m, day, c.direction === 'inbound' ? 'callsIn' : 'callsOut');
-    if (isAnsweredCall(c)) add(m, day, 'answered');
-    const talk = talkSecOf(c);
-    if (talk) add(m, day, 'talkSec', talk);
-    if (talk >= CONVO_SEC) add(m, day, 'convos');
+    callKeys(c).forEach(function (kv) { add(m, day, kv[0], kv[1]); });
   });
 
+  // RDV de la période, à leur DATE, chez leur closer : StatsCore (un état par
+  // RDV), population StatsCore.estRdvVente — le même compte que l'onglet En
+  // direct et le Journal.
   if (heldSnap) heldSnap.forEach(function (d) {
     const b = d.data() || {};
-    if (!MT.isClosingBooking(b, typeMap)) return;
+    if (!estRdvVente(b, typeMap)) return;
     const m = bookingCloser(b, R, persons);
-    let out = b.outcome || null;
-    if (!out && b.status === 'cancelled') out = 'annule';
-    if (out && OUTCOME_KEYS.indexOf(out) >= 0) add(m, b.date, out);
-    if (out === 'annule' || out === 'replanifie') return;
-    add(m, b.date, 'rdvHeld');
-    if (!out && MT.bookingStartMs(b) < now) add(m, b.date, 'pending');
+    const dl = rdvDelta(b, now);
+    RDV_KEYS.forEach(function (k) { if (dl[k]) add(m, b.date, k, dl[k]); });
   });
 
+  // Sets (setter de la fiche) et RDV posés par la personne elle-même (clic),
+  // au jour de création à Paris.
+  const setBookings = [];
   if (setSnap) setSnap.forEach(function (d) {
-    const b = d.data() || {};
-    if (!b.bookedBySlug || !MT.isClosingBooking(b, typeMap)) return;
-    add(R.bySlug[b.bookedBySlug] || null, parisDayOfMs(toMs(b.createdAt)), 'rdvSet');
+    const b = Object.assign({ id: d.id }, d.data() || {});
+    const ms = toMs(b.createdAt);
+    if (!inRange(ms)) return;
+    b._day = parisDayOfMs(ms);
+    setBookings.push(b);
+  });
+  let fiches = {};
+  const setIds = setBookings.filter(function (b) { return estSet(b, typeMap) && b.leadId; }).map(function (b) { return String(b.leadId); });
+  if (setIds.length) {
+    try { fiches = await fichesSetter(setIds); } catch (e) {
+      console.error('[team-pilotage] fiches des sets', e.message);
+      warnings.push('fiches des sets : ' + String(e.message || 'erreur').slice(0, 160) + ' — attribution partielle : ces sets sont rangés d\'après la personne qui a posé le RDV');
+    }
+  }
+  setBookings.forEach(function (b) {
+    if (estSet(b, typeMap)) add(setterOf(b, fiches, R), b._day, 'sets');
+    if (estPoseClic(b, typeMap)) add(R.bySlug[b.bookedBySlug] || null, b._day, 'posesClic');
   });
 
   if (leadSnap) leadSnap.forEach(function (d) {
@@ -888,6 +1077,12 @@ async function handleActivity(req, res, body) {
       if (!type) return;
       const ms = toMs(c.date || c.createdAt);
       if (!inRange(ms)) return;
+      if (estEnvoiAuto(c)) {
+        // Un WhatsApp automatique est déjà compté par whatsapp_messages
+        // (même envoi, deux traces) : il n'est compté qu'une fois, là-bas.
+        if (type !== 'whatsapp') add(null, parisDayOfMs(ms), 'msgAuto');
+        return;
+      }
       add(commMember(c, R), parisDayOfMs(ms), type);
     });
     (Array.isArray(l.notesHistory) ? l.notesHistory : []).forEach(function (n) {
@@ -902,10 +1097,10 @@ async function handleActivity(req, res, body) {
     const w = d.data() || {};
     if (w.statut === 'refuse') return;
     const ctx = w.contexte || {};
-    // Les rappels automatiques (contexte sans uid) ne sont à personne.
-    const m = ctx.uid ? (R.byUid[ctx.uid] || null) : null;
-    if (!m) { unassigned.whatsapp += 1; return; }
-    add(m, parisDayOfMs(toMs(w.at)), 'whatsapp');
+    // Les envois automatiques (rappels de RDV, relances, parcours : contexte
+    // sans uid) ne sont à personne : comptés à part, en « Envois auto ».
+    if (!ctx.uid) { add(null, parisDayOfMs(toMs(w.at)), 'msgAuto'); return; }
+    add(R.byUid[ctx.uid] || null, parisDayOfMs(toMs(w.at)), 'whatsapp');
   });
 
   const dmM = dmOwner(R);
@@ -935,8 +1130,9 @@ async function handleActivity(req, res, body) {
     });
   });
 
-  // Rappels : contacts relevés dans les appels, WhatsApp et actions déjà lus,
-  // plus les communications de la fiche elle-même.
+  // Rappels : contacts relevés dans les appels, WhatsApp et actions déjà lus
+  // (toute l'équipe — le Journal d'une personne lit le même index), plus les
+  // communications de la fiche elle-même. Envois automatiques exclus.
   if (rappelLeads) {
     const ci = contactIndex();
     callDocs.forEach(function (d) { ci.call(d.data() || {}, R); });
@@ -980,8 +1176,21 @@ async function handleActivity(req, res, body) {
     });
     ltsTeam = ltsAgg(all);
     ltsItems.sort(function (a, b) { return a.callAt < b.callAt ? 1 : -1; });
-    if (ltsRes.truncated) warnings.push('lead to speech : période très chargée, une partie des fiches ou des appels n\'a pas été lue');
   }
+
+  // Plafonds de lecture atteints : nommés dans la réponse, affichés par la
+  // page (bandeau « lecture incomplète »), jamais un chiffre tronqué en silence.
+  const plafonds = [];
+  function plafond(snap, lim, nom) { if (snap && snap.size >= lim) plafonds.push(nom + ' (' + lim + ' lus)'); }
+  plafond(callSnap, LIM.calls, 'appels');
+  plafond(heldSnap, LIM.rdv, 'RDV de la période');
+  plafond(setSnap, LIM.rdvCrees, 'RDV créés (sets, posés par clic)');
+  plafond(leadSnap, LIM.leads, 'fiches (messages et notes)');
+  plafond(waSnap, LIM.wa, 'WhatsApp');
+  plafond(dmSnap, LIM.dm, 'DM Instagram');
+  plafond(uaSnap, LIM.ua, 'temps de connexion');
+  if (rappelLeads && rappelLeads._tronque) plafonds.push('fiches à rappels (' + RAPPEL_LEADS_LIMIT + ' lues)');
+  if (ltsRes && ltsRes.truncated) plafonds.push('lead to speech (fiches ou appels)');
 
   const members = R.list.filter(function (m) {
     return !m.departed && !m.hidden && (m.sales || totals[m.slug]);
@@ -991,10 +1200,12 @@ async function handleActivity(req, res, body) {
 
   res.status(200).json({
     ok: true, from: from, to: to, generatedAt: isoOf(now),
+    // Ancien format conservé (lu par d'anciennes versions de la page).
     truncated: {
-      calls: !!(callSnap && callSnap.size >= 8000),
-      leads: !!(leadSnap && leadSnap.size >= 5000),
+      calls: !!(callSnap && callSnap.size >= LIM.calls),
+      leads: !!(leadSnap && leadSnap.size >= LIM.leads),
     },
+    plafonds: plafonds,
     warnings: warnings,
     members: members, unassigned: unassigned,
     lts: { team: ltsTeam, items: ltsItems },
@@ -1009,6 +1220,10 @@ async function handleActivity(req, res, body) {
 // SMS, e-mail, WhatsApp, action sur la fiche) entre 30 min avant l'heure
 // prévue et la fin de ce jour-là ; coché sans aucun contact = « coché sans
 // contact » ; échu sans contact ni case = « en retard » (décision 16/10/2026).
+// Un envoi AUTOMATIQUE (relance, parcours RDV, rappel WhatsApp sans auteur)
+// n'est pas un vrai contact (audit 25/11/2026, règle contactReel de
+// relances-core.js). Activité et Journal lisent le même index (actions de
+// toute l'équipe) : un rappel a le même sort sur les deux onglets.
 const RAPPEL_BEFORE_MS = 30 * 60000;
 const RAPPEL_LEAD_FIELDS = ['nom', 'telephone', 'phoneNormalized', 'followUps', 'communications', 'assignedTo', 'setterSlug', '_merged'];
 
@@ -1021,8 +1236,9 @@ function looseMember(name, R) {
   return R.byFirst[toks[0]] || null;
 }
 
+const RAPPEL_LEADS_LIMIT = 3000;
 async function loadRappelLeads() {
-  const q = db.collection('leads').where('followUps', '>', []).limit(3000);
+  const q = db.collection('leads').where('followUps', '>', []).limit(RAPPEL_LEADS_LIMIT);
   const snap = await q.select.apply(q, RAPPEL_LEAD_FIELDS).get();
   const out = [];
   snap.forEach(function (d) {
@@ -1030,6 +1246,8 @@ async function loadRappelLeads() {
     if (l._merged === true) return;
     out.push(Object.assign({ id: d.id }, l));
   });
+  // Plafond atteint : dit par la réponse (plafonds), jamais tu.
+  Object.defineProperty(out, '_tronque', { value: snap.size >= RAPPEL_LEADS_LIMIT, enumerable: false });
   return out;
 }
 
@@ -1052,7 +1270,9 @@ function contactIndex() {
     },
     wa: function (w, R) {
       if (w.statut === 'refuse' || w.statut === 'echec') return;
-      const m = w.contexte && w.contexte.uid ? R.byUid[w.contexte.uid] : null;
+      // Sans auteur = envoi automatique : pas un vrai contact.
+      if (!w.contexte || !w.contexte.uid) return;
+      const m = R.byUid[w.contexte.uid] || null;
       addK(last9(w.to) ? 'tel:' + last9(w.to) : null, { ms: toMs(w.at), kind: 'WhatsApp', who: m ? m.name : null });
     },
     action: function (leadId, ms, who) { addK('id:' + leadId, { ms: ms, kind: 'action fiche', who: who }); },
@@ -1063,7 +1283,7 @@ function contactIndex() {
       const k = last9(lead.phoneNormalized || lead.telephone);
       if (k) (idx['tel:' + k] || []).forEach(take);
       (Array.isArray(lead.communications) ? lead.communications : []).forEach(function (c) {
-        if (!c || c.direction !== 'outbound') return;
+        if (!c || c.direction !== 'outbound' || estEnvoiAuto(c)) return;
         const m = commMember(c, R);
         take({ ms: toMs(c.date || c.createdAt), kind: c.type === 'sms' ? 'SMS' : (c.type === 'email' ? 'e-mail' : (c.type === 'call' ? 'appel' : (c.type || 'message'))), who: m ? m.name : (c.ownerName || null) });
       });
@@ -1103,47 +1323,62 @@ function computeRappels(leads, R, ci, fromMs, toMsX, now) {
 // POST { action: 'journal', slug, date } → tout ce que la personne a fait ce
 // jour-là, minute par minute : pages et clics (user_events, nav.js), appels
 // (durée, décroché, résumé IA), messages envoyés AVEC leur texte (SMS,
-// e-mails, WhatsApp, DM Instagram), notes, actions sur les fiches, RDV posés
-// et tenus, rappels prévus et leur sort.
+// e-mails, WhatsApp, DM Instagram), notes, actions sur les fiches, Sets et
+// RDV posés par clic, RDV du jour dont elle est le closer (même compte que
+// l'Activité), rappels prévus et leur sort.
 async function handleJournal(req, res, body) {
   const date = validIso(body.date) ? body.date : todayIsoParis();
   const R = await loadRoster();
   const m = R.bySlug[String(body.slug || '')];
   const membersList = R.list.filter(function (x) { return !x.departed && !x.hidden; }).map(publicMember);
   if (!m) { res.status(200).json({ ok: true, date: date, member: null, members: membersList, events: [], rappels: [], summary: null }); return; }
-  const dayStart = MT.parisToUtcMs(date, '00:00');
-  const dayEnd = MT.parisToUtcMs(addDays(date, 1), '00:00');
+  const dayStart = dayStartMs(date);
+  const dayEnd = dayStartMs(addDays(date, 1));
   const now = Date.now();
   const startTs = admin.firestore.Timestamp.fromMillis(dayStart);
   const endTs = admin.firestore.Timestamp.fromMillis(dayEnd);
   const isDm = (dmOwner(R) || {}).slug === m.slug;
+  const slugs = R.list.filter(function (x) { return !x.hidden; }).map(function (x) { return x.slug; });
 
-  const callQ = db.collection('call_logs').where('initiatedAt', '>=', startTs).where('initiatedAt', '<', endTs).limit(4000);
-  const setQ = db.collection('bookings').where('createdAt', '>=', startTs).where('createdAt', '<', endTs).limit(500);
-  const heldQ = db.collection('bookings').where('date', '==', date).limit(500);
-  const leadQ = db.collection('leads').where('updatedAt', '>=', startTs).limit(3000);
-  const leadQ2 = db.collection('leads').where('lastContactAt', '>=', startTs).limit(3000);
+  const LIM = { calls: 4000, rdvCrees: 500, rdv: 500, leads: 3000, wa: 3000, dm: 3000, ev: 3000 };
+  const callQ = db.collection('call_logs').where('initiatedAt', '>=', startTs).where('initiatedAt', '<', endTs).limit(LIM.calls);
+  const setQ = db.collection('bookings').where('createdAt', '>=', startTs).where('createdAt', '<', endTs).limit(LIM.rdvCrees);
+  const heldQ = db.collection('bookings').where('date', '==', date).limit(LIM.rdv);
+  const leadQ = db.collection('leads').where('updatedAt', '>=', startTs).limit(LIM.leads);
+  const leadQ2 = db.collection('leads').where('lastContactAt', '>=', startTs).limit(LIM.leads);
   const LF = ['nom', 'telephone', 'phoneNormalized', 'communications', 'notesHistory', '_merged'];
   const empty = { forEach: function () {}, size: 0 };
   function safe(p) { return p.catch(function (e) { console.warn('[team-pilotage] journal', e.message); return null; }); }
 
   const r = await Promise.all([
-    m.uid ? safe(db.collection('user_events').where('uid', '==', m.uid).where('date', '==', date).limit(3000).get()) : null,
+    m.uid ? safe(db.collection('user_events').where('uid', '==', m.uid).where('date', '==', date).limit(LIM.ev).get()) : null,
     m.uid ? safe(db.collection('user_activity').doc(m.uid + '_' + date).get()) : null,
     safe(callQ.select.apply(callQ, CALL_FIELDS.concat(['aiSummary'])).get()),
     safe(setQ.select.apply(setQ, BOOKING_FIELDS.concat(['outcomeNote', 'remindersSent'])).get()),
     safe(heldQ.select.apply(heldQ, BOOKING_FIELDS.concat(['outcomeNote', 'remindersSent'])).get()),
     safe(Promise.all([leadQ.select.apply(leadQ, LF).get(), leadQ2.select.apply(leadQ2, LF).get()])),
-    safe(db.collection('whatsapp_messages').where('at', '>=', dayStart).where('at', '<', dayEnd).limit(3000).get()),
-    isDm ? safe(db.collection('ig_dm_events').where('date', '==', date).limit(3000).get()) : null,
-    safe(db.collection('lead_actions').doc(m.slug).collection('items').where('day', '==', date).get()),
+    safe(db.collection('whatsapp_messages').where('at', '>=', dayStart).where('at', '<', dayEnd).limit(LIM.wa).get()),
+    isDm ? safe(db.collection('ig_dm_events').where('date', '==', date).limit(LIM.dm).get()) : null,
+    // Actions de TOUTE l'équipe ce jour-là : l'index des contacts des rappels
+    // est le même que celui de l'onglet Activité (un rappel fait par un
+    // collègue est « fait » sur les deux onglets).
+    safe(Promise.all(slugs.map(function (s) {
+      return db.collection('lead_actions').doc(s).collection('items').where('day', '==', date).get()
+        .then(function (snap) { return { slug: s, snap: snap }; });
+    }))),
     safe(loadRappelLeads()),
     loadPersons(),
     MT.loadTypeMap(),
   ]);
   const evSnap = r[0], uaDoc = r[1], callSnap = r[2] || empty, setSnap = r[3] || empty, heldSnap = r[4] || empty;
-  const leadSnaps = r[5] || [], waSnap = r[6] || empty, dmSnap = r[7] || empty, actSnap = r[8] || empty;
+  const leadSnaps = r[5] || [], waSnap = r[6] || empty, dmSnap = r[7] || empty, actAll = r[8] || [];
   const rappelLeads = r[9] || [], persons = r[10], typeMap = r[11];
+  let actSnap = empty;
+  actAll.forEach(function (x) { if (x.slug === m.slug) actSnap = x.snap; });
+  const lectures = [];      // sources en échec (null = lecture impossible)
+  [['pages et clics', r[0], !!m.uid], ['appels', r[2], true], ['RDV créés', r[3], true], ['RDV du jour', r[4], true],
+    ['messages et notes', r[5], true], ['WhatsApp', r[6], true], ['DM Instagram', r[7], isDm], ['actions sur les fiches', r[8], true], ['rappels', r[9], true]]
+    .forEach(function (x) { if (x[2] && x[1] == null) lectures.push(x[0]); });
 
   const ev = [];
   const leadIds = {};
@@ -1153,8 +1388,12 @@ async function handleJournal(req, res, body) {
     if (o.leadId) leadIds[o.leadId] = 1;
     ev.push(o);
   }
+  // Mêmes clés que l'onglet Activité : callsOut = sortants, answered =
+  // sortants décrochés, talkSec = temps d'appel ; reçus à part. rdv = agrégat
+  // StatsCore des RDV du jour dont la personne est le closer.
   const sum = { activeMs: 0, sessions: 0, firstSeenAt: null, lastSeenAt: null, clicks: 0, pages: 0,
-    calls: 0, answered: 0, talkSec: 0, sms: 0, email: 0, whatsapp: 0, dm: 0, notes: 0, actions: 0, rdvSet: 0, rdvHeld: 0 };
+    callsOut: 0, answered: 0, convos: 0, talkSec: 0, callsIn: 0, answeredIn: 0, talkInSec: 0,
+    sms: 0, email: 0, whatsapp: 0, dm: 0, notes: 0, actions: 0, sets: 0, posesClic: 0, rdv: null };
   if (uaDoc && uaDoc.exists) {
     const u = uaDoc.data() || {};
     sum.activeMs = Number(u.activeMs) || 0; sum.sessions = Number(u.sessions) || 0;
@@ -1186,11 +1425,9 @@ async function handleJournal(req, res, body) {
     myCalls.push(Object.assign({ id: d.id }, c));
   });
   myCalls.forEach(function (c) {
-    sum.calls++;
+    callKeys(c).forEach(function (kv) { sum[kv[0]] += kv[1]; });
     const ok = isAnsweredCall(c);
-    if (ok) sum.answered++;
     const talk = talkSecOf(c);
-    sum.talkSec += talk;
     const other = c.direction === 'inbound' ? c.fromNumber : c.toNumber;
     if (!c.leadId && !(c.leadNameSnapshot || c.leadName) && last9(other)) phonesToResolve.push(last9(other));
     push(toMs(c.initiatedAt), 'call', 'call',
@@ -1208,7 +1445,7 @@ async function handleJournal(req, res, body) {
       const l = d.data() || {};
       if (l._merged === true) return;
       (Array.isArray(l.communications) ? l.communications : []).forEach(function (c) {
-        if (!c || c.direction !== 'outbound' || c.type === 'call') return;
+        if (!c || c.direction !== 'outbound' || c.type === 'call' || estEnvoiAuto(c)) return;
         const ms = toMs(c.date || c.createdAt);
         if (ms < dayStart || ms >= dayEnd) return;
         if (commMember(c, R) !== m) return;
@@ -1268,16 +1505,23 @@ async function handleJournal(req, res, body) {
       { leadId: t.leadId || null, leadName: t.leadNom || null, detail: (x.text || '') + (x.hasAttachment ? ' [pièce jointe]' : '') });
   });
 
-  // Actions sur les fiches
+  // Actions sur les fiches : index des contacts = toute l'équipe (comme
+  // l'Activité) ; frise et compteur = celles de la personne.
+  actAll.forEach(function (x) {
+    if (x.slug === m.slug) return;
+    const am = R.bySlug[x.slug];
+    x.snap.forEach(function (d) { const a = d.data() || {}; if (a.leadId) ci.action(a.leadId, toMs(a.createdAt), am ? am.name : x.slug); });
+  });
   actSnap.forEach(function (d) {
     const a = d.data() || {};
     sum.actions++;
-    ci.action(a.leadId, toMs(a.createdAt), m.name);
+    if (a.leadId) ci.action(a.leadId, toMs(a.createdAt), m.name);
     const title = a.action === 'set_booking' ? 'RDV posé (Leads Live)' : (a.action === 'assign' ? 'Attribution ' + (a.assignFrom || '—') + ' → ' + (a.assignTo || '—') : 'Statut ' + (a.prevStatus ? a.prevStatus + ' → ' : '→ ') + a.action);
     push(toMs(a.createdAt) || MT.parisToUtcMs(date, '12:00'), 'fiche', 'action', title, { leadId: a.leadId || null, leadName: a.leadName || null });
   });
 
-  // RDV posés et tenus
+  // RDV créés ce jour (Sets, posés par clic) et RDV du jour dont la personne
+  // est le closer (StatsCore : même compte que l'Activité et l'En direct).
   function remindersTxt(b) {
     const rs = b.remindersSent || {};
     const parts = [];
@@ -1285,28 +1529,53 @@ async function handleJournal(req, res, body) {
     if (rs.h1_email) parts.push('H-1 e-mail'); if (rs.h1_sms) parts.push('H-1 SMS');
     return parts.length ? 'Rappels auto envoyés : ' + parts.join(', ') : 'Aucun rappel auto envoyé';
   }
+  const crees = [];
   setSnap.forEach(function (d) {
-    const b = d.data() || {};
-    if (b.bookedBySlug !== m.slug) return;
-    sum.rdvSet++;
-    push(toMs(b.createdAt), 'rdv', 'booking_set', 'RDV posé pour le ' + String(b.date || '').split('-').reverse().join('/') + ' à ' + (b.time || '?') + (b.typeLabel ? ' — ' + b.typeLabel : ''),
-      { leadId: b.leadId || null, leadName: prospectName(b), bookingId: d.id });
+    const b = Object.assign({ id: d.id }, d.data() || {});
+    const ms = toMs(b.createdAt);
+    if (ms < dayStart || ms >= dayEnd) return;
+    crees.push(b);
+  });
+  let fiches = {};
+  let attributionPartielle = false;
+  const setIds = crees.filter(function (b) { return estSet(b, typeMap) && b.leadId; }).map(function (b) { return String(b.leadId); });
+  if (setIds.length) {
+    try { fiches = await fichesSetter(setIds); } catch (e) { attributionPartielle = true; console.warn('[team-pilotage] journal fiches des sets', e.message); }
+  }
+  crees.forEach(function (b) {
+    const set = estSet(b, typeMap);
+    const setter = set ? setterOf(b, fiches, R) : null;
+    const isSet = set && setter === m;
+    const isClic = estPoseClic(b, typeMap) && b.bookedBySlug === m.slug;
+    if (!isSet && !isClic) return;
+    if (isSet) sum.sets++;
+    if (isClic) sum.posesClic++;
+    const poseur = b.bookedBySlug ? (R.bySlug[b.bookedBySlug] || null) : null;
+    let quoi;
+    if (isSet && isClic) quoi = 'Set — RDV posé';
+    else if (isSet) quoi = 'Set (setter de la fiche) — RDV posé par ' + (poseur ? poseur.name : 'quelqu\'un d\'autre');
+    else if (set) quoi = 'RDV posé (clic) — set compté chez ' + (setter ? setter.name : 'Non attribué');
+    else quoi = 'RDV posé (clic) — ' + (SC.CLASSES[rdvClasse(b, typeMap)] || 'hors setting') + ', pas un set';
+    push(toMs(b.createdAt), 'rdv', 'booking_set', quoi + ' pour le ' + String(b.date || '').split('-').reverse().join('/') + ' à ' + (b.time || '?') + (b.typeLabel ? ' — ' + b.typeLabel : ''),
+      { leadId: b.leadId || null, leadName: prospectName(b), bookingId: b.id });
   });
   const heldIds = [];
   const helds = [];
   heldSnap.forEach(function (d) {
     const b = d.data() || {};
-    if (!MT.isClosingBooking(b, typeMap) || bookingCloser(b, R, persons) !== m) return;
+    if (!estRdvVente(b, typeMap) || bookingCloser(b, R, persons) !== m) return;
     heldIds.push(d.id);
     helds.push(Object.assign({ id: d.id }, b));
   });
+  // Compteurs : StatsCore.compter (doublons et replanifiés hors RDV). La
+  // frise, elle, garde tous les RDV avec leur état.
+  sum.rdv = rdvAgg(helds, now);
   const meets = {};
   if (heldIds.length) {
     const ms = await db.getAll.apply(db, heldIds.map(function (id) { return db.collection('booking_meet').doc(id); })).catch(function () { return []; });
     ms.forEach(function (s) { if (s.exists) meets[s.id] = s.data() || {}; });
   }
   helds.forEach(function (b) {
-    sum.rdvHeld++;
     const bm = meets[b.id] || {};
     const pr = bm.presence && bm.presence.ok ? bm.presence : null;
     const s2 = pr && pr.summary ? pr.summary : null;
@@ -1316,7 +1585,8 @@ async function handleJournal(req, res, body) {
       return p.name + ' ' + (p.joinedAt ? new Date(p.joinedAt).toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' }) : '') + (p.leftAt ? ' → ' + new Date(p.leftAt).toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' }) : (p.inRoom ? ' → présent' : ''));
     }).join(' · '));
     if (b.outcomeNote) lines.push('Note de résultat : ' + b.outcomeNote);
-    push(MT.bookingStartMs(b), 'rdv', 'booking', 'RDV ' + (b.typeLabel || '') + ' — ' + (b.outcome ? 'résultat : ' + b.outcome : (b.status === 'cancelled' ? 'annulé' : 'à statuer')) +
+    const lib = SC.libelle(b, now);
+    push(MT.bookingStartMs(b), 'rdv', 'booking', 'RDV ' + (b.typeLabel || '') + ' — ' + lib.mot +
       (s2 ? (s2.prospectJoined ? ' · prospect venu' : ' · prospect jamais entré') : ''),
       { leadId: b.leadId || null, leadName: prospectName(b), bookingId: b.id, detail: lines.join('\n') });
   });
@@ -1353,7 +1623,21 @@ async function handleJournal(req, res, body) {
     else if (x.status === 'coche_sans_contact') rs.checked++; else rs.upcoming++;
   });
   sum.rappels = rs;
-  res.status(200).json({ ok: true, date: date, member: publicMember(m), members: membersList, summary: sum, rappels: rappels, events: ev.slice(0, 5000), total: ev.length });
+  // Plafonds de lecture et lectures en échec : nommés, jamais tus.
+  const plafonds = [];
+  function plafond(snap, lim, nom) { if (snap && snap.size >= lim) plafonds.push(nom + ' (' + lim + ' lus)'); }
+  plafond(evSnap, LIM.ev, 'pages et clics');
+  plafond(callSnap, LIM.calls, 'appels');
+  plafond(setSnap, LIM.rdvCrees, 'RDV créés');
+  plafond(heldSnap, LIM.rdv, 'RDV du jour');
+  (leadSnaps || []).forEach(function (sn) { plafond(sn, LIM.leads, 'fiches (messages et notes)'); });
+  plafond(waSnap, LIM.wa, 'WhatsApp');
+  plafond(dmSnap, LIM.dm, 'DM Instagram');
+  if (rappelLeads && rappelLeads._tronque) plafonds.push('fiches à rappels (' + RAPPEL_LEADS_LIMIT + ' lues)');
+  const warnings = lectures.map(function (x) { return x + ' : lecture impossible'; });
+  if (attributionPartielle) warnings.push('fiches des sets : lecture impossible — attribution partielle, sets rangés d\'après la personne qui a posé le RDV');
+  res.status(200).json({ ok: true, date: date, member: publicMember(m), members: membersList, summary: sum, rappels: rappels,
+    events: ev.slice(0, 5000), total: ev.length, plafonds: plafonds.filter(function (x, i, a) { return a.indexOf(x) === i; }), warnings: warnings });
 }
 
 // ─── RECHERCHE ET HISTORIQUE D'UN PROSPECT ──────────────────────────────────
@@ -1526,10 +1810,11 @@ async function handleLead(req, res, body) {
     push(toMs(b.createdAt), 'booking_set', setter ? setter.name : null,
       'RDV posé pour le ' + (b.date || '?').split('-').reverse().join('/') + ' à ' + (b.time || '?') + (b.typeLabel ? ' — ' + b.typeLabel : '') + (setter ? '' : ' (réservé par le prospect)'),
       { bookingId: d.id });
-    const out = b.outcome || (b.status === 'cancelled' ? 'annule' : null);
+    // État unique du RDV (StatsCore) : même mot que les autres écrans.
+    const lib = SC.libelle(b, Date.now());
     push(MT.bookingStartMs(b), 'booking', closer ? closer.name : (b.personName || null),
-      'RDV ' + (b.typeLabel || '') + (out ? ' — résultat : ' + out : ' — à statuer'),
-      { bookingId: d.id, outcome: out, note: b.outcomeNote ? clip(b.outcomeNote, 200) : null });
+      'RDV ' + (b.typeLabel || '') + ' — ' + lib.mot,
+      { bookingId: d.id, outcome: b.outcome || null, etat: lib.etat, note: b.outcomeNote ? clip(b.outcomeNote, 200) : null });
   });
   if (bookingIds.length) {
     const ms = await db.getAll.apply(db, bookingIds.map(function (id) { return db.collection('booking_meet').doc(id); })).catch(function () { return []; });

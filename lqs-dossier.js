@@ -22,11 +22,22 @@
    API : LqsDossier.open(opts) · LqsDossier.loadTranscripts(rows, onProgress)
          LqsDossier.dossiersHtml(rows) · LqsDossier.print(title, html)
    ES5 strict, délégation d'événements, aucun onclick inline.
+
+   Audit de cohérence (25/11/2026) : état de chaque RDV et issue du prospect
+   lus par StatsCore (mêmes mots que Close SB, le Stats funnel et les listes
+   cliquables : Présent → Offre en attente / Non close / Disqualifié /
+   Présent (sans détail) ; À statuer ; À venir ; No-show ; Annulé ;
+   Replanifié) ; montants Contracté / Collecté / Reste à encaisser ;
+   closer, setter, jour du close et date du RDV visibles sans déplier.
    ============================================================================ */
 (function () {
   'use strict';
   var LC = window.LqsCore;
   if (!LC) { if (window.console) console.error('[lqs-dossier] lqs-core.js manquant'); return; }
+  var SC = window.StatsCore || null;
+  /* « i » du glossaire commun (vide sans stats-core.js). */
+  function I(cle, precision) { return SC && SC.info ? SC.info(cle, precision) : ''; }
+  function IN(titre, texte) { return SC && SC.infoLibre ? SC.infoLibre(titre, texte) : ''; }
 
   var T = {};          // bookingId → { state: 'loading'|'ok'|'err', entries, speakers, error }
   var O = null;        // overlay ouvert : { el, opts, open: {id:1} }
@@ -49,27 +60,65 @@
   function noteBadge(n) { var k = n == null ? 0 : n; return '<span class="lq-note lq-n' + k + '" title="' + NOTE_LBL[k] + '">' + (k ? k : '–') + '</span>'; }
   function nameOf(r) { var l = r.lead || {}; return l.nom || [l.prenom, l.name].filter(Boolean).join(' ') || l.email || '(sans nom)'; }
 
-  var OUTCOME = { close: '✅ Closé', non_close: '❌ Non closé', offre: '📨 Offre faite, en attente', disqualifie: '🚫 Disqualifié',
-    no_show: '👻 Absent (no-show)', annule: 'Annulé', replanifie: 'Replanifié' };
+  /* Mot d'un état de RDV : StatsCore (ETATS / DETAILS), le même partout.
+     etat : 'doublon' | 'replanifie' | 'annule' | 'no_show' | 'present' |
+     'a_statuer' | 'a_venir' ; detail (présent) : 'close' | 'non_close' |
+     'offre' | 'disqualifie' | 'sans_detail'. Repli sans stats-core.js. */
+  var ETAT_REPLI = { doublon: 'Doublon supprimé', replanifie: 'Replanifié', annule: 'Annulé', no_show: 'No-show', present: 'Présent', a_statuer: 'À statuer', a_venir: 'À venir' };
+  var DETAIL_REPLI = { close: 'Close', non_close: 'Non close', offre: 'Offre en attente', disqualifie: 'Disqualifié', sans_detail: 'Présent (sans détail)' };
+  function etatMot(etat, detail) {
+    if (etat === 'present') {
+      var d = detail || 'sans_detail';
+      return (SC && SC.DETAILS && SC.DETAILS[d]) ? SC.DETAILS[d].mot : (DETAIL_REPLI[d] || 'Présent');
+    }
+    return (SC && SC.ETATS && SC.ETATS[etat]) ? SC.ETATS[etat].mot : (ETAT_REPLI[etat] || '—');
+  }
   function callOutcome(c) {
-    if (c.outcome && OUTCOME[c.outcome]) return OUTCOME[c.outcome];
-    if (c.cancelled) return 'Annulé';
-    if (c.noshow) return '👻 Absent (no-show)';
-    if (c.present) return 'Présent (issue non détaillée)';
-    if (c.status === 'confirmed' || c.status === 'pending') return 'À venir / à statuer';
+    if (c.etat) return etatMot(c.etat, c.detail);
+    /* Ancien format (sans état commun) : déduit des drapeaux. */
+    if (c.cancelled) return etatMot('annule');
+    if (c.noshow) return etatMot('no_show');
+    if (c.present) return etatMot('present', c.outcome || 'sans_detail');
     return '—';
   }
   function offerLbl(o) { return o === 'elite' ? 'Élite' : (o === 'business' ? 'Business' : 'offre non renseignée'); }
-  /* Issue du prospect, en une phrase. */
+  function fIso(iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : ''; }
+  /* Montants d'un close : Contracté · Collecté · Reste à encaisser (texte). */
+  function montants(r) {
+    var reste = Math.max(0, (r.con || 0) - (r.cash || 0));
+    return fEur(r.con) + ' contracté · ' + fEur(r.cash) + ' collecté' + (reste > 0.5 ? ' · reste à encaisser ' + fEur(reste) : '');
+  }
+  /* Issue du prospect, en une phrase (mots du référentiel). Ordre : close
+     (closes des leads entrés, ou close de la période pour un dossier ouvert
+     depuis la carte Closes), close annulé, déjà client, puis l'état du RDV
+     retenu (r.rdvEtat / r.rdvDetail, lu sur le dernier RDV de la chaîne). */
   function statusOf(r) {
-    if (r.closed) return { k: 'won', t: '✅ Closé — ' + offerLbl(r.offer) + ' · ' + fEur(r.con) + ' signé · ' + fEur(r.cash) + ' encaissé' + (r.con - r.cash > 0.5 ? ' · reste ' + fEur(r.con - r.cash) : '') };
+    if (r.closed) return { k: 'won', t: '✅ Close — ' + offerLbl(r.offer) + ' · ' + montants(r)
+      + (r.closeSansRdv ? ' · sans RDV enregistré' : '') + (r.sansPaiement ? ' · sans paiement' : '') };
     if (r.closeCancelled) return { k: 'lost', t: '↩️ Close annulé' };
-    if (r.present) return { k: 'lost', t: '❌ Présent au RDV, non closé' };
-    if (r.upcoming) return { k: 'wait', t: '🗓 RDV à venir' };
-    if (r.noshow) return { k: 'lost', t: '👻 Absent au RDV (no-show)' };
-    if (r.booked && r.allCancelled) return { k: 'lost', t: 'RDV annulé' };
-    if (r.booked) return { k: 'wait', t: 'RDV pris, à statuer' };
-    return { k: 'none', t: 'Pas de RDV' };
+    if (r.dejaClient) return { k: 'none', t: '💼 Déjà client avant son inscription (pas un close des leads entrés)' };
+    var e = r.rdvEtat || null, d = r.rdvDetail || null;
+    if (!e) {
+      /* Ancien format : drapeaux du lead. */
+      if (r.present) e = 'present';
+      else if (r.upcoming) e = 'a_venir';
+      else if (r.noshow) e = 'no_show';
+      else if ((r.avecRdv || r.booked) && r.allCancelled) e = 'annule';
+      else if (r.avecRdv || r.booked) e = 'a_statuer';
+    }
+    if (!e || !(r.avecRdv || r.booked)) return { k: 'none', t: 'Pas de RDV' };
+    if (e === 'present') {
+      if (d === 'offre') return { k: 'wait', t: '📨 Présent au RDV, non closé — offre en attente' };
+      if (d === 'non_close') return { k: 'lost', t: '❌ Présent au RDV, non closé — non close (offre refusée)' };
+      if (d === 'disqualifie') return { k: 'lost', t: '🚫 Présent au RDV, non closé — disqualifié' };
+      if (d === 'close') return { k: 'wait', t: 'RDV au résultat Close, client non enregistré' + (r.sansVenteEnregistree ? ' (fiche cliente sans vente enregistrée)' : '') };
+      return { k: 'wait', t: 'Présent au RDV (sans détail) — résultat à saisir' };
+    }
+    if (e === 'a_venir') return { k: 'wait', t: '🗓 RDV à venir' };
+    if (e === 'a_statuer') return { k: 'wait', t: 'RDV passé, à statuer' };
+    if (e === 'no_show') return { k: 'lost', t: '👻 No-show' };
+    if (e === 'annule') return { k: 'lost', t: 'RDV annulé' };
+    return { k: 'wait', t: etatMot(e, d) };
   }
 
   /* ══ TRANSCRIPTIONS ═══════════════════════════════════════════════════
@@ -173,11 +222,33 @@
     }
     return h + '</div>';
   }
+  /* Détail de l'issue : montants (mots et « i » du glossaire), jour du
+     close, date du RDV, closer, setter, canal. */
+  function issueHtml(r) {
+    var parts = [];
+    if (r.closed) {
+      var reste = Math.max(0, (r.con || 0) - (r.cash || 0));
+      parts.push((SC ? esc(SC.mot('contracte')) : 'Contracté') + I('contracte') + ' : <strong>' + fEur(r.con) + '</strong>');
+      parts.push((SC ? esc(SC.mot('collecte')) : 'Collecté') + I('collecte') + ' : <strong>' + fEur(r.cash) + '</strong>');
+      parts.push((SC ? esc(SC.mot('reste_a_encaisser')) : 'Reste à encaisser') + I('reste_a_encaisser') + ' : ' + fEur(reste));
+      if (r.pending > 0.5) parts.push('dont ' + (SC ? esc(SC.mot('premiers_prelevements')).toLowerCase() : '1ers prélèvements en attente') + I('premiers_prelevements') + ' : ' + fEur(r.pending));
+      if (r.sansPaiement) parts.push('close sans paiement' + I('close_sans_paiement'));
+      if (r.closeDay) parts.push('client gagné le ' + fIso(r.closeDay) + I('closes'));
+      if (r.closeSansRdv) parts.push('sans RDV enregistré' + IN('Sans RDV enregistré', 'Client gagné directement depuis sa fiche ou repéré par le module Paiements, sans RDV de vente à son nom. Il compte dans les closes, ni dans les leads avec RDV ni dans les leads présents.'));
+    }
+    if (r.rdvDate) parts.push('RDV du ' + fIso(r.rdvDate));
+    var canal = r.bookedBy === 'self' ? 'Self Booking' : (r.bookedBy === 'setter' ? 'Setting (NB)' : (r.bookedBy === 'manuel' ? 'RDV manuel' : ''));
+    if (canal) parts.push(canal + I('canal'));
+    if (r.closerName) parts.push('closer : ' + esc(r.closerName) + I('closer'));
+    if (r.setterName) parts.push('setter : ' + esc(r.setterName) + I('setter'));
+    return parts.length ? '<div class="lqd-meta">' + parts.join(' · ') + '</div>' : '';
+  }
   function bodyHtml(r) {
     var l = r.lead || {};
-    var h = '<div class="lqd-meta">' + [l.email ? esc(l.email) : '', l.telephone ? esc(l.telephone) : '', 'entré le ' + fDay(r.entry),
+    var h = '<div class="lqd-meta">' + [l.email ? esc(l.email) : '', l.telephone ? esc(l.telephone) : '', r.entry != null ? 'entré le ' + fDay(r.entry) : '',
       r.sourceLabel ? 'source : ' + esc(r.sourceLabel) : '', r.axes && r.axes.creative && r.axes.creative.label ? 'pub : ' + esc(r.axes.creative.label) : '',
       r.closerName ? 'closer : ' + esc(r.closerName) : '', r.setterName ? 'setter : ' + esc(r.setterName) : '', r.team != null ? 'note équipe ★ ' + r.team : ''].filter(Boolean).join(' · ') + '</div>';
+    if (r.noLead) h += '<div class="lqd-muted">Aucune fiche lead reliée à ce close : pas de questionnaire, donc pas de note LQS.</div>';
     h += visiteurHtml(r);
     var q = LC.questionnaireOf(l);
     h += '<div class="lqd-h3">📝 Questionnaire rempli</div>';
@@ -196,7 +267,8 @@
       scored.forEach(function (d) { h += '<tr><td class="q">' + esc(d.ql) + '</td><td class="a">' + esc(d.al) + '</td><td class="p">' + (d.ko ? '⛔ éliminatoire' : fPts(d.pts)) + '</td></tr>'; });
       h += '</tbody></table>';
     } else if (r.note != null) h += '<div class="lqd-muted">Aucune de ses réponses ne porte de points dans le barème actuel.</div>';
-    h += '<div class="lqd-h3">🎯 Issue : ' + statusOf(r).t + '</div>';
+    h += '<div class="lqd-h3">🎯 Issue : ' + esc(statusOf(r).t) + '</div>';
+    h += issueHtml(r);
     var calls = (r.calls || []).filter(function (c) { return c.present || c.replay === 'ready' || c.noshow || c.outcome; });
     if (!calls.length) h += '<div class="lqd-muted">Aucun appel de vente tenu.</div>';
     calls.forEach(function (c) { h += callHtml(c); });
@@ -220,17 +292,19 @@
   /* Qui a eu le RDV (21/11/2026, demande Vincent) : visible sans déplier. */
   function whoHtml(r) {
     var parts = [];
+    if (r.closed && r.closeDay) parts.push('client le ' + String(r.closeDay).slice(8, 10) + '/' + String(r.closeDay).slice(5, 7));
     if (r.rdvDate) parts.push('RDV ' + String(r.rdvDate).slice(8, 10) + '/' + String(r.rdvDate).slice(5, 7));
     if (r.closerName) parts.push('closer : ' + esc(r.closerName));
     if (r.setterName) parts.push('setter : ' + esc(r.setterName));
     else if (r.bookedBy === 'self') parts.push('Self Booking');
+    else if (r.bookedBy === 'manuel') parts.push('RDV manuel');
     return parts.length ? '<span class="lqd-st">' + parts.join(' · ') + '</span>' : '';
   }
   function headHtml(r, i) {
     var st = statusOf(r);
     var nTr = readyCalls(r).length;
     return '<span class="lqd-i">' + (i + 1) + '</span>' + noteBadge(r.note) + '<span class="lqd-name">' + esc(nameOf(r)) + '</span>'
-      + '<span class="lqd-st lqd-' + st.k + '">' + st.t + '</span>'
+      + '<span class="lqd-st lqd-' + st.k + '">' + esc(st.t) + '</span>'
       + whoHtml(r)
       + '<span class="lqd-tag">' + (nTr ? '🎙 ' + nTr + ' transcription' + (nTr > 1 ? 's' : '') : (r.present ? 'sans transcription' : '')) + '</span>';
   }
@@ -292,7 +366,10 @@
     + '#lqPrint .fn-table-wrap{overflow:visible}#lqPrint th{position:static !important}'
     + '.lqp-bar{position:fixed;top:0;left:0;right:0;z-index:10;background:#111;color:#fff;padding:10px 18px;display:flex;gap:14px;align-items:center;font:14px Helvetica,Arial,sans-serif}'
     + '.lqp-bar button{font:600 14px Helvetica,Arial,sans-serif;padding:8px 16px;border-radius:8px;border:0;background:#3b82f6;color:#fff;cursor:pointer}'
-    + '.lqp-bar span{opacity:.75;font-size:12.5px}}';
+    + '.lqp-bar span{opacity:.75;font-size:12.5px}}'
+    /* Les « i » du glossaire (StatsCore) n'ont pas leur feuille de style
+       dans le document autonome : jamais imprimés. */
+    + '.sc-i,.sc-pop{display:none !important}';
   function standaloneDoc(title, html) {
     return '<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + esc(title) + '</title>'
       + pageCss() + '<style>' + SCREEN_CSS + '</style></head><body class="lq-printing">'
@@ -346,7 +423,7 @@
     var open = !!O.open[r.id];
     return '<div class="lqd-lead' + (open ? ' open' : '') + '" data-lqd-lead="' + esc(r.id) + '">'
       + '<div class="lqd-lead-h" data-lqd-toggle="' + esc(r.id) + '"><span class="lqd-caret">' + (open ? '▾' : '▸') + '</span>' + headHtml(r, i)
-      + '<a class="lqd-link" href="sales-contact.html?id=' + encodeURIComponent(r.id) + '" target="_blank" rel="noopener" title="Ouvrir la fiche">fiche ↗</a></div>'
+      + (r.noLead ? '<span class="lqd-link lqd-muted" title="Aucune fiche lead reliée à ce close">sans fiche</span>' : '<a class="lqd-link" href="sales-contact.html?id=' + encodeURIComponent(r.id) + '" target="_blank" rel="noopener" title="Ouvrir la fiche">fiche ↗</a>') + '</div>'
       + (open ? '<div class="lqd-lead-b">' + bodyHtml(r) + '</div>' : '') + '</div>';
   }
   function refreshLead(r) {

@@ -23,6 +23,11 @@
    Données : api/team-pilotage.js (admin uniquement). Toute l'équipe sales
    est suivie, setters compris : présence, temps de connexion, appels, RDV,
    messages, DM Instagram, actions et notes.
+   Audit de cohérence du 25/11/2026 : les chiffres suivent stats-core.js
+   (règles et glossaire communs). Chaque colonne et carte porte son « i »
+   (StatsCore.info / infoLibre). RDV d'une journée : UN compte, le même dans
+   En direct, Activité et Journal. « RDV closés » ≠ « Closes » ; « Sets » =
+   Set NB ; Appels = sortants, reçus à part ; plafonds de lecture affichés.
    ═══════════════════════════════════════════════════════════════════════ */
 .pl{padding:20px 26px 80px;max-width:1500px;margin:0 auto}
 .pl .sp{flex:1}
@@ -237,7 +242,7 @@ body:not(.light-theme) .pl-in[type=date]{color-scheme:dark}
     <section class="pl-people" id="livePeople"><div class="pl-empty">Chargement…</div></section>
     <div class="pl-h2" id="liveOtherH" style="display:none">Autres appels en cours</div>
     <section class="pl-rdvs" id="liveOther"></section>
-    <div class="pl-h2">RDV de closing du jour <em>· clic sur le lien Meet et présence du prospect</em></div>
+    <div class="pl-h2">RDV du jour <em>· RDV de vente comptés dans « RDV du jour » (annulés compris) · clic sur le lien Meet et présence du prospect</em></div>
     <section class="pl-rdvs" id="liveRdvs"></section>
     <p class="pl-note">« Lien cliqué » ne compte que les clics sur le lien suivi des e-mails et de la page de confirmation. Le prospect qui rejoint depuis son invitation Google Agenda n'en laisse pas : c'est la présence Meet qui fait foi. « Connecté » = onglet Team ouvert et visible dans les 7 dernières minutes ; le temps de connexion ne compte que l'onglet visible.</p>
   </section>
@@ -264,7 +269,7 @@ body:not(.light-theme) .pl-in[type=date]{color-scheme:dark}
     <div class="pl-h2">Par personne <em>· clic sur une ligne pour le détail par jour</em></div>
     <div class="pl-tw" id="actTable"><div class="pl-empty">Chargement…</div></div>
     <div id="actLts"></div>
-    <p class="pl-note">Appels : journal téléphonique (Ringover / dialer). Décroché = l'appel a été pris ; conversation = 1 min et plus. RDV posés : RDV de closing créés sur la période avec un setter identifié. RDV tenus : RDV de closing de la période par closeur, hors annulés et replanifiés. Messages : SMS et e-mails tracés sur les fiches, WhatsApp envoyés depuis la boîte partagée (les rappels automatiques sont « non attribués »), DM Instagram envoyés (attribués au setter écrit, comme dans Set NB). Connexion : temps d'onglet Team visible et nombre de sessions (nouvelle session après 30 min d'absence), relevés depuis le 16/10/2026. Actions : changements de statut, RDV posés et attributions dans Leads Live. Lead to speech : délai entre l'arrivée d'un nouveau lead et son 1er appel sortant (décroché ou non, nuits et week-ends compris), compté pour celui qui a passé ce 1er appel et rangé au jour de l'appel ; leads arrivés au plus 14 jours avant (au-delà, relance de base froide). Clic sur la cellule pour la liste. Plage maximale : 31 jours.</p>
+    <p class="pl-note" id="actNote">Pilotage mesure l'ACTIVITÉ de chacun, jour par jour (heure de Paris). Les mots sont ceux des écrans de résultat (Set NB, Close SB, Global closing, Stats funnel) et chaque colonne porte son « i ». Appels : appels sortants (journal Ringover / dialer) ; Décrochés : au moins 5 secondes de conversation, répondeurs écartés ; les appels reçus sont comptés à part. RDV : RDV de vente de la période à leur date, chez leur closer, chacun dans UN état (annulé, no-show, présent, à statuer, à venir) ; un RDV déplacé compte à sa nouvelle date. « RDV closés » n'est pas « Closes » (clients gagnés, au jour de la vente, sur Global closing et le Stats funnel). Sets : RDV du setting créés sur la période, chez le setter de la fiche — même chiffre que Set NB ; « Posés par lui (clic) » compte les RDV que la personne a créés elle-même. Messages : envoyés par une personne ; les envois automatiques sont à part. Clic sur une cellule : journal de la journée. Plage maximale : 31 jours.</p>
   </section>
 
   <!-- ═══ PROSPECT ═══ -->
@@ -278,12 +283,12 @@ body:not(.light-theme) .pl-in[type=date]{color-scheme:dark}
     </div>
     <div id="jrBanner"></div>
     <section class="pl-kpis" id="jrKpis"></section>
-    <div class="pl-h2">Rappels prévus ce jour-là <em>· fait = vrai contact avec le prospect (30 min avant l'heure → fin de journée)</em></div>
+    <div class="pl-h2">Rappels prévus ce jour-là <em>· fait = vrai contact de l'équipe avec le prospect (30 min avant l'heure → fin de journée), envois automatiques exclus</em></div>
     <section id="jrRappels"></section>
     <div class="pl-h2">Tout ce qui s'est passé <em>· du plus récent au plus ancien</em></div>
     <div class="pl-kinds" id="jrCats"></div>
     <section class="pl-tl" id="jrTl"><div class="pl-empty">Choisis une personne.</div></section>
-    <p class="pl-note">Pages et clics : relevés par Team depuis le 16/10/2026 (libellé du bouton, page, prospect concerné — jamais le contenu de ce qui est tapé). Messages : texte complet de ce qui est parti. Les e-mails envoyés directement depuis la boîte partagée strategie@ n'ont pas d'auteur et n'apparaissent que sur la fiche du prospect.</p>
+    <p class="pl-note">Pages et clics : relevés par Team depuis le 16/10/2026 (libellé du bouton, page, prospect concerné — jamais le contenu de ce qui est tapé). Messages : texte complet de ce qui est parti. Les e-mails envoyés directement depuis la boîte partagée strategie@ n'ont pas d'auteur et n'apparaissent que sur la fiche du prospect. Les chiffres du haut suivent les mêmes règles que l'onglet Activité : une journée de l'Activité = ce journal.</p>
   </section>
 
   <section class="pl-pane" id="paneLead">
@@ -300,6 +305,7 @@ body:not(.light-theme) .pl-in[type=date]{color-scheme:dark}
 <div class="pl-toast" id="plToast"></div>
 
 <script src="nav.js"></script>
+<script src="stats-core.js"></script>
 <script>
 (function () {
 'use strict';
@@ -308,17 +314,64 @@ var API = '/api/team-pilotage';
 var LIVE_EVERY_MS = 20000;
 var PALETTE = ['#60a5fa', '#f472b6', '#34d399', '#fbbf24', '#a78bfa', '#fb923c', '#22d3ee', '#f87171'];
 var ROLE_LABEL = { setter: 'Setter', setter_ecrit: 'Setter écrit', closer: 'Closer', closer_setter: 'Closer · setter', sales: 'Sales', admin: 'Admin' };
+/* Pastille d'un RDV : état unique StatsCore (etat, ou detail pour un présent). */
 var OUTCOME = {
-  close: ['🏆 Close', 'pill-ok'], non_close: ['❌ Non close', 'pill-bad'], offre: ['💬 Offre', 'pill-live'],
-  disqualifie: ['🚫 Disqua', 'pill-mute'], no_show: ['👻 No-show', 'pill-warn'], annule: ['🔴 Annulé', 'pill-bad'],
-  replanifie: ['📅 Replanifié', 'pill-mute']
+  close: ['🏆 Close', 'pill-ok'], non_close: ['❌ Non close', 'pill-bad'], offre: ['💬 Offre en attente', 'pill-live'],
+  disqualifie: ['🚫 Disqualifié', 'pill-mute'], sans_detail: ['✅ Présent (sans détail)', 'pill-ok'],
+  no_show: ['👻 No-show', 'pill-warn'], annule: ['🔴 Annulé', 'pill-bad'],
+  replanifie: ['📅 Replanifié', 'pill-mute'], a_statuer: ['À statuer', 'pill-warn'], doublon: ['Doublon supprimé', 'pill-mute']
 };
 var KIND = {
-  call: ['📞', 'Appels'], booking: ['📅', 'RDV'], booking_set: ['🗓️', 'RDV'], meet_click: ['🖱️', 'Visio'], meet_join: ['📹', 'Visio'],
+  call: ['📞', 'Appels'], booking: ['📅', 'RDV'], booking_set: ['🗓️', 'RDV posés'], meet_click: ['🖱️', 'Visio'], meet_join: ['📹', 'Visio'],
   action: ['⚡', 'Actions'], sms: ['📱', 'SMS'], whatsapp: ['💬', 'WhatsApp'], email: ['✉️', 'E-mails'], message: ['✉️', 'Messages'], note: ['📝', 'Notes'],
   journal: ['·', 'Journal'], creation: ['✨', 'Journal']
 };
-var KIND_ORDER = ['Appels', 'RDV', 'Visio', 'SMS', 'WhatsApp', 'E-mails', 'Messages', 'Notes', 'Actions', 'Journal'];
+var KIND_ORDER = ['Appels', 'RDV posés', 'RDV', 'Visio', 'SMS', 'WhatsApp', 'E-mails', 'Messages', 'Notes', 'Actions', 'Journal'];
+
+/* ── Glossaire et « i » (stats-core.js) ──────────────────────────────────
+   Chaque chiffre porte son « i » : un terme du glossaire commun
+   (StatsCore.info), ou une note propre à Pilotage (StatsCore.infoLibre)
+   pour ce qui n'est pas un terme du glossaire. */
+var SC = window.StatsCore;
+function I(cle, precision) { return SC ? SC.info(cle, precision) : ''; }
+function IL(titre, texte) { return SC ? SC.infoLibre(titre, texte) : ''; }
+var TXT = {
+  appels: 'Pilotage : appels passés par cette personne (téléphonie Ringover / dialer). Les appels sans auteur relié à un compte sont dans « Non attribué ».',
+  appelsRecus: ['Appels reçus', 'Appels entrants (prospects qui rappellent, standard). Comptés à part : ils ne sont ni dans « Appels » ni dans « Décrochés ».'],
+  recusPris: ['Reçus décrochés', 'Appels reçus avec au moins 5 secondes de conversation, répondeurs écartés (même règle que Décrochés).'],
+  tempsRecus: ['Temps des appels reçus', 'Conversation des appels reçus décrochés. À part du Temps d’appel, qui ne compte que les appels sortants.'],
+  convos: ['Décrochés ≥ 1 min', 'Appels sortants décrochés dont la conversation a duré au moins 1 minute.'],
+  lts: ['Lead to speech', 'Délai entre l’arrivée d’un nouveau lead et son premier appel sortant (décroché ou non, nuits et week-ends compris), compté pour la personne qui a passé ce 1er appel. Pilotage : leads appelés pour la première fois sur la période, arrivés au plus 14 jours avant, rangés au JOUR de l’appel. Le Stats funnel range les leads au MOIS de leur arrivée : les deux médianes peuvent différer. Dates d’arrivée lues à l’heure de Paris ; fiches de test et fiches fusionnées écartées.'],
+  ltsN: ['Leads appelés', 'Leads dont le 1er appel sortant a été passé sur la période (population du Lead to speech). Ce ne sont pas les « Leads » des autres écrans (fiches entrées sur la période).'],
+  posesClic: ['RDV posés par lui (clic)', 'RDV de vente que la personne a créés elle-même dans l’agenda pendant la période, RDV déplacés exclus. Compte d’activité : le chiffre officiel est « Sets », rangé chez le setter de la fiche (celui de Set NB). Les deux diffèrent quand une personne pose le RDV d’une fiche dont le setter est un autre.'],
+  clicsRdv: ['Clics RDV posé', 'Actions « RDV posé » du journal de Leads Live (clic sur le statut). Un clic n’est pas un set : un set est un RDV réellement créé dans l’agenda (colonne Sets).'],
+  statuts: ['Statuts', 'Changements de statut des fiches dans Leads Live (journal d’actions), attributions comprises dans le détail.'],
+  notes: ['Notes', 'Notes ajoutées sur les fiches pendant la période.'],
+  msgs: ['Messages', 'SMS et e-mails tracés sur les fiches, WhatsApp envoyés depuis la boîte partagée, DM Instagram envoyés (attribués au setter écrit, comme dans Set NB). Seuls les messages envoyés par une personne.'],
+  auto: ['Envois automatiques', 'Messages partis sans personne derrière : relances, parcours RDV, rappels WhatsApp de RDV. Comptés à part, une seule fois, jamais dans les messages d’une personne ni comme contact d’un rappel.'],
+  rappels: ['Rappels', 'Rappels programmés sur les fiches pour la période. « Fait » = un vrai contact de l’équipe avec le prospect (appel, message envoyé par une personne, action sur la fiche) entre 30 min avant l’heure prévue et la fin de la journée ; les envois automatiques ne comptent pas. « Coché sans contact » = case cochée sans aucun contact relevé.'],
+  connexion: ['Connexion', 'Temps d’onglet Team visible et nombre de sessions (nouvelle session après 30 min d’absence), relevés depuis le 16/10/2026.'],
+  rdvPilotage: 'Pilotage : RDV rangés chez leur closer (celui qui a validé le close, sinon l’hôte du RDV). RDV créés à la main dans l’Agenda compris.',
+  rdvClosesPilotage: 'Pilotage ne lit pas les paiements : un close annulé (rien encaissé, paiement annulé) reste ici dans « RDV closés ». Le chiffre officiel des ventes est « Closes » (Global closing, Stats funnel).'
+};
+/* Bandeau « lecture incomplète » : plafonds atteints et lectures en échec. */
+function partielBanner(plafonds, warnings) {
+  var h = '';
+  if (plafonds && plafonds.length) {
+    h += '<div class="pl-banner">⚠️ <b>Lecture incomplète' + I('lecture_incomplete') + '</b> — plafond de lecture atteint pour : ' + plafonds.map(esc).join(' · ') + '. Les chiffres concernés sont partiels : réduis la période.</div>';
+  }
+  if (warnings && warnings.length) {
+    h += '<div class="pl-banner">⚠️ <b>Données partielles</b> — ' + warnings.map(esc).join(' · ') + '</div>';
+  }
+  return h;
+}
+/* Détail d'un agrégat de RDV (StatsCore) en une phrase, pour un « i ». */
+function rdvPhrase(a) {
+  a = a || {};
+  return 'RDV ' + (a.rdv || 0) + ' = ' + (a.annules || 0) + ' annulé(s) + ' + (a.noshow || 0) + ' no-show + ' + (a.presents || 0) + ' présent(s) + ' +
+    (a.aStatuer || 0) + ' à statuer + ' + (a.aVenir || 0) + ' à venir. Kept ' + (a.kept || 0) + ' (RDV − annulés). Pitchés ' + (a.pitches || 0) +
+    ', dont ' + (a.rdvCloses || 0) + ' RDV closé(s).' + (a.replan ? ' ' + a.replan + ' replanifié(s) hors RDV.' : '') + (a.doublons ? ' ' + a.doublons + ' doublon(s) supprimé(s), comptés nulle part.' : '');
+}
 
 var TAB = 'live';
 var LIVE = null;
@@ -530,6 +583,7 @@ function renderLive() {
   } else if (L.meet.error) {
     ban = '<div class="pl-banner">📹 <b>Présence Meet :</b> ' + esc(L.meet.error.message || L.meet.error.error) + '</div>';
   }
+  ban += partielBanner(L.plafonds, null);
   $('liveBanner').innerHTML = ban;
 
   var members = (L.members || []).slice();
@@ -545,14 +599,22 @@ function renderLive() {
     else if (m.status === 'online') nOn++;
   });
   var rdvs = L.bookings || [];
-  var nLive = rdvs.filter(function (b) { return b.phase === 'live'; }).length;
-  var tCalls = 0, tAns = 0;
-  members.forEach(function (m) { tCalls += m.today.calls; tAns += m.today.answered; });
+  var nLive = rdvs.filter(function (b) { return b.phase === 'live' && (b.etat === 'a_venir' || b.etat === 'a_statuer'); }).length;
+  /* Totaux d'équipe calculés par le serveur sur TOUS les appels et RDV du
+     jour (sans auteur et anciens membres compris) : les mêmes que l'onglet
+     Activité réglé sur aujourd'hui. */
+  var T = L.team || { calls: 0, answered: 0, talkSec: 0, callsIn: 0, sansCarte: 0 };
+  var RV = L.rdv || {};
   $('liveKpis').innerHTML =
-    kpi('📞 En appel', nCall) + kpi('📹 En visio', nMeet) + kpi('🟢 Connectés', nOn) +
-    kpi('📅 RDV aujourd\'hui', rdvs.length + (nLive ? ' · ' + nLive + ' en cours' : '')) +
-    kpi('☎️ Appels du jour', tCalls + ' · ' + tAns + ' décrochés') +
-    kpi('⚡ Lead to speech du jour', L.lts && L.lts.n ? fmtDelay(L.lts.median) + ' · ' + L.lts.n + ' lead' + (L.lts.n > 1 ? 's' : '') : '—');
+    kpi('📞 En appel', nCall, IL('En appel', 'Membres dont un appel sonne ou est en cours en ce moment.')) +
+    kpi('📹 En visio', nMeet, IL('En visio', 'Membres dans la salle Meet d’un RDV pas encore statué, avec le prospect.')) +
+    kpi('🟢 Connectés', nOn, IL('Connectés', 'Onglet Team ouvert et visible dans les 7 dernières minutes.')) +
+    kpi('📅 RDV du jour', (RV.rdv || 0) + (nLive ? ' · ' + nLive + ' en cours' : ''), I('rdv', rdvPhrase(RV))) +
+    kpi('✅ Kept · Présents', (RV.kept || 0) + ' · ' + (RV.presents || 0) + (RV.aVenir ? ' (dont ' + RV.aVenir + ' à venir)' : ''), I('kept') + I('presents')) +
+    kpi('⏳ À statuer', RV.aStatuer || 0, I('a_statuer')) +
+    kpi('☎️ Appels du jour', T.calls + ' · ' + T.answered + ' décrochés', I('appels', 'Toute l’équipe, appels sans auteur et anciens membres compris' + (T.sansCarte ? ' (' + T.sansCarte + ' hors des cartes ci-dessous)' : '') + ' : le même total que l’onglet Activité réglé sur aujourd’hui.') + I('decroches')) +
+    kpi('📥 Appels reçus', T.callsIn, IL(TXT.appelsRecus[0], TXT.appelsRecus[1])) +
+    kpi('⚡ Lead to speech du jour', L.lts && L.lts.n ? fmtDelay(L.lts.median) + ' · ' + L.lts.n + ' lead' + (L.lts.n > 1 ? 's' : '') : '—', IL(TXT.lts[0], TXT.lts[1]));
   $('liveClock').textContent = '· ' + parisTime(L.now);
 
   if (!members.length) {
@@ -564,11 +626,13 @@ function renderLive() {
         '<div class="pl-ph" data-j="' + esc(m.slug + '|' + todayIso() + '|') + '" title="Ouvrir le journal du jour"><div class="pl-av" style="background:' + esc(memberColor(m)) + '">' + esc(initials(m)) + '</div>' +
         '<div class="pl-pn"><b>' + esc(m.name) + '</b><small>' + esc(ROLE_LABEL[m.role] || m.role || '') + '' + '</small></div></div>' +
         statusHtml(m) +
-        '<div class="pl-today"><span><b>' + t.calls + '</b> appel' + (t.calls > 1 ? 's' : '') + '</span>' +
-        '<span><b>' + t.answered + '</b> décroché' + (t.answered > 1 ? 's' : '') + '</span>' +
-        '<span><b>' + fmtTalk(t.talkSec) + '</b> de parole</span>' +
+        '<div class="pl-today"><span><b>' + t.calls + '</b> appel' + (t.calls > 1 ? 's' : '') + I('appels') + '</span>' +
+        '<span><b>' + t.answered + '</b> décroché' + (t.answered > 1 ? 's' : '') + I('decroches') + '</span>' +
+        '<span><b>' + fmtTalk(t.talkSec) + '</b> d\'appel' + I('temps_appel') + '</span>' +
+        (t.callsIn ? '<span><b>' + t.callsIn + '</b> reçu' + (t.callsIn > 1 ? 's' : '') + IL(TXT.appelsRecus[0], TXT.appelsRecus[1]) + '</span>' : '') +
         (t.lastCallAt ? '<span>dernier ' + esc(ago(t.lastCallAt)) + '</span>' : '') +
-        (t.lts && t.lts.n ? '<span title="Médiane du jour : arrivée du lead → 1er appel, sur les leads qu\'il ou elle a appelés en premier">⚡ <b>' + esc(fmtDelay(t.lts.median)) + '</b> lead to speech · ' + t.lts.n + ' lead' + (t.lts.n > 1 ? 's' : '') + ' · ' + t.lts.under5 + ' en &lt; 5 min</span>' : '') +
+        (t.rdv && (t.rdv.rdv || t.rdv.replan) ? '<span>📅 <b>' + t.rdv.rdv + '</b> RDV · ' + t.rdv.presents + ' présent' + (t.rdv.presents > 1 ? 's' : '') + (t.rdv.aStatuer ? ' · ' + t.rdv.aStatuer + ' à statuer' : '') + I('rdv', TXT.rdvPilotage + ' ' + rdvPhrase(t.rdv)) + '</span>' : '') +
+        (t.lts && t.lts.n ? '<span>⚡ <b>' + esc(fmtDelay(t.lts.median)) + '</b> lead to speech · ' + t.lts.n + ' lead' + (t.lts.n > 1 ? 's' : '') + ' · ' + t.lts.under5 + ' en &lt; 5 min' + IL(TXT.lts[0], 'Médiane du jour sur les leads que cette personne a appelés en premier. ' + TXT.lts[1]) + '</span>' : '') +
         (t.dmOut || t.dmIn || m.role === 'setter_ecrit' ? '<span><b>' + t.dmOut + '</b> DM envoyé' + (t.dmOut > 1 ? 's' : '') + ' · ' + t.dmIn + ' reçu' + (t.dmIn > 1 ? 's' : '') + (t.lastDmAt ? ' · dernier ' + esc(ago(t.lastDmAt)) : '') + '</span>' : '') +
         '<span>⏱ <b>' + fmtTalk(Math.round((t.activeMs || 0) / 1000)) + '</b> connecté' + (t.firstSeenAt ? ' · depuis ' + esc(parisTime(t.firstSeenAt)) : '') + (t.sessions > 1 ? ' · ' + t.sessions + ' sessions' : '') + (t.clicks ? ' · ' + t.clicks + ' clics' : '') + '</span>' +
         '</div>' +
@@ -588,19 +652,21 @@ function renderLive() {
 
   // RDV du jour
   if (!rdvs.length) {
-    $('liveRdvs').innerHTML = '<div class="pl-empty">Aucun RDV de closing aujourd\'hui.</div>';
+    $('liveRdvs').innerHTML = '<div class="pl-empty">Aucun RDV de vente aujourd\'hui.</div>';
   } else {
     $('liveRdvs').innerHTML = rdvs.map(rdvRow).join('');
   }
   tick();
 }
 
-function kpi(label, val) { return '<div class="pl-kpi"><span>' + esc(label) + '</span><b>' + esc(val) + '</b></div>'; }
+/* Carte chiffrée : libellé (texte), valeur (texte), « i » (HTML de StatsCore). */
+function kpi(label, val, info) { return '<div class="pl-kpi"><span>' + esc(label) + (info || '') + '</span><b>' + esc(val) + '</b></div>'; }
 
 function rdvRow(b) {
   // Un RDV statué est terminé, même si son créneau court encore.
-  var done = b.phase === 'past' || !!b.outcome;
-  var phaseTxt = b.outcome && b.phase !== 'past' ? 'statué' : (b.phase === 'live' ? '<span class="pill pill-live">● en cours</span>' : (b.phase === 'upcoming' ? 'à venir' : 'passé'));
+  var done = b.phase === 'past' || (!!b.etat && b.etat !== 'a_venir' && b.etat !== 'a_statuer');
+  var statue = b.etat && b.etat !== 'a_venir' && b.etat !== 'a_statuer';
+  var phaseTxt = statue && b.phase !== 'past' ? 'statué' : (b.phase === 'live' ? '<span class="pill pill-live">● en cours</span>' : (b.phase === 'upcoming' ? 'à venir' : 'passé'));
   var sig = [];
   if (!b.hasMeet) sig.push('<span class="pill pill-mute">pas de lien Meet</span>');
   if (b.clicks) sig.push('<span class="pill pill-ok" title="Dernier clic à ' + esc(parisTime(b.lastClickAt)) + '">🖱️ Lien cliqué à ' + esc(parisTime(b.firstClickAt)) + (b.clicks > 1 ? ' (×' + b.clicks + ')' : '') + '</span>');
@@ -630,11 +696,16 @@ function rdvRow(b) {
     .map(function (x) { return '<span class="' + (rm[x[0]] ? 'ok' : '') + '">' + (rm[x[0]] ? '✓ ' : '· ') + x[1] + '</span>'; });
   (b.waReminders || []).forEach(function (w) { remChips.push('<span class="' + (w.ok ? 'ok' : '') + '">' + (w.ok ? '✓' : '✗') + ' WhatsApp ' + esc(parisTime(w.at)) + '</span>'); });
   parts += '<div class="pl-rem" title="Rappels automatiques envoyés au prospect">' + remChips.join('') + '</div>';
-  var out = b.outcome && OUTCOME[b.outcome] ? '<span class="pill ' + OUTCOME[b.outcome][1] + '">' + OUTCOME[b.outcome][0] + '</span>' : (b.phase === 'past' ? '<span class="pill pill-warn">à statuer</span>' : '');
-  return '<div class="pl-rdv ' + esc(b.outcome && b.phase === 'live' ? 'past' : b.phase) + '">' +
+  /* État unique du RDV (StatsCore, renvoyé par le serveur) : la pastille dit
+     le même mot que l'Agenda et les rapports — un no-show posé par le menu
+     Statut est un no-show, « à statuer » = créneau terminé sans résultat. */
+  var ek = b.etat === 'present' ? (b.detail || 'sans_detail') : b.etat;
+  var out = ek && OUTCOME[ek] ? '<span class="pill ' + OUTCOME[ek][1] + '">' + OUTCOME[ek][0] + '</span>' : '';
+  var closed = b.etat && b.etat !== 'a_venir' && b.etat !== 'a_statuer';
+  return '<div class="pl-rdv ' + esc(closed && b.phase === 'live' ? 'past' : b.phase) + '">' +
     '<div class="pl-rt">' + esc(b.time) + '<small>' + phaseTxt + '</small></div>' +
     '<div class="pl-rp"><b>' + leadBtn(b.leadId, b.prospect) + '</b><small>' + esc(b.typeLabel) + ' · ' + b.duration + ' min</small></div>' +
-    '<div class="pl-rw">Closeur <b>' + esc(b.closerName || '—') + '</b>' + (b.setterName ? '<br>Posé par <b>' + esc(b.setterName) + '</b>' : '') + '</div>' +
+    '<div class="pl-rw">Closer <b>' + esc(b.closerName || 'Non attribué') + '</b>' + (b.setterName ? '<br>Posé par <b>' + esc(b.setterName) + '</b>' : '') + '</div>' +
     '<div class="pl-sig-w"><div class="pl-sig">' + sig.join('') + '</div>' + parts + '</div>' +
     '<div class="pl-ro">' + out + '</div>' +
     '</div>';
@@ -669,24 +740,54 @@ function loadActivity() {
   }).then(function () { actLoading = false; updateSub(); });
 }
 
+/* Colonnes : [clé renvoyée par l'API, libellé, groupe, « i »]. Le « i »
+   vient du glossaire commun (StatsCore) ; une note propre à Pilotage
+   s'ajoute en précision, jamais une autre définition. */
 var COLS = [
-  ['callsOut', 'Sortants', 'Appels'], ['callsIn', 'Entrants', 'Appels'], ['answered', 'Décrochés', 'Appels'],
-  ['convos', '≥ 1 min', 'Appels'], ['talkSec', 'Parole', 'Appels'],
-  ['ltsN', 'Leads', 'Lead to speech'], ['ltsMed', 'Médiane', 'Lead to speech'],
-  ['rdvSet', 'Posés', 'RDV'], ['rdvHeld', 'Tenus', 'RDV'], ['close', 'Close', 'RDV'], ['no_show', 'No-show', 'RDV'], ['pending', 'À statuer', 'RDV'],
-  ['sms', 'SMS', 'Messages'], ['email', 'E-mails', 'Messages'], ['whatsapp', 'WhatsApp', 'Messages'], ['dmOut', 'DM Insta', 'Messages'],
-  ['actStatus', 'Statuts', 'Fiches'], ['actBooking', 'RDV posés', 'Fiches'], ['notes', 'Notes', 'Fiches'],
-  ['rapDue', 'Prévus', 'Rappels'], ['rapDone', 'Faits', 'Rappels'], ['rapLate', 'En retard', 'Rappels'], ['rapChecked', 'Cochés sans contact', 'Rappels'],
-  ['activeMs', 'Temps', 'Connexion'], ['sessions', 'Sessions', 'Connexion'], ['clicks', 'Clics', 'Connexion']
+  ['callsOut', 'Appels', 'Appels sortants', function () { return I('appels', TXT.appels); }],
+  ['answered', 'Décrochés', 'Appels sortants', function () { return I('decroches'); }],
+  ['convos', '≥ 1 min', 'Appels sortants', function () { return IL(TXT.convos[0], TXT.convos[1]); }],
+  ['talkSec', 'Temps d\'appel', 'Appels sortants', function () { return I('temps_appel'); }],
+  ['callsIn', 'Reçus', 'Appels reçus', function () { return IL(TXT.appelsRecus[0], TXT.appelsRecus[1]); }],
+  ['answeredIn', 'Décrochés', 'Appels reçus', function () { return IL(TXT.recusPris[0], TXT.recusPris[1]); }],
+  ['talkInSec', 'Temps', 'Appels reçus', function () { return IL(TXT.tempsRecus[0], TXT.tempsRecus[1]); }],
+  ['ltsN', 'Leads appelés', 'Lead to speech', function () { return IL(TXT.ltsN[0], TXT.ltsN[1]); }],
+  ['ltsMed', 'Médiane', 'Lead to speech', function () { return IL(TXT.lts[0], TXT.lts[1]); }],
+  ['sets', 'Sets', 'Setting', function () { return I('sets', 'Rangés chez le setter de la fiche (celui qui touche la commission) : même chiffre que Set NB.'); }],
+  ['posesClic', 'Posés par lui (clic)', 'Setting', function () { return IL(TXT.posesClic[0], TXT.posesClic[1]); }],
+  ['rdv', 'RDV', 'RDV (closer)', function () { return I('rdv', TXT.rdvPilotage); }],
+  ['annules', 'Annulés', 'RDV (closer)', function () { return I('annules'); }],
+  ['noshow', 'No-show', 'RDV (closer)', function () { return I('no_show', 'Un no-show posé par le menu Statut de l’Agenda est compté ici.'); }],
+  ['kept', 'Kept', 'RDV (closer)', function () { return I('kept'); }],
+  ['presents', 'Présents', 'RDV (closer)', function () { return I('presents'); }],
+  ['pitches', 'Pitchés', 'RDV (closer)', function () { return I('pitches'); }],
+  ['rdvCloses', 'RDV closés', 'RDV (closer)', function () { return I('rdv_closes', TXT.rdvClosesPilotage); }],
+  ['aStatuer', 'À statuer', 'RDV (closer)', function () { return I('a_statuer'); }],
+  ['aVenir', 'À venir', 'RDV (closer)', function () { return I('a_venir'); }],
+  ['sms', 'SMS', 'Messages', function () { return IL(TXT.msgs[0], TXT.msgs[1]); }],
+  ['email', 'E-mails', 'Messages', function () { return IL(TXT.msgs[0], TXT.msgs[1]); }],
+  ['whatsapp', 'WhatsApp', 'Messages', function () { return IL(TXT.msgs[0], TXT.msgs[1]); }],
+  ['dmOut', 'DM Insta', 'Messages', function () { return IL(TXT.msgs[0], TXT.msgs[1]); }],
+  ['msgAuto', 'Envois auto', 'Messages', function () { return IL(TXT.auto[0], TXT.auto[1]); }],
+  ['actStatus', 'Statuts', 'Fiches', function () { return IL(TXT.statuts[0], TXT.statuts[1]); }],
+  ['actBooking', 'Clics RDV posé', 'Fiches', function () { return IL(TXT.clicsRdv[0], TXT.clicsRdv[1]); }],
+  ['notes', 'Notes', 'Fiches', function () { return IL(TXT.notes[0], TXT.notes[1]); }],
+  ['rapDue', 'Prévus', 'Rappels', function () { return IL(TXT.rappels[0], TXT.rappels[1]); }],
+  ['rapDone', 'Faits', 'Rappels', function () { return IL(TXT.rappels[0], TXT.rappels[1]); }],
+  ['rapLate', 'En retard', 'Rappels', function () { return IL(TXT.rappels[0], TXT.rappels[1]); }],
+  ['rapChecked', 'Cochés sans contact', 'Rappels', function () { return IL(TXT.rappels[0], TXT.rappels[1]); }],
+  ['activeMs', 'Temps', 'Connexion', function () { return IL(TXT.connexion[0], TXT.connexion[1]); }],
+  ['sessions', 'Sessions', 'Connexion', function () { return IL(TXT.connexion[0], TXT.connexion[1]); }],
+  ['clicks', 'Clics', 'Connexion', function () { return IL(TXT.connexion[0], TXT.connexion[1]); }]
 ];
 /* Catégorie du journal ouverte par un clic sur une cellule. */
-var COL_CAT = { callsOut: 'call', callsIn: 'call', answered: 'call', convos: 'call', talkSec: 'call',
-  rdvSet: 'rdv', rdvHeld: 'rdv', close: 'rdv', no_show: 'rdv', pending: 'rdv',
+var COL_CAT = { callsOut: 'call', answered: 'call', convos: 'call', talkSec: 'call', callsIn: 'call', answeredIn: 'call', talkInSec: 'call',
+  sets: 'rdv', posesClic: 'rdv', rdv: 'rdv', annules: 'rdv', noshow: 'rdv', kept: 'rdv', presents: 'rdv', pitches: 'rdv', rdvCloses: 'rdv', aStatuer: 'rdv', aVenir: 'rdv',
   sms: 'msg', email: 'msg', whatsapp: 'msg', dmOut: 'msg', actStatus: 'fiche', actBooking: 'fiche', notes: 'fiche',
   rapDue: 'rappel', rapDone: 'rappel', rapLate: 'rappel', rapChecked: 'rappel', activeMs: 'nav', sessions: 'nav', clicks: 'click' };
 function cell(k, v, slug, day) {
   v = Number(v) || 0;
-  var txt = k === 'talkSec' ? fmtTalk(v) : (k === 'activeMs' ? fmtTalk(Math.round(v / 1000)) : (k === 'ltsMed' ? (v ? fmtDelay(v) : '—') : String(v)));
+  var txt = (k === 'talkSec' || k === 'talkInSec') ? fmtTalk(v) : (k === 'activeMs' ? fmtTalk(Math.round(v / 1000)) : (k === 'ltsMed' ? (v ? fmtDelay(v) : '—') : String(v)));
   var j = '';
   if (k === 'ltsN' || k === 'ltsMed') {
     if (v) j = ' data-lts="' + esc((slug || '*') + '|' + (day || '')) + '" title="Voir les leads"';
@@ -694,6 +795,11 @@ function cell(k, v, slug, day) {
     j = ' data-j="' + esc(slug + '|' + day + '|' + (COL_CAT[k] || '')) + '" title="Ouvrir le journal"';
   }
   return '<td' + (v ? '' : ' class="z"') + j + '>' + esc(txt) + '</td>';
+}
+function sumField(members, k) {
+  var t = 0;
+  members.forEach(function (m) { t += Number(m.totals && m.totals[k]) || 0; });
+  return t;
 }
 function sumStats(list) {
   var o = {};
@@ -703,26 +809,32 @@ function sumStats(list) {
 }
 function renderActivity() {
   var A = ACT;
-  var ban = '';
-  if (A.warnings && A.warnings.length) ban += '<div class="pl-banner">⚠️ Données partielles — ' + A.warnings.map(esc).join(' · ') + '</div>';
-  if (A.truncated && (A.truncated.calls || A.truncated.leads)) ban += '<div class="pl-banner">⚠️ Période très chargée : une partie des ' + (A.truncated.calls ? 'appels' : 'fiches') + ' n\'a pas été lue. Réduis la plage.</div>';
-  $('actBanner').innerHTML = ban;
+  var plaf = (A.plafonds || []).slice();
+  if (!A.plafonds && A.truncated) {   /* réponse d'une ancienne version de la route */
+    if (A.truncated.calls) plaf.push('appels');
+    if (A.truncated.leads) plaf.push('fiches');
+  }
+  $('actBanner').innerHTML = partielBanner(plaf, A.warnings);
 
   var members = (A.members || []).slice().sort(function (a, b) {
-    return (b.totals.callsOut + b.totals.rdvSet + b.totals.rdvHeld) - (a.totals.callsOut + a.totals.rdvSet + a.totals.rdvHeld) || String(a.name).localeCompare(String(b.name));
+    return ((b.totals.callsOut || 0) + (b.totals.sets || 0) + (b.totals.rdv || 0)) - ((a.totals.callsOut || 0) + (a.totals.sets || 0) + (a.totals.rdv || 0)) || String(a.name).localeCompare(String(b.name));
   });
+  /* Total = somme des lignes affichées + « Non attribué » (jamais un total partiel). */
   var tot = sumStats(members.map(function (m) { return m.totals; }).concat([A.unassigned || {}]));
   var ltsT = A.lts && A.lts.team;
   tot.ltsMed = ltsT && ltsT.median ? ltsT.median : 0;   // une médiane ne s'additionne pas
   $('actKpis').innerHTML =
-    kpi('☎️ Appels', (tot.callsOut + tot.callsIn) + ' · ' + tot.answered + ' décrochés') +
-    kpi('🗣️ Temps de parole', fmtTalk(tot.talkSec)) +
-    kpi('⚡ Lead to speech', ltsT && ltsT.n ? fmtDelay(ltsT.median) + ' · ' + ltsT.n + ' lead' + (ltsT.n > 1 ? 's' : '') : '—') +
-    kpi('🗓️ RDV posés', tot.rdvSet) +
-    kpi('📅 RDV tenus', tot.rdvHeld + ' · ' + tot.close + ' close') +
-    kpi('✉️ Messages', tot.sms + tot.email + tot.whatsapp + tot.dmOut) +
-    kpi('⏱ Temps de connexion', fmtTalk(Math.round(tot.activeMs / 1000))) +
-    kpi('🔔 Rappels', tot.rapDue + ' prévus · ' + tot.rapDone + ' faits' + (tot.rapLate ? ' · ' + tot.rapLate + ' en retard' : ''));
+    kpi('☎️ Appels', tot.callsOut + ' · ' + tot.answered + ' décrochés', I('appels', TXT.appels) + I('decroches')) +
+    kpi('📥 Appels reçus', tot.callsIn + (tot.answeredIn ? ' · ' + tot.answeredIn + ' décrochés' : ''), IL(TXT.appelsRecus[0], TXT.appelsRecus[1])) +
+    kpi('🗣️ Temps d\'appel', fmtTalk(tot.talkSec) + (tot.talkInSec ? ' · reçus ' + fmtTalk(tot.talkInSec) : ''), I('temps_appel')) +
+    kpi('⚡ Lead to speech', ltsT && ltsT.n ? fmtDelay(ltsT.median) + ' · ' + ltsT.n + ' lead' + (ltsT.n > 1 ? 's' : '') : '—', IL(TXT.lts[0], TXT.lts[1])) +
+    kpi('🗓️ Sets', tot.sets, I('sets', 'Même chiffre que Set NB (Équipe) sur la même période.')) +
+    kpi('🖱️ RDV posés par clic', tot.posesClic, IL(TXT.posesClic[0], TXT.posesClic[1])) +
+    kpi('📅 RDV', tot.rdv + ' · kept ' + tot.kept + ' · ' + tot.presents + ' présents', I('rdv', TXT.rdvPilotage + ' ' + rdvPhrase(tot)) + I('kept') + I('presents')) +
+    kpi('🏁 RDV closés', tot.rdvCloses, I('rdv_closes', TXT.rdvClosesPilotage)) +
+    kpi('✉️ Messages', (tot.sms + tot.email + tot.whatsapp + tot.dmOut) + (tot.msgAuto ? ' · ' + tot.msgAuto + ' auto' : ''), IL(TXT.msgs[0], TXT.msgs[1]) + IL(TXT.auto[0], TXT.auto[1])) +
+    kpi('⏱ Temps de connexion', fmtTalk(Math.round(tot.activeMs / 1000)), IL(TXT.connexion[0], TXT.connexion[1])) +
+    kpi('🔔 Rappels', tot.rapDue + ' prévus · ' + tot.rapDone + ' faits' + (tot.rapLate ? ' · ' + tot.rapLate + ' en retard' : ''), IL(TXT.rappels[0], TXT.rappels[1]));
 
   var groups = [];
   COLS.forEach(function (c) {
@@ -731,7 +843,7 @@ function renderActivity() {
     else g.n++;
   });
   var h = '<table class="pl-t"><thead><tr><th class="l"></th>' + groups.map(function (g) { return '<th class="grp" colspan="' + g.n + '">' + esc(g.name) + '</th>'; }).join('') + '</tr>' +
-    '<tr><th class="l">Personne</th>' + COLS.map(function (c) { return '<th>' + esc(c[1]) + '</th>'; }).join('') + '</tr></thead><tbody>';
+    '<tr><th class="l">Personne' + I('heure_paris') + '</th>' + COLS.map(function (c) { return '<th>' + esc(c[1]) + c[3]() + '</th>'; }).join('') + '</tr></thead><tbody>';
   var days = [];
   for (var d = A.from; d <= A.to; d = addDays(d, 1)) days.push(d);
   days.reverse();
@@ -751,10 +863,13 @@ function renderActivity() {
   var un = A.unassigned || {};
   var unAny = COLS.some(function (c) { return Number(un[c[0]]) > 0; });
   if (unAny) {
-    h += '<tr><td class="l"><span class="who" style="color:var(--muted)"><span class="car"></span><i style="background:rgba(148,163,184,.4)"></i>Non attribué <small>boîte partagée, envois auto, anciens membres</small></span></td>' + COLS.map(function (c) { return cell(c[0], un[c[0]], '_un'); }).join('') + '</tr>';
+    h += '<tr><td class="l"><span class="who" style="color:var(--muted)"><span class="car"></span><i style="background:rgba(148,163,184,.4)"></i>Non attribué' + I('non_attribue', 'Pilotage : appels sans auteur relié à un compte, boîte partagée, envois automatiques, anciens membres (sans nom), closer ou setter inconnu.') + ' <small>sans auteur, envois auto, anciens membres</small></span></td>' + COLS.map(function (c) { return cell(c[0], un[c[0]], '_un'); }).join('') + '</tr>';
   }
-  h += '<tr class="tot"><td class="l">Total</td>' + COLS.map(function (c) { return cell(c[0], tot[c[0]]); }).join('') + '</tr>';
+  h += '<tr class="tot"><td class="l">Total' + IL('Total', 'Somme des lignes des personnes et de la ligne « Non attribué ». Le Lead to speech du total est la médiane de tous les leads, pas une somme.') + '</td>' + COLS.map(function (c) { return cell(c[0], tot[c[0]]); }).join('') + '</tr>';
   h += '</tbody></table>';
+  /* Identité écrite sous le tableau : chaque RDV a un seul état. */
+  h += '<p class="pl-note" style="padding:0 12px 10px">RDV ' + tot.rdv + ' = ' + tot.annules + ' annulés + ' + tot.noshow + ' no-show + ' + tot.presents + ' présents + ' + tot.aStatuer + ' à statuer + ' + tot.aVenir + ' à venir · Kept ' + tot.kept + ' = RDV − annulés · Présents ' + tot.presents + ' = ' + (tot.presents - tot.pitches) + ' disqua. ou sans détail + ' + tot.pitches + ' pitchés' +
+    ((A.unassigned && A.unassigned.replan) || sumField(members, 'replan') ? ' · ' + ((A.unassigned && A.unassigned.replan || 0) + sumField(members, 'replan')) + ' replanifiés hors RDV' + I('replanifie') : '') + '</p>';
   $('actTable').innerHTML = members.length ? h : '<div class="pl-empty">Aucune activité sur la période.</div>';
   renderLts();
 }
@@ -898,6 +1013,7 @@ function loadJournal() {
   $('jrTl').innerHTML = '<div class="pl-empty">Chargement du journal…</div>';
   $('jrRappels').innerHTML = '';
   $('jrKpis').innerHTML = '';
+  $('jrBanner').innerHTML = '';
   api({ action: 'journal', slug: JR.slug, date: JR.date }).then(function (j) {
     JR.data = j;
     JR.members = j.members || JR.members;
@@ -922,14 +1038,21 @@ function renderJournal() {
   $('jrDate').value = J.date;
   var S = J.summary || {};
   var rp = S.rappels || {};
+  var RV = S.rdv || {};
+  $('jrBanner').innerHTML = partielBanner(J.plafonds, J.warnings);
+  /* Mêmes clés et mêmes règles que l'onglet Activité (une journée de
+     l'Activité = ce journal) et que l'En direct pour aujourd'hui. */
   $('jrKpis').innerHTML =
-    kpi('⏱ Connexion', fmtTalk(Math.round((S.activeMs || 0) / 1000)) + (S.firstSeenAt ? ' · ' + parisTime(S.firstSeenAt) + '→' + parisTime(S.lastSeenAt) : '')) +
-    kpi('👆 Clics · pages', (S.clicks || 0) + ' · ' + (S.pages || 0)) +
-    kpi('📞 Appels', (S.calls || 0) + ' · ' + (S.answered || 0) + ' décrochés · ' + fmtTalk(S.talkSec)) +
-    kpi('✉️ Envoyés', (S.sms || 0) + ' SMS · ' + (S.email || 0) + ' e-mails · ' + (S.whatsapp || 0) + ' WA' + (S.dm ? ' · ' + S.dm + ' DM' : '')) +
-    kpi('📝 Fiches', (S.actions || 0) + ' actions · ' + (S.notes || 0) + ' notes') +
-    kpi('📅 RDV', (S.rdvSet || 0) + ' posés · ' + (S.rdvHeld || 0) + ' tenus') +
-    kpi('🔔 Rappels', (rp.due || 0) + ' prévus · ' + (rp.done || 0) + ' faits' + (rp.late ? ' · ' + rp.late + ' en retard' : ''));
+    kpi('⏱ Connexion', fmtTalk(Math.round((S.activeMs || 0) / 1000)) + (S.firstSeenAt ? ' · ' + parisTime(S.firstSeenAt) + '→' + parisTime(S.lastSeenAt) : ''), IL(TXT.connexion[0], TXT.connexion[1])) +
+    kpi('👆 Clics · pages', (S.clicks || 0) + ' · ' + (S.pages || 0), IL('Clics et pages', 'Pages ouvertes et clics relevés par Team depuis le 16/10/2026 (libellé du bouton, page, prospect concerné — jamais ce qui est tapé).')) +
+    kpi('📞 Appels', (S.callsOut || 0) + ' · ' + (S.answered || 0) + ' décrochés · ' + fmtTalk(S.talkSec), I('appels') + I('decroches') + I('temps_appel')) +
+    kpi('📥 Appels reçus', (S.callsIn || 0) + (S.answeredIn ? ' · ' + S.answeredIn + ' décrochés' : ''), IL(TXT.appelsRecus[0], TXT.appelsRecus[1])) +
+    kpi('✉️ Envoyés', (S.sms || 0) + ' SMS · ' + (S.email || 0) + ' e-mails · ' + (S.whatsapp || 0) + ' WA' + (S.dm ? ' · ' + S.dm + ' DM' : ''), IL(TXT.msgs[0], TXT.msgs[1])) +
+    kpi('📝 Fiches', (S.actions || 0) + ' actions · ' + (S.notes || 0) + ' notes', IL(TXT.statuts[0], TXT.statuts[1])) +
+    kpi('🗓️ Sets', (S.sets || 0) + ' · ' + (S.posesClic || 0) + ' posés par clic', I('sets', 'Rangés chez le setter de la fiche : même chiffre que Set NB.') + IL(TXT.posesClic[0], TXT.posesClic[1])) +
+    kpi('📅 RDV (closer)', (RV.rdv || 0) + ' · kept ' + (RV.kept || 0) + ' · ' + (RV.presents || 0) + ' présents' + (RV.aStatuer ? ' · ' + RV.aStatuer + ' à statuer' : ''), I('rdv', TXT.rdvPilotage + ' ' + rdvPhrase(RV)) + I('kept') + I('presents')) +
+    kpi('🏁 RDV closés', RV.rdvCloses || 0, I('rdv_closes', TXT.rdvClosesPilotage)) +
+    kpi('🔔 Rappels', (rp.due || 0) + ' prévus · ' + (rp.done || 0) + ' faits' + (rp.late ? ' · ' + rp.late + ' en retard' : ''), IL(TXT.rappels[0], TXT.rappels[1]));
 
   var RAP = { fait: ['✅ Fait', 'pill-ok'], a_venir: ['⏳ À venir', 'pill-live'], coche_sans_contact: ['⚠️ Coché sans contact', 'pill-warn'], en_retard: ['🔴 En retard', 'pill-bad'] };
   $('jrRappels').innerHTML = (J.rappels || []).length ? J.rappels.map(function (x) {

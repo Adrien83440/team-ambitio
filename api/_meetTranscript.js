@@ -53,6 +53,9 @@
 const { google } = require('googleapis');
 const { admin, db } = require('./_firebaseAdmin');
 const AI = require('./_ai');
+/* Règles uniques des RDV (classe Self Booking / Setting / Manuel / exclu) :
+   audit de cohérence du 25/11/2026. */
+const SC = require('../stats-core.js');
 
 const CFG_PATH = '_config/replay_closing';
 const DEFAULT_TOKEN = 'meet_closing';
@@ -144,17 +147,18 @@ function bookingEndMs(b) {
 }
 
 // ─── Périmètre : RDV de CLOSING uniquement ───────────────────────────────
-// Miroir de bkScope() de booking-admin.html : tout RDV du périmètre
-// Setting & Sales, c'est-à-dire hors coaching / clients. Un RDV posé par un
-// setter (source 'setter_booking', type isSetterOnly « … (Élodie) ») EST un
-// appel de closing : le setter le réserve, la closeuse le tient en visio.
+// Tout RDV du périmètre Setting & Sales, c'est-à-dire hors coaching / clients.
+// Un RDV posé par un setter (source 'setter_booking', type isSetterOnly) EST
+// un appel de closing : le setter le réserve, la closeuse le tient en visio.
 // Le setting lui-même se fait au téléphone, il n'a pas de RDV Meet.
+// Depuis l'audit du 25/11/2026, la règle n'est plus recopiée ici : c'est
+// StatsCore.classifyBooking (stats-core.js), la même pour tous les écrans.
+// Contrat inchangé pour les appelants (replay-closing, ai-closing-prep,
+// team-pilotage) : vrai pour un RDV Self Booking, Setting ou Manuel (créé à
+// la main dans l'Agenda), faux pour un RDV de coaching, de CSM, d'un client
+// existant ou marqué skipLeadCreation.
 function isClosingBooking(b, typeMap) {
-  const t = (b.type && typeMap && typeMap[b.type]) || null;
-  if (b.isCoaching === true) return false;
-  if (b.source === 'csm_manual' || b.skipLeadCreation === true || b.clientId) return false;
-  if (t && t.isCoaching === true) return false;
-  return true;
+  return SC.estRdvVente(SC.classifyBooking(b, typeMap));
 }
 
 async function loadTypeMap() {

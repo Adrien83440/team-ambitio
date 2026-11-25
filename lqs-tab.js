@@ -5,8 +5,8 @@
    (la page est déjà gardée admin ; aucune note LQS n'est montrée ailleurs,
    demande explicite de Vincent : les closers ne la voient pas).
 
-   Six vues, une barre de filtres commune (closer, base du cash) :
-     🧭 Vue d'ensemble   tunnel complet, LQS 1→5 × RDV / présents / closes / cash
+   Six vues, une barre de filtres commune (closer, base du tableau par note) :
+     🧭 Vue d'ensemble   closes de la période, tunnel des leads entrés, LQS 1→5
      📋 Quiz & réponses  abandon question par question + chaque réponse → résultats
      📣 Marketing (MQS)  campagne / adset / créa / canal : qualité + rentabilité
      🎯 Closers          RDV mois par mois : % de 4-5, qualité du pipe, closing
@@ -17,7 +17,10 @@
    API (appelée par sales-funnel.html) :
      LqsTab.show(mount, ctx)    ctx = { db, P, periodLabel, typeMap,
                                         tunnelFilter, sourceFilter, toast,
-                                        user, teamMembers, tunnelsMeta }
+                                        user, teamMembers, tunnelsMeta,
+                                        funnelCloses (K.closeRows, facultatif),
+                                        funnelKpis (K, facultatif : couverture
+                                          et total de la dépense pub) }
      LqsTab.invalidate()        période changée → rechargement au prochain show
      LqsTab.refilter(ctx)       filtres tunnel / source → recalcul sans recharger
    ES5 strict, délégation d'événements (data-*), aucun onclick inline.
@@ -184,12 +187,39 @@
 
   /* ══ ÉTAT / DONNÉES ════════════════════════════════════════════════════ */
   function activeGrid() { return S.draft || S.grid || LC.normalizeGrid(null); }
+  /* Plage de la vue Closers : mois calendaires à l'heure de PARIS (même
+     instant pour tous les appareils). */
   function closerRange() {
     var P = S.ctx.P;
     if (S.crMode === 'period') return { start: P.start, end: P.end };
     var n = S.crMode === '6m' ? 5 : 2;
+    if (SC && SC.parisParts && SC.dateParis) {
+      var pp = SC.parisParts(new Date());
+      var y = +pp.year, m0 = +pp.month - 1;
+      return { start: SC.dateParis(y, m0 - n, 1, 0, 0, 0, 0), end: SC.dateParis(y, m0 + 1, 0, 23, 59, 59, 999) };
+    }
     var now = new Date();
     return { start: new Date(now.getFullYear(), now.getMonth() - n, 1, 0, 0, 0, 0), end: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999) };
+  }
+  /* Équipe complète, membres partis compris (window.TEAM_MEMBERS les garde,
+     marqués departed) : leur activité passée reste comptée, sur la ligne
+     « Anciens membres », sans nom (référentiel §3, D10). */
+  function teamRoster() {
+    var list = S.ctx.teamMembers || window.TEAM_MEMBERS_LIST || [];
+    var map = window.TEAM_MEMBERS || {};
+    var extra = Object.keys(map).map(function (k) { return map[k]; });
+    var all = FC.mergeTeam ? FC.mergeTeam(list, extra) : list;
+    /* Un membre parti n'a plus de nom à l'écran (D10) : son nom devient
+       « Anciens membres » partout où le modèle l'écrit (closer d'un lead,
+       d'un appel, d'un close). Copie : le roster de la page n'est pas touché. */
+    return all.map(function (m) {
+      var parti = m && (m.departed === true || (FC.isDeparted && FC.isDeparted(m)));
+      if (!parti) return m;
+      var c = {};
+      Object.keys(m).forEach(function (f) { c[f] = m[f]; });
+      c.departed = true; c.shortName = 'Anciens membres'; c.displayName = 'Anciens membres';
+      return c;
+    });
   }
   function dataKey() {
     var P = S.ctx.P, cr = closerRange();
@@ -200,8 +230,12 @@
     S.M = LC.buildModel(S.D, {
       P: S.ctx.P, grid: activeGrid(), gridStamp: S.stamp,
       tunnelFilter: S.ctx.tunnelFilter, sourceFilter: S.ctx.sourceFilter,
-      teamMembers: S.ctx.teamMembers || window.TEAM_MEMBERS_LIST || [],
-      closerRange: closerRange(), tunnelsMeta: S.ctx.tunnelsMeta || null
+      teamMembers: teamRoster(), typeMap: S.ctx.typeMap || {},
+      closerRange: closerRange(), tunnelsMeta: S.ctx.tunnelsMeta || null,
+      /* Closes de la période : les lignes du Stats funnel (K.closeRows)
+         quand la page les fournit — même liste, mêmes filtres ; sinon la
+         même règle (FunnelCore.buildCloses) sur les données chargées ici. */
+      funnelCloses: Array.isArray(S.ctx.funnelCloses) ? S.ctx.funnelCloses : null
     });
     if (S.closer && !S.M.closers.some(function (c) { return c.slug === S.closer; })) S.closer = '';
   }
@@ -234,10 +268,12 @@
     if (!S.closer) return list;
     return list.filter(function (p) { return p.closer === S.closer; });
   }
+  /* Closes de la période (liste unique). Filtre closer : le closer DU CLOSE
+     (row.closer, règle du référentiel §4) — comme Global closing. */
   function periodSigned() {
     var list = S.M ? (S.M.periodSigned || []) : [];
     if (!S.closer) return list;
-    return list.filter(function (p) { return p.leadRow && p.leadRow.closer === S.closer; });
+    return list.filter(function (p) { return p.closer === S.closer; });
   }
   function toast(msg, bad) { if (S.ctx && typeof S.ctx.toast === 'function') S.ctx.toast(msg, bad); }
 
@@ -251,11 +287,11 @@
     h += '<div class="fn-seg lq-views">';
     VIEWS.forEach(function (v) { h += '<button data-lq-view="' + v[0] + '" class="' + (S.view === v[0] ? 'active' : '') + '">' + v[1] + '</button>'; });
     h += '</div><div class="lq-filters">';
-    h += '<select class="fn-sel" data-lq-closer title="Filtre toutes les vues sur les leads et RDV de ce closer"><option value="">👥 Toute l\'équipe</option>';
+    h += '<select class="fn-sel" data-lq-closer title="Avec un closer choisi, seuls les leads rattachés à lui (closer de leur close, sinon de leur RDV) sont comptés. Les taux par lead entré et les coûts pub ne sont pas calculés."><option value="">👥 Toute l\'équipe</option>';
     (S.M ? S.M.closers : []).forEach(function (c) { h += '<option value="' + esc(c.slug) + '"' + (S.closer === c.slug ? ' selected' : '') + '>🎯 ' + esc(c.name) + '</option>'; });
     h += '</select>';
-    h += '<div class="fn-seg" title="Base du cash"><button data-lq-cash="cohorte" class="' + (S.cashMode === 'cohorte' ? 'active' : '') + '" title="Signé et encaissé à ce jour par les leads entrés dans la période : juge la qualité des leads">💶 Cash des leads de la période</button>'
-      + '<button data-lq-cash="periode" class="' + (S.cashMode === 'periode' ? 'active' : '') + '" title="Signé = closes datés dans la période ; encaissé = prélèvements passés pendant la période, quel que soit le mois d\'entrée du lead">🏦 Signé / encaissé sur la période</button></div>';
+    h += '<div class="fn-seg" title="Base du tableau par note"><button data-lq-cash="cohorte" class="' + (S.cashMode === 'cohorte' ? 'active' : '') + '" title="Tableau par note : ce que sont devenus, jusqu\'à aujourd\'hui, les leads entrés pendant la période (closes, contracté et collecté des leads entrés) — juge la qualité des leads">💶 Résultats des leads entrés</button>'
+      + '<button data-lq-cash="periode" class="' + (S.cashMode === 'periode' ? 'active' : '') + '" title="Tableau par note : clients gagnés pendant la période (même liste que le Stats funnel), rangés selon la note du lead, quel que soit son mois d\'entrée">🏦 Closes de la période</button></div>';
     h += '<button class="fn-btn primary" data-lq-export' + (S.M && !S.exportBusy ? '' : ' disabled') + ' title="Tous les onglets + le dossier nominatif de chaque lead de la période (questionnaire, issue, transcription de la visio de closing)">' + (S.exportBusy ? esc(S.exportBusy) : '📄 Export PDF complet') + '</button>';
     h += '</div></div>';
     if (S.draft) h += '<div class="fn-alert lq-draft">✏️ Barème modifié, non enregistré : tous les chiffres affichés utilisent déjà le barème en cours d\'édition. <a href="#" data-lq-go="grid">Ouvrir le barème</a></div>';
@@ -268,7 +304,12 @@
     else if (S.err) h += '<div class="fn-ig-alert"><strong>Erreur de chargement :</strong> ' + esc(S.err) + '</div>';
     else if (!S.M) h += '<div class="fn-loading">—</div>';
     else {
-      if (S.M.leadsTruncated) h += '<div class="fn-alert">⚠ Trop de leads sur la période : la liste est tronquée. Réduis la période pour des chiffres exacts.</div>';
+      if (S.M.leadsTruncated) h += '<div class="fn-alert">⚠ Trop de leads sur la période : la liste est tronquée. Réduis la période pour des chiffres exacts.' + I('lecture_incomplete') + '</div>';
+      /* Lectures en échec / plafonds atteints (lqs-core M.erreursLecture) :
+         jamais un zéro muet (référentiel P7). */
+      var errL = S.M.erreursLecture || [];
+      if (errL.length) h += '<div class="fn-alert">⚠ <strong>Lecture incomplète</strong>' + I('lecture_incomplete') + '<ul style="margin:6px 0 0 18px;padding:0"><li>' + errL.map(esc).join('</li><li>') + '</li></ul></div>';
+      if (S.closer && S.view !== 'grid') h += '<div class="fn-alert">🎯 <strong>Filtre closer : ' + esc(S.M.memberName(S.closer)) + '.</strong> Seuls les leads rattachés à ce closer (closer de leur close, sinon de leur RDV) sont comptés. Les taux par lead entré et les coûts pub ne sont pas calculés.' + IL('filtre_closer') + '</div>';
       if (S.view === 'overview') h += viewOverview();
       else if (S.view === 'quiz') h += viewQuiz();
       else if (S.view === 'mkt') h += viewMarketing();
@@ -279,169 +320,263 @@
     S.mount.innerHTML = h;
   }
 
-  /* ══ VUE 1 — VUE D'ENSEMBLE ════════════════════════════════════════════ */
-  function cashOf(a) { return S.cashMode === 'periode' ? a.periodCon : a.con; }    // SIGNÉ
-  function paidOf(a) { return S.cashMode === 'periode' ? a.periodCash : a.cash; }   // ENCAISSÉ
+  /* ══ VUE 1 — VUE D'ENSEMBLE ════════════════════════════════════════════
+     Deux lectures, jamais sous le même mot (audit 25/11/2026) :
+       · cartes du haut = CLOSES DE LA PÉRIODE (liste unique, mêmes chiffres
+         que Closes / Contracté / Collecté du Stats funnel) ;
+       · tunnel et tableau par note = LEADS ENTRÉS (« Leads avec RDV »,
+         « Leads présents », « Closes des leads entrés ») — un lead compte
+         une fois ; en mode « Closes de la période », le tableau range les
+         closes de la période selon la note du lead. */
+  function cashOf(a) { return S.cashMode === 'periode' ? a.periodCon : a.con; }    // CONTRACTÉ
+  function paidOf(a) { return S.cashMode === 'periode' ? a.periodPaid : a.cash; }   // COLLECTÉ (à ce jour)
   function closesOf(a) { return S.cashMode === 'periode' ? a.signers : a.closes; }
 
+  /* Nom affiché d'un membre : un membre parti n'a plus de nom (D10). */
+  function nomDe(slug) {
+    if (!slug) return null;
+    if (S.M && S.M.isDeparted && S.M.isDeparted(slug)) return 'Anciens membres';
+    return S.M ? S.M.memberName(slug) : slug;
+  }
+
   /* Chiffre cliquable → dossiers nominatifs (lqs-dossier.js). kind :
-     leads | booked | present | closed ; note : 0-5 ou 'all'. */
+     leads | booked | present | closed | signed ; note : 0-5 ou 'all'. */
   function drill(n, note, kind) {
     if (!n || !window.LqsDossier) return fNum(n);
     return '<a href="#" class="lq-drill" data-lq-drill="' + kind + '" data-lq-dn="' + note + '" title="Voir les ' + fNum(n) + ' prospects, leurs réponses et leurs visios">' + fNum(n) + '</a>';
   }
-  var DRILL_LBL = { leads: 'Leads', booked: 'RDV pris', present: 'Présents au RDV', closed: 'Closés', signed: 'Closes signés sur la période — signé, encaissé, reste' };
-  /* Carte cliquable (23/11/2026, demande Vincent : « cliquer sur l'encaissé
-     pour voir le détail ») : ouvre les clients signés sur la période. */
-  function drillV(html, n) {
+  var DRILL_LBL = { leads: 'Leads + ré-optins', booked: 'Leads avec RDV', present: 'Leads présents au RDV', closed: 'Closes des leads entrés',
+    signed: 'Closes de la période — contracté, collecté, reste à encaisser' };
+  /* Carte cliquable (23/11/2026, demande Vincent : « cliquer sur le
+     collecté pour voir le détail ») : ouvre les closes de la période. */
+  function drillV(html, n, note) {
     if (!n || !window.LqsDossier) return html;
-    return '<a href="#" class="lq-drill" data-lq-drill="signed" data-lq-dn="all" title="Voir le détail client par client">' + html + '</a>';
+    return '<a href="#" class="lq-drill" data-lq-drill="signed" data-lq-dn="' + (note == null ? 'all' : note) + '" title="Voir le détail client par client">' + html + '</a>';
   }
+  /* Ligne de dossier d'un close de la période : la fiche du lead quand elle
+     existe, avec l'issue de CE close (montants, jour du close, closer et
+     setter de la liste unique) ; un close sans fiche lead (RDV closé sans
+     fiche, paiement seul) a un dossier réduit, sans questionnaire. */
+  function closeRowOf(ps) {
+    var base = ps.leadRow || null, r = {};
+    if (base) Object.keys(base).forEach(function (k) { r[k] = base[k]; });
+    else {
+      r = { id: 'close_' + ps.key, lead: { nom: ps.name }, noLead: true, note: null, pts: null, ko: false, detail: [], answers: [], calls: [],
+        entry: null, avecRdv: !!ps.bookingId, booked: !!ps.bookingId, leadPresent: false, present: false, axes: {}, team: null,
+        sourceLabel: ps.src === 'paiement' ? 'repéré par le module Paiements (aucune fiche lead reliée)' : (ps.src === 'rdv' ? 'RDV closé sans fiche lead' : '') };
+    }
+    r.closed = true; r.closeCancelled = false; r.dejaClient = false;
+    r.con = ps.con || 0; r.cash = ps.paid != null ? ps.paid : (ps.cash || 0); r.pending = ps.pending || 0;
+    r.closeDay = ps.day || null; r.sansPaiement = !!ps.sansPaiement;
+    r.offer = ps.offer || r.offer || null;
+    if (ps.closer) r.closer = ps.closer;
+    if (ps.setter) r.setter = ps.setter;
+    r.closerName = nomDe(r.closer); r.setterName = nomDe(r.setter);
+    if (ps.rdvDate) r.rdvDate = ps.rdvDate;
+    r.closeSansRdv = !r.avecRdv;
+    r.closeDeLaPeriode = true;
+    return r;
+  }
+  function noteMatch(note, n) { return note === 'all' || String(n == null ? 0 : n) === String(note); }
   function drillRows(note, kind) {
-    if (kind === 'signed') return periodSigned().map(function (ps) { return ps.leadRow; }).filter(function (r) { return !!r; });
+    if (kind === 'signed') return periodSigned().filter(function (ps) { return noteMatch(note, ps.note); }).map(closeRowOf);
     return rows().filter(function (r) {
-      if (note !== 'all' && String(r.note == null ? 0 : r.note) !== String(note)) return false;
-      if (kind === 'booked') return r.booked;
-      if (kind === 'present') return r.present;
+      if (!noteMatch(note, r.note)) return false;
+      if (kind === 'booked') return r.avecRdv;
+      if (kind === 'present') return r.leadPresent;
       if (kind === 'closed') return r.closed;
       return true;
     });
   }
   function openDrill(note, kind) {
+    var noteTxt = note === 'all' ? (kind === 'signed' ? '' : ' — toutes les notes') : (String(note) === '0' ? ' — non notés' : ' — note LQS ' + note);
     window.LqsDossier.open({
-      title: kind === 'signed' ? DRILL_LBL[kind] : DRILL_LBL[kind] + (note === 'all' ? ' — toutes les notes' : (String(note) === '0' ? ' — non notés' : ' — note LQS ' + note)),
-      sub: S.closer ? 'leads de ' + S.M.memberName(S.closer) : 'toute l\'équipe',
+      title: DRILL_LBL[kind] + noteTxt,
+      sub: S.closer ? (kind === 'signed' ? 'closes de ' : 'leads de ') + S.M.memberName(S.closer) : 'toute l\'équipe',
       periodLabel: S.ctx.periodLabel || '', rows: drillRows(note, kind)
     });
   }
 
-  /* Rapprochement avec le Stats funnel (21/11/2026, retour Vincent : 5 closes /
-     34 000 € ici, 6 / 40 000 € dans le funnel). Les closes DATÉS dans la
-     période sont comparés un par un ; chaque écart est nommé, avec sa raison.
-     Rien n'est recalculé : closes du funnel = K.closeRows, closes d'ici =
-     periodSigned (toute l'équipe, jamais le filtre closer). */
+  /* Contrôle « mêmes closes que le Stats funnel » (21/11/2026, refait le
+     25/11/2026). Les closes de la période de cet onglet SONT la liste unique
+     du Stats funnel (K.closeRows quand la page la fournit, sinon la même
+     règle FunnelCore.buildCloses) : la comparaison, client par client (clé
+     de la liste : fiche, sinon e-mail, sinon téléphone), doit toujours être
+     ✅. Un écart restant est nommé. Toute l'équipe, jamais le filtre closer. */
   function funnelCheckHtml() {
-    var fc = S.ctx && S.ctx.funnelCloses;
-    if (!fc || !S.M || S.closer) return '';
+    if (!S.M) return '';
+    var PC = S.M.periodCloses || {};
     var here = S.M.periodSigned || [];
-    var hereById = {}, hereCon = 0;
-    here.forEach(function (ps) { if (ps.lead) hereById[ps.lead._id] = ps; hereCon += ps.con || 0; });
-    var fun = fc.filter(function (r) { return !(r.rv && r.rv.cancelled); });
-    var funById = {}, funCon = 0;
-    fun.forEach(function (r) { if (r.leadId) funById[r.leadId] = r; funCon += (r.rv && r.rv.con) || 0; });
-    var only = [];
-    fun.forEach(function (r) {
-      if (r.leadId && hereById[r.leadId]) return;
-      only.push('<strong>' + esc(r.name || '—') + '</strong> (' + fEur((r.rv && r.rv.con) || 0) + ' signés) : compté par le funnel, absent d\'ici — ' +
-        (r.leadId ? 'fiche écartée par les filtres de cet onglet, ou close daté hors période d\'après son RDV'
-          : 'aucune fiche lead reliée (' + (r.src === 'paiement' ? 'close détecté par le module Paiements seul' : 'RDV closé sans fiche') + ') : pas de questionnaire, donc pas de note possible'));
-    });
-    here.forEach(function (ps) {
-      if (!ps.lead || funById[ps.lead._id]) return;
-      only.push('<strong>' + esc(ps.lead.nom || ps.lead.email || '—') + '</strong> (' + fEur(ps.con || 0) + ' signés) : compté ici (RDV « close » ou paiement daté dans la période), absent du funnel — fiche non gagnée sur la période pour le funnel');
-    });
-    var same = !only.length;
-    var body = '<div class="fn-stage-note" style="font-size:12.5px;line-height:1.7">' +
-      'Closes datés dans la période : <strong>' + fNum(here.length) + ' ici</strong> pour ' + fEur(hereCon) + ' signés · <strong>' + fNum(fun.length) + ' dans le Stats funnel</strong> pour ' + fEur(funCon) + ' signés.' +
-      (same ? ' ✅ Ce sont les mêmes clients.' : '<ul style="margin:6px 0 0 18px;padding:0"><li>' + only.join('</li><li>') + '</li></ul>') +
-      (S.cashMode === 'periode' ? '' : '<br/>Les cartes ci-dessus suivent les <em>leads entrés</em> sur la période : pour comparer au funnel, clique « 🏦 Signé / encaissé sur la période » en haut de l\'onglet.') +
-      '</div>';
-    return card((same ? '✅' : '🔎') + ' Rapprochement avec le Stats funnel', 'mêmes règles de montants (module Paiements, HT)', body);
+    var fc = S.ctx && Array.isArray(S.ctx.funnelCloses) ? S.ctx.funnelCloses : null;
+    var hCon = 0, hPaid = 0, hByKey = {};
+    here.forEach(function (ps) { hCon += ps.con || 0; hPaid += ps.paid || 0; hByKey[ps.key] = ps; });
+    var lines = [], same = true, fN = null, fCon = 0, fPaid = 0;
+    if (fc) {
+      var fun = fc.filter(function (r) { return r && !(r.rv && r.rv.cancelled); });
+      var fByKey = {};
+      fN = fun.length;
+      fun.forEach(function (r) { fCon += (r.rv && r.rv.con) || 0; fPaid += (r.rv && r.rv.paid) || 0; fByKey[r.key] = r; });
+      fun.forEach(function (r) {
+        if (hByKey[r.key]) return;
+        lines.push('<strong>' + esc(r.name || '—') + '</strong> (' + fEur((r.rv && r.rv.con) || 0) + ' contractés) : compté par le Stats funnel, absent d\'ici — les deux onglets n\'ont pas été lus au même moment ou avec les mêmes filtres : recharge la page.');
+      });
+      here.forEach(function (ps) {
+        if (fByKey[ps.key]) return;
+        lines.push('<strong>' + esc(ps.name || '—') + '</strong> (' + fEur(ps.con || 0) + ' contractés) : compté ici, absent du Stats funnel — les deux onglets n\'ont pas été lus au même moment ou avec les mêmes filtres : recharge la page.');
+      });
+      if (!lines.length && (Math.abs(fCon - hCon) > 0.5 || Math.abs(fPaid - hPaid) > 0.5)) {
+        lines.push('Mêmes clients, montants différents (contracté ' + fEur(hCon) + ' ici, ' + fEur(fCon) + ' au Stats funnel ; collecté ' + fEur(hPaid) + ' ici, ' + fEur(fPaid) + ' au Stats funnel) : le module Paiements a changé entre les deux lectures, recharge la page.');
+      }
+      same = !lines.length;
+    }
+    var named = [];
+    (PC.annules || []).forEach(function (a) { named.push(esc(a.name || '—') + ' — close annulé (' + esc(a.reason || 'annulé') + '), retiré des closes, du contracté et du collecté'); });
+    (PC.ecartsCanal || []).forEach(function (r) { named.push(esc(r.name || '—') + ' — écart de canal : compté ' + (r.sb ? 'Self Booking' : 'Setting (NB)') + ' (canal du RDV), la réponse du closer dit l\'inverse'); });
+    (PC.sansSignal || []).forEach(function (x) { named.push(esc(x.name || '—') + ' — fiche marquée cliente sans vente enregistrée : non comptée'); });
+    var body = '<div class="fn-stage-note" style="font-size:12.5px;line-height:1.7">'
+      + 'Closes de la période ici : <strong>' + fNum(here.length) + '</strong> · ' + fEur(hCon) + ' contractés · ' + fEur(hPaid) + ' collectés.'
+      + (fc ? ' Stats funnel : <strong>' + fNum(fN) + '</strong> · ' + fEur(fCon) + ' contractés · ' + fEur(fPaid) + ' collectés.' : '')
+      + (fc ? (same ? ' ✅ Même liste de clients, mêmes montants.' : '<ul style="margin:6px 0 0 18px;padding:0"><li>' + lines.join('</li><li>') + '</li></ul>') : '')
+      + '<br>' + (PC.source === 'funnel' ? 'Les closes de cet onglet sont les lignes du Stats funnel elles-mêmes.'
+        : (fc ? 'Liste recalculée ici par la même règle (FunnelCore.buildCloses) et comparée client par client.'
+          : 'Liste calculée ici par la même règle que le Stats funnel (FunnelCore.buildCloses). Ouvre l\'onglet Funnel pour la comparer client par client.'))
+      + (S.closer ? ' Contrôle fait sur toute l\'équipe : le filtre closer ne s\'y applique pas.' : '')
+      + (named.length ? '<div style="margin-top:6px"><strong>À savoir</strong>' + I('closes_annules') + I('ecart_canal') + I('clientes_sans_vente') + '<ul style="margin:4px 0 0 18px;padding:0"><li>' + named.join('</li><li>') + '</li></ul></div>' : '')
+      + '</div>';
+    return card((fc && !same ? '🔎' : '✅') + ' Contrôle : mêmes closes que le Stats funnel', 'liste unique des closes, montants HT du module Paiements', body);
   }
 
-  /* Les deux lectures sur la même carte (retour Vincent 22/11/2026). Par
-     défaut cet onglet suit les leads ENTRÉS sur la période : un client entré
-     plus tôt et signé ce mois-ci n'y est pas, alors que le Stats funnel le
-     compte. On affiche donc aussi le chiffre « sur la période », celui du
-     funnel, pour que les deux écrans se recoupent sans changer de mode. */
-  /* Closes signés sur la période (mêmes fiches que le Stats funnel) : nombre,
-     signé, et ce qui est déjà encaissé sur ces closes-là. */
+  /* Closes de la période (liste unique) : nombre, contracté, collecté à ce
+     jour, 1ers prélèvements en attente, closes sans paiement / sans fiche. */
   function monthHead() {
-    var n = 0, con = 0, cash = 0;
-    periodSigned().forEach(function (ps) { n++; con += ps.con || 0; cash += ps.cash || 0; });
-    return { n: n, con: con, cash: cash };
+    var o = { n: 0, con: 0, paid: 0, pending: 0, sansPaiement: 0, sansFiche: 0, E: 0, B: 0, U: 0 };
+    periodSigned().forEach(function (ps) {
+      o.n++; o.con += ps.con || 0; o.paid += ps.paid != null ? ps.paid : (ps.cash || 0); o.pending += ps.pending || 0;
+      if (ps.sansPaiement) o.sansPaiement++;
+      if (!ps.leadRow) o.sansFiche++;
+      if (ps.offer === 'elite') o.E++; else if (ps.offer === 'business') o.B++; else o.U++;
+    });
+    o.reste = Math.max(0, o.con - o.paid);
+    return o;
+  }
+  function annulesPeriode() {
+    var list = (S.M && S.M.periodCloses && S.M.periodCloses.annules) || [];
+    return S.closer ? list.filter(function (a) { return a.closer === S.closer; }) : list;
   }
 
   function viewOverview() {
     var R = rows();
+    var per = S.cashMode === 'periode';
     var bn = LC.byNote(R, periodPays(), periodSigned());
     var t = bn.total, m = bn.byNote;
     var totCash = cashOf(t);
+    var clName = S.closer ? S.M.memberName(S.closer) : '';
     var h = '';
     h += help('ℹ️ Comment lire cet onglet', '<p><strong>LQS (Lead Quality Score)</strong> : chaque lead reçoit une note de <strong>1 à 5</strong> calculée <strong>uniquement à partir de ses réponses</strong> (quiz, formulaires) avec le barème de l\'onglet ⚙️ — CA, équipe, contraintes… Aucun jugement humain : c\'est la qualité que le marketing nous envoie.</p>'
-      + '<p><strong>MQS (Marketing Quality Score)</strong> : la note d\'une campagne, d\'un adset, d\'une créa ou d\'un canal = qualité des leads qu\'elle amène (60 %) + ce qu\'ils rapportent vraiment (40 %).</p>'
-      + '<p>On croise ensuite avec la vérité commerciale : RDV, présents, closes, puis deux montants HT : <strong>signé</strong> (le contrat du close : paiements GoCardless non annulés, sinon la carte du close) et <strong>encaissé</strong> (prélèvements réellement passés). Le signé juge la valeur des leads (parts, « / lead », MQS, ROAS) ; l\'encaissé suit avec le préavis SEPA et les mensualités. Si les 4-5 ne closent pas, c\'est un sujet closing ; si les closers closent bien mais qu\'il n\'y a que des 1-2, c\'est un sujet marketing. Chacun sa responsabilité, chiffres à l\'appui.</p>'
+      + '<p><strong>MQS (Marketing Quality Score)</strong> : la note d\'une campagne, d\'un adset, d\'une créa ou d\'un canal = qualité des leads qu\'elle amène (60 %, LQS moyen) + ce qu\'ils rapportent (40 % : contracté des leads entrés par lead, comparé à la moyenne ; sans aucun contrat sur la période, taux de leads présents).</p>'
+      + '<p><strong>Les cartes Closes, Contracté et Collecté</strong> comptent les clients gagnés <strong>pendant la période</strong> : la même liste que le Stats funnel, quel que soit le mois d\'entrée du lead. <strong>Le tunnel et le tableau par note</strong> suivent les <strong>leads entrés</strong> pendant la période jusqu\'à aujourd\'hui : « Leads avec RDV », « Leads présents », « Closes des leads entrés » comptent des leads (un lead compte une fois), pas des RDV.</p>'
+      + '<p>Montants HT : <strong>contracté</strong> (valeur du contrat : module Paiements, sinon tarif déclaré au close) et <strong>collecté</strong> (prélèvements réellement passés, à ce jour). Le contracté juge la valeur des leads (parts, « / lead », MQS, contracté ÷ dépense) ; le collecté suit avec le préavis SEPA et les mensualités. Si les 4-5 ne closent pas, c\'est un sujet closing ; si les closers closent bien mais qu\'il n\'y a que des 1-2, c\'est un sujet marketing.</p>'
       + '<p><strong>Réservé aux admins</strong> : la note n\'est affichée nulle part ailleurs, les closers ne la voient pas.</p>');
 
-    /* KPIs */
+    /* KPIs — leads entrés */
     h += '<div class="fn-grid lq-kpis">';
-    h += kpi(fNum(t.leads), 'Leads de la période', fNum(t.noted) + ' notés (' + fPct(t.leads ? t.noted / t.leads * 100 : null, 0) + ')');
-    h += kpi(avgBadge(t.avgNote), 'LQS moyen', 'qualité moyenne envoyée par le marketing');
-    h += kpi(fPct(t.pct45, 0), 'Leads notés 4-5', fNum(t.n45) + ' leads · 1-2 : ' + fPct(t.pct12, 0));
-    h += kpi(fNum(t.booked), 'RDV pris', fPct(t.bookRate) + ' des leads');
-    h += kpi(fNum(t.present), 'Présents', fPct(t.showRate) + ' des RDV');
-    /* Closes / Signé / Encaissé en tête (23/11/2026, 3e retour Vincent) : ces
-       trois cartes affichent TOUJOURS les closes SIGNÉS sur la période, soit
-       exactement Closes / Contracté / Collecté du Stats funnel. Avant, elles
-       suivaient les seuls leads entrés sur la période (5 closes, 34 000 €)
-       pendant que le funnel en affichait 6 et 40 000 € : même mois, deux
-       chiffres. Le détail « leads entrés sur la période » passe en sous-ligne ;
-       le tableau par note, lui, reste sur les leads entrés (c'est son objet). */
+    if (S.closer) h += kpi(drill(t.leads, 'all', 'leads'), 'Leads de ' + esc(clName) + IL('filtre_closer'), fNum(t.nouveaux) + ' nouveaux + ' + fNum(t.reopt) + ' ré-optins · ' + fNum(t.noted) + ' notés');
+    else h += kpi(drill(t.leads, 'all', 'leads'), ML('leads_et_reoptins'), fNum(t.nouveaux) + ' nouveaux leads (= Leads du Stats funnel)' + I('leads') + ' + ' + fNum(t.reopt) + ' ré-optins' + I('reoptins') + '<br>' + fNum(t.noted) + ' notés (' + fPct(t.leads ? t.noted / t.leads * 100 : null) + ')');
+    h += kpi(avgBadge(t.avgNote), 'LQS moyen' + IL('lqs'), 'qualité moyenne envoyée par le marketing');
+    h += kpi(fPct(t.pct45), ML('lqs_45'), fNum(t.n45) + ' leads · ' + fPct(t.pct45) + ' des leads notés · ' + fPct(t.leads ? t.n45 / t.leads * 100 : null) + ' de tous les leads<br>LQS 1-2 : ' + fPct(t.pct12) + ' des leads notés');
+    if (!S.closer) h += kpi(drill(t.leadsAvecRdv, 'all', 'booked'), ML('leads_avec_rdv'), fPct(t.pctLeadsAvecRdv) + ' des leads');
+    h += kpi(drill(t.leadsPresents, 'all', 'present'), ML('leads_presents'), fPct(t.pctLeadsPresents) + ' des leads avec RDV');
+    h += '</div>';
+
+    /* KPIs — closes de la période (liste unique : Closes / Contracté /
+       Collecté du Stats funnel). Les chiffres des leads entrés passent en
+       sous-ligne, sous leur propre nom. */
     var mh = monthHead();
-    if (S.cashMode === 'periode') {
-      h += kpi(drillV(fNum(mh.n), mh.n), 'Closes signés', 'datés dans la période, comme le Stats funnel · ' + fNum(t.payers) + ' client' + (t.payers > 1 ? 's ont' : ' a') + ' payé');
-      h += kpi(drillV(fEur(mh.con), mh.n), 'Signé sur la période', 'HT, closes datés dans la période');
-      h += kpi(fEur(paidOf(t)), 'Encaissé sur la période', 'HT, prélèvements passés pendant la période, tous clients confondus<br>dont ' + fEur(mh.cash) + ' sur les closes de la période (= collecté du Stats funnel)');
-    } else {
-      h += kpi(drillV(fNum(mh.n), mh.n), 'Closes signés', 'sur la période, comme le Stats funnel' + (mh.n !== t.closes ? '<br>dont ' + fNum(t.closes) + ' de leads entrés sur la période' : '') + (t.closes ? '<br>' + offerSplit(t) : ''));
-      h += kpi(drillV(fEur(mh.con), mh.n), 'Signé', 'HT, closes signés sur la période' + (Math.abs(mh.con - totCash) > 0.5 ? '<br>dont ' + fEur(totCash) + ' de leads entrés sur la période' : ''));
-      h += kpi(drillV(fEur(mh.cash), mh.n), 'Encaissé', 'HT, déjà prélevé sur ces closes' + (mh.con > mh.cash ? '<br>' + fEur(mh.con - mh.cash) + ' restent à encaisser' : ''));
+    var an = annulesPeriode();
+    var prec = S.closer ? 'Ici : closes dont ' + clName + ' est le closer (comme Global closing).' : 'Même liste que le Stats funnel.';
+    var off = [];
+    if (mh.E) off.push('<span class="lq-oe">' + fNum(mh.E) + ' Élite</span>');
+    if (mh.B) off.push('<span class="lq-ob">' + fNum(mh.B) + ' Business</span>');
+    if (mh.U && (mh.E || mh.B)) off.push('<span class="lq-muted">' + fNum(mh.U) + ' sans offre</span>');
+    h += '<div class="fn-grid lq-kpis">';
+    h += kpi(drillV(fNum(mh.n), mh.n), MG('closes', prec),
+      (off.length ? off.join(' · ') + '<br>' : '')
+      + (mh.sansFiche ? 'dont ' + fNum(mh.sansFiche) + ' sans fiche lead (non notés)<br>' : '')
+      + (an.length ? fNum(an.length) + ' close' + (an.length > 1 ? 's annulés retirés' : ' annulé retiré') + I('closes_annules') + '<br>' : '')
+      + MG('closes_cohorte') + ' : ' + drill(t.closes, 'all', 'closed')
+      + (t.closesSansRdv ? ' · dont ' + fNum(t.closesSansRdv) + ' sans RDV enregistré' + IL('close_sans_rdv_enregistre') : ''));
+    h += kpi(drillV(fEur(mh.con), mh.n), MG('contracte'),
+      'HT · ' + MG('panier_moyen') + ' ' + fEur(mh.n ? mh.con / mh.n : null)
+      + (mh.sansPaiement ? '<br>dont ' + fNum(mh.sansPaiement) + ' close' + (mh.sansPaiement > 1 ? 's' : '') + ' sans paiement' + I('close_sans_paiement') : '')
+      + '<br>' + ML('contracte_cohorte') + ' : ' + fEur(t.con));
+    h += kpi(drillV(fEur(mh.paid), mh.n), MG('collecte'),
+      'HT, déjà prélevé sur ces closes<br>' + MG('reste_a_encaisser') + ' : ' + fEur(mh.reste)
+      + (mh.pending > 0.5 ? '<br>dont ' + MG('premiers_prelevements') + ' : ' + fEur(mh.pending) : '')
+      + '<br>' + ML('collecte_cohorte') + ' : ' + fEur(t.cash));
+    if (per) {
+      var pp = S.M.prelevePeriode || {};
+      h += kpi(fEur(t.periodCash), MG('preleve_periode'), 'HT, prélèvements passés pendant la période, anciens clients compris · '
+        + fNum(t.payers) + ' client' + (t.payers > 1 ? 's ont' : ' a') + ' payé'
+        + (pp.filtre ? '<br>filtre tunnel / source : paiements sans fiche lead écartés' : '')
+        + '<br>Ce n\'est pas le Collecté (clients gagnés pendant la période, à ce jour)');
     }
     h += '</div>';
 
     h += funnelCheckHtml();
 
-    /* Tunnel complet */
-    h += card('🛤️ Le tunnel complet', 'quiz (mesure anonyme) → leads → RDV → présents → closes → signé', tunnelStrip(t));
+    /* Tunnel des leads entrés */
+    h += card('🛤️ Le tunnel des leads entrés', 'quiz (mesure anonyme) → leads → leads avec RDV → leads présents → closes des leads entrés → contracté', tunnelStrip(t, mh));
 
     /* Phrases clés */
     h += card('💡 Ce qu\'il faut retenir', '', insightsHtml(bn));
 
     /* Tableau LQS */
+    var thTaux = '<th>' + ML('taux_close_leads_presents') + '</th><th>' + ML('taux_close_leads_avec_rdv') + '</th>';
     var body = '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr>'
-      + '<th class="l">Note LQS</th><th>Leads</th><th>Part</th><th>RDV pris</th><th>Présents</th>'
-      + '<th>' + (S.cashMode === 'periode' ? 'Closes signés' : 'Closes') + '</th><th title="Offre vendue : Élite / Business Phénix (closes des leads de la période)">Élite / Business</th><th title="Closes ÷ présents">Closing / présents</th><th title="Closes ÷ RDV pris">Closing / RDV</th>'
-      + '<th title="Signé HT, encaissé dessous">Signé · encaissé</th><th class="l" style="min-width:140px">Part du signé</th><th>Signé / client</th><th>Signé / lead</th><th title="Moyenne du curseur ★ posé par l\'équipe dans Leads Live">Note équipe</th></tr></thead><tbody>';
-    LC.NOTE_KEYS.forEach(function (k) {
-      var a = m[k];
-      if (!a.leads && !(S.cashMode === 'periode' && (a.periodCash || a.periodCon))) return;
+      + '<th class="l">Note LQS' + IL('lqs') + '</th><th>' + ML('leads_et_reoptins') + '</th><th>Part</th><th>' + ML('leads_avec_rdv') + '</th><th>' + ML('leads_presents') + '</th>'
+      + '<th>' + (per ? MG('closes', 'Ici : clients gagnés pendant la période, rangés selon la note du lead.') : MG('closes_cohorte')) + '</th>'
+      + '<th>Élite / Business' + IN('Élite / Business', 'Offre vendue (closeData.offre) : Élite / Business Phénix. « sans offre » = close sans offre renseignée.') + '</th>'
+      + thTaux
+      + '<th>' + (per ? MG('contracte') : ML('contracte_cohorte')) + ' · collecté</th><th class="l" style="min-width:140px">' + ML('part_contracte') + '</th><th>' + MG('panier_moyen') + '</th><th>' + ML('contracte_par_lead') + '</th>'
+      + (per ? '<th>' + MG('preleve_periode') + '</th>' : '')
+      + '<th>' + ML('note_equipe') + '</th></tr></thead><tbody>';
+    function rowCells(a, k, isTot) {
       var c = cashOf(a), share = totCash > 0 ? c / totCash * 100 : null;
       var cl = closesOf(a);
-      body += '<tr><td class="l">' + noteBadge(k || null) + ' <span class="lq-nl">' + NOTE_LBL[k] + '</span></td>'
-        + '<td>' + drill(a.leads, k, 'leads') + '</td><td>' + fPct(t.leads ? a.leads / t.leads * 100 : null, 0) + '</td>'
-        + '<td>' + drill(a.booked, k, 'booked') + sub(fPct(a.bookRate, 0)) + '</td>'
-        + '<td>' + drill(a.present, k, 'present') + sub(fPct(a.showRate, 0) + ' des RDV') + '</td>'
-        + '<td><strong>' + (S.cashMode === 'periode' ? fNum(cl) : drill(cl, k, 'closed')) + '</strong></td>'
-        + '<td>' + (a.closes ? fNum(a.closesE) + ' / ' + fNum(a.closesB) + (a.closesU ? sub(fNum(a.closesU) + ' sans offre') : '') : '—') + '</td>'
-        + '<td>' + fPct(a.closePresent, 0) + '</td><td>' + fPct(a.closeRdv, 0) + '</td>'
+      var nk = isTot ? 'all' : k;
+      var off2 = per
+        ? (a.signers ? fNum(a.signersE) + ' / ' + fNum(a.signersB) + (a.signersU ? sub(fNum(a.signersU) + ' sans offre') : '') : '—')
+        : (a.closes ? fNum(a.closesE) + ' / ' + fNum(a.closesB) + (a.closesU ? sub(fNum(a.closesU) + ' sans offre') : '') : '—');
+      var closesCell = per ? drillV(fNum(cl), cl, nk) : drill(cl, nk, 'closed') + (a.closesSansRdv ? sub('dont ' + fNum(a.closesSansRdv) + ' sans RDV enregistré') : '');
+      return '<td>' + drill(a.leads, nk, 'leads') + '</td><td>' + (isTot ? '100 %' : fPct(t.leads ? a.leads / t.leads * 100 : null)) + '</td>'
+        + '<td>' + drill(a.leadsAvecRdv, nk, 'booked') + sub(fPct(a.pctLeadsAvecRdv) + ' des leads') + '</td>'
+        + '<td>' + drill(a.leadsPresents, nk, 'present') + sub(fPct(a.pctLeadsPresents) + ' des leads avec RDV') + '</td>'
+        + '<td><strong>' + closesCell + '</strong></td>'
+        + '<td>' + off2 + '</td>'
+        + (per ? '<td>' + nonCalc() + '</td><td>' + nonCalc() + '</td>'
+          : '<td>' + fPct(a.tauxCloseLeadsPresents) + '</td><td>' + fPct(a.tauxCloseLeadsAvecRdv) + '</td>')
         + '<td>' + money(c, paidOf(a)) + '</td>'
-        + '<td class="l">' + bar(share, 'lq-n' + k) + sub(fPct(share)) + '</td>'
-        + '<td>' + fEur(cl ? c / cl : null) + '</td><td>' + fEur(a.leads ? c / a.leads : null) + '</td>'
-        + '<td>' + (a.teamAvg != null ? '★ ' + fDec(a.teamAvg, 1) : '—') + '</td></tr>';
-    });
-    body += '<tr class="tot"><td class="l">Total</td><td>' + drill(t.leads, 'all', 'leads') + '</td><td>100 %</td><td>' + drill(t.booked, 'all', 'booked') + sub(fPct(t.bookRate, 0)) + '</td><td>' + drill(t.present, 'all', 'present') + sub(fPct(t.showRate, 0) + ' des RDV') + '</td>'
-      + '<td>' + (S.cashMode === 'periode' ? fNum(closesOf(t)) : drill(closesOf(t), 'all', 'closed')) + '</td><td>' + (t.closes ? fNum(t.closesE) + ' / ' + fNum(t.closesB) + (t.closesU ? sub(fNum(t.closesU) + ' sans offre') : '') : '—') + '</td><td>' + fPct(t.closePresent, 0) + '</td><td>' + fPct(t.closeRdv, 0) + '</td><td>' + money(totCash, paidOf(t)) + '</td><td class="l"></td>'
-      + '<td>' + fEur(closesOf(t) ? totCash / closesOf(t) : null) + '</td><td>' + fEur(t.leads ? totCash / t.leads : null) + '</td><td>' + (t.teamAvg != null ? '★ ' + fDec(t.teamAvg, 1) : '—') + '</td></tr>';
-    body += '</tbody></table></div>';
-    body += '<div class="fn-stage-note" style="margin-top:8px">👆 Clique un chiffre (leads, RDV pris, présents, closes) pour voir les prospects concernés par leur nom, leur questionnaire, leur issue et la transcription de leur visio de closing — et les exporter en PDF.</div>';
-    body += '<div class="fn-stage-note" style="margin-top:8px">' + (S.cashMode === 'periode'
-      ? 'Mode « signé / encaissé sur la période » : leads / RDV / présents = leads entrés dans la période ; signé = closes datés dans la période (RDV de close, sinon date client) ; encaissé = prélèvements réellement passés pendant la période ; les deux rangés selon la note du lead, quel que soit son mois d\'entrée.'
-      : 'Leads entrés dans la période (ré-optins compris) · RDV et closes suivis jusqu\'à aujourd\'hui · signé = contrat HT du close · encaissé = prélèvements réellement passés (HT) · closes annulés exclus.') + '</div>';
-    if (S.cashMode !== 'periode' && (mh.n !== t.closes || Math.abs(mh.con - totCash) > 0.5)) {
-      body += '<div class="fn-stage-note" style="margin-top:8px">Ce tableau suit les leads <strong>entrés sur la période</strong> : ' + fNum(t.closes) + ' close' + (t.closes > 1 ? 's' : '') + ', ' + fEur(totCash) + ' signés. ' +
-        'Les cartes du haut comptent tous les closes <strong>signés sur la période</strong> (' + fNum(mh.n) + ', ' + fEur(mh.con) + ') : l\'écart vient de clients entrés avant la période et signés pendant. Pour voir ce tableau sur la même base, clique « 🏦 Signé / encaissé sur la période ».</div>';
+        + '<td class="l">' + (isTot ? '' : bar(share, 'lq-n' + k) + sub(fPct(share))) + '</td>'
+        + '<td>' + fEur(cl ? c / cl : null) + '</td><td>' + (per ? nonCalc() : fEur(a.leads ? c / a.leads : null)) + '</td>'
+        + (per ? '<td>' + fEur(a.periodCash) + '</td>' : '')
+        + '<td>' + (a.teamAvg != null ? '★ ' + fDec(a.teamAvg, 1) : '—') + '</td>';
     }
-    h += card('⭐ Qualité des leads → résultats', S.closer ? 'leads de ' + esc(S.M.memberName(S.closer)) : 'toute l\'équipe', body);
+    LC.NOTE_KEYS.forEach(function (k) {
+      var a = m[k];
+      if (!a.leads && !(per && (a.signers || a.periodCash || a.periodCon))) return;
+      body += '<tr><td class="l">' + noteBadge(k || null) + ' <span class="lq-nl">' + NOTE_LBL[k] + '</span></td>' + rowCells(a, k, false) + '</tr>';
+    });
+    body += '<tr class="tot"><td class="l">Total</td>' + rowCells(t, 'all', true) + '</tr>';
+    body += '</tbody></table></div>';
+    body += '<div class="fn-stage-note" style="margin-top:8px">👆 Clique un chiffre (leads, leads avec RDV, leads présents, closes) pour voir les prospects concernés par leur nom, leur questionnaire, leur issue et la transcription de leur visio de closing — et les exporter en PDF.</div>';
+    body += '<div class="fn-stage-note" style="margin-top:8px">' + (per
+      ? 'Mode « Closes de la période »' + IL('mode_periode') + ' : leads, leads avec RDV et leads présents = leads entrés pendant la période ; closes, contracté et collecté = clients gagnés pendant la période (même liste que le Stats funnel), rangés selon la note du lead quel que soit son mois d\'entrée ; un close sans fiche lead va en « Non noté ». Les taux de close et le contracté / lead ne se lisent que sur les leads entrés : ils ne sont pas calculés ici. « Prélevé sur la période » = prélèvements passés pendant la période, anciens clients compris (un autre chiffre).'
+      : 'Leads entrés pendant la période (ré-optins compris) · leads avec RDV, leads présents et closes des leads entrés suivis jusqu\'à aujourd\'hui (un lead compte une fois) · contracté = contrat HT du close · collecté = prélèvements réellement passés (HT) · closes annulés exclus · un ancien client qui se réinscrit n\'est pas un close des leads entrés.') + '</div>';
+    if (!per && (mh.n !== t.closes || Math.abs(mh.con - totCash) > 0.5)) {
+      body += '<div class="fn-stage-note" style="margin-top:8px">Ce tableau suit les <strong>leads entrés pendant la période</strong> : ' + fNum(t.closes) + ' close' + (t.closes > 1 ? 's' : '') + ' des leads entrés, ' + fEur(totCash) + ' contractés. '
+        + 'Les cartes du haut comptent les <strong>clients gagnés pendant la période</strong> (' + fNum(mh.n) + ', ' + fEur(mh.con) + ') : l\'écart vient de clients entrés à une autre date que celle de leur close. Pour voir ce tableau sur la même base, clique « 🏦 Closes de la période ».</div>';
+    }
+    h += card('⭐ Qualité des leads → résultats', S.closer ? 'leads de ' + esc(clName) : 'toute l\'équipe', body);
 
     h += alignmentCard(R);
     return h;
@@ -452,54 +587,56 @@
     (S.M.quiz || []).forEach(function (p) { q.starts += p.starts; q.completes += p.completes; q.gateShown += p.gate.shown; q.gateExit += p.gate.exit; q.has = true; });
     return q;
   }
-  function tunnelStrip(t) {
+  function tunnelStrip(t, mh) {
     var q = quizTotals();
     var V = LC.quizVersions(rows(), S.M.quiz || [], S.M.tunnels || S.ctx.tunnelsMeta || null, S.M.views);
     var quizLeads = rows().filter(function (r) { return r.answers.some(function (a) { return a.o === 'quiz'; }); }).length;
     var steps = [
-      q.has ? { v: fNum(q.starts), l: 'Quiz commencés', s: V.all.views ? fPct(q.starts / V.all.views * 100, 0) + ' des visites' : '' }
+      q.has ? { v: fNum(q.starts), l: 'Quiz commencés', s: V.all.views ? fPct(q.starts / V.all.views * 100) + ' des visites' : '' }
         : { v: V.all.views ? fNum(V.all.views) : '—', l: V.all.views ? 'Visites des pages quiz' : 'Quiz commencés', s: V.all.views ? 'commencés : mesure à activer' : 'mesure à activer' },
-      q.has ? { v: fNum(q.completes), l: 'Quiz terminés', s: q.starts ? fPct(q.completes / q.starts * 100, 0) + ' des débuts' : '' }
-        : { v: V.all.views ? fNum(V.all.optins) : '—', l: V.all.views ? 'Formulaires quiz envoyés' : 'Quiz terminés', s: V.all.views ? fPct(V.all.optins / V.all.views * 100, 1) + ' des visites' : '' },
-      { v: fNum(t.leads), l: 'Leads', s: fNum(quizLeads) + ' via le quiz' },
-      { v: fNum(t.booked), l: 'RDV pris', s: fPct(t.bookRate, 0) + ' des leads' },
-      { v: fNum(t.present), l: 'Présents', s: fPct(t.showRate, 0) + ' des RDV' },
-      { v: fNum(t.closes), l: 'Closes', s: fPct(t.closePresent, 0) + ' des présents' },
-      { v: fEur(t.con), l: 'Signé', s: fEur(t.cash) + ' encaissé' }
+      q.has ? { v: fNum(q.completes), l: 'Quiz terminés', s: q.starts ? fPct(q.completes / q.starts * 100) + ' des débuts' : '' }
+        : { v: V.all.views ? fNum(V.all.optins) : '—', l: V.all.views ? 'Formulaires quiz envoyés' : 'Quiz terminés', s: V.all.views ? fPct(V.all.optins / V.all.views * 100) + ' des visites' : '' },
+      { v: fNum(t.leads), l: S.closer ? 'Leads de ' + esc(S.M.memberName(S.closer)) + IL('filtre_closer') : ML('leads_et_reoptins'), s: fNum(quizLeads) + ' via le quiz' }
     ];
+    if (!S.closer) steps.push({ v: fNum(t.leadsAvecRdv), l: ML('leads_avec_rdv'), s: fPct(t.pctLeadsAvecRdv) + ' des leads' });
+    steps.push({ v: fNum(t.leadsPresents), l: ML('leads_presents'), s: fPct(t.pctLeadsPresents) + ' des leads avec RDV' });
+    steps.push({ v: fNum(t.closes), l: MG('closes_cohorte'), s: 'close / leads présents : ' + fPct(t.tauxCloseLeadsPresents) + (t.closesSansRdv ? '<br>dont ' + fNum(t.closesSansRdv) + ' sans RDV enregistré' : '') });
+    steps.push({ v: fEur(t.con), l: ML('contracte_cohorte'), s: fEur(t.cash) + ' collecté' });
     var h = '<div class="lq-strip">';
     steps.forEach(function (s, i) {
       if (i) h += '<div class="lq-strip-arrow">›</div>';
       h += '<div class="lq-strip-step"><div class="v">' + s.v + '</div><div class="l">' + s.l + '</div><div class="s">' + (s.s || '&nbsp;') + '</div></div>';
     });
     h += '</div>';
-    if (q.has && q.gateShown) h += '<div class="fn-stage-note" style="margin-top:8px">Écran prix : affiché ' + fNum(q.gateShown) + ' fois · ' + fNum(q.gateExit) + ' visiteurs se sont arrêtés là (disqualifiés avant de prendre un créneau).</div>';
+    if (mh && (mh.n !== t.closes || Math.abs(mh.con - t.con) > 0.5)) h += '<div class="fn-stage-note" style="margin-top:8px">Clients gagnés <strong>pendant la période</strong> (cartes du haut, quel que soit leur mois d\'entrée) : ' + fNum(mh.n) + ' close' + (mh.n > 1 ? 's' : '') + ' · ' + fEur(mh.con) + ' contractés. Ce tunnel suit les leads entrés pendant la période, jusqu\'à aujourd\'hui.</div>';
+    if (q.has && q.gateShown) h += '<div class="fn-stage-note" style="margin-top:8px">Écran prix : affiché ' + fNum(q.gateShown) + ' fois · ' + fNum(q.gateExit) + ' visiteurs se sont arrêtés là (écartés par l\'écran prix, avant de prendre un créneau).</div>';
     if (!q.has) h += '<div class="fn-stage-note" style="margin-top:8px">« Quiz commencés / terminés » et l\'abandon question par question démarrent à l\'instrumentation de la page quiz (scripts/quiz-tracking-patch.js --apply) : ils ne se reconstituent pas pour le passé. Visites et formulaires envoyés, eux, sont mesurés depuis septembre.</div>';
     return h;
   }
 
   function insightsHtml(bn) {
+    var per = S.cashMode === 'periode';
     var list = LC.insights(bn, S.cashMode);
-    var cashWord = S.cashMode === 'periode' ? 'du signé de la période' : 'du signé';
-    var totC = S.cashMode === 'periode' ? bn.total.periodCon : bn.total.con;
-    function enc(x) { return ', dont ' + fEur(x.paid) + ' encaissé'; }
+    var cashWord = per ? 'du contracté des closes de la période' : 'du contracté des leads entrés';
+    var totC = per ? bn.total.periodCon : bn.total.con;
+    function enc(x) { return ', dont ' + fEur(x.paid) + ' collecté'; }
     if (!(totC > 0)) {
       list = list.filter(function (x) { return x.k === 'hi' || x.k === 'lo' || x.k === 'none'; });
       var h0 = '<ul class="lq-ins">';
       list.forEach(function (x) {
-        if (x.k === 'hi') h0 += '<li><span class="lq-note lq-n5">4-5</span> Les leads notés <strong>4 et 5</strong> sont <strong>' + fNum(x.leads) + '</strong> (' + fPct(x.leadsPct, 0) + ' des leads). Aucun close signé sur ces leads pour l\'instant.</li>';
-        else if (x.k === 'lo') h0 += '<li><span class="lq-note lq-n1">1</span> Les leads notés <strong>1</strong> : ' + fNum(x.leads) + ' leads, ' + fNum(x.booked) + ' RDV pris.</li>';
-        else if (x.k === 'none') h0 += '<li><span class="lq-note lq-n0">–</span> ' + fNum(x.leads) + ' leads (' + fPct(x.pct, 0) + ') sans réponse exploitable : pas de quiz ni de formulaire noté (RDV direct, import, ancien tunnel).</li>';
+        if (x.k === 'hi') h0 += '<li><span class="lq-note lq-n5">4-5</span> Les leads notés <strong>LQS 4 et 5</strong> sont <strong>' + fNum(x.leads) + '</strong> (' + fPct(x.leadsPct) + ' de tous les leads, notés ou non). Aucun close sur ces leads pour l\'instant.</li>';
+        else if (x.k === 'lo') h0 += '<li><span class="lq-note lq-n1">1</span> Les leads notés <strong>LQS 1</strong> : ' + fNum(x.leads) + ' leads, ' + fNum(x.booked) + ' avec RDV.</li>';
+        else if (x.k === 'none') h0 += '<li><span class="lq-note lq-n0">–</span> ' + fNum(x.leads) + ' leads (' + fPct(x.pct) + ') sans réponse exploitable : pas de quiz ni de formulaire noté (RDV direct, import, ancien tunnel).</li>';
       });
       return h0 + '</ul>';
     }
     if (!list.length) return '<div class="lq-muted">Aucun lead noté sur la période : les leads n\'ont pas de réponses exploitables (quiz ou formulaire).</div>';
     var h = '<ul class="lq-ins">';
     list.forEach(function (x) {
-      if (x.k === 'hi') h += '<li><span class="lq-note lq-n5">4-5</span> Les leads notés <strong>4 et 5</strong> sont <strong>' + fNum(x.leads) + '</strong> (' + fPct(x.leadsPct, 0) + ' des leads) et pèsent <strong>' + fPct(x.cashPct, 0) + '</strong> ' + cashWord + ' (' + fEur(x.cash) + enc(x) + ').</li>';
-      else if (x.k === 'mid') h += '<li><span class="lq-note lq-n3">3-4</span> Le cœur de cible <strong>3 et 4</strong> pèse <strong>' + fPct(x.cashPct, 0) + '</strong> ' + cashWord + ' (' + fEur(x.cash) + enc(x) + ').</li>';
-      else if (x.k === 'lo') h += '<li><span class="lq-note lq-n1">1</span> Les leads notés <strong>1</strong> : ' + fNum(x.leads) + ' leads, ' + fNum(x.booked) + ' RDV pris, <strong>' + fPct(x.cashPct, 1) + '</strong> ' + cashWord + ' (' + fEur(x.cash) + enc(x) + ')' + (x.booked && (x.cashPct == null || x.cashPct < 5) ? ' → des créneaux à libérer pour de meilleurs leads.' : '.') + '</li>';
-      else if (x.k === 'none') h += '<li><span class="lq-note lq-n0">–</span> ' + fNum(x.leads) + ' leads (' + fPct(x.pct, 0) + ') sans réponse exploitable : pas de quiz ni de formulaire noté (RDV direct, import, ancien tunnel).</li>';
+      if (x.k === 'hi') h += '<li><span class="lq-note lq-n5">4-5</span> Les leads notés <strong>LQS 4 et 5</strong> sont <strong>' + fNum(x.leads) + '</strong> (' + fPct(x.leadsPct) + ' de tous les leads, notés ou non) et pèsent <strong>' + fPct(x.cashPct) + '</strong> ' + cashWord + ' (' + fEur(x.cash) + enc(x) + ').</li>';
+      else if (x.k === 'mid') h += '<li><span class="lq-note lq-n3">3-4</span> Les notes <strong>3 et 4</strong> (la note 4 est aussi comptée dans la ligne du dessus) pèsent <strong>' + fPct(x.cashPct) + '</strong> ' + cashWord + ' (' + fEur(x.cash) + enc(x) + ').</li>';
+      else if (x.k === 'lo') h += '<li><span class="lq-note lq-n1">1</span> Les leads notés <strong>LQS 1</strong> : ' + fNum(x.leads) + ' leads, ' + fNum(x.booked) + ' avec RDV, <strong>' + fPct(x.cashPct) + '</strong> ' + cashWord + ' (' + fEur(x.cash) + enc(x) + ')' + (x.booked && (x.cashPct == null || x.cashPct < 5) ? ' → des créneaux à libérer pour de meilleurs leads.' : '.') + '</li>';
+      else if (x.k === 'none') h += '<li><span class="lq-note lq-n0">–</span> ' + fNum(x.leads) + ' leads (' + fPct(x.pct) + ') sans réponse exploitable : pas de quiz ni de formulaire noté (RDV direct, import, ancien tunnel).</li>';
     });
     return h + '</ul>';
   }
@@ -550,19 +687,19 @@
       + '<td><strong>' + fNum(o.newLeads) + '</strong>' + ovRate(o.optins ? o.newLeads / o.optins * 100 : null) + '</td>'
       + '<td>' + fNum(o.backLeads) + ovRate(null) + '</td>'
       + '<td>' + fNum(o.booked) + ovRate(o.rBook) + '</td>'
-      + '<td>' + fNum(o.kept) + ovRate(o.rKept) + '</td>';
+      + '<td>' + fNum(o.present != null ? o.present : o.kept) + ovRate(o.rPresent != null ? o.rPresent : o.rKept) + '</td>';
   }
   function ovHead(first) {
     return '<thead><tr><th class="l">' + first + '</th>'
-      + '<th title="Page du quiz affichée (une fois par session)">Arrivés</th>'
-      + '<th title="Ont cliqué une réponse à la question 1 · taux = ÷ arrivés (KPI du test A/B)">Ont répondu Q1</th>'
-      + '<th title="Arrivés − ont répondu Q1">N\'ont rien cliqué</th>'
-      + '<th title="Écran de fin des questions atteint · taux = ÷ ont répondu Q1">Ont fini les questions</th>'
-      + '<th title="Formulaire de coordonnées envoyé · taux = ÷ ont fini les questions (sinon ÷ ont répondu Q1)">Formulaire envoyé</th>'
-      + '<th title="Nouvelles fiches Leads Live dont la page d\'entrée est ce quiz · taux = ÷ formulaires">Nouveaux leads</th>'
-      + '<th title="Fiches déjà connues, ré-inscrites par ce quiz pendant la période (mise à jour, pas de nouvelle fiche)">Déjà connus revenus</th>'
-      + '<th title="RDV créés sur la période (seul ou par un setter, hors replanifications) · taux = ÷ leads">RDV pris</th>'
-      + '<th title="RDV tenus (fin de chaîne de report) · taux = ÷ RDV pris">RDV honorés</th></tr></thead>';
+      + '<th>' + ML('arrives') + '</th>'
+      + '<th>Ont répondu Q1' + IN('Ont répondu Q1', 'Ont cliqué une réponse à la question 1 · taux = ÷ arrivés (KPI du test A/B).') + '</th>'
+      + '<th>N\'ont rien cliqué' + IN('N\'ont rien cliqué', 'Arrivés − ont répondu Q1.') + '</th>'
+      + '<th>Ont fini les questions' + IN('Ont fini les questions', 'Écran de fin des questions atteint · taux = ÷ ont répondu Q1.') + '</th>'
+      + '<th>' + ML('formulaire_envoye') + '</th>'
+      + '<th>' + ML('nouveaux_leads') + '</th>'
+      + '<th>' + MG('reoptins', 'Ici : fiches déjà connues réinscrites par ce quiz pendant la période (mise à jour, pas de nouvelle fiche).') + '</th>'
+      + '<th>' + MG('rdv_pris', 'Ici : RDV pris pendant la période par les leads de ce quiz (Self Booking ou Setting, hors reports et doublons) · taux = ÷ nouveaux leads + ré-optins.') + '</th>'
+      + '<th>' + MG('presents', 'Ici : RDV pris dont le prospect est venu (lu sur le dernier RDV de la chaîne de report) · taux = ÷ RDV pris.') + '</th></tr></thead>';
   }
   function dayShort(iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] : '—'; }
   function overviewCards(list) {
@@ -594,13 +731,13 @@
           + ' · par réponse à Q1 ' + fEur(q.total.q1 ? q.spend / q.total.q1 : null)
           + ' · par formulaire ' + fEur(q.total.optins ? q.spend / q.total.optins : null)
           + ' · <strong>par nouveau lead ' + fEur(q.cpl) + '</strong>'
-          + (nl !== q.total.newLeads ? ' (' + fEur(nl ? q.spend / nl : null) + ' en comptant les déjà connus)' : '') + '</div>'
+          + (nl !== q.total.newLeads ? ' (' + fEur(nl ? q.spend / nl : null) + ' en comptant les ré-optins)' : '') + '</div>'
           + '<div class="fn-stage-note">Dépense de chaque pub répartie selon la page où arrivent SES visites (utm_content), jour par jour : une même campagne peut mener à deux quiz.'
           + (list.spendUnattributed ? ' ' + fEur(list.spendUnattributed) + ' de dépense sur la période sans visite rattachée (pubs sans utm_content, autres pages).' : '') + '</div>';
       }
       body += '<div class="fn-stage-note" style="margin-top:8px">Période couverte par la mesure : '
         + (q.first ? 'du ' + dayShort(q.first) + ' au ' + dayShort(q.last) : 'aucune visite mesurée')
-        + ' · jours de Paris · visites internes (tests, équipe) exclues. Arrivés, réponses à Q1 et formulaires : compteurs de la page, toutes publications réunies. Leads et RDV : fiches Leads Live dont ce quiz est la page d\'entrée.</div>';
+        + ' · jours de Paris · visites internes (tests, équipe) exclues. Arrivés, réponses à Q1 et formulaires : compteurs de la page, toutes publications réunies. Leads et RDV : fiches Leads Live dont ce quiz est la page d\'entrée. Ce bloc ne suit pas les filtres tunnel / source / closer de la page.</div>';
       h += card('🎯 ' + esc(q.name) + ' — chiffres de référence', 'un quiz, ses variantes · taux sous chaque chiffre', body);
     });
     return h;
@@ -633,21 +770,23 @@
   function qualityCard() {
     var list = LC.qualityByPage(rows(), S.M.tunnels || S.ctx.tunnelsMeta || null);
     if (!list.length) return '';
-    var body = '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr><th class="l">Page d\'entrée</th><th>Leads</th>'
-      + '<th title="Leads qui ont pris un RDV · seul (lien de réservation) / par un setter">RDV pris</th><th>Honorés</th><th>Closes</th>'
-      + '<th title="Closes ÷ leads">Closing / lead</th><th title="Signé HT, encaissé dessous">Signé · encaissé</th><th>Signé / lead</th></tr></thead><tbody>';
-    var lastQuiz = '';
+    var body = '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr><th class="l">Page d\'entrée</th><th>' + ML('nouveaux_leads') + '</th><th>' + MG('reoptins', 'Ici : anciens leads réinscrits par ce quiz pendant la période.') + '</th>'
+      + '<th>' + ML('leads_avec_rdv', 'Sous le chiffre : Self Booking (SB) / Setting (NB) / manuel, selon leur premier RDV.') + '</th><th>' + ML('leads_presents') + '</th><th>' + MG('closes_cohorte') + '</th>'
+      + '<th>' + ML('taux_close_lead') + '</th><th>' + ML('contracte_cohorte') + ' · collecté</th><th>' + ML('contracte_par_lead') + '</th></tr></thead><tbody>';
+    var lastQuiz = '', sansRep = 0;
     list.forEach(function (g) {
       var a = g.agg;
-      if (g.quiz !== lastQuiz) { body += '<tr class="tot"><td class="l" colspan="8">' + esc(g.quiz) + '</td></tr>'; lastQuiz = g.quiz; }
-      body += '<tr><td class="l"><strong>' + esc(g.label) + '</strong>' + sub(esc(g.path + (g.variant ? ' · ' + g.variant.toUpperCase() : ''))) + '</td>'
-        + '<td>' + fNum(a.leads) + '</td>'
-        + '<td>' + fNum(a.booked) + sub(fPct(a.bookRate, 0) + ' · seul ' + fNum(g.self) + ' / setter ' + fNum(g.setter)) + '</td>'
-        + '<td>' + fNum(a.present) + sub(fPct(a.showRate, 0) + ' des RDV') + '</td>'
-        + '<td><strong>' + fNum(a.closes) + '</strong></td><td>' + fPct(a.closeLead, 1) + '</td>'
+      sansRep += g.sansReponses || 0;
+      if (g.quiz !== lastQuiz) { body += '<tr class="tot"><td class="l" colspan="9">' + esc(g.quiz) + '</td></tr>'; lastQuiz = g.quiz; }
+      body += '<tr><td class="l"><strong>' + esc(g.label) + '</strong>' + sub(esc(g.path + (g.variant ? ' · ' + g.variant.toUpperCase() : '')) + (g.sansReponses ? ' · ' + fNum(g.sansReponses) + ' fiche' + (g.sansReponses > 1 ? 's' : '') + ' sans réponses (non comptée' + (g.sansReponses > 1 ? 's' : '') + ')' : '')) + '</td>'
+        + '<td>' + fNum(a.nouveaux) + '</td><td>' + fNum(a.reopt) + '</td>'
+        + '<td>' + fNum(a.leadsAvecRdv) + sub(fPct(a.pctLeadsAvecRdv) + ' des leads · SB ' + fNum(g.self) + ' / NB ' + fNum(g.setter) + (g.manuel ? ' / manuel ' + fNum(g.manuel) : '')) + '</td>'
+        + '<td>' + fNum(a.leadsPresents) + sub(fPct(a.pctLeadsPresents) + ' des leads avec RDV') + '</td>'
+        + '<td><strong>' + fNum(a.closes) + '</strong>' + (a.closesSansRdv ? sub('dont ' + fNum(a.closesSansRdv) + ' sans RDV enregistré') : '') + '</td><td>' + fPct(a.tauxCloseLeads) + '</td>'
         + '<td>' + money(a.con, a.cash) + '</td><td>' + fEur(a.leads ? a.con / a.leads : null) + '</td></tr>';
     });
-    body += '</tbody></table></div><div class="fn-stage-note" style="margin-top:8px">Leads de la période choisie (pour la lecture du brief : période depuis le 01/10), rangés par la page quiz qui les a fait entrer. RDV et closes suivis jusqu\'à aujourd\'hui ; signé = contrat HT du close, encaissé = prélèvements passés.</div>';
+    body += '</tbody></table></div><div class="fn-stage-note" style="margin-top:8px">Leads de la période choisie (nouveaux leads et ré-optins séparés ; pour la lecture du brief : période depuis le 01/10), rangés par la page quiz qui les a fait entrer. Leads avec RDV, leads présents et closes des leads entrés suivis jusqu\'à aujourd\'hui (un lead compte une fois) ; contracté = contrat HT du close, collecté = prélèvements passés. Close / lead et contracté / lead se calculent sur nouveaux leads + ré-optins.'
+      + (sansRep ? ' ' + fNum(sansRep) + ' fiche' + (sansRep > 1 ? 's' : '') + ' entrée' + (sansRep > 1 ? 's' : '') + ' par un quiz sans réponses enregistrées n\'' + (sansRep > 1 ? 'y sont' : 'y est') + ' pas comptée' + (sansRep > 1 ? 's' : '') + '.' : '') + '</div>';
     return card('🏁 Qualité des leads par page d\'entrée', 'quel quiz, quelle variante amène les leads qui signent', body);
   }
 
@@ -665,10 +804,10 @@
     if (S.quizVer && !V.list.some(function (v) { return v.key === S.quizVer; }) && !fams.some(function (f) { return f.key === S.quizVer; })) S.quizVer = '';
     var h = help('ℹ️ Comment lire cette vue', '<p>Deux types de personnes : les <strong>visiteurs</strong> (tous ceux qui font le quiz, comptés anonymement) et les <strong>contacts</strong> (ceux qui ont laissé leurs coordonnées à la fin).</p>'
       + '<p><strong>🚪 À quel moment les gens quittent le quiz</strong> : pour chaque question, combien de visiteurs l\'ont vue, combien y ont répondu, combien sont partis dessus — puis combien ont tout rempli. Une question qui fait partir beaucoup de monde est peut-être mal posée, pas pertinente ou gênante.</p>'
-      + '<p><strong>📋 Question par question</strong> : pour chaque réponse, combien de visiteurs l\'ont choisie, et ce que ça a donné chez les contacts (clients Élite / Business, signé et encaissé), avec ses points dans le barème.</p>'
+      + '<p><strong>📋 Question par question</strong> : pour chaque réponse, combien de visiteurs l\'ont choisie, et ce que ça a donné chez les contacts (closes des leads entrés Élite / Business, contracté et collecté), avec ses points dans le barème.</p>'
       + '<p>Les <strong>cartes</strong> en haut filtrent par version du quiz (Dark, White, YouTube…). « Comparer » les met côte à côte. Les formulaires hors quiz sont tout en bas.</p>'
       + '<p><strong>Période comparable</strong> (par défaut) : toutes les publications de la page sont réunies tant que les questions mesurées restent les mêmes ; un changement de questions ou une mesure corrigée ouvre une nouvelle période, pour ne jamais mélanger deux parcours qui ne se comparent pas. Les <strong>chiffres de référence</strong> en tête (arrivés, Q1, formulaires, leads, RDV) couvrent toujours toute la période choisie.</p>'
-      + '<p>Mêmes définitions sur toutes les pages : <strong>arrivés</strong> = page affichée, <strong>commencé</strong> = a cliqué une réponse à la question 1.</p>');
+      + '<p>Définitions : dans les <strong>chiffres de référence</strong>, <strong>arrivés</strong> = page du quiz affichée (une fois par session, compteur de la page) ; dans le <strong>parcours</strong>, la première ligne compte ceux qui <strong>ont vu la 1re question</strong> (mesure du quiz lui-même, période comparable) ; <strong>commencé</strong> = a cliqué une réponse à la question 1. Côté contacts : leads avec RDV, leads présents et closes des leads entrés comptent des leads (un lead compte une fois).</p>');
     var ovList = LC.quizOverview(S.D || {}, S.ctx.P, S.M.tunnels || S.ctx.tunnelsMeta || null);
     h += overviewCards(ovList);
     h += checksCard(ovList);
@@ -733,7 +872,7 @@
       + '<div class="lq-vname">' + esc(v.name) + '</div><div class="lq-vsub">' + esc(v.sub || '') + '</div>'
       + '<div class="lq-vline"><span class="lq-muted">Visiteurs :</span> ' + (v.starts ? '<strong>' + fNum(v.starts) + '</strong> ont commencé · ' + fPct(v.completeRate, 0) + ' ont tout rempli'
         : (v.views ? '<strong>' + fNum(v.views) + '</strong> visites · ' + fNum(v.optins) + ' formulaires envoyés' : '<span class="lq-muted">visiteurs : en attente de mesure</span>')) + '</div>'
-      + '<div class="lq-vline"><span class="lq-muted">Leads de la période :</span> <strong>' + fNum(a.leads) + '</strong> → <strong>' + fNum(a.closes) + '</strong> client' + (a.closes > 1 ? 's' : '') + ' · <strong>' + fEur(a.con) + '</strong> signés · ' + fEur(a.cash) + ' encaissés</div>'
+      + '<div class="lq-vline"><span class="lq-muted">Leads de la période :</span> <strong>' + fNum(a.leads) + '</strong> → <strong>' + fNum(a.closes) + '</strong> close' + (a.closes > 1 ? 's' : '') + ' des leads entrés · <strong>' + fEur(a.con) + '</strong> contractés · ' + fEur(a.cash) + ' collectés</div>'
       + (a.closes ? '<div class="lq-vline">' + offerSplit(a) + '</div>' : '') + '</div>';
   }
 
@@ -773,9 +912,9 @@
     if (o.nr) res = '<span class="lq-muted">ancienne version de la page : la réponse choisie n\'était pas transmise</span>';
     else if (!a) res = '<span class="lq-muted">aucun lead avec cette réponse</span>';
     else {
-      res = '<strong>' + fNum(a.leads) + '</strong> lead' + (a.leads > 1 ? 's' : '') + ' → <strong>' + fNum(a.closes) + '</strong> client' + (a.closes > 1 ? 's' : '');
+      res = '<strong>' + fNum(a.leads) + '</strong> lead' + (a.leads > 1 ? 's' : '') + ' → <strong>' + fNum(a.closes) + '</strong> close' + (a.closes > 1 ? 's' : '');
       if (a.closes) res += ' (' + offerSplit(a) + ')';
-      res += ' · <strong>' + fEur(a.con) + '</strong> signés · ' + fEur(a.cash) + ' encaissés';
+      res += ' · <strong>' + fEur(a.con) + '</strong> contractés · ' + fEur(a.cash) + ' collectés';
       var lv = vSplit(o.leadsByV, vars);
       if (lv) res += sub('leads : ' + lv);
     }
@@ -788,11 +927,11 @@
   function detailTable(c) {
     var h = '<div class="fn-table-wrap" style="margin-top:8px"><table class="fn-igt lq-t"><thead>'
       + '<tr><th class="l" rowspan="2">Réponse</th><th colspan="2" class="lq-cmp-g">Visiteurs du quiz</th><th colspan="9" class="lq-cmp-g">Contacts (ont laissé leurs coordonnées)</th><th rowspan="2" class="lq-cmp-g">Points</th></tr>'
-      + '<tr><th class="lq-cmp-g">Ont choisi</th><th>Part</th><th class="lq-cmp-g">Contacts</th><th>RDV pris</th><th>Venus au RDV</th><th>Clients</th><th>dont Élite</th><th>dont Business</th><th title="Clients ÷ contacts">Taux de vente</th><th title="Signé HT, encaissé dessous">Signé · encaissé</th><th>Signé par contact</th></tr></thead><tbody>';
+      + '<tr><th class="lq-cmp-g">Ont choisi</th><th>Part</th><th class="lq-cmp-g">Contacts</th><th>' + ML('leads_avec_rdv') + '</th><th>' + ML('leads_presents') + '</th><th>' + MG('closes_cohorte') + '</th><th>dont Élite</th><th>dont Business</th><th>' + ML('taux_close_lead') + '</th><th>' + ML('contracte_cohorte') + ' · collecté</th><th>' + ML('contracte_par_lead') + '</th></tr></thead><tbody>';
     c.answers.forEach(function (o) {
       var a = o.agg;
       h += '<tr><td class="l">' + esc(o.label) + '</td><td class="lq-cmp-g">' + fNum(o.visitors) + '</td><td>' + fPct(o.visitorShare, 0) + '</td>'
-        + (a ? '<td class="lq-cmp-g">' + fNum(a.leads) + '</td><td>' + fNum(a.booked) + '</td><td>' + fNum(a.present) + '</td><td><strong>' + fNum(a.closes) + '</strong>' + (a.closesU ? sub(fNum(a.closesU) + ' sans offre') : '') + '</td>'
+        + (a ? '<td class="lq-cmp-g">' + fNum(a.leads) + '</td><td>' + fNum(a.leadsAvecRdv) + '</td><td>' + fNum(a.leadsPresents) + '</td><td><strong>' + fNum(a.closes) + '</strong>' + (a.closesU ? sub(fNum(a.closesU) + ' sans offre') : '') + '</td>'
           + '<td>' + fNum(a.closesE) + (a.closesE ? sub(fEur(a.conE)) : '') + '</td><td>' + fNum(a.closesB) + (a.closesB ? sub(fEur(a.conB)) : '') + '</td>'
           + '<td>' + fPct(a.closeLead, 1) + '</td><td>' + money(a.con, a.cash) + '</td><td><strong>' + fEur(a.conPerLead) + '</strong></td>'
           : '<td colspan="9" class="l lq-muted lq-cmp-g">aucun contact avec cette réponse sur la période</td>')
@@ -800,7 +939,7 @@
     });
     if (c.lq) {
       var t = c.lq.agg;
-      h += '<tr class="tot"><td class="l">Total</td><td class="lq-cmp-g">' + (c.step ? fNum(c.step.answered) : '—') + '</td><td></td><td class="lq-cmp-g">' + fNum(t.leads) + '</td><td>' + fNum(t.booked) + '</td><td>' + fNum(t.present) + '</td><td>' + fNum(t.closes) + '</td><td>' + fNum(t.closesE) + (t.closesE ? sub(fEur(t.conE)) : '') + '</td><td>' + fNum(t.closesB) + (t.closesB ? sub(fEur(t.conB)) : '') + '</td><td>' + fPct(t.closeLead, 1) + '</td><td>' + money(t.con, t.cash) + '</td><td>' + fEur(t.conPerLead) + '</td><td class="lq-cmp-g"></td></tr>';
+      h += '<tr class="tot"><td class="l">Total</td><td class="lq-cmp-g">' + (c.step ? fNum(c.step.answered) : '—') + '</td><td></td><td class="lq-cmp-g">' + fNum(t.leads) + '</td><td>' + fNum(t.leadsAvecRdv) + '</td><td>' + fNum(t.leadsPresents) + '</td><td>' + fNum(t.closes) + '</td><td>' + fNum(t.closesE) + (t.closesE ? sub(fEur(t.conE)) : '') + '</td><td>' + fNum(t.closesB) + (t.closesB ? sub(fEur(t.conB)) : '') + '</td><td>' + fPct(t.closeLead, 1) + '</td><td>' + money(t.con, t.cash) + '</td><td>' + fEur(t.conPerLead) + '</td><td class="lq-cmp-g"></td></tr>';
     }
     return h + '</tbody></table></div>';
   }
@@ -813,7 +952,7 @@
     var h = '<div class="fn-table-wrap"><table class="fn-igt lq-t lq-cmp"><thead><tr><th class="l" rowspan="2">Réponse</th>';
     others.forEach(function (o) { h += '<th colspan="3" class="lq-cmp-g">' + platformBadge(o.v.platform) + ' ' + esc(o.v.name) + '</th>'; });
     h += '</tr><tr>';
-    others.forEach(function () { h += '<th class="lq-cmp-g" title="Part des visiteurs qui ont choisi cette réponse">Choisie par</th><th>Contacts</th><th>Signé / contact</th>'; });
+    others.forEach(function () { h += '<th class="lq-cmp-g" title="Part des visiteurs qui ont choisi cette réponse">Choisie par</th><th>Contacts</th><th>Contracté / lead</th>'; });
     h += '</tr></thead><tbody>';
     c.answers.forEach(function (ans) {
       h += '<tr><td class="l">' + esc(ans.label) + '</td>';
@@ -836,13 +975,13 @@
          · parcours visiteurs = période mesurée ; « devenus leads » limité à
            cette même période pour se lire avec lui ;
          · résultats = tous les leads de la période choisie en haut de page. */
-      h += '<div class="lq-summary"><div><strong>Parcours des visiteurs</strong>' + (d.from ? ' <span class="lq-muted">depuis le ' + fDay(d.from) + '</span>' : '') + ' : <strong>' + fNum(d.shown) + '</strong> arrivés sur la page → <strong>' + fNum(d.starts) + '</strong> ont répondu à la 1re question → <strong>' + fNum(d.completes) + '</strong> ont rempli le quiz → <strong>' + fNum(view.leadsInMeasure) + '</strong> ' + plur(view.leadsInMeasure, 'est devenu lead', 'sont devenus leads') + '</div>'
-        + '<div style="margin-top:6px"><strong>Résultats des leads</strong> <span class="lq-muted">' + esc(S.ctx.periodLabel || 'période choisie') + '</span> : <strong>' + fNum(t.leads) + '</strong> lead' + (t.leads > 1 ? 's' : '') + ' de ce quiz → <strong>' + fNum(t.closes) + '</strong> client' + (t.closes > 1 ? 's' : '') + (t.closes ? ' (' + offerSplit(t) + ')' : '') + ' · <strong>' + fEur(t.con) + '</strong> signés · ' + fEur(t.cash) + ' encaissés'
+      h += '<div class="lq-summary"><div><strong>Parcours des visiteurs</strong>' + (d.from ? ' <span class="lq-muted">depuis le ' + fDay(d.from) + '</span>' : '') + ' : <strong>' + fNum(d.shown) + '</strong> ont vu la 1re question' + IL('vus_q1') + ' → <strong>' + fNum(d.starts) + '</strong> ont répondu à la 1re question → <strong>' + fNum(d.completes) + '</strong> ont rempli le quiz → <strong>' + fNum(view.leadsInMeasure) + '</strong> ' + plur(view.leadsInMeasure, 'est devenu lead', 'sont devenus leads') + '</div>'
+        + '<div style="margin-top:6px"><strong>Résultats des leads</strong> <span class="lq-muted">' + esc(S.ctx.periodLabel || 'période choisie') + '</span> : <strong>' + fNum(t.leads) + '</strong> lead' + (t.leads > 1 ? 's' : '') + ' de ce quiz → <strong>' + fNum(t.closes) + '</strong> close' + (t.closes > 1 ? 's' : '') + ' des leads entrés' + (t.closes ? ' (' + offerSplit(t) + ')' : '') + ' · <strong>' + fEur(t.con) + '</strong> contractés · ' + fEur(t.cash) + ' collectés'
         + (view.beforeMeasure ? '<div class="lq-sub">dont ' + fNum(view.beforeMeasure) + ' lead' + (view.beforeMeasure > 1 ? 's entrés' : ' entré') + ' avant le début de la mesure visiteurs : ' + (view.beforeMeasure > 1 ? 'ils comptent' : 'il compte') + ' dans les résultats, pas dans le parcours.</div>' : '') + '</div></div>';
     } else {
       h += '<div class="fn-alert" style="margin:0 0 12px">⏳ <strong>Le suivi question par question est activé, mais aucune visite n\'a encore été mesurée sur cette période.</strong> Dès les prochaines personnes qui font le quiz, tu verras ici combien commencent, combien remplissent tout, et sur quelle question elles partent. Le passé ne peut pas être reconstitué.'
         + (cur && cur.views ? '<br>Déjà connu sur la période : <strong>' + fNum(cur.views) + '</strong> visites de la page quiz → <strong>' + fNum(cur.optins) + '</strong> formulaires envoyés (' + fPct(cur.views ? cur.optins / cur.views * 100 : null, 1) + ').' : '') + '</div>';
-      h += '<div class="lq-summary"><strong>' + fNum(t.leads) + '</strong> personnes ont rempli le quiz et laissé leurs coordonnées sur la période → <strong>' + fNum(t.booked) + '</strong> RDV pris → <strong>' + fNum(t.closes) + '</strong> client' + (t.closes > 1 ? 's' : '') + (t.closes ? ' (' + offerSplit(t) + ')' : '') + ' · <strong>' + fEur(t.con) + '</strong> signés · ' + fEur(t.cash) + ' encaissés</div>';
+      h += '<div class="lq-summary"><strong>' + fNum(t.leads) + '</strong> personnes ont rempli le quiz et laissé leurs coordonnées sur la période → <strong>' + fNum(t.leadsAvecRdv) + '</strong> avec RDV → <strong>' + fNum(t.closes) + '</strong> close' + (t.closes > 1 ? 's' : '') + ' des leads entrés' + (t.closes ? ' (' + offerSplit(t) + ')' : '') + ' · <strong>' + fEur(t.con) + '</strong> contractés · ' + fEur(t.cash) + ' collectés</div>';
     }
     if (!cmp) h += exitMap(view);
     if (!view.cards.length) return h + '<div class="lq-muted">Aucune question à afficher.</div>';
@@ -935,18 +1074,18 @@
       + (best && worst && best !== worst ? ' · meilleure : <strong>' + esc(best.label) + '</strong>' : '') + '</span></div>';
     if (open) {
       var list = q.answerList.slice(0, 30);
-      h += '<div class="fn-table-wrap" style="margin-top:8px"><table class="fn-igt lq-t"><thead><tr><th class="l">Réponse</th><th>Points</th><th>Leads</th><th>Part</th><th>RDV pris</th><th>Présents</th><th>Closes</th><th>Closing / lead</th><th title="Signé HT, encaissé dessous">Signé · encaissé</th><th>Signé / lead</th><th>LQS moyen</th></tr></thead><tbody>';
+      h += '<div class="fn-table-wrap" style="margin-top:8px"><table class="fn-igt lq-t"><thead><tr><th class="l">Réponse</th><th>Points</th><th>' + ML('leads_et_reoptins') + '</th><th>Part</th><th>' + ML('leads_avec_rdv') + '</th><th>' + ML('leads_presents') + '</th><th>' + MG('closes_cohorte') + '</th><th>' + ML('taux_close_lead') + '</th><th>' + ML('contracte_cohorte') + ' · collecté</th><th>' + ML('contracte_par_lead') + '</th><th>LQS moyen' + IL('lqs') + '</th></tr></thead><tbody>';
       list.forEach(function (x) {
         var a = x.agg;
         var tag = x === best && best !== worst ? ' <span class="fn-tbadge lq-good">la plus rentable</span>' : (x === worst && best !== worst ? ' <span class="fn-tbadge lq-warn">la moins rentable</span>' : '');
         h += '<tr><td class="l">' + esc(x.label) + tag + '</td>'
           + '<td>' + ptsChip(x) + '</td><td>' + fNum(a.leads) + '</td><td>' + fPct(x.share, 0) + '</td>'
-          + '<td>' + fNum(a.booked) + sub(fPct(a.bookRate, 0)) + '</td><td>' + fNum(a.present) + sub(fPct(a.showRate, 0)) + '</td>'
+          + '<td>' + fNum(a.leadsAvecRdv) + sub(fPct(a.pctLeadsAvecRdv) + ' des leads') + '</td><td>' + fNum(a.leadsPresents) + sub(fPct(a.pctLeadsPresents) + ' des leads avec RDV') + '</td>'
           + '<td>' + fNum(a.closes) + '</td><td>' + fPct(a.closeLead, 1) + '</td>'
           + '<td>' + money(a.con, a.cash) + '</td><td><strong>' + fEur(a.conPerLead) + '</strong></td><td>' + avgBadge(a.avgNote) + '</td></tr>';
       });
       if (q.answerList.length > list.length) h += '<tr><td class="l lq-muted" colspan="11">+ ' + (q.answerList.length - list.length) + ' autres réponses (texte libre), moins fréquentes.</td></tr>';
-      h += '<tr class="tot"><td class="l">Toutes les réponses</td><td></td><td>' + fNum(q.agg.leads) + '</td><td>100 %</td><td>' + fNum(q.agg.booked) + '</td><td>' + fNum(q.agg.present) + '</td><td>' + fNum(q.agg.closes) + '</td><td>' + fPct(q.agg.closeLead, 1) + '</td><td>' + money(q.agg.con, q.agg.cash) + '</td><td>' + fEur(q.agg.conPerLead) + '</td><td>' + avgBadge(q.agg.avgNote) + '</td></tr>';
+      h += '<tr class="tot"><td class="l">Toutes les réponses</td><td></td><td>' + fNum(q.agg.leads) + '</td><td>100 %</td><td>' + fNum(q.agg.leadsAvecRdv) + '</td><td>' + fNum(q.agg.leadsPresents) + '</td><td>' + fNum(q.agg.closes) + '</td><td>' + fPct(q.agg.closeLead, 1) + '</td><td>' + money(q.agg.con, q.agg.cash) + '</td><td>' + fEur(q.agg.conPerLead) + '</td><td>' + avgBadge(q.agg.avgNote) + '</td></tr>';
       h += '</tbody></table></div>';
     }
     return h + '</div>';
@@ -975,60 +1114,123 @@
         : ' Lieu approximatif (ville de l\'adresse internet) capté depuis le 23/11/2026 à l\'inscription ou à la prise de RDV ; clients plus anciens : lieu de la signature du contrat.')
       + ' Pas de dépense par appareil ni par région : Meta ne la transmet pas.</div>';
   }
+  /* Couverture de la dépense par pub — même règle que le Stats funnel
+     (k.adSpendDaysExpected / Covered / Complete, funnel-core.js) : jours de
+     la période jusqu'à HIER (Paris) ayant au moins une ligne ads_insights_ad
+     qui passe les filtres tunnel / source. Repris tel quel quand la page
+     fournit les KPI du funnel (ctx.funnelKpis). */
+  function adsCoverage() {
+    var K = S.ctx && S.ctx.funnelKpis;
+    if (K && K.adSpendDaysExpected != null) return { expected: K.adSpendDaysExpected, covered: K.adSpendDaysCovered || 0, ok: !!K.adSpendComplete };
+    var P = S.ctx.P, tf = S.ctx.tunnelFilter, yt = S.ctx.sourceFilter === 'youtube';
+    var dates = {}, spend = 0;
+    if (!yt) (S.M.adsByAd || []).forEach(function (a) {
+      if (!a || !a.date) return;
+      if (tf && tf !== 'all' && a.tunnel && (a.tunnel === 'business' ? 'business' : 'elite') !== tf) return;
+      dates[a.date] = 1; spend += Number(a.spend) || 0;
+    });
+    var startIso = FC.isoDate(P.start), endIso = FC.isoDate(P.end);
+    var hier = SC && SC.jourParis ? SC.jourParis(Date.now() - 86400000) : FC.isoDate(new Date(Date.now() - 86400000));
+    var fin = endIso < hier ? endIso : hier;
+    var expected = 0, covered = 0;
+    if (startIso <= fin) {
+      var pp = startIso.split('-'), d = Date.UTC(+pp[0], +pp[1] - 1, +pp[2]), guard = 0;
+      while (guard++ < 1200) {
+        var iso = new Date(d).toISOString().slice(0, 10);
+        if (iso > fin) break;
+        expected++;
+        if (dates[iso]) covered++;
+        d += 86400000;
+      }
+    }
+    return { expected: expected, covered: covered, ok: expected > 0 ? covered >= expected : spend > 0 };
+  }
   function viewMarketing() {
     var R = rows();
-    var ax = LC.byAxis(R, S.axis, S.M.adsByAd, S.ctx.tunnelFilter);
-    var h = help('ℹ️ Comment se calcule le MQS', '<p><strong>MQS = 60 % qualité + 40 % résultats</strong>, sur 5.</p><p><strong>Qualité</strong> = LQS moyen des leads de la source (ce que leurs réponses valent).<br><strong>Résultats</strong> = montant signé (HT) par lead de la source, comparé à la moyenne : 2× la moyenne ou plus → 5 ; ≥ 1,25× → 4 ; ≥ 0,75× → 3 ; ≥ 0,35× → 2 ; sinon 1. Les petits effectifs sont ramenés vers la moyenne pour ne pas s\'emballer sur 2 leads.</p>'
+    var ax = LC.byAxis(R, S.axis, S.M.adsByAd, S.ctx.tunnelFilter, S.ctx.sourceFilter);
+    var cov = adsCoverage();
+    var K = S.ctx && S.ctx.funnelKpis;
+    var costsOk = !S.closer && !ax.sansDepense && cov.ok;
+    var h = help('ℹ️ Comment se calcule le MQS', '<p><strong>MQS = 60 % qualité + 40 % résultats</strong>, sur 5.</p><p><strong>Qualité</strong> = LQS moyen des leads de la source (ce que leurs réponses valent).<br><strong>Résultats</strong> = contracté des leads entrés (HT) par lead de la source, comparé à la moyenne : 2× la moyenne ou plus → 5 ; ≥ 1,25× → 4 ; ≥ 0,75× → 3 ; ≥ 0,35× → 2 ; sinon 1. Sans aucun contrat sur la période, la partie résultats compare le taux de leads présents. Les petits effectifs sont ramenés vers la moyenne pour ne pas s\'emballer sur 2 leads.</p>'
       + '<p>Sous ' + LC.MQS_MIN + ' leads notés : « n.s. » (non significatif). <strong>Une créa de découverte</strong> peut avoir un MQS moyen et nourrir les autres : à lire avec la colonne Dépense et le Journal avant de couper.</p>'
+      + '<p><strong>Contracté ÷ dépense</strong> n\'est pas le ROAS pub du Stats funnel : il divise la valeur des contrats des leads entrés, pas l\'argent déjà prélevé.</p>'
       + '<p>Les leads sans UTM tombent dans « Pub · créative non transmise » ou « Hors pub ». Pour que chaque 4-5 remonte à sa créa, toutes les pubs doivent porter le modèle d\'URL Meta (utm_content={{ad.name}} ou {{ad.id}}).</p>');
     h += '<div class="fn-seg" style="margin-bottom:14px;width:fit-content">';
     AXES.forEach(function (a) { h += '<button data-lq-axis="' + a[0] + '" class="' + (S.axis === a[0] ? 'active' : '') + '">' + a[1] + '</button>'; });
     h += '</div>';
     h += visiteurCoverage(ax);
+    if (S.closer) h += '<div class="fn-alert">Filtre closer : dépense, CPL, coût / lead LQS 4-5 et contracté ÷ dépense ne sont pas calculés — la dépense pub ne se répartit pas par closer.</div>';
+    else if (ax.sansDepense) h += '<div class="fn-alert">Vue YouTube : aucune dépense pub Meta à rapporter à ces leads (même règle que le Stats funnel) — coûts non calculés.</div>';
+    else if (!cov.ok && ax.spend > 0) h += '<div class="fn-alert">⚠ Dépense Meta par pub reçue pour ' + fNum(cov.covered) + ' jour' + (cov.covered > 1 ? 's' : '') + ' sur ' + fNum(cov.expected) + ' : coûts masqués, ils seraient faussement bas.' + IL('depense_incomplete') + '</div>';
     var withMqs = ax.rows.filter(function (x) { return x.m; }).sort(function (a, b) { return b.m.mqs - a.m.mqs; });
     if (withMqs.length >= 2) {
       var top = withMqs[0], low = withMqs[withMqs.length - 1];
-      h += '<div class="fn-rates"><span class="rt">🏆 Meilleure source : <strong>' + esc(top.label) + '</strong> MQS ' + fDec(top.m.mqs, 1) + ' · ' + fPct(top.agg.pct45, 0) + ' de 4-5 · ' + fEur(top.agg.conPerLead) + ' signés / lead' + (top.agg.closes ? ' · ' + offerSplit(top.agg) : '') + '</span>'
-        + '<span class="rt">⚠️ Plus faible : <strong>' + esc(low.label) + '</strong> MQS ' + fDec(low.m.mqs, 1) + ' · ' + fPct(low.agg.pct45, 0) + ' de 4-5</span></div>';
+      h += '<div class="fn-rates"><span class="rt">🏆 Meilleure source : <strong>' + esc(top.label) + '</strong> MQS ' + fDec(top.m.mqs, 1) + ' · ' + fPct(top.agg.pct45) + ' de LQS 4-5 · ' + fEur(top.agg.conPerLead) + ' contractés / lead' + (top.agg.closes ? ' · ' + offerSplit(top.agg) : '') + '</span>'
+        + '<span class="rt">⚠️ Plus faible : <strong>' + esc(low.label) + '</strong> MQS ' + fDec(low.m.mqs, 1) + ' · ' + fPct(low.agg.pct45) + ' de LQS 4-5</span></div>';
     }
-    var t = ax.total;
-    var body = '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr><th class="l">Source</th><th title="Marketing Quality Score">MQS</th><th>Dépense</th><th>Leads</th><th>CPL</th><th>LQS moyen</th><th>% 4-5</th><th title="Dépense ÷ leads notés 4-5">Coût / lead 4-5</th><th class="l" style="min-width:110px">Répartition</th><th>RDV</th><th>Présents</th><th>Closes</th><th title="Closes offre Élite et leur montant signé" class="lq-oe">Élite</th><th title="Closes offre Business Phénix et leur montant signé" class="lq-ob">Business</th><th title="Signé HT, encaissé dessous">Signé · encaissé</th><th title="Signé ÷ dépense">ROAS</th></tr></thead><tbody>';
+    var t = ax.total, tp = ax.totalPub || t;
+    var body = '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr><th class="l">Source</th><th>' + ML('mqs') + '</th><th>' + ML('depense_pub_ligne') + '</th><th>' + ML('leads_et_reoptins') + '</th><th>' + ML('cpl_source') + '</th><th>LQS moyen' + IL('lqs') + '</th><th>% ' + ML('lqs_45') + '</th><th>' + ML('cout_lead_45') + '</th><th class="l" style="min-width:110px">Répartition</th>'
+      + '<th>' + ML('leads_avec_rdv') + '</th><th>' + ML('leads_presents') + '</th><th>' + MG('closes_cohorte') + '</th><th class="lq-oe">Élite' + IN('Élite', 'Closes des leads entrés à l\'offre Élite et leur contracté.') + '</th><th class="lq-ob">Business' + IN('Business', 'Closes des leads entrés à l\'offre Business Phénix et leur contracté.') + '</th><th>' + ML('contracte_cohorte') + ' · collecté</th><th>' + MG('contracte_sur_depense') + '</th></tr></thead><tbody>';
     ax.rows.forEach(function (x) {
       var a = x.agg;
       body += '<tr' + (x.outOfAds ? ' class="lq-dim"' : '') + '><td class="l"><span class="lq-src" title="' + esc(x.label) + '">' + esc(x.label) + '</span>' + (x.legacy ? ' <span class="fn-tbadge lq-toff" title="Attribution reconstruite depuis l\'ancien champ utm">⚠</span>' : '') + '</td>'
-        + '<td>' + mqsBadge(x.m) + '</td><td>' + (x.hasSpend ? fEur(x.spend) : '—') + '</td><td>' + fNum(a.leads) + '</td><td>' + fEur(x.cpl) + '</td>'
-        + '<td>' + avgBadge(a.avgNote) + '</td><td>' + fPct(a.pct45, 0) + '</td><td>' + fEur(x.cpl45) + '</td><td class="l">' + distBar(a.dist) + '</td>'
-        + '<td>' + fNum(a.booked) + '</td><td>' + fNum(a.present) + '</td><td>' + fNum(a.closes) + (a.closesU ? sub(fNum(a.closesU) + ' sans offre') : '') + '</td>'
+        + '<td>' + mqsBadge(x.m) + '</td><td>' + (!S.closer && x.hasSpend ? fEur(x.spend) : '—') + '</td><td>' + fNum(a.leads) + '</td><td>' + (costsOk ? fEur(x.cpl) : '—') + '</td>'
+        + '<td>' + avgBadge(a.avgNote) + '</td><td>' + fPct(a.pct45) + '</td><td>' + (costsOk ? fEur(x.cpl45) : '—') + '</td><td class="l">' + distBar(a.dist) + '</td>'
+        + '<td>' + fNum(a.leadsAvecRdv) + '</td><td>' + fNum(a.leadsPresents) + '</td><td>' + fNum(a.closes) + (a.closesU ? sub(fNum(a.closesU) + ' sans offre') : '') + '</td>'
         + '<td>' + (a.closesE ? '<span class="lq-oe">' + fNum(a.closesE) + '</span>' + sub(fEur(a.conE)) : '—') + '</td>'
         + '<td>' + (a.closesB ? '<span class="lq-ob">' + fNum(a.closesB) + '</span>' + sub(fEur(a.conB)) : '—') + '</td>'
-        + '<td>' + money(a.con, a.cash) + '</td><td>' + fRoas(x.roas) + '</td></tr>';
+        + '<td>' + money(a.con, a.cash) + '</td><td>' + (costsOk ? fRoas(x.conPerSpend != null ? x.conPerSpend : x.roas) : '—') + '</td></tr>';
     });
-    body += '<tr class="tot"><td class="l">Total</td><td></td><td>' + (ax.spend ? fEur(ax.spend) : '—') + '</td><td>' + fNum(t.leads) + '</td><td>' + fEur(ax.spend && t.leads ? ax.spend / t.leads : null) + '</td><td>' + avgBadge(t.avgNote) + '</td><td>' + fPct(t.pct45, 0) + '</td><td>' + fEur(ax.spend && t.n45 ? ax.spend / t.n45 : null) + '</td><td class="l">' + distBar(t.dist) + '</td><td>' + fNum(t.booked) + '</td><td>' + fNum(t.present) + '</td><td>' + fNum(t.closes) + (t.closesU ? sub(fNum(t.closesU) + ' sans offre') : '') + '</td><td>' + (t.closesE ? fNum(t.closesE) + sub(fEur(t.conE)) : '—') + '</td><td>' + (t.closesB ? fNum(t.closesB) + sub(fEur(t.conB)) : '—') + '</td><td>' + money(t.con, t.cash) + '</td><td>' + fRoas(ax.spend > 0 && t.con > 0 ? t.con / ax.spend : null) + '</td></tr>';
-    body += '</tbody></table></div><div class="fn-stage-note" style="margin-top:8px">Leads entrés dans la période · dépense = données Meta par pub (ads_insights_ad) quand Make les envoie, sinon « — » · signé = contrats HT des closes de la ligne, encaissé = prélèvements passés à ce jour · ROAS = signé ÷ dépense · les lignes « hors pub » sont en bas.</div>';
+    var horsPub = t.leads - tp.leads;
+    var depTot = S.closer ? '—' : (ax.spend ? fEur(ax.spend) + sub('dont ' + fEur(ax.spendRattachee) + ' rattachés à une ligne' + (ax.spendNonRattachee > 0.5 ? ' · ' + fEur(ax.spendNonRattachee) + ' non rattachés (pub sans lead)' : ''))
+      + (K && K.spend != null ? sub('dépense du compte (onglet Funnel) : ' + fEur(K.spend)) : '') : '—');
+    body += '<tr class="tot"><td class="l">Total</td><td></td><td>' + depTot + '</td><td>' + fNum(t.leads) + '</td>'
+      + '<td>' + (costsOk && ax.cplPub != null ? fEur(ax.cplPub) + sub('leads venus de la pub' + (horsPub > 0 ? ' · ' + fEur(t.leads ? ax.spend / t.leads : null) + ' en comptant les ' + fNum(horsPub) + ' leads hors pub' : '')) : '—') + '</td>'
+      + '<td>' + avgBadge(t.avgNote) + '</td><td>' + fPct(t.pct45) + '</td><td>' + (costsOk && tp.n45 ? fEur(ax.spend / tp.n45) : '—') + '</td><td class="l">' + distBar(t.dist) + '</td><td>' + fNum(t.leadsAvecRdv) + '</td><td>' + fNum(t.leadsPresents) + '</td><td>' + fNum(t.closes) + (t.closesU ? sub(fNum(t.closesU) + ' sans offre') : '') + '</td><td>' + (t.closesE ? fNum(t.closesE) + sub(fEur(t.conE)) : '—') + '</td><td>' + (t.closesB ? fNum(t.closesB) + sub(fEur(t.conB)) : '—') + '</td><td>' + money(t.con, t.cash) + '</td>'
+      + '<td>' + (costsOk ? fRoas(ax.conPerSpend) + sub('lignes pub seulement') : '—') + '</td></tr>';
+    body += '</tbody></table></div><div class="fn-stage-note" style="margin-top:8px">Leads entrés pendant la période (ré-optins compris) · dépense = données Meta par pub (ads_insights_ad) quand Make les envoie, sinon « — » ; le total reprend toute la dépense reçue, rattachée ou non à une ligne · contracté = contrats HT des closes des leads entrés de la ligne, collecté = prélèvements passés à ce jour · Contracté ÷ dépense, CPL et coût / lead LQS 4-5 du total : lignes venues de la pub seulement · les lignes « hors pub » sont en bas.</div>';
     h += card('📣 Qualité par ' + AXES.filter(function (a) { return a[0] === S.axis; })[0][1].toLowerCase(), S.closer ? 'leads de ' + esc(S.M.memberName(S.closer)) : '', body);
     return h;
   }
 
-  /* ══ VUE 4 — CLOSERS ═══════════════════════════════════════════════════ */
+  /* ══ VUE 4 — CLOSERS ═══════════════════════════════════════════════════
+     Par RDV (audit 25/11/2026) : RDV de vente DATÉS dans la plage, comptés
+     par StatsCore (RDV = annulés + no-show + présents + à statuer + à
+     venir ; Show-up = présents ÷ (Kept − à venir)). Closes / Contracté /
+     Collecté = liste unique des closes de la plage, rangés chez le closer
+     du close (comme Global closing), un client = un close. Lignes « Non
+     attribué » et « Anciens membres » : la somme des lignes = « Toute
+     l'équipe ». */
+  function closerHead() {
+    return '<th>' + MG('rdv', 'Ici : RDV de vente datés dans la plage, Self Booking, Setting et manuels.') + '</th>'
+      + '<th>% ' + ML('lqs_45', 'Ici : RDV dont le lead est noté LQS 4 ou 5 ÷ RDV dont le lead est noté.') + '</th><th>' + ML('qualite_pipe') + '</th><th class="l" style="min-width:110px">Répartition</th>'
+      + '<th>' + MG('presents') + '</th>'
+      + '<th>' + MG('closes', 'Ici : clients gagnés pendant la plage (même liste que le Stats funnel), rangés chez le closer qui a conclu la vente.') + '</th>'
+      + '<th>' + MG('taux_close_presents') + '</th><th>' + MG('taux_close_rdv') + '</th>'
+      + '<th>' + MG('contracte') + ' · collecté</th>';
+  }
+  function showUpSub(a) { return sub('show-up ' + fPct(a.showUp != null ? a.showUp : a.showRate)); }
   function viewClosers() {
+    var cr = closerRange();
     var h = '<div class="fn-seg" style="margin-bottom:14px;width:fit-content">'
       + '<button data-lq-cr="period" class="' + (S.crMode === 'period' ? 'active' : '') + '">Période sélectionnée</button>'
       + '<button data-lq-cr="3m" class="' + (S.crMode === '3m' ? 'active' : '') + '">3 derniers mois</button>'
-      + '<button data-lq-cr="6m" class="' + (S.crMode === '6m' ? 'active' : '') + '">6 derniers mois</button></div>';
+      + '<button data-lq-cr="6m" class="' + (S.crMode === '6m' ? 'active' : '') + '">6 derniers mois</button></div>'
+      + (S.crMode !== 'period' ? '<span class="lq-muted" style="margin-left:10px">la plage ne change que ce tableau' + IL('plage_closers') + '</span>' : '');
     var board = LC.closerBoard(S.M.rdvRows, S.M.memberName);
     var team = LC.byCloser(S.M.rdvRows, '');
-    var body = '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr><th class="l">Closer</th><th>RDV</th><th>% de 4-5</th><th title="LQS moyen des RDV">Qualité du pipe</th><th class="l" style="min-width:110px">Répartition</th><th>Présents</th><th>Closes</th><th>Closing / présents</th><th>Closing / RDV</th><th title="Signé HT, encaissé dessous">Signé · encaissé</th></tr></thead><tbody>';
+    var body = '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr><th class="l">Closer' + I('closer') + '</th>' + closerHead() + '</tr></thead><tbody>';
     board.forEach(function (a) {
-      var departed = a.slug && !S.M.closers.some(function (c) { return c.slug === a.slug; });
-      if (departed) return;
+      if (a.slug && S.M.isDeparted && S.M.isDeparted(a.slug)) return;   // réunis dans « Anciens membres » par closerBoard
       var sel = a.slug && a.slug === S.closer;
-      body += '<tr class="' + (a.slug ? 'lq-click' : '') + (sel ? ' lq-sel' : '') + '"' + (a.slug ? ' data-lq-pick="' + esc(a.slug) + '"' : '') + '><td class="l"><strong>' + esc(a.name) + '</strong></td><td>' + fNum(a.rdv) + '</td><td>' + fPct(a.pct45, 0) + '</td><td>' + avgBadge(a.avgNote) + '</td><td class="l">' + distBar(a.dist) + '</td>'
-        + '<td>' + fNum(a.present) + sub(fPct(a.showRate, 0)) + '</td><td><strong>' + fNum(a.closes) + '</strong></td><td>' + fPct(a.closePresent, 0) + '</td><td>' + fPct(a.closeRdv, 0) + '</td><td>' + money(a.con, a.cash) + '</td></tr>';
+      var nm = a.anciens ? MG('anciens_membres') : (a.nonAttribue ? MG('non_attribue') : '<strong>' + esc(a.name) + '</strong>');
+      body += '<tr class="' + (a.slug ? 'lq-click' : '') + (sel ? ' lq-sel' : '') + '"' + (a.slug ? ' data-lq-pick="' + esc(a.slug) + '"' : '') + '><td class="l">' + nm + '</td><td>' + fNum(a.rdv) + '</td><td>' + fPct(a.pct45) + '</td><td>' + avgBadge(a.avgNote) + '</td><td class="l">' + distBar(a.dist) + '</td>'
+        + '<td>' + fNum(a.presents) + showUpSub(a) + '</td><td><strong>' + fNum(a.closes) + '</strong></td><td>' + fPct(a.tauxClosePresents) + '</td><td>' + fPct(a.tauxCloseRdv) + '</td><td>' + money(a.con, a.cash) + '</td></tr>';
     });
     var tt = team.total;
-    body += '<tr class="tot"><td class="l">Toute l\'équipe</td><td>' + fNum(tt.rdv) + '</td><td>' + fPct(tt.pct45, 0) + '</td><td>' + avgBadge(tt.avgNote) + '</td><td class="l">' + distBar(tt.dist) + '</td><td>' + fNum(tt.present) + sub(fPct(tt.showRate, 0)) + '</td><td>' + fNum(tt.closes) + '</td><td>' + fPct(tt.closePresent, 0) + '</td><td>' + fPct(tt.closeRdv, 0) + '</td><td>' + money(tt.con, tt.cash) + '</td></tr>';
-    body += '</tbody></table></div><div class="fn-stage-note" style="margin-top:8px">RDV de vente datés dans la plage (replanifiés comptés une fois, sur leur dernier RDV) · closer = celui qui a statué le close, sinon l\'expert du RDV · clique un closer pour son détail. Les membres partis sont comptés dans « Toute l\'équipe » sans être listés.</div>';
-    h += card('🎯 Closers — qualité reçue et résultats', fMonth(FC.isoDate(closerRange().start).slice(0, 7)) + ' → ' + fMonth(FC.isoDate(closerRange().end).slice(0, 7)), body);
+    body += '<tr class="tot"><td class="l">Toute l\'équipe' + I('equipe') + '</td><td>' + fNum(tt.rdv) + '</td><td>' + fPct(tt.pct45) + '</td><td>' + avgBadge(tt.avgNote) + '</td><td class="l">' + distBar(tt.dist) + '</td><td>' + fNum(tt.presents) + showUpSub(tt) + '</td><td>' + fNum(tt.closes) + '</td><td>' + fPct(tt.tauxClosePresents) + '</td><td>' + fPct(tt.tauxCloseRdv) + '</td><td>' + money(tt.con, tt.cash) + '</td></tr>';
+    body += '</tbody></table></div><div class="fn-stage-note" style="margin-top:8px">RDV de vente datés dans la plage (Self Booking, Setting et RDV créés à la main dans l\'Agenda ; un RDV déplacé compte une fois, à sa nouvelle date ; un doublon supprimé nulle part) · closer d\'un RDV = celui qui a validé le close, sinon l\'hôte du RDV · Closes = clients gagnés pendant la plage, même liste que le Stats funnel, rangés chez le closer du close et comptés une fois · « Non attribué » = closer inconnu · « Anciens membres » = membres partis, sans nom · les lignes s\'additionnent pour donner « Toute l\'équipe » · les corrections manuelles ✎ de Set NB / Close SB ne sont pas reprises · clique un closer pour son détail.</div>';
+    h += card('🎯 Closers — qualité reçue et résultats', fMonth(FC.isoDate(cr.start).slice(0, 7)) + ' → ' + fMonth(FC.isoDate(cr.end).slice(0, 7)), body);
 
     if (!S.closer) {
       h += card('📅 Toute l\'équipe, mois par mois', '', monthsTable(team, null) + '<div class="fn-stage-note" style="margin-top:8px">Choisis un closer (en haut ou dans le tableau) pour sa lecture détaillée.</div>');
@@ -1037,44 +1239,59 @@
     var me = LC.byCloser(S.M.rdvRows, S.closer);
     var name = S.M.memberName(S.closer);
     h += card('📅 ' + esc(name) + ', mois par mois', '', monthsTable(me, team));
-    /* Closing par note : le closer vs l'équipe */
-    var nb = '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr><th class="l">Note du lead</th><th>RDV</th><th>Présents</th><th>Closes</th><th>Closing / présents</th><th>Équipe : closing / présents</th><th title="Signé HT, encaissé dessous">Signé · encaissé</th></tr></thead><tbody>';
+    /* Close par note : le closer vs l'équipe */
+    var nb = '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr><th class="l">Note du lead' + IL('lqs') + '</th><th>' + MG('rdv') + '</th><th>' + MG('presents') + '</th><th>' + MG('closes', 'Ici : closes de ' + name + ' sur la plage, rangés selon la note du lead.') + '</th><th>' + MG('taux_close_presents') + '</th><th>Équipe : close / présents</th><th>' + MG('contracte') + ' · collecté</th></tr></thead><tbody>';
     LC.NOTE_KEYS.forEach(function (k) {
       var a = me.byNote[k], tb = team.byNote[k];
-      if (!a.rdv) return;
-      var diff = ok(a.closePresent) && ok(tb.closePresent) ? a.closePresent - tb.closePresent : null;
-      nb += '<tr><td class="l">' + noteBadge(k || null) + ' <span class="lq-nl">' + NOTE_LBL[k] + '</span></td><td>' + fNum(a.rdv) + '</td><td>' + fNum(a.present) + '</td><td><strong>' + fNum(a.closes) + '</strong></td>'
-        + '<td>' + fPct(a.closePresent, 0) + (diff != null ? sub('<span class="' + (diff >= 0 ? 'lq-up' : 'lq-down') + '">' + (diff >= 0 ? '+' : '') + fDec(diff, 0) + ' pts vs équipe</span>') : '') + '</td>'
-        + '<td>' + fPct(tb.closePresent, 0) + '</td><td>' + money(a.con, a.cash) + '</td></tr>';
+      if (!a.rdv && !a.closes) return;
+      var diff = ok(a.tauxClosePresents) && ok(tb.tauxClosePresents) ? a.tauxClosePresents - tb.tauxClosePresents : null;
+      nb += '<tr><td class="l">' + noteBadge(k || null) + ' <span class="lq-nl">' + NOTE_LBL[k] + '</span></td><td>' + fNum(a.rdv) + '</td><td>' + fNum(a.presents) + '</td><td><strong>' + fNum(a.closes) + '</strong></td>'
+        + '<td>' + fPct(a.tauxClosePresents) + (diff != null ? sub('<span class="' + (diff >= 0 ? 'lq-up' : 'lq-down') + '">' + (diff >= 0 ? '+' : '') + fDec(diff, 1) + ' pts vs équipe</span>') : '') + '</td>'
+        + '<td>' + fPct(tb.tauxClosePresents) + '</td><td>' + money(a.con, a.cash) + '</td></tr>';
     });
-    nb += '</tbody></table></div>';
-    h += card('⭐ ' + esc(name) + ' — closing selon la qualité du lead', 'à qualité égale, le closer fait-il mieux ou moins bien que l\'équipe ?', nb);
+    nb += '</tbody></table></div><div class="fn-stage-note" style="margin-top:8px">Un close est daté du jour où le client est gagné, un RDV du jour où il a lieu : sur une note ou un mois peu fournis, le taux peut ne pas avoir de sens (affiché —).</div>';
+    h += card('⭐ ' + esc(name) + ' — close selon la qualité du lead', 'à qualité égale, le closer fait-il mieux ou moins bien que l\'équipe ?', nb);
     return h;
   }
 
   function monthsTable(me, team) {
-    if (!me.months.length) return '<div class="lq-muted">Aucun RDV sur la plage.</div>';
+    if (!me.months.length) return '<div class="lq-muted">Aucun RDV ni close sur la plage.</div>';
     var teamBy = {};
     if (team) team.months.forEach(function (m) { teamBy[m.month] = m; });
     var h = '<ul class="lq-ins" style="margin-bottom:12px">';
     me.months.forEach(function (m) {
-      h += '<li><strong>' + cap(fMonth(m.month)) + '</strong> : ' + fNum(m.rdv) + ' RDV, <strong>' + fPct(m.pct45, 1) + '</strong> de 4-5, qualité du pipe <strong>' + fDec(m.avgNote, 2) + '</strong>, '
-        + fNum(m.closes) + ' close' + (m.closes > 1 ? 's' : '') + ' → closing <strong>' + fPct(m.closePresent, 1) + '</strong> des présents'
-        + (team && teamBy[m.month] ? ' <span class="lq-muted">(équipe : ' + fPct(teamBy[m.month].pct45, 0) + ' de 4-5, closing ' + fPct(teamBy[m.month].closePresent, 0) + ')</span>' : '') + '.</li>';
+      h += '<li><strong>' + cap(fMonth(m.month)) + '</strong> : ' + fNum(m.rdv) + ' RDV, <strong>' + fPct(m.pct45) + '</strong> de LQS 4-5, qualité du pipe <strong>' + fDec(m.avgNote, 2) + '</strong>, '
+        + fNum(m.presents) + ' présent' + (m.presents > 1 ? 's' : '') + ' (show-up ' + fPct(m.showUp) + '), '
+        + fNum(m.closes) + ' close' + (m.closes > 1 ? 's' : '') + ' → close / présents <strong>' + fPct(m.tauxClosePresents) + '</strong>'
+        + (team && teamBy[m.month] ? ' <span class="lq-muted">(équipe : ' + fPct(teamBy[m.month].pct45) + ' de LQS 4-5, close / présents ' + fPct(teamBy[m.month].tauxClosePresents) + ')</span>' : '') + '.</li>';
     });
     h += '</ul>';
-    h += '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr><th class="l">Mois</th><th>RDV</th><th>Annulés</th><th>No-show</th><th>Présents</th><th>% de 4-5</th><th>Qualité du pipe</th><th class="l" style="min-width:110px">Répartition</th><th>Closes</th><th>Closing / présents</th><th>Closing / RDV</th><th title="Signé HT, encaissé dessous">Signé · encaissé</th>' + (team ? '<th>Équipe : 4-5 / closing</th>' : '') + '</tr></thead><tbody>';
+    h += '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr><th class="l">Mois</th><th>' + MG('rdv') + '</th><th>' + MG('annules') + '</th><th>' + MG('no_show') + '</th><th>' + MG('presents') + '</th><th>' + MG('a_statuer') + '</th><th>' + MG('a_venir') + '</th>'
+      + '<th>% ' + ML('lqs_45') + '</th><th>' + ML('qualite_pipe') + '</th><th class="l" style="min-width:110px">Répartition</th><th>' + MG('closes') + '</th><th>' + MG('taux_close_presents') + '</th><th>' + MG('taux_close_rdv') + '</th><th>' + MG('contracte') + ' · collecté</th>' + (team ? '<th>Équipe : LQS 4-5 / close / présents</th>' : '') + '</tr></thead><tbody>';
     me.months.forEach(function (m) {
       var tm = teamBy[m.month];
-      h += '<tr><td class="l"><strong>' + cap(fMonth(m.month)) + '</strong>' + (m.upcoming ? sub(fNum(m.upcoming) + ' à venir') : '') + '</td><td>' + fNum(m.rdv) + '</td><td>' + fNum(m.cancelled) + '</td><td>' + fNum(m.noshow) + '</td><td>' + fNum(m.present) + sub(fPct(m.showRate, 0)) + '</td>'
-        + '<td>' + fPct(m.pct45, 1) + '</td><td>' + avgBadge(m.avgNote) + '</td><td class="l">' + distBar(m.dist) + '</td><td><strong>' + fNum(m.closes) + '</strong></td><td>' + fPct(m.closePresent, 1) + '</td><td>' + fPct(m.closeRdv, 1) + '</td><td>' + money(m.con, m.cash) + '</td>'
-        + (team ? '<td>' + (tm ? fPct(tm.pct45, 0) + ' / ' + fPct(tm.closePresent, 0) : '—') + '</td>' : '') + '</tr>';
+      h += '<tr><td class="l"><strong>' + cap(fMonth(m.month)) + '</strong></td><td>' + fNum(m.rdv) + '</td><td>' + fNum(m.annules) + '</td><td>' + fNum(m.noshow) + '</td><td>' + fNum(m.presents) + showUpSub(m) + '</td><td>' + fNum(m.aStatuer) + '</td><td>' + fNum(m.aVenir) + '</td>'
+        + '<td>' + fPct(m.pct45) + '</td><td>' + avgBadge(m.avgNote) + '</td><td class="l">' + distBar(m.dist) + '</td><td><strong>' + fNum(m.closes) + '</strong></td><td>' + fPct(m.tauxClosePresents) + '</td><td>' + fPct(m.tauxCloseRdv) + '</td><td>' + money(m.con, m.cash) + '</td>'
+        + (team ? '<td>' + (tm ? fPct(tm.pct45) + ' / ' + fPct(tm.tauxClosePresents) : '—') + '</td>' : '') + '</tr>';
     });
-    h += '</tbody></table></div>';
+    h += '</tbody></table></div><div class="fn-stage-note" style="margin-top:8px">RDV = annulés + no-show + présents + à statuer + à venir. Les closes sont rangés au mois où le client est gagné.</div>';
     return h;
   }
 
   /* ══ VUE 5 — LEADS NOTÉS ═══════════════════════════════════════════════ */
+  /* État du RDV retenu d'un lead (r.rdvEtat / r.rdvDetail, StatsCore) :
+     mot du référentiel (Présent → son détail : Offre en attente, Non close,
+     Disqualifié, Présent (sans détail) ; À statuer ; À venir ; No-show ;
+     Annulé). null = pas de RDV. */
+  var ETAT_CLS = { present: 'lq-tq', a_venir: 'lq-tf', a_statuer: 'lq-warn', no_show: 'lq-warn', annule: 'lq-toff', replanifie: 'lq-tf', doublon: 'lq-toff' };
+  function rdvLibelle(r) {
+    if (!r || !r.avecRdv || !r.rdvEtat) return null;
+    var mot;
+    if (r.rdvEtat === 'present') mot = (SC && SC.DETAILS && SC.DETAILS[r.rdvDetail || 'sans_detail'] ? SC.DETAILS[r.rdvDetail || 'sans_detail'].mot : 'Présent');
+    else mot = SC && SC.ETATS && SC.ETATS[r.rdvEtat] ? SC.ETATS[r.rdvEtat].mot : r.rdvEtat;
+    if (r.rdvEtat === 'present' && r.rdvDetail === 'close') mot = 'RDV au résultat Close';
+    return { mot: mot, cls: ETAT_CLS[r.rdvEtat] || 'lq-tf' };
+  }
   function viewLeads() {
     var all = rows();
     var counts = { all: all.length, 5: 0, 4: 0, 3: 0, 2: 0, 1: 0, 0: 0 };
@@ -1099,23 +1316,23 @@
     h += '</div><div class="fn-lt-search"><input type="text" data-lq-search placeholder="Nom, email, source, closer…" value="' + esc(S.leadsQ) + '"></div>'
       + (window.LqsDossier ? '<button class="fn-btn" data-lq-drill="leads" data-lq-dn="' + (S.leadsNote === 'all' ? 'all' : S.leadsNote) + '">📂 Dossiers complets (questionnaires + visios) · PDF</button>' : '') + '</div>';
     var shown = S.exporting ? list : list.slice(0, S.leadsLimit);
-    h += '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr><th class="l">Lead</th><th>Entrée</th><th class="l">Source</th><th>LQS</th><th>Points</th><th title="Curseur ★ de l\'équipe (Leads Live)">★ équipe</th><th class="l">Parcours</th><th class="l">Closer</th><th title="Signé HT, encaissé dessous">Signé · encaissé</th></tr></thead><tbody>';
+    h += '<div class="fn-table-wrap"><table class="fn-igt lq-t"><thead><tr><th class="l">Lead</th><th>Entrée</th><th class="l">Source</th><th>LQS</th><th>Points</th><th>' + ML('note_equipe') + '</th><th class="l">Parcours' + IN('Parcours', 'Issue du lead : close (closes des leads entrés), sinon état de son RDV retenu (le RDV closé, sinon le dernier présent, sinon le premier), lu sur le dernier RDV de la chaîne de report.') + '</th><th class="l">Closer' + I('closer') + '</th><th>' + ML('contracte_cohorte') + ' · collecté</th></tr></thead><tbody>';
     shown.forEach(function (r) {
       var l = r.lead, open = !!S.openLead[r.id];
       var path = [];
-      if (r.closed) path.push('<span class="fn-tbadge lq-good">💰 Client</span>');
+      if (r.closed) path.push('<span class="fn-tbadge lq-good">💰 Close</span>' + (r.closeSansRdv ? ' <span class="fn-tbadge lq-tf" title="' + esc(LOCAL.close_sans_rdv_enregistre[1]) + '">sans RDV enregistré</span>' : ''));
       else if (r.closeCancelled) path.push('<span class="fn-tbadge lq-warn">close annulé</span>');
-      else if (r.present) path.push('<span class="fn-tbadge lq-tq">présent</span>');
-      else if (r.upcoming) path.push('<span class="fn-tbadge lq-tf">RDV à venir</span>');
-      else if (r.noshow) path.push('<span class="fn-tbadge lq-warn">no-show</span>');
-      else if (r.booked && r.allCancelled) path.push('<span class="fn-tbadge lq-toff">annulé</span>');
-      else if (r.booked) path.push('<span class="fn-tbadge lq-tf">RDV</span>');
-      else path.push('<span class="lq-muted">pas de RDV</span>');
+      if (!r.closed) {
+        var st = rdvLibelle(r);
+        if (st) path.push('<span class="fn-tbadge ' + st.cls + '">' + esc(st.mot) + '</span>');
+        else if (!r.closeCancelled) path.push('<span class="lq-muted">pas de RDV</span>');
+      }
+      if (r.dejaClient) path.push('<span class="fn-tbadge lq-toff" title="' + esc(LOCAL.deja_client[1]) + '">déjà client</span>');
       if (r.reopt) path.push('<span class="fn-reopt" title="Ré-optin dans la période">↻</span>');
       h += '<tr class="lq-click" data-lq-lead="' + esc(r.id) + '"><td class="l"><a class="fn-lead-link" href="sales-contact.html?id=' + encodeURIComponent(r.id) + '" target="_blank" rel="noopener">' + esc(l.nom || l.email || '—') + '</a></td>'
         + '<td>' + fDay(r.entry) + '</td><td class="l"><span class="lq-src" title="' + esc(r.axes.creative ? r.axes.creative.label : '') + '">' + esc(r.axes.creative ? r.axes.creative.label : r.sourceLabel) + '</span></td>'
         + '<td>' + noteBadge(r.note) + '</td><td>' + (r.pts != null ? fPts(r.pts) : '—') + '</td><td>' + (r.team != null ? '★ ' + r.team : '—') + '</td>'
-        + '<td class="l">' + path.join(' ') + '</td><td class="l">' + esc(r.closerName || '—') + '</td><td>' + (r.closed ? money(r.con, r.cash) : '—') + '</td></tr>';
+        + '<td class="l">' + path.join(' ') + '</td><td class="l">' + esc(nomDe(r.closer) || '—') + '</td><td>' + (r.closed ? money(r.con, r.cash) : '—') + '</td></tr>';
       if (open) {
         h += '<tr class="fn-ig-det"><td colspan="9" class="l">';
         if (!r.detail.length) h += '<span class="lq-muted">Aucune réponse exploitable sur cette fiche.</span>';
@@ -1130,7 +1347,7 @@
     h += '</tbody></table></div>';
     if (list.length > shown.length) h += '<div style="margin-top:10px"><button class="fn-btn" data-lq-more>Afficher plus (' + (list.length - shown.length) + ' restants)</button></div>';
     h += '<div class="fn-stage-note" style="margin-top:8px">Clique une ligne pour le détail des points. * = points par défaut (réponse pas encore revue dans le barème).</div>';
-    return card('👥 Leads de la période, notés', fNum(list.length) + ' leads', h);
+    return card('👥 Leads + ré-optins de la période, notés', fNum(list.length) + ' leads', h);
   }
 
   /* ══ VUE 6 — BARÈME ════════════════════════════════════════════════════ */
@@ -1173,7 +1390,7 @@
     var th = g.thresholds;
     var h = help('ℹ️ Comment fonctionne le barème', '<p>Chaque réponse rapporte des <strong>points</strong> (négatifs permis). On additionne les points de toutes les réponses du lead, puis on convertit en note grâce aux <strong>seuils</strong>. Une réponse <strong>⛔ éliminatoire</strong> donne 1 quel que soit le total.</p>'
       + '<p><strong>Points par défaut</strong> (*) : posés automatiquement sur ce qui se lit sans ambiguïté — CA mensuel (−2 sous 5 k€ … +3 au-delà de 100 k€), taille d\'équipe, heures, objectif. Tout le reste démarre à 0.</p>'
-      + '<p><strong>Suggestion</strong> : ce que les résultats réels proposent — montant signé par lead de la réponse comparé à la moyenne (dès 8 closes sur la période), à défaut taux de RDV honorés (dès 10 présents), dès ' + LC.SUGGEST_MIN + ' leads par réponse. C\'est une aide, pas une vérité : sur une période courte, élargis-la (3 à 6 mois) avant d\'appliquer.</p>'
+      + '<p><strong>Suggestion</strong> : ce que les résultats réels proposent — contracté des leads entrés par lead de la réponse, comparé à la moyenne, seulement si la période compte au moins 8 closes des leads entrés (sinon aucune suggestion calculée : seule la recommandation d\'audit ★ s\'affiche), dès ' + LC.SUGGEST_MIN + ' leads par réponse. C\'est une aide, pas une vérité : sur une période courte, élargis-la (3 à 6 mois) avant d\'appliquer.</p>'
       + '<p>Modifier un point recalcule <strong>immédiatement</strong> tous les onglets (aperçu). Rien n\'est enregistré tant que tu n\'as pas cliqué « Enregistrer ». Le barème s\'applique à tout l\'historique : aucune donnée n\'est réécrite sur les leads.</p>');
 
     var st = '<div class="lq-th">';
@@ -1196,7 +1413,7 @@
         + '<span class="lq-qmeta">' + fNum(q.agg.leads) + ' leads</span></div>';
       if (open && !q.off) {
         var list = q.answerList.slice(0, 40);
-        body += '<div class="fn-table-wrap" style="margin-top:8px"><table class="fn-igt lq-t"><thead><tr><th class="l">Réponse</th><th>Leads</th><th>Closing / lead</th><th>Signé / lead</th><th title="Proposé par les résultats réels">Suggestion</th><th>Points</th><th title="Note 1 d\'office">⛔ Éliminatoire</th></tr></thead><tbody>';
+        body += '<div class="fn-table-wrap" style="margin-top:8px"><table class="fn-igt lq-t"><thead><tr><th class="l">Réponse</th><th>' + ML('leads_et_reoptins') + '</th><th>' + ML('taux_close_lead') + '</th><th>' + ML('contracte_par_lead') + '</th><th>Suggestion' + IN('Suggestion', 'Recommandation de l\'audit du 13/11/2026 (★, tout l\'historique) quand elle existe ; sinon calcul sur la période (contracté / lead de la réponse comparé à la moyenne), seulement s\'il y a au moins 8 closes des leads entrés. Cliquer pour appliquer.') + '</th><th>Points</th><th title="Note 1 d\'office">⛔ Éliminatoire</th></tr></thead><tbody>';
         list.forEach(function (x) {
           var id = esc(q.q) + '" data-lq-a="' + esc(x.a) + '" data-lq-ql="' + esc(q.label) + '" data-lq-al="' + esc(x.label);
           body += '<tr><td class="l">' + esc(x.label) + (x.known ? '' : ' <span class="fn-tbadge lq-tf" title="Réponse jamais revue : points par défaut">nouveau</span>') + '</td>'

@@ -6,9 +6,12 @@
 // email aux admins. Affiché en haut des dashboards admin (ai-brief-widget.js).
 //
 // Collecteurs (chacun isolé : une erreur dans l'un n'empêche pas les autres) :
-//   • leads entrés hier (par provenance) et leads chauds non traités ;
-//   • appels de la veille par setter (call_logs) ;
-//   • RDV d'hier et leurs issues (close, montants, no-show…), RDV du jour ;
+//   • leads entrés hier (date d'entrée réelle, par provenance), ré-optins à
+//     part, et leads chauds non traités ;
+//   • appels de la veille par personne (sortants, décrochés, appels reçus) ;
+//   • RDV d'hier (états StatsCore : annulés, no-show, présents, pitchés,
+//     à statuer…), closes d'hier (liste unique FunnelCore.loadCloses : clients
+//     gagnés hier, contracté / collecté du module Paiements), RDV du jour ;
 //   • clients à risque (feu rouge / orange — rempli à partir du Lot 3 par
 //     clients/{id}.aiRisk) ;
 //   • alertes de l'agent de surveillance (ai_watch, Lot 5) si présentes.
@@ -18,6 +21,12 @@
 //        s'il est 8 h à Paris (gère heure d'été / d'hiver). ?force=1 pour tester.
 //   POST Bearer <ID token admin> { regenerate? } — brief du jour (le génère
 //        s'il n'existe pas encore, sans email).
+//
+// Référentiel des chiffres (audit de cohérence du 25/11/2026) : mêmes règles
+// et mêmes mots que les écrans et que l'assistant (api/_aiTools.js) —
+// StatsCore pour les RDV, la liste unique des closes pour Closes / Contracté /
+// Collecté, jours de Paris, anciens membres comptés sous « Anciens membres »
+// (plus aucune liste de prénoms en dur). Chaque bloc porte `definitions`.
 // ============================================================================
 
 const { requireAdmin } = require('./_verifyFirebaseAuth');
@@ -25,8 +34,9 @@ const parseBody = require('./_parseBody');
 const { db } = require('./_firebaseAdmin');
 const { callClaude, humanError, tsToMs, cap } = require('./_ai');
 const { sendToAdmins } = require('./_aiMail');
-
-const DEPARTED = { guillaumes: 1 };
+const SC = require('../stats-core.js');
+const FC = require('../funnel-core.js');
+const T = require('./_aiTools');
 
 // ---------------------------------------------------------------------------
 //  Dates Paris
@@ -45,98 +55,146 @@ function shiftDate(dateStr, days) {
   return new Date(Date.UTC(p[0], p[1] - 1, p[2] + days, 12)).toISOString().slice(0, 10);
 }
 
-function isCoachingBooking(b) { return !!(b.isCoaching || b.clientId || b.isCsm); }
-
 // ---------------------------------------------------------------------------
 //  Collecte
 // ---------------------------------------------------------------------------
 
 async function collect(today) {
   const yesterday = shiftDate(today, -1);
-  const yStart = new Date(parisMidnightMs(yesterday));
-  const tStart = new Date(parisMidnightMs(today));
+  /* Bornes de la veille et du jour à l'heure de Paris (StatsCore). */
+  const yStart = SC.debutJourParis(yesterday);
+  const yEnd = SC.finJourParis(yesterday);
+  const tStart = SC.debutJourParis(today);
   const out = { today: today, yesterday: yesterday, errors: [] };
+  const defs = {};
 
   async function safe(name, fn) {
     try { await fn(); } catch (e) { out.errors.push(name + ': ' + (e && e.message)); console.warn('[ai-morning-brief] ' + name, e); }
   }
+  /* Contexte commun (types de RDV, fiches d'agenda, équipe) : une lecture. */
+  const ctxP = T.contexte().catch(function (e) {
+    out.errors.push('contexte: ' + (e && e.message));
+    return { typeMap: {}, persons: {}, team: [], bySlug: {}, resoudre: function () { return null; },
+      nomDe: function (slug) { return slug ? String(slug) : SC.mot('non_attribue'); }, avert: [] };
+  });
 
   await Promise.all([
     safe('leads', async function () {
-      const s = await db.collection('leads').where('createdAt', '>=', yStart).where('createdAt', '<', tStart).get();
+      /* Leads entrés hier : date d'entrée réelle (FunnelCore.loadLeads, comme
+         le Stats funnel), fusionnées et fiches de test retirées, ré-optins à part. */
+      const D = {};
+      await FC.loadLeads(db, { start: yStart, end: yEnd }, D);
       const bySrc = {};
-      let n = 0;
-      s.forEach(function (d) {
-        const l = d.data() || {};
-        if (l._merged) return;
-        n++;
+      (D.leads || []).forEach(function (l) {
         const k = (l.landingFirst && l.landingFirst.label) || l.sourceDetail || l.type || l.source || 'autre';
         bySrc[k] = (bySrc[k] || 0) + 1;
       });
-      out.newLeads = { total: n, parProvenance: bySrc };
+      out.newLeads = { leads: (D.leads || []).length, reoptins: D.reoptinsError ? null : (D.reoptins || []).length, parProvenance: bySrc };
+      if (D.leadsTruncated) out.errors.push('leads: plafond de lecture atteint, total tronqué');
+      if (D.reoptinsError) out.errors.push('reoptins: ' + D.reoptinsError);
+      Object.assign(defs, T.definitions({ leads: 'leads', reoptins: 'reoptins' }));
     }),
     safe('hotLeads', async function () {
-      const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+      /* Leads des 7 derniers jours (jours de Paris, date d'entrée réelle). */
+      const since = SC.debutJourParis(shiftDate(today, -7));
       const s = await db.collection('leads').where('createdAt', '>=', since).get();
       const hot = [];
       let untouched24 = 0;
       s.forEach(function (d) {
         const l = d.data() || {};
-        if (l._merged || l.isClient) return;
+        if (!FC.isCountedLead(l) || l.isClient) return;
+        const entree = FC.realEntryMs(l);
+        if (entree == null || entree < since.getTime()) return;
         const comms = (l.communications || []).filter(function (c) { return c.type === 'call' || c.type === 'sms'; });
         const st = l.status || 'nouveau';
-        if (st === 'nouveau' && !comms.length && Date.now() - tsToMs(l.createdAt) > 24 * 3600 * 1000) untouched24++;
+        if (st === 'nouveau' && !comms.length && Date.now() - entree > 24 * 3600 * 1000) untouched24++;
         if (l.aiLead && l.aiLead.proba >= 60 && (st === 'nouveau' || st === 'appele') && !(l.bookingsHistory || []).length) {
-          hot.push({ nom: l.nom || '?', proba: l.aiLead.proba, statut: st, assigne: l.assignedTo || null, raison: cap(l.aiLead.raison, 160), tentatives: comms.length });
+          hot.push({ nom: l.nom || '?', proba: l.aiLead.proba, statut: st, assigne: l.setterSlug || l.assignedTo || null, raison: cap(l.aiLead.raison, 160), tentatives: comms.length });
         }
       });
       hot.sort(function (a, b) { return b.proba - a.proba; });
       out.hotLeads = hot.slice(0, 12);
-      out.untouched24h = untouched24;
+      out.jamaisContactes24h = untouched24;
+      Object.assign(defs, T.definitions({ jamaisContactes24h: 'jamais_contactes_24h' }));
     }),
     safe('calls', async function () {
-      const s = await db.collection('call_logs').where('initiatedAt', '>=', yStart).where('initiatedAt', '<', tStart).get();
-      const by = {};
+      /* Appels de la veille : sortants et décrochés par la règle commune
+         (StatsCore.estDecroche via FunnelCore.callStats), appels reçus à part,
+         auteur = compte relié à l'appel (FunnelCore.callerOf). */
+      const ctx = await ctxP;
+      const s = await db.collection('call_logs').where('initiatedAt', '>=', yStart).where('initiatedAt', '<=', yEnd).get();
+      const idx = FC.callerIndex(ctx.team);
+      const groupes = {};
       s.forEach(function (d) {
         const c = d.data() || {};
-        const who = c.userName || c.ringoverUserName || 'inconnu';
-        if (!by[who]) by[who] = { appels: 0, decroches: 0, minutes: 0 };
-        by[who].appels++;
-        if ((Number(c.durationSec) || 0) > 20) by[who].decroches++;
-        by[who].minutes += Math.round((Number(c.durationSec) || 0) / 60);
+        const who = FC.callerOf(c, idx);
+        const k = !who ? SC.mot('non_attribue') : (who.departed ? SC.mot('anciens_membres') : who.name);
+        (groupes[k] = groupes[k] || []).push(c);
+      });
+      const by = {};
+      Object.keys(groupes).forEach(function (k) {
+        const st = FC.callStats(groupes[k]);
+        by[k] = { appels: st.out, decroches: st.answered, tempsAppelMin: Math.round(st.talkSec / 60), appelsRecus: st.inbound };
       });
       out.callsYesterday = by;
+      Object.assign(defs, T.definitions({ appels: 'appels', decroches: 'decroches', tempsAppelMin: ['temps_appel', 'En minutes.'], appelsRecus: 'appels_recus' }));
     }),
     safe('bookings', async function () {
-      const s = await db.collection('bookings').where('date', 'in', [yesterday, today]).get();
-      const y = { total: 0, close: 0, contracte: 0, collecte: 0, no_show: 0, non_close: 0, annule: 0, sans_issue: 0, closes: [] };
-      const agenda = [];
-      s.forEach(function (d) {
-        const b = d.data() || {};
-        if (isCoachingBooking(b)) return;
-        if (DEPARTED[b.personId]) return;
-        const name = b.prospect ? ((b.prospect.prenom || '') + ' ' + (b.prospect.nom || '')).trim() : '';
-        if (b.date === yesterday) {
-          if (b.status === 'cancelled' && !b.outcome) { y.annule++; return; }
-          y.total++;
-          const o = b.outcome || '';
-          if (o === 'close') {
-            y.close++;
-            const cd = b.closeData || {};
-            y.contracte += Number(cd.contracte) || 0;
-            y.collecte += Number(cd.collecte) || 0;
-            y.closes.push((name || '?') + ' — ' + (cd.offre || '?') + ' par ' + (b.personName || '?'));
-          } else if (o === 'no_show') y.no_show++;
-          else if (o === 'non_close' || o === 'offre' || o === 'disqualifie') y.non_close++;
-          else if (o === 'annule' || o === 'replanifie') y.annule++;
-          else y.sans_issue++;
-        } else if (b.status !== 'cancelled') {
-          agenda.push({ heure: b.time || '?', type: b.typeLabel || b.type || 'RDV', avec: b.personName || '?', prospect: name || '?' });
-        }
+      const ctx = await ctxP;
+      const now = Date.now();
+      const liste = await T.lireRdvDates(yesterday, today, ctx);
+      const hier = liste.filter(function (b) { return b.date === yesterday; });
+      const venteHier = hier.filter(function (b) { return SC.estRdvVente(b._class); });
+      /* RDV d'hier : états StatsCore (un RDV = un état ; à statuer = créneau
+         passé sans résultat ; disqualifiés à part, jamais en non close). */
+      const a = SC.compter(venteHier, now);
+      const rdv = T.blocRdv(a);
+      rdv.parCanal = {
+        selfBooking: SC.compter(venteHier.filter(function (b) { return b._class === 'self'; }), now).rdv,
+        setting: SC.compter(venteHier.filter(function (b) { return b._class === 'setter'; }), now).rdv,
+      };
+      const man = SC.compter(venteHier.filter(function (b) { return b._class === 'admin'; }), now).rdv;
+      if (man) rdv.parCanal.manuels = man;
+      /* À statuer d'hier, par closer du RDV (pour l'action « saisir les résultats »). */
+      const aStatuerParCloser = {};
+      venteHier.forEach(function (b) {
+        if (SC.etat(b, now) !== 'a_statuer') return;
+        const k = ctx.nomDe(SC.closerDuRdv(b, ctx.resoudre));
+        aStatuerParCloser[k] = (aStatuerParCloser[k] || 0) + 1;
       });
-      agenda.sort(function (a, b) { return a.heure < b.heure ? -1 : 1; });
-      out.bookingsYesterday = y;
+      if (Object.keys(aStatuerParCloser).length) rdv.aStatuerParCloser = aStatuerParCloser;
+      out.bookingsYesterday = rdv;
+
+      /* Closes d'hier : la liste unique (clients gagnés hier, closes annulés
+         retirés, montants du module Paiements), closer du close. */
+      const CL = await FC.loadCloses(db, { start: yStart, end: yEnd, typeMap: ctx.typeMap, bookings: hier, resoudrePersonne: ctx.resoudre });
+      const byId = {};
+      hier.forEach(function (b) { byId[b._id] = b; });
+      const closes = T.blocCloses(CL, ctx, null);
+      closes.liste = CL.rows.slice(0, 20).map(function (row) {
+        const cdL = (row.lead && row.lead.closedData) || {};
+        const cdB = (row.bookingId && byId[row.bookingId] && byId[row.bookingId].closeData) || {};
+        const o = { client: row.name || '?', offre: cdL.offre || cdB.offre || null, canal: row.sb ? SC.CLASSES.self : SC.CLASSES.setter,
+          closer: ctx.nomDe(row.closer), contracte: Math.round(row.rv.con), collecte: Math.round(row.rv.paid) };
+        if (!row.rv.hasPay) o.sansPaiement = true;
+        return o;
+      });
+      out.closesYesterday = closes;
+      T.avertCloses(CL).forEach(function (x) { out.errors.push(x); });
+
+      /* Agenda du jour : RDV de vente maintenus (ni annulés, ni replanifiés,
+         ni doublons), closer du RDV (StatsCore.closerDuRdv). */
+      const agenda = [];
+      liste.forEach(function (b) {
+        if (b.date !== today || !SC.estRdvVente(b._class)) return;
+        const e = SC.etat(b, now);
+        if (e === 'annule' || e === 'replanifie' || e === 'doublon') return;
+        agenda.push({ heure: b.time || '?', type: b.typeLabel || b.type || 'RDV', canal: SC.CLASSES[b._class], closer: ctx.nomDe(SC.closerDuRdv(b, ctx.resoudre)),
+          prospect: (b.prospect ? ((b.prospect.prenom || '') + ' ' + (b.prospect.nom || '')).trim() : '') || '?' });
+      });
+      agenda.sort(function (x, y) { return x.heure < y.heure ? -1 : 1; });
       out.agendaToday = agenda;
+      Object.assign(defs, T.definitions(T.DEF_RDV), T.definitions(T.DEF_CLOSES), T.definitions({ parCanal: 'canal', manuels: 'rdv_manuels', aStatuerParCloser: 'a_statuer' }));
     }),
     safe('clientRisk', async function () {
       // client_ai/{id} (api/_clientHealth.js) — jamais sur clients/{id}.
@@ -205,6 +263,10 @@ async function collect(today) {
       out.alertesSurveillance = list;
     }),
   ]);
+  const ctx = await ctxP;
+  (ctx.avert || []).forEach(function (x) { out.errors.push(x); });
+  Object.assign(defs, T.definitions({ nonAttribue: 'non_attribue', anciensMembres: 'anciens_membres', heureParis: 'heure_paris' }));
+  out.definitions = defs;
   return out;
 }
 
@@ -240,12 +302,18 @@ const SYSTEM = [
   'Tu rédiges le BRIEF DU MATIN des dirigeants d\'Alteore (Adrien, Emily, Vincent) : une lecture de 60 secondes pour piloter la journée.',
   'Tu reçois les chiffres bruts de la veille, l\'agenda du jour et les alertes. Tu produis :',
   '- titre : la tonalité de la journée ;',
-  '- resume : 2 phrases, le plus important d\'abord (argent encaissé / perdu, risque client, opportunité chaude) ;',
+  '- resume : 2 phrases, le plus important d\'abord (closes et argent collecté / perdu, risque client, opportunité chaude) ;',
   '- sections, dans cet ordre et seulement si elles ont du contenu : « Hier » (📊, chiffres clés commentés), « Leads chauds à appeler » (🔥), « Clients à risque » (🚨, TOUJOURS présente s\'il y a des clients rouges ; signale les nouveaux passages au rouge), « Renouvellements & upsell » (💎), « Agenda du jour » (📅), « Alertes » (⚠️) ; 3 à 6 puces chacune, courtes, chiffrées ;',
   '- alertesMesureQuiz (si présent) : la mesure des quiz ne concorde pas hier — UNE puce dans « Alertes » par quiz, avec l\'écart chiffré (onglet Funnel Sales › Qualité leads › Quiz, encart « Contrôle de cohérence »). Absent = tout concorde : n\'en parle pas ;',
   '- prospectsChaudsApresRdv (si présent) : prospects en séquence d\'e-mails après un RDV qui ont cliqué hier sans reprendre rendez-vous — UNE puce « À rappeler » par prospect (prénom, ce qu\'il a répondu, s\'il a cliqué sur réserver). Absent : n\'en parle pas ;',
   '- actions : 3 à 6 actions concrètes pour aujourd\'hui, avec qui (prénom ou rôle) et quoi.',
   'Règles : uniquement les données fournies, aucune invention, aucun chiffre inventé. Si une donnée manque, n\'en parle pas. Ton direct, factuel, français.',
+  'VOCABULAIRE (celui des écrans de l\'équipe — le champ `definitions` donne le sens exact de chaque chiffre, ne le redéfinis jamais autrement) :',
+  '- bookingsYesterday = RDV de vente d\'hier (à la date du RDV) : RDV, Annulés, No-show, Présents, Disqua., Pitchés, Offres en attente, Non closes, À statuer, Kept, Show-up. « À statuer » = RDV passé sans résultat saisi (action : saisir le résultat, closer dans aStatuerParCloser). Un disqualifié n\'est JAMAIS un non close ; un replanifié n\'est pas un annulé. « RDV closés » (rdvCloses) n\'est pas « Closes ».',
+  '- closesYesterday = Closes d\'hier : clients gagnés hier (liste unique, closes annulés retirés). Contracté = valeur HT des contrats ; Collecté = ce qui a déjà été prélevé ; un close « sans paiement » n\'a pas encore de paiement dans le module Paiements (son collecté est 0 : ne le présente jamais comme payé). Dis « collecté », jamais « encaissé » ni « cash ».',
+  '- newLeads = Leads entrés hier (date d\'entrée réelle) ; les Ré-optins sont à part, ne les additionne pas aux leads. callsYesterday : Appels = sortants ; Décrochés = au moins 5 s de conversation, répondeurs écartés ; appels reçus à part.',
+  '- « Anciens membres » et « Non attribué » sont des lignes de l\'équipe, pas des personnes : ne les nomme pas comme quelqu\'un à qui confier une action.',
+  '- errors (si présent) : une lecture a échoué ou a été tronquée — si cela touche un chiffre que tu cites, dis-le (« chiffre partiel »).',
 ].join('\n');
 
 async function generate(today, uid) {

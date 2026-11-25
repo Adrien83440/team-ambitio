@@ -55,6 +55,13 @@
 .pj-obj-annual label { font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px; }
 .pj-note { background: rgba(255, 255, 255, .025); border-radius: 10px; padding: 16px 18px; border-left: 3px solid var(--gold); font-size: 13px; line-height: 1.8; color: var(--muted); }
 .pj-note b { color: var(--text); }
+.pj-alert { background: var(--bg2); border: 1px solid var(--border); border-left: 3px solid var(--red); border-radius: 10px; padding: 11px 14px; margin-bottom: 14px; font-size: 12.5px; line-height: 1.6; color: var(--text); }
+.pj-alert.warn { border-left-color: var(--gold); }
+.pj-alert b { color: var(--text); }
+.pj-group td { font-weight: 700; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; background: var(--bg2); }
+.pj-sub td { font-weight: 600; background: var(--bg2); }
+.pj-flag { display: inline-block; font-size: 10.5px; color: var(--muted); margin: 2px 6px 0 0; }
+.pj-ctrl { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 12px; color: var(--muted); padding: 10px 18px 14px; }
 @media (max-width: 1000px) {
   .pj-hero { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pj-row { grid-template-columns: minmax(0, 1fr); }
@@ -107,6 +114,7 @@
 </script>
 <script src="stats-core.js"></script>
 <script src="funnel-core.js"></script>
+<script src="stats-drill.js"></script>
 <script src="sales-hist-data.js"></script>
 <script src="nav.js" defer></script>
 </head>
@@ -118,7 +126,7 @@
     <div class="au-head-ico">📈</div>
     <div>
       <h1 class="au-title">Projections <span style="color:var(--muted);font-weight:500">· objectif &amp; ce qui manque</span></h1>
-      <div class="au-sub">Closes, contracté et encaissé <strong>réels</strong> : fiches gagnées, RDV closés et module Paiements. Un close annulé (paiement annulé ou client stoppé sans prélèvement) ne compte pas ; seul un prélèvement passé est de l'encaissé.</div>
+      <div class="au-sub">Closes, contracté et collecté calculés par la <strong>même liste de closes</strong> que le Stats funnel : un client gagné = un close, compté le jour de la vente ; les closes annulés sont retirés. Avant juillet 2026 : ancienne saisie, affichée à part. <span id="hdrInfo"></span></div>
     </div>
     <div class="au-head-right">
       <span class="au-badge-auto"><span class="dot"></span> Données automatiques</span>
@@ -149,7 +157,7 @@
 <div class="au-modal-bg" id="objModal">
   <div class="au-modal">
     <h3 id="objTitle">🎯 Objectifs</h3>
-    <div class="hint">Contracté HT. Un mois laissé vide reprend l'objectif annuel ÷ 12. Stocké dans <code>_config/sales_objectives</code>.</div>
+    <div class="hint">Objectif de contracté (hors taxes). Un mois laissé vide reprend l'objectif annuel ÷ 12. Stocké dans <code>_config/sales_objectives</code>, lu aussi par le Dashboard.</div>
     <div class="pj-obj-annual"><label for="objAnnual">Objectif annuel (€ HT)</label><input type="number" id="objAnnual" min="0" step="1000"/></div>
     <div class="pj-obj-grid" id="objMonths"></div>
     <div class="au-modal-actions">
@@ -163,76 +171,120 @@
 (function () {
   'use strict';
   /* ═══════════════════════════════════════════════════════════════════════
-     PROJECTIONS — refonte du 13/10/2026
+     PROJECTIONS — refonte du 13/10/2026, alignée sur le référentiel des
+     chiffres commerciaux le 25/11/2026 (audit de cohérence, demande d'Adrien)
      ─────────────────────────────────────────────────────────────────────
-     L'ancienne page lisait saisies/{uid}/mois (saisie hebdo à la main),
-     abandonnée depuis que Close SB / SET NB calculent tout seuls : tout
-     tombait à zéro. Désormais :
-     · closes = fiches passées clientes (clientSince) + RDV closés sans fiche
-       + paiements sans fiche gagnée — les trois chemins du Funnel ;
-     · montants et closes annulés = règle REVENUE de funnel-core.js
-       (FunnelCore.revClient) — JAMAIS recopiée ici ;
-     · mois antérieurs à AUTO_FROM : saisie manuelle historique (saisies,
-       repli sales-hist-data.js), affichée comme telle ;
-     · objectifs = _config/sales_objectives (admin), contracté HT.
+     · Closes / Contracté / Collecté : UNIQUEMENT FunnelCore.loadCloses (un
+       appel pour la partie calculée de l'année) + FunnelCore.sumCloses, lignes
+       rangées au mois du jour de la vente (ligne.day, heure de Paris) et au
+       closer de la ligne (ligne.closer). Plus aucune copie locale des chemins
+       de close, du rattachement des paiements ni des fiches gagnées.
+     · Onglet Équipe = somme des onglets des closers + « Non attribué »
+       (anciens membres sans nom, closer inconnu).
+     · « Prélevé sur la période » = FunnelCore.cashInPeriod (tous clients).
+     · RDV et taux : StatsCore (classe, état, compter, tauxClose) ; LTB = RDV
+       pris ÷ leads entrés (FunnelCore.loadLeads).
+     · Mois antérieurs à AUTO_FROM : ancienne saisie (saisies, repli
+       sales-hist-data.js), sans « HT », séparés des mois calculés — même
+       lecture que le Dashboard.
+     · Objectifs = _config/sales_objectives (admin), lus aussi par le
+       Dashboard (même repli DEFAULT_OBJ, même projection de fin d'année).
+     Lecture seule, sauf l'enregistrement des objectifs par un admin.
      ═══════════════════════════════════════════════════════════════════════ */
+  var SC = window.StatsCore;
   var FC = window.FunnelCore;
+  var SD = window.StatsDrill;
   var db = firebase.firestore();
   var $ = function (s) { return document.querySelector(s); };
 
   var MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-  var AUTO_FROM = '2026-07';             // 1er mois calculé automatiquement (closes RDV + Paiements complets)
+  var AUTO_FROM = '2026-07';             // 1er mois calculé (même seuil que le Dashboard)
+  /* Repli de l'objectif annuel quand _config/sales_objectives n'a rien pour
+     l'année — le Dashboard en a une copie EXACTE (à garder identiques). */
   var DEFAULT_OBJ = { '2025': 500000, '2026': 1000000, '2027': 1500000 };
-  var DEFAULT_TICKET = 6000;             // panier HT de repli si aucun close récent
-  var RATE_WINDOW_DAYS = 90;             // fenêtre des taux de conversion
-  var DAY = 86400000;
+  var DEFAULT_TICKET = 6000;             // panier de repli si aucun close (affiché comme tel)
+  var RATE_WINDOW_DAYS = 90;             // fenêtre des taux : les 90 jours finissant hier
+  var NA = '_na';                        // onglet « Non attribué »
   var IS_ADMIN = localStorage.getItem('ambitio_role') === 'admin';
 
   var S = {
-    year: 0, month: 0,                   // mois affiché (month 0-11)
+    year: 0, month: 0,                   // mois affiché (month 0-11), heure de Paris
     slug: '_all',
-    objectives: {},                      // { 'YYYY': { annual, months: { '1'..'12': n|null } } }
-    data: null, loading: false
+    objectives: {}, objErreur: null,     // { 'YYYY': { annual, months: { '1'..'12': n|null } } }
+    data: null, loading: false, token: 0
   };
   (function initPeriod() {
-    var now = new Date();
-    S.year = now.getFullYear(); S.month = now.getMonth();
+    var mp = SC.moisParis(Date.now()).split('-');
+    S.year = +mp[0]; S.month = +mp[1] - 1;
     try { var sl = localStorage.getItem('proj_v2_member'); if (sl) S.slug = sl; } catch (e) {}
   })();
 
-  /* ── Formats ── */
-  function pad2(n) { return String(n).padStart(2, '0'); }
-  function ymOf(ms) { var d = new Date(ms); return d.getFullYear() + '-' + pad2(d.getMonth() + 1); }
-  function isoOf(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
-  function fmtEuro(n) { return (Math.round(Number(n) || 0)).toLocaleString('fr-FR') + ' €'; }
-  function fmtPct(n, dec) { if (n == null || !isFinite(n)) return '—'; var f = Math.pow(10, dec == null ? 1 : dec); return (Math.round(n * f) / f).toLocaleString('fr-FR') + ' %'; }
+  /* ── Formats (montants et taux : StatsCore, une seule écriture) ── */
+  function pad2(n) { n = String(n); return n.length < 2 ? '0' + n : n; }
+  var fmtEuro = SC.fmtEuro;
+  function fmtPct(v, dec) { return SC.fmtPct(v, dec); }
   function fmtNum(n) { return (Math.round(Number(n) || 0)).toLocaleString('fr-FR'); }
-  function fmtDay(ms) { var d = new Date(ms); return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1); }
-  function esc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function fmtDayIso(iso) { return iso ? String(iso).slice(8, 10) + '/' + String(iso).slice(5, 7) : '—'; }
+  function esc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function info(cle, plus) { return SC.info(cle, plus); }
+  function infoLibre(t, x) { return SC.infoLibre(t, x); }
   function toast(msg, err) {
     var t = $('#auToast'); t.textContent = msg; t.className = err ? 'err show' : 'show';
     clearTimeout(window.__auTo); window.__auTo = setTimeout(function () { t.className = ''; }, 3200);
   }
-  function memberName(slug) {
-    var m = window.TEAM_MEMBERS && window.TEAM_MEMBERS[slug];
-    return m ? (m.shortName || m.displayName || slug) : (slug || '—');
-  }
-  function isDeparted(slug) { return !!(window.TEAM_DEPARTED && window.TEAM_DEPARTED[slug]); }
 
-  /* Jours ouvrés (lun-ven) entre deux dates incluses. */
-  function workdays(from, to) {
+  /* ── Jours (clés 'AAAA-MM-JJ' à l'heure de Paris) ── */
+  function todayIso() { return SC.jourParis(Date.now()); }
+  function isoAdd(iso, n) { var p = String(iso).split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2] + n)).toISOString().slice(0, 10); }
+  function moisCle(y, m0) { return y + '-' + pad2(m0 + 1); }
+  function lastDayIso(y, m0) { return moisCle(y, m0) + '-' + pad2(new Date(Date.UTC(y, m0 + 1, 0)).getUTCDate()); }
+  function estOuvre(iso) { var p = String(iso).split('-'); var w = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])).getUTCDay(); return w !== 0 && w !== 6; }
+  /* Jours ouvrés (lun-ven) entre deux jours inclus. Fériés non retirés. */
+  function workdays(aIso, bIso) {
+    if (!aIso || !bIso || aIso > bIso) return 0;
     var n = 0;
-    for (var d = new Date(from.getFullYear(), from.getMonth(), from.getDate()); d <= to; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) {
-      var w = d.getDay(); if (w !== 0 && w !== 6) n++;
-    }
+    FC.joursEntre(aIso, bIso).forEach(function (d) { if (estOuvre(d)) n++; });
     return n;
+  }
+  function msgErr(e) { return (e && e.message) || 'lecture impossible'; }
+
+  /* ── Personnes ── */
+  function teamMap() { return window.TEAM_MEMBERS || {}; }
+  function has(map, k) { return !!k && Object.prototype.hasOwnProperty.call(map, k); }
+  function isDeparted(slug) {
+    if (!slug) return false;
+    var m = teamMap()[slug] || null;
+    if (m && (m.departed === true)) return true;
+    if (typeof window.isDepartedMember === 'function' && (window.isDepartedMember(slug) || (m && window.isDepartedMember(m)))) return true;
+    return !!(window.TEAM_DEPARTED && window.TEAM_DEPARTED[slug]);
+  }
+  /* Onglet d'une personne : son slug, ou « Non attribué » (closer inconnu,
+     ancien membre, slug qui n'est pas un membre de l'équipe). */
+  function bucket(slug) {
+    if (!slug) return NA;
+    if (isDeparted(slug)) return NA;
+    var map = teamMap();
+    if (Object.keys(map).length && !has(map, slug)) return NA;
+    return slug;
+  }
+  function memberName(slug) {
+    var m = teamMap()[slug];
+    return m ? (m.shortName || m.displayName || slug) : (slug || '');
+  }
+  /* Nom affiché dans une liste : jamais le nom d'un ancien membre (D10). */
+  function nomDe(slug) {
+    if (!slug) return '';
+    if (isDeparted(slug)) return SC.mot('anciens_membres');
+    var map = teamMap();
+    if (Object.keys(map).length && !has(map, slug)) return slug + ' (hors onglets)';
+    return memberName(slug);
   }
 
   /* ── Objectifs ── */
   function objYear(y) {
     var o = S.objectives[String(y)] || {};
-    var annual = (o.annual != null && o.annual !== '') ? Number(o.annual) || 0 : (DEFAULT_OBJ[String(y)] || 0);
-    return { annual: annual, months: o.months || {} };
+    var regle = o.annual != null && o.annual !== '';
+    return { annual: regle ? (Number(o.annual) || 0) : (DEFAULT_OBJ[String(y)] || 0), months: o.months || {}, regle: regle };
   }
   function objMonth(y, m) {
     var o = objYear(y);
@@ -241,8 +293,9 @@
   }
   function loadObjectives() {
     return db.collection('_config').doc('sales_objectives').get().then(function (snap) {
-      S.objectives = (snap.exists && snap.data().years) || {};
-    }).catch(function (e) { console.warn('[projections] objectifs', e && e.message); S.objectives = {}; });
+      S.objectives = (snap.exists && (snap.data() || {}).years) || {};
+      S.objErreur = null;
+    }).catch(function (e) { console.warn('[projections] objectifs', msgErr(e)); S.objectives = {}; S.objErreur = msgErr(e); });
   }
 
   /* ══ CHARGEMENT ══════════════════════════════════════════════════════════ */
@@ -252,288 +305,313 @@
     return out;
   }
 
-  /* Saisie manuelle historique d'un mois (avant AUTO_FROM) : somme des
-     membres — saisies/{slug}/mois/{YYYY-MM}, repli sales-hist-data.js. */
+  /* Ancienne saisie d'un mois (avant AUTO_FROM) : saisies/{slug}/mois/{AAAA-MM},
+     repli sales-hist-data.js. Mêmes membres et même repli que le Dashboard. */
   function legacySlugs() {
     var seen = {}, out = [];
     function add(s) { if (s && !seen[s]) { seen[s] = 1; out.push(s); } }
     Object.keys(window.HIST_DATA || {}).forEach(add);
-    (window.TEAM_MEMBERS_LIST || []).forEach(function (m) { add(m.slug); });
-    ['elodie', 'guillaume'].forEach(add);
+    (window.TEAM_MEMBERS_LIST || []).forEach(function (m) { add(m && m.slug); });
     return out;
   }
   function sumWeeks(obj) {
-    var t = { closes: 0, contracte: 0, collecte: 0 };
+    var t = { closes: 0, contracte: 0 }, any = false;
     Object.keys(obj || {}).forEach(function (w) {
       var x = obj[w] || {};
-      t.closes += Number(x.closes) || 0; t.contracte += Number(x.contracte) || 0; t.collecte += Number(x.collecte) || 0;
+      any = true;
+      t.closes += Number(x.closes) || 0; t.contracte += Number(x.contracte) || 0;
     });
-    return t;
+    return any ? t : null;
   }
   function loadLegacyMonth(y, m) {
-    var key = y + '-' + pad2(m + 1);
+    var key = moisCle(y, m);
     var mk = MONTHS_FR[m] + ' ' + y;
-    var slugs = legacySlugs();
-    return Promise.all(slugs.map(function (slug) {
+    var erreurs = 0;
+    return Promise.all(legacySlugs().map(function (slug) {
       return db.collection('saisies').doc(slug).collection('mois').doc(key).get().then(function (s) {
-        if (s.exists) {
-          var raw = s.data() || {};
-          if (raw.closing_total) return { slug: slug, closes: Number(raw.closing_total.closes) || 0, contracte: Number(raw.closing_total.contracte) || 0 };
-          if (raw.closing) { var t = sumWeeks(raw.closing); return { slug: slug, closes: t.closes, contracte: t.contracte }; }
-        }
-        var h = window.HIST_DATA && window.HIST_DATA[slug];
-        if (h && h.closing && h.closing[mk]) return { slug: slug, closes: Number(h.closing[mk].closes) || 0, contracte: Number(h.closing[mk].contracte) || 0 };
-        if (h && h.closing_weekly && h.closing_weekly[mk]) { var t2 = sumWeeks(h.closing_weekly[mk]); return { slug: slug, closes: t2.closes, contracte: t2.contracte }; }
-        return null;
-      }).catch(function () { return null; });
-    })).then(function (rows) {
-      var out = { closes: 0, contracte: 0, bySlug: {}, has: false };
-      rows.forEach(function (r) {
-        if (!r) return;
-        out.has = true; out.closes += r.closes; out.contracte += r.contracte;
-        out.bySlug[r.slug] = { closes: r.closes, contracte: r.contracte };
+        return s.exists ? (s.data() || {}) : null;
+      }, function () { erreurs++; return null; }).then(function (raw) {
+        var h = (window.HIST_DATA || {})[slug] || null, t = null;
+        if (raw && raw.closing_total) t = { closes: Number(raw.closing_total.closes) || 0, contracte: Number(raw.closing_total.contracte) || 0 };
+        else if (raw && raw.closing) t = sumWeeks(raw.closing);
+        if (!t && h && h.closing && h.closing[mk]) t = { closes: Number(h.closing[mk].closes) || 0, contracte: Number(h.closing[mk].contracte) || 0 };
+        if (!t && h && h.closing_weekly && h.closing_weekly[mk]) t = sumWeeks(h.closing_weekly[mk]);
+        return t ? { slug: slug, closes: t.closes, contracte: t.contracte } : null;
       });
+    })).then(function (rows) {
+      var out = { month: m, bySlug: {}, has: false, erreurs: erreurs };
+      rows.forEach(function (r) { if (r) { out.has = true; out.bySlug[r.slug] = { closes: r.closes, contracte: r.contracte }; } });
       return out;
     });
   }
 
-  function loadAll() {
-    var y = S.year;
-    var now = new Date();
-    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    var winStart = new Date(today.getTime() - RATE_WINDOW_DAYS * DAY);
-    var winEnd = new Date(today.getTime() - 1);              // hier 23:59:59
-    var yStart = new Date(y, 0, 1), yEnd = new Date(y, 11, 31, 23, 59, 59, 999);
-    var qStart = winStart < yStart ? winStart : yStart;
-    var qEnd = yEnd > today ? yEnd : today;
-    var P = { start: qStart, end: qEnd };
-    var TS = firebase.firestore.Timestamp;
-    var mEnd = new Date(S.year, S.month + 1, 0);
-
-    var legacyMonths = [];
-    for (var m = 0; m < 12; m++) { if ((y + '-' + pad2(m + 1)) < AUTO_FROM) legacyMonths.push(m); }
-
-    var DATA = { payments: [], closedLeads: [] };
-    return Promise.all([
-      FC.loadTypeMap(db).catch(function () { return {}; }),
-      db.collection('payments').get().then(snapList),
-      db.collection('leads').where('clientSince', '>=', TS.fromDate(qStart)).where('clientSince', '<=', TS.fromDate(qEnd)).limit(800).get().then(snapList),
-      db.collection('bookings').where('outcome', '==', 'close').get().then(snapList).catch(function () { return []; }),
-      /* Taux de conversion : RDV ayant eu lieu sur la fenêtre glissante */
-      db.collection('bookings').where('date', '>=', isoOf(winStart)).where('date', '<=', isoOf(winEnd)).get().then(snapList).catch(function () { return []; }),
-      /* RDV à venir jusqu'à la fin du mois affiché (pipeline) */
-      (mEnd >= today
-        ? db.collection('bookings').where('date', '>=', isoOf(today)).where('date', '<=', isoOf(mEnd)).get().then(snapList).catch(function () { return []; })
-        : Promise.resolve([])),
-      /* Leads entrés sur la fenêtre (ratio RDV / lead) */
-      db.collection('leads').where('createdAt', '>=', TS.fromDate(winStart)).where('createdAt', '<=', TS.fromDate(winEnd)).limit(FC.LEADS_QUERY_LIMIT).get().then(function (snap) {
-        var n = 0;
-        snap.forEach(function (doc) {
-          var d = doc.data();
-          if (d._merged === true) return;
-          var re = FC.realEntryMs(d);
-          if (re != null && re >= winStart.getTime() && re <= winEnd.getTime()) n++;
-        });
-        return { n: n, truncated: snap.size >= FC.LEADS_QUERY_LIMIT };
-      }).catch(function () { return { n: 0, truncated: false }; }),
-      Promise.all(legacyMonths.map(function (mm) { return loadLegacyMonth(y, mm).then(function (r) { r.month = mm; return r; }); }))
-    ]).then(function (res) {
-      DATA.payments = res[1];
-      DATA.closedLeads = res[2].filter(function (l) { return l._merged !== true; });
-      var pack = {
-        typeMap: res[0] || {}, payments: res[1], closedLeads: DATA.closedLeads,
-        closeBookings: res[3], winBookings: res[4], upcoming: res[5], winLeads: res[6],
-        legacy: {}, P: P, winStart: winStart, winEnd: winEnd, today: today
-      };
-      res[7].forEach(function (r) { pack.legacy[r.month] = r; });
-      /* Paiements sans fiche gagnée : même résolution que le Funnel. */
-      return FC.resolvePaymentLeads(db, P, DATA).then(function () { return pack; }, function () { return pack; });
-    });
+  /* Table des types de RDV : lue ici (et non par FC.loadTypeMap, qui avale
+     l'erreur) pour qu'une lecture en échec soit DITE — sans elle, Self Booking
+     et Setting ne se distinguent plus. */
+  function loadTypes(err) {
+    return db.collection('booking_config').doc('_types').get().then(function (snap) {
+      return FC.buildTypeMap((snap.exists && (snap.data() || {}).list) || []);
+    }, function (e) { err.push('types de RDV (Self Booking / Setting mal répartis) : ' + msgErr(e)); return {}; });
   }
-
-  /* ══ CALCUL ══════════════════════════════════════════════════════════════
-     Liste des closes (trois chemins du Funnel) avec verdict REVENUE. */
-  function buildCloses(pack) {
-    var idx = FC.revIndex(pack.payments);
-    pack.payments.forEach(function (p) { p._matched = false; });
-    function paysFor(leadId, email, phone) {
-      var list = FC.revPaymentsFor(idx, leadId, email, phone).filter(function (p) { return !p._matched; });
-      list.forEach(function (p) { p._matched = true; });
-      return list;
-    }
-    var declByLead = {}, closerByLead = {};
-    pack.closeBookings.forEach(function (b) {
-      if (!b.leadId || !b.closeData) return;
-      declByLead[b.leadId] = b.closeData;
-      if (b.closeData.closerSlug) closerByLead[b.leadId] = b.closeData.closerSlug;
-    });
-    function closerOfPays(pays) { for (var i = 0; i < pays.length; i++) if (pays[i].closerSlug) return pays[i].closerSlug; return null; }
-    var out = [];
-    var ps = pack.P.start.getTime(), pe = pack.P.end.getTime();
-
-    /* ① fiches gagnées */
-    pack.closedLeads.forEach(function (l) {
-      var ms = FC.parseFlexMs(l.clientSince);
-      if (ms == null) return;
-      var pays = paysFor(l._id, l.email, l.telephone || l.phone);
-      var decl = declByLead[l._id] || l.closedData || null;
-      var rv = FC.revClient(pays, l, decl);
-      out.push({
-        ms: ms, name: l.nom || l.email || l._id, leadId: l._id,
-        closer: (l.closedData && l.closedData.closerSlug) || closerByLead[l._id] || l.closeurSlug || closerOfPays(pays) || null,
-        sb: l.stage === 'closed_won_self', rv: rv, pays: pays
-      });
-    });
-    /* ② RDV closés sans fiche */
-    pack.closeBookings.forEach(function (b) {
-      if (b.leadId) return;
-      var ms = FC.parseFlexMs(b.date);
-      if (ms == null || ms < ps || ms > pe) return;
-      var pr = b.prospect || {};
-      var pays = paysFor(null, pr.email, pr.telephone || pr.phone);
-      var rv = FC.revClient(pays, null, b.closeData || null);
-      out.push({ ms: ms, name: pr.nom || pr.email || b._id, leadId: null, closer: (b.closeData && b.closeData.closerSlug) || closerOfPays(pays), sb: FC.classifyBooking(b, pack.typeMap) === 'self', rv: rv, pays: pays });
-    });
-    /* ③ paiements sans fiche gagnée de la même période */
-    pack.payments.forEach(function (p) {
-      if (!p._payClose || p._matched || p._payClose.kind !== 'count') return;
-      var ms = FC.parseFlexMs(p.createdAt);
-      if (ms == null) return;
-      p._matched = true;
-      var pc = p._payClose;
-      var rv = FC.revClient([p], pc.lead || null, null);
-      out.push({ ms: ms, name: pc.name, leadId: pc.lead ? pc.lead._id : null, closer: p.closerSlug || null, sb: !!pc.sb, rv: rv, pays: [p], viaPayment: true });
-    });
-    out.sort(function (a, b) { return a.ms - b.ms; });
-    return out;
+  /* Hôte d'un RDV : fiche d'agenda (booking_config, __type person) → membre. */
+  function loadPersons(err) {
+    return db.collection('booking_config').get().then(function (snap) {
+      var map = {};
+      snap.forEach(function (doc) { var d = doc.data(); if (d && d.__type === 'person') map[doc.id] = { firebaseUid: d.firebaseUid || null }; });
+      return map;
+    }, function (e) { err.push('fiches d’agenda (le closer d’un close non validé peut manquer) : ' + msgErr(e)); return {}; });
   }
-
-  /* Cash encaissé daté par mois (tous clients, tous paiements). */
-  function cashByMonth(payments, slug) {
-    var m = {};
-    payments.forEach(function (p) {
-      if (slug !== '_all' && p.closerSlug !== slug) return;
-      FC.revPaidEntries(p).forEach(function (e) {
-        if (e.ms == null) return;
-        var k = ymOf(e.ms);
-        m[k] = (m[k] || 0) + e.ht;
-      });
-    });
-    return m;
-  }
-
-  /* Taux de conversion sur la fenêtre glissante (équipe). */
-  function computeRates(pack, closes) {
-    var rdv = 0, presents = 0, pitched = 0;
-    pack.winBookings.forEach(function (b) {
-      if (FC.classifyBooking(b, pack.typeMap) === 'excluded') return;
-      var oc = b.outcome || null;
-      var resched = oc === 'replanifie' || (!oc && b.status === 'cancelled' && b.rescheduled === true);
-      if (resched) return;
-      rdv++;
-      var present = oc ? (oc === 'offre' || oc === 'close' || oc === 'non_close' || oc === 'disqualifie') : b.status === 'completed';
-      if (present) presents++;
-      if (oc === 'offre' || oc === 'close' || oc === 'non_close') pitched++;
-    });
-    var ws = pack.winStart.getTime(), we = pack.winEnd.getTime();
-    var nCloses = 0, sumCon = 0;
-    closes.forEach(function (c) {
-      if (c.rv.cancelled || c.ms < ws || c.ms > we) return;
-      nCloses++; sumCon += c.rv.con;
-    });
-    var ticket = nCloses > 0 && sumCon > 0 ? sumCon / nCloses : null;
-    if (ticket == null) {
-      var n2 = 0, s2 = 0;
-      closes.forEach(function (c) { if (!c.rv.cancelled && c.rv.con > 0) { n2++; s2 += c.rv.con; } });
-      ticket = n2 > 0 ? s2 / n2 : DEFAULT_TICKET;
-    }
-    var upcoming = 0;
-    pack.upcoming.forEach(function (b) {
-      if (FC.classifyBooking(b, pack.typeMap) === 'excluded') return;
-      if (b.outcome) return;
-      if (b.status === 'cancelled' || b.status === 'no_show' || b.status === 'completed') return;
-      if (b.date < isoOf(pack.today)) return;
-      upcoming++;
-    });
-    return {
-      rdv: rdv, presents: presents, pitched: pitched, closes: nCloses, leads: pack.winLeads.n, leadsTruncated: pack.winLeads.truncated,
-      ticket: ticket, upcoming: upcoming,
-      closeParRdv: rdv > 0 ? nCloses / rdv : null,
-      closeParOffre: pitched > 0 ? nCloses / pitched : null,
-      offreParPresent: presents > 0 ? pitched / presents : null,
-      presentParRdv: rdv > 0 ? presents / rdv : null,
-      rdvParLead: pack.winLeads.n > 0 ? rdv / pack.winLeads.n : null
+  function resoudreAvec(persons) {
+    return function (personId) {
+      if (!personId) return null;
+      var map = teamMap(), p = persons[personId];
+      if (p && p.firebaseUid) {
+        var keys = Object.keys(map);
+        for (var i = 0; i < keys.length; i++) {
+          var m = map[keys[i]];
+          if (m && (m.firebaseUid === p.firebaseUid || m.uid === p.firebaseUid)) return m.slug || keys[i];
+        }
+      }
+      return has(map, personId) ? personId : null;
     };
   }
 
-  /* Agrégat par mois de l'année affichée. */
-  function computeYear(pack, closes, slug) {
+  function loadAll() {
     var y = S.year;
-    var cash = cashByMonth(pack.payments, slug);
+    var tIso = todayIso();
+    var err = [];
+    var yStartIso = y + '-01-01', yEndIso = y + '-12-31';
+    var calcStartIso = (y + '-01' >= AUTO_FROM) ? yStartIso : (AUTO_FROM + '-01');
+    var hasCalc = yEndIso >= calcStartIso;
+    var mKey = moisCle(y, S.month), mEndIso = lastDayIso(y, S.month);
+    /* Taux et pipeline : seulement quand le mois affiché est calculé et pas
+       encore terminé (ailleurs ils ne sont pas affichés). */
+    var needRates = mKey >= AUTO_FROM && mEndIso >= tIso;
+    var win = { startIso: isoAdd(tIso, -RATE_WINDOW_DAYS), endIso: isoAdd(tIso, -1) };
+    var legacyMonths = [];
+    for (var m = 0; m < 12; m++) { if (moisCle(y, m) < AUTO_FROM) legacyMonths.push(m); }
+
+    return Promise.all([loadTypes(err), loadPersons(err)]).then(function (r0) {
+      var typeMap = r0[0], resoudre = resoudreAvec(r0[1]);
+      var pYear = hasCalc
+        ? FC.loadCloses(db, { start: SC.debutJourParis(calcStartIso), end: SC.finJourParis(yEndIso), typeMap: typeMap, resoudrePersonne: resoudre })
+        : db.collection('payments').get().then(function (snap) {
+          return { rows: [], annules: [], sansSignal: [], ecartsCanal: [], autres: [], toutes: [], tronque: false, erreur: null, payments: snapList(snap) };
+        }, function (e) { return { rows: [], annules: [], sansSignal: [], ecartsCanal: [], autres: [], toutes: [], tronque: false, erreur: 'paiements : ' + msgErr(e), payments: [] }; });
+      /* Fenêtre des taux contenue dans la partie calculée de l'année : mêmes
+         lignes. Sinon (début d'année, année passée), un appel pour elle. */
+      var winInYear = hasCalc && win.startIso >= calcStartIso && win.endIso <= yEndIso;
+      var pWinCloses = (needRates && !winInYear)
+        ? FC.loadCloses(db, { start: SC.debutJourParis(win.startIso), end: SC.finJourParis(win.endIso), typeMap: typeMap, resoudrePersonne: resoudre })
+        : Promise.resolve(null);
+      /* RDV datés dans la fenêtre + RDV à venir jusqu'à la fin du mois affiché. */
+      var bEndIso = mEndIso > win.endIso ? mEndIso : win.endIso;
+      var pBkDate = needRates
+        ? db.collection('bookings').where('date', '>=', win.startIso).where('date', '<=', bEndIso).get().then(snapList, function (e) { err.push('RDV (taux et RDV à venir) : ' + msgErr(e)); return null; })
+        : Promise.resolve([]);
+      /* RDV pris (créés) dans la fenêtre : numérateur du LTB. */
+      var TS = firebase.firestore.Timestamp;
+      var pBkCreated = needRates
+        ? db.collection('bookings').where('createdAt', '>=', TS.fromDate(SC.debutJourParis(win.startIso))).where('createdAt', '<=', TS.fromDate(SC.finJourParis(win.endIso))).get().then(snapList, function (e) { err.push('RDV pris (LTB) : ' + msgErr(e)); return null; })
+        : Promise.resolve([]);
+      /* Leads entrés dans la fenêtre : même lecture que le Stats funnel
+         (fusionnés et fiches de test retirés, plafond dit). */
+      var DL = {};
+      var pLeads = needRates
+        ? FC.loadLeads(db, { start: SC.debutJourParis(win.startIso), end: SC.finJourParis(win.endIso) }, DL).then(function () { return DL; }, function (e) { DL.leadsError = DL.leadsError || msgErr(e); return DL; })
+        : Promise.resolve(null);
+      var pLegacy = Promise.all(legacyMonths.map(function (mm) { return loadLegacyMonth(y, mm); }));
+      return Promise.all([pYear, pWinCloses, pBkDate, pBkCreated, pLeads, pLegacy]).then(function (res) {
+        var yr = res[0];
+        if (yr.erreur) err.push('closes : ' + yr.erreur);
+        var legacy = {}, legErr = 0;
+        res[5].forEach(function (r) { legacy[r.month] = r; legErr += r.erreurs || 0; });
+        if (legErr) err.push('ancienne saisie : ' + legErr + ' lecture(s) en échec (repli sur les données historiques du fichier)');
+        var winRes = res[1] || null;
+        if (winRes && winRes.erreur) err.push('closes des ' + RATE_WINDOW_DAYS + ' derniers jours : ' + winRes.erreur);
+        var leads = res[4];
+        if (leads && leads.leadsError) err.push('leads entrés (LTB) : ' + leads.leadsError);
+        return {
+          y: y, tIso: tIso, typeMap: typeMap, calcStartIso: calcStartIso, hasCalc: hasCalc,
+          year: yr, winCloses: winRes, winInYear: winInYear, win: win, needRates: needRates,
+          bkDate: res[2], bkCreated: res[3], leads: leads, legacy: legacy,
+          tronque: !!yr.tronque || !!(winRes && winRes.tronque),
+          leadsTronque: !!(leads && leads.leadsTruncated),
+          erreurs: err
+        };
+      });
+    });
+  }
+
+  /* ══ CALCUL ══════════════════════════════════════════════════════════════ */
+  /* Closer d'un prélèvement : celui du paiement, sinon celui du close du
+     client (fiche, e-mail, téléphone). Sert à ranger le « Prélevé sur la
+     période » dans les onglets. */
+  function payCloserIndex(rows) {
+    var byLead = {}, byEmail = {}, byP9 = {};
+    rows.forEach(function (r) {
+      if (!r.closer) return;
+      if (r.leadId && !byLead[r.leadId]) byLead[r.leadId] = r.closer;
+      var l = r.lead || {};
+      var em = String(l.email || '').toLowerCase().trim();
+      if (em && !byEmail[em]) byEmail[em] = r.closer;
+      var p9 = FC.phone9(l.telephone || l.phone);
+      if (p9 && !byP9[p9]) byP9[p9] = r.closer;
+    });
+    return function (p) {
+      if (p.closerSlug) return p.closerSlug;
+      if (p.leadId && byLead[p.leadId]) return byLead[p.leadId];
+      var em = String(p.leadEmail || '').toLowerCase().trim();
+      if (em && byEmail[em]) return byEmail[em];
+      var p9 = FC.phone9(p.leadPhone);
+      return (p9 && byP9[p9]) || null;
+    };
+  }
+
+  function inSlug(slug, closer) { return slug === '_all' || bucket(closer) === slug; }
+
+  /* Agrégat par mois de l'année affichée, pour un onglet. */
+  function computeYear(pack, slug) {
+    var y = pack.y;
+    var all = pack.year.toutes || [];
+    var payCloser = payCloserIndex(all);
+    var payments = pack.year.payments || [];
     var months = [];
     for (var m = 0; m < 12; m++) {
-      var key = y + '-' + pad2(m + 1);
+      var key = moisCle(y, m);
       var auto = key >= AUTO_FROM;
-      var row = { m: m, key: key, auto: auto, closes: 0, cancelled: 0, contracte: 0, encaisseCloses: 0, pending: 0, cash: cash[key] || 0, list: [], has: false, obj: objMonth(y, m) };
+      var sIso = key + '-01', eIso = lastDayIso(y, m);
+      var row = { m: m, key: key, auto: auto, closes: 0, cancelled: 0, contracte: 0, collecte: 0, pending: 0, reste: 0, sansPaiement: 0,
+        sb: 0, nb: 0, preleve: 0, list: [], has: false, obj: objMonth(y, m), sIso: sIso, eIso: eIso };
       if (auto) {
-        closes.forEach(function (c) {
-          if (ymOf(c.ms) !== key) return;
-          if (slug !== '_all' && c.closer !== slug) return;
-          row.list.push(c);
-          row.has = true;
-          if (c.rv.cancelled) { row.cancelled++; return; }
-          row.closes++; row.contracte += c.rv.con; row.encaisseCloses += c.rv.paid; row.pending += c.rv.pending;
+        all.forEach(function (r) {
+          if (String(r.day).slice(0, 7) !== key) return;
+          if (!inSlug(slug, r.closer)) return;
+          row.list.push(r);
         });
+        var t = FC.sumCloses(row.list);
+        row.closes = t.closes; row.contracte = t.con; row.collecte = t.paid; row.pending = t.pending; row.reste = t.reste; row.sansPaiement = t.sansPaiement;
+        row.list.forEach(function (r) { if (r.rv && r.rv.cancelled) row.cancelled++; else if (r.sb) row.sb++; else row.nb++; });
+        row.has = row.list.length > 0;
       } else {
         var lg = pack.legacy[m];
         if (lg && lg.has) {
-          var src = slug === '_all' ? lg : (lg.bySlug[slug] || null);
-          if (src) { row.closes = src.closes; row.contracte = src.contracte; row.has = src.closes > 0 || src.contracte > 0; }
+          Object.keys(lg.bySlug).forEach(function (s) {
+            if (slug !== '_all' && bucket(s) !== slug) return;
+            row.closes += lg.bySlug[s].closes; row.contracte += lg.bySlug[s].contracte;
+          });
+          row.has = row.closes > 0 || row.contracte > 0;
         }
       }
-      if (row.cash > 0) row.has = true;
+      var cash = FC.cashInPeriod(payments, SC.debutJourParis(sIso).getTime(), SC.finJourParis(eIso).getTime());
+      cash.lignes.forEach(function (l) { if (inSlug(slug, payCloser(l.p))) row.preleve += l.ht; });
+      if (row.preleve > 0) row.has = true;
       months.push(row);
     }
     return months;
   }
 
+  /* Taux de l'équipe sur les 90 jours finissant hier — règles StatsCore. */
+  function computeRates(pack) {
+    if (!pack.needRates) return null;
+    var tm = pack.typeMap, now = Date.now(), w = pack.win;
+    function cls(b) { return SC.classifyBooking(b, tm); }
+    var r = { ok: true, bkErr: pack.bkDate == null, prisErr: pack.bkCreated == null };
+    var winB = [], upcoming = [];
+    (pack.bkDate || []).forEach(function (b) {
+      if (!SC.estRdvVente(cls(b))) return;
+      if (b.date >= w.startIso && b.date <= w.endIso) winB.push(b);
+      if (b.date >= pack.tIso && b.date <= lastDayIso(S.year, S.month) && SC.etat(b, now) === 'a_venir') upcoming.push(b);
+    });
+    r.a = SC.compter(winB, now);
+    r.upcomingList = upcoming;
+    r.upcoming = upcoming.length;
+    var pris = 0;
+    (pack.bkCreated || []).forEach(function (b) {
+      if (!SC.estRdvPris(cls(b)) || SC.estRemplacant(b) || SC.estDoublon(b)) return;
+      pris++;
+    });
+    r.pris = pris;
+    r.leads = pack.leads && !pack.leads.leadsError ? (pack.leads.leads || []).length : null;
+    r.leadsTronque = pack.leadsTronque;
+    /* Closes de la fenêtre : même liste unique (lignes de l'année si la
+       fenêtre y est contenue, sinon l'appel dédié). */
+    var src = pack.winInYear ? (pack.year.rows || []) : ((pack.winCloses && pack.winCloses.rows) || []);
+    var rowsWin = src.filter(function (x) { return x.day >= w.startIso && x.day <= w.endIso; });
+    var t = FC.sumCloses(rowsWin);
+    r.closes = t.closes; r.con = t.con;
+    r.ticket = t.panier; r.ticketSrc = 'fenetre';
+    if (r.ticket == null || !(r.ticket > 0)) {
+      var ty = FC.sumCloses(pack.year.rows || []);
+      if (ty.panier > 0) { r.ticket = ty.panier; r.ticketSrc = 'annee'; r.ticketN = ty.closes; }
+      else { r.ticket = DEFAULT_TICKET; r.ticketSrc = 'defaut'; }
+    }
+    r.tauxClosePitch = SC.tauxClose(r.closes, r.a.pitches);   /* % ou null */
+    r.tauxCloseRdv = SC.tauxClose(r.closes, r.a.rdv);
+    r.tauxPitch = r.a.tauxPitch;                               /* pitchés ÷ présents */
+    r.showUp = r.a.showUp;                                     /* présents ÷ (Kept − à venir) */
+    r.keptPct = r.a.keptPct;                                   /* Kept ÷ RDV */
+    r.ltb = (r.leads != null && !r.prisErr) ? SC.pct(r.pris, r.leads) : null;
+    return r;
+  }
+
   /* ══ RENDU ═══════════════════════════════════════════════════════════════ */
   function refresh() {
-    if (S.loading) return;
+    var token = ++S.token;
     S.loading = true;
     $('#monthLbl').textContent = MONTHS_FR[S.month] + ' ' + S.year;
-    $('#content').innerHTML = '<div class="au-loading"><div class="au-spinner"></div>Calcul des closes, paiements et taux de conversion…</div>';
+    $('#content').innerHTML = '<div class="au-loading"><div class="au-spinner"></div>Calcul des closes, paiements et taux…</div>';
     Promise.all([loadObjectives(), loadAll()]).then(function (res) {
+      if (token !== S.token) return;
       var pack = res[1];
-      var closes = buildCloses(pack);
-      S.data = { pack: pack, closes: closes, rates: computeRates(pack, closes) };
+      if (S.objErreur) pack.erreurs.push('objectifs (repli sur l’objectif par défaut) : ' + S.objErreur);
+      S.data = { pack: pack, rates: computeRates(pack) };
       S.loading = false;
       render();
     }).catch(function (e) {
+      if (token !== S.token) return;
       S.loading = false;
       console.error('[projections]', e);
-      $('#content').innerHTML = '<div class="au-empty"><span class="i">⚠️</span>' + esc(e && e.message || 'Erreur de chargement') + '</div>';
+      $('#content').innerHTML = '<div class="au-empty"><span class="i">⚠️</span>' + esc(msgErr(e)) + '</div>';
     });
+  }
+
+  /* Onglets : Équipe, chaque closer actif qui a des closes (ou une ancienne
+     saisie) dans l'année, et « Non attribué » s'il n'est pas vide. */
+  function tabSlugs(pack) {
+    var seen = {}, out = [], na = false;
+    function add(b) { if (b === NA) { na = true; return; } if (!seen[b]) { seen[b] = 1; out.push(b); } }
+    (pack.year.toutes || []).forEach(function (r) { add(bucket(r.closer)); });
+    Object.keys(pack.legacy).forEach(function (m) {
+      var lg = pack.legacy[m];
+      Object.keys(lg.bySlug || {}).forEach(function (s) { var v = lg.bySlug[s]; if (v.closes > 0 || v.contracte > 0) add(bucket(s)); });
+    });
+    if (!na) {
+      var payCloser = payCloserIndex(pack.year.toutes || []);
+      var ys = SC.debutJourParis(pack.y + '-01-01').getTime(), ye = SC.finJourParis(pack.y + '-12-31').getTime();
+      na = FC.cashInPeriod(pack.year.payments || [], ys, ye).lignes.some(function (l) { return bucket(payCloser(l.p)) === NA; });
+    }
+    out.sort(function (a, b) { return memberName(a).localeCompare(memberName(b)); });
+    return { slugs: out, na: na };
   }
 
   function renderMembers() {
     if (!S.data) { $('#memberTabs').innerHTML = ''; return; }
-    var seen = {}, slugs = [];
-    S.data.closes.forEach(function (c) {
-      if (!c.closer || seen[c.closer] || isDeparted(c.closer)) return;
-      if (new Date(c.ms).getFullYear() !== S.year) return;
-      seen[c.closer] = 1; slugs.push(c.closer);
-    });
-    if (S.slug !== '_all' && !seen[S.slug]) S.slug = '_all';
-    if (!slugs.length) { $('#memberTabs').innerHTML = ''; return; }
-    var h = '<button class="au-member' + (S.slug === '_all' ? ' active' : '') + '" style="--au-mc:#5b7cfa" data-slug="_all"><span class="au-member-av">Σ</span><span><span class="au-member-n">Équipe</span><br/><span class="au-member-r">tous les closes</span></span></button>';
-    slugs.forEach(function (sl) {
-      var m = (window.TEAM_MEMBERS && window.TEAM_MEMBERS[sl]) || {};
+    var t = tabSlugs(S.data.pack);
+    if (S.slug !== '_all' && !(S.slug === NA ? t.na : t.slugs.indexOf(S.slug) >= 0)) S.slug = '_all';
+    if (!t.slugs.length && !t.na) { $('#memberTabs').innerHTML = ''; return; }
+    var h = '<button class="au-member' + (S.slug === '_all' ? ' active' : '') + '" style="--au-mc:#5b7cfa" data-slug="_all"><span class="au-member-av">Σ</span><span><span class="au-member-n">' + esc(SC.mot('equipe')) + info('equipe') + '</span><br/><span class="au-member-r">onglets + Non attribué</span></span></button>';
+    t.slugs.forEach(function (sl) {
+      var m = teamMap()[sl] || {};
       var name = memberName(sl);
       h += '<button class="au-member' + (S.slug === sl ? ' active' : '') + '" style="--au-mc:' + esc(m.color || '#5b7cfa') + '" data-slug="' + esc(sl) + '">' +
         '<span class="au-member-av">' + esc((m.initials || name.slice(0, 2)).toUpperCase()) + '</span>' +
-        '<span><span class="au-member-n">' + esc(name) + '</span><br/><span class="au-member-r">closes signés</span></span></button>';
+        '<span><span class="au-member-n">' + esc(name) + '</span><br/><span class="au-member-r">closes comme closer</span></span></button>';
     });
+    if (t.na) {
+      h += '<button class="au-member' + (S.slug === NA ? ' active' : '') + '" style="--au-mc:#8f97b2" data-slug="' + NA + '"><span class="au-member-av">?</span>' +
+        '<span><span class="au-member-n">' + esc(SC.mot('non_attribue')) + info('non_attribue_contenu') + '</span><br/><span class="au-member-r">anciens membres, closer inconnu</span></span></button>';
+    }
     $('#memberTabs').innerHTML = h;
   }
 
@@ -542,197 +620,339 @@
       (sub ? '<div class="s">' + sub + '</div>' : '') +
       (pct != null ? '<div class="pj-bar"><i style="width:' + Math.max(2, Math.min(100, pct)) + '%"></i></div>' : '') + '</div>';
   }
+  function cellSd(html, ref) { return SD ? SD.cell(html, ref) : html; }
 
-  function statusTag(c) {
-    var rv = c.rv;
-    if (rv.cancelled) return '<span class="pj-tag ko">🚫 annulé — ' + esc(rv.reason) + '</span>';
-    if (!rv.hasPay) return '<span class="pj-tag wait">💶 sans paiement' + (rv.declCol > 0 ? ' (déclaré ' + fmtEuro(rv.declCol) + ')' : '') + '</span>';
-    if (rv.paid <= 0) return '<span class="pj-tag wait">⏳ 1er prélèvement en attente</span>';
-    return '<span class="pj-tag ok">✅ encaissé</span>';
+  function lectureBanner(pack) {
+    var h = '';
+    if (pack.erreurs.length) {
+      h += '<div class="pj-alert"><b>⚠ Lecture incomplète</b>' + info('lecture_incomplete') + ' — les chiffres concernés sont partiels (ce ne sont pas des zéros) : ' +
+        esc(pack.erreurs.join(' · ')) + '. Clique sur ⟳ Actualiser.</div>';
+    }
+    if (pack.tronque) {
+      h += '<div class="pj-alert warn"><b>⚠ Liste des clients gagnés tronquée</b>' + info('lecture_incomplete') + ' — la période contient plus de fiches gagnées que le plafond de lecture (' +
+        fmtNum(FC.CLOSED_LEADS_LIMIT) + ') : Closes, Contracté et Collecté sont incomplets.</div>';
+    }
+    return h;
   }
+
+  function slugLabel(slug) { return slug === '_all' ? SC.mot('equipe') : slug === NA ? SC.mot('non_attribue') : memberName(slug); }
 
   function render() {
     renderMembers();
     if (!S.data) return;
     var pack = S.data.pack, rates = S.data.rates;
     var slug = S.slug;
-    var months = computeYear(pack, S.data.closes, slug);
+    var months = computeYear(pack, slug);
     var cur = months[S.month];
-    var today = pack.today;
-    var mStart = new Date(S.year, S.month, 1), mEnd = new Date(S.year, S.month + 1, 0);
-    var isCurrent = today >= mStart && today <= mEnd;
-    var isPast = mEnd < today;
+    var tIso = pack.tIso;
+    var mStartIso = cur.sIso, mEndIso = cur.eIso;
+    var isCurrent = tIso >= mStartIso && tIso <= mEndIso;
+    var isPast = mEndIso < tIso;
     var team = slug === '_all';
     var objM = cur.obj;
     var objY = objYear(S.year).annual;
+    var mLbl = MONTHS_FR[S.month] + ' ' + S.year;
+    var ANC_X = 'Montants tapés à la main avant juillet 2026 : on ne sait pas s’ils étaient hors taxes. Ils ne se comparent pas exactement aux mois calculés.';
 
-    /* ── Hero du mois ── */
-    var pctObj = objM > 0 ? cur.contracte / objM * 100 : null;
-    var h = '';
+    var h = lectureBanner(pack);
     if (!cur.auto) {
-      h += '<div class="au-card" style="border-color:rgba(167,139,250,.35);background:rgba(167,139,250,.05);padding:12px 16px;font-size:12.5px">📜 ' + MONTHS_FR[S.month] + ' ' + S.year + ' est antérieur au calcul automatique (' + AUTO_FROM.slice(5) + '/' + AUTO_FROM.slice(0, 4) + ') : closes et contracté viennent de l\'ancienne <strong>saisie manuelle</strong>. Seul le cash encaissé (prélèvements GoCardless) est réel.</div>';
+      h += '<div class="au-card" style="border-color:var(--purple);padding:12px 16px;font-size:12.5px">📜 ' + esc(mLbl) + ' est antérieur au calcul automatique (' + AUTO_FROM.slice(5) + '/' + AUTO_FROM.slice(0, 4) +
+        ') : closes et contracté viennent de l’<strong>ancienne saisie</strong>' + info('ancienne_saisie', ANC_X) + '. Seul le « Prélevé sur la période » (prélèvements GoCardless) est calculé.</div>';
     }
-    h += '<div class="pj-hero">' +
-      kpi('Contracté HT — ' + MONTHS_FR[S.month], fmtEuro(cur.contracte),
-        (team ? 'objectif ' + fmtEuro(objM) + ' · ' + (pctObj != null ? fmtPct(pctObj, 0) : '—') : 'objectif équipe ' + fmtEuro(objM)),
-        '#5b7cfa', team ? pctObj : null) +
-      kpi('Closes', fmtNum(cur.closes),
-        (cur.cancelled ? '<span style="color:var(--red)">' + cur.cancelled + ' annulé(s) déduit(s)</span> · ' : '') + 'panier moyen ' + (cur.closes > 0 ? fmtEuro(cur.contracte / cur.closes) : '—'),
-        '#34d399') +
-      kpi('Encaissé — closes du mois', fmtEuro(cur.encaisseCloses),
-        cur.auto ? ((cur.pending > 0 ? '⏳ ' + fmtEuro(cur.pending) + ' à encaisser (1er prélèvement pas encore passé)' : 'prélèvements réellement passés') ) : 'non disponible (saisie manuelle)',
-        '#fbbf24') +
-      kpi('Cash encaissé dans le mois', fmtEuro(cur.cash),
-        'tous les prélèvements datés du mois' + (team ? '' : ' (paiements de ce closer)') + ' — mensualités des anciens clients comprises',
-        '#2dd4bf') +
-      '</div>';
+    /* ── Héro du mois ── */
+    var pctObj = objM > 0 ? cur.contracte / objM * 100 : null;
+    var subObj = team
+      ? 'objectif du mois ' + fmtEuro(objM) + info('objectif') + ' · ' + fmtPct(pctObj, 0) + ' atteint'
+      : 'objectif d’équipe ' + fmtEuro(objM) + info('objectif');
+    h += '<div class="pj-hero">';
+    if (cur.auto) {
+      h += kpi(esc(SC.mot('contracte')) + ' — ' + esc(MONTHS_FR[S.month]) + info('contracte'), cellSd(fmtEuro(cur.contracte), 'm:closes'), subObj, '#5b7cfa', team ? pctObj : null) +
+        kpi(esc(SC.mot('closes')) + info('closes'), cellSd(fmtNum(cur.closes), 'm:closes'),
+          (cur.closes ? 'dont ' + cur.sb + ' SB' + info('closes_sb') + ' · ' + cur.nb + ' NB' + info('closes_nb') + '<br/>' : '') +
+          (cur.cancelled ? '<span style="color:var(--red)">' + cellSd(cur.cancelled + ' close' + (cur.cancelled > 1 ? 's' : '') + ' annulé' + (cur.cancelled > 1 ? 's' : '') + ' retiré' + (cur.cancelled > 1 ? 's' : ''), 'm:annules') + '</span>' + info('closes_annules', 'Le retrait s’applique au mois du close : ce total peut baisser après coup.') + ' · ' : '') +
+          esc(SC.mot('panier_moyen')) + ' ' + (cur.closes > 0 ? fmtEuro(cur.contracte / cur.closes) : '—') + info('panier_moyen'),
+          '#34d399') +
+        kpi(esc(SC.mot('collecte')) + ' — closes du mois' + info('collecte'), cellSd(fmtEuro(cur.collecte), 'm:closes'),
+          esc(SC.mot('reste_a_encaisser')) + ' ' + fmtEuro(cur.reste) + info('reste_a_encaisser') +
+          (cur.pending > 0 ? '<br/>dont ⏳ ' + fmtEuro(cur.pending) + ' de 1ers prélèvements en attente' + info('premiers_prelevements') : '') +
+          (cur.sansPaiement ? '<br/>' + cur.sansPaiement + ' close' + (cur.sansPaiement > 1 ? 's' : '') + ' sans paiement' + info('close_sans_paiement') : ''),
+          '#fbbf24');
+    } else {
+      h += kpi(esc(SC.mot('contracte')) + ' — ' + esc(MONTHS_FR[S.month]) + ' (ancienne saisie)' + info('ancienne_saisie', ANC_X), fmtEuro(cur.contracte), subObj, '#a78bfa', team ? pctObj : null) +
+        kpi(esc(SC.mot('closes')) + ' (ancienne saisie)' + info('ancienne_saisie'), fmtNum(cur.closes), 'chiffre déclaré' + info('declare'), '#a78bfa') +
+        kpi(esc(SC.mot('collecte')) + info('collecte'), '—', 'pas de collecté pour l’ancienne saisie : voir le Prélevé sur la période', '#fbbf24');
+    }
+    h += kpi(esc(SC.mot('preleve_periode')) + info('preleve_periode', team ? 'Ici : prélèvements datés du mois affiché.' : 'Onglet d’une personne : prélèvements de ses clients (closer du paiement, sinon closer du close du client).'),
+      fmtEuro(cur.preleve), 'tous les prélèvements datés du mois, mensualités des anciens clients comprises', '#2dd4bf');
+    h += '</div>';
 
-    /* ── Ce qui manque + projection fin de mois ── */
-    if (cur.auto) h += '<div class="pj-row">' + missingCard(cur, rates, objM, today, mStart, mEnd, isCurrent, isPast, team) + forecastCard(cur, rates, objM, today, mStart, mEnd, isCurrent, isPast, team) + '</div>';
-
-    /* ── Closes du mois ── */
-    if (cur.auto) h += closesCard(cur);
-
-    /* ── Année ── */
-    h += yearCard(months, objY, today, team);
+    if (cur.auto) {
+      h += '<div class="pj-row">' + missingCard(cur, rates, objM, tIso, isCurrent, isPast, team) + forecastCard(cur, rates, objM, tIso, isCurrent, isPast, team) + '</div>';
+      h += closesCard(cur, pack, team);
+    }
+    h += yearCard(months, objY, tIso, team, pack);
 
     h += '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Note du manager</div></div><div class="pj-note">' +
-      'Une <b>projection</b>, c\'est ce que tu atteins dans 75 à 80 % des cas, sans te forcer. Un <b>objectif</b>, c\'est ta projection augmentée de 33 à 50 % : ce que tu vises pour sortir de ta zone de confort.<br/>' +
-      '<b style="color:var(--gold)">Objectif ' + S.year + ' : ' + fmtEuro(objY) + ' HT contracté</b> — soit ~' + fmtEuro(objY / 12) + ' par mois en moyenne.</div></div>';
+      'Une <b>projection</b>, c’est ce que tu atteins dans 75 à 80 % des cas, sans te forcer. Un <b>objectif</b>, c’est ta projection augmentée de 33 à 50 % : ce que tu vises pour sortir de ta zone de confort.<br/>' +
+      '<b style="color:var(--gold)">Objectif ' + S.year + ' : ' + fmtEuro(objY) + ' de contracté</b>' + info('objectif') + ' — soit ~' + fmtEuro(objY / 12) + ' par mois en moyenne.</div></div>';
 
     $('#content').innerHTML = h;
   }
 
-  function missingCard(cur, r, objM, today, mStart, mEnd, isCurrent, isPast, team) {
-    var title = '<div class="au-card-head"><div class="au-card-title">🎯 Ce qui manque pour l\'objectif du mois</div><div class="au-card-note">taux réels des ' + RATE_WINDOW_DAYS + ' derniers jours · équipe</div></div>';
+  function missingCard(cur, r, objM, tIso, isCurrent, isPast, team) {
+    var title = '<div class="au-card-head"><div class="au-card-title">🎯 Ce qui manque pour l’objectif du mois</div><div class="au-card-note">taux de l’équipe · ' + RATE_WINDOW_DAYS + ' jours finissant hier' + info('heure_paris') + '</div></div>';
     if (!team) {
-      return '<div class="au-card">' + title + '<div class="pj-lead">L\'objectif est un objectif <b>d\'équipe</b> : repasse sur l\'onglet « Équipe » pour voir ce qui manque. Ce closer pèse <b>' + fmtEuro(cur.contracte) + '</b> sur ' + fmtEuro(objM) + '.</div></div>';
+      return '<div class="au-card">' + title + '<div class="pj-lead">L’objectif est un objectif <b>d’équipe</b> : repasse sur l’onglet « Équipe » pour voir ce qui manque. ' + esc(slugLabel(S.slug)) + ' pèse <b>' + fmtEuro(cur.contracte) + '</b> de contracté sur ' + fmtEuro(objM) + '.</div></div>';
     }
-    var reste = Math.max(0, objM - cur.contracte);
     if (isPast) {
       var ecart = cur.contracte - objM;
-      return '<div class="au-card">' + title + '<div class="pj-lead">Mois terminé : <b>' + fmtEuro(cur.contracte) + '</b> contracté pour ' + fmtEuro(objM) + ' d\'objectif — ' +
+      return '<div class="au-card">' + title + '<div class="pj-lead">Mois terminé : <b>' + fmtEuro(cur.contracte) + '</b> de contracté pour ' + fmtEuro(objM) + ' d’objectif — ' +
         (ecart >= 0 ? '<span style="color:var(--green)">objectif dépassé de ' + fmtEuro(ecart) + '</span>' : '<span style="color:var(--red)">il a manqué ' + fmtEuro(-ecart) + '</span>') + '.</div></div>';
     }
+    var reste = Math.max(0, objM - cur.contracte);
     if (reste <= 0) {
       return '<div class="au-card">' + title + '<div class="pj-lead"><span style="color:var(--green)">✅ Objectif du mois atteint</span> (' + fmtEuro(cur.contracte) + ' / ' + fmtEuro(objM) + '). Tout close supplémentaire est du bonus.</div></div>';
     }
-    var from = isCurrent ? today : mStart;
-    var wdLeft = workdays(from, mEnd);
+    if (!r) return '<div class="au-card">' + title + '<div class="pj-lead">Taux non chargés.</div></div>';
+    var a = r.a;
+    var fromIso = isCurrent ? tIso : cur.sIso;
+    var wdLeft = workdays(fromIso, cur.eIso);
     var closesNeeded = Math.ceil(reste / r.ticket);
-    function need(n, rate) { return (rate && rate > 0) ? Math.ceil(n / rate) : null; }
-    var offres = need(closesNeeded, r.closeParOffre);
-    var presents = offres != null ? need(offres, r.offreParPresent) : null;
-    var rdv = presents != null ? need(presents, r.presentParRdv) : null;
-    var rdvEncore = rdv != null ? Math.max(0, rdv - r.upcoming) : null;
-    var leads = (rdvEncore != null && r.rdvParLead) ? Math.ceil(rdvEncore / r.rdvParLead) : null;
+    function need(n, ratePct) { return (n != null && ratePct != null && ratePct > 0) ? Math.ceil(n / (ratePct / 100)) : null; }
+    var pitches = need(closesNeeded, r.tauxClosePitch);
+    var presents = need(pitches, r.tauxPitch);
+    var kept = need(presents, r.showUp);
+    var rdv = need(kept, r.keptPct);
+    var rdvEncore = (rdv != null && !r.bkErr) ? Math.max(0, rdv - r.upcoming) : null;
+    var leads = need(rdvEncore, r.ltb);
     function perDay(n) { return (n == null || !wdLeft) ? '—' : (Math.round(n / wdLeft * 10) / 10).toLocaleString('fr-FR'); }
     function cell(n) { return n == null ? '<td>—</td>' : '<td class="need">' + fmtNum(n) + '</td>'; }
+    var ticketTxt = r.ticketSrc === 'fenetre' ? esc(SC.mot('panier_moyen')) + ' ' + fmtEuro(r.ticket) + ' (' + fmtNum(r.closes) + ' closes)' + info('panier_moyen')
+      : r.ticketSrc === 'annee' ? esc(SC.mot('panier_moyen')) + ' de l’année ' + fmtEuro(r.ticket) + info('panier_moyen', 'Aucun close sur les ' + RATE_WINDOW_DAYS + ' derniers jours : panier moyen des closes de l’année.')
+      : '<span style="color:var(--gold)">panier par défaut ' + fmtEuro(r.ticket) + ' (aucun close récent)</span>' + infoLibre('Panier par défaut', 'Aucun close ni sur les ' + RATE_WINDOW_DAYS + ' derniers jours ni sur l’année : le calcul suppose un contrat de ' + fmtEuro(DEFAULT_TICKET) + '.');
 
     var h = '<div class="au-card">' + title +
-      '<div class="pj-lead">Il reste <b>' + fmtEuro(reste) + '</b> à contracter en <b>' + wdLeft + ' jour(s) ouvré(s)</b>. Au panier moyen de ' + fmtEuro(r.ticket) + ', il faut encore <b>' + closesNeeded + ' close(s)</b>' +
-      (rdv != null ? ', soit environ <b>' + fmtNum(rdv) + ' RDV tenus</b> au total — <b>' + fmtNum(r.upcoming) + '</b> déjà posés d\'ici la fin du mois, donc <b>' + fmtNum(rdvEncore) + ' RDV de plus</b> à poser' : '') + '.</div>' +
+      '<div class="pj-lead">Il reste <b>' + fmtEuro(reste) + '</b> à contracter en <b>' + wdLeft + ' jour(s) ouvré(s)</b> (aujourd’hui compris). Au ' + (r.ticketSrc === 'defaut' ? 'panier par défaut' : 'panier moyen') + ' de ' + fmtEuro(r.ticket) + ', il faut encore <b>' + closesNeeded + ' close(s)</b>' +
+      (rdv != null ? ', soit environ <b>' + fmtNum(rdv) + ' RDV</b> au total — <b>' + fmtNum(r.upcoming) + '</b> déjà à venir d’ici la fin du mois, donc <b>' + fmtNum(rdvEncore) + ' RDV de plus</b> à faire prendre' : '') + '.</div>' +
       '<table class="pj-steps"><thead><tr><th>Étape</th><th>Il faut encore</th><th>Par jour ouvré</th><th>Taux utilisé (' + RATE_WINDOW_DAYS + ' j)</th></tr></thead><tbody>' +
-      '<tr><td>Closes</td>' + cell(closesNeeded) + '<td>' + perDay(closesNeeded) + '</td><td>panier ' + fmtEuro(r.ticket) + ' (' + r.closes + ' closes)</td></tr>' +
-      '<tr><td>Offres pitchées</td>' + cell(offres) + '<td>' + perDay(offres) + '</td><td>close / offre ' + fmtPct(r.closeParOffre != null ? r.closeParOffre * 100 : null) + '</td></tr>' +
-      '<tr><td>Présents (live)</td>' + cell(presents) + '<td>' + perDay(presents) + '</td><td>offre / présent ' + fmtPct(r.offreParPresent != null ? r.offreParPresent * 100 : null) + '</td></tr>' +
-      '<tr><td>RDV tenus</td>' + cell(rdv) + '<td>' + perDay(rdv) + '</td><td>présent / RDV ' + fmtPct(r.presentParRdv != null ? r.presentParRdv * 100 : null) + '</td></tr>' +
-      '<tr><td>RDV encore à poser</td>' + cell(rdvEncore) + '<td>' + perDay(rdvEncore) + '</td><td>' + fmtNum(r.upcoming) + ' RDV sales déjà au planning</td></tr>' +
-      '<tr><td>Leads à faire entrer</td>' + cell(leads) + '<td>' + perDay(leads) + '</td><td>RDV / lead ' + fmtPct(r.rdvParLead != null ? r.rdvParLead * 100 : null) + (r.leadsTruncated ? ' ⚠ tronqué' : '') + '</td></tr>' +
+      '<tr><td>' + SC.motInfo('closes') + '</td>' + cell(closesNeeded) + '<td>' + perDay(closesNeeded) + '</td><td>' + ticketTxt + '</td></tr>' +
+      '<tr><td>' + SC.motInfo('pitches') + '</td>' + cell(pitches) + '<td>' + perDay(pitches) + '</td><td>' + esc(SC.mot('taux_close_pitches')) + ' ' + fmtPct(r.tauxClosePitch) + info('taux_close_pitches') + '</td></tr>' +
+      '<tr><td>' + SC.motInfo('presents') + '</td>' + cell(presents) + '<td>' + perDay(presents) + '</td><td>' + esc(SC.mot('taux_pitch')) + ' ' + fmtPct(r.tauxPitch) + info('taux_pitch') + '</td></tr>' +
+      '<tr><td>' + SC.motInfo('kept', 'Ici : RDV maintenus (non annulés) nécessaires pour obtenir ce nombre de présents, au show-up des ' + RATE_WINDOW_DAYS + ' derniers jours.') + '</td>' + cell(kept) + '<td>' + perDay(kept) + '</td><td>' + esc(SC.mot('show_up')) + ' ' + fmtPct(r.showUp) + info('show_up') + '</td></tr>' +
+      '<tr><td>' + SC.motInfo('rdv', 'Ici : RDV à avoir à l’agenda (annulés et no-show compris) pour obtenir ce Kept.') + '</td>' + cell(rdv) + '<td>' + perDay(rdv) + '</td><td>' + esc(SC.mot('kept_pct')) + ' ' + fmtPct(r.keptPct) + info('kept_pct') + '</td></tr>' +
+      '<tr><td>RDV encore à faire prendre' + infoLibre('RDV encore à faire prendre', 'RDV nécessaires moins les RDV de vente déjà à venir d’ici la fin du mois.') + '</td>' + cell(rdvEncore) + '<td>' + perDay(rdvEncore) + '</td><td>' +
+        (r.bkErr ? '— (RDV illisibles)' : fmtNum(r.upcoming) + ' RDV ' + esc(SC.mot('a_venir').toLowerCase()) + info('a_venir', 'Ici : RDV de vente au planning d’ici la fin du mois.')) + '</td></tr>' +
+      '<tr><td>Leads à faire entrer' + infoLibre('Leads à faire entrer', 'RDV encore à faire prendre ÷ LTB des ' + RATE_WINDOW_DAYS + ' derniers jours. Une estimation : une partie des RDV vient de leads plus anciens.') + '</td>' + cell(leads) + '<td>' + perDay(leads) + '</td><td>' +
+        esc(SC.mot('ltb')) + ' ' + fmtPct(r.ltb) + info('ltb') + (r.leadsTronque ? ' <span style="color:var(--gold)">⚠ leads tronqués</span>' + info('lecture_incomplete') : '') + '</td></tr>' +
       '</tbody></table>' +
-      '<div class="au-card-note" style="margin-top:10px">Base ' + RATE_WINDOW_DAYS + ' j : ' + fmtNum(r.leads) + ' leads · ' + fmtNum(r.rdv) + ' RDV sales (replanifiés exclus, coaching exclu) · ' + fmtNum(r.presents) + ' présents · ' + fmtNum(r.pitched) + ' offres · ' + fmtNum(r.closes) + ' closes non annulés.</div>' +
+      '<div class="au-card-note" style="margin-top:10px">Base des ' + RATE_WINDOW_DAYS + ' jours finissant hier (' + fmtDayIso(S.data.pack.win.startIso) + ' → ' + fmtDayIso(S.data.pack.win.endIso) + ', heure de Paris) : ' +
+        (r.leads != null ? fmtNum(r.leads) : '—') + ' leads' + info('leads') + ' · ' + (r.prisErr ? '—' : fmtNum(r.pris)) + ' RDV pris' + info('rdv_pris') + ' · ' +
+        fmtNum(a.rdv) + ' RDV' + info('rdv') + ' · ' + fmtNum(a.annules) + ' annulés' + info('annules') + ' · ' + fmtNum(a.kept) + ' Kept' + info('kept') + (a.aVenir ? ' (dont ' + fmtNum(a.aVenir) + ' à venir)' : '') +
+        (a.aStatuer ? ' · ' + fmtNum(a.aStatuer) + ' à statuer' + info('a_statuer') : '') + ' · ' + fmtNum(a.presents) + ' présents' + info('presents') + ' · ' + fmtNum(a.pitches) + ' pitchés' + info('pitches') + ' · ' +
+        fmtNum(r.closes) + ' closes' + info('closes') + '. RDV de vente (Self Booking, Setting et manuels) ; replanifiés et doublons retirés.</div>' +
       '</div>';
     return h;
   }
 
-  function forecastCard(cur, r, objM, today, mStart, mEnd, isCurrent, isPast, team) {
+  function forecastCard(cur, r, objM, tIso, isCurrent, isPast, team) {
     var h = '<div class="au-card"><div class="au-card-head"><div class="au-card-title">🔮 Projection fin de mois</div></div>';
-    if (isPast) return h + '<div class="pj-lead">Mois terminé — résultat final : <b>' + fmtEuro(cur.contracte) + '</b>.</div></div>';
-    var wdTotal = workdays(mStart, mEnd);
-    var wdDone = isCurrent ? workdays(mStart, new Date(today.getTime() - DAY)) : 0;
+    if (isPast) return h + '<div class="pj-lead">Mois terminé — résultat final : <b>' + fmtEuro(cur.contracte) + '</b> de contracté.</div></div>';
+    var wdTotal = workdays(cur.sIso, cur.eIso);
+    var wdDone = isCurrent ? workdays(cur.sIso, tIso) : 0;            /* aujourd'hui compris : le contracté d'aujourd'hui l'est aussi */
     var rythme = wdDone > 0 ? cur.contracte / wdDone * wdTotal : cur.contracte;
-    var pipeline = team && r.closeParRdv != null ? cur.contracte + r.upcoming * r.closeParRdv * r.ticket : null;
+    var pipeline = (team && r && !r.bkErr && r.tauxCloseRdv != null) ? cur.contracte + r.upcoming * (r.tauxCloseRdv / 100) * r.ticket : null;
     function line(lbl, v, sub) {
       var col = objM > 0 ? (v >= objM ? 'var(--green)' : v >= objM * 0.75 ? 'var(--gold)' : 'var(--red)') : 'var(--text)';
       return '<div class="pj-scen-i"><span>' + lbl + (sub ? '<br/><span style="color:var(--muted);font-size:11px">' + sub + '</span>' : '') + '</span><b style="color:' + col + '">' + fmtEuro(v) + '</b></div>';
     }
     h += '<div class="pj-scen">' +
-      line('📊 Au rythme actuel', rythme, wdDone > 0 ? fmtEuro(cur.contracte) + ' en ' + wdDone + ' j ouvrés, prolongé sur ' + wdTotal + ' j' : 'pas encore de jour ouvré écoulé') +
-      (pipeline != null ? line('📅 Avec les RDV déjà posés', pipeline, fmtEuro(cur.contracte) + ' + ' + fmtNum(r.upcoming) + ' RDV × ' + fmtPct(r.closeParRdv * 100) + ' de close × ' + fmtEuro(r.ticket)) : '') +
-      line('🎯 Objectif du mois', objM, team ? 'reste ' + fmtEuro(Math.max(0, objM - cur.contracte)) : 'objectif d\'équipe') +
+      line('📊 Au rythme actuel' + infoLibre('Au rythme actuel', 'Contracté du mois ÷ jours ouvrés écoulés (aujourd’hui compris) × jours ouvrés du mois. Les jours fériés ne sont pas retirés.'), rythme,
+        wdDone > 0 ? fmtEuro(cur.contracte) + ' en ' + wdDone + ' j ouvrés (aujourd’hui compris), prolongé sur ' + wdTotal + ' j' : 'pas encore de jour ouvré écoulé') +
+      (pipeline != null ? line('📅 Avec les RDV à venir' + infoLibre('Avec les RDV à venir', 'Contracté du mois + RDV de vente à venir d’ici la fin du mois × Close / RDV des ' + RATE_WINDOW_DAYS + ' derniers jours × panier moyen.'), pipeline,
+        fmtEuro(cur.contracte) + ' + ' + fmtNum(r.upcoming) + ' RDV × ' + fmtPct(r.tauxCloseRdv) + ' ' + esc(SC.mot('taux_close_rdv')) + info('taux_close_rdv') + ' × ' + fmtEuro(r.ticket)) : '') +
+      line('🎯 Objectif du mois' + info('objectif'), objM, team ? 'reste ' + fmtEuro(Math.max(0, objM - cur.contracte)) : 'objectif d’équipe') +
       '</div>' +
-      (cur.pending > 0 ? '<div class="au-card-note" style="margin-top:10px">⏳ ' + fmtEuro(cur.pending) + ' signés attendent leur 1er prélèvement : comptés en contracté, pas en encaissé.</div>' : '') +
+      (cur.pending > 0 ? '<div class="au-card-note" style="margin-top:10px">⏳ ' + fmtEuro(cur.pending) + ' de 1ers prélèvements en attente' + info('premiers_prelevements') + ' : comptés dans le contracté, pas dans le collecté.</div>' : '') +
       '</div>';
     return h;
   }
 
-  function closesCard(cur) {
-    var h = '<div class="au-card" style="padding:0;overflow:hidden"><div class="au-card-head" style="padding:16px 18px 0;margin-bottom:10px"><div class="au-card-title">Closes de ' + MONTHS_FR[S.month] + ' ' + S.year + '</div>' +
-      '<div class="au-card-note">fiche gagnée, RDV closé ou paiement créé · montants HT</div></div>';
-    if (!cur.list.length) return h + '<div class="au-empty" style="padding:22px"><span class="i">🗒️</span>Aucun close sur ce mois' + (S.slug !== '_all' ? ' pour ce closer' : '') + '.</div></div>';
-    h += '<div class="au-twrap" style="border:none;border-radius:0"><table class="au-table"><thead><tr><th>Date</th><th>Client</th><th>Closer</th><th>Canal</th><th>Contracté</th><th>Encaissé</th><th>À encaisser</th><th>Statut</th></tr></thead><tbody>';
+  /* Statut d'un close : mêmes mots que les listes (StatsDrill.closeItem). */
+  function statusTag(c) {
+    var rv = c.rv;
+    if (rv.cancelled) return '<span class="pj-tag ko">🚫 close annulé — ' + esc(rv.reason) + '</span>';
+    if (!rv.hasPay) return '<span class="pj-tag wait">💶 ' + esc(SC.mot('close_sans_paiement').toLowerCase()) + '</span>';
+    if (rv.paid <= 0) return '<span class="pj-tag wait">⏳ 1er prélèvement en attente</span>';
+    return '<span class="pj-tag ok">✅ prélèvements en cours</span>';
+  }
+
+  function closesCard(cur, pack, team) {
+    var h = '<div class="au-card" style="padding:0;overflow:hidden"><div class="au-card-head" style="padding:16px 18px 0;margin-bottom:10px"><div class="au-card-title">Closes de ' + esc(MONTHS_FR[S.month] + ' ' + S.year) + info('closes') + '</div>' +
+      '<div class="au-card-note">même liste que le Stats funnel · montants hors taxes' + info('ht') + '</div></div>';
+    /* Contrôles (onglet Équipe) : fiches clientes sans vente, écarts de canal. */
+    var ctrl = '';
+    if (team) {
+      var key = cur.key;
+      var sans = (pack.year.sansSignal || []).filter(function (x) { return String(x.day).slice(0, 7) === key; });
+      var ecarts = cur.list.filter(function (x) { return x.canalEcart && !(x.rv && x.rv.cancelled); });
+      var inconnus = cur.list.filter(function (x) { return x.canalSrc === 'inconnu' && !(x.rv && x.rv.cancelled); });
+      if (sans.length) ctrl += '<span>' + cellSd(sans.length + ' fiche' + (sans.length > 1 ? 's' : '') + ' cliente' + (sans.length > 1 ? 's' : '') + ' sans vente enregistrée (non comptée' + (sans.length > 1 ? 's' : '') + ')', 'm:sans') + info('clientes_sans_vente') + '</span>';
+      if (ecarts.length) ctrl += '<span>' + ecarts.length + ' écart' + (ecarts.length > 1 ? 's' : '') + ' de canal' + info('ecart_canal') + '</span>';
+      if (inconnus.length) ctrl += '<span>' + inconnus.length + ' close' + (inconnus.length > 1 ? 's' : '') + ' au canal inconnu' + info('canal_inconnu') + '</span>';
+    }
+    if (!cur.list.length) return h + '<div class="au-empty" style="padding:22px"><span class="i">🗒️</span>Aucun close sur ce mois' + (S.slug !== '_all' ? ' dans cet onglet' : '') + '.</div>' + (ctrl ? '<div class="pj-ctrl">' + ctrl + '</div>' : '') + '</div>';
+    h += '<div class="au-twrap" style="border:none;border-radius:0"><table class="au-table"><thead><tr><th>Jour du close' + info('closes') + '</th><th>Client</th><th>' + SC.motInfo('closer') + '</th><th>' + SC.motInfo('canal') + '</th>' +
+      '<th>' + SC.motInfo('contracte') + '</th><th>' + SC.motInfo('collecte') + '</th><th>1er prélèvement en attente' + info('premiers_prelevements') + '</th><th>Statut</th></tr></thead><tbody>';
     cur.list.slice().sort(function (a, b) { return b.ms - a.ms; }).forEach(function (c) {
-      var link = c.leadId ? '<a href="sales-contact.html?id=' + encodeURIComponent(c.leadId) + '" target="_blank" style="color:#b6c3ff">' + esc(c.name) + '</a>' : esc(c.name);
-      h += '<tr' + (c.rv.cancelled ? ' class="pj-cancel"' : '') + '><td>' + fmtDay(c.ms) + '</td><td>' + link + '</td><td>' + esc(c.closer ? memberName(c.closer) : '—') + '</td>' +
-        '<td>' + (c.sb ? 'SB' : 'NB') + (c.viaPayment ? ' · via paiement' : '') + '</td>' +
-        '<td>' + fmtEuro(c.rv.con) + '</td><td>' + fmtEuro(c.rv.paid) + '</td><td>' + (c.rv.pending > 0 ? fmtEuro(c.rv.pending) : '·') + '</td><td>' + statusTag(c) + '</td></tr>';
+      var it = SD ? SD.closeItem(c, { nomDe: nomDe }) : { closer: nomDe(c.closer) || SC.mot('non_attribue'), canal: c.sb ? 'Self Booking' : 'Setting (NB)', flags: [] };
+      var link = c.leadId ? '<a href="sales-contact.html?id=' + encodeURIComponent(c.leadId) + '" target="_blank" rel="noopener" style="color:#b6c3ff">' + esc(c.name) + '</a>' : esc(c.name);
+      var flags = '';
+      (it.flags || []).forEach(function (f) { flags += '<span class="pj-flag">· ' + esc(f) + '</span>'; });
+      h += '<tr' + (c.rv.cancelled ? ' class="pj-cancel"' : '') + '><td>' + fmtDayIso(c.day) + '</td><td>' + link + (flags ? '<br/>' + flags : '') + '</td><td>' + esc(it.closer) + '</td>' +
+        '<td>' + (c.sb ? 'SB' : 'NB') + '</td>' +
+        '<td>' + fmtEuro(c.rv.con) + (!c.rv.hasPay && c.rv.con > 0 && !c.rv.cancelled ? ' <span style="color:var(--muted)">déclaré</span>' : '') + '</td><td>' + fmtEuro(c.rv.paid) + '</td><td>' + (c.rv.pending > 0 ? '⏳ ' + fmtEuro(c.rv.pending) : '·') + '</td><td>' + statusTag(c) + '</td></tr>';
     });
-    h += '</tbody></table></div></div>';
+    h += '<tr class="au-total"><td>Total</td><td>' + fmtNum(cur.closes) + ' close' + (cur.closes > 1 ? 's' : '') + (cur.cancelled ? ' (+ ' + cur.cancelled + ' annulé' + (cur.cancelled > 1 ? 's' : '') + ', non compté' + (cur.cancelled > 1 ? 's' : '') + ')' : '') + '</td><td></td><td></td>' +
+      '<td>' + fmtEuro(cur.contracte) + '</td><td>' + fmtEuro(cur.collecte) + '</td><td>' + (cur.pending > 0 ? '⏳ ' + fmtEuro(cur.pending) : '·') + '</td>' +
+      '<td>' + esc(SC.mot('reste_a_encaisser')) + ' ' + fmtEuro(cur.reste) + info('reste_a_encaisser') + '</td></tr>';
+    h += '</tbody></table></div>' + (ctrl ? '<div class="pj-ctrl">' + ctrl + '</div>' : '') + '</div>';
     return h;
   }
 
-  function yearCard(months, objY, today, team) {
-    var y = S.year;
-    var curIdx = today.getFullYear() === y ? today.getMonth() : (today.getFullYear() > y ? 12 : -1);
-    var ytd = 0, cashY = 0, closesY = 0, cancelledY = 0;
-    months.forEach(function (r) { ytd += r.contracte; cashY += r.cash; closesY += r.closes; cancelledY += r.cancelled; });
-    /* Projection fin d'année : cumul + moyenne des 3 derniers mois complets
-       (ou du mois en cours seul si rien avant) sur les mois restants. */
+  /* Projection fin d'année — même formule que le Dashboard : cumul + moyenne
+     des 3 derniers mois terminés pour chaque mois restant (le mois en cours
+     est complété jusqu'à cette moyenne). Glossaire : projection_annee. */
+  function projectionAnnee(vals, curIdx) {
+    var ytd = 0; vals.forEach(function (v) { ytd += v; });
     var done = [];
-    for (var i = Math.min(curIdx, 12) - 1; i >= 0 && done.length < 3; i--) done.push(months[i].contracte);
+    for (var i = Math.min(curIdx, 12) - 1; i >= 0 && done.length < 3; i--) done.push(vals[i]);
     var avg = done.length ? done.reduce(function (a, b) { return a + b; }, 0) / done.length : 0;
     var monthsLeft = curIdx < 0 ? 12 : Math.max(0, 12 - curIdx - 1);
-    var projY = curIdx >= 12 ? ytd : ytd + avg * monthsLeft + (curIdx >= 0 && curIdx < 12 ? Math.max(0, avg - months[curIdx].contracte) : 0);
+    var proj = curIdx >= 12 ? ytd : ytd + avg * monthsLeft + ((curIdx >= 0 && curIdx < 12) ? Math.max(0, avg - vals[curIdx]) : 0);
+    return { ytd: ytd, avg: avg, n: done.length, proj: proj };
+  }
+
+  function yearCard(months, objY, tIso, team, pack) {
+    var y = S.year;
+    var tY = +tIso.slice(0, 4), tM = +tIso.slice(5, 7) - 1;
+    var curIdx = tY === y ? tM : (tY > y ? 12 : -1);
+    var closesY = 0, cancelledY = 0, collecteY = 0, preleveY = 0, ancY = 0, ancClosesY = 0, sumObjM = 0;
+    months.forEach(function (r) {
+      closesY += r.closes; cancelledY += r.cancelled; collecteY += r.collecte; preleveY += r.preleve; sumObjM += r.obj;
+      if (!r.auto) { ancY += r.contracte; ancClosesY += r.closes; }
+    });
+    var P = projectionAnnee(months.map(function (r) { return r.contracte; }), curIdx);
+    var ytd = P.ytd, projY = P.proj;
     var monthsForNeed = curIdx < 0 ? 12 : Math.max(1, 12 - Math.min(curIdx, 11));
     var needPerMonth = Math.max(0, objY - ytd) / monthsForNeed;
     var pct = objY > 0 ? ytd / objY * 100 : null;
+    var ANC_X = 'Montants tapés à la main avant juillet 2026 : on ne sait pas s’ils étaient hors taxes.';
+    var diffObj = Math.abs(sumObjM - objY) >= 1;
 
     var h = '<div class="pj-hero">' +
-      kpi('Contracté ' + y, fmtEuro(ytd), closesY + ' closes' + (cancelledY ? ' · ' + cancelledY + ' annulé(s)' : '') + (team ? ' · ' + fmtPct(pct, 1) + ' de l\'objectif' : ''), '#5b7cfa', team ? pct : null) +
-      kpi('Objectif ' + y, fmtEuro(objY), team ? 'reste ' + fmtEuro(Math.max(0, objY - ytd)) : 'objectif d\'équipe', '#fbbf24') +
-      kpi('Projection fin d\'année', fmtEuro(projY), 'cumul + moyenne des ' + done.length + ' derniers mois (' + fmtEuro(avg) + '/mois)' + (team && objY > 0 ? (projY >= objY ? ' · ✅ au-dessus' : ' · ⚠ manque ' + fmtEuro(objY - projY)) : ''), projY >= objY ? '#34d399' : '#ef4444') +
-      kpi('Rythme nécessaire', team ? (needPerMonth > 0 ? fmtEuro(needPerMonth) + '/mois' : '✅ atteint') : '—', team ? monthsForNeed + ' mois restants, mois en cours compris' : 'objectif d\'équipe', '#a78bfa') +
+      kpi(esc(SC.mot('contracte')) + ' ' + y + info('contracte'), cellSd(fmtEuro(ytd), 'y:all'),
+        fmtNum(closesY) + ' closes' + (cancelledY ? ' · ' + cancelledY + ' annulé(s) retiré(s)' : '') + (team ? ' · ' + fmtPct(pct, 1) + ' de l’objectif' : '') +
+        (ancY > 0 ? '<br/>dont ' + fmtEuro(ancY) + ' d’ancienne saisie' + info('ancienne_saisie', ANC_X) : ''), '#5b7cfa', team ? pct : null) +
+      kpi(esc(SC.mot('objectif')) + ' ' + y + info('objectif'), fmtEuro(objY),
+        (team ? 'reste ' + fmtEuro(Math.max(0, objY - ytd)) : 'objectif d’équipe') + (diffObj ? '<br/>somme des objectifs mensuels : ' + fmtEuro(sumObjM) : ''), '#fbbf24') +
+      kpi(esc(SC.mot('projection_annee')) + info('projection_annee'), fmtEuro(projY),
+        'contracté à ce jour + moyenne des ' + P.n + ' derniers mois terminés (' + fmtEuro(P.avg) + '/mois)' + (team && objY > 0 ? (projY >= objY ? ' · ✅ au-dessus' : ' · ⚠ manque ' + fmtEuro(objY - projY)) : ''), projY >= objY ? '#34d399' : '#ef4444') +
+      kpi('Rythme nécessaire' + infoLibre('Rythme nécessaire', 'Objectif annuel moins le contracté depuis janvier, divisé par les mois restants (mois en cours compris).'), team ? (needPerMonth > 0 ? fmtEuro(needPerMonth) + '/mois' : '✅ atteint') : '—', team ? monthsForNeed + ' mois restants, mois en cours compris' : 'objectif d’équipe', '#a78bfa') +
       '</div>';
 
     var mx = 1;
     months.forEach(function (r) { mx = Math.max(mx, r.contracte, r.obj); });
-    h += '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Contracté mois par mois — ' + y + '</div></div>' +
-      '<div class="pj-legend"><span style="--pj-lc:#5b7cfa">Contracté (auto)</span><span style="--pj-lc:#a78bfa">Contracté (saisie manuelle)</span><span style="--pj-lc:rgba(251,191,36,.5)">Objectif du mois</span></div>' +
+    h += '<div class="au-card"><div class="au-card-head"><div class="au-card-title">' + esc(SC.mot('contracte')) + ' mois par mois — ' + y + (team ? '' : ' · ' + esc(slugLabel(S.slug))) + '</div></div>' +
+      '<div class="pj-legend"><span style="--pj-lc:#5b7cfa">Contracté (calculé)</span><span style="--pj-lc:#a78bfa">Contracté (ancienne saisie)</span><span style="--pj-lc:rgba(251,191,36,.5)">Objectif du mois</span></div>' +
       '<div class="pj-chart">';
     months.forEach(function (r) {
-      h += '<div class="pj-col' + (r.m === curIdx ? ' cur' : '') + '" title="' + MONTHS_FR[r.m] + ' : ' + fmtEuro(r.contracte) + ' / objectif ' + fmtEuro(r.obj) + '"><div class="bars">' +
+      h += '<div class="pj-col' + (r.m === curIdx ? ' cur' : '') + '" title="' + esc(MONTHS_FR[r.m] + ' : ' + fmtEuro(r.contracte) + (r.auto ? '' : ' (ancienne saisie)') + ' / objectif ' + fmtEuro(r.obj)) + '"><div class="bars">' +
         '<div class="b real' + (r.auto ? '' : ' legacy') + '" style="height:' + (r.contracte / mx * 100).toFixed(1) + '%"></div>' +
         '<div class="b obj" style="height:' + (r.obj / mx * 100).toFixed(1) + '%"></div></div><div class="lbl">' + MONTHS_FR[r.m].slice(0, 3) + '</div></div>';
     });
     h += '</div></div>';
 
+    /* Écart cumulé : le mois en cours ne compte que la part de son objectif
+       correspondant aux jours ouvrés écoulés (aujourd'hui compris). */
     var cumul = 0, cumObj = 0;
-    h += '<div class="au-card" style="padding:0;overflow:hidden"><div class="au-card-head" style="padding:16px 18px 0;margin-bottom:10px"><div class="au-card-title">Détail ' + y + '</div><div class="au-card-note">contracté HT · encaissé = prélèvements réellement passés</div></div>' +
-      '<div class="au-twrap" style="border:none;border-radius:0"><table class="au-table"><thead><tr><th>Mois</th><th>Source</th><th>Closes</th><th>Annulés</th><th>Contracté</th><th>Objectif</th><th>Écart cumulé</th><th>Encaissé closes du mois</th><th>Cash du mois</th></tr></thead><tbody>';
-    months.forEach(function (r) {
+    function row(r) {
       var future = r.m > curIdx;
-      if (!future) { cumul += r.contracte; cumObj += r.obj; }
-      var d = cumul - cumObj;
-      h += '<tr' + (r.m === curIdx ? ' class="today"' : future ? ' class="future"' : '') + '><td>' + MONTHS_FR[r.m] + '</td>' +
-        '<td>' + (r.auto ? '<span class="pj-tag ok">auto</span>' : '<span class="pj-tag legacy">saisie</span>') + '</td>' +
-        '<td>' + (r.has || r.closes ? r.closes : '·') + '</td><td>' + (r.cancelled ? '<span style="color:var(--red)">' + r.cancelled + '</span>' : '·') + '</td>' +
+      var d = null;
+      if (!future) {
+        cumul += r.contracte;
+        if (r.m === curIdx) {
+          var wt = workdays(r.sIso, r.eIso), wd = workdays(r.sIso, tIso);
+          cumObj += wt > 0 ? r.obj * wd / wt : r.obj;
+        } else cumObj += r.obj;
+        d = cumul - cumObj;
+      }
+      return '<tr' + (r.m === curIdx ? ' class="today"' : future ? ' class="future"' : '') + '><td>' + MONTHS_FR[r.m] + '</td>' +
+        '<td>' + (r.auto ? '<span class="pj-tag ok">calculé</span>' : '<span class="pj-tag legacy">ancienne saisie</span>') + '</td>' +
+        '<td>' + (r.has || r.closes ? (r.auto ? cellSd(fmtNum(r.closes), 'y:' + r.m) : fmtNum(r.closes)) : '·') + '</td><td>' + (r.cancelled ? '<span style="color:var(--red)">' + r.cancelled + '</span>' : '·') + '</td>' +
         '<td>' + (r.contracte ? fmtEuro(r.contracte) : '·') + '</td><td>' + fmtEuro(r.obj) + '</td>' +
-        '<td>' + (future || !team ? '·' : '<span style="color:' + (d >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (d >= 0 ? '+' : '−') + fmtEuro(Math.abs(d)) + '</span>') + '</td>' +
-        '<td>' + (r.auto ? (r.encaisseCloses ? fmtEuro(r.encaisseCloses) : '·') : '—') + '</td><td>' + (r.cash ? fmtEuro(r.cash) : '·') + '</td></tr>';
-    });
-    h += '<tr class="au-total"><td>Total</td><td></td><td>' + closesY + '</td><td>' + (cancelledY || '·') + '</td><td>' + fmtEuro(ytd) + '</td><td>' + fmtEuro(objY) + '</td><td></td><td></td><td>' + fmtEuro(cashY) + '</td></tr>';
+        '<td>' + (d == null || !team ? '·' : '<span style="color:' + (d >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (d >= 0 ? '+' : '−') + fmtEuro(Math.abs(d)) + '</span>') + '</td>' +
+        '<td>' + (r.auto ? (r.collecte ? fmtEuro(r.collecte) : '·') : '—') + '</td><td>' + (r.preleve ? fmtEuro(r.preleve) : '·') + '</td></tr>';
+    }
+    function sub(lbl, list) {
+      var c = 0, an = 0, con = 0, ob = 0, col = 0, pr = 0, auto = list[0].auto;
+      list.forEach(function (r) { c += r.closes; an += r.cancelled; con += r.contracte; ob += r.obj; col += r.collecte; pr += r.preleve; });
+      return '<tr class="pj-sub"><td>' + lbl + '</td><td></td><td>' + fmtNum(c) + '</td><td>' + (an || '·') + '</td><td>' + fmtEuro(con) + '</td><td>' + fmtEuro(ob) + '</td><td></td><td>' + (auto ? fmtEuro(col) : '—') + '</td><td>' + fmtEuro(pr) + '</td></tr>';
+    }
+    var anc = months.filter(function (r) { return !r.auto; }), calc = months.filter(function (r) { return r.auto; });
+    h += '<div class="au-card" style="padding:0;overflow:hidden"><div class="au-card-head" style="padding:16px 18px 0;margin-bottom:10px"><div class="au-card-title">Détail ' + y + (team ? '' : ' · ' + esc(slugLabel(S.slug))) + '</div>' +
+      '<div class="au-card-note">mois calculés : hors taxes' + info('ht') + (anc.length ? ' · ancienne saisie : montants déclarés' + info('ancienne_saisie', ANC_X) : '') + '</div></div>' +
+      '<div class="au-twrap" style="border:none;border-radius:0"><table class="au-table"><thead><tr><th>Mois</th><th>Source</th><th>' + SC.motInfo('closes') + '</th><th>' + SC.motInfo('closes_annules') + '</th><th>' + SC.motInfo('contracte') + '</th>' +
+      '<th>Objectif' + info('objectif') + '</th><th>Écart cumulé' + infoLibre('Écart cumulé', 'Contracté cumulé depuis janvier moins l’objectif cumulé. Le mois en cours ne compte que la part de son objectif correspondant aux jours ouvrés écoulés (aujourd’hui compris). Mois à venir : pas d’écart.') + '</th>' +
+      '<th>' + esc(SC.mot('collecte')) + ' (closes du mois)' + info('collecte') + '</th><th>' + SC.motInfo('preleve_periode') + '</th></tr></thead><tbody>';
+    if (anc.length) {
+      h += '<tr class="pj-group"><td colspan="9">Ancienne saisie (déclaré)' + info('ancienne_saisie', ANC_X) + '</td></tr>';
+      anc.forEach(function (r) { h += row(r); });
+      if (calc.length) h += sub('Sous-total ancienne saisie', anc);
+    }
+    if (calc.length) {
+      if (anc.length) h += '<tr class="pj-group"><td colspan="9">Calculé (liste des closes)' + info('closes') + '</td></tr>';
+      calc.forEach(function (r) { h += row(r); });
+      if (anc.length) h += sub('Sous-total calculé', calc);
+    }
+    h += '<tr class="au-total"><td>Total</td><td></td><td>' + fmtNum(closesY) + '</td><td>' + (cancelledY || '·') + '</td><td>' + fmtEuro(ytd) + '</td><td>' + fmtEuro(sumObjM) +
+      (diffObj ? infoLibre('Total des objectifs', 'Somme des objectifs mensuels affichés (' + fmtEuro(sumObjM) + '). L’objectif annuel enregistré est de ' + fmtEuro(objY) + ' : des mois ont un objectif propre.') : '') +
+      '</td><td></td><td>' + (calc.length ? fmtEuro(collecteY) : '—') + '</td><td>' + fmtEuro(preleveY) + '</td></tr>';
     h += '</tbody></table></div></div>';
     return h;
+  }
+
+  /* ══ LISTES CLIQUABLES (stats-drill.js) ══════════════════════════════════ */
+  function drill(ref) {
+    if (!S.data || !SD) return null;
+    var pack = S.data.pack, slug = S.slug;
+    var months = computeYear(pack, slug);
+    var ctx = { nomDe: nomDe };
+    var who = slugLabel(slug);
+    function items(list) { return list.map(function (r) { return SD.closeItem(r, ctx); }); }
+    if (ref === 'm:closes' || ref === 'm:annules') {
+      var cur = months[S.month];
+      var list = ref === 'm:annules' ? cur.list.filter(function (r) { return r.rv && r.rv.cancelled; }) : cur.list;
+      return { title: (ref === 'm:annules' ? SC.mot('closes_annules') : SC.mot('closes')) + ' — ' + MONTHS_FR[S.month] + ' ' + S.year, sub: who,
+        info: ref === 'm:annules' ? 'closes_annules' : 'closes', items: items(list),
+        note: ref === 'm:closes' && cur.cancelled ? 'Les closes annulés figurent dans la liste, barrés de leurs montants : ils ne sont pas comptés.' : '' };
+    }
+    if (ref === 'm:sans') {
+      var key = moisCle(S.year, S.month);
+      var sans = (pack.year.sansSignal || []).filter(function (x) { return String(x.day).slice(0, 7) === key; });
+      return { title: SC.mot('clientes_sans_vente') + ' — ' + MONTHS_FR[S.month] + ' ' + S.year, info: 'clientes_sans_vente', items: items(sans) };
+    }
+    if (ref === 'y:all') {
+      var all = [];
+      months.forEach(function (r) { if (r.auto) all = all.concat(r.list); });
+      return { title: SC.mot('closes') + ' ' + S.year + ' (mois calculés)', sub: who, info: 'closes', items: items(all),
+        note: months.some(function (r) { return !r.auto && r.has; }) ? 'Les mois de l’ancienne saisie n’ont pas de liste nominative : seuls leurs totaux déclarés existent.' : '' };
+    }
+    var mm = /^y:(\d+)$/.exec(ref);
+    if (mm) {
+      var r = months[+mm[1]];
+      return { title: SC.mot('closes') + ' — ' + MONTHS_FR[r.m] + ' ' + S.year, sub: who, info: 'closes', items: items(r.list) };
+    }
+    return null;
   }
 
   /* ══ OBJECTIFS (admin) ═══════════════════════════════════════════════════ */
@@ -751,7 +971,7 @@
   function saveObjectives() {
     var annual = $('#objAnnual').value;
     var months = {};
-    document.querySelectorAll('#objMonths input[data-m]').forEach(function (inp) {
+    Array.prototype.forEach.call(document.querySelectorAll('#objMonths input[data-m]'), function (inp) {
       var v = inp.value.trim();
       months[inp.getAttribute('data-m')] = v === '' ? null : Math.max(0, Number(v) || 0);
     });
@@ -767,20 +987,22 @@
       $('#objModal').classList.remove('show');
       toast('Objectifs ' + S.year + ' enregistrés');
       render();
-    }).catch(function (e) { toast('Erreur : ' + (e && e.message), true); });
+    }).catch(function (e) { toast('Erreur : ' + msgErr(e), true); });
   }
 
   /* ══ ÉVÉNEMENTS ══════════════════════════════════════════════════════════ */
   /* Rechargement complet à chaque mois : le pipeline (RDV à venir jusqu'à
      la fin du mois affiché) dépend du mois. */
   function shiftMonth(delta) {
-    var d = new Date(S.year, S.month + delta, 1);
-    S.year = d.getFullYear(); S.month = d.getMonth();
+    var m = S.month + delta, y = S.year;
+    while (m < 0) { m += 12; y--; }
+    while (m > 11) { m -= 12; y++; }
+    S.year = y; S.month = m;
     refresh();
   }
   $('#btnPrev').addEventListener('click', function () { shiftMonth(-1); });
   $('#btnNext').addEventListener('click', function () { shiftMonth(1); });
-  $('#btnToday').addEventListener('click', function () { var n = new Date(); S.year = n.getFullYear(); S.month = n.getMonth(); refresh(); });
+  $('#btnToday').addEventListener('click', function () { var mp = SC.moisParis(Date.now()).split('-'); S.year = +mp[0]; S.month = +mp[1] - 1; refresh(); });
   $('#btnRefresh').addEventListener('click', refresh);
   $('#memberTabs').addEventListener('click', function (e) {
     var b = e.target.closest ? e.target.closest('.au-member') : null;
@@ -795,12 +1017,15 @@
   $('#objSave').addEventListener('click', saveObjectives);
   $('#objModal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('show'); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') $('#objModal').classList.remove('show'); });
-  /* Noms / couleurs des closers : nav.js charge l'équipe après coup. */
+  if (SD) SD.bind($('#content'), function (ref) { return drill(ref); });
+  /* Noms / couleurs des closers et membres partis : nav.js charge l'équipe après coup. */
   window.addEventListener('team-members-loaded', function () { if (S.data) render(); });
 
   /* ══ INIT : attendre l'auth Firebase ══ */
-  if (!FC || typeof FC.revClient !== 'function') {
-    $('#content').innerHTML = '<div class="au-empty"><span class="i">⚠️</span>funnel-core.js introuvable — rechargement nécessaire.</div>';
+  var hi = document.getElementById('hdrInfo');
+  if (hi && SC) hi.innerHTML = SC.info('heure_paris');
+  if (!FC || typeof FC.loadCloses !== 'function' || !SC) {
+    $('#content').innerHTML = '<div class="au-empty"><span class="i">⚠️</span>funnel-core.js ou stats-core.js introuvable — rechargement nécessaire.</div>';
     return;
   }
   var started = false;

@@ -11,6 +11,9 @@
 // `voice: true` → réponse courte, sans mise en forme, faite pour être lue à
 // voix haute. Plus utilisé depuis le retrait de l'orbe vocal (06/11/2026) :
 // seule la barre ⌘K (ai-cmdk.js) appelle encore cet endpoint, en texte.
+// Audit de cohérence du 25/11/2026 : les consignes imposent le vocabulaire
+// des écrans et la lecture du champ `definitions` des outils (glossaire
+// commun de stats-core.js) ; le modèle ne recalcule plus les taux fournis.
 // ============================================================================
 
 const { requireAdmin } = require('./_verifyFirebaseAuth');
@@ -33,7 +36,9 @@ module.exports = async function (req, res) {
   const system = [
     'Tu es « Alteore », l\'assistant IA des dirigeants d\'Alteore (Adrien, Emily, Vincent). Nous sommes le ' + today + ' (' + iso + ').',
     'Tu réponds à leurs questions sur l\'activité en interrogeant les outils (lecture seule). Utilise les outils dès qu\'une question porte sur des chiffres, des personnes ou des dossiers : ne réponds jamais de mémoire sur les données.',
-    'Calcule toi-même les taux et comparaisons à partir des résultats. Si une donnée n\'existe pas dans les outils, dis-le simplement.',
+    'Les chiffres des outils sont EXACTEMENT ceux des écrans de l\'équipe (Stats funnel, Set NB, Close SB, Global closing) : répète-les tels quels, avec les mots des outils (RDV, Annulés, No-show, Présents, Disqua., Pitchés, Offres en attente, Non closes, À statuer, Kept, Show-up, RDV pris, Sets, Closes, Contracté, Collecté, Reste à encaisser, 1ers prélèvements en attente, Panier moyen, Leads, Ré-optins, LTB, Appels, Décrochés). Dis « collecté », jamais « encaissé » ni « cash » ; « Closes », jamais « ventes ».',
+    'Pour expliquer un chiffre, reprends le texte du champ `definitions` de l\'outil : ne redéfinis jamais un terme autrement. Ne recalcule jamais un taux ou un total qu\'un outil fournit (show-up, taux de close, LTB, panier moyen…). N\'additionne jamais des RDV (comptés à la date du RDV) et des RDV pris (comptés le jour où ils sont pris) ; « RDV closés » n\'est pas « Closes » (clients gagnés, datés du jour de la vente). LTB = RDV pris ÷ leads entrés : il est donné par leads_stats.',
+    'Montants : hors taxes (HT) sauf mention TTC explicite (impayés). Un montant « déclaré » (saisi par le closer) n\'est ni du contracté ni du collecté. Si un outil renvoie `avertissements` (lecture incomplète, liste tronquée), dis que le chiffre concerné est partiel. Si tu calcules toi-même une comparaison que les outils ne donnent pas, dis comment tu l\'as calculée. Si une donnée n\'existe pas dans les outils, dis-le simplement.',
     body.voice
       ? 'MODE VOCAL : ta réponse sera lue à voix haute. 2 à 4 phrases maximum, naturelles, sans liste, sans markdown, sans emoji ; arrondis les chiffres ; termine par une piste d\'action si c\'est utile.'
       : 'Réponse claire et concise ; listes courtes autorisées ; chiffres précis.',
