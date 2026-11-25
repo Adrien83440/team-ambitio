@@ -41,7 +41,7 @@
      celles qui n'ont pas de source corrigible (téléphonie, actions de fiche).
      Les colonnes tirées des RDV et du module Paiements se corrigent à la
      source (résultat du RDV, paiement) : là seulement elles changent partout. */
-  var CORRECTIONS_AUTORISEES = { calls: 1, decroches: 1, tempsAppel: 1, messages: 1, leads: 1, sets: 0 };
+  var CORRECTIONS_AUTORISEES = { tel: 1, dm: 1, act: 1 };   /* groupes de colonnes : téléphone, messages, actions de fiche */
 
   var DUREE_DEFAUT_MIN = 30;
 
@@ -97,6 +97,25 @@
     var dur = Number(b.duration) > 0 ? Number(b.duration) : DUREE_DEFAUT_MIN;
     return s + dur * 60000;
   }
+  /* Une date construite à l'heure de PARIS (mois de 0 à 11), quel que soit le
+     fuseau de l'appareil ou du serveur : le 1er du mois à 00:00 est le même
+     instant pour l'équipe, pour une média buyeuse à l'étranger et pour une
+     Vercel Function (qui tourne en UTC). */
+  function dateParis(y, m0, d, hh, mi, ss, ms) {
+    var guess = Date.UTC(y, m0, d == null ? 1 : d, hh || 0, mi || 0, ss || 0, ms || 0);
+    var o = parisParts(new Date(guess));
+    var asParis = Date.UTC(+o.year, +o.month - 1, +o.day, +o.hour, +o.minute, ss || 0, ms || 0);
+    var out = new Date(guess - (asParis - guess));
+    /* Changement d'heure : une seconde passe corrige le décalage résiduel. */
+    var o2 = parisParts(out);
+    var asParis2 = Date.UTC(+o2.year, +o2.month - 1, +o2.day, +o2.hour, +o2.minute, ss || 0, ms || 0);
+    if (asParis2 !== guess) out = new Date(out.getTime() - (asParis2 - guess));
+    return out;
+  }
+  /* Début (00:00:00.000) et fin (23:59:59.999) d'un jour 'AAAA-MM-JJ' à Paris. */
+  function debutJourParis(iso) { var p = String(iso).split('-'); return dateParis(+p[0], +p[1] - 1, +p[2], 0, 0, 0, 0); }
+  function finJourParis(iso) { var p = String(iso).split('-'); return dateParis(+p[0], +p[1] - 1, +p[2], 23, 59, 59, 999); }
+
   /* Un RDV est « passé » quand son créneau est terminé — le même seuil que le
      bouton Résultat de l'Agenda. Sans heure lisible : passé dès le lendemain. */
   function estPasse(b, now) {
@@ -593,9 +612,10 @@
   return {
     /* Réglages */
     CLOSE_AXE: CLOSE_AXE, CORRECTIONS_AUTORISEES: CORRECTIONS_AUTORISEES,
-    correctionAutorisee: function (colonne) { return CORRECTIONS_AUTORISEES[colonne] === 1; },
+    correctionAutorisee: function (groupe) { return CORRECTIONS_AUTORISEES[groupe] === 1; },
     /* Temps */
     parisParts: parisParts, jourParis: jourParis, moisParis: moisParis,
+    dateParis: dateParis, debutJourParis: debutJourParis, finJourParis: finJourParis,
     debutMs: debutMs, finMs: finMs, estPasse: estPasse, toDate: toDate, pad2: pad2,
     /* Classe d'un RDV */
     classifyBooking: classifyBooking, CLASSES: CLASSES, estRdvVente: estRdvVente, estRdvPris: estRdvPris,

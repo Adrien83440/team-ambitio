@@ -408,16 +408,14 @@
      (type isSetterOnly, ex. call_strat_phenix_elodie) est No Booking,
      même si booking.html n'avait pas encore posé le bon source à l'époque.
      typeMap optionnel : { typeId: {isSetterOnly, isCoaching} } */
-  function classifyBooking(b, typeMap) {
-    var t = (typeMap || {})[b.type] || {};
-    if (b.isCoaching === true || t.isCoaching === true) return 'excluded';
-    if (b.source === 'csm_manual' || b.skipLeadCreation === true || b.clientId) return 'excluded';
-    if (b.source === 'admin_manual') return 'admin';
-    if (b.source === 'setter_booking') return 'setter';
-    if (t.isSetterOnly === true) return 'setter';   // type setter = NB, quel que soit le source
-    if (b.source === 'self_booking') return 'self';
-    return 'self';
+  /* RÈGLE UNIQUE (audit de cohérence du 25/11/2026) : la classe d'un RDV vit
+     dans stats-core.js, chargé avant ce fichier sur toutes les pages. */
+  function statsCore() {
+    var SC = (typeof window !== 'undefined' && window.StatsCore) || null;
+    if (!SC) throw new Error('alteore-flow.js : stats-core.js doit être chargé avant ce fichier');
+    return SC;
   }
+  function classifyBooking(b, typeMap) { return statsCore().classifyBooking(b, typeMap); }
   function isSB(b, typeMap) { return classifyBooking(b, typeMap) === 'self'; }
   function isPresent(outcome) { return !!PRESENT_SET[outcome]; }
   function isPitched(outcome) { return !!PITCHED_SET[outcome]; }

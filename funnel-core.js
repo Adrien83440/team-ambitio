@@ -30,13 +30,19 @@
 // reçu en paramètre (`db`).
 // ============================================================================
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory();
-  else root.FunnelCore = factory();
-}(typeof self !== 'undefined' ? self : this, function () {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./stats-core.js'));
+  else root.FunnelCore = factory(root.StatsCore);
+}(typeof self !== 'undefined' ? self : this, function (SC) {
   'use strict';
+
+  /* RÈGLES UNIQUES (audit de cohérence du 25/11/2026) : la classe d'un RDV,
+     son état (annulé, no-show, présent…), Kept, Show-up et le glossaire
+     vivent dans stats-core.js. Ce fichier n'en recode aucune. */
+  if (!SC) throw new Error('funnel-core.js : stats-core.js doit être chargé avant ce fichier');
 
   /* ── Constantes métier (déplacées depuis sales-funnel.html) ── */
   var LEADS_QUERY_LIMIT = 6000;
+  var CLOSED_LEADS_LIMIT = 2000;   /* fiches gagnées sur une période — au-delà : « liste tronquée » affiché */
   var CALLS_QUERY_LIMIT = 5000;
   var ANSWERED_MIN_SEC  = 5;                  // même seuil que le Dashboard Sales
   /* Signature du répondeur (mesurée sur les appels réels le 17/08/2026) :
@@ -1024,16 +1030,7 @@
        est quand même NB. Même règle dans alteore-flow.js (toute la plateforme).
      'excluded' → coaching / csm_manual / clientId / skipLeadCreation
      'admin'    → admin_manual (compté à part, hors LTB)               */
-  function classifyBooking(b, TYPE_MAP) {
-    var t = TYPE_MAP[b.type] || {};
-    if (b.isCoaching === true || t.isCoaching === true) return 'excluded';
-    if (b.source === 'csm_manual' || b.skipLeadCreation === true || b.clientId) return 'excluded';
-    if (b.source === 'admin_manual') return 'admin';
-    if (b.source === 'setter_booking') return 'setter';
-    if (t.isSetterOnly === true) return 'setter';   // type setter = NB, quel que soit le source
-    if (b.source === 'self_booking') return 'self';
-    return 'self';
-  }
+  function classifyBooking(b, TYPE_MAP) { return SC.classifyBooking(b, TYPE_MAP); }
 
 
   function loadAds(db, P, DATA) {
@@ -1184,14 +1181,50 @@
   function loadClosedLeads(db, P, DATA) {
     var startTs = tsOf(P.start);
     var endTs = tsOf(P.end);
+    DATA.closedLeadsTruncated = false;
+    DATA.closedLeadsError = null;
     return db.collection('leads')
       .where('clientSince', '>=', startTs)
       .where('clientSince', '<=', endTs)
-      .limit(500)
+      .limit(CLOSED_LEADS_LIMIT)
       .get().then(function (snap) {
         DATA.closedLeads = [];
-        snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; DATA.closedLeads.push(d); });
-      }).catch(function (e) { console.warn('[funnel] closedLeads', e.message); DATA.closedLeads = []; });
+        /* Une fiche fusionnée n'est jamais un client : la fiche gardée porte la vente. */
+        snap.forEach(function (doc) { var d = doc.data(); if (d._merged === true) return; d._id = doc.id; DATA.closedLeads.push(d); });
+        /* Plafond de lecture atteint : dit à l'écran, jamais tu (audit 25/11/2026). */
+        DATA.closedLeadsTruncated = snap.size >= CLOSED_LEADS_LIMIT;
+      }).catch(function (e) { console.warn('[funnel] closedLeads', e.message); DATA.closedLeads = []; DATA.closedLeadsError = e.message || 'lecture impossible'; });
+  }
+
+  /* RDV au résultat « close » des fiches gagnées — le RDV PORTEUR d'un close
+     peut être daté hors de la période (RDV du 28/10, close validé le 05/11) :
+     il n'est alors pas dans DATA.bookings. On le lit par fiche (quelques
+     dizaines de lectures au plus) pour connaître le canal (Self Booking /
+     Setting), le closer et le setter du close par la même règle partout.
+     → DATA.closeBookings = { leadId: [RDV close…] } */
+  function loadCloseBookings(db, DATA, TYPE_MAP) {
+    DATA.closeBookings = {};
+    var known = {};
+    (DATA.bookings || []).forEach(function (b) { if (b && b.outcome === 'close' && b.leadId) known[b.leadId] = 1; });
+    var ids = {};
+    (DATA.closedLeads || []).forEach(function (l) { if (l && l._id && !known[l._id]) ids[l._id] = 1; });
+    (DATA.payments || []).forEach(function (p) {
+      var l = p && p._payClose && p._payClose.lead;
+      if (l && l._id && !known[l._id]) ids[l._id] = 1;
+    });
+    var list = Object.keys(ids);
+    if (!list.length) return Promise.resolve();
+    return Promise.all(list.map(function (id) {
+      return db.collection('bookings').where('leadId', '==', id).get().then(function (snap) {
+        snap.forEach(function (doc) {
+          var d = doc.data();
+          if (d.outcome !== 'close') return;
+          d._id = doc.id;
+          d._class = classifyBooking(d, TYPE_MAP || {});
+          (DATA.closeBookings[id] = DATA.closeBookings[id] || []).push(d);
+        });
+      }).catch(function (e) { console.warn('[funnel] RDV porteur', e.message); });
+    }));
   }
 
   /* ══ REVENUE — close annulé, encaissé réel (validé Adrien 13/10/2026) ══
@@ -1310,6 +1343,287 @@
     return { cancelled: false, reason: null, paid: r2(paid), con: r2(con), pending: r2(pending), hasPay: pays.length > 0, declCol: declCol };
   }
 
+  /* ══ CLOSES — LA LISTE UNIQUE (audit de cohérence du 25/11/2026) ══════════
+     Avant : dix règles sous le mot « close » (RDV closé à la date du RDV sur
+     les pages équipe, fiche gagnée au funnel, un mélange dans Qualité leads…).
+     Désormais TOUS les écrans — Stats funnel, Qualité leads, Set NB, Close SB,
+     Global closing, Projections, Dashboard — comptent Closes, Contracté et
+     Collecté à partir de CETTE liste. Décision d'Adrien du 25/11/2026 :
+
+       UN CLOSE = UN CLIENT GAGNÉ, compté UNE fois, le JOUR OÙ IL EST GAGNÉ
+       (leads.clientSince : signature du contrat ou validation du close).
+
+     Entrent dans la liste :
+       ① les fiches dont clientSince tombe dans la période, non fusionnées,
+          AVEC un signal de vente : étape closed_won_*, RDV de la fiche au
+          résultat close, paiement non annulé rattaché, ou contrat signé.
+          closedData seul n'est PAS un signal (il survit à un close corrigé
+          en « non close »). Une fiche cliente sans aucun signal n'est pas un
+          close : elle sort dans `sansSignal`, nommée à l'écran.
+       ② les RDV au résultat close SANS fiche, datés dans la période, dont ni
+          l'e-mail ni le téléphone ne sont ceux d'une fiche de ① ;
+       ③ les paiements créés dans la période sans fiche gagnée (résolus par
+          resolvePaymentLeads), regroupés par client.
+     Un paiement n'est rattaché qu'UNE fois ; un paiement qui porte un leadId
+     ne sert jamais une autre fiche. Les closes annulés (verdict revClient)
+     sortent dans `annules`.
+
+     Canal d'un close (Self Booking / Setting) : classe du RDV porteur ; à
+     défaut la réponse du closer (closedData.sb) ; à défaut l'étape de la
+     fiche ; sinon Setting « canal inconnu ». Closer et setter d'un close :
+     une seule chaîne (voir closeurDe / setterDe).
+
+     o = { closedLeads, bookings, closeBookings, payments, typeMap, start, end,
+           leadOk(lead), rdvOk(rdv), payCloseOk(pc, paiement),
+           resoudrePersonne(personId, rdv) }
+     → { rows, annules, sansSignal, ecartsCanal, autres, toutes }
+     Une ligne : { key, leadId, name, ms, day, src, signal, sb, canal,
+       canalSrc, canalEcart, closer, setter, bookingId, rdvDate, rv, lead } */
+  function lowerTrim(v) { return String(v || '').toLowerCase().trim(); }
+  function declOfClose(cd) { return cd ? { contracte: Number(cd.contracte) || 0, collecte: Number(cd.collecte) || 0 } : null; }
+  function rdvKey(b) { return (b.date || '') + ' ' + (b.time || ''); }
+
+  function buildCloses(o) {
+    o = o || {};
+    var typeMap = o.typeMap || {};
+    var startMs = o.start.getTime(), endMs = o.end.getTime();
+    var sIso = SC.jourParis(o.start), eIso = SC.jourParis(o.end);
+    var payments = o.payments || [];
+    var idx = revIndex(payments);
+    payments.forEach(function (p) { if (p) p._matched = false; });
+
+    function clsOf(b) { return b._class || SC.classifyBooking(b, typeMap); }
+    function payListFor(leadId, email, phone) {
+      var list = revPaymentsFor(idx, leadId, email, phone).filter(function (p) {
+        if (p._matched) return false;
+        /* Un paiement rattaché à une fiche ne sert jamais une AUTRE fiche
+           (ni un RDV sans fiche) : même e-mail ou même téléphone ne suffit pas. */
+        if (p.leadId && p.leadId !== leadId) return false;
+        return true;
+      });
+      list.forEach(function (p) { p._matched = true; });
+      return list;
+    }
+    function release(list) { (list || []).forEach(function (p) { p._matched = false; }); }
+
+    /* RDV au résultat close, par fiche (période + RDV porteurs hors période). */
+    var closeRdvByLead = {}, seenRdv = {};
+    function addRdv(b) {
+      if (!b || b.outcome !== 'close' || !b.leadId) return;
+      var id = b._id || b.id;
+      if (id) { if (seenRdv[id]) return; seenRdv[id] = 1; }
+      (closeRdvByLead[b.leadId] = closeRdvByLead[b.leadId] || []).push(b);
+    }
+    (o.bookings || []).forEach(addRdv);
+    var extra = o.closeBookings || {};
+    Object.keys(extra).forEach(function (id) { (extra[id] || []).forEach(addRdv); });
+    function carrierOf(leadId) {
+      var list = (closeRdvByLead[leadId] || []).filter(function (b) { return clsOf(b) !== 'excluded'; });
+      if (!list.length) return null;
+      list.sort(function (a, b) { var ka = rdvKey(a), kb = rdvKey(b); return ka < kb ? -1 : ka > kb ? 1 : 0; });
+      return list[0];
+    }
+    function canalDe(carrier, lead, fallbackSb) {
+      var cdL = (lead && lead.closedData) || {}, cdB = (carrier && carrier.closeData) || {};
+      var declSb = typeof cdL.sb === 'boolean' ? cdL.sb : (typeof cdB.sb === 'boolean' ? cdB.sb : null);
+      var cc = carrier ? clsOf(carrier) : null;
+      var stage = String((lead && lead.stage) || '');
+      var canal, src;
+      if (cc === 'self' || cc === 'setter') { canal = cc; src = 'rdv'; }
+      else if (declSb !== null) { canal = declSb ? 'self' : 'setter'; src = 'declare'; }
+      else if (stage === 'closed_won_self') { canal = 'self'; src = 'etape'; }
+      else if (stage === 'closed_won_setting') { canal = 'setter'; src = 'etape'; }
+      else if (typeof fallbackSb === 'boolean') { canal = fallbackSb ? 'self' : 'setter'; src = 'etape'; }
+      else { canal = 'setter'; src = 'inconnu'; }
+      return { canal: canal, src: src, ecart: src === 'rdv' && declSb !== null && declSb !== (canal === 'self') };
+    }
+    function closeurDe(carrier, lead, pays) {
+      var cdL = (lead && lead.closedData) || {}, cdB = (carrier && carrier.closeData) || {};
+      if (cdL.closerSlug) return cdL.closerSlug;
+      if (cdB.closerSlug) return cdB.closerSlug;
+      var host = carrier ? SC.closerDuRdv(carrier, o.resoudrePersonne) : null;
+      if (host) return host;
+      for (var i = 0; i < (pays || []).length; i++) if (pays[i] && pays[i].closerSlug) return pays[i].closerSlug;
+      return null;
+    }
+    function setterDe(carrier, lead) {
+      var cdL = (lead && lead.closedData) || {}, cdB = (carrier && carrier.closeData) || {};
+      return cdL.setterSlug || cdB.setterSlug || (lead && lead.setterSlug) || (carrier && carrier.bookedBySlug) || null;
+    }
+
+    var rows = [], annules = [], sansSignal = [], ecartsCanal = [], autres = [];
+    var seenKey = {}, wonEmail = {}, wonP9 = {};
+    function push(row) {
+      if (row.rv && row.rv.cancelled) { annules.push(row); return; }
+      rows.push(row);
+      if (row.canalEcart) ecartsCanal.push(row);
+    }
+
+    /* ① Fiches gagnées */
+    (o.closedLeads || []).forEach(function (l) {
+      if (!l || l._merged === true) return;
+      var ms = parseFlexMs(l.clientSince);
+      if (ms == null || ms < startMs || ms > endMs) return;
+      if (o.leadOk && !o.leadOk(l)) return;
+      var key = 'l:' + l._id;
+      if (seenKey[key]) return;
+      var em = lowerTrim(l.email), tel = l.telephone || l.phone, p9 = phone9(tel);
+      var name = l.nom || em || l._id;
+      var carrier = carrierOf(l._id);
+      var stage = String(l.stage || '');
+      var pays = payListFor(l._id, em, tel);
+      var activePay = false;
+      pays.forEach(function (p) { if (p.status !== 'cancelled') activePay = true; });
+      var signal = (stage === 'closed_won_self' || stage === 'closed_won_setting') ? 'etape'
+        : carrier ? 'rdv_close'
+        : activePay ? 'paiement'
+        : l.clientFromSignature === true ? 'signature'
+        : (pays.length ? 'paiement' : null);   /* paiements tous annulés : la vente a existé, revClient tranche */
+      if (!signal) {
+        release(pays);
+        sansSignal.push({ key: key, leadId: l._id, name: name, ms: ms, day: SC.jourParis(ms), stage: stage, lead: l });
+        return;
+      }
+      seenKey[key] = 1;
+      if (em) wonEmail[em] = 1;
+      if (p9) wonP9[p9] = 1;
+      var decl = declOfClose(l.closedData) || declOfClose(carrier && carrier.closeData);
+      var rv = revClient(pays, l, decl);
+      if (!rv.cancelled && l.isClient === false && rv.paid <= 0.005) {
+        rv = { cancelled: true, reason: 'retiré des clients', paid: 0, con: 0, pending: 0, hasPay: pays.length > 0, declCol: rv.declCol };
+      }
+      var cn = canalDe(carrier, l, null);
+      push({
+        key: key, leadId: l._id, name: name, ms: ms, day: SC.jourParis(ms), src: 'fiche', signal: signal,
+        sb: cn.canal === 'self', canal: cn.canal, canalSrc: cn.src, canalEcart: cn.ecart,
+        closer: closeurDe(carrier, l, pays), setter: setterDe(carrier, l),
+        bookingId: carrier ? (carrier._id || carrier.id || null) : null, rdvDate: carrier ? (carrier.date || '') : '',
+        rv: rv, lead: l
+      });
+    });
+
+    /* ② RDV closés sans fiche */
+    (o.bookings || []).forEach(function (b) {
+      if (!b || b.outcome !== 'close' || b.leadId) return;
+      var cls = clsOf(b);
+      if (!SC.estRdvVente(cls)) return;
+      if (!b.date || b.date < sIso || b.date > eIso) return;
+      if (o.rdvOk && !o.rdvOk(b)) return;
+      var bem = lowerTrim(b.prospect && b.prospect.email);
+      var btel = b.prospect && (b.prospect.telephone || b.prospect.phone);
+      var bp9 = phone9(btel);
+      if ((bem && wonEmail[bem]) || (bp9 && wonP9[bp9])) return;      /* déjà compté par sa fiche */
+      var key = bem ? 'e:' + bem : bp9 ? 't:' + bp9 : 'b:' + (b._id || b.id);
+      if (seenKey[key]) return;
+      seenKey[key] = 1;
+      if (bem) wonEmail[bem] = 1;
+      if (bp9) wonP9[bp9] = 1;
+      var pays = payListFor(null, bem, btel);
+      var rv = revClient(pays, null, declOfClose(b.closeData));
+      var ms = SC.debutMs(b);
+      if (isNaN(ms)) ms = SC.debutJourParis(b.date).getTime();
+      var cn = canalDe(b, null, null);
+      push({
+        key: key, leadId: null, name: (b.prospect && b.prospect.nom) || bem || (b._id || b.id), ms: ms, day: b.date, src: 'rdv', signal: 'rdv_close',
+        sb: cn.canal === 'self', canal: cn.canal, canalSrc: cn.src, canalEcart: cn.ecart,
+        closer: closeurDe(b, null, pays), setter: setterDe(b, null),
+        bookingId: b._id || b.id || null, rdvDate: b.date || '', rv: rv, lead: null
+      });
+    });
+
+    /* ③ Paiements sans fiche gagnée, regroupés par client */
+    var groups = {}, order = [];
+    payments.forEach(function (p) {
+      if (!p || !p._payClose || p._matched) return;
+      var pc = p._payClose;
+      if (pc.kind === 'other') { autres.push({ name: pc.name, paymentId: p._id || null }); return; }
+      if (o.payCloseOk && !o.payCloseOk(pc, p)) return;
+      var em = lowerTrim(p.leadEmail), p9 = phone9(p.leadPhone);
+      var key = (pc.lead && pc.lead._id) ? 'l:' + pc.lead._id : em ? 'e:' + em : p9 ? 't:' + p9 : 'p:' + (p._id || order.length);
+      if (seenKey[key] || (em && wonEmail[em]) || (p9 && wonP9[p9])) return;
+      if (!groups[key]) { groups[key] = { key: key, pc: pc, list: [] }; order.push(key); }
+      groups[key].list.push(p);
+      p._matched = true;
+    });
+    order.forEach(function (key) {
+      var g = groups[key], pc = g.pc, lead = pc.lead || null;
+      seenKey[key] = 1;
+      var ms = null;
+      g.list.forEach(function (p) { var c = parseFlexMs(p.createdAt); if (c != null && (ms == null || c < ms)) ms = c; });
+      if (ms == null) ms = startMs;
+      var carrier = lead ? carrierOf(lead._id) : null;
+      var rv = revClient(g.list, lead, null);
+      var cn = canalDe(carrier, lead, typeof pc.sb === 'boolean' && lead ? pc.sb : null);
+      push({
+        key: key, leadId: lead ? lead._id : null, name: pc.name, ms: ms, day: SC.jourParis(ms), src: 'paiement', signal: 'paiement',
+        sb: cn.canal === 'self', canal: cn.canal, canalSrc: cn.src, canalEcart: cn.ecart,
+        closer: closeurDe(carrier, lead, g.list), setter: setterDe(carrier, lead),
+        bookingId: carrier ? (carrier._id || carrier.id || null) : null, rdvDate: carrier ? (carrier.date || '') : '',
+        rv: rv, lead: lead, noLead: !!pc.noLead
+      });
+    });
+
+    function byDay(a, b) { return a.ms - b.ms; }
+    rows.sort(byDay); annules.sort(byDay);
+    return { rows: rows, annules: annules, sansSignal: sansSignal, ecartsCanal: ecartsCanal, autres: autres, toutes: rows.concat(annules) };
+  }
+
+  /* Totaux d'une liste de lignes de closes (déjà filtrée par l'écran). */
+  function sumCloses(rows) {
+    var t = { closes: 0, con: 0, paid: 0, pending: 0, sansPaiement: 0 };
+    (rows || []).forEach(function (r) {
+      if (!r || !r.rv || r.rv.cancelled) return;
+      t.closes++; t.con += r.rv.con; t.paid += r.rv.paid; t.pending += r.rv.pending;
+      if (!r.rv.hasPay) t.sansPaiement++;
+    });
+    t.con = Math.round(t.con * 100) / 100; t.paid = Math.round(t.paid * 100) / 100; t.pending = Math.round(t.pending * 100) / 100;
+    t.reste = Math.max(0, Math.round((t.con - t.paid) * 100) / 100);
+    t.panier = t.closes > 0 ? t.con / t.closes : null;
+    t.collecteParClose = t.closes > 0 ? t.paid / t.closes : null;
+    return t;
+  }
+
+  /* Charge et construit la liste des closes d'une période pour un écran qui
+     n'a pas le DATA du funnel (Set NB, Close SB, Global closing, Dashboard…).
+     o = { start, end, typeMap, bookings (RDV de la période déjà chargés par la
+           page ; lus ici s'ils manquent), resoudrePersonne }
+     → Promise de { rows, annules, sansSignal, ecartsCanal, autres, toutes,
+                    tronque, erreur } — jamais rejetée : `erreur` dit ce qui a
+     manqué (à AFFICHER : un zéro muet n'est pas une réponse). */
+  function loadCloses(db, o) {
+    o = o || {};
+    var P = { start: o.start, end: o.end };
+    var D = { bookings: o.bookings || null, payments: [], closedLeads: [], closeBookings: {} };
+    var erreurs = [];
+    var pBookings = D.bookings ? Promise.resolve() : db.collection('bookings')
+      .where('date', '>=', SC.jourParis(o.start)).where('date', '<=', SC.jourParis(o.end)).get()
+      .then(function (snap) {
+        D.bookings = [];
+        snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; D.bookings.push(d); });
+      }).catch(function (e) { D.bookings = []; erreurs.push('RDV : ' + (e.message || 'lecture impossible')); });
+    return Promise.all([pBookings, loadClosedLeads(db, P, D), loadPayments(db, D)])
+      .then(function () {
+        if (D.closedLeadsError) erreurs.push('fiches gagnées : ' + D.closedLeadsError);
+        if (D.paymentsError) erreurs.push('paiements : ' + D.paymentsError);
+        return resolvePaymentLeads(db, P, D);
+      })
+      .then(function () { return loadCloseBookings(db, D, o.typeMap || {}); })
+      .then(function () {
+        var res = buildCloses({
+          closedLeads: D.closedLeads, bookings: D.bookings, closeBookings: D.closeBookings, payments: D.payments,
+          typeMap: o.typeMap || {}, start: o.start, end: o.end, leadOk: o.leadOk, rdvOk: o.rdvOk, payCloseOk: o.payCloseOk,
+          resoudrePersonne: o.resoudrePersonne
+        });
+        res.tronque = !!D.closedLeadsTruncated;
+        res.erreur = erreurs.length ? erreurs.join(' · ') : null;
+        res.payments = D.payments;
+        return res;
+      })
+      .catch(function (e) {
+        return { rows: [], annules: [], sansSignal: [], ecartsCanal: [], autres: [], toutes: [], tronque: false, erreur: (e && e.message) || 'lecture impossible', payments: [] };
+      });
+  }
+
   /* MODULE PAIEMENTS (collection payments — GoCardless) : LA vérité du cash
      (validé Adrien 14/07). Chaque doc : totalAmount (contrat TTC),
      paidAmount (encaissé réel à date), paymentsHistory[] (chaque
@@ -1319,12 +1633,13 @@
      petite (dizaines de docs) → chargée en entier, croisée côté client. */
   function loadPayments(db, DATA) {
     DATA.payments = [];
+    DATA.paymentsError = null;
     return db.collection('payments').get().then(function (snap) {
       snap.forEach(function (doc) {
         var d = doc.data(); d._id = doc.id;
         DATA.payments.push(d);
       });
-    }).catch(function (e) { console.warn('[funnel] payments', e.message); DATA.payments = []; });
+    }).catch(function (e) { console.warn('[funnel] payments', e.message); DATA.payments = []; DATA.paymentsError = e.message || 'lecture impossible'; });
   }
 
   /* Appels : requête étendue jusqu'au lookahead (fin de fenêtre + 14 j,
@@ -2916,6 +3231,9 @@
     /* REVENUE — close annulé / encaissé réel (SET NB, Close SB, Projections) */
     revHT: revHT, revIndex: revIndex, revPaymentsFor: revPaymentsFor,
     revPaidEntries: revPaidEntries, revPaidHT: revPaidHT, revClient: revClient,
+    /* CLOSES — la liste unique (25/11/2026) */
+    buildCloses: buildCloses, sumCloses: sumCloses, loadCloses: loadCloses, loadCloseBookings: loadCloseBookings,
+    CLOSED_LEADS_LIMIT: CLOSED_LEADS_LIMIT,
     isYoutubeSource: isYoutubeSource, leadSource: leadSource,
     bookingSource: bookingSource, pageSource: pageSource,
     effectiveCosts: effectiveCosts, classifyBooking: classifyBooking,
