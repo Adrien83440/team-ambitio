@@ -10,23 +10,35 @@
    Les chiffres viennent TOUS de funnel-core.js (source unique) : ce fichier
    ne calcule que des sommes de colonnes et des pourcentages d'affichage.
 
-   Colonnes (une ligne par pub, bascule ensemble / campagne) :
-     ★ coût par lead qualifié · ★ coût par RDV honoré · ★ coût par vente
-     (en tête, juste après le nom) · dépense · leads · coût par lead · qualifiés (CA déclaré ≥ 20 k€/mois,
-     % sur les leads qui ont déclaré un CA) · faux numéros · disqualifiés ·
-     jamais joints (% sur les leads entrés depuis > 48 h) · RDV posés ·
-     honorés · annulés · no-show · ventes · contracté · encaissé.
-   Tri par défaut : coût par RDV honoré, croissant (les « — » en bas). Pubs
+   Colonnes (une ligne par pub, bascule ensemble / campagne) — vocabulaire
+   unique du référentiel (25/11/2026, décision D16 : « Honorés » → « Pitchés »,
+   « Ventes » → « Closes », « RDV posés » → « RDV pris » ; aucun chiffre ne
+   bouge) :
+     ★ € / lead CA ≥ 20 k€ · ★ € / RDV pitché · ★ € / close (en tête, juste
+     après le nom) · dépense par pub · leads · CPL · CA ≥ 20 k€ (CA déclaré au
+     quiz, % sur les leads qui ont déclaré un CA) · faux numéros · fiches
+     disqualifiées (des FICHES, pas des RDV) · jamais joints (% sur les leads
+     entrés depuis > 48 h) · RDV pris · pitchés · annulés · no-show · closes ·
+     contracté · collecté. Chaque en-tête porte son « i » (StatsCore.info :
+     glossaire commun ; infoLibre pour les termes propres à cet écran).
+   Champs : `pitched` (repli `honored`, ancien nom gardé par funnel-core.js et
+   par la route tant que d'anciens onglets ouverts le lisent). L'événement
+   Meta garde son nom technique « RdvHonore » (D17 : on n'y touche pas).
+   Tri par défaut : coût par RDV pitché, croissant (les « — » en bas). Pubs
    à moins de 10 leads : repère ⚠ (échantillon trop faible pour conclure).
-   Les trois coûts sont masqués si la dépense Meta ne couvre pas la période
-   (plus d'un jour manquant) — un coût trop beau fait monter un budget.
+   Les coûts sont masqués dès qu'un jour de dépense par pub manque (jours
+   attendus jusqu'à HIER : même règle que le Stats funnel, k.adSpendOk) — un
+   coût trop beau fait monter un budget. La ligne Total porte la dépense pub
+   du COMPTE (k.spend, même chiffre que le funnel) et son CPL pub (k.cplAds).
 
    API :
      AdsQualityTab.render(el, data, opts)
-       data = { rowsByAxis: { creative, adset, campaign }, coverage: {…},
-                periodLabel }
-       opts = { admin: bool, adminCtx: { db, user, toast } }
-     AdsQualityTab.fromKpis(K, periodLabel) → data
+       data = { rowsByAxis: { creative, adset, campaign, device, region },
+                coverage: {…}, unattrByAxis: {…},
+                lecture: { erreurs: [phrases], partiel: {…} }, periodLabel }
+       opts = { admin: bool, readonly: bool, adminCtx: { db, user, toast } }
+     AdsQualityTab.fromKpis(K, periodLabel) → data   (onglet du funnel)
+     AdsQualityTab.fromShare(j, periodLabel) → data  (réponse de la route)
    ES5 strict (Safari ancien). Délégation d'événements, aucun onclick inline.
    ============================================================================ */
 (function (root) {
@@ -49,61 +61,136 @@
   function esc(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
+  /* Formats communs (stats-core.js) : euros entiers, taux à une décimale.
+     Repli local si le module n'est pas chargé. */
+  function SC() { return root.StatsCore || null; }
   function eur(v, dec) {
     if (v == null || !isFinite(v)) return '—';
     var d = dec == null ? 0 : dec;
+    if (!d && SC() && SC().fmtEuro) return SC().fmtEuro(v);
     try { return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }).replace(/ /g, ' ') + ' €'; }
     catch (e) { return Math.round(v) + ' €'; }
   }
-  function pct(n, base) { return base > 0 ? Math.round(n / base * 100) + ' %' : '—'; }
+  function pct(n, base) {
+    if (!(base > 0)) return '—';
+    var v = n / base * 100;
+    if (SC() && SC().fmtPct) return SC().fmtPct(v);
+    return v.toFixed(1).replace('.', ',') + ' %';
+  }
   function nPct(n, base) {
     if (!n) return '<span class="aq-z">0</span>';
     return '<b>' + n + '</b> <span class="aq-p">' + pct(n, base) + '</span>';
   }
+  /* Le « i » : terme du glossaire commun (info), sinon note propre à cet
+     écran (infoLibre). Chaîne vide si stats-core.js manque. */
+  function I(cle, precision) { return SC() && SC().info ? SC().info(cle, precision) : ''; }
+  function IL(titre, texte) { return SC() && SC().infoLibre ? SC().infoLibre(titre, texte) : ''; }
+  /* RDV pitchés de la ligne : `pitched`, repli sur l'ancien nom `honored`
+     (réponse d'une route pas encore redéployée, onglet resté ouvert). */
+  function pit(r) {
+    if (!r) return 0;
+    if (r.pitched != null) return Number(r.pitched) || 0;
+    return Number(r.honored) || 0;
+  }
+  function zero(n) { return n ? n : '<span class="aq-z">0</span>'; }
 
   /* ── Colonnes ─────────────────────────────────────────────────────────── */
+  /* i : le « i » de l'en-tête (rendu à l'affichage : StatsCore peut se charger
+     après ce fichier). Les en-têtes du CSV reprennent les mêmes mots. */
+  var TXT_CPQ = 'Dépense de la pub ÷ ses leads qui ont déclaré au quiz un chiffre d’affaires mensuel d’au moins 20 000 €. Ligne Total : dépense pub du compte ÷ total de la colonne CA ≥ 20 k€.';
+  var TXT_CPH = 'Dépense de la pub ÷ ses RDV pitchés de la période (offre présentée : résultat Offre, Close ou Non close). C’est le tri par défaut. Ligne Total : dépense pub du compte ÷ total de la colonne Pitchés.';
+  var TXT_CPV = 'Dépense de la pub ÷ ses closes de la période (clients gagnés pendant la période, même si leur lead est entré avant) : le CAC pub, pub par pub. Ligne Total : dépense pub du compte ÷ total de la colonne Closes.';
+  var TXT_CA = 'Leads de la ligne qui ont déclaré au quiz un chiffre d’affaires mensuel d’au moins 20 000 €. La part se calcule sur les leads qui ont déclaré un CA (n/a : aucun CA déclaré, VSL ou formulaire). Ce n’est ni la note LQS, ni la note équipe ★.';
+  var TXT_FAUX = 'Leads de la ligne dont la fiche est aujourd’hui à l’étape Faux numéro ou Poubelle du Pipeline. Part sur les leads de la ligne.';
+  var TXT_DISQ = 'Leads de la ligne dont la fiche est aujourd’hui à l’étape Disqualification ou Disqualifié en closing (faux numéros à part). Ce sont des fiches, pas des RDV : ce n’est pas la colonne « Disqua. » des pages équipe, qui compte des RDV. Part sur les leads de la ligne.';
+  var TXT_NEVER = 'Leads entrés depuis plus de 48 h sans aucun appel décroché (au moins 5 secondes de conversation, répondeurs écartés) ni aucun RDV. Faux numéros, fiches disqualifiées et clients n’y entrent pas. Part sur ces leads de plus de 48 h.';
   var COLS = [
-    { k: 'cpq', l: '€ / qualifié', t: 'Coût par lead qualifié (CA ≥ 20 k€/mois)', cost: true, star: true, v: function (r) { return r.cpq; }, f: function (r) { return eur(r.cpq); } },
-    { k: 'cph', l: '€ / RDV honoré', t: 'Coût par RDV honoré — tri par défaut', cost: true, star: true, v: function (r) { return r.cph; }, f: function (r) { return eur(r.cph); } },
-    { k: 'cpv', l: '€ / vente', t: 'Coût par vente', cost: true, star: true, v: function (r) { return r.cpv; }, f: function (r) { return eur(r.cpv); } },
-    { k: 'spend', l: 'Dépense', t: 'Dépense Meta de la période (Make → ads_insights_ad)', v: function (r) { return r.hasSpend ? r.spend : null; }, f: function (r) { return r.hasSpend ? eur(r.spend) : '—'; } },
-    { k: 'leads', l: 'Leads', t: 'Leads entrés sur la période', v: function (r) { return r.leads; }, f: function (r) { return '<b>' + r.leads + '</b>'; } },
-    { k: 'cpl', l: '€ / lead', t: 'Coût par lead', cost: true, v: function (r) { return r.cpl; }, f: function (r) { return eur(r.cpl); } },
-    { k: 'qualCa', l: 'Qualifiés', t: 'Chiffre d\'affaires déclaré au quiz ≥ 20 000 €/mois — part calculée sur les leads qui ont déclaré un CA', v: function (r) { return r.caKnown ? r.qualCa / r.caKnown : null; }, f: function (r) { return r.caKnown ? nPct(r.qualCa, r.caKnown) : '<span class="aq-z" title="aucun CA déclaré (VSL, formulaire)">n/a</span>'; } },
-    { k: 'faux', l: 'Faux n°', t: 'Fiches en Faux numéro ou Poubelle (Pipeline) — part sur les leads', v: function (r) { return r.leads ? r.faux / r.leads : null; }, f: function (r) { return nPct(r.faux, r.leads); } },
-    { k: 'disq', l: 'Disqualifiés', t: 'Disqualifiés au setting ou au closing — part sur les leads', v: function (r) { return r.leads ? r.disq / r.leads : null; }, f: function (r) { return nPct(r.disq, r.leads); } },
-    { k: 'never', l: 'Jamais joints', t: 'Aucun appel décroché (répondeurs exclus) et aucun RDV — part sur les leads entrés depuis plus de 48 h, hors faux numéros, disqualifiés et clients', v: function (r) { return r.neverEligible ? r.neverReached / r.neverEligible : null; }, f: function (r) { return r.neverEligible ? nPct(r.neverReached, r.neverEligible) : '—'; } },
-    { k: 'booked', l: 'RDV posés', t: 'RDV commerciaux pris sur la période (replanifications exclues)', v: function (r) { return r.booked; }, f: function (r) { return r.booked || '<span class="aq-z">0</span>'; } },
-    { k: 'honored', l: 'Honorés', t: 'RDV ayant eu lieu sur la période avec une issue close, non close ou offre', v: function (r) { return r.honored; }, f: function (r) { return r.honored ? '<b>' + r.honored + '</b>' : '<span class="aq-z">0</span>'; } },
-    { k: 'cancelled', l: 'Annulés', t: 'RDV de la période annulés', v: function (r) { return r.cancelled; }, f: function (r) { return r.cancelled || '<span class="aq-z">0</span>'; } },
-    { k: 'noshow', l: 'No-show', t: 'RDV de la période non honorés par le prospect', v: function (r) { return r.noshow; }, f: function (r) { return r.noshow || '<span class="aq-z">0</span>'; } },
-    { k: 'closes', l: 'Ventes', t: 'Clients gagnés sur la période (close annulé exclu)', v: function (r) { return r.closes; }, f: function (r) { return r.closes ? '<b>' + r.closes + '</b>' : '<span class="aq-z">0</span>'; } },
-    { k: 'con', l: 'Contracté', t: 'Montant signé HT des ventes', v: function (r) { return r.con; }, f: function (r) { return r.con ? eur(r.con) : '—'; } },
-    { k: 'col', l: 'Encaissé', t: 'Prélèvements réellement passés (HT)', v: function (r) { return r.col; }, f: function (r) { return r.col ? eur(r.col) : '—'; } }
+    { k: 'cpq', l: '€ / lead CA ≥ 20 k€', i: function () { return IL('€ / lead CA ≥ 20 k€', TXT_CPQ); }, cost: true, star: true, v: function (r) { return r.cpq; }, f: function (r) { return eur(r.cpq); } },
+    { k: 'cph', l: '€ / RDV pitché', i: function () { return IL('€ / RDV pitché', TXT_CPH); }, cost: true, star: true, v: function (r) { return r.cph; }, f: function (r) { return eur(r.cph); } },
+    { k: 'cpv', l: '€ / close', i: function () { return IL('€ / close', TXT_CPV); }, cost: true, star: true, v: function (r) { return r.cpv; }, f: function (r) { return eur(r.cpv); } },
+    { k: 'spend', l: 'Dépense par pub', i: function () { return I('depense_pub_ligne', 'Ligne Total : dépense pub du COMPTE (même chiffre que le Stats funnel), avec en dessous la part rattachée aux lignes listées.'); }, v: function (r) { return r.hasSpend ? r.spend : null; }, f: function (r) { return r.hasSpend ? eur(r.spend) : '—'; } },
+    { k: 'leads', l: 'Leads', i: function () { return I('leads', 'Ici : leads de la ligne, rattachés à la pub qui les a amenés (premier passage).'); }, v: function (r) { return r.leads; }, f: function (r) { return '<b>' + r.leads + '</b>'; } },
+    { k: 'cpl', l: 'CPL', i: function () { return I('cpl_source', 'Ligne Total : CPL pub du Stats funnel = dépense pub du compte ÷ leads venus de la pub (nombre donné par le « i » de la cellule).'); }, cost: true, v: function (r) { return r.cpl; }, f: function (r) { return eur(r.cpl); } },
+    { k: 'qualCa', l: 'CA ≥ 20 k€', i: function () { return IL('CA ≥ 20 k€', TXT_CA); }, v: function (r) { return r.caKnown ? r.qualCa / r.caKnown : null; }, f: function (r) { return r.caKnown ? nPct(r.qualCa, r.caKnown) : '<span class="aq-z">n/a</span>'; } },
+    { k: 'faux', l: 'Faux n°', i: function () { return IL('Faux numéros', TXT_FAUX); }, v: function (r) { return r.leads ? r.faux / r.leads : null; }, f: function (r) { return nPct(r.faux, r.leads); } },
+    { k: 'disq', l: 'Fiches disqualifiées', i: function () { return IL('Fiches disqualifiées', TXT_DISQ); }, v: function (r) { return r.leads ? r.disq / r.leads : null; }, f: function (r) { return nPct(r.disq, r.leads); } },
+    { k: 'never', l: 'Jamais joints', i: function () { return IL('Jamais joints', TXT_NEVER); }, v: function (r) { return r.neverEligible ? r.neverReached / r.neverEligible : null; }, f: function (r) { return r.neverEligible ? nPct(r.neverReached, r.neverEligible) : '—'; } },
+    { k: 'booked', l: 'RDV pris', i: function () { return I('rdv_pris', 'Ici : RDV pris pendant la période par les leads de la ligne.'); }, v: function (r) { return r.booked; }, f: function (r) { return zero(r.booked); } },
+    { k: 'pitched', l: 'Pitchés', i: function () { return I('pitches', 'Ici : RDV de la période des leads de la ligne. C’est l’ensemble envoyé à Meta sous le nom technique « RdvHonore ».'); }, v: function (r) { return pit(r); }, f: function (r) { var n = pit(r); return n ? '<b>' + n + '</b>' : zero(0); } },
+    { k: 'cancelled', l: 'Annulés', i: function () { return I('annules'); }, v: function (r) { return r.cancelled; }, f: function (r) { return zero(r.cancelled); } },
+    { k: 'noshow', l: 'No-show', i: function () { return I('no_show'); }, v: function (r) { return r.noshow; }, f: function (r) { return zero(r.noshow); } },
+    { k: 'closes', l: 'Closes', i: function () { return I('closes', 'Ici : closes dont la fiche est rattachée à la ligne ; un lead entré avant la période compte s’il est gagné pendant la période. Les closes sans fiche rattachable sont sous le tableau (« Non ventilables »).'); }, v: function (r) { return r.closes; }, f: function (r) { return r.closes ? '<b>' + r.closes + '</b>' : zero(0); } },
+    { k: 'con', l: 'Contracté', i: function () { return I('contracte'); }, v: function (r) { return r.con; }, f: function (r) { return r.con ? eur(r.con) : '—'; } },
+    { k: 'col', l: 'Collecté', i: function () { return I('collecte'); }, v: function (r) { return r.col; }, f: function (r) { return r.col ? eur(r.col) : '—'; } }
   ];
   function colByKey(k) { for (var i = 0; i < COLS.length; i++) if (COLS[i].k === k) return COLS[i]; return null; }
   function cols() { return isVis() ? COLS.filter(function (c) { return !c.cost && c.k !== 'spend'; }) : COLS; }
 
   /* ── Données ──────────────────────────────────────────────────────────── */
+  /* Phrases de lecture incomplète utiles à CET onglet (k.erreursLecture de
+     funnel-core.js) : les coûts internes, commissions, journal d'actions,
+     visites, ré-optins et équipe ne le concernent pas. Même liste que
+     api/ads-quality-share.js (LECTURE_HORS_LIEN). */
+  var LECTURE_HORS_ONGLET = [/^Lecture des coûts/, /^Lecture des commissions/, /^Lecture du journal/, /^Lecture de l.équipe/, /^Lecture des visites/,
+    /^Lecture des ré-optins/, /^Liste des ré-optins/];
+  function lectureUtile(phrases) {
+    return (phrases || []).filter(function (s) {
+      if (typeof s !== 'string' || !s) return false;
+      for (var i = 0; i < LECTURE_HORS_ONGLET.length; i++) if (LECTURE_HORS_ONGLET[i].test(s)) return false;
+      return true;
+    });
+  }
+  function axesOf(by) {
+    by = by || {};
+    return { creative: by.creative || [], adset: by.adset || [], campaign: by.campaign || [], device: by.device || [], region: by.region || [] };
+  }
   function fromKpis(K, periodLabel) {
     var by = (K && K.utmRowsByAxis) || {};
     return {
-      rowsByAxis: { creative: by.creative || [], adset: by.adset || [], campaign: by.campaign || [], device: by.device || [], region: by.region || [] },
+      rowsByAxis: axesOf(by),
       coverage: {
         leads: K ? K.leads : 0, attributedLeads: K ? K.attributedLeads : 0, attributedPct: K ? K.attributedPct : null,
         hasAdLevelSpend: !!(K && K.hasAdLevelSpend), adLevelSpend: K ? K.adLevelSpend : 0,
-        adSpendComplete: !!(K && K.adSpendComplete), adSpendDaysCovered: K ? K.adSpendDaysCovered : 0,
-        adSpendDaysExpected: K ? K.adSpendDaysExpected : 0
+        adSpendComplete: !!(K && K.adSpendComplete),
+        adSpendOk: K && K.adSpendOk != null ? !!K.adSpendOk : undefined,
+        adSpendDaysCovered: K ? K.adSpendDaysCovered : 0, adSpendDaysExpected: K ? K.adSpendDaysExpected : 0,
+        /* Dépense pub du COMPTE (ads_insights, même chiffre que le funnel) */
+        spend: K && K.spend != null ? K.spend : null, adsSpendOk: K && K.adsSpendOk != null ? !!K.adsSpendOk : undefined,
+        adsDaysCovered: K ? K.adsDaysCovered : null, adsDaysExpected: K ? K.adsDaysExpected : null,
+        leadsAds: K ? K.leadsAds : null, cplAds: K ? K.cplAds : null
       },
+      unattrByAxis: (K && K.utmUnattrByAxis) || {},
+      lecture: { erreurs: lectureUtile(K && K.erreursLecture), partiel: (K && K.partiel) || {} },
       periodLabel: periodLabel || ''
     };
   }
-  /* Coûts affichables : dépense présente et au plus UN jour manquant (la
-     dépense d'aujourd'hui n'arrive que demain matin — Make lit J-1). */
+  /* Réponse de api/ads-quality-share.js (lien média buyeuse). */
+  function fromShare(j, periodLabel) {
+    j = j || {};
+    return {
+      rowsByAxis: axesOf(j.rowsByAxis),
+      coverage: j.coverage || {},
+      unattrByAxis: j.unattrByAxis || {},
+      lecture: { erreurs: lectureUtile(j.lecture && j.lecture.erreurs), partiel: (j.lecture && j.lecture.partiel) || {} },
+      periodLabel: periodLabel || ''
+    };
+  }
+  /* Coûts affichables — MÊME règle que le Stats funnel (k.adSpendOk) : la
+     dépense par pub doit couvrir tous les jours de la période jusqu'à HIER
+     (la dépense d'un jour n'arrive que le lendemain). Plus de tolérance d'un
+     jour : un jour manquant fait un coût faussement bas. Repli sur l'ancien
+     drapeau adSpendComplete (réponse d'une route pas encore redéployée). */
   function costsOk(cov) {
     if (!cov || !cov.hasAdLevelSpend) return false;
-    var missing = (cov.adSpendDaysExpected || 0) - (cov.adSpendDaysCovered || 0);
-    return missing <= 1;
+    if (typeof cov.adSpendOk === 'boolean') return cov.adSpendOk;
+    if (typeof cov.adSpendComplete === 'boolean') return cov.adSpendComplete;
+    return (cov.adSpendDaysExpected || 0) - (cov.adSpendDaysCovered || 0) <= 0;
+  }
+  /* Ligne Total : coûts calculés sur la dépense pub du COMPTE ; affichables
+     si la dépense par pub ET celle du compte sont complètes. */
+  function totalCostsOk(cov) {
+    if (!costsOk(cov)) return false;
+    return cov.adsSpendOk !== false;
   }
   function sortRows(rows) {
     var c = colByKey(state.sort) || colByKey('cph');
@@ -119,16 +206,28 @@
       return (b.leads - a.leads) || (a.key < b.key ? -1 : (a.key > b.key ? 1 : 0));
     });
   }
-  function totals(rows) {
+  /* Total des lignes de pub listées. Dépense : celle du COMPTE quand elle
+     est connue (même chiffre que le Stats funnel), la part rattachée aux
+     lignes est gardée à côté (spendLignes) ; CPL : CPL pub du funnel
+     (dépense ÷ leads venus de la pub) ; autres coûts : dépense ÷ total de
+     la colonne (deux chiffres affichés). */
+  function totals(rows, cov) {
     var t = { key: 'Total', leads: 0, caKnown: 0, qualCa: 0, faux: 0, disq: 0, neverReached: 0, neverEligible: 0,
-      booked: 0, honored: 0, cancelled: 0, noshow: 0, closes: 0, con: 0, col: 0, spend: 0, hasSpend: false };
+      booked: 0, pitched: 0, cancelled: 0, noshow: 0, closes: 0, con: 0, col: 0, spend: 0, hasSpend: false,
+      spendLignes: 0, spendCompte: false };
     rows.forEach(function (r) {
-      ['leads', 'caKnown', 'qualCa', 'faux', 'disq', 'neverReached', 'neverEligible', 'booked', 'honored', 'cancelled', 'noshow', 'closes', 'con', 'col'].forEach(function (f) { t[f] += Number(r[f]) || 0; });
-      if (r.hasSpend) { t.spend += Number(r.spend) || 0; t.hasSpend = true; }
+      ['leads', 'caKnown', 'qualCa', 'faux', 'disq', 'neverReached', 'neverEligible', 'booked', 'cancelled', 'noshow', 'closes', 'con', 'col'].forEach(function (f) { t[f] += Number(r[f]) || 0; });
+      t.pitched += pit(r);
+      if (r.hasSpend) { t.spendLignes += Number(r.spend) || 0; t.hasSpend = true; }
     });
-    t.cpl = t.hasSpend && t.leads ? t.spend / t.leads : null;
+    t.spend = t.spendLignes;
+    if (cov && cov.spend != null && isFinite(cov.spend) && Number(cov.spend) > 0) {
+      t.spend = Number(cov.spend); t.hasSpend = true; t.spendCompte = true;
+    }
+    if (t.spendCompte) t.cpl = cov.cplAds != null && isFinite(cov.cplAds) ? Number(cov.cplAds) : null;
+    else t.cpl = t.hasSpend && t.leads ? t.spend / t.leads : null;
     t.cpq = t.hasSpend && t.qualCa ? t.spend / t.qualCa : null;
-    t.cph = t.hasSpend && t.honored ? t.spend / t.honored : null;
+    t.cph = t.hasSpend && t.pitched ? t.spend / t.pitched : null;
     t.cpv = t.hasSpend && t.closes ? t.spend / t.closes : null;
     return t;
   }
@@ -182,24 +281,32 @@
       + '.aq-jt{width:100%;border-collapse:collapse;min-width:900px;font-size:11.5px}'
       + '.aq-jt th{text-align:left;padding:6px 8px;color:var(--muted,#8f97b2);font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border2,#353a52)}'
       + '.aq-jt td{padding:6px 8px;border-bottom:1px solid var(--border,#2a2e40);vertical-align:top}'
-      + '.aq-link{word-break:break-all;font-family:var(--font-m,monospace);font-size:11px}';
+      + '.aq-link{word-break:break-all;font-family:var(--font-m,monospace);font-size:11px}'
+      + '.aq-sl{display:block;font-size:10.5px;font-weight:500;color:var(--muted,#8f97b2);white-space:nowrap}'
+      + '.aq-note.err{border-color:rgba(239,68,68,.35);color:var(--red3,#f87171)}'
+      + '.aq-note ul{margin:4px 0 0 18px;padding:0}'
+      + '.aq-t th .sc-i{vertical-align:-1px}';
     (document.head || document.documentElement).appendChild(st);
   }
 
   /* ── Tableau ──────────────────────────────────────────────────────────── */
+  var TXT_TOTAL = 'Somme des lignes de pub listées (lignes hors pub / pub inconnue et non ventilables à part : voir sous le tableau). Dépense : dépense pub du compte, même chiffre que le Stats funnel. CPL : CPL pub du Stats funnel. Autres coûts : cette dépense ÷ le total de leur colonne.';
+  var TXT_TOTAL_VIS = 'Somme des lignes dont l’appareil ou le lieu est connu. Les lignes « inconnu » et les non ventilables sont à part (voir sous le tableau).';
   function tableHtml(data) {
     var rowsAll = (data.rowsByAxis && data.rowsByAxis[state.axis]) || [];
     var ads = rowsAll.filter(function (r) { return !r.outOfAds; });
     var out = rowsAll.filter(function (r) { return r.outOfAds; });
     var rows = sortRows(state.showOut ? rowsAll : ads);
-    var ok = costsOk(data.coverage);
+    var cov = data.coverage || {};
+    var ok = costsOk(cov);
+    var okTot = totalCostsOk(cov);
     var axisName = AXES.filter(function (a) { return a.id === state.axis; })[0].name;
 
     var h = '<div class="aq-tw"><table class="aq-t"><thead><tr><th data-aq-sort="key">' + esc(axisName) + '</th>';
     cols().forEach(function (c) {
       var cls = (c.star ? 'star ' : '') + (state.sort === c.k ? 'sorted' : '');
       var arrow = state.sort === c.k ? (state.dir > 0 ? ' ▲' : ' ▼') : '';
-      h += '<th class="' + cls + '" data-aq-sort="' + c.k + '" title="' + esc(c.t) + '">' + (c.star ? '★ ' : '') + esc(c.l) + arrow + '</th>';
+      h += '<th class="' + cls + '" data-aq-sort="' + c.k + '">' + (c.star ? '★ ' : '') + esc(c.l) + arrow + (c.i ? c.i() : '') + '</th>';
     });
     h += '</tr></thead><tbody>';
     if (!rows.length) h += '<tr><td colspan="' + (cols().length + 1) + '" style="text-align:center;color:var(--muted,#8f97b2);padding:22px">' + (isVis() ? 'Aucun lead dont ' + (state.axis === 'device' ? 'l\'appareil' : 'le lieu') + ' est connu sur la période.' : 'Aucun lead attribué à une pub sur la période.') + '</td></tr>';
@@ -216,15 +323,44 @@
       h += '</tr>';
     });
     if (rows.length) {
-      var t = totals(ads);
-      h += '<tr class="tot"><td>' + (isVis() ? 'Total connus (' : 'Total pubs (') + ads.length + ')</td>';
-      cols().forEach(function (c) { h += '<td class="' + (c.star ? 'star' : '') + '">' + ((c.cost && !ok) ? '—' : c.f(t)) + '</td>'; });
+      var t = totals(ads, isVis() ? null : cov);
+      h += '<tr class="tot"><td>' + (isVis() ? 'Total connus (' : 'Total pubs (') + ads.length + ')' + IL('Ligne Total', isVis() ? TXT_TOTAL_VIS : TXT_TOTAL) + '</td>';
+      cols().forEach(function (c) {
+        var txt;
+        if (c.cost && !okTot) txt = '—';
+        else if (c.k === 'spend' && t.spendCompte) {
+          txt = eur(t.spend) + IL('Dépense pub du compte', 'Dépense Meta du compte sur la période, jour par jour, hors taxes (corrigeable dans l’onglet Données Ads du Stats funnel). '
+              + eur(t.spendLignes) + ' sont rattachés aux pubs listées ; ' + eur(Math.max(0, t.spend - t.spendLignes)) + ' ne le sont pas : pubs sans lead, jours pas encore reçus pub par pub, corrections à la main.')
+            + '<span class="aq-sl">dont ' + eur(t.spendLignes) + ' rattachés aux lignes</span>';
+        } else if (c.k === 'cpl' && t.spendCompte) {
+          txt = eur(t.cpl) + I('cpl_pub', 'Ici : ' + eur(t.spend) + ' ÷ ' + (cov.leadsAds != null ? cov.leadsAds : '?') + ' leads venus de la pub (pubs listées, pubs sans créative transmise comprises).');
+        } else txt = c.f(t);
+        h += '<td class="' + (c.star ? 'star' : '') + '">' + txt + '</td>';
+      });
       h += '</tr>';
     }
     h += '</tbody></table></div>';
     if (out.length) {
       h += '<div class="aq-row"><button type="button" class="aq-btn" data-aq-out="1">' + (state.showOut ? 'Masquer' : 'Afficher') + ' les ' + out.length + ' ligne(s) ' + (isVis() ? (state.axis === 'device' ? 'appareil inconnu' : 'lieu inconnu') : 'hors pub / pub inconnue') + '</button></div>';
     }
+    h += identityHtml(data, ads, out);
+    return h;
+  }
+  /* Sous le tableau : ce qui n'est sur aucune ligne, et l'identité
+     pubs + hors pub + non ventilables = Closes de la période (P4). */
+  function identityHtml(data, ads, out) {
+    var ua = (data.unattrByAxis && data.unattrByAxis[state.axis]) || null;
+    function sum(list, f) { var s = 0; list.forEach(function (r) { s += (f === 'pitched' ? pit(r) : (Number(r[f]) || 0)); }); return s; }
+    var h = '<div class="aq-note">';
+    if (ua) {
+      var uaPit = ua.pitched != null ? ua.pitched : 0;
+      var cA = sum(ads, 'closes'), cO = sum(out, 'closes'), cU = Number(ua.closes) || 0;
+      h += '<b>Non ventilables</b>' + IL('Non ventilables', 'RDV et closes dont aucune fiche n’a pu être retrouvée (RDV sans fiche, client repéré par le seul paiement) : ils ne peuvent être rangés sur aucune ligne.')
+        + ' : ' + (Number(ua.booked) || 0) + ' RDV pris · ' + uaPit + ' pitchés · ' + (Number(ua.cancelled) || 0) + ' annulés · ' + (Number(ua.noshow) || 0) + ' no-show · ' + cU + ' closes.<br>'
+        + 'Closes : ' + (isVis() ? 'lignes connues ' : 'pubs listées ') + cA + ' + ' + (isVis() ? 'inconnu ' : 'hors pub / pub inconnue ') + cO + ' + non ventilables ' + cU
+        + ' = <b>' + (cA + cO + cU) + ' closes</b> de la période' + I('closes', 'Même liste que le chiffre Closes du Stats funnel, sur la même période et avec les mêmes filtres (tunnel, source).') + '<br>';
+    }
+    h += 'Montants hors taxes' + I('ht') + '.</div>';
     return h;
   }
 
@@ -237,42 +373,80 @@
     h += '</div><button type="button" class="aq-btn" data-aq-csv="1">⬇ Export CSV</button>';
     if (opts.admin && !opts.readonly) h += '<button type="button" class="aq-btn primary" data-aq-share="1">🔗 Lien média buyeuse</button>';
     h += '</div>';
+    /* Lectures en échec ou tronquées : dites, jamais un zéro muet (P7). */
+    var errs = (data.lecture && data.lecture.erreurs) || [];
+    if (errs.length) {
+      h += '<div class="aq-note err"><b>Chiffres incomplets</b>' + I('lecture_incomplete') + '<ul>';
+      errs.forEach(function (s) { h += '<li>' + esc(s) + '</li>'; });
+      h += '</ul></div>';
+    }
     var att = cov.attributedPct != null ? Math.round(cov.attributedPct) + ' %' : '—';
-    h += '<div class="aq-note">Lecture : chaque lead est rattaché à la pub qui l\'a amené (premier passage), puis suivi jusqu\'au RDV et à la vente. '
-      + '<b>' + att + '</b> des ' + (cov.leads || 0) + ' leads de la période portent une attribution publicitaire. '
+    h += '<div class="aq-note">Lecture : leads = entrés sur la période, chacun rattaché à la pub qui l\'a amené (premier passage) ; RDV pris = créés sur la période ; '
+      + 'pitchés, annulés, no-show = RDV datés sur la période ; closes, contracté et collecté = clients gagnés sur la période, même si leur lead est entré avant (collecté = prélevé à ce jour).'
+      + IL('Deux périodes dans un tableau', 'Les closes de la période ne viennent pas tous des leads entrés pendant la période : un lead entré en octobre et gagné en novembre compte en novembre, sur sa pub. Pour suivre les leads d’un mois jusqu’à la vente, voir Qualité leads (closes des leads entrés).')
+      + ' <b>' + att + '</b> des ' + (cov.leads || 0) + ' leads de la période portent une attribution publicitaire. '
       + 'Les leads d\'avant le nouveau paramétrage d\'URL restent rattachés par le nom de la pub (repère « nom ») ou « pub inconnue ». '
       + '<b>★</b> = les trois coûts à piloter. Colonnes triables (clic sur l\'en-tête).</div>';
     if (isVis()) h += '<div class="aq-note">' + (state.axis === 'device'
       ? 'Appareil du prospect à l\'inscription (navigateur capté depuis le 12/11/2026) ou à la prise de RDV. Le navigateur intégré de Facebook / Instagram forme sa propre ligne.'
       : 'Lieu approximatif du prospect (déduit de son adresse internet, aucune adresse conservée) à l\'inscription ou à la prise de RDV ; clients plus anciens : lieu de la signature.')
       + ' Pas de coûts sur cet axe : Meta ne transmet pas la dépense par appareil ni par région.</div>';
-    if (!cov.hasAdLevelSpend) {
-      h += '<div class="aq-note warn">Aucune dépense par pub sur la période (scénario Make « FB insight ÉLITE — Créatives ») : les coûts sont masqués.</div>';
-    } else if (!costsOk(cov)) {
-      h += '<div class="aq-note warn">Dépense Meta reçue pour <b>' + cov.adSpendDaysCovered + ' jour(s) sur ' + cov.adSpendDaysExpected + '</b> : les coûts sont masqués tant que la période n\'est pas couverte (ils seraient faussement bas).</div>';
-    }
+    else h += coverageHtml(cov);
     return h;
+  }
+  /* Couverture de la dépense : dite à l'écran, même règle que le funnel
+     (jours attendus jusqu'à hier, aucun jour manquant). */
+  function coverageHtml(cov) {
+    if (!cov.hasAdLevelSpend) {
+      return '<div class="aq-note warn">Aucune dépense par pub reçue sur la période (scénario Make « FB insight ÉLITE — Créatives ») : les coûts sont masqués.' + I('depense_incomplete') + '</div>';
+    }
+    if (!costsOk(cov)) {
+      return '<div class="aq-note warn">Dépense par pub reçue pour <b>' + (cov.adSpendDaysCovered || 0) + ' jour(s) sur ' + (cov.adSpendDaysExpected || 0) + '</b> (jours attendus jusqu\'à hier, même règle que le Stats funnel) : '
+        + 'les coûts sont masqués, ils seraient faussement bas.' + I('couverture_depense') + '</div>';
+    }
+    if (cov.adsSpendOk === false) {
+      return '<div class="aq-note warn">Dépense du compte reçue pour <b>' + (cov.adsDaysCovered || 0) + ' jour(s) sur ' + (cov.adsDaysExpected || 0) + '</b> : '
+        + 'les coûts de la ligne Total sont masqués (ils seraient faussement bas) ; les coûts pub par pub restent affichés.' + I('couverture_depense') + '</div>';
+    }
+    return '';
   }
 
   /* ── Export CSV (séparateur « ; », décimales à la virgule : Excel FR) ── */
-  function csv(data) {
+  /* En-têtes : mêmes mots que le tableau (25/11/2026 : « RDV posés » → « RDV
+     pris », « RDV honorés » → « Pitchés », « Ventes » → « Closes »,
+     « Encaissé » → « Collecté », « Qualifiés » → « CA ≥ 20 k€ »,
+     « Disqualifiés » → « Fiches disqualifiées ») ; aucun chiffre ne change. */
+  var CSV_HEAD = ['Ligne', 'Hors pub', 'Identifiants pub', 'Dépense par pub', 'Leads', 'CPL', 'Leads avec CA déclaré', 'Leads CA ≥ 20 k€', 'Part CA ≥ 20 k€',
+    'Faux numéros', 'Part faux numéros', 'Fiches disqualifiées', 'Part fiches disqualifiées', 'Jamais joints', 'Leads > 48 h', 'Part jamais joints',
+    'RDV pris', 'Pitchés', 'Annulés', 'No-show', 'Closes', 'Contracté HT', 'Collecté HT',
+    'Coût par lead CA ≥ 20 k€', 'Coût par RDV pitché', 'Coût par close', 'Moins de 10 leads'];
+  function csvLines(data) {
     var rows = sortRows((data.rowsByAxis && data.rowsByAxis[state.axis]) || []);
-    var ok = costsOk(data.coverage);
+    var cov = data.coverage || {};
+    var ok = costsOk(cov) && !isVis();
     function num(v, dec) { if (v == null || !isFinite(v)) return ''; return Number(v).toFixed(dec == null ? 2 : dec).replace('.', ','); }
     function cell(s) { s = String(s == null ? '' : s); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
-    var head = ['Ligne', 'Hors pub', 'Identifiants pub', 'Dépense', 'Leads', 'Coût par lead', 'Leads avec CA déclaré', 'Qualifiés', 'Part qualifiés',
-      'Faux numéros', 'Part faux numéros', 'Disqualifiés', 'Part disqualifiés', 'Jamais joints', 'Leads > 48 h', 'Part jamais joints',
-      'RDV posés', 'RDV honorés', 'Annulés', 'No-show', 'Ventes', 'Contracté HT', 'Encaissé HT',
-      'Coût par lead qualifié', 'Coût par RDV honoré', 'Coût par vente', 'Moins de 10 leads'];
-    var lines = [head.join(';')];
+    var lines = [CSV_HEAD.join(';')];
     rows.forEach(function (r) {
-      lines.push([cell(r.key), r.outOfAds ? 'oui' : '', cell((r.adIdList || []).join(' ')), r.hasSpend ? num(r.spend) : '', r.leads, ok ? num(r.cpl) : '',
+      lines.push([cell(r.key), r.outOfAds ? 'oui' : '', cell((r.adIdList || []).join(' ')), r.hasSpend && !isVis() ? num(r.spend) : '', r.leads, ok ? num(r.cpl) : '',
         r.caKnown, r.qualCa, r.caKnown ? num(r.qualCa / r.caKnown * 100, 1) : '',
         r.faux, r.leads ? num(r.faux / r.leads * 100, 1) : '', r.disq, r.leads ? num(r.disq / r.leads * 100, 1) : '',
         r.neverReached, r.neverEligible, r.neverEligible ? num(r.neverReached / r.neverEligible * 100, 1) : '',
-        r.booked, r.honored, r.cancelled, r.noshow, r.closes, num(r.con), num(r.col),
+        r.booked, pit(r), r.cancelled, r.noshow, r.closes, num(r.con), num(r.col),
         ok ? num(r.cpq) : '', ok ? num(r.cph) : '', ok ? num(r.cpv) : '', r.leads < SMALL ? 'oui' : ''].join(';'));
     });
+    /* Coûts non exportés : dit dans le fichier, pas seulement à l'écran. */
+    if (!isVis() && !costsOk(cov)) {
+      lines.push(cell(cov.hasAdLevelSpend
+        ? 'Coûts non exportés : dépense par pub reçue pour ' + (cov.adSpendDaysCovered || 0) + ' jour(s) sur ' + (cov.adSpendDaysExpected || 0) + ' (jusqu\'à hier) — ils seraient faussement bas.'
+        : 'Coûts non exportés : aucune dépense par pub reçue sur la période.'));
+    }
+    var errs = (data.lecture && data.lecture.erreurs) || [];
+    errs.forEach(function (s) { lines.push(cell('Chiffres incomplets : ' + s)); });
+    return lines;
+  }
+  function csv(data) {
+    var lines = csvLines(data);
     var blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -327,10 +501,15 @@
     sans_contact: 'sans e-mail ni téléphone', contact_bloque: 'contact bloqué', telephone_invalide: 'téléphone invalide',
     trop_ancien: 'plus de 7 jours', fiche_introuvable: 'fiche introuvable' };
 
+  /* D17 (25/11/2026) : les événements envoyés à Meta ne changent pas. Le
+     « i » dit pourquoi « Vente » et la colonne Closes peuvent différer. */
+  var TXT_VENTE_META = 'L’événement « Vente » part au moment où un RDV est statué Close : un par RDV closé, au tarif hors taxes déclaré aux cartes du close. La colonne Closes du tableau suit la liste unique des clients gagnés (un par client, le jour où il devient client, closes annulés retirés) et le Contracté lit le module Paiements : les deux peuvent différer (close validé sur la fiche sans RDV, client à deux RDV closés, remise, paiement annulé). « RdvHonore » est l’ensemble des RDV pitchés.';
+  var TXT_VENTE_MONTANT = 'Montant envoyé à Meta : tarif hors taxes choisi aux cartes du close, au moment du close. La colonne Contracté lit le contrat du module Paiements : elle peut différer (remise, paiement annulé).';
   function capiPanelHtml() {
     var c = admin.capi;
     var h = '<div class="aq-panel" id="aqCapiPanel"><h4>📡 Événements renvoyés à Meta (API Conversions)</h4>'
-      + '<div class="aq-sub">LeadQualifie (CA ≥ 20 k€/mois) · LeadLQS3plus / LeadLQS4plus / LeadLQS5 (note LQS ≥ 3, ≥ 4, = 5 à l\'opt-in, cumulatifs : un lead noté 5 envoie les trois) · LeadDisqualifie (réponse éliminatoire ⛔ du barème, audiences d\'exclusion) · RdvPose · RdvHonore (close, non close, offre) · Vente (montant contracté) — plus les jumeaux serveur de Lead et Schedule, avec le même identifiant que le pixel navigateur (Meta n\'en garde qu\'un). Jamais pour un faux numéro, un visiteur YouTube ou un pixel non autorisé. Envoi toutes les 10 min ; rien d\'antérieur à l\'activation.</div>';
+      + '<div class="aq-sub">LeadQualifie (CA ≥ 20 k€/mois) · LeadLQS3plus / LeadLQS4plus / LeadLQS5 (note LQS ≥ 3, ≥ 4, = 5 à l\'opt-in, cumulatifs : un lead noté 5 envoie les trois) · LeadDisqualifie (réponse éliminatoire ⛔ du barème, audiences d\'exclusion) · RdvPose (RDV commercial créé, report exclu) · RdvHonore (résultat close, non close ou offre : un RDV pitché — nom technique gardé chez Meta) · Vente (un par RDV au résultat close, au tarif HT déclaré au close) — plus les jumeaux serveur de Lead et Schedule, avec le même identifiant que le pixel navigateur (Meta n\'en garde qu\'un). Jamais pour un faux numéro, un visiteur YouTube ou un pixel non autorisé. Envoi toutes les 10 min ; rien d\'antérieur à l\'activation.'
+      + IL('Vente (Meta) et colonne Closes', TXT_VENTE_META) + '</div>';
     if (!c) return h + '<div class="aq-row aq-sub">Chargement…</div></div>';
     if (c.error) return h + '<div class="aq-row aq-note warn">' + esc(c.error) + '</div></div>';
     var mode = !c.enabled ? '<span class="aq-pill off">désactivé</span>'
@@ -372,7 +551,7 @@
           : (r.response && r.response.ok ? 'reçu (' + (r.response.events_received != null ? r.response.events_received : '?') + ')' + (r.response.fbtrace_id ? ' · ' + esc(r.response.fbtrace_id) : '')
             : esc((r.response && r.response.error) || '') + (r.attempts ? ' · essai ' + r.attempts : ''));
         h += '<tr><td>' + esc(r.sentAt ? new Date(r.sentAt).toLocaleString('fr-FR') : '') + '</td>'
-          + '<td><b>' + esc(r.event) + '</b>' + (r.value != null ? ' · ' + eur(r.value) : '') + (r.lqs != null ? ' · LQS ' + esc(r.lqs) : '') + (r.test ? ' <span class="aq-pill wait">test</span>' : '') + '</td>'
+          + '<td><b>' + esc(r.event) + '</b>' + (r.value != null ? ' · ' + eur(r.value) + (r.event === 'Vente' ? ' <span class="aq-z">(tarif déclaré au close)</span>' + IL('Montant de la Vente envoyée à Meta', TXT_VENTE_MONTANT) : '') : '') + (r.lqs != null ? ' · LQS ' + esc(r.lqs) : '') + (r.test ? ' <span class="aq-pill wait">test</span>' : '') + '</td>'
           + '<td>' + (r.leadId ? '<a href="sales-leads.html?lead=' + encodeURIComponent(r.leadId) + '" target="_blank" rel="noopener">' + esc(r.leadName || r.leadId) + '</a>' : '<span class="aq-z">' + esc(r.reason || '—') + '</span>') + '</td>'
           + '<td><span class="aq-pill ' + p[0] + '">' + esc(p[1]) + '</span></td>'
           + '<td>' + resp + '</td>'
@@ -527,5 +706,6 @@
     repaint();
   }
 
-  root.AdsQualityTab = { render: render, fromKpis: fromKpis, costsOk: costsOk, COLS: COLS };
+  root.AdsQualityTab = { render: render, fromKpis: fromKpis, fromShare: fromShare, costsOk: costsOk, totalCostsOk: totalCostsOk,
+    totals: totals, lectureUtile: lectureUtile, csvLines: csvLines, CSV_HEAD: CSV_HEAD, COLS: COLS };
 })(typeof window !== 'undefined' ? window : this);

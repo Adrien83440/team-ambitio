@@ -18,7 +18,12 @@
 //
 // Réponses
 //   200 { ok:true, mode, tunnel, month, day, from, to, months:[…],
-//         computedAt:<ms>, k, instagram, facebook, journal }
+//         computedAt:<ms>, k, alertes:[…], instagram, facebook, journal }
+//         k        = K de funnel-core.js PASSÉ PAR LA LISTE BLANCHE
+//                    (AGENCY_K_FIELDS) : seuls les champs que la page lit.
+//         alertes  = phrases fixes (lecture en échec, liste tronquée) écrites
+//                    ICI : jamais le texte brut d'une erreur Firestore, qui
+//                    peut contenir un chemin de document ou un identifiant.
 //   403 { ok:false }   ← token absent / faux / révoqué
 //   405 { ok:false }   ← autre verbe que GET
 //   500 { ok:false }
@@ -33,21 +38,22 @@
 // - Réponse d'erreur volontairement pauvre : { ok:false } — impossible de
 //   savoir si c'est le token, le mois ou le tunnel qui est en cause.
 // - ⚠ CE FICHIER EST LE SEUL POINT DE SORTIE des chiffres du funnel vers
-//   l'extérieur : l'assainissement (AGENCY_EXCLUDE ci-dessous) s'y fait,
-//   et nulle part ailleurs.
+//   l'extérieur : l'assainissement (LISTE BLANCHE AGENCY_K_FIELDS ci-dessous,
+//   champ par champ, y compris dans les tableaux d'objets) s'y fait, et nulle
+//   part ailleurs. Un champ ajouté plus tard à K ne sort PAS par défaut.
 // - Chaque accès (accepté comme refusé) est journalisé dans audit_log.
 // ============================================================================
 
-/* ⚠ AVANT TOUTE MANIPULATION DE DATE — les bornes de période sont
-   construites en heure LOCALE (new Date(y, m, 1)). Vercel tourne en UTC :
-   sans ça, « juillet » commencerait le 01/07 à 02:00 heure de Paris et les
-   leads des deux premières heures du mois tomberaient hors période. Le
-   funnel interne, lui, calcule en heure de Paris — les deux vues doivent
-   découper le temps exactement pareil. */
+/* Fuseau : les bornes de période viennent de FunnelCore.period* (heure de
+   Paris, calculée explicitement — référentiel §7), les clés de jour et de
+   mois de StatsCore.jourParis / moisParis. Aucune date n'est construite ici
+   à l'heure locale. La ligne ci-dessous n'est qu'une ceinture pour un code
+   tiers qui lirait encore l'heure locale : Vercel tourne en UTC. */
 process.env.TZ = 'Europe/Paris';
 
 const crypto = require('crypto');
 const { db, admin } = require('./_firebaseAdmin');
+const SC = require('../stats-core.js');
 const Core = require('../funnel-core.js');
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
@@ -57,37 +63,149 @@ const MODE_RE = /^(month|day|7d|30d|custom)$/;
 const MONTHS_LISTED = 12;
 const MAX_RANGE_DAYS = 92;      // garde-fou de charge sur les plages libres
 const CACHE_TTL_MS = 120 * 1000;
+/* Plafonds de lecture des réseaux sociaux : atteints → « liste tronquée ». */
+const IG_MEDIA_LIMIT = 500;
+const IG_DAYS_LIMIT = 400;
+const DM_LIMIT = 3000;
+const FB_POSTS_LIMIT = 500;
 
-/* ⚠ CONTRAT DE DONNÉES — champs de K qui ne sortent JAMAIS de la maison.
-   Toute évolution future de K qui ajoute un champ nominatif (nom de client,
-   de prospect ou de membre d'équipe) ou une donnée financière interne
-   (salaire, commission, coût d'outillage) DOIT être ajoutée ici — c'est
-   l'absence totale de donnée personnelle dans la réponse qui rend l'accès
-   externe conforme (RGPD) sans contrat de sous-traitance de données. */
-const AGENCY_EXCLUDE = {
-  /* Nominatifs clients / prospects */
-  collecteMissingNames: 1,
-  closesCancelledNames: 1,
-  payCloseNames: 1,
-  payCloseOther: 1,
-  /* Listes cliquables du héro + contrôle de cohérence (21/11/2026) : noms
-     de prospects et RDV complets — jamais hors de la maison. */
-  closeRows: 1,
-  drill: 1,
-  coh: 1,
-  /* Équipe, par personne */
-  callsByUser: 1,
-  /* Coûts internes & commissions */
-  commSetting: 1,
-  commSettingN: 1,
-  costFixe: 1,
-  costOutils: 1,
-  costConfigured: 1,
-  costSrcMonth: 1,
-  costOwnEntry: 1,
-  costSetting: 1,
-  costPerRdvNB: 1,
+/* ⚠ CONTRAT DE DONNÉES — LISTE BLANCHE (audit du 25/11/2026, TRA-07 / COU-07 /
+   SEC-01). Avant : une liste NOIRE retirait quelques champs connus, et tout
+   champ ajouté plus tard à K sortait par défaut (délais par setter avec son
+   prénom, coût interne du setting par soustraction, listes nominatives des
+   closes…). Désormais ne sortent QUE les champs ci-dessous, relevés dans
+   agency-funnel.html et funnel-pages-table.js (les deux seuls lecteurs), et
+   les tableaux d'objets sont filtrés champ par champ.
+   Notation : 1 = valeur simple (nombre, booléen, texte, null) ; { … } = objet
+   dont seuls les champs nommés sortent ; [ spec ] = tableau dont chaque
+   élément suit spec ; { '*': spec } = table à clés libres (clés contrôlées).
+   C'est l'absence totale de donnée personnelle et de coût interne dans la
+   réponse qui rend l'accès externe conforme (RGPD) sans contrat de
+   sous-traitance de données : AVANT d'ajouter un champ ici, vérifier qu'il ne
+   porte ni nom (lead, client, membre), ni e-mail, ni téléphone, ni slug de
+   membre, ni coût du setting, commission ou délai par personne. */
+const AB = 1;
+/* Cellule d'une page du tunnel (funnel-core.js, vslCell / zero) : RDV pris
+   depuis la page, présents, RDV closés, et les Closes / Contracté / Collecté
+   de la liste unique rangés sur la page. */
+const PAGE_CELL = { views: AB, ctas: AB, leads: AB, bookings: AB, present: AB, rdvCloses: AB, closes: AB, con: AB, col: AB };
+function cellPlus(extra) { return Object.assign({}, PAGE_CELL, extra); }
+/* Agrégat StatsCore (k.tenue*) : seuls les compteurs affichés. */
+const TENUE = { rdv: AB, annules: AB, noshow: AB, presents: AB, pitches: AB, disqua: AB, sansDetail: AB,
+  offres: AB, nonCloses: AB, aStatuer: AB, aVenir: AB, kept: AB, keptPct: AB, showUp: AB, tauxPitch: AB };
+/* Chaînes de RDV pris (k.chAll / chSB / chNB). */
+const CHAINE = { n: AB, sansSuite: AB, cancelled: AB, noshow: AB, present: AB, disqua: AB, pitched: AB, offres: AB,
+  closesOc: AB, nonCloses: AB, sansDetail: AB, aStatuer: AB, aVenir: AB, kept: AB, keptPct: AB, showUp: AB, tauxPitch: AB };
+/* Totaux de la liste unique des closes (FunnelCore.sumCloses) : des sommes,
+   jamais les lignes (k.closeRows est nominatif). */
+const CLOSES = { closes: AB, con: AB, paid: AB, pending: AB, reste: AB, panier: AB, collecteParClose: AB, sansPaiement: AB };
+const TAUX = { rdv: AB, presents: AB, pitches: AB };
+const TUNNELS = { elite: AB, business: AB };
+/* Ligne du tableau « Performance publicitaire » : agrégats par pub / adset /
+   campagne / canal. adIdList, caKnown, faux, disq, neverReached… ne sont pas
+   lus par la page : ils ne sortent pas. */
+const UTM_ROW = { key: AB, legacy: AB, outOfAds: AB, leads: AB, scoreSum: AB, scoreN: AB, qual: AB,
+  booked: AB, cancelled: AB, noshow: AB, pitched: AB, closes: AB, con: AB, col: AB, spend: AB, hasSpend: AB, cpl: AB, roas: AB };
+const UTM_UNATTR = { booked: AB, cancelled: AB, noshow: AB, pitched: AB, closes: AB };
+const UTM_AXES = ['creative', 'adset', 'campaign', 'channel'];
+function parAxe(spec) { const o = {}; UTM_AXES.forEach((ax) => { o[ax] = spec; }); return o; }
+
+const AGENCY_K_FIELDS = {
+  /* Leads */
+  leads: AB, reoptins: AB, leadsTest: AB, reoptinsEcartes: AB, leadsAds: AB,
+  leadsByTunnel: TUNNELS, bookedByTunnel: TUNNELS, bookedNoTunnel: AB,
+  /* Ligne 1 — RDV pris (axe création) */
+  chAll: CHAINE, chSB: CHAINE, chNB: CHAINE,
+  /* Ligne 2 — RDV de la période (axe date du RDV) */
+  rdvMois: AB, rdvSB: AB, rdvNB: AB, rdvMan: AB,
+  kept: AB, keptSB: AB, keptNB: AB, keptMan: AB, keptPct: AB,
+  dueCancelled: AB, dueNoShow: AB, dueUpcoming: AB, dueRescheduled: AB, dueCreatedBefore: AB, dueReplacement: AB,
+  showUp: AB, showUpSB: AB, showUpNB: AB, showUpMan: AB,
+  tenue: TENUE, tenueSB: TENUE, tenueNB: TENUE, tenueMan: TENUE,
+  /* Closes et montants — totaux de la liste unique */
+  closes: CLOSES, closesSB: CLOSES, closesNB: CLOSES, closesCancelled: AB,
+  resteAEncaisser: AB, panierMoyen: AB, collecteParClose: AB,
+  tauxClose: TAUX, tauxCloseSB: TAUX, tauxCloseNB: TAUX,
+  /* Setting (NB) — leads reçus et récupération (comptes, jamais par personne) */
+  leadsNbRecus: AB, leadsNbRecusNonTravailles: AB, cohortSetter: AB, recovery: AB,
+  /* Publicité */
+  hasAds: AB, spend: AB, impressions: AB, clicks: AB, cpm: AB, ctr: AB, cpc: AB, cpl: AB, cplAds: AB,
+  adsDays: AB, adsDaysCovered: AB, adsDaysExpected: AB, adsSpendOk: AB,
+  views: AB, optinReal: AB, optinLeads: AB, optinClicks: AB,
+  roasAds: AB, collecteSurDepense: AB, wonCollecteAds: AB, wonCollecteHorsPub: AB, wonCollecteNonRattache: AB,
+  cacAds: AB, closesWonAds: AB,
+  cprSB: AB, cprKept: AB, cprLive: AB, cprOffre: AB,
+  abTests: [{ page: AB, variants: [{ variant: AB, views: AB, optins: AB }] }],
+  /* Pages du tunnel (funnel-pages-table.js) */
+  vslActive: AB, vslViews: AB, vslCtas: AB, vslCtaRate: AB, vslLeads: AB, vslBookings: AB, vslBookRate: AB,
+  vslPresent: AB, vslCpr: AB, vslCloses: AB, vslContracte: AB, vslCollecte: AB,
+  vslClosesAutresPages: AB, vslClosesNonRattaches: AB,
+  vslLabels: { '*': AB },
+  vslFunnels: [cellPlus({ slug: AB, name: AB, kind: AB,
+    steps: [cellPlus({ page: AB, slug: AB, name: AB, type: AB, order: AB, orphan: AB,
+      variants: [cellPlus({ id: AB, label: AB, weight: AB, status: AB })] })] })],
+  vslLegacy: [cellPlus({ page: AB, label: AB })],
+  vslLegacyTotals: PAGE_CELL,
+  /* Performance publicitaire */
+  utmRowsByAxis: parAxe([UTM_ROW]), utmUnattrByAxis: parAxe(UTM_UNATTR),
+  attributedPct: AB, attributedLeads: AB, creativeIndexSize: AB,
+  hasAdLevelSpend: AB, adSpendComplete: AB, adSpendDaysCovered: AB, adSpendDaysExpected: AB,
 };
+
+/* ⛔ JAMAIS — garde-fou : ces champs de K sont nominatifs (noms de leads, de
+   clients, de membres, listes cliquables, contrôle de cohérence) ou internes
+   (coût du setting, commissions, délais et appels par personne). Si l'un
+   d'eux est ajouté par erreur à la liste blanche, le module refuse de se
+   charger (erreur au déploiement plutôt qu'une fuite silencieuse). */
+const AGENCY_NEVER = [
+  'closeRows', 'drill', 'coh', 'collecteMissingNames', 'closesCancelledNames', 'payCloseNames', 'payCloseOther',
+  'statutsSetSansRdvListe', 'actWorkedBySlug', 'ltsByUser', 'callsByUser', 'erreursLecture',
+  'commSetting', 'commSettingN', 'commSettingSB', 'commSettingNB', 'commSettingOk', 'commSettingSbInconnu',
+  'costFixe', 'costOutils', 'costConfigured', 'costSrcMonth', 'costOwnEntry', 'costSetting', 'costPerRdvNB',
+  'costPerRdvNBBase', 'costFiltered', 'costDaysDone', 'costDaysElapsed', 'costDaysTotal',
+  'coutTotal', 'roasGlobal', 'margeGlobale', 'roasPubSetting', 'margeAvantClosing',
+];
+AGENCY_NEVER.forEach((f) => {
+  if (Object.prototype.hasOwnProperty.call(AGENCY_K_FIELDS, f)) {
+    throw new Error('[agency-funnel] champ interdit dans la liste blanche : ' + f);
+  }
+});
+
+/* Clés libres d'une table (k.vslLabels) : identifiant de page seulement. */
+const SAFE_KEY = /^[A-Za-z0-9_-]{1,80}$/;
+
+/* Applique une spécification de la liste blanche. Renvoie undefined pour ce
+   qui ne doit pas sortir (type inattendu compris : un objet là où un nombre
+   est attendu ne passe pas). */
+function pickSpec(v, spec) {
+  if (spec === AB) {
+    if (v === null || typeof v === 'number' || typeof v === 'boolean' || typeof v === 'string') return v;
+    return undefined;
+  }
+  if (Array.isArray(spec)) {
+    if (!Array.isArray(v)) return undefined;
+    return v.map((x) => pickSpec(x, spec[0])).filter((x) => x !== undefined);
+  }
+  if (spec && typeof spec === 'object') {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
+    const out = {};
+    if (spec['*'] !== undefined) {
+      Object.keys(v).forEach((key) => {
+        if (!SAFE_KEY.test(key)) return;
+        const r = pickSpec(v[key], spec['*']);
+        if (r !== undefined) out[key] = r;
+      });
+      return out;
+    }
+    Object.keys(spec).forEach((f) => {
+      if (!Object.prototype.hasOwnProperty.call(v, f)) return;
+      const r = pickSpec(v[f], spec[f]);
+      if (r !== undefined) out[f] = r;
+    });
+    return out;
+  }
+  return undefined;
+}
 
 /* ⚠ INSTAGRAM — LISTE BLANCHE, pas liste noire.
    Le reste du fichier assainit K en retirant des champs connus ; ici on fait
@@ -165,9 +283,9 @@ async function loadInstagramDm(P) {
   try {
     const snap = await db.collection('ig_dm_threads')
       .where('firstEventDate', '>=', a).where('firstEventDate', '<=', b)
-      .limit(3000).get();
+      .limit(DM_LIMIT).get();
 
-    const o = { conversations: snap.size, sortants: 0, entrants: 0,
+    const o = { conversations: snap.size, tronque: snap.size >= DM_LIMIT, sortants: 0, entrants: 0,
                 initiesNous: 0, repondus: 0, tauxReponse: null,
                 delaiMedianMs: null, initiesEux: 0, notreDelaiMedianMs: null,
                 rattacheesFiche: 0 };
@@ -208,8 +326,8 @@ async function loadInstagram(P) {
   const b = Core.isoDate(P.end);
   try {
     const [snapMedia, snapAcc] = await Promise.all([
-      db.collection('ig_media').where('date', '>=', a).where('date', '<=', b).limit(500).get(),
-      db.collection('ig_account_daily').where('date', '>=', a).where('date', '<=', b).limit(400).get(),
+      db.collection('ig_media').where('date', '>=', a).where('date', '<=', b).limit(IG_MEDIA_LIMIT).get(),
+      db.collection('ig_account_daily').where('date', '>=', a).where('date', '<=', b).limit(IG_DAYS_LIMIT).get(),
     ]);
 
     const medias = snapMedia.docs
@@ -234,6 +352,8 @@ async function loadInstagram(P) {
 
     return JSON.parse(JSON.stringify({
       jours: jours.length,
+      /* Plafond de lecture atteint : dit à l'écran (« liste tronquée »). */
+      tronque: snapMedia.size >= IG_MEDIA_LIMIT || snapAcc.size >= IG_DAYS_LIMIT,
       compte: Object.assign({}, tot, {
         followers: followersFin,
         followersDelta: (followersDebut !== null && followersFin !== null && jours.length > 1)
@@ -256,9 +376,9 @@ async function loadFacebook(P) {
   const b = Core.isoDate(P.end);
   try {
     const [snapPosts, snapPage, snapDm] = await Promise.all([
-      db.collection('fb_posts').where('date', '>=', a).where('date', '<=', b).limit(500).get(),
-      db.collection('fb_page_daily').where('date', '>=', a).where('date', '<=', b).limit(400).get(),
-      db.collection('fb_dm_threads').where('firstEventDate', '>=', a).where('firstEventDate', '<=', b).limit(3000).get(),
+      db.collection('fb_posts').where('date', '>=', a).where('date', '<=', b).limit(FB_POSTS_LIMIT).get(),
+      db.collection('fb_page_daily').where('date', '>=', a).where('date', '<=', b).limit(IG_DAYS_LIMIT).get(),
+      db.collection('fb_dm_threads').where('firstEventDate', '>=', a).where('firstEventDate', '<=', b).limit(DM_LIMIT).get(),
     ]);
 
     const posts = snapPosts.docs
@@ -282,7 +402,7 @@ async function loadFacebook(P) {
     /* Messenger — agrégats seulement, calculés ici : fb_dm_threads porte le
        nom de l'interlocuteur et parfois celui du lead rattaché, et aucun de
        ces documents ne sort. Seuls des nombres traversent. */
-    const dm = { conversations: snapDm.size, sortants: 0, entrants: 0,
+    const dm = { conversations: snapDm.size, tronque: snapDm.size >= DM_LIMIT, sortants: 0, entrants: 0,
                  initiesNous: 0, repondus: 0, tauxReponse: null,
                  delaiMedianMs: null, initiesEux: 0, notreDelaiMedianMs: null,
                  rattacheesFiche: 0 };
@@ -310,6 +430,7 @@ async function loadFacebook(P) {
 
     return JSON.parse(JSON.stringify({
       jours: jours.length,
+      tronque: snapPosts.size >= FB_POSTS_LIMIT || snapPage.size >= IG_DAYS_LIMIT,
       page: Object.assign({}, tot, {
         followers: fin,
         followersDelta: (debut !== null && fin !== null && jours.length > 1) ? fin - debut : null,
@@ -324,11 +445,46 @@ async function loadFacebook(P) {
 }
 
 function sanitizeK(k) {
-  const out = {};
-  Object.keys(k || {}).forEach((f) => { if (!AGENCY_EXCLUDE[f]) out[f] = k[f]; });
+  const out = pickSpec(k || {}, AGENCY_K_FIELDS) || {};
   /* JSON round-trip : supprime les undefined et transforme NaN/Infinity en
      null — la page agence affiche « — » pour tout null. */
   return JSON.parse(JSON.stringify(out));
+}
+
+/* Lectures en échec ou tronquées (référentiel P7 : jamais un zéro muet).
+   Phrases FIXES, écrites ici : k.erreursLecture embarque le texte brut des
+   erreurs Firestore (chemin de document, identifiant de membre) et parle de
+   données internes (coûts, commissions, journal d'actions, appels) — il ne
+   sort pas. Seules les lectures qui touchent un chiffre de la page Agence
+   sont signalées. */
+function alertesLecture(DATA, extra) {
+  const D = DATA || {};
+  const out = [];
+  if (extra && extra.typesErreur) out.push('Types de RDV illisibles : la répartition Self Booking / Setting (NB) peut être fausse.');
+  if (D.bookingsError) out.push('Les RDV n’ont pas pu être lus : RDV, Kept, Présents, Pitchés et RDV pris sont incomplets.');
+  if (D.chainsTruncated) out.push('Certaines chaînes de reports sont trop longues : le résultat de leur dernier RDV peut manquer (RDV pris).');
+  if (D.closedLeadsError) out.push('Les clients gagnés n’ont pas pu être lus : Closes, Contracté et Collecté sont incomplets.');
+  if (D.closedLeadsTruncated) out.push('Liste des clients gagnés tronquée (plafond de lecture atteint) : Closes, Contracté et Collecté sont sous-estimés. Réduis la période.');
+  if (D.paymentsError) out.push('Le module Paiements n’a pas pu être lu : le Contracté affiché est le tarif déclaré au close, le Collecté est à 0, et les closes repérés par le seul paiement manquent.');
+  if (D.closeBookingsError) out.push('Les RDV des closes n’ont pas pu être lus : la répartition Self Booking / Setting (NB) des closes peut être fausse.');
+  if (D.leadsError) out.push('Les leads n’ont pas pu être lus : Leads, LTB, CPL et tout ce qui se calcule par lead sont à zéro ou incomplets.');
+  if (D.leadsTruncated) out.push('Liste des leads tronquée (plafond de lecture atteint) : Leads, LTB et CPL sont faux. Réduis la période.');
+  if (D.reoptinsError) out.push('Les ré-optins n’ont pas pu être lus : Ré-optins à zéro.');
+  if (D.reoptinsTruncated) out.push('Liste des ré-optins tronquée (plafond de lecture atteint) : Ré-optins sous-estimés. Réduis la période.');
+  if (D.adsError) out.push('La dépense pub n’a pas pu être lue : Dépense, CPL, CPR, CAC et ROAS pub ne sont pas fiables.');
+  if (D.adsByAdError) out.push('La dépense par pub n’a pas pu être lue : coûts par créative masqués.');
+  if (D.viewsError) out.push('Les visites des pages n’ont pas pu être lues : Vues et taux d’opt-in à zéro.');
+  if (D.creativesError) out.push('Le référentiel des pubs n’a pas pu être lu : certaines pubs restent affichées par leur identifiant.');
+  if (extra) {
+    if (extra.instagram === null) out.push('Instagram : lecture impossible pour le moment, section masquée.');
+    else if (extra.instagram && extra.instagram.tronque) out.push('Instagram : plus de ' + IG_MEDIA_LIMIT + ' publications ou ' + IG_DAYS_LIMIT + ' jours sur la période, liste tronquée. Réduis la période.');
+    if (extra.instagram && extra.instagramDm === null) out.push('Instagram : messages privés illisibles pour le moment, bloc masqué.');
+    else if (extra.instagramDm && extra.instagramDm.tronque) out.push('Instagram : plus de ' + DM_LIMIT + ' conversations sur la période, chiffres des messages privés sous-estimés.');
+    if (extra.facebook === null) out.push('Facebook : lecture impossible pour le moment, section masquée.');
+    else if (extra.facebook && extra.facebook.tronque) out.push('Facebook : plus de ' + FB_POSTS_LIMIT + ' publications ou ' + IG_DAYS_LIMIT + ' jours sur la période, liste tronquée. Réduis la période.');
+    if (extra.facebook && extra.facebook.dm && extra.facebook.dm.tronque) out.push('Facebook : plus de ' + DM_LIMIT + ' conversations Messenger sur la période, chiffres sous-estimés.');
+  }
+  return out;
 }
 
 /* Journal marketing : date / catégorie / texte seulement. L'auteur (membre
@@ -378,44 +534,74 @@ async function logAccess(req, ok, info) {
   }
 }
 
+/* Jour calendaire réel (« 2026-02-31 » refusé) : calcul pur sur des clés
+   AAAA-MM-JJ, sans fuseau. */
+function vraiJour(iso) {
+  if (!DAY_RE.test(iso || '')) return false;
+  const p = iso.split('-');
+  return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])).toISOString().slice(0, 10) === iso;
+}
+
+/* Mois de Paris d'aujourd'hui → [année, mois 0-11]. */
+function moisParisCourant() {
+  const p = SC.moisParis(new Date()).split('-');
+  return [+p[0], +p[1] - 1];
+}
+
 /* Construit la période demandée. Toute valeur malformée retombe sur le mois
    courant — jamais d'erreur qui distinguerait « mauvais paramètre » de
-   « mauvais token ». */
+   « mauvais token ». Bornes : FunnelCore.period* (heure de Paris), comme le
+   Stats funnel interne. Renvoie aussi `reduite` quand une plage trop large a
+   été ramenée à MAX_RANGE_DAYS (dit à l'écran). */
 function buildPeriod(q) {
   const mode = MODE_RE.test(q.mode) ? q.mode : 'month';
-  if (mode === 'day' && DAY_RE.test(q.day)) return Core.periodDay(q.day);
-  if (mode === '7d') return Core.periodPreset(7);
-  if (mode === '30d') return Core.periodPreset(30);
-  if (mode === 'custom' && DAY_RE.test(q.from) && DAY_RE.test(q.to) && q.from <= q.to) {
-    const P = Core.periodCustom(q.from, q.to);
-    const days = Math.round((P.end.getTime() - P.start.getTime()) / 86400000) + 1;
-    /* Plage trop large : on la ramène à MAX_RANGE_DAYS en gardant la fin
-       demandée. Mieux qu'un timeout silencieux côté agence. */
-    if (days > MAX_RANGE_DAYS) {
-      const s = new Date(P.end.getTime() - (MAX_RANGE_DAYS - 1) * 86400000);
-      return Core.periodCustom(Core.isoDate(s), Core.isoDate(P.end));
+  if (mode === 'day' && vraiJour(q.day)) return { P: Core.periodDay(q.day), reduite: false };
+  if (mode === '7d') return { P: Core.periodPreset(7), reduite: false };
+  if (mode === '30d') return { P: Core.periodPreset(30), reduite: false };
+  if (mode === 'custom' && vraiJour(q.from) && vraiJour(q.to) && q.from <= q.to) {
+    /* Jours calendaires de la plage (clés AAAA-MM-JJ, sans fuseau : un
+       changement d'heure ne décale rien). Plage trop large : ramenée aux
+       MAX_RANGE_DAYS derniers jours demandés — mieux qu'un timeout silencieux
+       côté agence, et dit à l'écran. */
+    const jours = Core.joursEntre(q.from, q.to);
+    if (jours.length > MAX_RANGE_DAYS) {
+      return { P: Core.periodCustom(jours[jours.length - MAX_RANGE_DAYS], q.to), reduite: true };
     }
-    return P;
+    return { P: Core.periodCustom(q.from, q.to), reduite: false };
   }
   if (mode === 'month' && MONTH_RE.test(q.month)) {
     const p = q.month.split('-');
-    return Core.periodMonth(+p[0], +p[1] - 1);
+    const m0 = +p[1] - 1;
+    if (m0 >= 0 && m0 <= 11) return { P: Core.periodMonth(+p[0], m0), reduite: false };
   }
-  const now = new Date();
-  return Core.periodMonth(now.getFullYear(), now.getMonth());
+  const cur = moisParisCourant();
+  return { P: Core.periodMonth(cur[0], cur[1]), reduite: false };
 }
 
-/* Les MONTHS_LISTED derniers mois calendaires — sert à peupler le sélecteur
-   de mois côté agence. Aucune requête Firestore : la liste ne dépend que du
-   calendrier, et un mois sans activité s'affiche naturellement à zéro. */
+/* Les MONTHS_LISTED derniers mois calendaires de Paris — sert à peupler le
+   sélecteur de mois côté agence. Aucune requête Firestore : la liste ne
+   dépend que du calendrier, et un mois sans activité s'affiche à zéro. */
 function recentMonths() {
   const out = [];
-  const now = new Date();
+  const cur = moisParisCourant();
+  const base = cur[0] * 12 + cur[1];
   for (let i = 0; i < MONTHS_LISTED; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    out.push(d.getFullYear() + '-' + Core.pad2(d.getMonth() + 1));
+    const n = base - i;
+    out.push(Math.floor(n / 12) + '-' + Core.pad2((n % 12) + 1));
   }
   return out;
+}
+
+/* Table des types de RDV : lue ICI pour que son échec soit DIT (le chargeur
+   de funnel-core.js l'avale et classe alors tout RDV au repli). */
+async function loadTypes() {
+  try {
+    const snap = await db.collection('booking_config').doc('_types').get();
+    return { map: Core.buildTypeMap((snap.exists && (snap.data() || {}).list) || []), erreur: false };
+  } catch (e) {
+    console.warn('[agency-funnel] types illisibles:', e && e.message);
+    return { map: null, erreur: true };
+  }
 }
 
 /* Cache mémoire par instance de lambda. On met en cache les DONNÉES CHARGÉES
@@ -427,7 +613,11 @@ async function loadPeriodData(P) {
   const key = Core.isoDate(P.start) + '|' + Core.isoDate(P.end);
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.res;
-  const res = await Core.loadAll(db, { P });
+  const types = await loadTypes();
+  const opts = { P };
+  if (types.map) opts.typeMap = types.map;
+  const res = await Core.loadAll(db, opts);
+  res.typesErreur = types.erreur;
   cache.set(key, { at: Date.now(), res });
   /* Bornage trivial : une instance ne garde que quelques périodes. */
   if (cache.size > 8) cache.delete(cache.keys().next().value);
@@ -445,7 +635,8 @@ module.exports = async (req, res) => {
   const q = req.query || {};
   const token = typeof q.t === 'string' ? q.t : '';
   const tunnel = TUNNEL_RE.test(q.tunnel) ? q.tunnel : 'all';
-  const P = buildPeriod(q);
+  const per = buildPeriod(q);
+  const P = per.P;
   const info = { mode: P.mode, from: Core.isoDate(P.start), to: Core.isoDate(P.end), tunnel };
 
   try {
@@ -470,7 +661,15 @@ module.exports = async (req, res) => {
       P,
       tunnelFilter: tunnel,
       teamMembers: loaded.teamMembers,
+      typeMap: loaded.typeMap,
     });
+    const alertes = alertesLecture(loaded.DATA, {
+      typesErreur: loaded.typesErreur, instagram, instagramDm, facebook,
+    });
+    if (per.reduite) {
+      alertes.unshift('Plage ramenée aux ' + MAX_RANGE_DAYS + ' derniers jours demandés (du ' + info.from.split('-').reverse().join('/')
+        + ' au ' + info.to.split('-').reverse().join('/') + ') : au-delà, le calcul serait trop long.');
+    }
 
     await logAccess(req, true, info);
 
@@ -485,6 +684,7 @@ module.exports = async (req, res) => {
       months: recentMonths(),
       computedAt: Date.now(),
       k: sanitizeK(k),
+      alertes: alertes,
       instagram: instagram,
       facebook: facebook,
       journal: sanitizeJournal(loaded.DATA.journalPeriod),
@@ -495,6 +695,9 @@ module.exports = async (req, res) => {
   }
 };
 
-/* Le chargement complet d'une grande période (jusqu'à 6000 leads + 5000
-   appels) dépasse largement les 10 s par défaut. */
+/* Le chargement complet d'une grande période (leads, RDV, appels lus par
+   pages) dépasse largement les 10 s par défaut. */
 module.exports.config = { maxDuration: 60 };
+/* Pour les tests (node) : la liste blanche et son application. */
+module.exports._test = { AGENCY_K_FIELDS, AGENCY_NEVER, sanitizeK, pickSpec, alertesLecture, buildPeriod, recentMonths,
+  viderCache: () => cache.clear() };

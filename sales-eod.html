@@ -191,6 +191,9 @@ html, body {
 }
 .kpi-input:focus { border-color: var(--red2); }
 .kpi-input::placeholder { color: var(--muted2); }
+/* Chiffres déclarés (25/11/2026) : note sous le bouton, 100 % variables de thème */
+.kpi-decl-note { font-size: 11px; color: var(--muted); line-height: 1.5; margin: -4px 0 6px; }
+.eod-decl-note { font-size: 11.5px; color: var(--muted); line-height: 1.55; margin: -4px 0 14px; }
 
 /* Save */
 .eod-save-row { display: flex; align-items: center; gap: 12px; margin: 20px 0 36px; }
@@ -432,14 +435,17 @@ html, body {
       </div>
     </div>
     <!-- KPIs optionnels -->
-    <button class="kpi-toggle" id="kpiToggle"><span class="kpi-arrow">▶</span> KPIs optionnels (appels, RDV, CA...)</button>
+    <!-- Chiffres déclarés (25/11/2026, décision D27) : la saisie reste, chaque
+         libellé dit « déclaré » et porte le « i » (rempli par eodRenderKpiLabels). -->
+    <button class="kpi-toggle" id="kpiToggle"><span class="kpi-arrow">▶</span> Chiffres déclarés (optionnels : appels, RDV, closes, montant…)</button>
+    <div class="kpi-decl-note" id="kpiDeclNote">Chiffres tapés à la main, non vérifiés. Les chiffres calculés sont dans Set NB et Close SB.</div>
     <div class="kpi-grid" id="kpiGrid">
-      <div class="kpi-input-wrap"><label>Nb appels</label><input type="number" class="kpi-input" id="kpiAppels" placeholder="—" min="0"/></div>
-      <div class="kpi-input-wrap"><label>Décrochés</label><input type="number" class="kpi-input" id="kpiDecroches" placeholder="—" min="0"/></div>
-      <div class="kpi-input-wrap"><label>RDV posés</label><input type="number" class="kpi-input" id="kpiRdvPoses" placeholder="—" min="0"/></div>
-      <div class="kpi-input-wrap"><label>RDV effectués</label><input type="number" class="kpi-input" id="kpiRdvEffectues" placeholder="—" min="0"/></div>
-      <div class="kpi-input-wrap"><label>Closes</label><input type="number" class="kpi-input" id="kpiCloses" placeholder="—" min="0"/></div>
-      <div class="kpi-input-wrap"><label>CA closé (€)</label><input type="number" class="kpi-input" id="kpiCA" placeholder="—" min="0"/></div>
+      <div class="kpi-input-wrap"><label data-eod-kpi="appels">Appels (déclaré)</label><input type="number" class="kpi-input" id="kpiAppels" placeholder="—" min="0"/></div>
+      <div class="kpi-input-wrap"><label data-eod-kpi="decroches">Décrochés (déclaré)</label><input type="number" class="kpi-input" id="kpiDecroches" placeholder="—" min="0"/></div>
+      <div class="kpi-input-wrap"><label data-eod-kpi="rdvPoses">Sets (déclaré)</label><input type="number" class="kpi-input" id="kpiRdvPoses" placeholder="—" min="0"/></div>
+      <div class="kpi-input-wrap"><label data-eod-kpi="rdvEffectues">RDV effectués (déclaré)</label><input type="number" class="kpi-input" id="kpiRdvEffectues" placeholder="—" min="0"/></div>
+      <div class="kpi-input-wrap"><label data-eod-kpi="closes">Closes (déclaré)</label><input type="number" class="kpi-input" id="kpiCloses" placeholder="—" min="0"/></div>
+      <div class="kpi-input-wrap"><label data-eod-kpi="ca">Montant closé (€, déclaré)</label><input type="number" class="kpi-input" id="kpiCA" placeholder="—" min="0"/></div>
     </div>
     <!-- Save -->
     <div class="eod-save-row">
@@ -472,6 +478,7 @@ html, body {
       <span class="week-label" id="weekLabel">Semaine du ...</span>
       <button class="week-nav-btn" id="weekNext">▶</button>
     </div>
+    <div class="eod-decl-note" id="weekDeclNote">Semaine du lundi au dimanche. Les chiffres ci-dessous sont déclarés dans les EOD ; les chiffres calculés sont ceux de Close SB et de Set NB.</div>
     <div class="summary-stats" id="weekStats"></div>
     <div class="week-grid" id="weekGrid"></div>
   </div>
@@ -482,6 +489,7 @@ html, body {
       <span class="st-icon" style="background:rgba(96,165,250,0.12);color:#60a5fa">📊</span>
       Tendances & Insights — <span id="trendsMemberName" style="color:var(--red3)">...</span>
     </div>
+    <div class="eod-decl-note" id="trendsDeclNote">Chiffres déclarés dans les EOD des 14 derniers jours (aujourd’hui compris). Les chiffres calculés sont ceux de Close SB et de Set NB.</div>
     <div class="trends-grid">
       <div class="trend-card">
         <div class="trend-card-title">📈 Mindset Setting (14 jours)</div>
@@ -504,6 +512,7 @@ html, body {
 </div>
 <div class="eod-toast" id="eodToast"></div>
 
+<script src="stats-core.js"></script>
 <script>
 /* ═══════════════════════════════════════
    EOD REPORTS — Ambitio Corp
@@ -524,35 +533,90 @@ function toast(msg) { var el = document.getElementById('eodToast'); el.textConte
 function getMonday(d) { var day = d.getDay(); var diff = d.getDate() - day + (day === 0 ? -6 : 1); return new Date(d.getFullYear(), d.getMonth(), diff); }
 function mindsetColor(v) { if (typeof v !== 'number') return 'var(--muted)'; if (v <= 3) return '#ef4444'; if (v <= 5) return '#f59e0b'; if (v <= 7) return '#fbbf24'; return '#34d399'; }
 
+/* ══════════ CHIFFRES DÉCLARÉS (25/11/2026 — audit des chiffres, D27) ══════════
+   L'EOD garde sa saisie : chaque chiffre tapé à la main porte le mot
+   « déclaré » et le « i » du glossaire commun (stats-core.js). Aucun
+   rapprochement automatique avec les RDV ni les paiements dans ce chantier :
+   la page ne lit toujours que eod/{uid}/jours. Valeurs stockées inchangées
+   (mêmes champs kpis.*, mêmes valeurs d'issue de RDV). */
+var SC = window.StatsCore || null;
+function eodEsc(t) {
+  return String(t == null ? '' : t).replace(/[&<>"']/g, function(c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function iDecl(prec) { return (SC && SC.info) ? SC.info('declare', prec) : ''; }
+function iLibre(titre, texte) { return (SC && SC.infoLibre) ? SC.infoLibre(titre, texte) : ''; }
+var EOD_KPI_DEFS = {
+  appels:       { label: 'Appels (déclaré)', court: 'appels déclarés',
+                  prec: 'Appels que tu déclares avoir passés ce jour. Le nombre mesuré par la téléphonie (appels sortants) est dans Set NB.' },
+  decroches:    { label: 'Décrochés (déclaré)', court: 'décrochés déclarés',
+                  prec: 'Appels décrochés que tu déclares. Le chiffre mesuré (au moins 5 secondes de conversation, répondeurs écartés) est dans Set NB.' },
+  rdvPoses:     { label: 'Sets (déclaré)', court: 'sets déclarés (RDV posés)',
+                  prec: 'RDV que tu déclares avoir posés ce jour (champ « RDV posés » à l’origine). Le chiffre calculé est « Sets » dans Set NB : un set = un RDV réellement créé dans l’agenda.' },
+  rdvEffectues: { label: 'RDV effectués (déclaré)', court: 'RDV effectués déclarés',
+                  prec: 'RDV effectués = RDV que tu as tenus ce jour avec le prospect présent, offre présentée ou non. Le chiffre calculé correspondant est « Présents » dans Close SB (résultat saisi sur le RDV : offre, close, non close ou disqualifié).' },
+  closes:       { label: 'Closes (déclaré)', court: 'closes déclarés',
+                  prec: 'Closes que tu déclares pour ce jour. Le chiffre calculé est « Closes » (un par client gagné, le jour où il devient client) dans Close SB, Set NB et le Stats funnel.' },
+  ca:           { label: 'Montant closé (€, déclaré)', court: 'montant closé déclaré',
+                  prec: 'Montant que tu déclares pour les closes du jour, sans préciser hors taxes ou TTC. Ce n’est ni le Contracté ni le Collecté : ces deux montants viennent du module Paiements (Close SB, Stats funnel).' }
+};
+function eodRenderKpiLabels() {
+  var labels = document.querySelectorAll('[data-eod-kpi]');
+  for (var i = 0; i < labels.length; i++) {
+    var d = EOD_KPI_DEFS[labels[i].getAttribute('data-eod-kpi')];
+    if (d) labels[i].innerHTML = eodEsc(d.label) + iDecl(d.prec);
+  }
+  var notes = [
+    ['kpiDeclNote', 'Chiffres tapés à la main, non vérifiés. Les chiffres calculés sont dans Set NB et Close SB.'],
+    ['weekDeclNote', 'Semaine du lundi au dimanche. Les chiffres ci-dessous sont déclarés dans les EOD ; les chiffres calculés sont ceux de Close SB et de Set NB.'],
+    ['trendsDeclNote', 'Chiffres déclarés dans les EOD des 14 derniers jours (aujourd’hui compris). Les chiffres calculés sont ceux de Close SB et de Set NB.']
+  ];
+  for (var j = 0; j < notes.length; j++) {
+    var el = document.getElementById(notes[j][0]);
+    if (el) el.innerHTML = eodEsc(notes[j][1]) + iDecl();
+  }
+}
+eodRenderKpiLabels();
+
+/* Libellés alignés sur les résultats d'un RDV (modale Résultat, glossaire
+   commun) ; les VALEURS stockées ne changent pas, les anciens EOD se relisent
+   tels quels : follow_up et en_reflexion = « Offre en attente »,
+   pas_interesse = « Non close », reporte = « Replanifié ». */
 var RDV_ISSUES = [
-  { value: 'close', label: 'Closé ✅' },
-  { value: 'follow_up', label: 'Follow-up prévu' },
+  { value: 'close', label: 'Close ✅' },
+  { value: 'follow_up', label: 'Offre en attente (follow-up prévu)' },
   { value: 'annule', label: 'Annulé' },
   { value: 'no_show', label: 'No-show' },
-  { value: 'reporte', label: 'Reporté' },
-  { value: 'pas_interesse', label: 'Pas intéressé' },
-  { value: 'en_reflexion', label: 'En réflexion' },
-  { value: 'disqualifie', label: 'Disqualifié 🚫' },
+  { value: 'reporte', label: 'Replanifié' },
+  { value: 'pas_interesse', label: 'Non close' },
+  { value: 'en_reflexion', label: 'Offre en attente (en réflexion)' },
+  { value: 'disqualifie', label: 'Disqualifié 🚫' }
 ];
 
-document.getElementById('eodDate').value = fmtDate(new Date());
+/* Jour par défaut : aujourd'hui à l'heure de Paris (quel que soit le fuseau de l'appareil). */
+document.getElementById('eodDate').value = (SC && SC.jourParis) ? SC.jourParis(new Date()) : fmtDate(new Date());
 
 // ══════════ AUTH ══════════
-// UIDs Firebase en dur : on n'utilise plus le matching par nom (race condition qui
-// provoquait des écritures sous des chemins eod/guillaume et eod/elodie en string).
-// ⚠ 2026-04-13 : UID Guillaume corrigé (manquait un O) + flag archived.
-// 2026-09-10 : la liste n'est plus figée — elle se complète depuis le roster
-// _meta/team_members (nav.js) : tout membre de l'ÉQUIPE SALES actif portant
-// un firebaseUid (setter, closer, closer_setter, setter_ecrit). Élodie reste
-// le socle (repli si le roster tarde). Guillaume (parti 07/2026) n'apparaît
-// plus pour personne ; ses EOD restent en base sous eod/{son uid}.
-var MEMBER_MAP = {
-  elodie:    { uid: 'IrL8bfOrUfMH2fEPFzuojPT8bQh1', name: 'Élodie',    color: '#60a5fa', role: 'closer_setter', order: 999 }
-};
+// On écrit toujours sous le vrai UID Firebase du membre (jamais un nom ni un
+// slug : une ancienne correspondance par nom écrivait sous des chemins faux).
+// 25/11/2026 (audit des chiffres) : plus AUCUN membre en dur. La liste vient
+// uniquement de l'équipe (_meta/team_members, lue par nav.js) : tout membre de
+// l'ÉQUIPE SALES portant un firebaseUid (setter, closer, closer_setter,
+// setter_ecrit). Les anciens membres (window.isDepartedMember de nav.js, ou
+// drapeau departed de la fiche) ne sont jamais proposés ni nommés ; leurs EOD
+// restent en base sous eod/{uid}.
+var MEMBER_MAP = {};
 var EOD_SALES_ROLES = { setter: 1, closer: 1, closer_setter: 1, setter_ecrit: 1 };
 var EOD_SETTER_ONLY = { setter: 1, setter_ecrit: 1 };   // pas de panneau Closing
-var EOD_DEPARTED = { guillaume: 1, guillaumes: 1, elodie: 1 };     // même liste que nav.js / alteore-flow.js
+var EOD_ROSTER_LU = false;   // vrai dès que l'équipe est chargée (événement team-members-loaded)
 var VIEWING_ROLE = '';
+
+function _eodIsDeparted(m) {
+  if (!m) return false;
+  if (typeof window.isDepartedMember === 'function') return !!window.isDepartedMember(m);
+  return m.departed === true;
+}
 
 function _eodRoleLabel(role) {
   if (role === 'closer_setter') return 'Closer · Setter';
@@ -569,7 +633,7 @@ function _eodSyncRoster() {
   for (var i = 0; i < list.length; i++) {
     var m = list[i];
     if (!m || !m.slug || !EOD_SALES_ROLES[m.role]) continue;
-    if (EOD_DEPARTED[m.slug] || m.departed === true) continue;
+    if (_eodIsDeparted(m)) { delete MEMBER_MAP[m.slug]; continue; }
     if (!m.firebaseUid) continue;
     var cur = MEMBER_MAP[m.slug] || {};
     MEMBER_MAP[m.slug] = {
@@ -578,7 +642,7 @@ function _eodSyncRoster() {
       color: m.color || cur.color || '#60a5fa',
       role: m.role,
       order: (m.order != null) ? m.order : (cur.order != null ? cur.order : 500),
-      departed: !!(EOD_DEPARTED[m.slug] || cur.departed),
+      departed: false,
       archived: m.active === false
     };
   }
@@ -599,11 +663,13 @@ function _eodRenderGate() {
     var initial = (info.name || key)[0].toUpperCase();
     h += '<div class="eod-gate-btn' + (key === (localStorage.getItem('eod_last_member') || '') ? ' sel' : '') + '" data-pick="' + key + '">';
     h += '<div class="eod-gate-av" style="background:linear-gradient(135deg,' + info.color + '55,' + info.color + ')">' + initial + '</div>';
-    h += '<div class="eod-gate-name">' + info.name.replace(/</g, '&lt;') + '</div>';
-    h += '<div class="eod-gate-role">' + _eodRoleLabel(info.role) + '</div>';
+    h += '<div class="eod-gate-name">' + eodEsc(info.name) + '</div>';
+    h += '<div class="eod-gate-role">' + eodEsc(_eodRoleLabel(info.role)) + '</div>';
     h += '</div>';
   });
-  if (!h) h = '<div style="font-size:13px;color:var(--muted)">Aucun membre sales relié à un compte — vérifie les rôles équipe dans Admin → Utilisateurs.</div>';
+  if (!h) h = '<div style="font-size:13px;color:var(--muted)">' + (EOD_ROSTER_LU || (window.TEAM_MEMBERS_LIST && window.TEAM_MEMBERS_LIST.length)
+    ? 'Aucun membre sales relié à un compte — vérifie les rôles équipe dans Admin → Utilisateurs.'
+    : 'Chargement de l’équipe…') + '</div>';
   wrap.innerHTML = h;
 }
 
@@ -677,7 +743,7 @@ function _eodApplyArchivedFlags() {
   });
 }
 _eodOnRoster();
-window.addEventListener('team-members-loaded', _eodOnRoster);
+window.addEventListener('team-members-loaded', function() { EOD_ROSTER_LU = true; _eodOnRoster(); });
 
 (function initAuth() {
   var nmCache  = localStorage.getItem('ambitio_name') || 'Utilisateur';
@@ -1110,7 +1176,7 @@ function renderWeekGrid(monday, entries) {
         h += '<span class="dc-tag has-closing">Closing</span>';
       }
       var kp = entry.kpis || {};
-      if (kp.appels || kp.closes || kp.ca) h += '<span class="dc-tag has-kpi">KPIs</span>';
+      if (kp.appels || kp.closes || kp.ca) h += '<span class="dc-tag has-kpi">Déclarés</span>';
       h += '</div>';
     } else {
       h += '<div style="font-size:11px;color:var(--muted2);margin-top:8px">Pas de données</div>';
@@ -1138,12 +1204,16 @@ function renderWeekStats(entries) {
   var avgMS = msN ? (totalMS / msN).toFixed(1) : '—';
   var avgMC = mcN ? (totalMC / mcN).toFixed(1) : '—';
   var h = '';
-  h += '<div class="ss-card"><div class="ss-val">' + keys.length + '/7</div><div class="ss-label">EODs remplis</div></div>';
+  h += '<div class="ss-card"><div class="ss-val">' + keys.length + '/7</div><div class="ss-label">EOD remplis (lun. → dim.)' +
+    iLibre('EOD remplis', 'Jours de la semaine affichée, du lundi au dimanche (7 jours, week-end compris), pour lesquels un EOD est enregistré. Un message de discussion posté un jour sans EOD ne compte pas.') + '</div></div>';
   h += '<div class="ss-card"><div class="ss-val" style="color:' + mindsetColor(parseFloat(avgMS)) + '">' + avgMS + '</div><div class="ss-label">Mindset setting moy.</div></div>';
   h += '<div class="ss-card"><div class="ss-val" style="color:' + mindsetColor(parseFloat(avgMC)) + '">' + avgMC + '</div><div class="ss-label">Mindset closing moy.</div></div>';
-  h += '<div class="ss-card"><div class="ss-val">' + totalRdv + '</div><div class="ss-label">RDV total</div></div>';
-  h += '<div class="ss-card"><div class="ss-val" style="color:var(--green)">' + totalCloses + '</div><div class="ss-label">Closes</div></div>';
-  h += '<div class="ss-card"><div class="ss-val" style="color:var(--gold)">' + (totalCA ? totalCA.toLocaleString('fr-FR') + '€' : '—') + '</div><div class="ss-label">CA closé</div></div>';
+  h += '<div class="ss-card"><div class="ss-val">' + totalRdv + '</div><div class="ss-label">RDV de la liste (déclarés)' +
+    iLibre('RDV de la liste (déclarés)', 'Lignes de « Mes rendez-vous » des EOD de la semaine, hors jours cochés « Pas de closing ». Tapées à la main, non reliées à l’agenda : les RDV calculés sont dans Close SB. Même règle que les RDV des Tendances.') + '</div></div>';
+  h += '<div class="ss-card"><div class="ss-val" style="color:var(--green)">' + totalCloses + '</div><div class="ss-label">Closes (déclaré)' +
+    iDecl('Somme du champ « Closes (déclaré) » des EOD de la semaine. Ce n’est pas le nombre de RDV notés « Close » dans la liste des RDV (Tendances), ni les Closes calculés de Close SB.') + '</div></div>';
+  h += '<div class="ss-card"><div class="ss-val" style="color:var(--gold)">' + (totalCA ? totalCA.toLocaleString('fr-FR') + '€' : '—') + '</div><div class="ss-label">Montant closé (déclaré)' +
+    iDecl('Somme du champ « Montant closé » des EOD de la semaine, sans préciser hors taxes ou TTC. Ni Contracté ni Collecté : ces montants viennent du module Paiements (Close SB, Stats funnel).') + '</div></div>';
   document.getElementById('weekStats').innerHTML = h;
 }
 
@@ -1154,15 +1224,15 @@ function openDayDetail(dateStr, entry) {
   var backdrop = document.createElement('div');
   backdrop.className = 'day-modal-backdrop';
   var h = '<div class="day-modal">';
-  h += '<div class="dm-header"><div class="dm-title">' + fmtDateFR(dateStr) + ' — ' + VIEWING_NAME + '</div><button class="dm-close" id="dmClose">✕</button></div>';
+  h += '<div class="dm-header"><div class="dm-title">' + eodEsc(fmtDateFR(dateStr) + ' — ' + VIEWING_NAME) + '</div><button class="dm-close" id="dmClose">✕</button></div>';
   h += '<div class="dm-body">';
   // Setting
   h += '<div class="dm-section"><div class="dm-section-title"><span style="color:#34d399">📞</span> Setting</div>';
-  h += '<div class="dm-text"><strong>Ressenti :</strong> ' + (s.ressenti || 'Non renseigné') + '</div>';
+  h += '<div class="dm-text"><strong>Ressenti :</strong> ' + eodEsc(s.ressenti || 'Non renseigné') + '</div>';
   h += '<div class="dm-text" style="margin-top:6px"><strong>Mindset :</strong> <span style="color:' + mindsetColor(s.mindset) + ';font-weight:700">' + (s.mindset || '—') + '/10</span></div>';
-  if (s.mindsetComment) h += '<div class="dm-text" style="margin-top:4px;font-size:12px;color:var(--muted);font-style:italic">' + s.mindsetComment + '</div>';
-  if (s.extraMile) h += '<div class="dm-text" style="margin-top:6px"><strong>Extra mile :</strong> ' + s.extraMile + '</div>';
-  if (s.besoinAide && s.besoinAide.toLowerCase() !== 'ras') h += '<div class="dm-text" style="margin-top:6px"><strong>Besoin d\'aide :</strong> ' + s.besoinAide + '</div>';
+  if (s.mindsetComment) h += '<div class="dm-text" style="margin-top:4px;font-size:12px;color:var(--muted);font-style:italic">' + eodEsc(s.mindsetComment) + '</div>';
+  if (s.extraMile) h += '<div class="dm-text" style="margin-top:6px"><strong>Extra mile :</strong> ' + eodEsc(s.extraMile) + '</div>';
+  if (s.besoinAide && s.besoinAide.toLowerCase() !== 'ras') h += '<div class="dm-text" style="margin-top:6px"><strong>Besoin d\'aide :</strong> ' + eodEsc(s.besoinAide) + '</div>';
   h += '</div>';
   // Closing
   if (entry.closingSkipped) {
@@ -1173,25 +1243,26 @@ function openDayDetail(dateStr, entry) {
     if (c.rdvs && c.rdvs.length > 0) {
       c.rdvs.forEach(function(r) {
         var il = ''; RDV_ISSUES.forEach(function(o) { if (o.value === r.issue) il = o.label; });
-        h += '<div class="dm-rdv-item"><strong>' + r.nom + '</strong> <span style="color:var(--muted);margin-left:8px">→ ' + il + '</span></div>';
+        h += '<div class="dm-rdv-item"><strong>' + eodEsc(r.nom) + '</strong> <span style="color:var(--muted);margin-left:8px">→ ' + eodEsc(il || r.issue || '') + '</span></div>';
       });
     } else { h += '<div class="dm-text" style="color:var(--muted)">Aucun RDV</div>'; }
-    if (c.commentaire) h += '<div class="dm-text" style="margin-top:8px"><strong>Commentaire :</strong> ' + c.commentaire + '</div>';
+    if (c.commentaire) h += '<div class="dm-text" style="margin-top:8px"><strong>Commentaire :</strong> ' + eodEsc(c.commentaire) + '</div>';
     h += '<div class="dm-text" style="margin-top:6px"><strong>Mindset :</strong> <span style="color:' + mindsetColor(c.mindset) + ';font-weight:700">' + (c.mindset || '—') + '/10</span></div>';
-    if (c.mindsetComment) h += '<div class="dm-text" style="margin-top:4px;font-size:12px;color:var(--muted);font-style:italic">' + c.mindsetComment + '</div>';
+    if (c.mindsetComment) h += '<div class="dm-text" style="margin-top:4px;font-size:12px;color:var(--muted);font-style:italic">' + eodEsc(c.mindsetComment) + '</div>';
     h += '</div>';
   }
   // KPIs
   var hasKpi = k.appels || k.decroches || k.rdvPoses || k.rdvEffectues || k.closes || k.ca;
   if (hasKpi) {
-    h += '<div class="dm-section"><div class="dm-section-title"><span style="color:#60a5fa">📊</span> KPIs</div>';
+    h += '<div class="dm-section"><div class="dm-section-title"><span style="color:#60a5fa">📊</span> Chiffres déclarés' +
+      iDecl('Tapés à la main dans cet EOD, non vérifiés. Les chiffres calculés sont ceux de Set NB et de Close SB.') + '</div>';
     h += '<div style="display:flex;gap:12px;flex-wrap:wrap">';
-    if (k.appels != null) h += '<div class="dm-text"><strong>' + k.appels + '</strong> appels</div>';
-    if (k.decroches != null) h += '<div class="dm-text"><strong>' + k.decroches + '</strong> décrochés</div>';
-    if (k.rdvPoses != null) h += '<div class="dm-text"><strong>' + k.rdvPoses + '</strong> RDV posés</div>';
-    if (k.rdvEffectues != null) h += '<div class="dm-text"><strong>' + k.rdvEffectues + '</strong> RDV effectués</div>';
-    if (k.closes != null) h += '<div class="dm-text"><strong>' + k.closes + '</strong> closes</div>';
-    if (k.ca != null) h += '<div class="dm-text"><strong>' + k.ca.toLocaleString('fr-FR') + '€</strong> CA</div>';
+    ['appels', 'decroches', 'rdvPoses', 'rdvEffectues', 'closes', 'ca'].forEach(function(cle) {
+      var v = k[cle], d = EOD_KPI_DEFS[cle];
+      if (v == null || !d) return;
+      var txt = (cle === 'ca') ? (Number(v).toLocaleString('fr-FR') + '€') : String(v);
+      h += '<div class="dm-text"><strong>' + eodEsc(txt) + '</strong> ' + eodEsc(d.court) + iDecl(d.prec) + '</div>';
+    });
     h += '</div></div>';
   }
   // Discussion
@@ -1324,9 +1395,11 @@ function generateInsights(entries) {
   analyzeMindset(entries, 'setting', 'setting');
   analyzeMindset(entries, 'closing', 'closing');
 
-  // RDV analysis
+  // RDV de la liste — même règle que l'Historique : jours cochés « Pas de
+  // closing » exclus (un seul total de RDV déclarés dans la page).
   var totalRdv = 0, closedRdv = 0, annuledRdv = 0, noShowRdv = 0, disqualifieRdv = 0;
   entries.forEach(function(e) {
+    if (e.closingSkipped) return;
     ((e.closing || {}).rdvs || []).forEach(function(r) {
       totalRdv++;
       if (r.issue === 'close') closedRdv++;
@@ -1335,21 +1408,25 @@ function generateInsights(entries) {
       if (r.issue === 'disqualifie') disqualifieRdv++;
     });
   });
+  var pctListe = function(n) { return totalRdv ? Math.round((n / totalRdv) * 100) + ' %' : '—'; };
+  var iListe = iLibre('RDV de la liste (déclarés)', 'Lignes de « Mes rendez-vous » des EOD des 14 derniers jours, hors jours cochés « Pas de closing », avec le résultat choisi dans la liste. Tapées à la main, non reliées à l’agenda : les RDV et leurs résultats calculés sont dans Close SB. Les pourcentages se rapportent à toutes les lignes de la liste, annulés et no-show compris.');
   if (totalRdv > 0) {
-    insights.push({ icon: closedRdv > 0 ? 'up' : 'info', text: '<strong>' + totalRdv + ' RDV</strong> sur la période : ' + closedRdv + ' closés (' + ((closedRdv / totalRdv) * 100).toFixed(0) + '%), ' + annuledRdv + ' annulés, ' + noShowRdv + ' no-shows.' });
+    insights.push({ icon: closedRdv > 0 ? 'up' : 'info', text: '<strong>' + totalRdv + ' RDV dans la liste</strong> (déclarés, 14 derniers jours)' + iListe + ' : ' +
+      closedRdv + ' notés « Close » (' + pctListe(closedRdv) + ' des RDV de la liste, annulés et no-show compris), ' + annuledRdv + ' annulé' + (annuledRdv > 1 ? 's' : '') + ', ' + noShowRdv + ' no-show.' });
   }
   if (disqualifieRdv > 0) {
-    insights.push({ icon: 'info', text: '<strong>' + disqualifieRdv + ' RDV disqualifié' + (disqualifieRdv > 1 ? 's' : '') + '</strong> sur la période (' + ((disqualifieRdv / totalRdv) * 100).toFixed(0) + '% des RDV).' });
+    insights.push({ icon: 'info', text: '<strong>' + disqualifieRdv + ' RDV noté' + (disqualifieRdv > 1 ? 's' : '') + ' « Disqualifié »</strong> dans la liste (' + pctListe(disqualifieRdv) + ' des RDV de la liste).' });
   }
   if ((annuledRdv + noShowRdv) > totalRdv * 0.4 && totalRdv >= 3) {
-    insights.push({ icon: 'warn', text: '<strong>Taux d\'annulation élevé</strong> (' + (annuledRdv + noShowRdv) + '/' + totalRdv + '). Vérifier la confirmation des RDV.' });
+    insights.push({ icon: 'warn', text: '<strong>Annulés + no-show élevés</strong> (' + annuledRdv + ' annulé' + (annuledRdv > 1 ? 's' : '') + ', ' + noShowRdv + ' no-show sur ' + totalRdv + ' RDV de la liste). Vérifier la confirmation des RDV.' +
+      iLibre('Annulés + no-show', 'Somme des RDV notés « Annulé » et « No-show » dans la liste déclarée. Ce n’est pas le Taux d’annulation des autres écrans (annulés ÷ RDV, sans les no-show).') });
   }
 
-  // KPIs
+  // Chiffres déclarés
   var kpiDays = entries.filter(function(e) { return (e.kpis || {}).appels != null; });
   if (kpiDays.length >= 3) {
     var avgA = kpiDays.reduce(function(a, e) { return a + (e.kpis.appels || 0); }, 0) / kpiDays.length;
-    insights.push({ icon: 'info', text: '<strong>Moyenne de ' + avgA.toFixed(0) + ' appels/jour</strong> sur ' + kpiDays.length + ' jours renseignés.' });
+    insights.push({ icon: 'info', text: '<strong>Moyenne de ' + avgA.toFixed(0) + ' appels déclarés / jour</strong> sur ' + kpiDays.length + ' jours renseignés.' + iDecl(EOD_KPI_DEFS.appels.prec) });
   }
 
   // Text sentiment
@@ -1373,9 +1450,11 @@ function generateInsights(entries) {
   if (helpN >= 2) insights.push({ icon: 'warn', text: '<strong>Demandes d\'aide récurrentes</strong> détectées. Point à aborder en management.' });
 
   // Consistency
-  var last7 = entries.filter(function(e) { return ((new Date()) - parseDate(e.date)) / 86400000 <= 7; });
-  if (last7.length >= 5) insights.push({ icon: 'up', text: '<strong>Excellente régularité</strong> : ' + last7.length + ' EODs sur les 7 derniers jours. 👏' });
-  else if (last7.length <= 2 && entries.length >= 3) insights.push({ icon: 'down', text: '<strong>Régularité en baisse</strong> cette semaine : seulement ' + last7.length + ' EOD(s).' });
+  // 7 derniers jours = aujourd'hui et les 6 jours précédents (7 jours calendaires).
+  var last7 = entries.filter(function(e) { return ((new Date()) - parseDate(e.date)) / 86400000 < 7; });
+  var iFen = iLibre('7 derniers jours', 'Aujourd’hui et les 6 jours précédents, week-end compris (fenêtre glissante). Différent de « EOD remplis » de l’Historique, qui compte la semaine du lundi au dimanche.');
+  if (last7.length >= 5) insights.push({ icon: 'up', text: '<strong>Excellente régularité</strong> : ' + last7.length + ' EOD sur les 7 derniers jours. 👏' + iFen });
+  else if (last7.length <= 2 && entries.length >= 3) insights.push({ icon: 'down', text: '<strong>Régularité en baisse</strong> : seulement ' + last7.length + ' EOD sur les 7 derniers jours.' + iFen });
 
   if (insights.length === 0) { list.innerHTML = '<div class="eod-loading">Pas d\'insights pour le moment.</div>'; return; }
   var ih = '';

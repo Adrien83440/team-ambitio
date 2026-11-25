@@ -599,7 +599,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
 <div class="fn-modal-bg" id="fnCostsModal">
   <div class="fn-modal">
     <h3>💶 Coûts setting (réels)</h3>
-    <div class="hint">Alimente le <strong>Coût / RDV NB</strong> : (fixe + commissions Setting + outils) ÷ RDV posés par le setting. Les <strong>commissions</strong> viennent automatiquement du module Commissions (deals Setting datés dans la période) — seuls le fixe (salaire setter) et les outils (Ringover, Twilio…) sont à renseigner ici, en €/mois. Une valeur saisie pour un mois est <strong>reportée automatiquement sur les mois suivants</strong> tant qu'une valeur plus récente n'est pas saisie. Stocké dans <code>_config/funnel_costs</code>.</div>
+    <div class="hint">Alimente le <strong>Coût setting</strong> (fixe + outils + commissions de setting dues) et le <strong>Coût / RDV pris NB</strong> : (fixe + outils + commissions des closes Setting (NB)) ÷ RDV pris NB (= Sets). Les <strong>commissions</strong> sont lues dans le module Commissions (closes de la période, validées ou non) — seuls le fixe du setting et les outils (Ringover, Twilio…) se renseignent ici, en € <strong>hors taxes</strong> par mois. Le fixe n'est pas lu dans les contrats de l'équipe (la page Commissions, elle, les lit) : vérifie qu'il correspond. Une valeur saisie pour un mois est <strong>reportée automatiquement sur les mois suivants</strong> tant qu'une valeur plus récente n'est pas saisie ; sur un mois en cours, elle est comptée au prorata des jours écoulés. Stocké dans <code>_config/funnel_costs</code>.</div>
     <div id="fnCostsBody"></div>
     <div class="fn-modal-actions">
       <button class="fn-btn" id="fnCostsCancel">Annuler</button>
@@ -612,7 +612,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
 <div class="fn-modal-bg" id="fnAgencyModal">
   <div class="fn-modal">
     <h3>🔗 Accès agence — lecture seule</h3>
-    <div class="hint">Un lien secret que l'agence pub peut ouvrir quand elle veut, sans compte ni accès Firestore. Elle ne voit QUE les KPIs marketing du mois (pub, opt-in, prise de RDV, créatives, rentabilité, Instagram organique, journal) — <strong>jamais</strong> un nom de lead, un montant de commission, un coût interne, ni le pseudo d'un commentateur Instagram ou le contenu d'un message privé. Instagram est inclus en <strong>chiffres agrégés</strong> : audience, GO par publication, taux de réponse aux DM. Les chiffres sont l'instantané publié à chaque consultation du funnel en vue <strong>Mois / Tous les tunnels</strong>. Stocké dans <code>_config/agency_access</code>.</div>
+    <div class="hint">Un lien secret que l'agence pub peut ouvrir quand elle veut, sans compte ni accès Firestore. Elle ne voit QUE les KPIs marketing du mois (pub, opt-in, prise de RDV, créatives, rentabilité, Instagram organique, journal) — <strong>jamais</strong> un nom de lead, un montant de commission, un coût interne, ni le pseudo d'un commentateur Instagram ou le contenu d'un message privé. Instagram est inclus en <strong>chiffres agrégés</strong> : audience, GO par publication, taux de réponse aux DM. Les chiffres sont calculés à la demande, par le même module que cette page, pour la période qu'elle choisit. Stocké dans <code>_config/agency_access</code>.</div>
     <div id="fnAgencyBody"></div>
     <div class="fn-modal-actions">
       <button class="fn-btn" id="fnAgencyCloseBtn">Fermer</button>
@@ -781,6 +781,17 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
   /* Coûts publicitaires affichables : la dépense couvre tous les jours
      attendus de la période (k.adsSpendOk, jusqu'à hier, heure de Paris). */
   function adsCouts(k) { return !k || k.adsSpendOk !== false; }
+  /* Mentions sous un coût du setting : lecture des commissions en échec,
+     fixe / outils reportés d'un mois précédent, prorata d'une période en
+     cours, deals de setting sans sous-type connu. */
+  function coutsNotes(k, avecProrata) {
+    var n = [];
+    if ((DATA && DATA.settingDealsUnavailable) || (k.partiel && k.partiel.commissions)) n.push('<span style="color:var(--orange,#e8a13c)">⚠ commissions illisibles : coût incomplet</span>' + SC.info('lecture_incomplete'));
+    if (k.costSetting != null && !k.costOwnEntry && k.costSrcMonth) n.push('<span style="color:var(--orange,#e8a13c)">⚠ fixe et outils reportés de ' + esc(k.costSrcMonth) + ' — ajuste via 💶 (les outils varient)</span>');
+    if (avecProrata && k.costDaysTotal && k.costDaysDone < k.costDaysTotal) n.push('fixe et outils au prorata des jours écoulés (' + fmtNum(k.costDaysDone) + ' sur ' + fmtNum(k.costDaysTotal) + ')');
+    if (k.commSettingSbInconnu > 0) n.push(fmtNum(k.commSettingSbInconnu) + ' commission(s) sans canal connu, comptée(s) en Setting (NB)');
+    return n.length ? '<br>' + n.join(' · ') : '';
+  }
   /* Sous-ligne du CPL pub : son dénominateur, et le CPL « tous leads » pour
      mémoire (k.cpl — n'est plus jamais affiché seul sous le mot CPL). */
   function cplSub(k) {
@@ -1267,14 +1278,19 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
   function renderVslStage(k) {
     var hasLeads = k.vslLeads > 0;
     var h = stageOpen('🎬', 'Pages du tunnel — conversion par étape',
-      'vues, clics et formulaires : mesure Alteore sur les pages hébergées (une session = une vue) · RDV : collection bookings, provenance posée à la prise de RDV ou à l\'opt-in · présents et closes : RDV terminal de la chaîne · replanifications et RDV internes exclus');
+      'vues, clics et formulaires : mesure Alteore sur les pages hébergées (une session = une vue) · RDV pris : collection bookings, provenance posée à la prise de RDV ou à l\'opt-in, résultat lu sur le dernier RDV de la chaîne · closes, contracté et collecté : la liste unique des closes de la période, rangés sur la page de leur RDV closé (à défaut, la page d\'entrée de la fiche) · replanifications et RDV internes exclus');
     h += '<div class="fn-grid">';
-    h += kpiCard(fmtNum(k.vslViews), 'Vues', 'toutes pages et variantes', null, k.vslViews === 0);
-    h += kpiCard(fmtNum(k.vslCtas), 'Clics « Réserver »', 'clics / vues ' + fmtPct(k.vslCtaRate), null, k.vslCtas === 0);
-    if (hasLeads) h += kpiCard(fmtNum(k.vslLeads), 'Formulaires remplis', 'form. / vues ' + fmtPct(k.vslViews > 0 ? k.vslLeads / k.vslViews * 100 : null));
-    h += kpiCard(fmtNum(k.vslBookings), 'RDV pris', 'RDV / vues ' + fmtPct(k.vslBookRate) + (hasLeads && k.vslLeads > 0 && k.vslBookings <= k.vslLeads ? ' · RDV / form. ' + fmtPct(k.vslBookings / k.vslLeads * 100) : ''));
-    h += kpiCard(fmtNum(k.vslPresent || 0), 'Présents', 'présents / RDV ' + fmtPct(k.vslBookings > 0 ? (k.vslPresent || 0) / k.vslBookings * 100 : null), null, !k.vslPresent);
-    h += kpiCard(fmtEuro2(k.vslCpr), 'CPR', 'dépense pub / RDV pris depuis ces pages', null, k.vslCpr == null);
+    h += kpiCard(fmtNum(k.vslViews), 'Vues' + SC.info('vues_page'), 'toutes pages et variantes', null, k.vslViews === 0);
+    h += kpiCard(fmtNum(k.vslCtas), 'Clics bouton' + SC.info('clics_bouton'), 'clics ÷ vues ' + fmtPct(k.vslCtaRate), null, k.vslCtas === 0);
+    if (hasLeads) h += kpiCard(fmtNum(k.vslLeads), 'Formulaires' + SC.info('formulaires_page'), 'nouveaux leads + ré-optins · formulaires ÷ vues ' + fmtPct(k.vslViews > 0 ? k.vslLeads / k.vslViews * 100 : null));
+    h += kpiCard(fmtNum(k.vslBookings), 'RDV pris' + SC.info('rdv_pris', 'Ici : RDV pris depuis ces pages (provenance connue).'), 'RDV ÷ vues ' + fmtPct(k.vslBookRate) + (hasLeads && k.vslLeads > 0 && k.vslBookings <= k.vslLeads ? ' · RDV ÷ formulaires ' + fmtPct(k.vslBookings / k.vslLeads * 100) : ''));
+    h += kpiCard(fmtNum(k.vslPresent || 0), 'Présents' + SC.info('presents'), 'présents ÷ RDV pris ' + fmtPct(k.vslBookings > 0 ? (k.vslPresent || 0) / k.vslBookings * 100 : null) + infoL('presents_pages'), null, !k.vslPresent);
+    if (k.vslCloses != null) {
+      h += kpiCard(fmtNum(k.vslCloses), 'Closes des pages' + infoL('closes_pages'),
+        fmtNum(k.vslCloses) + ' + ' + fmtNum(k.vslClosesAutresPages || 0) + ' sur d’autres pages + ' + fmtNum(k.vslClosesNonRattaches || 0) + ' non rattachés = ' + fmtNum((k.closes || {}).closes) + ' Closes' + SC.info('closes') +
+        '<br>contracté ' + fmtEuro(k.vslContracte) + ' · collecté ' + fmtEuro(k.vslCollecte) + SC.info('ht'), null, !k.vslCloses);
+    }
+    h += kpiCard(adsCouts(k) ? fmtEuro2(k.vslCpr) : '—', 'CPR pages' + infoL('cpr_pages'), adsCouts(k) ? 'dépense pub ÷ ' + fmtNum(k.vslBookings) + ' RDV pris depuis ces pages' : adsManque(k), null, !adsCouts(k) || k.vslCpr == null);
     h += '</div>';
     h += FunnelPagesTable.render(k);
     if (!(k.vslFunnels || []).length) h += '<div class="fn-stage-note" style="margin-top:10px">Aucune page hébergée mesurée sur la période.</div>';
@@ -1506,10 +1522,12 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
        qui est le pire. On garde la Dépense (une somme partielle annoncée
        comme telle reste lisible) et on masque les ratios. */
     var spendComplete = showSpend && k.adSpendComplete === true;
-    var showRatios = showSpend && spendComplete;
+    /* Même règle que le reste de l'onglet : la dépense du COMPTE doit aussi
+       couvrir tous les jours attendus (k.adsSpendOk). */
+    var showRatios = showSpend && spendComplete && adsCouts(k);
 
     var h = stageOpen('🎨', 'Performance publicitaire',
-      'axe = attribution capturée à l\'arrivée du lead (attributionFirst), plus le champ UTM écrasable · chaque colonne garde l\'axe de sa section : leads entrés · RDV pris · annulés &amp; no-show ayant lieu · closes gagnés sur la période · qualifiés = score ⭐ 4-5 (Leads Live)');
+      'axe = attribution capturée à l\'arrivée du lead (attributionFirst), plus le champ UTM écrasable · chaque colonne garde l\'axe de sa section : leads entrés · RDV pris · annulés, no-show et pitchés à la date du RDV · closes, contracté et collecté = la liste unique des closes de la période (jour de la vente) · « Note équipe 4-5 » = étoiles 4 ou 5 posées par l\'équipe dans Leads Live (ni la note LQS, ni le CA déclaré)' + infoL('note_equipe'));
 
     /* — Sélecteur d'axe — */
     h += '<div class="fn-utm-axis" style="display:flex;gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap">';
@@ -1542,9 +1560,9 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
        le CPL du mois. */
     if (showSpend && !spendComplete) {
       h += '<div class="fn-stage-note" style="margin-top:6px;border-left:3px solid var(--gold);padding-left:8px">'
-        + '⚠ <strong>Dépense incomplète : ' + fmtNum(k.adSpendDaysCovered) + ' jour' + (k.adSpendDaysCovered > 1 ? 's' : '') + ' sur ' + fmtNum(k.adSpendDaysExpected) + '</strong> de la période ont de la donnée publicitaire. '
+        + '⚠ <strong>Dépense par pub incomplète : ' + fmtNum(k.adSpendDaysCovered) + ' jour' + (k.adSpendDaysCovered > 1 ? 's' : '') + ' sur ' + fmtNum(k.adSpendDaysExpected) + '</strong> (jusqu’à hier) ont de la dépense pub par pub' + infoL('jours_depense') + '. '
         + 'La colonne Dépense ne montre donc qu\'une <strong>partie</strong> du budget réel, alors que la colonne Leads couvre tout. '
-        + '<strong>CPL et ROAS sont masqués</strong> tant que c\'est le cas : les calculer reviendrait à diviser un jour de dépense par un mois de leads, et à afficher un coût par lead bien trop flatteur. '
+        + '<strong>CPL et ROAS pub de ce tableau sont masqués</strong> tant que c\'est le cas : les calculer reviendrait à diviser un jour de dépense par un mois de leads, et à afficher un coût par lead bien trop flatteur. '
         + 'Fais rejouer l\'ingestion Make sur les jours manquants — l\'endpoint est idempotent.</div>';
     }
 
@@ -1581,12 +1599,12 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     var agg = null;
     if (small.length) {
       agg = { key: 'Autres (' + small.length + ' valeur' + (small.length > 1 ? 's' : '') + ' à moins de ' + UTM_MIN_LEADS + ' leads)',
-        leads: 0, scoreSum: 0, scoreN: 0, qual: 0, booked: 0, cancelled: 0, noshow: 0,
-        closes: 0, col: 0, spend: 0, hasSpend: false, legacy: false, _agg: true };
+        leads: 0, scoreSum: 0, scoreN: 0, qual: 0, booked: 0, cancelled: 0, noshow: 0, pitched: 0,
+        closes: 0, col: 0, con: 0, spend: 0, hasSpend: false, legacy: false, _agg: true };
       small.forEach(function (r) {
         agg.leads += r.leads; agg.scoreSum += r.scoreSum; agg.scoreN += r.scoreN;
         agg.qual += r.qual; agg.booked += r.booked; agg.cancelled += r.cancelled;
-        agg.noshow += r.noshow; agg.closes += r.closes; agg.col += r.col;
+        agg.noshow += r.noshow; agg.pitched += r.pitched || 0; agg.closes += r.closes; agg.col += r.col; agg.con += r.con || 0;
         agg.spend += r.spend || 0; if (r.hasSpend) agg.hasSpend = true;
         if (r.legacy) agg.legacy = true;
       });
@@ -1595,17 +1613,19 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       main.push(agg);
     }
 
-    var minW = showRatios ? 1180 : (showSpend ? 1020 : 940);
+    var minW = showRatios ? 1380 : (showSpend ? 1220 : 1140);
+    function th(t) { return '<th style="cursor:default">' + t + '</th>'; }
     h += '<div class="fn-table-wrap" style="margin-top:10px"><table class="fn-table" style="min-width:' + minW + 'px"><thead><tr>';
-    h += '<th style="cursor:default">' + esc(axisLabel) + '</th>';
-    h += '<th style="cursor:default">Leads</th><th style="cursor:default">Score moy ⭐</th><th style="cursor:default">Qualifiés 4-5</th>';
-    h += '<th style="cursor:default">RDV pris</th><th style="cursor:default">Annulés</th><th style="cursor:default">No-show</th>';
-    h += '<th style="cursor:default">Closes</th><th style="cursor:default">Collecté HT</th>';
+    h += th(esc(axisLabel));
+    h += th('Leads' + SC.info('leads')) + th('Note équipe moy. ⭐' + infoL('note_equipe')) + th('Note équipe 4-5' + infoL('note_equipe'));
+    h += th('RDV pris' + SC.info('rdv_pris')) + th('Annulés' + SC.info('annules')) + th('No-show' + SC.info('no_show')) + th('Pitchés' + SC.info('pitches'));
+    h += th('Closes' + SC.info('closes')) + th('Contracté HT' + SC.info('contracte')) + th('Collecté HT' + SC.info('collecte'));
     if (showSpend) {
-      h += '<th style="cursor:default">Dépense' + (spendComplete ? '' : ' <span style="color:var(--gold)" title="Partielle — ' + k.adSpendDaysCovered + ' j sur ' + k.adSpendDaysExpected + '">⚠</span>') + '</th>';
-      if (showRatios) h += '<th style="cursor:default">CPL</th><th style="cursor:default">ROAS</th>';
+      h += th('Dépense par pub' + infoL('depense_par_pub') + (spendComplete ? '' : ' <span style="color:var(--gold)" title="' + escAttr('Partielle — ' + k.adSpendDaysCovered + ' j sur ' + k.adSpendDaysExpected) + '">⚠</span>'));
+      if (showRatios) h += th('CPL' + infoL('cpl_pub', 'Ici : dépense de la ligne ÷ leads de la ligne.')) + th(esc(SC.mot('roas_pub')) + SC.info('roas_pub', 'Ici : collecté des closes de la ligne ÷ dépense de la ligne.'));
     }
     h += '</tr></thead><tbody>';
+    var tot = { leads: 0, scoreSum: 0, scoreN: 0, qual: 0, booked: 0, cancelled: 0, noshow: 0, pitched: 0, closes: 0, con: 0, col: 0, spend: 0 };
 
     main.forEach(function (r) {
       var avg = r.scoreN ? Math.round(r.scoreSum / r.scoreN * 10) / 10 : null;
@@ -1613,7 +1633,11 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       /* Le taux de close reste un vrai ratio de cohorte : numérateur et
          dénominateur portent tous deux sur des leads. Le ratio RDV/leads,
          lui, ne l'est pas — il n'est plus affiché comme un pourcentage. */
-      var closePct = (r.leads > 0 && r.closes > 0) ? ' <span style="color:var(--muted2);font-size:10px">' + fmtPct(r.closes / r.leads * 100, 1) + '</span>' : '';
+      /* (Plus de « % closes ÷ leads » ici : les closes de la période ne sont
+         pas des closes des leads de la période — ce n'était pas un taux.) */
+      tot.leads += r.leads; tot.scoreSum += r.scoreSum; tot.scoreN += r.scoreN; tot.qual += r.qual; tot.booked += r.booked;
+      tot.cancelled += r.cancelled; tot.noshow += r.noshow; tot.pitched += r.pitched || 0; tot.closes += r.closes;
+      tot.con += r.con || 0; tot.col += r.col || 0; tot.spend += r.spend || 0;
       /* Le ⚠ signale une attribution PUBLICITAIRE douteuse. Une ligne
          « Hors pub » n'en est pas une : elle est nommée et assumée, le
          marqueur n'y ferait que du bruit. */
@@ -1627,18 +1651,36 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       h += '<td class="num">' + fmtNum(r.booked) + '</td>';
       h += '<td class="num"' + (r.cancelled ? ' style="color:var(--red3)"' : '') + '>' + fmtNum(r.cancelled) + '</td>';
       h += '<td class="num"' + (r.noshow ? ' style="color:var(--gold)"' : '') + '>' + fmtNum(r.noshow) + '</td>';
-      h += '<td class="num"' + (r.closes ? ' style="color:#34d399;font-weight:700"' : '') + '>' + fmtNum(r.closes) + closePct + '</td>';
+      h += '<td class="num">' + fmtNum(r.pitched || 0) + '</td>';
+      h += '<td class="num"' + (r.closes ? ' style="color:#34d399;font-weight:700"' : '') + '>' + fmtNum(r.closes) + '</td>';
+      h += '<td class="num">' + (r.closes ? fmtEuro(r.con) : '—') + '</td>';
       h += '<td class="num">' + (r.closes ? fmtEuro(r.col) : '—') + '</td>';
       if (showSpend) {
         h += '<td class="num"' + (spendComplete ? '' : ' style="color:var(--muted)" title="Dépense partielle sur la période"') + '>' + (r.hasSpend ? fmtEuro(r.spend) : '—') + '</td>';
         if (showRatios) {
           h += '<td class="num">' + (r.cpl != null ? fmtEuro2(r.cpl) : '—') + '</td>';
-          h += '<td class="num"' + (r.roas != null && r.roas >= 1 ? ' style="color:#34d399;font-weight:700"' : '') + '>' + (r.roas != null ? r.roas.toFixed(2).replace('.', ',') + '×' : '—') + '</td>';
+          h += '<td class="num"' + (r.roas != null && r.roas >= 1 ? ' style="color:#34d399;font-weight:700"' : '') + '>' + fmtRoas(r.roas) + '</td>';
         }
       }
       h += '</tr>';
     });
+    /* Ligne Total : somme des lignes affichées (repliées comprises). Avec les
+       non ventilables, elle retombe sur les totaux du héro. */
+    var tAvg = tot.scoreN ? Math.round(tot.scoreSum / tot.scoreN * 10) / 10 : null;
+    h += '<tr style="font-weight:700;border-top:2px solid var(--line)"><td>Total des lignes</td><td class="num">' + fmtNum(tot.leads) + '</td>'
+      + '<td class="num">' + (tAvg == null ? '—' : '⭐ ' + tAvg.toLocaleString('fr-FR')) + '</td><td class="num">' + (tot.scoreN ? fmtNum(tot.qual) : '—') + '</td>'
+      + '<td class="num">' + fmtNum(tot.booked) + '</td><td class="num">' + fmtNum(tot.cancelled) + '</td><td class="num">' + fmtNum(tot.noshow) + '</td><td class="num">' + fmtNum(tot.pitched) + '</td>'
+      + '<td class="num">' + fmtNum(tot.closes) + '</td><td class="num">' + fmtEuro(tot.con) + '</td><td class="num">' + fmtEuro(tot.col) + '</td>';
+    if (showSpend) {
+      h += '<td class="num">' + fmtEuro(tot.spend) + '</td>';
+      if (showRatios) h += '<td class="num">' + fmtEuro2(tot.leads > 0 && tot.spend > 0 ? tot.spend / tot.leads : null) + '</td><td class="num">' + fmtRoas(tot.spend > 0 && tot.col > 0 ? tot.col / tot.spend : null) + '</td>';
+    }
+    h += '</tr>';
     h += '</tbody></table></div>';
+    var clT = k.closes || {};
+    h += '<div class="fn-stage-note" style="margin-top:8px">Total des lignes : ' + fmtNum(tot.leads) + ' leads = Leads du héro' + SC.info('leads') +
+      ' · ' + fmtNum(tot.closes) + ' closes + ' + fmtNum(uu.closes || 0) + ' non ventilable(s)' + infoL('non_ventilables') + ' = ' + fmtNum(clT.closes) + ' Closes' + SC.info('closes') +
+      (showSpend ? ' · dépense : ' + fmtEuro(tot.spend) + ' rattachés à une ligne, ' + fmtEuro(Math.max(0, (k.spend || 0) - tot.spend)) + ' non rattachés, sur ' + fmtEuro(k.spend) + ' de Dépense pub' + infoL('depense_par_pub') : '') + '.</div>';
 
     if (small.length || utmShowAll) {
       h += '<div style="margin-top:8px"><button type="button" data-utm-more="1" style="cursor:pointer;font:inherit;font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;border:1px solid var(--line);background:transparent;color:var(--muted)">'
@@ -1646,20 +1688,21 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
         + '</button></div>';
     }
 
-    if (uu.booked || uu.cancelled || uu.noshow || uu.closes) {
+    if (uu.booked || uu.cancelled || uu.noshow || uu.pitched || uu.closes) {
       var uuParts = [];
       if (uu.booked) uuParts.push(fmtNum(uu.booked) + ' RDV pris');
       if (uu.cancelled) uuParts.push(fmtNum(uu.cancelled) + ' annulé(s)');
       if (uu.noshow) uuParts.push(fmtNum(uu.noshow) + ' no-show');
+      if (uu.pitched) uuParts.push(fmtNum(uu.pitched) + ' pitché(s)');
       if (uu.closes) uuParts.push(fmtNum(uu.closes) + ' close(s)');
       /* Note corrigée 17/08 : les « 45 j » annoncés jusqu'ici étaient faux.
          C'est une borne HAUTE sur createdAt (rattrapage des imports tardifs),
          pas une fenêtre en arrière. La vraie cause est ci-dessous. */
-      h += '<div class="fn-stage-note" style="margin-top:8px">⚠ Non ventilables : ' + uuParts.join(' · ')
+      h += '<div class="fn-stage-note" style="margin-top:8px">⚠ Non ventilables' + infoL('non_ventilables') + ' : ' + uuParts.join(' · ')
         + ' — lead entré <strong>avant</strong> la période et sans ré-optin (donc hors du jeu de leads chargé), close sans fiche liée, ou close détecté via Paiements. Comptés dans les totaux des sections, absents du tableau.</div>';
     }
-    h += '<div class="fn-stage-note" style="margin-top:6px">Le ratio RDV/leads n\'est volontairement plus affiché sur cette ligne : les RDV incluent ceux de leads ré-optinés entrés avant la période, le pourcentage dépassait 100 %. Le LTB fiable est dans « Prise de RDV ».</div>';
-    h += '<div class="fn-stage-note" style="margin-top:6px">Le score ⭐ se remplit dans Leads Live après chaque appel — plus l\'équipe note, plus cette colonne devient fiable.</div>';
+    h += '<div class="fn-stage-note" style="margin-top:6px">Le ratio RDV/leads n\'est volontairement plus affiché sur cette ligne : les RDV incluent ceux de leads ré-optinés entrés avant la période, le pourcentage dépassait 100 %. Le LTB (RDV pris ÷ leads) est sur la Ligne 1 du héro et dans « Prise de RDV ».' + SC.info('ltb') + '</div>';
+    h += '<div class="fn-stage-note" style="margin-top:6px">La note équipe ⭐ se remplit dans Leads Live après chaque appel — plus l\'équipe note, plus ces deux colonnes deviennent fiables.' + infoL('note_equipe') + '</div>';
     h += '</div>';
     return h;
   }
@@ -1887,13 +1930,15 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
 
     /* ❓ Mode d'emploi — SUR la page, replié par défaut (demande Adrien
        15/07), réécrit le 25/11/2026 pour dire les règles ACTUELLES. */
-    h += '<details class="fn-help"><summary>❓ Comment lire ce funnel — les 6 règles (clique pour déplier)</summary><div class="hb">'
+    h += '<details class="fn-help"><summary>❓ Comment lire ce funnel — les 8 règles (clique pour déplier)</summary><div class="hb">'
       + '<p><strong>1 · Un RDV a deux dates</strong> — le jour où on le <strong>prend</strong> et le jour où il <strong>a lieu</strong>. La <strong>Ligne 1</strong> et « Prise de RDV » comptent les <strong>RDV pris</strong> pendant la période (ce que la pub et le setting ont produit : LTB, CPR), avec le résultat de leur dernier RDV, même s’il arrive après la période. La <strong>Ligne 2</strong> et « Tenue » comptent les <strong>RDV de la période</strong>, ceux qui ont lieu pendant la période. Le pont chiffré entre les deux est dans « Prise de RDV ».</p>'
       + '<p><strong>2 · Self Booking (SB), Setting (NB), Manuels.</strong> SB : le prospect réserve seul sur le lien public. Setting (NB) : RDV posé par un setter sur le lien setter (le type de consultation fait foi). Manuels : RDV créés à la main dans l’Agenda, comptés à leur date (Ligne 2, Tenue) mais jamais dans les RDV pris, les Sets ni le LTB. Sous chaque carte, Self Booking + Setting (NB) (+ Manuels) = le total.</p>'
       + '<p><strong>3 · Un RDV n’a qu’un état</strong> : annulé, no-show, présent, à statuer ou à venir (les replanifiés comptent à leur nouvelle date, les doublons supprimés nulle part). <strong>Kept = RDV − annulés</strong> : le no-show reste dedans, sur les deux lignes. <strong>Show-up = présents ÷ (Kept − à venir)</strong>.</p>'
       + '<p><strong>4 · Closes = clients gagnés pendant la période</strong>, un par client, comptés le jour de la vente. C’est la même liste que Set NB, Close SB, Global closing et Qualité leads. Un close annulé est retiré partout. Le canal d’un close est celui de son RDV closé ; à défaut, la réponse du closer, puis l’étape de la fiche.</p>'
       + '<p><strong>5 · Les montants sont HT et lus dans le module Paiements.</strong> Contracté = valeur des contrats ; Collecté = prélèvements déjà passés, à ce jour, sur ces mêmes clients ; Reste à encaisser = contracté − collecté. Un close sans paiement : contracté = tarif déclaré au close, collecté à 0, signalé « sans paiement ». Le collecté déclaré par le closer n’est jamais compté.</p>'
-      + '<p><strong>6 · « — » = pas de donnée, ou un taux qui n’a pas de sens</strong> (par exemple plus de closes que de pitchés sur une période courte) : jamais un chiffre inventé. Une lecture en échec ou tronquée s’affiche en rouge en haut de l’onglet. Le petit « i » à côté de chaque chiffre donne sa règle ; un chiffre souligné s’ouvre en liste nominative.</p>'
+      + '<p><strong>6 · Leads et téléphone.</strong> Leads = fiches entrées pendant la période (date d’entrée réelle) ; les ré-optins (anciennes fiches réinscrites par un vrai formulaire) sont à part. LTB = RDV pris ÷ leads : des RDV pris par d’anciens leads entrent au numérateur. Appels = appels sortants de l’équipe sales (CSM et coachs à part) ; Décroché = au moins ' + SC.DECROCHE_MIN_SEC + ' s de conversation, répondeurs écartés, partout la même règle.</p>'
+      + '<p><strong>7 · Coûts.</strong> Un seul chiffre s’appelle ROAS : le <strong>ROAS pub</strong> (collecté des clients venus de la pub ÷ dépense pub). CPL pub = dépense ÷ leads venus de la pub. Tant que la dépense pub n’est pas reçue pour tous les jours de la période (jusqu’à hier), CPL pub, CPR, CAC pub et ROAS pub sont masqués. Les coûts du setting ne se ventilent pas par tunnel ni par source (« — » sous filtre) et sont comptés au prorata des jours écoulés sur une période en cours. Montants hors taxes.</p>'
+      + '<p><strong>8 · « — » = pas de donnée, ou un taux qui n’a pas de sens</strong> (par exemple plus de closes que de pitchés sur une période courte) : jamais un chiffre inventé. Une lecture en échec ou tronquée s’affiche en rouge en haut de l’onglet. Le petit « i » à côté de chaque chiffre donne sa règle ; un chiffre souligné s’ouvre en liste nominative.</p>'
       + '</div></details>';
 
     /* Self Booking / Setting (NB) / Manuels sous chaque carte (23/11/2026,
@@ -2208,12 +2253,19 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     h += '<div style="font-size:10.5px;color:var(--gold);font-weight:800;letter-spacing:0.7px;margin:12px 0 8px">🔗 Self Booking — le prospect prend RDV seul (lien public)</div>';
     h += '<div class="fn-grid">';
     h += kpiCard(fmtNum(k.leads), 'Leads (total)' + SC.info('leads'), 'entrés pendant la période');
-    h += kpiCard(fmtNum(cS.n), 'RDV pris SB' + SC.info('rdv_pris'), ltbTxt('LTB (SB)', cS.n) + ' · dont ' + fmtNum(k.orgSB.cohort) + ' leads de la période' + (k.orgSB.reopt ? ' · ' + k.orgSB.reopt + ' ré-optins' : '') + (k.orgSB.old ? ' · ' + k.orgSB.old + ' leads plus anciens' : ''), targetBadge('selfShare', k.selfShare));
+    h += kpiCard(fmtNum(cS.n), 'RDV pris SB' + SC.info('rdv_pris'), ltbTxt('LTB (SB)', cS.n) + ' · dont ' + fmtNum(k.orgSB.cohort) + ' leads de la période' + (k.orgSB.reopt ? ' · ' + k.orgSB.reopt + ' ré-optins' : '') + (k.orgSB.old ? ' · ' + k.orgSB.old + ' leads plus anciens' + SC.info('rdv_pris_hors_tunnel') : '') +
+      '<br>part Self Booking ' + fmtPct(k.selfShare) + ' = ' + fmtNum(cS.n) + ' ÷ ' + fmtNum(ch.n) + ' RDV pris', targetBadge('selfShare', k.selfShare));
     h += chainCards(cS, 'SB');
-    h += kpiCard(fmtEuro2(k.cprSB), 'CPR', 'dépense ÷ ' + fmtNum(cS.n) + ' RDV pris SB (annulés inclus)');
-    h += kpiCard(fmtEuro2(k.cprKept), 'CPR KEPT', 'dépense ÷ ' + fmtNum(cS.kept) + ' Kept SB');
-    h += kpiCard(fmtEuro2(k.cprLive), 'CPR Présent', 'dépense ÷ ' + fmtNum(cS.present) + ' présents SB');
-    h += kpiCard(fmtEuro2(k.cprOffre), 'CPR Pitché', 'dépense ÷ ' + fmtNum(cS.pitched) + ' pitchés SB');
+    /* Coûts par RDV Self Booking : dépense pub ÷ un compte de la ligne SB
+       (dénominateur écrit dessous). Masqués si la dépense est incomplète. */
+    var okAdsSB = adsCouts(k);
+    function cprCard(v, lbl, cle, den, denLbl) {
+      return kpiCard(okAdsSB ? fmtEuro2(v) : '—', lbl + infoL(cle), okAdsSB ? 'dépense pub ÷ ' + fmtNum(den) + ' ' + denLbl : adsManque(k), null, !okAdsSB || v == null);
+    }
+    h += cprCard(k.cprSB, 'CPR SB', 'cpr_sb', cS.n, 'RDV pris SB (annulés inclus)');
+    h += cprCard(k.cprKept, 'Coût / RDV SB kept', 'cout_kept_sb', cS.kept, 'Kept SB');
+    h += cprCard(k.cprLive, 'Coût / présent SB', 'cout_present_sb', cS.present, 'présents SB');
+    h += cprCard(k.cprOffre, 'Coût / pitché SB', 'cout_pitche_sb', cS.pitched, 'pitchés SB');
     h += '</div>';
     /* — Ligne 2 : SETTING (NB) — */
     h += '<div style="font-size:10.5px;color:#c4b5fd;font-weight:800;letter-spacing:0.7px;margin:16px 0 8px">📞 Setting (NB) — RDV posés par un setter (lien setter)</div>';
@@ -2241,16 +2293,21 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       ltbTxt('LTB (NB)', cN.n) +
       ' · dont ' + fmtNum(k.orgNB.cohort) + ' leads de la période' + (k.orgNB.reopt ? ' · ' + k.orgNB.reopt + ' ré-optins' : '') + (k.orgNB.old ? ' · ' + k.orgNB.old + ' leads plus anciens' : '') +
       (k.statutsSetSansRdv > 0 ? '<br>+ ' + fd(k.statutsSetSansRdv, fmtNum(k.statutsSetSansRdv), 'statutsSet') + ' statut(s) « Set » sans RDV, hors Sets' + SC.info('statuts_set_sans_rdv') : ''));
-    h += kpiCard(fmtPct(k.recovery), 'Taux de récupération', cohortLabelRecovery(k), targetBadge('recovery', k.recovery));
+    h += kpiCard(fmtPct(k.recovery), 'Taux de récupération' + infoL('taux_recuperation'), cohortLabelRecovery(k), targetBadge('recovery', k.recovery));
     h += chainCards(cN, 'NB');
-    var csSub;
-    var csRep = (k.costSetting != null && !k.costOwnEntry && k.costSrcMonth) ? ' · <span style="color:var(--orange,#e8a13c)">⚠ fixe/outils reportés de ' + esc(k.costSrcMonth) + ' — ajuste via 💶 (outils variables)</span>' : '';
-    var csNa = DATA && DATA.settingDealsUnavailable ? '<span style="color:var(--orange,#e8a13c)">⚠ commissions indisponibles</span> · ' : '';
-    if (k.costPerRdvNB != null) csSub = csNa + '(fixe ' + fmtEuro(k.costFixe) + ' + comm ' + fmtEuro(k.commSetting) + (k.commSettingN ? ' — ' + k.commSettingN + ' deal(s)' : '') + ' + outils ' + fmtEuro(k.costOutils) + ') ÷ ' + fmtNum(cN.n) + ' RDV pris NB' + csRep;
-    else if (k.costSetting != null) csSub = 'coût setting ' + fmtEuro(k.costSetting) + ' — aucun RDV pris NB sur la période' + csRep;
-    else csSub = 'salaire fixe setter + outils non renseignés — bouton 💶 Coûts (les commissions, elles, remontent toutes seules du module Commissions)';
-    h += kpiCard(k.costPerRdvNB != null ? fmtEuro2(k.costPerRdvNB) : '—', 'Coût / RDV pris NB (réel)', csSub, null, k.costPerRdvNB == null);
-    h += kpiCard(fmtEuro2(k.cpl), 'CPL', 'dépense ÷ ' + fmtNum(k.leads) + ' leads', targetBadge('cpl', k.cpl));
+    /* Coût / RDV pris NB = (fixe + outils + commissions des closes NB) ÷
+       RDV pris NB (= Sets, k.costPerRdvNBBase). Sous filtre tunnel / source :
+       « — » (coûts non ventilés). Période en cours : fixe et outils au
+       prorata des jours écoulés. */
+    var cpSub, cpVal = '—';
+    if (k.costFiltered) cpSub = 'coûts du setting non ventilés par tunnel / source — repasse sur « Tous »' + infoL('couts_non_ventiles');
+    else if (k.costPerRdvNB != null) {
+      cpVal = fmtEuro2(k.costPerRdvNB);
+      cpSub = '(fixe ' + fmtEuro(k.costFixe) + infoL('fixe_setting') + ' + outils ' + fmtEuro(k.costOutils) + ' + commissions des closes NB ' + fmtEuro(k.commSettingNB) + infoL('commissions_dues') + ') ÷ ' + fmtNum(k.costPerRdvNBBase) + ' RDV pris NB' + SC.info('sets') +
+        coutsNotes(k, true);
+    } else if (k.costSetting != null) cpSub = 'coût setting ' + fmtEuro(k.costSetting) + ' — aucun RDV pris NB sur la période' + coutsNotes(k, true);
+    else cpSub = 'fixe du setting et outils non renseignés — bouton 💶 Coûts (les commissions, elles, sont lues dans le module Commissions)' + coutsNotes(k, false);
+    h += kpiCard(cpVal, 'Coût / RDV pris NB' + infoL('cout_rdv_pris_nb'), cpSub, null, cpVal === '—');
     h += '</div>';
     if (k.bookedAdmin > 0) h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + fmtNum(k.bookedAdmin) + ' RDV manuels créés pendant la période' + SC.info('rdv_manuels') + ' — jamais des RDV pris, des Sets ni du LTB ; comptés à leur date dans la Ligne 2 et la Tenue (part Manuels).</div>';
     if (k.unknownLeadBookings > 0 && tunnelFilter === 'all') h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + fmtNum(k.unknownLeadBookings) + ' RDV pris par des leads entrés avant la période ou sans fiche' + SC.info('rdv_pris_hors_tunnel') + ' — compris dans les RDV pris, hors taux de récupération.</div>';
@@ -2300,54 +2357,76 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     h += '</div>';
     h += '<div class="fn-arrow">▼</div>';
 
-    /* 6. Téléphonie — cartes d'activité strictement sur la période ;
-       TTC / TTB / joignabilité = parcours par lead de la cohorte, 1er
-       contact cherché jusqu'à 14 j après la fenêtre (fix censure 15/07). */
+    /* 6. Téléphonie (règles communes, 25/11/2026) — Appels = SORTANTS de
+       l'équipe sales (setters, closers, admins, anciens membres) + appels
+       sans auteur ; CSM / coachs « hors équipe sales », à part. Décroché =
+       StatsCore.estDecroche (≥ 5 s de conversation, répondeurs écartés).
+       Lead to speech / joignabilité : leads entrés pendant la période, appels
+       de leurs 14 premiers jours (FunnelCore.leadContact). */
     var telNotes = [];
-    if (DATA.callsTruncated) telNotes.push('⚠ tronqué à ' + CALLS_QUERY_LIMIT + ' appels');
-    if (k.ttxProvisional) telNotes.push('⏳ délais provisoires — des 1ers contacts peuvent encore arriver (fenêtre + 14 j non écoulés)');
+    if (k.partiel && k.partiel.calls) telNotes.push('⚠ chiffres partiels — voir « Lecture incomplète » en haut de l’onglet' + SC.info('lecture_incomplete'));
+    if (k.ttxProvisional) telNotes.push('⏳ délais provisoires — des 1ers contacts peuvent encore arriver (14 jours après l’arrivée des derniers leads non écoulés)');
     /* Le taux a chuté d'un tiers le 17/08 en corrigeant le prédicat. Sans
        cette phrase, l'équipe croit à une mauvaise semaine. */
     telNotes.push('📵 messageries exclues depuis le 17/08 — un répondeur n\'est plus compté comme un décroché');
     /* Les appels du jour n'ont pas encore leur sonnerie (sync à 3 h 30) :
-       la règle ne peut pas s'y appliquer et le taux remonte artificiellement.
-       Le dire vaut mieux que d'afficher 81,8 % au lieu de 60 % en silence. */
+       la règle ne peut pas s'y appliquer et le taux remonte artificiellement. */
     if (k.callsNoRingData > 0) {
       telNotes.push('⏳ <strong>taux provisoire</strong> — ' + fmtNum(k.callsNoRingData) + ' appel' + (k.callsNoRingData > 1 ? 's' : '')
-        + ' sans donnée de sonnerie, comptés décrochés par défaut. Le sync Ringover les enrichit chaque nuit ; d\'ici là le taux est surestimé.');
+        + ' sans donnée de sonnerie, comptés décrochés s’ils durent ' + SC.DECROCHE_MIN_SEC + ' s ou plus. Le sync Ringover les enrichit chaque nuit ; d\'ici là le taux est surestimé.');
     }
-    h += stageOpen('☎️', 'Activité téléphonique (Ringover — auto)', telNotes.length ? telNotes.join(' · ') : null);
+    h += stageOpen('☎️', 'Activité téléphonique (Ringover — auto)', telNotes.join(' · '));
     h += '<div class="fn-grid">';
-    h += kpiCard(fmtNum(k.callsOut), 'Appels sortants', null);
-    h += kpiCard(fmtNum(k.callsAnswered), 'Décrochés', 'conversation ≥ ' + ANSWERED_MIN_SEC + ' s, hors messagerie');
-    h += kpiCard(fmtPct(k.answerRate), 'Taux de décroché', 'un décroché après longue sonnerie suivi de moins de 15 s est une messagerie, pas une conversation', targetBadge('decroche', k.answerRate));
+    var appSub = 'sortants de l’équipe sales (setters, closers, admins, anciens membres)';
+    if (k.callsSansAuteur > 0) appSub += '<br>dont ' + fmtNum(k.callsSansAuteur) + ' sans auteur' + SC.info('appels_sans_auteur');
+    if (k.callsOutHorsSales > 0) appSub += '<br>+ ' + fmtNum(k.callsOutHorsSales) + ' hors équipe sales, non comptés' + infoL('hors_equipe_sales');
+    h += kpiCard(fmtNum(k.callsOut), esc(SC.mot('appels')) + SC.info('appels', 'Ici : équipe sales et appels sans auteur ; CSM et coachs à part.'), appSub);
+    h += kpiCard(fmtNum(k.callsAnswered), esc(SC.mot('decroches')) + SC.info('decroches'), 'conversation ≥ ' + SC.DECROCHE_MIN_SEC + ' s, messageries écartées');
+    h += kpiCard(fmtPct(k.answerRate), esc(SC.mot('taux_decroche')) + SC.info('taux_decroche'), fmtNum(k.callsAnswered) + ' décrochés ÷ ' + fmtNum(k.callsOut) + ' appels', targetBadge('decroche', k.answerRate));
+    h += kpiCard(fmtSec(k.talkSec), esc(SC.mot('temps_appel')) + SC.info('temps_appel'), 'conversation des ' + fmtNum(k.callsAnswered) + ' appels décrochés', null, !k.talkSec);
+    h += kpiCard(fmtSec(k.avgAnsweredDurSec), esc(SC.mot('duree_moyenne_appel')) + SC.info('duree_moyenne_appel'), 'temps d’appel ÷ ' + fmtNum(k.callsAnswered) + ' décrochés', null, k.avgAnsweredDurSec == null);
+    if (k.callsIn > 0) h += kpiCard(fmtNum(k.callsIn), 'Appels reçus' + infoL('appels_recus'), fmtNum(k.callsInAnswered) + ' pris · hors Appels');
     var provTag = k.ttxProvisional ? ' · <span style="color:var(--gold)">provisoire</span>' : '';
-    h += kpiCard(fmtDelay(k.ttcMedian), '⏱ Time-to-contact médian', 'entrée lead → 1er appel · ' + fmtNum(k.ttcCount) + ' appelés · ' + fmtNum(k.leadsNeverCalled) + ' jamais appelés' + provTag, null, k.ttcMedian == null);
-    h += kpiCard(fmtDelay(k.ttbSetMedian), '⏱ Time-to-book setting', 'entrée lead → RDV posé par le setting · ' + fmtNum(k.ttbSetCount) + ' leads' + provTag, null, k.ttbSetMedian == null);
-    h += kpiCard(fmtDelay(k.ttbSelfMedian), '⏱ Time-to-book self', 'entrée lead → self-booking · ' + fmtNum(k.ttbSelfCount) + ' leads' + provTag, null, k.ttbSelfMedian == null);
-    h += kpiCard(fmtPct(k.reachRate, 0), 'Taux de joignabilité', fmtNum(k.leadsReached) + ' joints / ' + fmtNum(k.leadsCalled) + ' appelés · ' + fmtNum(k.leadsNeverCalled) + ' jamais appelés', targetBadge('reach', k.reachRate));
-    h += kpiCard(k.attemptsAvg != null ? (Math.round(k.attemptsAvg * 10) / 10).toLocaleString('fr-FR') : '—', 'Tentatives / lead appelé', 'appels moyens par lead touché');
-    h += kpiCard(fmtSec(k.avgAnsweredDurSec), 'Durée moy. décroché', 'conversation moyenne (≥ ' + ANSWERED_MIN_SEC + ' s)');
+    h += kpiCard(fmtDelay(k.ttcMedian), '⚡ Lead to speech médian' + infoL('lead_to_speech'), fmtNum(k.leadsCalled) + ' leads appelés sous 14 j après leur entrée · ' + fmtNum(k.leadsNeverCalled) + ' jamais appelés' + provTag, null, k.ttcMedian == null);
+    h += kpiCard(fmtDelay(k.ttbSetMedian), '⏱ Time-to-book setting' + infoL('time_to_book'), 'entrée du lead → RDV posé par le setting · ' + fmtNum(k.ttbSetCount) + ' leads' + provTag, null, k.ttbSetMedian == null);
+    h += kpiCard(fmtDelay(k.ttbSelfMedian), '⏱ Time-to-book Self Booking' + infoL('time_to_book'), 'entrée du lead → RDV pris seul · ' + fmtNum(k.ttbSelfCount) + ' leads' + provTag, null, k.ttbSelfMedian == null);
+    h += kpiCard(fmtPct(k.reachRate), 'Taux de joignabilité' + infoL('joignabilite'), fmtNum(k.leadsReached) + ' joints ÷ ' + fmtNum(k.leadsCalled) + ' appelés · ' + fmtNum(k.leadsNeverCalled) + ' jamais appelés', targetBadge('reach', k.reachRate));
+    h += kpiCard(k.attemptsAvg != null ? (Math.round(k.attemptsAvg * 10) / 10).toLocaleString('fr-FR') : '—', 'Tentatives / lead appelé' + infoL('tentatives'), 'appels vers les ' + fmtNum(k.leadsCalled) + ' leads appelés, sous 14 j ÷ ' + fmtNum(k.leadsCalled));
     h += '</div>';
     if (k.callsByUser && k.callsByUser.length) {
-      var maxOut = k.callsByUser[0].out || 1;
-      h += '<div style="margin-top:12px"><div style="font-size:10.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.7px;margin-bottom:8px">Par closer</div><div class="fn-minibars">';
-      k.callsByUser.forEach(function (u) {
-        var rate = u.out > 0 ? u.ans / u.out * 100 : 0;
-        h += '<div class="fn-minibar"><span class="mb-l" title="' + escAttr(u.name) + '">' + esc(u.name) + '</span><span class="mb-track"><span class="mb-fill" style="width:' + (u.out / maxOut * 100).toFixed(1) + '%;background:#f472b6"></span></span><span class="mb-v" style="width:170px">' + fmtNum(u.out) + ' app. · ' + fmtNum(u.ans) + ' déc. · ' + fmtPct(rate, 0) + '</span></div>';
-      });
-      h += '</div></div>';
+      var dedans = k.callsByUser.filter(function (u) { return !u.horsEquipe; });
+      var hors = k.callsByUser.filter(function (u) { return u.horsEquipe; });
+      var maxOut = 1;
+      k.callsByUser.forEach(function (u) { if (u.out > maxOut) maxOut = u.out; });
+      var sumOut = 0;
+      function callBar(u) {
+        var rate = u.out > 0 ? u.ans / u.out * 100 : null;
+        var lbl = esc(u.name) + (u.unassigned ? SC.info('appels_sans_auteur') : (u.anciens ? SC.info('anciens_membres') : (u.horsEquipe ? infoL('hors_equipe_sales') : '')));
+        return '<div class="fn-minibar"' + (u.unassigned || u.horsEquipe ? ' style="opacity:.65"' : '') + '><span class="mb-l" title="' + escAttr(u.name) + '">' + lbl + '</span><span class="mb-track"><span class="mb-fill" style="width:' + (u.out / maxOut * 100).toFixed(1) + '%;background:#f472b6"></span></span><span class="mb-v" style="width:240px">' + fmtNum(u.out) + ' appels · ' + fmtNum(u.ans) + ' décrochés · ' + fmtPct(rate) + ' · ' + fmtSec(u.talkSec || 0) + '</span></div>';
+      }
+      h += '<div style="margin-top:12px"><div style="font-size:10.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.7px;margin-bottom:8px">Appels par personne — équipe sales' + infoL('appels_par_personne') + '</div><div class="fn-minibars">';
+      dedans.forEach(function (u) { sumOut += u.out; h += callBar(u); });
+      h += '</div><div class="fn-stage-note" style="margin-top:4px">Somme des lignes : ' + fmtNum(sumOut) + (sumOut === k.callsOut ? ' = ' : ' ≠ ') + fmtNum(k.callsOut) + ' Appels' + SC.info('appels') +
+        (sumOut !== k.callsOut ? ' (écart : ' + fmtNum(sumOut - k.callsOut) + ' appel(s) d’anciens membres qui n’étaient pas dans l’équipe sales, rangés dans « Anciens membres » mais hors du total)' : '') +
+        ' · taux = décrochés ÷ appels de la personne · durée = temps d’appel.</div>';
+      if (hors.length) {
+        h += '<div class="fn-minibars" style="margin-top:6px">';
+        hors.forEach(function (u) { h += callBar(u); });
+        h += '</div><div class="fn-stage-note" style="margin-top:4px">« Hors équipe sales » : à part, hors du total Appels.</div>';
+      }
+      h += '</div>';
     }
     /* Lead to speech par personne (23/10/2026) — entrée du lead → 1er appel,
        attribué à l'auteur de ce 1er appel ; un lead = une personne. Barre =
-       part des leads appelés en moins d'1 h. Même cohorte et mêmes filtres
-       que le Time-to-contact médian ci-dessus. */
+       part des leads appelés en moins d'1 h. Mêmes leads que la médiane. */
     if (k.ltsByUser && k.ltsByUser.length) {
-      h += '<div style="margin-top:14px"><div style="font-size:10.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.7px;margin-bottom:8px">⚡ Lead to speech par personne <span style="text-transform:none;font-weight:500;letter-spacing:0">— entrée du lead → 1er appel, compté pour celui qui l\'a passé · barre = part appelée en moins d\'1 h' + provTag + '</span></div><div class="fn-minibars">';
+      h += '<div style="margin-top:14px"><div style="font-size:10.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.7px;margin-bottom:8px">⚡ Lead to speech par personne' + infoL('lead_to_speech') + ' <span style="text-transform:none;font-weight:500;letter-spacing:0">— entrée du lead → 1er appel, compté pour celui qui l\'a passé · barre = part appelée en moins d\'1 h' + provTag + '</span></div><div class="fn-minibars">';
+      var sumLts = 0;
       k.ltsByUser.forEach(function (u) {
-        h += '<div class="fn-minibar"' + (u.unassigned ? ' style="opacity:.6"' : '') + '><span class="mb-l" title="' + escAttr(u.name) + '">' + esc(u.name) + '</span><span class="mb-track"><span class="mb-fill" style="width:' + u.under60Pct.toFixed(1) + '%;background:#34d399"></span></span><span class="mb-v" style="width:300px;max-width:62%">médiane <strong>' + fmtDelay(u.median) + '</strong> · ' + fmtNum(u.n) + ' lead' + (u.n > 1 ? 's' : '') + ' · ' + fmtPct(u.under5Pct, 0) + ' &lt; 5 min · ' + fmtPct(u.under60Pct, 0) + ' &lt; 1 h</span></div>';
+        sumLts += u.n;
+        h += '<div class="fn-minibar"' + (u.unassigned ? ' style="opacity:.6"' : '') + '><span class="mb-l" title="' + escAttr(u.name) + '">' + esc(u.name) + (u.anciens ? SC.info('anciens_membres') : '') + '</span><span class="mb-track"><span class="mb-fill" style="width:' + u.under60Pct.toFixed(1) + '%;background:#34d399"></span></span><span class="mb-v" style="width:300px;max-width:62%">médiane <strong>' + fmtDelay(u.median) + '</strong> · ' + fmtNum(u.n) + ' lead' + (u.n > 1 ? 's' : '') + ' · ' + fmtPct(u.under5Pct) + ' &lt; 5 min · ' + fmtPct(u.under60Pct) + ' &lt; 1 h</span></div>';
       });
-      h += '</div></div>';
+      h += '</div><div class="fn-stage-note" style="margin-top:4px">Somme des lignes : ' + fmtNum(sumLts) + ' = ' + fmtNum(k.leadsCalled) + ' leads appelés.</div></div>';
     }
     h += '</div>';
     h += '<div class="fn-arrow">▼</div>';
@@ -2355,18 +2434,18 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     /* (sections SETTING/CLOSING et Saisies manuelles supprimées les 14-15/07
        — décision Adrien : 100 % données logiciel, zéro saisie déclarative.) */
 
-    /* 8. Rentabilité — l'échelle CPR vit dans la ligne SB de « Prise de
-       RDV », le ROAS dans « Publicité » : ici, uniquement ce qui n'existe
-       nulle part ailleurs (CPL, CAC Market Only, AOV, coût setting). */
-    h += stageOpen('💶', 'Coûts &amp; rentabilité', 'collecté = prélèvements réellement passés à ce jour (module Paiements, HT) · dépense pub et coûts du setting : onglet Données Ads et bouton 💶 Coûts');
+    /* 8. Coûts & rentabilité — ce qui n'existe nulle part ailleurs : CPL pub,
+       CAC pub, Collecté total ÷ dépense pub (sous son nom, jamais « ROAS »),
+       Panier moyen, Collecté / close, Coût setting. Tous les montants de K,
+       aucun recalcul. Dépense incomplète → coûts pub masqués, et dit. */
+    var okAds8 = adsCouts(k);
+    h += stageOpen('💶', 'Coûts &amp; rentabilité', 'collecté = prélèvements réellement passés à ce jour sur les closes de la période (module Paiements, HT' + SC.info('ht') + ') · dépense pub : onglet Données Ads · fixe et outils du setting : bouton 💶 Coûts (à saisir HT) · commissions : module Commissions');
     h += '<div class="fn-grid">';
-    h += kpiCard(fmtEuro2(k.cpl), 'CPL', 'dépense ÷ ' + fmtNum(k.leads) + ' leads', targetBadge('cpl', k.cpl));
-    /* Même correction que le ROAS : le CAC divisait la dépense pub par TOUS
-       les clients, y compris ceux qui n'ont jamais vu une publicité — il
-       sortait donc un coût d'acquisition artificiellement bas. */
-    h += kpiCard(fmtEuro2(k.cacAds), 'CAC pub', 'dépense pub ÷ ' + fmtNum(k.closesWonAds) + ' client(s) venus de la pub'
-      + (k.closesWonHorsPub > 0 ? ' · ' + fmtNum(k.closesWonHorsPub) + ' client(s) hors pub exclus' : '')
-      + ' — ≠ « CPA » Meta (achat, RDV ou lead selon la campagne)', null, k.cacAds == null);
+    h += kpiCard(okAds8 ? fmtEuro2(k.cplAds) : '—', 'CPL pub' + infoL('cpl_pub'), cplSub(k), okAds8 ? targetBadge('cpl', k.cplAds) : '', !okAds8 || k.cplAds == null);
+    h += kpiCard(okAds8 ? fmtEuro2(k.cacAds) : '—', 'CAC pub' + infoL('cac_pub'), okAds8 ? 'dépense pub ÷ ' + fmtNum(k.closesWonAds) + ' close(s) venus de la pub'
+      + (k.closesWonHorsPub > 0 ? ' · ' + fmtNum(k.closesWonHorsPub) + ' close(s) hors pub exclus' : '') : adsManque(k), null, !okAds8 || k.cacAds == null);
+    h += kpiCard(okAds8 ? fmtRoas(k.collecteSurDepense) : '—', 'Collecté total ÷ dépense pub' + infoL('collecte_sur_depense'),
+      okAds8 ? fmtEuro(k.wonCollecte) + ' collectés (tous clients de la période) ÷ ' + fmtEuro(k.spend) + ' de dépense pub — pas un ROAS pub' : adsManque(k), null, !okAds8 || k.collecteSurDepense == null);
     /* « AOV » disparaît (référentiel §4) : Panier moyen = contracté ÷ closes,
        Collecté / close = collecté ÷ closes — valeurs de K, pas recalculées. */
     var clE = k.closes || {};
@@ -2374,10 +2453,16 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     var cpcHint = 'collecté ' + fmtEuro(clE.paid) + ' ÷ ' + fmtNum(clE.closes) + ' closes — monte à chaque mensualité';
     if (clE.pending > 0) cpcHint += ' · ' + fmtEuro(clE.pending) + ' de 1ers prélèvements en attente' + SC.info('premiers_prelevements');
     h += kpiCard(fmtEuro2(k.collecteParClose), SC.mot('collecte_par_close') + SC.info('collecte_par_close'), cpcHint, null, k.collecteParClose == null);
-    var cs2;
-    if (k.costSetting != null) cs2 = (DATA && DATA.settingDealsUnavailable ? '<span style="color:var(--orange,#e8a13c)">⚠ commissions indisponibles</span> · ' : '') + 'fixe ' + fmtEuro(k.costFixe) + ' + commissions ' + fmtEuro(k.commSetting) + ' + outils ' + fmtEuro(k.costOutils) + (!k.costOwnEntry && k.costSrcMonth ? ' · <span style="color:var(--orange,#e8a13c)">⚠ reporté de ' + esc(k.costSrcMonth) + '</span>' : '');
-    else cs2 = 'fixe &amp; outils non renseignés — bouton 💶 Coûts';
-    h += kpiCard(k.costSetting != null ? fmtEuro2(k.costSetting) : '—', 'Coût setting (période)', cs2, null, k.costSetting == null);
+    var cs2, csVal = '—';
+    if (k.costSetting != null) {
+      csVal = fmtEuro2(k.costSetting);
+      cs2 = 'fixe ' + fmtEuro(k.costFixe) + infoL('fixe_setting') + ' + outils ' + fmtEuro(k.costOutils) +
+        ' + commissions dues ' + fmtEuro(k.commSetting) + infoL('commissions_dues') +
+        (k.commSettingN ? ' (' + fmtNum(k.commSettingN) + ' commission(s), dont validées ' + fmtEuro(k.commSettingOk) + ' ; dont ' + fmtEuro(k.commSettingSB) + ' sur des closes Self Booking)' : '') +
+        coutsNotes(k, true) +
+        (k.costFiltered ? '<br>coûts du setting non ventilés par tunnel / source : total de toute l’équipe' + infoL('couts_non_ventiles') : '');
+    } else cs2 = 'fixe du setting et outils non renseignés — bouton 💶 Coûts' + coutsNotes(k, false);
+    h += kpiCard(csVal, 'Coût setting (période)' + infoL('cout_setting'), cs2, null, k.costSetting == null);
     h += '</div>';
     if (k.payCloseOther && k.payCloseOther.length) h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + k.payCloseOther.length + ' paiement(s) de la période rattaché(s) à un client gagné dans une AUTRE période (' + esc(k.payCloseOther.join(', ')) + ') — prélèvement tardif, le close reste compté à sa propre période.</div>';
     h += '</div>';
@@ -2405,10 +2490,9 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
      anciens (hors cohorte) ne comptent pas dans ce taux — d'où l'écart
      possible avec le nombre total de RDV setting créés. */
   function cohortLabelRecovery(k) {
-    var base = k.leads - k.cohortSelf;
     var others = (k.orgNB ? k.orgNB.reopt + k.orgNB.old : 0);
-    var extra = others ? ' · +' + others + ' RDV setting sur des ré-optins / leads plus anciens (hors calcul)' : '';
-    return k.cohortSetter + ' des ' + base + ' leads sans RDV self ont eu un RDV posé par le setting' + extra;
+    var extra = others ? '<br>+ ' + fmtNum(others) + ' RDV du setting sur des ré-optins ou des leads plus anciens (hors taux)' : '';
+    return fmtNum(k.cohortSetter) + ' leads NB reçus amenés en RDV par le setting ÷ ' + fmtNum(k.leadsNbRecus) + ' leads NB reçus' + SC.info('leads_nb_recus') + extra;
   }
   /* ════════════════════════════════════════════════════════════════
      RENDER — ONGLET LEADS (détail par lead)
@@ -2423,8 +2507,8 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     calls:   function (l) { return l._nbCalls || 0; },
     sms:     function (l) { return l._nbSms || 0; },
     ttc:     function (l) { return l._ttc == null ? Infinity : l._ttc; },
-    rdv:     function (l) { return l._bk && l._bk.length ? (l._bk[0]._class === 'self' ? 1 : 2) : 0; },
-    status:  function (l) { return l._bk && l._bk.length ? (l._bk[0].status || '') : ''; },
+    rdv:     function (l) { var r = leadRdvInfo(l); return r ? (r.head._class === 'self' ? 1 : 2) : 0; },
+    status:  function (l) { var r = leadRdvInfo(l); return r ? r.lib.mot : ''; },
     ttb:     function (l) { return l._ttb == null ? Infinity : l._ttb; },
     place:   function (l) { var v = visOf(l); return (v.zone + ' ' + v.city).toLowerCase() || '~'; },
     device:  function (l) { return FC.deviceLabel(visOf(l)) || '~'; }
@@ -2440,33 +2524,55 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
   }
   function visPlace(v) { return window.FUNNEL_READONLY === true ? (v.zone || '') : FC.placeLabel(v); }
 
+  /* Dernier RDV du lead (écarts TEN-11 / PRE-12 / LQS-17) : la chaîne la
+     plus récemment prise parmi ses RDV pris (période + 14 jours), suivie
+     jusqu'à son RDV TERMINAL (reports et transferts, FunnelCore.rdvTerminal),
+     état et libellé par StatsCore.libelle — résultat d'abord, « À statuer »
+     si le créneau est passé sans résultat. Plus le statut brut du premier RDV.
+     → { head (RDV pris : son canal), term (RDV terminal : date, résultat),
+         lib ({ etat, mot, couleur }) } ou null. */
   function leadRdvInfo(l) {
     if (!l._bk || !l._bk.length) return null;
-    var best = l._bk.slice().sort(function (a, b) { return (a._createdMs || 0) - (b._createdMs || 0); })[0];
-    return best;
+    var last = l._bk.slice().sort(function (a, b) { return (b._createdMs || 0) - (a._createdMs || 0); })[0];
+    var term = FC.rdvTerminal(last, DATA.bookingsById || {}) || last;
+    var head = last, guard = 0;
+    while (head && SC.estRemplacant(head) && guard++ < 10) {
+      var pid = head.rescheduledFromId || head.transferredFrom;
+      var prev = pid ? (DATA.bookingsById || {})[pid] : null;
+      if (!prev || prev === head) break;
+      head = prev;
+    }
+    return { head: head || last, term: term, lib: SC.libelle(term, Date.now()) };
   }
+  function canalLabel(b) { return b && b._class === 'self' ? 'Self Booking' : (b && b._class === 'admin' ? 'Manuel' : 'Setting (NB)'); }
 
   function renderLeads() {
     var el = $('#fnTabLeads');
     if (!K) { el.innerHTML = '<div class="fn-loading">Chargement…</div>'; return; }
     var h = '';
+    /* Lecture en échec ou plafond atteint : dit ici aussi (la liste est faite
+       des mêmes fiches que les Leads de l'onglet Funnel). */
+    h += erreursBanner(K);
     h += '<div class="fn-lt-toolbar">';
     h += '<div class="fn-lt-search"><input type="text" id="fnLeadsSearch" placeholder="Nom, email, téléphone, UTM…" value="' + escAttr(leadsSearch) + '"></div>';
     h += '<select class="fn-sel" id="fnLeadsRdvF">';
     h += '<option value="all"' + (leadsRdvFilter === 'all' ? ' selected' : '') + '>Tous</option>';
-    h += '<option value="with"' + (leadsRdvFilter === 'with' ? ' selected' : '') + '>Avec RDV</option>';
+    h += '<option value="with"' + (leadsRdvFilter === 'with' ? ' selected' : '') + '>Avec RDV (pris pendant la période + 14 j)</option>';
     h += '<option value="without"' + (leadsRdvFilter === 'without' ? ' selected' : '') + '>Sans RDV</option>';
-    h += '<option value="nocontact"' + (leadsRdvFilter === 'nocontact' ? ' selected' : '') + '>Sans contact</option>';
-    h += '</select>';
+    h += '<option value="nocontact"' + (leadsRdvFilter === 'nocontact' ? ' selected' : '') + '>Sans contact (ni appel, ni SMS, ni RDV)</option>';
+    h += '</select>' + infoL('filtre_rdv_leads');
     h += '<div style="flex:1"></div>';
-    h += '<span class="fn-stage-note" id="fnLeadsCount"></span>';
+    h += '<span class="fn-stage-note"><span id="fnLeadsCount"></span>' + infoL('leads_liste') + '</span>';
     h += '<button class="fn-btn" id="fnLeadsCsv">⬇ Export CSV</button>';
     h += '</div>';
     h += '<div class="fn-table-wrap"><table class="fn-table"><thead><tr>';
-    var cols = [['name', 'Lead'], ['tunnel', 'Tunnel'], ['utm', 'UTM'], ['place', '📍 Lieu'], ['device', '📱 Appareil'], ['score', '⭐'], ['entry', 'Entrée réelle'], ['calls', '📞'], ['sms', '💬'], ['ttc', '1er contact'], ['rdv', 'RDV'], ['status', 'Statut RDV'], ['ttb', '⏱ Book']];
+    var cols = [['name', 'Lead'], ['tunnel', 'Tunnel'], ['utm', 'UTM'], ['place', '📍 Lieu'], ['device', '📱 Appareil'],
+      ['score', '⭐', infoL('note_equipe')], ['entry', 'Entrée réelle', SC.info('heure_paris')],
+      ['calls', '📞', infoL('joignabilite', 'Colonne : appels sortants de l’équipe vers ce lead, dans ses 14 premiers jours.')], ['sms', '💬'],
+      ['ttc', 'Lead to speech', infoL('lead_to_speech')], ['rdv', 'Canal', SC.info('canal')], ['status', 'Dernier RDV', infoL('dernier_rdv')], ['ttb', '⏱ Book', infoL('time_to_book')]];
     cols.forEach(function (c) {
       var arrow = leadsSort.key === c[0] ? (leadsSort.dir > 0 ? ' ▲' : ' ▼') : '';
-      h += '<th data-sort="' + c[0] + '">' + c[1] + arrow + '</th>';
+      h += '<th data-sort="' + c[0] + '">' + c[1] + arrow + (c[2] || '') + '</th>';
     });
     h += '</tr></thead><tbody id="fnLeadsBody"></tbody></table></div>';
     el.innerHTML = h;
@@ -2474,6 +2580,8 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     $('#fnLeadsSearch').oninput = function () { leadsSearch = this.value; renderLeadsBody(); };
     $('#fnLeadsRdvF').onchange = function () { leadsRdvFilter = this.value; renderLeadsBody(); };
     $('#fnLeadsCsv').onclick = exportLeadsCsv;
+    var rlL = $('[data-fn-reload]', el);
+    if (rlL) rlL.onclick = refresh;
     $$('th[data-sort]', el).forEach(function (th) {
       th.onclick = function () {
         var kk = th.getAttribute('data-sort');
@@ -2493,7 +2601,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
         var src = l._source != null ? l._source : FC.leadSource(l, DATA.tunnelsMeta);
         if (sourceFilter === 'youtube' ? src !== 'youtube' : src === 'youtube') return false;
       }
-      var bk = leadRdvInfo(l);
+      var bk = (l._bk && l._bk.length) ? 1 : 0;
       if (leadsRdvFilter === 'with' && !bk) return false;
       if (leadsRdvFilter === 'without' && bk) return false;
       if (leadsRdvFilter === 'nocontact' && ((l._nbCalls || 0) > 0 || (l._nbSms || 0) > 0 || bk)) return false;
@@ -2523,7 +2631,8 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     var shown = list.slice(0, 800);
     shown.forEach(function (l) {
       var bk = leadRdvInfo(l);
-      var reopt = (l.engagementHistory && l.engagementHistory.length) ? ' <span class="fn-reopt" title="' + l.engagementHistory.length + ' passage(s) archivé(s)">🔄</span>' : '';
+      var nIns = (l.engagementHistory && l.engagementHistory.length) || 0;
+      var reopt = nIns ? ' <span class="fn-reopt" title="' + escAttr(nIns + ' inscription(s) précédente(s) de cette fiche — pas des ré-optins de la période') + '">↺ ' + nIns + '</span>' : '';
       var utm = decodeUtm(l.utm) || '—';
       rows += '<tr>';
       rows += '<td><a class="fn-lead-link" href="sales-contact.html?id=' + encodeURIComponent(l._id) + '" target="_blank">' + esc(l.nom || l.email || '—') + '</a>' + reopt + '</td>';
@@ -2537,12 +2646,10 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       rows += '<td class="num">' + frDate(l._entry) + '</td>';
       rows += '<td class="num">' + (l._nbCalls || 0) + '</td>';
       rows += '<td class="num">' + (l._nbSms || 0) + '</td>';
-      rows += '<td class="num">' + fmtDelay(l._ttc) + (l._ttc != null ? '<br><span style="color:var(--muted2);font-size:10px">' + esc(l._ttcBy ? l._ttcBy.name : 'non attribué') + '</span>' : '') + '</td>';
+      rows += '<td class="num">' + fmtDelay(l._ttc) + (l._ttc != null ? '<br><span style="color:var(--muted2);font-size:10px">' + esc(l._ttcBy ? l._ttcBy.name : SC.mot('non_attribue')) + '</span>' : '') + '</td>';
       if (bk) {
-        rows += '<td><span class="fn-tbadge ' + (bk._class === 'self' ? 'self">🔗 Self' : 'setter">📞 Setter') + '</span></td>';
-        var st = bk.status || 'confirmed';
-        var stLabel = st === 'confirmed' ? 'À venir' : st === 'completed' ? 'Tenu' : st === 'cancelled' ? 'Annulé' : st === 'no_show' ? 'No-show' : st;
-        rows += '<td><span class="fn-tbadge st-' + esc(st) + '">' + esc(stLabel) + '</span> <span style="color:var(--muted2);font-size:10px">' + esc(frDay(bk.date)) + '</span></td>';
+        rows += '<td><span class="fn-tbadge ' + (bk.head._class === 'self' ? 'self">🔗 ' : 'setter">📞 ') + esc(canalLabel(bk.head)) + '</span></td>';
+        rows += '<td><span class="fn-tbadge" style="color:' + escAttr(bk.lib.couleur) + ';border:1px solid currentColor;background:transparent">' + esc(bk.lib.mot) + '</span> <span style="color:var(--muted2);font-size:10px">' + esc(frDay(bk.term.date)) + '</span></td>';
       } else {
         rows += '<td><span style="color:var(--muted2)">—</span></td><td><span style="color:var(--muted2)">—</span></td>';
       }
@@ -2556,7 +2663,9 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
   function exportLeadsCsv() {
     var list = filteredLeads();
     var sep = ';';
-    var head = ['Nom', 'Email', 'Telephone', 'Tunnel', 'UTM', 'Ville', 'Region', 'Pays', 'Appareil', 'Systeme', 'Navigateur ou appli', 'Score', 'Entree reelle', 'Re-optins', 'Appels', 'SMS', '1er contact (h)', '1er appel par', 'RDV', 'Statut RDV', 'Date RDV', 'Time-to-book (h)'];
+    /* Mêmes valeurs que l'écran : jour et heure de Paris, dernier RDV en
+       fin de chaîne (libellé commun), canal en toutes lettres. */
+    var head = ['Nom', 'Email', 'Telephone', 'Tunnel', 'UTM', 'Ville', 'Region', 'Pays', 'Appareil', 'Systeme', 'Navigateur ou appli', 'Note equipe', 'Entree reelle (heure de Paris)', 'Inscriptions precedentes', 'Appels (14 premiers jours)', 'SMS', 'Lead to speech (h)', '1er appel par', 'Canal', 'Dernier RDV', 'Resultat saisi', 'Date du dernier RDV', 'Time-to-book (h)'];
     var lines = [head.join(sep)];
     list.forEach(function (l) {
       var bk = leadRdvInfo(l);
@@ -2569,12 +2678,12 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
         cell(window.FUNNEL_READONLY === true ? '' : cv.city), cell(cv.zone), cell(FC.countryName(cv.country)),
         cell(cv.device), cell(cv.os), cell(cv.app ? 'appli ' + cv.app : cv.browser),
         cell((l.leadScore >= 1 && l.leadScore <= 5) ? l.leadScore : ''),
-        cell(l._entry ? new Date(l._entry).toISOString() : ''),
+        cell(l._entry ? isoDateTimeParis(l._entry) : ''),
         cell(l.engagementHistory ? l.engagementHistory.length : 0),
         cell(l._nbCalls || 0), cell(l._nbSms || 0), cell(hours(l._ttc)),
-        cell(l._ttc == null ? '' : (l._ttcBy ? l._ttcBy.name : 'non attribué')),
-        cell(bk ? (bk._class === 'self' ? 'self' : 'setter') : ''),
-        cell(bk ? (bk.status || 'confirmed') : ''), cell(bk ? bk.date : ''),
+        cell(l._ttc == null ? '' : (l._ttcBy ? l._ttcBy.name : SC.mot('non_attribue'))),
+        cell(bk ? canalLabel(bk.head) : ''),
+        cell(bk ? bk.lib.mot : ''), cell(bk ? (bk.term.outcome || '') : ''), cell(bk ? (bk.term.date || '') : ''),
         cell(hours(l._ttb))
       ].join(sep));
     });
@@ -2589,12 +2698,24 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
   /* ════════════════════════════════════════════════════════════════
      RENDER — ONGLET DONNÉES ADS (grille jour × tunnel, saisie admin)
      ════════════════════════════════════════════════════════════════ */
-  var ADS_FIELDS = [['spend', 'Dépense €'], ['impressions', 'Impr.'], ['clicks', 'Clics'], ['leads', 'Leads FB']];
+  var ADS_FIELDS = [['spend', 'Dépense (€)'], ['impressions', 'Impr.'], ['clicks', 'Clics sortants'], ['leads', 'Leads pixel Meta']];
   var ADS_TUNNELS = [['elite', 'Élite'], ['business', 'Business']];
 
+  /* Une cellule = LE document {date}_{tunnel} (celui qu'on édite). Une autre
+     ligne rangée sur la même case (tunnel ni Élite ni Business, comptée en
+     Élite comme dans le funnel — FunnelCore.adsTunnelOf) n'écrase plus la
+     cellule : elle est listée à part (map._extra) et comptée dans le TOTAL. */
   function adsDocMap() {
-    var map = {};
-    DATA.ads.forEach(function (a) { map[(a.date || '') + '_' + (a.tunnel === 'business' ? 'business' : 'elite')] = a; });
+    var map = {}, extra = {};
+    DATA.ads.forEach(function (a) {
+      var key = (a.date || '') + '_' + FC.adsTunnelOf(a);
+      if (a._id === key || (!map[key] && !a._id)) map[key] = a;
+      else { if (!extra[key]) extra[key] = []; extra[key].push(a); }
+    });
+    Object.keys(extra).forEach(function (key) {
+      if (!map[key]) { var first = extra[key].shift(); if (first && first._id === key) map[key] = first; else if (first) extra[key].unshift(first); }
+    });
+    map._extra = extra;
     return map;
   }
 
@@ -2614,6 +2735,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       }
     });
     var h = '';
+    if (DATA.adsError) h += '<div class="fn-alert" style="margin-bottom:14px">⚠️ <strong>' + esc(SC.mot('lecture_incomplete')) + '</strong>' + SC.info('lecture_incomplete') + ' — lecture de la dépense pub impossible (' + esc(DATA.adsError) + ') : la grille ci-dessous est vide ou incomplète, ne l’enregistre pas. <button class="fn-btn" id="fnAdsReload" style="margin-left:8px">⟳ Recharger</button></div>';
     h += '<div class="fn-stage" style="margin-bottom:12px"><div class="fn-stage-head"><div class="fn-stage-title">💶 Données Ads — ' + MONTHS_FR[P.m] + ' ' + P.y + '</div>';
     h += '<div class="fn-stage-note">' + (lastMake ? '⚙️ Dernière data Make : ' + frDate(lastMake) : '⚙️ Aucune donnée Make reçue — scénario à brancher (doc fournie)') + '</div></div>';
     h += '<div class="fn-stage-note">Saisie manuelle : modifie les cellules puis 💾. Une cellule éditée passe la journée en <span class="fn-src manual">manuel</span> (Make ne l\'écrasera plus, sa valeur restera proposée via ↩).</div>';
@@ -2641,9 +2763,14 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
           h += '<td' + (i === 0 ? ' class="sep"' : '') + '><input type="number" step="any" min="0" data-doc="' + escAttr(docId) + '" data-field="' + f[0] + '" value="' + escAttr(shown) + '"' + (draft !== null ? ' class="dirty"' : '') + '></td>';
         });
         var src = '';
-        if (doc.source === 'make') src = '<span class="fn-src make">make</span>';
+        var xs = (map._extra || {})[docId] || [];
+        if (xs.length) {
+          var xSpend = 0; xs.forEach(function (x) { xSpend += Number(x.spend) || 0; });
+          src += '<span class="fn-src" title="' + escAttr(xs.length + ' autre(s) ligne(s) rangée(s) ici (tunnel « ' + xs.map(function (x) { return x.tunnel || 'sans tunnel'; }).join(', ') + ' »), comptée(s) dans le TOTAL et dans la Dépense pub, non modifiable(s) ici') + '">+' + esc((Math.round(xSpend * 100) / 100).toLocaleString('fr-FR')) + ' €</span> ';
+        }
+        if (doc.source === 'make') src += '<span class="fn-src make">make</span>';
         else if (doc.source === 'manual') {
-          src = '<span class="fn-src manual">man.</span>';
+          src += '<span class="fn-src manual">man.</span>';
           if (doc.makeSuggested) {
             var ms2 = doc.makeSuggested;
             var tip = 'Make propose — dépense: ' + (ms2.spend != null ? ms2.spend : '—') + ' · impr: ' + (ms2.impressions != null ? ms2.impressions : '—') + ' · clics: ' + (ms2.clicks != null ? ms2.clicks : '—') + ' · leads: ' + (ms2.leads != null ? ms2.leads : '—');
@@ -2655,12 +2782,18 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       h += '</tr>';
     }
 
-    /* Totaux + dérivés */
+    /* Totaux + dérivés — même rangement que la Dépense pub du funnel
+       (FunnelCore.adsTunnelOf : Business, sinon Élite). */
+    var grand = 0, nAutre = 0, autreSpend = 0;
+    DATA.ads.forEach(function (a) {
+      grand += Number(a.spend) || 0;
+      if (a.tunnel !== 'elite' && a.tunnel !== 'business') { nAutre++; autreSpend += Number(a.spend) || 0; }
+    });
     h += '<tr class="totals"><td class="day">TOTAL</td>';
     ADS_TUNNELS.forEach(function (t) {
       var tot = { spend: 0, impressions: 0, clicks: 0, leads: 0 };
       DATA.ads.forEach(function (a) {
-        if (a.tunnel !== t[0]) return;
+        if (FC.adsTunnelOf(a) !== t[0]) return;
         tot.spend += Number(a.spend) || 0; tot.impressions += Number(a.impressions) || 0;
         tot.clicks += Number(a.clicks) || 0; tot.leads += Number(a.leads) || 0;
       });
@@ -2671,6 +2804,8 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     });
     h += '</tr>';
     h += '</tbody></table></div>';
+    h += '<div class="fn-stage-note" style="margin-top:8px">Élite + Business = ' + esc(fmtEuro2(grand)) + ' = Dépense pub de l’onglet Funnel (vue « Tous les tunnels / Toutes les sources »)' + infoL('grille_ads_total') + '. Montants à saisir hors taxes' + infoL('depense_pub') + '.' +
+      (nAutre ? ' ⚠ ' + nAutre + ' ligne(s) d’un tunnel ni Élite ni Business (' + esc(fmtEuro2(autreSpend)) + ') : comptées en Élite, signalées « +… € » dans la colonne Src, non modifiables ici.' : '') + '</div>';
     h += '<div style="display:flex;gap:10px;margin-top:12px;align-items:center">';
     h += '<button class="fn-btn primary" id="fnAdsSave">💾 Enregistrer les modifications</button>';
     h += '<span class="fn-stage-note" id="fnAdsDirtyCount"></span>';
@@ -2690,6 +2825,8 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       btn.onclick = function () { restoreMakeValues(btn.getAttribute('data-restore')); };
     });
     $('#fnAdsSave').onclick = saveAdsDraft;
+    var rl = $('#fnAdsReload');
+    if (rl) rl.onclick = refresh;
     updateAdsDirtyCount();
   }
 
@@ -3761,10 +3898,10 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     var eff = effectiveCosts(mk);
     var h = '';
     h += '<div class="fn-trow"><span class="tl">Mois concerné</span><input type="month" id="fnCostMonth" value="' + mk + '" style="width:150px;text-align:left"></div>';
-    h += '<div class="fn-trow"><span class="tl">Fixe setter — salaire mensuel (ex. Élodie : 500 €)</span><input type="number" step="any" min="0" id="fnCostFixe" value="' + (cur && cur.fixe != null ? escAttr(cur.fixe) : (eff ? escAttr(eff.fixe) : '')) + '" placeholder="500"></div>';
-    h += '<div class="fn-trow"><span class="tl">Outils &amp; télécom du mois — variable (Ringover conso, Twilio…)</span><input type="number" step="any" min="0" id="fnCostOutils" value="' + (cur && cur.outils != null ? escAttr(cur.outils) : (eff ? escAttr(eff.outils) : '')) + '" placeholder="0"></div>';
+    h += '<div class="fn-trow"><span class="tl">Fixe du setting — total mensuel, montant HT</span><input type="number" step="any" min="0" id="fnCostFixe" value="' + (cur && cur.fixe != null ? escAttr(cur.fixe) : (eff ? escAttr(eff.fixe) : '')) + '" placeholder="0"></div>';
+    h += '<div class="fn-trow"><span class="tl">Outils &amp; télécom du mois — variable (Ringover conso, Twilio…), montant HT</span><input type="number" step="any" min="0" id="fnCostOutils" value="' + (cur && cur.outils != null ? escAttr(cur.outils) : (eff ? escAttr(eff.outils) : '')) + '" placeholder="0"></div>';
     if (!cur && eff) h += '<div class="hint" style="margin-top:10px">Valeurs pré-remplies = report du mois <strong>' + esc(eff.src) + '</strong> (dernier saisi). Le fixe bouge rarement, les <strong>outils sont variables</strong> (conso Ringover) : ajuste-les puis Enregistrer — ça crée l\'entrée propre à ce mois. Les commissions ne se saisissent jamais ici : elles viennent du module Commissions.</div>';
-    else if (!cur && !eff) h += '<div class="hint" style="margin-top:10px">Aucune valeur saisie pour l\'instant — le Coût / RDV NB affiche « — » tant que rien n\'est renseigné.</div>';
+    else if (!cur && !eff) h += '<div class="hint" style="margin-top:10px">Aucune valeur saisie pour l\'instant — le Coût setting et le Coût / RDV pris NB affichent « — » tant que rien n\'est renseigné.</div>';
     var body = $('#fnCostsBody');
     body.innerHTML = h;
     var mIn = $('#fnCostMonth');
@@ -4097,7 +4234,11 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       teamMembers: window.TEAM_MEMBERS_LIST || [],
       tunnelsMeta: (DATA && DATA.tunnelsMeta) || null,
       /* Closes du Stats funnel — rapprochés de ceux de Qualité leads (21/11/2026). */
-      funnelCloses: K ? (K.closeRows || []) : null
+      funnelCloses: K ? (K.closeRows || []) : null,
+      /* KPI du funnel (25/11/2026) : couverture de la dépense par pub et
+         dépense du compte, pour que la vue Marketing masque ses coûts avec
+         la MÊME règle et cite la même Dépense pub (lqs-tab.js, adsCoverage). */
+      funnelKpis: K || null
     };
   }
   function renderLqs() {

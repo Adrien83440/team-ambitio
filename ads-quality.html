@@ -15,7 +15,10 @@
    Page publique AUTONOME : aucun SDK Firebase, aucune auth, aucun nav.js.
    Seule source : GET /api/ads-quality-share?t=TOKEN (funnel-core.js côté
    serveur, mêmes chiffres que l'onglet admin). Rendu : ads-quality-tab.js,
-   le module de l'onglet admin, sans ses encarts d'administration.
+   le module de l'onglet admin, sans ses encarts d'administration ; le « i »
+   à côté de chaque colonne et les formats viennent de stats-core.js
+   (glossaire commun, chargé avant). Vocabulaire du 25/11/2026 : Pitchés,
+   Closes, RDV pris, Collecté (aucun chiffre ne change).
    ═══════════════════════════════════════════════════════════════════════ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -61,8 +64,10 @@ html, body { background: var(--bg); color: var(--text); font-family: var(--font-
     <button type="button" class="aqp-btn" id="aqpRefresh">⟳</button>
   </div>
   <div id="aqpBody"><div class="aqp-msg">Chargement…</div></div>
-  <div class="aqp-foot">Vue en lecture seule. Leads entrés sur la période, RDV et ventes suivis jusqu'à aujourd'hui ; chiffres calculés à l'ouverture, hors trafic YouTube. Aucune donnée personnelle n'est transmise.</div>
+  <div class="aqp-foot">Vue en lecture seule. Leads = entrés sur la période ; RDV pris = créés sur la période ; pitchés, annulés, no-show = RDV datés sur la période ; closes, contracté et collecté = clients gagnés sur la période, même si leur lead est entré avant (collecté = prélevé à ce jour). Chiffres calculés à l'ouverture, hors trafic YouTube. Aucune donnée personnelle n'est transmise.</div>
 </div>
+<!-- stats-core.js AVANT ads-quality-tab.js : glossaire commun, « i » et formats. -->
+<script src="stats-core.js"></script>
 <script src="ads-quality-tab.js"></script>
 <script>
 (function () {
@@ -72,7 +77,8 @@ html, body { background: var(--bg); color: var(--text); font-family: var(--font-
   function $(id) { return document.getElementById(id); }
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   var now = new Date();
-  S.month = now.getFullYear() + '-' + pad(now.getMonth() + 1);
+  /* Mois courant à l'heure de Paris (règle commune), quel que soit l'appareil. */
+  S.month = window.StatsCore && window.StatsCore.moisParis ? window.StatsCore.moisParis(now) : now.getFullYear() + '-' + pad(now.getMonth() + 1);
   $('aqpMonth').value = S.month;
   var MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
   function frDate(iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : iso; }
@@ -86,9 +92,20 @@ html, body { background: var(--bg); color: var(--text); font-family: var(--font-
     if (S.mode === 'month') q += '&month=' + S.month;
     if (S.mode === 'custom') q += '&from=' + S.from + '&to=' + S.to;
     $('aqpBody').innerHTML = '<div class="aqp-msg">Calcul en cours…</div>';
-    fetch('/api/ads-quality-share?' + q).then(function (r) { return r.json(); }).then(function (j) {
-      if (!j || !j.ok) { $('aqpBody').innerHTML = '<div class="aqp-msg err">Ce lien n\'est pas (ou plus) valide.</div>'; return; }
-      window.AdsQualityTab.render($('aqpBody'), { rowsByAxis: j.rowsByAxis, coverage: j.coverage, periodLabel: label(j) }, { admin: false });
+    fetch('/api/ads-quality-share?' + q).then(function (r) {
+      return r.json().then(function (j) { return { status: r.status, j: j }; }, function () { return { status: r.status, j: null }; });
+    }).then(function (res) {
+      var j = res.j;
+      if (!j || !j.ok) {
+        /* 403 = jeton refusé ; toute autre erreur = calcul impossible (jamais
+           présentée comme un lien invalide). */
+        $('aqpBody').innerHTML = res.status === 403
+          ? '<div class="aqp-msg err">Ce lien n\'est pas (ou plus) valide.</div>'
+          : '<div class="aqp-msg err">Calcul impossible pour le moment (erreur ' + (Number(res.status) || '?') + '). Réessaie dans un instant.</div>';
+        return;
+      }
+      var A = window.AdsQualityTab;
+      A.render($('aqpBody'), A.fromShare ? A.fromShare(j, label(j)) : { rowsByAxis: j.rowsByAxis, coverage: j.coverage, periodLabel: label(j) }, { admin: false });
     }).catch(function () { $('aqpBody').innerHTML = '<div class="aqp-msg err">Chargement impossible. Réessaie dans un instant.</div>'; });
   }
   $('aqpMode').addEventListener('click', function (e) {

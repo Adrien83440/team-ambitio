@@ -23,6 +23,7 @@
   }
 </script>
 
+<script src="stats-core.js"></script>
 <script>
 /* === sales-data.js inlined === */
 /**
@@ -32,7 +33,10 @@
  */
 
 /* ═══════════════════════════════════════════════════════════
-   PROJECTIONS FIXES — modifier ici pour changer les cibles
+   PROJECTIONS FIXES — anciennes cibles figées (24 000 € et 4 closes par
+   semaine). 25/11/2026 : plus AFFICHÉES (« Proj: » retiré du formulaire) ;
+   gardées seulement parce que DB.compute() les lit. L'objectif de l'équipe
+   est celui de Projections (_config/sales_objectives).
 ═══════════════════════════════════════════════════════════ */
 const PROJECTIONS = {
   closing: {
@@ -73,13 +77,9 @@ const DB = {
       s3: { leads:127, calls:178, decroches:38, propRdv:16, sets:11, presents:4, closes:1 },
       s4: { leads:100, calls:150, decroches:28, propRdv:15, sets:10, presents:4, closes:0 },
     },
-    deals: [
-      { client:'Julie Berchoux',     email:'julieberchoux@icloud.com',         offre:'BP 12', type:'Closing', date:'24/01/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting après self booking', ok:true  },
-      { client:'Corinne Alaga',      email:'contact@lestabliersgourmands.com', offre:'BP 12', type:'Setting', date:'27/01/2026', cHT:null, coHT:null,  comm:125, bonus:0, notes:"Setting d'un close d'Elodie", ok:true  },
-      { client:'Belinda Giangiulio', email:'lesdemoisellesduvrac@gmail.com',   offre:'BP 12', type:'Closing', date:'30/01/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-      { client:'Cecile Auneau',      email:'domcecile@gmail.com',              offre:'BP 12', type:'Closing', date:'09/02/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-      { client:'Justine Biton',      email:'lephildesidees@hotmail.com',       offre:'BP 12', type:'Closing', date:'09/02/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-    ],
+    /* 25/11/2026 (décision D28) : plus aucune donnée d'exemple nominative
+       (noms et e-mails de clients) dans le code de la page. */
+    deals: [],
   },
 
   // Calculé depuis _raw
@@ -90,14 +90,8 @@ const DB = {
     'Février 2026': { contracte:24000, collecte:2000, totalComm:2125, statut:'En attente', deals:[] },
     'Mars 2026':    { contracte:0,     collecte:0,    totalComm:1625, statut:'En attente', deals:[] },
   },
-  team: {
-    week: [
-      { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:22748, collecte:13629, calls:29, lives:24, offres:19, closes:7, showup:0.83, txOffre:0.792, txTransfoShow:0.292, txTransfoOffre:0.368, caCall:784.4  },
-    ],
-    month: [
-      { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:34069, collecte:3966, calls:46, lives:28, offres:13, closes:7, showup:0.609, txOffre:0.464, txTransfoShow:0.25,  txTransfoOffre:0.538, caCall:617.2 },
-    ],
-  },
+  /* Lu par aucun rendu de cette page ; exemple nominatif retiré (D28). */
+  team: { week: [], month: [] },
 
   // Recalcule toutes les métriques depuis _raw
   compute() {
@@ -475,6 +469,10 @@ window.getMonthWeeks=getMonthWeeks; window.ALL_WEEKS=ALL_WEEKS;
 
 <div class="page">
 
+  <!-- Bandeau « ancienne saisie » (décision D27 du 25/11/2026) : la page reste
+       ouverte et écrit comme avant ; le « i » est ajouté par saisieRenderLegacy(). -->
+  <div id="saisie-legacy" style="margin-bottom:16px;padding:12px 15px;border-radius:12px;background:var(--bg3);border:1px solid var(--border2);border-left:3px solid var(--gold);font-size:12.5px;line-height:1.6;color:var(--text)">📜 <b style="color:var(--gold)">Ancienne saisie</b> — plus lue par aucun écran depuis juillet 2026 : les chiffres sont calculés à partir des RDV et des paiements (Set NB, Close SB).</div>
+
   <!-- Header -->
   <div class="page-header-row">
     <div>
@@ -495,7 +493,7 @@ window.getMonthWeeks=getMonthWeeks; window.ALL_WEEKS=ALL_WEEKS;
   <div id="section-closing">
 
     <div style="background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.12);border-radius:12px;padding:13px 16px;margin-bottom:16px;font-size:12px;color:var(--muted);line-height:1.6">
-      💡 Saisis tes chiffres <b style="color:var(--text)">semaine par semaine</b>. Les totaux mensuels et ratios sont calculés automatiquement.
+      💡 <span data-saisie-decl>Chiffres déclarés : saisis-les <b style="color:var(--text)">semaine par semaine</b>. Ils ne sont repris par aucun écran ; les chiffres de closing calculés sont dans Close SB.</span>
     </div>
 
     <div class="week-grid" style="grid-template-columns:repeat(2,1fr);gap:16px" id="closing-weeks"></div>
@@ -509,7 +507,7 @@ window.getMonthWeeks=getMonthWeeks; window.ALL_WEEKS=ALL_WEEKS;
   <div id="section-setting" style="display:none">
 
     <div style="background:rgba(96,165,250,0.04);border:1px solid rgba(96,165,250,0.12);border-radius:12px;padding:13px 16px;margin-bottom:16px;font-size:12px;color:var(--muted);line-height:1.6">
-      💡 Saisis ton activité setting semaine par semaine. Leads = contacts traités depuis Notion/CRM.
+      💡 <span data-saisie-decl>Chiffres déclarés : saisis ton activité setting semaine par semaine (Leads = contacts traités depuis Notion/CRM). Ils ne sont repris par aucun écran ; les chiffres de setting calculés sont dans Set NB.</span>
     </div>
 
     <div class="week-grid" style="grid-template-columns:repeat(2,1fr);gap:16px" id="setting-weeks"></div>
@@ -557,17 +555,17 @@ window.getMonthWeeks=getMonthWeeks; window.ALL_WEEKS=ALL_WEEKS;
             <input class="form-input" id="nd-date" type="date"/>
           </div>
           <div class="form-field">
-            <label class="form-label">Contracté HT (€)</label>
+            <label class="form-label">Contracté déclaré (€)</label>
             <input class="form-input" id="nd-contracte" type="number" placeholder="6000"/>
           </div>
         </div>
         <div class="form-row">
           <div class="form-field">
-            <label class="form-label">Collecté HT (€)</label>
+            <label class="form-label">Collecté déclaré (€)</label>
             <input class="form-input" id="nd-collecte" type="number" placeholder="500"/>
           </div>
           <div class="form-field">
-            <label class="form-label">Commission (€)</label>
+            <label class="form-label">Commission (€) — estimation personnelle, non reprise dans Commissions</label>
             <input class="form-input" id="nd-comm" type="number" placeholder="500"/>
           </div>
         </div>
@@ -627,6 +625,33 @@ window.getMonthWeeks=getMonthWeeks; window.ALL_WEEKS=ALL_WEEKS;
 </style>
 
 <script>
+/* ── Ancienne saisie (25/11/2026, audit des chiffres, D27) ──
+   Bandeau + libellés « déclaré » + « i » du glossaire commun. Aucune
+   redirection, et la page écrit exactement comme avant (saisies/{uid}). */
+var SC_SAISIE = window.StatsCore || null;
+function saisieEsc(t) {
+  return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function saisieInfoDecl(prec) { return (SC_SAISIE && SC_SAISIE.info) ? SC_SAISIE.info('declare', prec) : ''; }
+function saisieRenderLegacy() {
+  var el = document.getElementById('saisie-legacy');
+  if (el && SC_SAISIE && SC_SAISIE.info) {
+    el.innerHTML = '📜 <b style="color:var(--gold)">Ancienne saisie</b> — plus lue par aucun écran depuis juillet 2026 : ' +
+      'les chiffres sont calculés à partir des RDV et des paiements (Set NB, Close SB).' + SC_SAISIE.info('ancienne_saisie',
+        'Cette page enregistre encore ce que tu tapes, mais plus aucun écran ne le relit.');
+  }
+  var notes = document.querySelectorAll('[data-saisie-decl]');
+  for (var i = 0; i < notes.length; i++) {
+    if (!notes[i].getAttribute('data-saisie-i')) {
+      notes[i].setAttribute('data-saisie-i', '1');
+      notes[i].insertAdjacentHTML('beforeend', saisieInfoDecl());
+    }
+  }
+}
+saisieRenderLegacy();
+
 /* ── Month nav ── */
 const MONTHS = DB.months;
 let _cm = (() => {
@@ -666,47 +691,40 @@ function buildClosingWeeks() {
       <div class="week-form-card">
         <div class="week-form-title">
           ${wk.label} <small style="font-weight:400;opacity:.6">(${wk.range})</small>
-          <span>Proj: ${p.closes} closes · ${U.euro(p.contracte)}</span>
         </div>
         <div class="form-grid-3">
           <div class="fi">
-            <label>Calls</label>
+            <label>RDV (déclaré)</label>
             <input type="number" id="c-${w}-calls" value="${d.calls||''}" placeholder="0"/>
-            <div class="proj-hint">Proj: ${p.calls}</div>
           </div>
           <div class="fi">
-            <label>Lives</label>
+            <label>Présents (déclaré)</label>
             <input type="number" id="c-${w}-lives" value="${d.lives||''}" placeholder="0"/>
-            <div class="proj-hint">Proj: ${p.lives}</div>
           </div>
           <div class="fi">
-            <label>Offres faites</label>
+            <label>Pitchés (déclaré)</label>
             <input type="number" id="c-${w}-offres" value="${d.offres||''}" placeholder="0"/>
-            <div class="proj-hint">Proj: ${p.offres}</div>
           </div>
           <div class="fi">
-            <label>Closes total</label>
+            <label>Closes (déclaré)</label>
             <input type="number" id="c-${w}-closes" value="${d.closes||''}" placeholder="0"/>
-            <div class="proj-hint">Proj: ${p.closes}</div>
           </div>
           <div class="fi">
-            <label>Hard close</label>
+            <label>Hard close (déclaré)</label>
             <input type="number" id="c-${w}-hc" value="${d.hc||''}" placeholder="0"/>
           </div>
           <div class="fi">
-            <label>Follow-up</label>
+            <label>Follow-up (déclaré)</label>
             <input type="number" id="c-${w}-fu" value="${d.fu||''}" placeholder="0"/>
           </div>
           <div class="fi-sep"></div>
           <div class="fi">
-            <label>Contracté (€)</label>
+            <label>Contracté (€, déclaré)</label>
             <input type="number" id="c-${w}-contracte" value="${d.contracte||''}" placeholder="0"/>
-            <div class="proj-hint">Proj: ${U.euro(p.contracte)}</div>
           </div>
           <div class="fi">
-            <label>Collecté (€)</label>
+            <label>Collecté (€, déclaré)</label>
             <input type="number" id="c-${w}-collecte" value="${d.collecte||''}" placeholder="0"/>
-            <div class="proj-hint">Proj: ${U.euro(p.collecte)}</div>
           </div>
         </div>
       </div>`;
@@ -731,44 +749,36 @@ function buildSettingWeeks() {
       <div class="week-form-card">
         <div class="week-form-title">
           ${wk.label} <small style="font-weight:400;opacity:.6">(${wk.range})</small>
-          <span>Proj: ${p.sets} sets · ${p.closes} closes</span>
         </div>
         <div class="form-grid-3">
           <div class="fi">
-            <label>Leads</label>
+            <label>Leads (déclaré)</label>
             <input type="number" id="s-${w}-leads" value="${d.leads||''}" placeholder="0"/>
-            <div class="proj-hint">Proj: ${p.leads}</div>
           </div>
           <div class="fi">
-            <label>Calls passés</label>
+            <label>Appels (déclaré)</label>
             <input type="number" id="s-${w}-calls" value="${d.calls||''}" placeholder="0"/>
-            <div class="proj-hint">Proj: ${p.calls}</div>
           </div>
           <div class="fi">
-            <label>Décrochés</label>
+            <label>Décrochés (déclaré)</label>
             <input type="number" id="s-${w}-decroches" value="${d.decroches||''}" placeholder="0"/>
-            <div class="proj-hint">Proj: ${p.decroches}</div>
           </div>
           <div class="fi">
-            <label>Prop. RDV</label>
+            <label>Prop. RDV (déclaré)</label>
             <input type="number" id="s-${w}-propRdv" value="${d.propRdv||''}" placeholder="0"/>
-            <div class="proj-hint">Proj: ${p.propRdv}</div>
           </div>
           <div class="fi">
-            <label>Sets</label>
+            <label>Sets (déclaré)</label>
             <input type="number" id="s-${w}-sets" value="${d.sets||''}" placeholder="0"/>
-            <div class="proj-hint">Proj: ${p.sets}</div>
           </div>
           <div class="fi">
-            <label>Show-up</label>
+            <label>Présents (déclaré)</label>
             <input type="number" id="s-${w}-presents" value="${d.presents||''}" placeholder="0"/>
-            <div class="proj-hint">Proj: ${p.presents}</div>
           </div>
           <div class="fi-sep"></div>
           <div class="fi">
-            <label>Closes</label>
+            <label>Closes (déclaré)</label>
             <input type="number" id="s-${w}-closes" value="${d.closes||''}" placeholder="0"/>
-            <div class="proj-hint">Proj: ${p.closes}</div>
           </div>
         </div>
       </div>`;
@@ -793,16 +803,16 @@ function buildDealsList() {
   document.getElementById('deals-list').innerHTML = `
     <table class="data-table" style="width:100%;min-width:500px">
       <thead><tr>
-        <th>Client</th><th>Type</th><th>Contracté</th><th>Commission</th><th>Statut</th><th></th>
+        <th>Client</th><th>Type</th><th>Contracté déclaré${saisieInfoDecl('Montant tapé à la main dans ce formulaire. On ne sait pas s’il était hors taxes. Le Contracté de référence vient du module Paiements (Close SB, Stats funnel).')}</th><th>Commission (estimation)${saisieInfoDecl('Estimation personnelle tapée à la main, non reprise dans la page Commissions (qui applique le barème et le contrat du membre).')}</th><th>Statut</th><th></th>
       </tr></thead>
       <tbody>
         ${deals.map((d,i) => `
           <tr>
             <td>
-              <div style="font-weight:600;font-size:12px">${d.client}</div>
-              <div style="font-size:10px;color:var(--muted)">${d.date}</div>
+              <div style="font-weight:600;font-size:12px">${saisieEsc(d.client)}</div>
+              <div style="font-size:10px;color:var(--muted)">${saisieEsc(d.date)}</div>
             </td>
-            <td><span class="badge ${d.type==='Closing'?'badge-red':'badge-blue'}">${d.type}</span></td>
+            <td><span class="badge ${d.type==='Closing'?'badge-red':'badge-blue'}">${saisieEsc(d.type)}</span></td>
             <td class="td-mono">${d.cHT ? U.euro(d.cHT) : '—'}</td>
             <td class="td-mono" style="color:var(--gold);font-weight:700">${U.euro(d.comm)}</td>
             <td><span class="badge ${d.ok?'badge-green':'badge-gold'}">${d.ok?'✓ Vérifié':'En attente'}</span></td>

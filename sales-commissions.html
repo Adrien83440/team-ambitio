@@ -24,6 +24,8 @@ if (!firebase.apps.length) {
 }
 </script>
 
+<!-- Glossaire commun et petit « i » d'explication (25/11/2026) — chargé avant le script de la page. -->
+<script src="stats-core.js"></script>
 <script src="nav.js" defer></script>
 <style>
 /* ═══ RESET & BASE ══════════════════════════════════════════ */
@@ -720,17 +722,18 @@ const BONUS_MILESTONES = [
 /* Membres partis de la société — masqués PARTOUT (dashboard, fiches,
    comparatifs) mais données historiques conservées. Validé Adrien 14/07/2026. */
 const DEPARTED_COMM = { guillaume: true, guillaumes: true, elodie: true }; // slug réel du roster : guillaumes
-/* Solde de fin de mission : un membre parti reste visible de l'ADMIN seul
-   jusqu'à la date indiquée (incluse), le temps de régler ses dernières
-   commissions — le Setting d'un close d'octobre est versé en novembre (M+1).
-   Élodie : fin de mission le 10/10/2026. */
+/* Solde de fin de mission : la FICHE d'un membre parti reste ouverte à
+   l'ADMIN seul jusqu'à la date indiquée (incluse, jour de Paris), le temps de
+   valider ses dernières commissions — le Setting d'un close d'octobre est
+   versé en novembre (M+1). Élodie : fin de mission le 10/10/2026.
+   Depuis le 25/11/2026 cette date ne règle QUE l'accès à la fiche : elle ne
+   retire plus rien des totaux de l'équipe (ses lignes validées restent
+   comptées, mois passés compris, sur « Anciens membres » — décision D10). */
 const FINAL_PAY_UNTIL = { elodie: '2026-11-30' };
 function _finalPayOpen(uid) {
   var until = FINAL_PAY_UNTIL[uid];
   if (!until) return false;
-  var d = new Date();
-  var today = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
-  return today <= until;
+  return _jourParisNow() <= until;
 }
 
 const MEMBERS_COMM = [
@@ -820,18 +823,51 @@ function _fsToM(fsKey) {
   if (!p[0] || isNaN(mi) || mi < 0 || mi > 11) return null;
   return MONTHS_FR[mi] + ' ' + p[0];
 }
+/* Mois courant À L'HEURE DE PARIS ('AAAA-MM'), quel que soit le fuseau de
+   l'appareil (même règle que les autres écrans : StatsCore.moisParis). */
+function _moisParisNow() {
+  if (window.StatsCore && StatsCore.moisParis) return StatsCore.moisParis(new Date());
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+function _jourParisNow() {
+  if (window.StatsCore && StatsCore.jourParis) return StatsCore.jourParis(new Date());
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+/* Ouverture (25/11/2026) : TOUJOURS sur le mois en cours (heure de Paris),
+   comme Set NB, Close SB et le Stats funnel. Avant : dernier mois consulté
+   (localStorage comm_month) ou, à défaut, « Février 2026 » en dur. Le mois
+   choisi n'est plus mémorisé d'une visite à l'autre. */
 let _cm = (() => {
-  const s = localStorage.getItem('comm_month') || 'Février 2026';
-  const p = s.split(' ');
-  const mi = MONTHS_FR.indexOf(p[0]);
-  return { month: mi >= 0 ? mi : 1, year: parseInt(p[1]) || 2026 };
+  const mk = _moisParisNow();
+  const y = parseInt(mk.slice(0, 4), 10), mi = parseInt(mk.slice(5, 7), 10) - 1;
+  return { month: (mi >= 0 && mi <= 11) ? mi : 0, year: y || new Date().getFullYear() };
 })();
 function cmk() { return MONTHS_FR[_cm.month] + ' ' + _cm.year; }
 function prevMonth() { _cm.month--; if (_cm.month < 0) { _cm.month = 11; _cm.year--; } saveCm(); renderAll(); }
 function nextMonth() { _cm.month++; if (_cm.month > 11) { _cm.month = 0; _cm.year++; } saveCm(); renderAll(); }
+function currentMonth() {
+  const mk = _moisParisNow();
+  _cm = { month: parseInt(mk.slice(5, 7), 10) - 1, year: parseInt(mk.slice(0, 4), 10) };
+  saveCm(); renderAll();
+}
+function _isCurrentMonthShown() { return _mToFs(cmk()) === _moisParisNow(); }
 function saveCm() {
-  localStorage.setItem('comm_month', cmk());
   document.getElementById('month-lbl').textContent = cmk();
+  _paintMonthNav();
+}
+/* Bouton « Mois en cours » + repère « mois passé / à venir » à côté du sélecteur. */
+function _paintMonthNav() {
+  const btn = document.getElementById('month-now');
+  const tag = document.getElementById('month-tag');
+  const cur = _isCurrentMonthShown();
+  if (btn) btn.style.display = cur ? 'none' : '';
+  if (tag) {
+    const shown = _mToFs(cmk()) || '', now = _moisParisNow();
+    tag.textContent = cur ? 'mois en cours' : (shown < now ? 'mois passé' : 'mois à venir');
+    tag.style.color = cur ? 'var(--green)' : 'var(--gold)';
+  }
 }
 
 let currentMember = null;
@@ -933,9 +969,23 @@ function _bonusPeriod(uid) {
   while ((y + 1) + sd.slice(4) <= today) y++;
   return { start: y + sd.slice(4), end: (y + 1) + sd.slice(4) };
 }
+/* Date d'un deal en 'AAAA-MM-JJ'. Deux formats en base : JJ/MM/AAAA (deals
+   AUTO, historique) et AAAA-MM-JJ (deal ajouté à la main : valeur brute du
+   champ date du formulaire). Avant le 25/11/2026 seul le premier était lu :
+   un deal ajouté à la main valait 0 point sur une période annuelle. Lecture
+   seule — la donnée n'est pas réécrite. '' = date illisible ou absente. */
 function _dealIso(d) {
-  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(d && d.date || ''));
-  return m ? m[3] + '-' + m[2] + '-' + m[1] : '';
+  const s = String(d && d.date || '').trim();
+  let m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s);
+  if (m) return m[3] + '-' + m[2] + '-' + m[1];
+  m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  return m ? s : '';
+}
+/* Date affichée d'un deal : toujours JJ/MM/AAAA (affichage seul). */
+function _dealDateFr(d) {
+  const iso = _dealIso(d);
+  if (iso) return iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
+  return (d && d.date) ? String(d.date) : '';
 }
 function _ptsLabel(uid) {
   const p = _bonusPeriod(uid);
@@ -975,8 +1025,21 @@ function calcTotalPoints(uid) {
   return total;
 }
 
+/* Montant d'une ligne = commission + bonus, tels qu'enregistrés (aucun
+   barème recalculé ici). Un champ absent ou illisible compte 0 € et la ligne
+   est SIGNALÉE (_dealAmountIssue) : avant le 25/11/2026, un bonus absent
+   rendait la somme NaN, affichée « 0 € » pour TOUT le total, sans alerte. */
+function _num(v) { const n = Number(v); return isFinite(n) ? n : 0; }
+function _dealAmount(d) { return _num(d && d.comm) + _num(d && d.bonus); }
+function _dealAmountIssue(d) {
+  if (!d) return '';
+  const bad = v => v === undefined || v === null || v === '' || !isFinite(Number(v));
+  if (bad(d.comm)) return 'commission absente ou illisible, comptée 0 €';
+  if (bad(d.bonus)) return 'bonus absent, compté 0 €';
+  return '';
+}
 function calcComm(deals) {
-  return deals.filter(d => d.ok).reduce((t, d) => t + d.comm + d.bonus, 0);
+  return deals.filter(d => d.ok).reduce((t, d) => t + _dealAmount(d), 0);
 }
 
 function calcContracte(deals) {
@@ -1005,6 +1068,62 @@ function fmtDec(n) {
   if (!n) return '0 €';
   return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(n) + ' €';
 }
+
+/* ═══ MOTS ET « i » (référentiel des chiffres, 25/11/2026) ═══════════════
+   Cette page est une feuille de PAIE : elle compte des lignes de commission
+   validées à la main, rangées au mois de versement, et des montants SAISIS
+   au close. Ce ne sont ni les Closes, ni les Sets, ni le Contracté / Collecté
+   des écrans de résultat (Global closing, Set NB, Stats funnel) : chaque
+   chiffre le dit par son « i ». Aucun calcul de commission ne change ici. */
+function _esc(t) {
+  return String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function _i(cle, precision) { return (window.StatsCore && StatsCore.info) ? StatsCore.info(cle, precision) : ''; }
+function _il(titre, texte) { return (window.StatsCore && StatsCore.infoLibre) ? StatsCore.infoLibre(titre, texte) : ''; }
+/* Notes propres à cette page (termes absents du glossaire commun : à y
+   ajouter — voir le compte rendu du chantier). */
+const COMM_TXT = {
+  moisVersement: 'Mois de versement des commissions : en général le mois où le close a été validé. Une commission de setting peut être posée sur le mois suivant (réglage « Setting versé ») ou déplacée à la main (◀ ▶). Ce n’est pas le mois du RDV ni celui de la signature : les closes et les sets d’un mois sont sur Global closing, Close SB, Set NB et le Stats funnel. La page s’ouvre sur le mois en cours, à l’heure de Paris.',
+  commissionsEquipe: 'Somme des commissions validées ✓ (commission + bonus) de toute l’équipe sur ce mois de versement, anciens membres compris (ligne « Anciens membres », sans nom). Le chiffre est le même quel que soit le compte connecté. Les lignes « en attente » n’y sont pas. Montants tels qu’inscrits au contrat de chaque membre (HT ou TTC selon son contrat) : la page ne les convertit pas. Une ligne de commission reste en place même si son close a été annulé depuis dans les rapports (rien encaissé, paiement annulé ou client stoppé) : cette page ne lit pas les paiements et ne peut pas le signaler. Les closes annulés sont listés dans Close SB, Set NB et le Stats funnel : à vérifier avant de valider.',
+  commissionsMembre: 'Commissions validées ✓ (commission + bonus) de ce membre rangées sur ce mois de versement. Les lignes « en attente » n’y sont pas. Montants tels qu’inscrits à son contrat (HT ou TTC selon le contrat). Une ligne reste en place même si son close a été annulé depuis dans les rapports : cette page ne lit pas les paiements et ne peut pas le signaler (closes annulés : Close SB, Set NB, Stats funnel).',
+  closingValidees: 'Lignes de commission de closing passées à « Validé » à la main, rangées au mois de versement : une par client signé dont le membre est le closer. Ce n’est pas le nombre de Closes : une ligne en attente, un close sans closer identifié ou un close d’un autre mois n’y sont pas. Le nombre officiel de Closes est sur Global closing et le Stats funnel.',
+  settingValidees: 'Lignes de commission de setting passées à « Validé » à la main, rangées au mois de versement : une par client signé dont le membre est le setter, Self Booking compris. Ce ne sont pas des RDV posés : le nombre officiel de Sets est sur Set NB.',
+  fixes: 'Fixe mensuel du contrat de chaque membre ACTUEL (Admin → Utilisateurs), au prorata de son mois d’arrivée. Le fixe d’un ancien membre n’est pas repris dans ce total. Montant tel qu’inscrit au contrat (HT ou TTC selon le contrat) : la page ne le convertit pas.',
+  fixeMembre: 'Fixe mensuel inscrit au contrat du membre (Admin → Utilisateurs), au prorata de son mois d’arrivée. HT ou TTC selon son contrat : la page ne le convertit pas.',
+  totalMembre: 'Fixe du mois + commissions validées ✓ de ce mois de versement. Même unité que le contrat du membre (HT ou TTC).',
+  ancienMembre: 'Personnes qui ont quitté l’équipe : plus de fiche ni de nom, mais leurs commissions validées des mois passés restent dans le total de l’équipe.',
+  totalIndisponible: 'Ton compte ne voit que tes propres commissions : le total de l’équipe n’est pas affiché plutôt que d’être faux. Tes chiffres sont sur ta fiche ci-dessous. Un closer ou un admin voit le total de l’équipe.',
+  enAttente: 'Lignes de commission pas encore validées ✓ : elles ne comptent dans aucun total de cette page.',
+  canal: 'Ici, Self-Booking / No-Booking est la réponse donnée par le closer au moment du close : c’est elle qui fixe le tarif de setting. Close SB, Set NB et le Stats funnel rangent le close selon son RDV (pris seul par le prospect, ou posé par un setter) : les deux peuvent différer.',
+  pointsPeriode: 'Points des commissions de closing validées ✓ dont la date du close tombe dans la période annuelle du contrat (ouverte à la date anniversaire d’arrivée). Une ligne sans date lisible n’y est pas comptée et le dit.',
+  pointsCarriere: 'Points des commissions de closing validées ✓ de tous les mois connus, plus les points historiques d’avant le suivi.',
+  pointsMois: 'Points des commissions de closing validées ✓ rangées sur ce mois de versement.',
+  statut: 'Seules les lignes « ✓ Validé » comptent dans les totaux. Clic sur le statut pour le changer.',
+  commissionCol: 'Commission (+ bonus) de la ligne, telle qu’enregistrée. HT ou TTC selon le contrat du membre.',
+  topDeals: 'Lignes de commission validées ✓ de ce mois de versement, classées par montant (commission + bonus). Un ancien membre apparaît sans nom.',
+  repartition: 'Commissions de closing validées ✓ de ce mois de versement, par offre. Ce n’est pas le nombre de Closes.',
+  lignesValidees: 'Lignes de commission (closing et setting) passées à « Validé » à la main, rangées sur ce mois de versement. Un closer qui est aussi le setter d’un client a deux lignes pour ce client. Ce ne sont ni des Closes ni des Sets : voir Global closing et Set NB.'
+};
+/* Pose les « i » des libellés écrits dans le HTML : data-comm-i = note de
+   COMM_TXT (titre data-comm-t), data-comm-gl = terme du glossaire commun
+   (précision data-comm-x). Idempotent. */
+function _paintStaticInfos() {
+  document.querySelectorAll('[data-comm-i],[data-comm-gl]').forEach(function(el) {
+    if (el.getAttribute('data-comm-done')) return;
+    var html = el.hasAttribute('data-comm-gl')
+      ? _i(el.getAttribute('data-comm-gl'), el.getAttribute('data-comm-x') || '')
+      : _il(el.getAttribute('data-comm-t') || '', COMM_TXT[el.getAttribute('data-comm-i')] || '');
+    if (!html) return;
+    el.innerHTML = html;
+    el.setAttribute('data-comm-done', '1');
+  });
+}
+/* Délégation : boutons ajoutés par ce chantier (pas d'onclick en ligne). */
+document.addEventListener('click', function(e) {
+  var b = e.target && e.target.closest ? e.target.closest('[data-comm-act]') : null;
+  if (!b) return;
+  if (b.getAttribute('data-comm-act') === 'now') currentMonth();
+});
 
 /* ═══ CONTRAT PAR MEMBRE (10/09/2026) ═══════════════════════════
    _meta/team_members[].contract = { fixe, closing:{offre:{mensualise,pif}},
@@ -1104,89 +1223,201 @@ function offreClass(offre) {
 /* ══════════════════════════════════════════════════════════
    RENDER GLOBAL DASHBOARD
 ══════════════════════════════════════════════════════════ */
+/* ═══ ÉQUIPE : MÊME TOTAL POUR TOUS (25/11/2026, décision D10) ═══════════
+   Le total d'un mois = TOUTES les lignes validées de ce mois, anciens membres
+   compris (rangés sur « Anciens membres », sans nom), quel que soit le compte
+   connecté et quelle que soit la date du jour. Avant : somme des seules
+   fiches visibles → un closer, un admin et un setter lisaient trois totaux
+   différents, et le total des mois passés baissait seul quand un membre
+   partait (FINAL_PAY_UNTIL). La visibilité des FICHES ne change pas
+   (_visibleMembers) ; elle ne retire plus rien des totaux. */
+function _isAncien(m) {
+  if (!m) return false;
+  if (m.departed || m.archived || DEPARTED_COMM[m.uid]) return true;
+  const tm = (window.TEAM_MEMBERS || {})[m.uid];
+  return !!(tm && typeof window.isDepartedMember === 'function' && window.isDepartedMember(tm));
+}
+/* Qui peut lire le total de l'équipe sur cette page : 'all' (admin, closer,
+   closer_setter), 'self' (setter : sa seule fiche — la page ne lui montre
+   pas la paie des autres), 'unknown' (roster pas encore chargé). Un compte
+   qui ne voit pas tout lit « — », jamais un total partiel. */
+function _teamView() {
+  if (_isAdminView()) return 'all';
+  const me = _commMe();
+  if (!me) return 'unknown';
+  return (me.role === 'setter' || me.role === 'setter_ecrit') ? 'self' : 'all';
+}
+function _uniqueMembers() {
+  const seen = {};
+  return MEMBERS_COMM.filter(m => { if (!m || !m.uid || seen[m.uid]) return false; seen[m.uid] = 1; return true; });
+}
+function _teamAgg(month) {
+  const visible = {};
+  _visibleMembers().forEach(m => { visible[m.uid] = 1; });
+  const a = { comm: 0, contracte: 0, collecte: 0, nClos: 0, nSet: 0, pendingN: 0, pendingAmt: 0, issues: 0,
+              fixe: 0, deals: [], rows: [], anciens: { comm: 0, nClos: 0, nSet: 0, n: 0 } };
+  _uniqueMembers().forEach(m => {
+    const deals = getDeals(m.uid, month);
+    const ok = deals.filter(d => d.ok);
+    const comm = calcComm(deals);
+    a.comm += comm;
+    a.contracte += calcContracte(deals);
+    a.collecte += calcCollecte(deals);
+    a.nClos += ok.filter(d => d.type === 'Closing').length;
+    a.nSet += ok.filter(d => d.type === 'Setting').length;
+    deals.filter(d => !d.ok).forEach(d => { a.pendingN++; a.pendingAmt += _dealAmount(d); });
+    ok.forEach(d => { if (_dealAmountIssue(d)) a.issues++; });
+    const ancien = _isAncien(m);
+    if (!ancien) a.fixe += _memberFixe(m.uid, month);
+    const shown = !!visible[m.uid];
+    ok.forEach(d => a.deals.push(Object.assign({}, d, { _member: m, _named: shown })));
+    if (shown) a.rows.push(m);
+    else {
+      a.anciens.comm += comm;
+      a.anciens.nClos += ok.filter(d => d.type === 'Closing').length;
+      a.anciens.nSet += ok.filter(d => d.type === 'Setting').length;
+      a.anciens.n += ok.length;
+    }
+  });
+  return a;
+}
+function _plural(n, one, many) { return n + ' ' + (n > 1 ? many : one); }
+/* Lectures Firestore en échec (P7 : jamais un total partiel muet). */
+let _fsErr = {};
+function _paintLoadWarn() {
+  const box = document.getElementById('comm-warn');
+  if (!box) return;
+  const month = cmk();
+  const who = {};
+  Object.keys(_fsErr).forEach(k => {
+    const e = _fsErr[k];
+    if (e && (e.month === null || e.month === month)) who[e.uid] = 1;
+  });
+  const n = Object.keys(who).length;
+  if (!n) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = '';
+  box.innerHTML = '⚠️ Lecture impossible des commissions de ' + _plural(n, 'membre', 'membres') +
+    ' : les totaux de ce mois peuvent être incomplets (chiffres de ce navigateur affichés à la place). Recharge la page.' +
+    _i('lecture_incomplete');
+}
+
 function renderDashboard() {
   const month = cmk();
   const lbl = document.getElementById('dash-month-label'); if (lbl) lbl.textContent = month;
+  _paintLoadWarn();
 
-  // Aggregate — équipe sales active uniquement (membres partis exclus)
-  let totalComm = 0, totalContracte = 0, totalCollecte = 0, allDeals = [];
-  _visibleMembers().forEach(m => {
-    const deals = getDeals(m.uid, month);
-    totalComm      += calcComm(deals);
-    totalContracte += calcContracte(deals);
-    totalCollecte  += calcCollecte(deals);
-    deals.filter(d => d.ok).forEach(d => allDeals.push({ ...d, _member: m }));
-  });
+  const view = _teamView();
+  const bottom = document.getElementById('dash-bottom');
+  if (view !== 'all') {
+    /* Setter (ou roster pas encore chargé) : « — » plutôt qu'un total
+       partiel ; le comparatif et les tops, nominatifs, ne s'affichent pas. */
+    const dash = view === 'self' ? '—' : '…';
+    ['dash-comm', 'dash-contracte', 'dash-collecte', 'dash-deals'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.textContent = dash;
+    });
+    const sub = document.getElementById('dash-comm-sub');
+    if (sub) sub.innerHTML = view === 'self'
+      ? 'Total de l’équipe non affiché' + _il('Commissions de l’équipe', COMM_TXT.totalIndisponible)
+      : 'Chargement de l’équipe…';
+    if (bottom) bottom.style.display = 'none';
+    return;
+  }
+  if (bottom) bottom.style.display = '';
 
-  // KPIs row
-  const nClos = allDeals.filter(d => d.type === 'Closing').length;
-  const nSet  = allDeals.filter(d => d.type === 'Setting').length;
-  const totPtsMonth = _visibleMembers().reduce((t, m) => t + calcPoints(getDeals(m.uid, month)), 0);
+  const A = _teamAgg(month);
 
-  document.getElementById('dash-comm').textContent      = fmtDec(totalComm);
-  const totalFixe = _visibleMembers().reduce((t, m) => t + _memberFixe(m.uid), 0);
+  document.getElementById('dash-comm').textContent = fmtDec(A.comm);
   const dashCommSub = document.getElementById('dash-comm-sub');
-  if (dashCommSub) dashCommSub.textContent = totalFixe > 0
-    ? 'Deals validés & encaissés · + ' + fmt(totalFixe) + ' de fixes = ' + fmtDec(totalComm + totalFixe)
-    : 'Deals validés & encaissés';
-  document.getElementById('dash-contracte').textContent = fmt(totalContracte);
-  document.getElementById('dash-collecte').textContent  = fmt(totalCollecte);
-  document.getElementById('dash-deals').textContent     = nClos + ' closes · ' + nSet + ' sets';
+  if (dashCommSub) {
+    let s = 'Validées uniquement';
+    if (A.pendingN) s += ' · ' + _plural(A.pendingN, 'ligne', 'lignes') + ' en attente (' + fmtDec(A.pendingAmt) + ')' +
+      _il('En attente', COMM_TXT.enAttente);
+    if (A.fixe > 0) s += ' · + ' + fmt(A.fixe) + ' de fixes' + _il('Fixes', COMM_TXT.fixes) + ' = ' + fmtDec(A.comm + A.fixe);
+    if (A.issues) s += '<div style="color:var(--gold);margin-top:3px">⚠️ ' + _plural(A.issues, 'ligne validée', 'lignes validées') +
+      ' sans commission ou sans bonus lisible : comptée(s) 0 € — voir la fiche du membre.</div>';
+    dashCommSub.innerHTML = s;
+  }
+  document.getElementById('dash-contracte').textContent = fmt(A.contracte);
+  document.getElementById('dash-collecte').textContent  = fmt(A.collecte);
+  document.getElementById('dash-deals').innerHTML =
+    _plural(A.nClos, 'commission de closing', 'commissions de closing') + _il('Commissions de closing validées', COMM_TXT.closingValidees) +
+    '<br>' + _plural(A.nSet, 'commission de setting', 'commissions de setting') + _il('Commissions de setting validées', COMM_TXT.settingValidees);
 
-  // Comparatif members — équipe sales active uniquement
-  const maxComm = Math.max(..._visibleMembers().map(m => calcComm(getDeals(m.uid, month))), 1);
-  const compHtml = _visibleMembers().map(m => {
+  // Comparatif : fiches visibles + ligne « Anciens membres » (sans nom).
+  const parts = A.rows.map(m => ({ m: m, comm: calcComm(getDeals(m.uid, month)) }));
+  const maxComm = Math.max(1, A.anciens.comm, ...parts.map(p => p.comm));
+  let compHtml = parts.map(p => {
+    const m = p.m;
     const deals = getDeals(m.uid, month);
-    const comm = calcComm(deals);
+    const comm = p.comm;
     const pts  = calcPoints(deals);
     const nc   = deals.filter(d => d.type === 'Closing' && d.ok).length;
+    const ns   = deals.filter(d => d.type === 'Setting' && d.ok).length;
     const pct  = Math.round((comm / maxComm) * 100);
+    const fx   = _isAncien(m) ? 0 : _memberFixe(m.uid);
     return `<div class="comp-bar-row">
       <div class="comp-bar-top">
         <div class="comp-bar-name">
-          <div style="width:8px;height:8px;border-radius:50%;background:${m.color}"></div>
-          ${m.name}
+          <div style="width:8px;height:8px;border-radius:50%;background:${_esc(m.color)}"></div>
+          ${_esc(m.name)}
         </div>
         <div class="comp-bar-val" style="color:var(--green)">${fmtDec(comm)}</div>
       </div>
       <div class="comp-bar-track">
-        <div class="comp-bar-fill" style="width:${pct}%;background:${m.color}"></div>
+        <div class="comp-bar-fill" style="width:${pct}%;background:${_esc(m.color)}"></div>
       </div>
-      <div class="comp-bar-sub">${nc} closes${_hasBonus(m) ? ' · ' + pts.toFixed(1) + ' pts' : ''} ce mois${_memberFixe(m.uid) > 0 ? ' · fixe ' + fmt(_memberFixe(m.uid)) + ' → total ' + fmtDec(comm + _memberFixe(m.uid)) : ''}</div>
+      <div class="comp-bar-sub">${nc} closing · ${ns} setting validées${_hasBonus(m) ? ' · ' + pts.toFixed(1) + ' pts' : ''}${fx > 0 ? ' · fixe ' + fmt(fx) + ' → total ' + fmtDec(comm + fx) : ''}</div>
     </div>`;
   }).join('');
+  if (A.anciens.n > 0 || A.anciens.comm) {
+    const pct = Math.round((A.anciens.comm / maxComm) * 100);
+    compHtml += `<div class="comp-bar-row" style="opacity:.7">
+      <div class="comp-bar-top">
+        <div class="comp-bar-name">
+          <div style="width:8px;height:8px;border-radius:50%;background:var(--muted)"></div>
+          Anciens membres${_il('Anciens membres', COMM_TXT.ancienMembre)}
+        </div>
+        <div class="comp-bar-val" style="color:var(--green)">${fmtDec(A.anciens.comm)}</div>
+      </div>
+      <div class="comp-bar-track">
+        <div class="comp-bar-fill" style="width:${pct}%;background:var(--muted)"></div>
+      </div>
+      <div class="comp-bar-sub">${A.anciens.nClos} closing · ${A.anciens.nSet} setting validées</div>
+    </div>`;
+  }
+  compHtml += `<div class="comp-bar-sub" style="margin-top:4px;padding-top:8px;border-top:1px solid var(--border)">Total de l’équipe : <b style="color:var(--green)">${fmtDec(A.comm)}</b> = somme des lignes ci-dessus</div>`;
   document.getElementById('dash-comp').innerHTML = compHtml;
 
-  // Top deals (by commission, descending)
-  const sorted = [...allDeals].sort((a, b) => (b.comm + b.bonus) - (a.comm + a.bonus)).slice(0, 6);
+  // Top commissions (montant décroissant) — un ancien membre sans nom.
+  const sorted = [...A.deals].sort((a, b) => _dealAmount(b) - _dealAmount(a)).slice(0, 6);
   const topHtml = sorted.length
     ? sorted.map((d, i) => `
       <div class="top-deal-row">
         <div class="top-deal-num ${i === 0 ? 'gold' : ''}">${i + 1}</div>
         <div class="top-deal-info">
-          <div class="top-deal-client">${d.client}</div>
+          <div class="top-deal-client">${_esc(d.client)}</div>
           <div class="top-deal-meta">
-            <span class="deal-type-tag ${d.type === 'Closing' ? 'tag-closing' : 'tag-setting'}" style="padding:1px 5px;font-size:10px">${d.type}</span>
-            &nbsp;<span class="deal-offre ${offreClass(d.offre)}" style="padding:1px 5px;font-size:10px">${offreDisplay(d.offre, d.subtype)}</span>
-            &nbsp;· ${d._member.name}
+            <span class="deal-type-tag ${d.type === 'Closing' ? 'tag-closing' : 'tag-setting'}" style="padding:1px 5px;font-size:10px">${_esc(d.type)}</span>
+            &nbsp;<span class="deal-offre ${offreClass(d.offre)}" style="padding:1px 5px;font-size:10px">${_esc(offreDisplay(d.offre, d.subtype))}</span>
+            &nbsp;· ${d._named ? _esc(d._member.name) : 'Ancien membre'}
           </div>
         </div>
-        <div class="top-deal-comm">${fmtDec(d.comm + d.bonus)}</div>
+        <div class="top-deal-comm">${fmtDec(_dealAmount(d))}</div>
       </div>`).join('')
-    : '<div style="padding:20px;text-align:center;color:var(--muted2);font-size:13px">Aucun deal validé ce mois</div>';
+    : '<div style="padding:20px;text-align:center;color:var(--muted2);font-size:13px">Aucune commission validée sur ce mois</div>';
   document.getElementById('dash-top-deals').innerHTML = topHtml;
 
-  // Offre distribution
+  // Répartition par offre — commissions de closing validées
   /* BP 6 retiré des choix (offre disparue, 10/09/2026) — les deals
      historiques BP 6 restent lisibles ligne par ligne. */
   const offres = ['BP 12', 'Elite', 'Titan'];
   const colors  = { 'BP 12': '#a78bfa', 'Elite': '#f59e0b', 'Titan': '#ef4444' };
   const offreCounts = {};
-  offres.forEach(o => { offreCounts[o] = allDeals.filter(d => d.offre === o && d.type === 'Closing').length; });
+  offres.forEach(o => { offreCounts[o] = A.deals.filter(d => d.offre === o && d.type === 'Closing').length; });
   const maxCount = Math.max(...Object.values(offreCounts), 1);
   const distHtml = offres.map(o => `
     <div class="offre-dist-row">
-      <div class="offre-dist-label"><span class="deal-offre ${offreClass(o)}" style="padding:2px 6px;font-size:10px">${offreDisplay(o)}</span></div>
+      <div class="offre-dist-label"><span class="deal-offre ${offreClass(o)}" style="padding:2px 6px;font-size:10px">${_esc(offreDisplay(o))}</span></div>
       <div class="offre-dist-track">
         <div class="offre-dist-fill" style="width:${Math.round((offreCounts[o]/maxCount)*100)}%;background:${colors[o]}"></div>
       </div>
@@ -1221,31 +1452,31 @@ function renderListe() {
       <div class="mc-head">
         <div class="mc-avatar" style="background:linear-gradient(135deg,${m.color}88,${m.color})">${m.name[0]}</div>
         <div class="mc-info">
-          <div class="mc-name">${m.name} ${m.surname}${m.archived ? ' <span class="archived-pill">📦 Archivé</span>' : ''}</div>
+          <div class="mc-name">${_esc(m.name)} ${_esc(m.surname)}${m.archived ? ' <span class="archived-pill">📦 Archivé</span>' : ''}</div>
           <div class="mc-role">${m.role}</div>
         </div>
       </div>
       <div class="mc-kpis">
         <div class="mc-kpi">
-          <div class="mc-kpi-label">Commissions</div>
+          <div class="mc-kpi-label">Commissions validées${_il('Commissions validées', COMM_TXT.commissionsMembre)}</div>
           <div class="mc-kpi-val" style="color:var(--green)">${fmtDec(comm)}</div>
         </div>
         <div class="mc-kpi">
-          <div class="mc-kpi-label">Deals ce mois</div>
-          <div class="mc-kpi-val">${nClos} clos · ${nSet} sets</div>
+          <div class="mc-kpi-label">Lignes validées${_il('Lignes validées', COMM_TXT.closingValidees + ' ' + COMM_TXT.settingValidees)}</div>
+          <div class="mc-kpi-val" style="font-size:13px">${nClos} closing · ${nSet} setting</div>
         </div>
         ${hasFixeContract ? `
         <div class="mc-kpi">
-          <div class="mc-kpi-label">Fixe mensuel${_fixeNote(m.uid) ? ' <span style="text-transform:none;letter-spacing:0" title="' + _fixeNote(m.uid) + '">· prorata</span>' : ''}</div>
+          <div class="mc-kpi-label">Fixe mensuel${_fixeNote(m.uid) ? ' <span style="text-transform:none;letter-spacing:0" title="' + _esc(_fixeNote(m.uid)) + '">· prorata</span>' : ''}${_il('Fixe mensuel', COMM_TXT.fixeMembre)}</div>
           <div class="mc-kpi-val">${fmt(fixe)}</div>
         </div>
         <div class="mc-kpi">
-          <div class="mc-kpi-label">Total (fixe + comm.)</div>
+          <div class="mc-kpi-label">Total (fixe + comm.)${_il('Total fixe + commissions', COMM_TXT.totalMembre)}</div>
           <div class="mc-kpi-val" style="color:var(--gold)">${fmtDec(fixe + comm)}</div>
         </div>` : ''}
       </div>
       ${!_hasBonus(m) ? '' : `<div class="mc-points-row">
-        <div class="mc-pts-label">${_ptsLabel(m.uid)}</div>
+        <div class="mc-pts-label">${_esc(_ptsLabel(m.uid))}${_bonusPeriod(m.uid) ? _il('Points de la période', COMM_TXT.pointsPeriode) : _il('Points cumulés', COMM_TXT.pointsCarriere)}</div>
         <div class="mc-pts-val">
           <span>${totalPts.toFixed(1)} pts</span>
           <span class="mc-pts-stars">${totalPts >= 100 ? '🌟' : totalPts >= 50 ? '⭐' : totalPts >= 10 ? '✨' : ''}</span>
@@ -1301,7 +1532,7 @@ function renderFiche() {
   // Header
   document.getElementById('fiche-av').style.background = `linear-gradient(135deg,${m.color}88,${m.color})`;
   document.getElementById('fiche-av').textContent = m.name[0];
-  document.getElementById('fiche-name').textContent = `${m.name} ${m.surname}`;
+  document.getElementById('fiche-name').textContent = `${m.name} ${m.surname}`.trim();
   document.getElementById('fiche-sub').textContent = `${m.role} · ${cmk()}`;
   document.getElementById('sub-month-label').textContent = cmk();
 
@@ -1325,7 +1556,15 @@ function renderFiche() {
   document.getElementById('kpi-pts-month').textContent = pts.toFixed(1) + ' pts';
   document.getElementById('kpi-pts-total').textContent = totalPts.toFixed(1) + ' pts';
   const ptsLbl = document.querySelector('#kpi-pts-total-card .kpi-label');
-  if (ptsLbl) ptsLbl.textContent = _bonusPeriod(m.uid) ? _ptsLabel(m.uid) : 'Points total carrière';
+  if (ptsLbl) ptsLbl.innerHTML = _bonusPeriod(m.uid)
+    ? _esc(_ptsLabel(m.uid)) + _il('Points de la période', COMM_TXT.pointsPeriode)
+    : 'Points total carrière' + _il('Points total carrière', COMM_TXT.pointsCarriere);
+  // Lignes validées dont la commission ou le bonus est illisible (comptées 0 €).
+  const issueN = deals.filter(d => d.ok && _dealAmountIssue(d)).length;
+  const kpiCommSub = document.getElementById('kpi-comm-sub');
+  if (kpiCommSub) kpiCommSub.innerHTML = issueN
+    ? '<span style="color:var(--gold)">⚠️ ' + _plural(issueN, 'ligne validée', 'lignes validées') + ' sans montant lisible, comptée(s) 0 €</span>'
+    : (deals.some(d => !d.ok) ? _plural(deals.filter(d => !d.ok).length, 'ligne', 'lignes') + ' en attente, non comptée(s)' : 'Validées uniquement');
 
   // Programme de bonus : closers uniquement
   const hasBonus = _hasBonus(m);
@@ -1366,18 +1605,24 @@ function renderBonusSection(totalPts, monthPts, next, prev) {
 function renderDealsTable(deals) {
   const tbody = document.getElementById('deals-tbody');
   if (!deals.length) {
-    tbody.innerHTML = `<tr><td colspan="9"><div class="deals-empty">Aucun deal ce mois — ajoute le premier ↑</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9"><div class="deals-empty">Aucune ligne de commission sur ce mois — ajoute la première ↑</div></td></tr>`;
   } else {
     const subLabel = { mensualise: 'Mensualisé', pif: 'PIF', noBooking: 'No-Booking', selfBooking: 'Self-Booking' };
     tbody.innerHTML = deals.map((d, i) => `
       <tr>
         <td>
-          <div class="deal-client">${d.client}${d.auto ? ' <span style="display:inline-block;margin-left:5px;font-size:8.5px;font-weight:800;letter-spacing:.5px;color:#2dd4bf;border:1px solid rgba(45,212,191,.4);background:rgba(45,212,191,.08);border-radius:999px;padding:1px 7px;vertical-align:middle" title="Créé automatiquement au Close (RDV)">⚡ AUTO</span>' : ''}</div>
-          <div class="deal-email">${d.email}</div>
+          <div class="deal-client">${_esc(d.client)}${d.auto ? ' <span style="display:inline-block;margin-left:5px;font-size:8.5px;font-weight:800;letter-spacing:.5px;color:#2dd4bf;border:1px solid rgba(45,212,191,.4);background:rgba(45,212,191,.08);border-radius:999px;padding:1px 7px;vertical-align:middle" title="Créé automatiquement au Close (RDV)">⚡ AUTO</span>' : ''}</div>
+          <div class="deal-email">${_esc(d.email)}</div>
         </td>
-        <td><span class="deal-offre ${offreClass(d.offre)}">${offreDisplay(d.offre, d.subtype)}</span></td>
-        <td><span class="deal-type-tag ${d.type === 'Closing' ? 'tag-closing' : 'tag-setting'}">${d.type}</span>${d.subtype ? `<div style="font-size:9.5px;color:var(--muted);margin-top:3px">${subLabel[d.subtype] || d.subtype}</div>` : ''}</td>
-        <td style="font-size:12px;color:var(--muted)">${d.date || '—'}${
+        <td><span class="deal-offre ${offreClass(d.offre)}">${_esc(offreDisplay(d.offre, d.subtype))}</span></td>
+        <td><span class="deal-type-tag ${d.type === 'Closing' ? 'tag-closing' : 'tag-setting'}">${_esc(d.type)}</span>${d.subtype ? `<div style="font-size:9.5px;color:var(--muted);margin-top:3px">${_esc(subLabel[d.subtype] || d.subtype)}${(d.subtype === 'selfBooking' || d.subtype === 'noBooking') ? _i('ecart_canal', COMM_TXT.canal) : ''}</div>` : ''}</td>
+        <td style="font-size:12px;color:var(--muted)">${_esc(_dealDateFr(d)) || '—'}${
+          /* Programme de points sur période annuelle : une ligne de closing sans
+             date lisible n'entre pas dans les points de la période — on le dit. */
+          (d.type === 'Closing' && !_dealIso(d) && _bonusPeriod(currentMember && currentMember.uid))
+            ? '<div style="font-size:9.5px;color:var(--gold);margin-top:3px">date manquante : non comptée dans les points de la période</div>'
+            : ''
+        }${
           /* Commission de setting versée sur un autre mois que son close :
              on l'écrit, sinon la ligne semble mal datée. */
           d.closeMonth && d.closeMonth !== _mToFs(cmk())
@@ -1385,7 +1630,9 @@ function renderDealsTable(deals) {
             : ''
         }</td>
         <td>
-          <div class="deal-comm">${fmtDec(d.comm)}${d.bonus ? ` <span style="font-size:11px;color:var(--gold)">+${d.bonus}€</span>` : ''}</div>
+          <div class="deal-comm">${fmtDec(_num(d.comm))}${_num(d.bonus) ? ` <span style="font-size:11px;color:var(--gold)">+${_esc(fmtDec(_num(d.bonus)))}</span>` : ''}</div>${
+            _dealAmountIssue(d) ? `<div style="font-size:9.5px;color:var(--gold);margin-top:3px">⚠️ ${_esc(_dealAmountIssue(d))}</div>` : ''
+          }
         </td>
         <td class="col-pts"><span class="deal-pts">${d.type === 'Closing' ? '⭐ ×' + (POINTS[d.offre] || 0) : '—'}</span></td>
         <td onclick="toggleDealOk(${i})" style="cursor:pointer" title="Clic pour basculer le statut">
@@ -1394,7 +1641,7 @@ function renderDealsTable(deals) {
             <span style="color:${d.ok ? 'var(--green)' : 'var(--gold)'}">${d.ok ? '✓ Validé' : '⏳ En attente'}</span>
           </div>
         </td>
-        <td class="deal-notes">${d.notes || '—'}</td>
+        <td class="deal-notes">${_esc(d.notes) || '—'}</td>
         <td style="white-space:nowrap">
           <button class="deal-move" onclick="moveDeal(${i},-1)" title="Déplacer sur le mois précédent">◀</button>
           <button class="deal-move" onclick="moveDeal(${i},1)" title="Déplacer sur le mois suivant">▶</button>
@@ -1585,16 +1832,28 @@ function _markArchivedMembers() {
 
 /* Refonte 07/2026 : les commissions AUTO (Close) peuvent viser n'importe quel
    membre du roster — on ajoute dynamiquement à MEMBERS_COMM ceux qui manquent
-   (sinon leurs deals seraient invisibles sur cette page). */
+   (sinon leurs deals seraient invisibles sur cette page).
+   25/11/2026 (décision D10) : les membres PARTIS ou archivés sont ajoutés
+   aussi (marqués _ancienRoster), pour que leurs lignes validées des mois
+   passés restent dans les totaux de l'équipe. Ils n'ont ni carte ni fiche
+   (_visibleMembers les écarte) et la migration ne leur écrit rien.
+   nav.js retire les partis de TEAM_MEMBERS_LIST mais les garde dans la map
+   TEAM_MEMBERS : on lit les deux. */
 function _syncRosterMembers() {
-  var list = window.TEAM_MEMBERS_LIST || [];
+  var list = (window.TEAM_MEMBERS_LIST || []).slice();
+  var map = window.TEAM_MEMBERS || {};
+  Object.keys(map).forEach(function(k) {
+    var x = map[k];
+    if (x && !x.slug) x = Object.assign({ slug: k }, x);
+    if (x && !list.some(function(y) { return y && y.slug === x.slug; })) list.push(x);
+  });
   var added = 0;
   list.forEach(function(m) {
     if (!m || !m.slug) return;
-    if (DEPARTED_COMM[m.slug]) return;       // parti de la société
-    if (m.active === false) return;          // archivé dans le roster
     if (MEMBERS_COMM.some(function(x) { return x.uid === m.slug; })) return;
     if (m.role !== 'closer' && m.role !== 'setter' && m.role !== 'closer_setter' && m.role !== 'setter_ecrit') return;
+    var ancien = !!(DEPARTED_COMM[m.slug] || m.active === false || m.departed === true ||
+      (typeof window.isDepartedMember === 'function' && window.isDepartedMember(m)));
     MEMBERS_COMM.push({
       uid: m.slug,
       name: m.shortName || m.displayName || m.slug,
@@ -1603,6 +1862,9 @@ function _syncRosterMembers() {
       bonus: (m.role === 'closer' || m.role === 'closer_setter'),
       color: m.color || '#6b7280',
       careerPtsBase: 0,
+      departed: ancien && (DEPARTED_COMM[m.slug] || m.departed === true ||
+        (typeof window.isDepartedMember === 'function' && window.isDepartedMember(m))) ? true : undefined,
+      _ancienRoster: ancien || undefined,
       data: {}
     });
     added++;
@@ -1630,8 +1892,10 @@ function _commMe() {
 
 function _visibleMembers() {
   _markArchivedMembers();
-  /* Équipe sales active uniquement : les membres partis (departed) et
-     archivés sont masqués pour TOUT LE MONDE, admin compris (14/07/2026). */
+  /* FICHES affichées (cartes, fiche, lignes nominatives du comparatif) :
+     équipe sales active uniquement — les membres partis (departed) et
+     archivés sont masqués pour TOUT LE MONDE, admin compris (14/07/2026).
+     Les TOTAUX de l'équipe ne passent plus par cette liste (_teamAgg). */
   var admin = _isAdminView();
   var list = MEMBERS_COMM.filter(function(m) {
     if (admin && _finalPayOpen(m.uid)) return true;
@@ -1668,6 +1932,11 @@ window.addEventListener('team-members-loaded', function() {
 async function renderAll() {
   _markArchivedMembers();
   document.getElementById('month-lbl').textContent = cmk();
+  _paintMonthNav();
+  // Membres arrivés dans MEMBERS_COMM après la première lecture : les lire.
+  if (_fsDb && _fsLoaded.__done && _membersNotLoaded().length) {
+    await loadAllCommFromFirestore();
+  }
   // Charger depuis Firestore si pas en cache
   var ck = MEMBERS_COMM[0].uid + '_' + cmk();
   if (_fsDb && !_fsDealsCache[ck]) {
@@ -1698,7 +1967,11 @@ async function loadCommFromFirestore(month) {
         try { localStorage.setItem('comm_deals_' + m.uid + '_' + month, JSON.stringify(deals)); } catch(e) {}
         loaded++;
       }
-    } catch(e) { console.warn('[Comm] Firestore load error', m.uid, month, e.message); }
+      delete _fsErr[m.uid + '_' + month];
+    } catch(e) {
+      console.warn('[Comm] Firestore load error', m.uid, month, e.message);
+      _fsErr[m.uid + '_' + month] = { uid: m.uid, month: month, msg: e && e.message };
+    }
   }
   console.log('[Comm] Firestore: ' + loaded + ' membres chargés pour ' + month);
 }
@@ -1706,10 +1979,16 @@ async function loadCommFromFirestore(month) {
 /* Charge TOUS les mois de commissions/{uid}/mois/* en une requête par
    membre — nécessaire pour que le total carrière (points, milestones)
    soit juste sur n'importe quel poste, pas seulement celui qui a saisi. */
+/* _fsLoaded : membres dont l'historique a été lu — un membre ajouté au
+   roster APRÈS la première lecture (anciens membres compris) est lu au
+   rendu suivant, sinon ses lignes manqueraient aux totaux. */
+let _fsLoaded = {};
+function _membersNotLoaded() { return MEMBERS_COMM.filter(function(m) { return m && m.uid && !_fsLoaded[m.uid]; }); }
 async function loadAllCommFromFirestore() {
   if (!_fsDb) return;
   for (var i = 0; i < MEMBERS_COMM.length; i++) {
     var m = MEMBERS_COMM[i];
+    if (_fsLoaded[m.uid]) continue;
     try {
       var snap = await _fsDb.collection('commissions').doc(m.uid).collection('mois').get();
       snap.forEach(function(doc) {
@@ -1720,7 +1999,12 @@ async function loadAllCommFromFirestore() {
         _fsDealsCache[m.uid + '_' + month] = d.deals;
         try { localStorage.setItem('comm_deals_' + m.uid + '_' + month, JSON.stringify(d.deals)); } catch(e) {}
       });
-    } catch(e) { console.warn('[Comm] Firestore loadAll error', m.uid, e.message); }
+      _fsLoaded[m.uid] = true;
+      delete _fsErr[m.uid];
+    } catch(e) {
+      console.warn('[Comm] Firestore loadAll error', m.uid, e.message);
+      _fsErr[m.uid] = { uid: m.uid, month: null, msg: e && e.message };
+    }
   }
   console.log('[Comm] Firestore: historique complet chargé (' + Object.keys(_fsDealsCache).length + ' mois×membres en cache)');
 }
@@ -1730,6 +2014,9 @@ async function migrateCommToFirestore() {
   var migrated = 0;
   for (var i = 0; i < MEMBERS_COMM.length; i++) {
     var m = MEMBERS_COMM[i];
+    /* Ancien membre ajouté depuis le roster pour les totaux (25/11/2026) :
+       lecture seule, cette page ne lui écrit rien. */
+    if (m._ancienRoster) continue;
     // Migrer les données hardcodées + localStorage
     var allMonths = Object.keys(m.data || {});
     // Ajouter les mois connus dans localStorage
@@ -1817,6 +2104,8 @@ async function initPayToggle() {
 
 document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('month-lbl').textContent = cmk();
+  _paintStaticInfos();
+  _paintMonthNav();
   renderListe();
 
   // Firebase Auth
@@ -1829,6 +2118,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // Charger TOUT l'historique Firestore (points carrière + milestones),
       // le mois courant est inclus.
       await loadAllCommFromFirestore();
+      _fsLoaded.__done = true;
       renderAll();
       initPayToggle();
 
@@ -1860,8 +2150,11 @@ document.addEventListener('DOMContentLoaded', function() {
       </div>
       <div class="month-nav">
         <button onclick="prevMonth()">&#9664;</button>
-        <span id="month-lbl">Février 2026</span>
+        <span id="month-lbl"></span>
         <button onclick="nextMonth()">&#9654;</button>
+        <span id="month-tag" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px"></span>
+        <span data-comm-i="moisVersement" data-comm-t="Mois de versement" style="color:var(--muted)"></span>
+        <button type="button" id="month-now" data-comm-act="now" style="display:none;font-size:11px;font-weight:700;border:1px solid var(--border2);border-radius:8px;padding:3px 8px">Mois en cours</button>
       </div>
     </div>
   </div>
@@ -1870,35 +2163,36 @@ document.addEventListener('DOMContentLoaded', function() {
   <div id="view-liste">
 
     <!-- ── GLOBAL DASHBOARD ─────────────────────────────────── -->
-    <div class="dash-section-label">Vue d'ensemble · <span id="dash-month-label"></span></div>
+    <div class="dash-section-label">Vue d'ensemble · <span id="dash-month-label"></span> <span style="text-transform:none;letter-spacing:0;font-weight:500">(mois de versement)</span></div>
+    <div id="comm-warn" style="display:none;margin-bottom:14px;padding:10px 14px;border-radius:10px;border:1px solid rgba(239,68,68,0.35);background:var(--red-soft);color:var(--text);font-size:12px"></div>
     <div class="dash-row">
       <div class="dash-kpi" style="--dk-color:var(--green)">
-        <div class="dash-kpi-label">Commissions équipe</div>
+        <div class="dash-kpi-label">Commissions de l’équipe<span data-comm-i="commissionsEquipe" data-comm-t="Commissions de l’équipe"></span></div>
         <div class="dash-kpi-val" id="dash-comm">—</div>
-        <div class="dash-kpi-sub" id="dash-comm-sub">Deals validés &amp; encaissés</div>
+        <div class="dash-kpi-sub" id="dash-comm-sub">Validées uniquement</div>
       </div>
       <div class="dash-kpi" style="--dk-color:var(--blue)">
-        <div class="dash-kpi-label">Contracté HT</div>
+        <div class="dash-kpi-label">Tarif déclaré (HT)<span data-comm-gl="declare_au_close" data-comm-x="Tarif saisi par le closer au close, pour les seules lignes de closing validées ✓ de ce mois de versement. Le Contracté (contrats du module Paiements) est sur Global closing, Close SB, Set NB et le Stats funnel."></span></div>
         <div class="dash-kpi-val" id="dash-contracte">—</div>
-        <div class="dash-kpi-sub">Total signatures</div>
+        <div class="dash-kpi-sub">saisi au close · lignes validées</div>
       </div>
       <div class="dash-kpi" style="--dk-color:var(--purple)">
-        <div class="dash-kpi-label">Collecté HT</div>
+        <div class="dash-kpi-label">Versé à la signature (déclaré)<span data-comm-gl="declare_au_close" data-comm-x="Montant que le closer a déclaré encaissé à la signature, pour les seules lignes de closing validées ✓ de ce mois de versement. Ce ne sont pas les prélèvements : le Collecté est sur Global closing, Close SB, Set NB et le Stats funnel."></span></div>
         <div class="dash-kpi-val" id="dash-collecte">—</div>
-        <div class="dash-kpi-sub">Cash encaissé</div>
+        <div class="dash-kpi-sub">saisi par le closer au close</div>
       </div>
       <div class="dash-kpi" style="--dk-color:var(--gold)">
-        <div class="dash-kpi-label">Deals du mois</div>
-        <div class="dash-kpi-val" style="font-size:16px;padding-top:4px" id="dash-deals">—</div>
-        <div class="dash-kpi-sub">Closes + settings validés</div>
+        <div class="dash-kpi-label">Commissions validées</div>
+        <div class="dash-kpi-val" style="font-size:13px;padding-top:4px;line-height:1.6" id="dash-deals">—</div>
+        <div class="dash-kpi-sub">rangées au mois de versement — ce ne sont pas les Closes ni les Sets</div>
       </div>
     </div>
 
-    <div class="dash-bottom">
+    <div class="dash-bottom" id="dash-bottom">
       <!-- Comparatif commerciaux -->
       <div class="dash-panel">
         <div class="dash-panel-head">
-          <span>📊 Comparatif commerciaux</span>
+          <span>📊 Comparatif commerciaux<span data-comm-i="commissionsEquipe" data-comm-t="Total de l’équipe"></span></span>
         </div>
         <div class="dash-panel-body" id="dash-comp"></div>
       </div>
@@ -1906,11 +2200,11 @@ document.addEventListener('DOMContentLoaded', function() {
       <!-- Top deals + distribution -->
       <div style="display:flex;flex-direction:column;gap:14px">
         <div class="dash-panel" style="flex:1">
-          <div class="dash-panel-head">🔥 Top deals du mois</div>
+          <div class="dash-panel-head"><span>🔥 Top commissions validées<span data-comm-i="topDeals" data-comm-t="Top commissions validées"></span></span></div>
           <div class="dash-panel-body" id="dash-top-deals"></div>
         </div>
         <div class="dash-panel">
-          <div class="dash-panel-head">📦 Répartition par offre (closes)</div>
+          <div class="dash-panel-head"><span>📦 Répartition par offre (commissions de closing)<span data-comm-i="repartition" data-comm-t="Répartition par offre"></span></span></div>
           <div class="dash-panel-body">
             <div class="offre-dist" id="dash-dist"></div>
           </div>
@@ -1932,39 +2226,40 @@ document.addEventListener('DOMContentLoaded', function() {
       <div class="fiche-avatar" id="fiche-av"></div>
       <div class="fiche-title">
         <div class="fiche-name" id="fiche-name"></div>
-        <div class="fiche-sub" id="fiche-sub">Closing + Setting · Février 2026</div>
+        <div class="fiche-sub" id="fiche-sub"></div>
       </div>
     </div>
 
     <!-- KPIs -->
     <div class="kpi-row">
       <div class="kpi-card highlight">
-        <div class="kpi-label">Commissions du mois</div>
+        <div class="kpi-label">Commissions validées<span data-comm-i="commissionsMembre" data-comm-t="Commissions validées"></span></div>
         <div class="kpi-val" id="kpi-comm" style="color:var(--green)">0 €</div>
+        <div class="kpi-sub" id="kpi-comm-sub"></div>
       </div>
       <div class="kpi-card" id="kpi-fixe-card" style="display:none">
-        <div class="kpi-label">Fixe mensuel (contrat)</div>
+        <div class="kpi-label">Fixe mensuel (contrat)<span data-comm-i="fixeMembre" data-comm-t="Fixe mensuel"></span></div>
         <div class="kpi-val" id="kpi-fixe">0 €</div>
         <div class="kpi-sub" id="kpi-fixe-sub"></div>
       </div>
       <div class="kpi-card highlight" id="kpi-total-card" style="display:none">
-        <div class="kpi-label">Total fixe + commissions</div>
+        <div class="kpi-label">Total fixe + commissions<span data-comm-i="totalMembre" data-comm-t="Total fixe + commissions"></span></div>
         <div class="kpi-val" id="kpi-total" style="color:var(--gold)">0 €</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">Contracté HT</div>
+        <div class="kpi-label">Tarif déclaré (HT)<span data-comm-gl="declare_au_close" data-comm-x="Tarif saisi par le closer au close, pour les seules lignes de closing validées ✓ de ce membre sur ce mois de versement. Le Contracté réel est sur Global closing et le Stats funnel."></span></div>
         <div class="kpi-val" id="kpi-contracte">0 €</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">Collecté HT</div>
+        <div class="kpi-label">Versé à la signature (déclaré)<span data-comm-gl="declare_au_close" data-comm-x="Montant déclaré encaissé à la signature par le closer, lignes de closing validées ✓ seulement. Ce ne sont pas les prélèvements : le Collecté est sur Global closing et le Stats funnel."></span></div>
         <div class="kpi-val" id="kpi-collecte">0 €</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">Deals validés</div>
+        <div class="kpi-label">Lignes validées<span data-comm-i="lignesValidees" data-comm-t="Lignes validées"></span></div>
         <div class="kpi-val" id="kpi-deals">0</div>
       </div>
       <div class="kpi-card" id="kpi-pts-month-card">
-        <div class="kpi-label">Points ce mois</div>
+        <div class="kpi-label">Points ce mois<span data-comm-i="pointsMois" data-comm-t="Points ce mois"></span></div>
         <div class="kpi-val" id="kpi-pts-month" style="color:var(--gold)">0 pts</div>
       </div>
       <div class="kpi-card" id="kpi-pts-total-card">
@@ -1990,7 +2285,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <!-- Deals section -->
     <div class="deals-section">
       <div class="deals-header">
-        <div class="deals-header-title">📋 Deals — <span style="color:var(--muted);font-weight:400;font-size:13px" id="sub-month-label"></span></div>
+        <div class="deals-header-title">📋 Lignes de commission — <span style="color:var(--muted);font-weight:400;font-size:13px" id="sub-month-label"></span></div>
         <div class="deals-header-actions">
           <button class="btn btn-primary btn-sm" onclick="toggleAddForm()">+ Ajouter un deal</button>
         </div>
@@ -2050,7 +2345,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="form-actions">
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--muted)">
             <input type="checkbox" id="f-ok" style="accent-color:var(--green)"/>
-            Deal validé / encaissé
+            Commission validée ✓
           </label>
           <span class="pts-preview" id="pts-preview">0 pts</span>
           <span class="comm-preview" id="comm-preview">0 €</span>
@@ -2067,9 +2362,9 @@ document.addEventListener('DOMContentLoaded', function() {
             <th>Offre</th>
             <th>Type</th>
             <th>Date</th>
-            <th>Commission</th>
+            <th>Commission<span data-comm-i="commissionCol" data-comm-t="Commission"></span></th>
             <th class="col-pts">Points</th>
-            <th>Statut</th>
+            <th>Statut<span data-comm-i="statut" data-comm-t="Statut"></span></th>
             <th>Notes</th>
             <th></th>
           </tr>
@@ -2079,15 +2374,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
       <div class="deals-footer">
         <div class="deals-footer-item">
-          <span class="deals-footer-label">Contracté HT :</span>
+          <span class="deals-footer-label">Tarif déclaré (HT)<span data-comm-gl="declare_au_close" data-comm-x="Lignes de closing validées ✓ seulement."></span> :</span>
           <span class="deals-footer-val" id="footer-contracte">0 €</span>
         </div>
         <div class="deals-footer-item">
-          <span class="deals-footer-label">Collecté HT :</span>
+          <span class="deals-footer-label">Versé à la signature (déclaré)<span data-comm-gl="declare_au_close" data-comm-x="Lignes de closing validées ✓ seulement. Ce ne sont pas les prélèvements."></span> :</span>
           <span class="deals-footer-val" id="footer-collecte">0 €</span>
         </div>
         <div class="deals-footer-item" style="font-size:14px">
-          <span class="deals-footer-label">Total commissions :</span>
+          <span class="deals-footer-label">Total commissions validées<span data-comm-i="commissionsMembre" data-comm-t="Total commissions validées"></span> :</span>
           <span class="deals-footer-val" id="footer-comm" style="color:var(--green);font-size:16px">0 €</span>
         </div>
       </div>

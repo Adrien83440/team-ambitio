@@ -2710,7 +2710,9 @@
         else if (l._ttbSet == null || ms - l._entry < l._ttbSet) l._ttbSet = ms - l._entry;
       }
       l._bk = l._bk || [];
-      l._bk.push(b);
+      /* computeKpis est relancé à chaque changement de filtre sur le même DATA :
+         ne jamais empiler deux fois le même RDV. */
+      if (l._bk.indexOf(b) < 0) l._bk.push(b);
     }
     /* Récupération / TTB : dédupliqué par lead → on garde TOUS les RDV créés
        (replanifications incluses) pour ne pas perdre le marquage SB/NB du lead. */
@@ -3079,8 +3081,10 @@
        a donc toujours un Lead to speech : k.ttcCount = k.leadsCalled. ── */
     function nomAffiche(who) {
       if (!who) return { key: '_none', name: 'Non attribué', unassigned: true, anciens: false };
-      if (who.departed) return { key: '_anciens', name: SC.mot('anciens_membres') || 'Anciens membres', unassigned: false, anciens: true };
+      /* « Hors équipe sales » d'abord : une ancienne CSM n'est pas une ancienne
+         de l'équipe sales — ses appels ne sont pas dans les appels sortants de l'équipe. */
       if (!who.sales) return { key: '_hors', name: 'Hors équipe sales', unassigned: false, anciens: false, hors: true };
+      if (who.departed) return { key: '_anciens', name: SC.mot('anciens_membres') || 'Anciens membres', unassigned: false, anciens: true };
       return { key: who.key, name: who.name, unassigned: false, anciens: false };
     }
     var callsByP9 = {};

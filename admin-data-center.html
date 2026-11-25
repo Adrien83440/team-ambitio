@@ -157,6 +157,13 @@
     .dc-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
     .dc-toast.err { border-color: rgba(239,68,68,0.4); }
 
+    /* Bandeau « page historique » (25/11/2026) — 100 % variables de thème */
+    .dc-legacy { margin: -4px 0 18px; padding: 12px 15px; border-radius: 10px; background: var(--bg3); border: 1px solid var(--border2); border-left: 3px solid var(--gold); font-size: 12.5px; line-height: 1.6; color: var(--text); }
+    .dc-legacy b { color: var(--gold); }
+    .dc-legacy-sub { display: block; margin-top: 4px; color: var(--muted); font-size: 11.5px; }
+    .dc-kpi-old { font-size: 10.5px; color: var(--muted); margin: -3px 0 6px; font-style: italic; }
+    .dc-live-alert { margin: 0 0 14px; padding: 10px 13px; border-radius: 10px; background: var(--bg3); border: 1px solid var(--border2); border-left: 3px solid var(--red2); font-size: 12px; line-height: 1.55; color: var(--text); }
+
     @media(max-width: 1100px) { .dc-kpi-grid { grid-template-columns: repeat(2,1fr); } }
     @media(max-width: 760px)  { .dc-kpi-grid { grid-template-columns: 1fr; } .dc-main { padding: 16px; } }
   </style>
@@ -175,6 +182,10 @@
       </div>
     </div>
 
+    <!-- Bandeau « page historique » (décision D20 du 25/11/2026) : rempli par
+         renderLegacyBanner() pour porter le « i » du glossaire commun. -->
+    <div class="dc-legacy" id="dc-legacy">📜 <b>Page historique</b> : ces indicateurs viennent de l’ancienne saisie hebdomadaire, non alimentée depuis juillet 2026. Les chiffres à jour sont dans le Stats funnel, Set NB et Global closing.</div>
+
     <div class="tabs mb" style="margin-bottom:18px">
       <div class="tab active" data-tab="ref">📚 Référentiel</div>
       <div class="tab" data-tab="live">📊 Suivi Live</div>
@@ -187,7 +198,7 @@
         <div class="dc-filter" id="dc-src-filter">
           <button class="active" data-src="all">Tous</button>
           <button data-src="manual">🟡 Manuel</button>
-          <button data-src="firestore">🟢 Firestore</button>
+          <button data-src="firestore">🟢 Ancienne saisie</button>
           <button data-src="booking">🟣 Booking</button>
           <button data-src="derived">🔵 Calculé</button>
         </div>
@@ -210,8 +221,8 @@
         </div>
         <div class="dc-live-note">
           <span class="dc-kpi-src dc-src-manual" style="margin:0">🟡 Saisie manuelle</span>
-          <span class="dc-kpi-src dc-src-firestore" style="margin:0">🟢 Agrégé saisies</span>
-          <span class="dc-kpi-src dc-src-booking" style="margin:0">🟣 Module Booking</span>
+          <span class="dc-kpi-src dc-src-firestore" style="margin:0">🟢 Ancienne saisie hebdo</span>
+          <span class="dc-kpi-src dc-src-booking" style="margin:0">🟣 RDV d’un type</span>
           <span class="dc-kpi-src dc-src-derived" style="margin:0">🔵 Calculé</span>
         </div>
         <div style="flex:1"></div>
@@ -238,9 +249,11 @@
           </div>
         </div>
         <div class="dc-form-help" style="margin-top:10px">
-          <strong>Call Booked</strong> et <strong>Kept Call</strong> sont comptés depuis la collection <code>bookings</code> :
-          uniquement le type de consultation choisi, RDV de coaching exclus.
-          <strong>Kept Call</strong> = tous les RDV du mois sauf les annulés.
+          <strong>RDV du type suivi</strong> (ancien nom « Total Call Booked ») et <strong>Non annulés</strong> (ancien nom « Kept Call »)
+          sont comptés depuis la collection <code>bookings</code> : uniquement le type de consultation choisi, RDV de coaching exclus,
+          annulés et RDV déplacés compris. <strong>Non annulés</strong> = RDV du type suivi dont le statut n’est pas « annulé »
+          (no-show et RDV à venir compris). Ce ne sont ni les « RDV » ni le « Kept » des autres écrans, qui comptent tous les RDV de vente
+          et retirent d’abord les RDV déplacés.
         </div>
       </div>
 
@@ -324,8 +337,8 @@
         <div class="form-field" id="dc-f-booking-wrap" style="display:none">
           <label class="form-label">Métrique Booking</label>
           <select class="form-input" id="dc-f-bookingmetric">
-            <option value="booked">RDV pris (Call Booked) — tous les RDV du mois</option>
-            <option value="kept">RDV honorés (Kept Call) — hors annulés</option>
+            <option value="booked">RDV du type suivi (ex-Call Booked) — tous, annulés et déplacés compris</option>
+            <option value="kept">Non annulés (ex-Kept Call) — statut différent de « annulé »</option>
           </select>
           <div class="dc-form-help">Compté depuis la collection <code>bookings</code>, selon le type de consultation et la base de comptage définis dans « Paramètres Module Booking » (onglet Suivi Live). RDV de coaching toujours exclus.</div>
         </div>
@@ -373,6 +386,7 @@
 
   <div class="dc-toast" id="dc-toast"></div>
 
+  <script src="stats-core.js"></script>
   <script src="nav.js"></script>
   <script>
   (function () {
@@ -399,6 +413,7 @@
     var bookingTypes = [];        // [{id,label,...}] depuis booking_config/_types
     var liveMonth = null;         // 'YYYY-MM'
     var liveAgg = {};             // { 'closing.lives': somme, ... }
+    var liveAggMeta = { membres: 0, avecDonnees: 0, erreurs: 0, rosterErreur: false };
     var bookingAgg = { booked: null, kept: null };
     var manualDraft = {};
     var editingKpiId = null, editingFamilyId = null;
@@ -527,10 +542,19 @@
       } catch (e) { return null; }
     }
 
+    /* Ancienne saisie non alimentée : mois ≥ juillet 2026 sans AUCUN document
+       de saisie lu pour l'équipe. Ses compteurs ne valent pas 0 : ils n'existent
+       pas (affichés « non alimenté », jamais un zéro muet). */
+    function legacyNonAlimente() {
+      return !!liveMonth && liveMonth >= AUTO_FROM && liveAggMeta.avecDonnees === 0 &&
+        !liveAggMeta.rosterErreur && !liveAggMeta.erreurs;
+    }
     function computeLiveValues() {
       if (!REF_DOC) return {};
       var ctx = {};
+      var absents = {};   // ids non alimentés (et dérivés qui en dépendent) → « — »
       var kpis = REF_DOC.kpis || [];
+      var vide = legacyNonAlimente();
       // 1) bases : manuel + firestore + booking
       kpis.forEach(function (k) {
         if (k.source === 'manual') {
@@ -538,20 +562,30 @@
           ctx[k.id] = (raw === '' || raw == null || isNaN(raw)) ? null : Number(raw);
         } else if (k.source === 'firestore') {
           ctx[k.id] = (k.fsField && liveAgg[k.fsField] != null) ? liveAgg[k.fsField] : null;
+          if (vide) { ctx[k.id] = null; absents[k.id] = 1; }
         } else if (k.source === 'booking') {
           ctx[k.id] = (k.bookingMetric === 'kept') ? bookingAgg.kept : bookingAgg.booked;
         }
       });
-      // 2) dérivés — passes itératives
+      // 2) dérivés — passes itératives. Un dérivé qui utilise un indicateur
+      //    non alimenté est lui-même « — » (sinon 0 ÷ x afficherait 0 %).
+      function dependDAbsent(expr) {
+        var ids = String(expr || '').match(/[a-zA-Z_][a-zA-Z0-9_]*/g) || [];
+        for (var i = 0; i < ids.length; i++) if (absents[ids[i]]) return true;
+        return false;
+      }
       for (var pass = 0; pass < 8; pass++) {
         var changed = false;
         kpis.forEach(function (k) {
           if (k.source !== 'derived') return;
-          var v = evalExpr(k.expr, ctx);
+          var v;
+          if (dependDAbsent(k.expr)) { v = null; if (!absents[k.id]) { absents[k.id] = 1; changed = true; } }
+          else v = evalExpr(k.expr, ctx);
           if (ctx[k.id] !== v) { ctx[k.id] = v; changed = true; }
         });
         if (!changed) break;
       }
+      ctx._absents = absents;
       return ctx;
     }
 
@@ -624,6 +658,8 @@
         }
       } catch (e) {
         console.error('[data-center] lecture _meta/team_members échouée', e);
+        liveAggMeta.rosterErreur = true;
+        return slugs;   // pas de mise en cache : nouvel essai au prochain mois affiché
       }
       teamSlugs = slugs;
       return slugs;
@@ -631,6 +667,7 @@
 
     async function loadLiveAggregates() {
       liveAgg = {};
+      liveAggMeta = { membres: 0, avecDonnees: 0, erreurs: 0, rosterErreur: false };
       if (!REF_DOC) return;
       var fsFields = {};
       (REF_DOC.kpis || []).forEach(function (k) {
@@ -652,9 +689,11 @@
       var reads = memberIds.map(function (mid) {
         return db.collection('saisies').doc(mid).collection('mois').doc(liveMonth).get()
           .then(function (s) { return s.exists ? s.data() : null; })
-          .catch(function () { return null; });
+          .catch(function () { liveAggMeta.erreurs++; return null; });
       });
       var docs = await Promise.all(reads);
+      liveAggMeta.membres = memberIds.length;
+      liveAggMeta.avecDonnees = docs.filter(Boolean).length;
 
       docs.forEach(function (data) {
         if (!data) return;
@@ -765,10 +804,200 @@
     var refFilter = { src: 'all', q: '' };
     var SRC_META = {
       manual:    { cls: 'dc-src-manual',    icon: '🟡', label: 'Saisie manuelle' },
-      firestore: { cls: 'dc-src-firestore', icon: '🟢', label: 'Agrégé saisies' },
-      booking:   { cls: 'dc-src-booking',   icon: '🟣', label: 'Module Booking' },
+      firestore: { cls: 'dc-src-firestore', icon: '🟢', label: 'Ancienne saisie' },
+      booking:   { cls: 'dc-src-booking',   icon: '🟣', label: 'RDV d’un type' },
       derived:   { cls: 'dc-src-derived',   icon: '🔵', label: 'Calculé' }
     };
+
+    /* ════════════════════════════════════════════════════════════════
+       LIBELLÉS AFFICHÉS (25/11/2026 — audit des chiffres, décision D20)
+       Page historique : PAS de rebranchement sur les calculs communs.
+       On corrige seulement ce qui est AFFICHÉ (nom, définition, formule
+       lisible, « i »), par identifiant d'indicateur. Le document
+       _config/kpi_referentiel n'est ni relu autrement ni réécrit : ses
+       libellés d'origine restent en base (ils s'affichent en « Nom
+       enregistré » quand ils diffèrent, et la modale d'édition les montre
+       toujours tels quels). Aucun calcul ne change, y compris l'OSR %
+       (c'est sa définition qui est alignée sur son calcul).
+       Mots du glossaire commun (stats-core.js) seulement accompagnés de
+       « (ancienne saisie) » : ces chiffres ne suivent pas leur règle.
+       ════════════════════════════════════════════════════════════════ */
+    var SC = window.StatsCore || null;
+    var AUTO_FROM = '2026-07';   // ancienne saisie arrêtée en juillet 2026 (même borne que Projections et le Dashboard)
+
+    function iGlo(cle, prec) { return (SC && SC.info) ? SC.info(cle, prec) : ''; }
+    function iLib(titre, texte) { return (SC && SC.infoLibre) ? SC.infoLibre(titre, texte) : ''; }
+
+    var P_MAN = 'Tapé à la main chaque mois sur cette page (onglet Suivi Live), non vérifié.';
+    function pFs(champ) {
+      return 'Somme du champ « ' + champ + ' » de l’ancienne saisie hebdomadaire, tous les membres de l’équipe, pour le mois affiché. ' +
+        'Plus personne ne la remplit depuis juillet 2026 : « non alimenté » à partir de ce mois-là.';
+    }
+    var T_RDV_TYPE = 'RDV d’un seul type de consultation (réglage « Paramètres Module Booking » du Suivi Live), RDV de coaching exclus : ' +
+      'annulés, RDV déplacés et leurs nouveaux créneaux compris, comptés à la date du RDV ou à leur date de prise selon le réglage. ' +
+      'Ce ne sont ni les « RDV » ni les « RDV pris » des autres écrans (tous les RDV de vente, RDV déplacés comptés une fois).';
+    var T_MIXTE = ' Le calcul rapproche des chiffres de l’ancienne saisie et des RDV comptés dans l’agenda : deux sources différentes.';
+
+    /* id → { label, def, formula, old (ancien nom affiché), i: { cle, prec } | { titre, texte } } */
+    var DISPLAY = {
+      /* ── 1. Inputs & volumes bruts ── */
+      budget_pub: { label: 'Budget pub (ancienne saisie)', def: 'Budget publicitaire tapé à la main pour le mois. La dépense pub mesurée est dans le Stats funnel.',
+        i: { cle: 'declare', prec: P_MAN + ' Ce n’est pas la dépense Meta reçue par le Stats funnel.' } },
+      cac_market_only: { label: 'CAC (ancienne saisie)', old: 'CAC Market Only', def: 'Budget pub saisi ÷ closes de l’ancienne saisie.',
+        formula: 'Budget pub (saisi) ÷ Closes (ancienne saisie)',
+        i: { titre: 'CAC (ancienne saisie)', texte: 'Budget pub tapé à la main ÷ closes de l’ancienne saisie. Ce n’est pas le CAC pub du Stats funnel (dépense mesurée ÷ closes de la période venus de la pub).' } },
+      cpr: { label: 'CPR (ancienne saisie)', def: 'Budget pub saisi ÷ RDV du type suivi.',
+        formula: 'Budget pub (saisi) ÷ RDV du type suivi',
+        i: { titre: 'CPR (ancienne saisie)', texte: 'Budget pub tapé à la main ÷ RDV du type suivi (un seul type de consultation, annulés et RDV déplacés compris). Ce n’est pas le CPR SB du Stats funnel (dépense ÷ RDV Self Booking pris).' } },
+      call_to_close: { def: 'Présents de l’ancienne saisie nécessaires en moyenne pour un close de l’ancienne saisie.',
+        formula: 'Présents ÷ Closes (ancienne saisie)',
+        i: { titre: 'Call to Close', texte: 'Présents (champ « lives ») ÷ closes, tous deux de l’ancienne saisie hebdomadaire.' } },
+      break_even_calls: { def: 'Présents qu’il faudrait pour rembourser le budget pub, au collecté moyen par présent de l’ancienne saisie.',
+        formula: 'Budget pub (saisi) ÷ Collecté / présent',
+        i: { titre: 'Break-Even Calls', texte: 'Budget pub tapé à la main ÷ (collecté ÷ présents de l’ancienne saisie).' } },
+      break_even_closing_pct: { formula: 'Break-Even Calls ÷ Présents (ancienne saisie) × 100',
+        i: { titre: 'Break Even Closing (live) %', texte: 'Break-Even Calls ÷ présents de l’ancienne saisie × 100. Toutes les valeurs de départ sont saisies à la main.' } },
+      nombre_slots: { label: 'Nombre de slots (ancienne saisie)', def: 'Créneaux ouverts dans l’agenda closer, tapés à la main pour le mois.',
+        i: { cle: 'declare', prec: P_MAN } },
+      total_lead: { label: 'Leads (ancienne saisie)', old: 'Total Lead', def: 'Somme du champ « leads » de l’ancienne saisie. Ce ne sont pas les Leads du Stats funnel (fiches entrées sur la période).',
+        i: { cle: 'ancienne_saisie', prec: pFs('leads') } },
+      total_call_booked: { label: 'RDV du type suivi', old: 'Total Call Booked', def: 'RDV d’un seul type de consultation, annulés et RDV déplacés compris.',
+        formula: 'Comptage bookings · type de consultation suivi',
+        i: { titre: 'RDV du type suivi', texte: T_RDV_TYPE } },
+      kept_call: { label: 'Non annulés (type suivi)', old: 'Kept Call',
+        def: 'RDV du type suivi dont le statut n’est pas « annulé » : no-show et RDV à venir compris. Un RDV déplacé en sort, son nouveau créneau y entre.',
+        formula: 'RDV du type suivi hors statut « annulé »',
+        i: { titre: 'Non annulés (type suivi)', texte: 'RDV du type suivi dont le statut n’est pas « annulé » : no-show et RDV à venir compris. Un RDV déplacé (statut annulé) en sort, son nouveau créneau y entre. Proche du Kept sans en suivre la règle : le Kept des autres écrans compte tous les RDV de vente et retire d’abord les RDV déplacés.' } },
+      call_live: { label: 'Présents (ancienne saisie)', old: 'Call Live', def: 'Calls tenus avec le prospect, déclarés par les closers dans l’ancienne saisie.',
+        i: { cle: 'ancienne_saisie', prec: pFs('lives') + ' Ce ne sont pas les Présents calculés sur les résultats des RDV.' } },
+      offer: { label: 'Pitchés (ancienne saisie)', old: 'Offer', def: 'Calls où une offre a été présentée, déclarés dans l’ancienne saisie.',
+        i: { cle: 'ancienne_saisie', prec: pFs('offres') + ' Ce ne sont pas les Pitchés calculés sur les résultats des RDV.' } },
+      deposits: { label: 'Acomptes (ancienne saisie)', old: 'Deposits', def: 'Acomptes / paiements partiels déclarés dans l’ancienne saisie.',
+        i: { cle: 'ancienne_saisie', prec: pFs('deposits') } },
+      closes: { label: 'Closes (ancienne saisie)', def: 'Ventes déclarées dans l’ancienne saisie. Ce ne sont pas les Closes du Stats funnel (clients gagnés sur la période).',
+        i: { cle: 'ancienne_saisie', prec: pFs('closes') } },
+      occ: { label: 'OCC (ancienne saisie)', def: 'One Call Close — ventes conclues dès le 1er call, tapées à la main pour le mois.', i: { cle: 'declare', prec: P_MAN } },
+      fuc: { label: 'FUC (ancienne saisie)', def: 'Follow-Up Close — ventes conclues après follow-up, tapées à la main pour le mois.', i: { cle: 'declare', prec: P_MAN } },
+
+      /* ── 2. Ratios funnel ── */
+      occ_pct: { formula: 'OCC ÷ Closes × 100 (ancienne saisie)',
+        i: { titre: 'OCC %', texte: 'OCC tapé à la main ÷ closes de l’ancienne saisie × 100.' } },
+      closing_booked_pct: { def: 'Closes de l’ancienne saisie rapportés aux RDV du type suivi.',
+        formula: 'Closes (ancienne saisie) ÷ RDV du type suivi × 100',
+        i: { titre: 'Closing Booked %', texte: 'Closes de l’ancienne saisie ÷ RDV du type suivi × 100.' + T_MIXTE + ' Le taux de close de référence (Close / RDV) est dans le Stats funnel.' } },
+      closing_live_pct: { label: 'Close / présents (ancienne saisie)', old: 'Closing Live %', def: 'Closes ÷ présents, tous deux déclarés dans l’ancienne saisie.',
+        formula: 'Closes ÷ Présents × 100 (ancienne saisie)',
+        i: { titre: 'Close / présents (ancienne saisie)', texte: 'Closes ÷ présents (champs « closes » et « lives ») de l’ancienne saisie × 100. Le taux calculé sur les RDV et les clients gagnés est dans le Stats funnel.' } },
+      closing_offer_pct: { label: 'Close / pitchés (ancienne saisie)', old: 'Closing Offer %', def: 'Closes ÷ pitchés, tous deux déclarés dans l’ancienne saisie.',
+        formula: 'Closes ÷ Pitchés × 100 (ancienne saisie)',
+        i: { titre: 'Close / pitchés (ancienne saisie)', texte: 'Closes ÷ pitchés (champs « closes » et « offres ») de l’ancienne saisie × 100. Le taux calculé sur les RDV et les clients gagnés est dans le Stats funnel.' } },
+      kept_pct: { label: 'Non annulés % (type suivi)', old: 'Kept %', def: 'Part des RDV du type suivi dont le statut n’est pas « annulé ».',
+        formula: 'Non annulés ÷ RDV du type suivi × 100',
+        i: { titre: 'Non annulés % (type suivi)', texte: 'Non annulés ÷ RDV du type suivi × 100. Les RDV déplacés comptent au dénominateur et en sortent comme des annulés : ce n’est pas le Kept % des autres écrans (Kept ÷ RDV, RDV déplacés exclus).' } },
+      btcl_pct: { def: 'Présents de l’ancienne saisie rapportés aux RDV du type suivi.',
+        formula: 'Présents (ancienne saisie) ÷ RDV du type suivi × 100',
+        i: { titre: 'BTCL %', texte: 'Présents de l’ancienne saisie ÷ RDV du type suivi × 100.' + T_MIXTE } },
+      showup_pct: { label: 'Présents ÷ non annulés % (mixte)', old: 'Show-up %', def: 'Présents de l’ancienne saisie ÷ RDV non annulés du type suivi.',
+        formula: 'Présents (ancienne saisie) ÷ Non annulés × 100',
+        i: { titre: 'Présents ÷ non annulés % (mixte)', texte: 'Présents de l’ancienne saisie ÷ RDV non annulés du type suivi (RDV à venir compris) × 100.' + T_MIXTE + ' Ce n’est pas le Show-up des autres écrans (présents ÷ Kept déjà passés). Non alimenté depuis juillet 2026.' } },
+      epr_pct: { def: 'Pitchés de l’ancienne saisie rapportés aux RDV du type suivi.',
+        formula: 'Pitchés (ancienne saisie) ÷ RDV du type suivi × 100',
+        i: { titre: 'EPR %', texte: 'Pitchés de l’ancienne saisie ÷ RDV du type suivi × 100.' + T_MIXTE } },
+      osr_pct: { label: 'OSR % (slots ÷ pitchés)',
+        def: 'Créneaux ouverts pour une offre présentée : 400 % = 4 créneaux par offre. Le calcul est slots ÷ pitchés, l’inverse de la définition d’origine (« part des slots utilisés pour pitcher »).',
+        formula: 'Nombre de slots ÷ Pitchés × 100',
+        i: { titre: 'OSR % (slots ÷ pitchés)', texte: 'Nombre de slots tapé à la main ÷ pitchés de l’ancienne saisie × 100. Attention : la définition d’origine de l’OSR (« part des slots utilisés pour pitcher ») correspond au calcul inverse (pitchés ÷ slots). Le chiffre affiché est bien slots ÷ pitchés : plus il est haut, moins les créneaux servent à pitcher.' } },
+      offer_pct: { label: 'Taux de pitch (ancienne saisie)', old: 'Offer %', def: 'Pitchés ÷ présents, tous deux déclarés dans l’ancienne saisie.',
+        formula: 'Pitchés ÷ Présents × 100 (ancienne saisie)',
+        i: { titre: 'Taux de pitch (ancienne saisie)', texte: 'Pitchés ÷ présents (champs « offres » et « lives ») de l’ancienne saisie × 100. Le taux calculé sur les résultats des RDV est dans le Stats funnel.' } },
+
+      /* ── 3. Montants (ancienne saisie) ── */
+      cash_per_call_booked: { label: 'Collecté / RDV du type suivi', old: 'Cash per call booked', def: 'Collecté de l’ancienne saisie ÷ RDV du type suivi.',
+        formula: 'Collecté (ancienne saisie) ÷ RDV du type suivi',
+        i: { titre: 'Collecté / RDV du type suivi', texte: 'Collecté de l’ancienne saisie ÷ RDV du type suivi.' + T_MIXTE } },
+      cash_per_call_live: { label: 'Collecté / présent (ancienne saisie)', old: 'Cash per call live', def: 'Collecté ÷ présents, tous deux déclarés dans l’ancienne saisie.',
+        formula: 'Collecté ÷ Présents (ancienne saisie)',
+        i: { titre: 'Collecté / présent (ancienne saisie)', texte: 'Collecté ÷ présents de l’ancienne saisie. On ne sait pas si les montants saisis étaient hors taxes.' } },
+      ltb_pct: { label: 'LTB % (ancienne saisie)', def: 'RDV du type suivi rapportés aux leads de l’ancienne saisie.',
+        formula: 'RDV du type suivi ÷ Leads (ancienne saisie) × 100',
+        i: { titre: 'LTB % (ancienne saisie)', texte: 'RDV du type suivi (comptés dans l’agenda) ÷ leads de l’ancienne saisie × 100.' + T_MIXTE + ' Ce n’est pas le LTB du Stats funnel (RDV pris ÷ leads entrés sur la période).' } },
+      cancelled_rate: { label: 'Annulés ou déplacés % (type suivi)', old: 'Cancelled Rate', def: 'Part des RDV du type suivi au statut « annulé », RDV déplacés compris.',
+        formula: '(RDV du type suivi − Non annulés) ÷ RDV du type suivi × 100',
+        i: { titre: 'Annulés ou déplacés % (type suivi)', texte: 'RDV du type suivi au statut « annulé » ÷ RDV du type suivi × 100. Les RDV déplacés y comptent comme des annulations et les no-show n’y sont pas : ce n’est pas le Taux d’annulation des autres écrans (annulés ÷ RDV, RDV déplacés exclus).' } },
+      total_contacte: { label: 'Total contacté (ancienne saisie)', def: 'Leads contactés par le setting, tapés à la main pour le mois. Ce ne sont pas les Leads travaillés de Set NB.',
+        i: { cle: 'declare', prec: P_MAN } },
+      total_collecte_p: { label: 'Contracté (ancienne saisie)', old: 'Total Collecté P',
+        def: 'Montant des contrats signés, tapé à la main pour le mois (c’est du contracté, pas du collecté). Ce n’est pas le Contracté du Stats funnel.',
+        i: { cle: 'declare', prec: P_MAN + ' Nommé « Total Collecté P » à l’origine : c’est un montant contracté. On ne sait pas s’il était hors taxes. Le Contracté de référence vient du module Paiements (Stats funnel).' } },
+      total_collecte_reel: { label: 'Collecté (ancienne saisie)', old: 'Total Collecté Réel',
+        def: 'Montant encaissé déclaré dans l’ancienne saisie. Ce n’est pas le Collecté du Stats funnel (module Paiements).',
+        i: { cle: 'ancienne_saisie', prec: pFs('collecte') + ' On ne sait pas si les montants étaient hors taxes.' } },
+      collecte_reel_pct: { label: 'Part collectée (ancienne saisie)', old: 'Collecté Réel %', def: 'Collecté de l’ancienne saisie ÷ contracté tapé à la main.',
+        formula: 'Collecté (ancienne saisie) ÷ Contracté (ancienne saisie) × 100',
+        i: { titre: 'Part collectée (ancienne saisie)', texte: 'Collecté de l’ancienne saisie hebdomadaire ÷ contracté tapé à la main sur cette page × 100.' } },
+      aov: { label: 'Collecté / close (ancienne saisie)', old: 'AOV', def: 'Collecté ÷ closes, tous deux déclarés dans l’ancienne saisie. Ce n’est pas un panier moyen (contracté ÷ closes).',
+        formula: 'Collecté ÷ Closes (ancienne saisie)',
+        i: { titre: 'Collecté / close (ancienne saisie)', texte: 'Collecté ÷ closes de l’ancienne saisie. Le mot « AOV » disparaît : ce n’est pas un panier moyen (contracté ÷ closes), et le Collecté / close de référence est dans le Stats funnel.' } },
+
+      /* ── 4. Setting ── */
+      nbr_sets: { label: 'Sets (ancienne saisie)', old: 'Nbr de Sets', def: 'RDV posés déclarés par les setters dans l’ancienne saisie. Ce ne sont pas les Sets de Set NB (RDV réellement créés).',
+        i: { cle: 'ancienne_saisie', prec: pFs('sets') } },
+      nbr_sets_live: { label: 'Sets présents (ancienne saisie)', old: 'Nbr de Sets Live', def: 'RDV setters tenus avec le prospect, tapés à la main pour le mois.',
+        i: { cle: 'declare', prec: P_MAN } },
+      showup_sets_pct: { label: 'Sets présents ÷ Sets % (ancienne saisie)', old: 'Show-Up sur Sets (NB) %', def: 'Sets présents tapés à la main ÷ sets de l’ancienne saisie.',
+        formula: 'Sets présents ÷ Sets × 100 (ancienne saisie)',
+        i: { titre: 'Sets présents ÷ Sets % (ancienne saisie)', texte: 'Sets présents tapés à la main ÷ sets de l’ancienne saisie × 100. Ce n’est pas le Show-up NB des autres écrans (présents ÷ Kept déjà passés).' } },
+      closes_sets_nb: { label: 'Closes NB (ancienne saisie)', old: 'Closes (Sets NB)', def: 'Ventes attribuées au setting, tapées à la main pour le mois.',
+        i: { cle: 'declare', prec: P_MAN + ' Ce ne sont pas les Closes NB calculés (Set NB, Stats funnel).' } },
+      tx_decroche: { label: 'Taux de décroché (ancienne saisie)', old: 'Tx de décroché', def: 'Taux de décroché tapé à la main par le setter.',
+        i: { cle: 'declare', prec: P_MAN + ' Le taux mesuré sur la téléphonie (décrochés ÷ appels) est dans Set NB.' } },
+      closing_live_sets_pct: { label: 'Closes NB ÷ Sets présents % (ancienne saisie)', old: 'Closing Live (Sets) %', def: 'Closes NB ÷ sets présents, tous deux tapés à la main.',
+        formula: 'Closes NB ÷ Sets présents × 100 (ancienne saisie)',
+        i: { titre: 'Closes NB ÷ Sets présents % (ancienne saisie)', texte: 'Closes NB ÷ sets présents, tous deux tapés à la main, × 100.' } },
+      cash_collecte_setting_nb: { label: 'Collecté NB (ancienne saisie)', old: 'Cash collecté R Setting NB', def: 'Montant encaissé attribué au setting, tapé à la main pour le mois.',
+        i: { cle: 'declare', prec: P_MAN + ' On ne sait pas s’il était hors taxes. Ce n’est pas le Collecté NB calculé.' } },
+
+      /* ── 5. Performance globale ── */
+      sales_velocity: { formula: '(Leads × Close / présents × Collecté / close) ÷ TTS (ancienne saisie)',
+        i: { titre: 'Sales Velocity', texte: 'Leads × Close / présents × Collecté / close ÷ TTS : toutes ces valeurs viennent de l’ancienne saisie ou d’une saisie manuelle.' } },
+      tts: { label: 'TTS (ancienne saisie)', def: 'Time To Sale — délai moyen entre lead entrant et close (en jours), tapé à la main pour le mois.',
+        i: { cle: 'declare', prec: P_MAN } }
+    };
+    var FAMILY_DISPLAY = { cash: 'Montants & ratios (ancienne saisie)' };
+
+    function dsp(k) { return (k && DISPLAY[k.id]) || {}; }
+    function dispLabel(k) { return dsp(k).label || k.label; }
+    function dispDef(k) { return dsp(k).def || k.definition; }
+    function dispFormula(k) { return dsp(k).formula || k.formula; }
+    function famLabel(f) { return FAMILY_DISPLAY[f.id] || f.label; }
+    /* Ancien nom à rappeler sous le libellé : nom d'origine de l'indicateur,
+       et nom enregistré dans le référentiel s'il diffère encore. */
+    function oldNames(k) {
+      var d = dsp(k), out = [];
+      if (d.old) out.push(d.old);
+      if (k.label && k.label !== dispLabel(k) && out.indexOf(k.label) < 0) out.push(k.label);
+      return out;
+    }
+    /* Le « i » de chaque indicateur : terme du glossaire + précision, ou note
+       libre quand ce n'est pas un terme du glossaire (ratio propre à la page).
+       Indicateur ajouté à la main (absent de la table) : selon sa source. */
+    function kpiInfo(k) {
+      var d = dsp(k);
+      if (d.i && d.i.cle) return iGlo(d.i.cle, d.i.prec);
+      if (d.i && d.i.texte) return iLib(d.i.titre || dispLabel(k), d.i.texte);
+      if (k.source === 'manual') return iGlo('declare', P_MAN);
+      if (k.source === 'firestore') return iGlo('ancienne_saisie', pFs(String(k.fsField || '').split('.').pop()));
+      if (k.source === 'booking') return iLib(dispLabel(k), T_RDV_TYPE);
+      return iLib(dispLabel(k), 'Calcul propre à cette page : ' + (k.formula || k.expr || '—') + '. Les valeurs de départ viennent de l’ancienne saisie, d’une saisie manuelle ou des RDV du type suivi.');
+    }
+    function renderLegacyBanner() {
+      var el = $('#dc-legacy');
+      if (!el) return;
+      el.innerHTML = '📜 <b>Page historique</b> : ces indicateurs viennent de l’ancienne saisie hebdomadaire, non alimentée depuis juillet 2026. ' +
+        'Les chiffres à jour sont dans le Stats funnel, Set NB et Global closing.' + iGlo('ancienne_saisie') +
+        '<span class="dc-legacy-sub">Les noms ont été corrigés pour dire ce que chaque carte compte réellement (ancien nom rappelé en italique) ; ' +
+        'aucun calcul n’a changé. Les cartes 🟣 comptent les RDV d’un seul type de consultation, avec leurs propres règles.</span>';
+    }
 
     function renderRef() {
       var body = $('#dc-ref-body');
@@ -794,7 +1023,7 @@
         var famKpis = kpis.filter(function (k) {
           if (k.familyId !== fam.id) return false;
           if (refFilter.src !== 'all' && k.source !== refFilter.src) return false;
-          if (q && (k.label + ' ' + k.definition + ' ' + k.formula).toLowerCase().indexOf(q) === -1) return false;
+          if (q && (k.label + ' ' + dispLabel(k) + ' ' + k.definition + ' ' + dispDef(k) + ' ' + k.formula + ' ' + dispFormula(k)).toLowerCase().indexOf(q) === -1) return false;
           return true;
         });
         if (q || refFilter.src !== 'all') { if (!famKpis.length) return; }
@@ -802,7 +1031,7 @@
         html += '<div class="dc-family" data-fam="' + esc(fam.id) + '">';
         html += '<div class="dc-family-head">';
         html += '<div class="dc-family-num">' + (idx + 1) + '</div>';
-        html += '<div class="dc-family-name">' + esc(fam.label) + '</div>';
+        html += '<div class="dc-family-name">' + esc(famLabel(fam)) + '</div>';
         html += '<div class="dc-family-count">' + famKpis.length + ' KPI' + (famKpis.length > 1 ? 's' : '') + '</div>';
         html += '<div class="dc-family-edit">';
         html += '<button class="dc-mini-btn" data-edit-fam="' + esc(fam.id) + '" title="Renommer la famille">✎</button>';
@@ -813,16 +1042,18 @@
           var sm = SRC_META[k.source] || SRC_META.manual;
           html += '<div class="dc-kpi s-' + esc(k.source) + '" data-kpi="' + esc(k.id) + '">';
           html += '<div class="dc-kpi-top">';
-          html += '<div class="dc-kpi-name">' + esc(k.label) + '</div>';
+          html += '<div class="dc-kpi-name">' + esc(dispLabel(k)) + kpiInfo(k) + '</div>';
           html += '<div class="dc-kpi-unit">' + esc(k.unit) + '</div>';
           html += '</div>';
-          html += '<div class="dc-kpi-def">' + esc(k.definition) + '</div>';
-          if (k.formula) {
-            html += '<div class="dc-kpi-formula"><span class="fx">ƒ</span><span>' + esc(k.formula) + '</span></div>';
+          var anciens = oldNames(k);
+          if (anciens.length) html += '<div class="dc-kpi-old">Ancien nom : ' + esc(anciens.join(' · ')) + '</div>';
+          html += '<div class="dc-kpi-def">' + esc(dispDef(k)) + '</div>';
+          if (dispFormula(k)) {
+            html += '<div class="dc-kpi-formula"><span class="fx">ƒ</span><span>' + esc(dispFormula(k)) + '</span></div>';
           }
           html += '<div class="dc-kpi-src ' + sm.cls + '">' + sm.icon + ' ' + sm.label;
           if (k.source === 'firestore' && k.fsField) html += ' · ' + esc(k.fsField);
-          if (k.source === 'booking') html += ' · ' + (k.bookingMetric === 'kept' ? 'RDV honorés' : 'RDV pris');
+          if (k.source === 'booking') html += ' · ' + (k.bookingMetric === 'kept' ? 'non annulés' : 'tous les RDV du type');
           html += '</div>';
           html += '</div>';
         });
@@ -1082,20 +1313,35 @@
       var cfg = REF_DOC.bookingConfig || {};
       var bookingUnconfigured = !cfg.typeId && !cfg.typeLabel;
 
+      var absents = ctx._absents || {};
       var html = '';
+      /* Rien de tronqué ni de remplacé en silence : lectures en échec et
+         ancienne saisie non alimentée sont écrites en tête. */
+      var alertes = [];
+      if (liveAggMeta.rosterErreur) alertes.push('lecture de la liste de l’équipe impossible : les indicateurs de l’ancienne saisie ne sont pas lus');
+      if (liveAggMeta.erreurs) alertes.push(liveAggMeta.erreurs + ' lecture(s) de l’ancienne saisie en échec sur ' + liveAggMeta.membres + ' membre(s) : totaux partiels');
+      if (bookingAgg._error) alertes.push('lecture des RDV impossible : les cartes 🟣 et leurs ratios sont vides');
+      if (alertes.length) {
+        html += '<div class="dc-live-alert">⚠️ ' + esc(alertes.join(' · ')) + '. Recharge la page.' + iGlo('lecture_incomplete') + '</div>';
+      }
+      if (legacyNonAlimente()) {
+        html += '<div class="dc-legacy" style="margin:0 0 14px">📜 <b>' + esc(monthLabel(liveMonth)) + '</b> : l’ancienne saisie n’est plus alimentée ' +
+          '(aucune saisie hebdomadaire de l’équipe pour ce mois). Ses indicateurs 🟢 et les ratios qui en dépendent affichent « non alimenté », pas 0.' +
+          iGlo('ancienne_saisie') + '</div>';
+      }
       families.forEach(function (fam, idx) {
         var famKpis = kpis.filter(function (k) { return k.familyId === fam.id; });
         if (!famKpis.length) return;
         html += '<div class="dc-family">';
         html += '<div class="dc-family-head"><div class="dc-family-num">' + (idx + 1) + '</div>' +
-                '<div class="dc-family-name">' + esc(fam.label) + '</div>' +
+                '<div class="dc-family-name">' + esc(famLabel(fam)) + '</div>' +
                 '<div class="dc-family-count">' + famKpis.length + ' KPI' + (famKpis.length > 1 ? 's' : '') + '</div></div>';
         html += '<div class="dc-kpi-grid">';
         famKpis.forEach(function (k) {
           var sm = SRC_META[k.source] || SRC_META.manual;
           var val = ctx[k.id];
           html += '<div class="dc-live-kpi s-' + esc(k.source) + '">';
-          html += '<div class="dc-live-label"><span>' + esc(k.label) + '</span>' +
+          html += '<div class="dc-live-label"><span>' + esc(dispLabel(k)) + kpiInfo(k) + '</span>' +
                   '<span class="tag ' + sm.cls + '">' + sm.icon + '</span></div>';
           if (k.source === 'manual') {
             var dv = manualDraft[k.id];
@@ -1104,16 +1350,19 @@
           } else {
             var display = fmtVal(val, k.unit);
             html += '<div class="dc-live-value' + (display === '—' ? ' muted' : '') + '">' + display + '</div>';
-            if (k.source === 'derived' && k.formula) {
-              html += '<div class="dc-live-formula">ƒ ' + esc(k.formula) + '</div>';
+            if (absents[k.id]) {
+              html += '<div class="dc-live-formula" style="color:var(--gold)">📜 non alimenté depuis juillet 2026</div>';
+            } else if (k.source === 'derived' && dispFormula(k)) {
+              html += '<div class="dc-live-formula">ƒ ' + esc(dispFormula(k)) + '</div>';
             } else if (k.source === 'firestore' && k.fsField) {
-              html += '<div class="dc-live-formula">Σ ' + esc(k.fsField) + ' · équipe</div>';
+              html += '<div class="dc-live-formula">Σ ' + esc(k.fsField) + ' · équipe · ancienne saisie</div>';
             } else if (k.source === 'booking') {
               if (bookingUnconfigured) {
                 html += '<div class="dc-live-formula" style="color:var(--gold)">⚙️ Choisis le type de consultation ci-dessus</div>';
               } else {
                 html += '<div class="dc-live-formula">RDV · ' + esc(cfg.typeLabel || 'type') + ' · ' +
-                        (cfg.dateBasis === 'created' ? 'date de prise' : 'date du RDV') + '</div>';
+                        (cfg.dateBasis === 'created' ? 'date de prise' : 'date du RDV') +
+                        (k.bookingMetric === 'kept' ? ' · statut ≠ annulé' : ' · annulés et déplacés compris') + '</div>';
               }
             }
           }
@@ -1251,6 +1500,7 @@
           await loadBookingTypes();
 
           $('#dc-app').style.display = '';
+          renderLegacyBanner();
           bindUI();
           watchReferentiel();
         } catch (e) {

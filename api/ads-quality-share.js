@@ -14,9 +14,11 @@
 // coupé depuis l'onglet « 🎯 Qualité par pub » du Funnel Sales. Distinct du
 // lien agence : on peut couper l'un sans l'autre.
 //
-// CE QUI SORT — LISTE BLANCHE (rowFields ci-dessous) : par pub / ensemble /
-// campagne, des NOMBRES et le nom de la pub. Jamais un nom de lead, un
-// e-mail, un téléphone, un nom de membre de l'équipe ni une commission.
+// CE QUI SORT — LISTE BLANCHE (ROW_FIELDS, K_FIELDS, UNATTR_FIELDS,
+// PARTIEL_FIELDS ci-dessous) : par pub / ensemble / campagne, des NOMBRES et
+// le nom de la pub ; les phrases « chiffres incomplets » sans leur détail
+// technique. Jamais un nom de lead, un e-mail, un téléphone, un nom de membre
+// de l'équipe, une commission ni un coût interne.
 // Chaque accès (accepté ou refusé) est journalisé dans audit_log.
 // ============================================================================
 'use strict';
@@ -35,24 +37,59 @@ const MAX_RANGE_DAYS = 92;
 const CACHE_TTL_MS = 120 * 1000;
 const AXES = ['creative', 'adset', 'campaign', 'device', 'region'];
 
+// `pitched` = RDV pitchés de la ligne (25/11/2026, vocabulaire unique :
+// colonne « Pitchés ») ; `honored` = même valeur, ancien nom gardé tant que
+// d'anciens onglets ouverts de ads-quality.html le lisent. Aucun champ
+// nominatif : des nombres, le nom de la pub et ses identifiants.
 const ROW_FIELDS = ['key', 'group', 'legacy', 'outOfAds', 'adIdList',
   'leads', 'caKnown', 'qualCa', 'faux', 'disq', 'neverReached', 'neverEligible',
-  'booked', 'honored', 'cancelled', 'noshow', 'closes', 'con', 'col',
+  'booked', 'pitched', 'honored', 'cancelled', 'noshow', 'closes', 'con', 'col',
   'spend', 'hasSpend', 'cpl', 'cpq', 'cph', 'cpv', 'smallSample'];
+// Couverture et totaux du compte : la ligne Total porte la dépense pub du
+// compte (spend) et le CPL pub (cplAds = spend ÷ leadsAds), comme le Stats
+// funnel ; les coûts sont masqués selon adSpendOk (dépense par pub reçue pour
+// tous les jours jusqu'à hier) et adsSpendOk (dépense du compte).
 const K_FIELDS = ['leads', 'attributedLeads', 'attributedPct', 'hasAdLevelSpend', 'adLevelSpend',
-  'adSpendComplete', 'adSpendDaysCovered', 'adSpendDaysExpected', 'creativeIndexSize'];
+  'adSpendComplete', 'adSpendOk', 'adSpendDaysCovered', 'adSpendDaysExpected', 'creativeIndexSize',
+  'spend', 'adsSpendOk', 'adsDaysCovered', 'adsDaysExpected', 'leadsAds', 'cplAds'];
+// RDV et closes sans fiche rattachable, par axe : des compteurs seulement.
+const UNATTR_FIELDS = ['booked', 'pitched', 'cancelled', 'noshow', 'closes'];
+// Drapeaux « chiffre partiel » utiles à ce tableau (booléens).
+const PARTIEL_FIELDS = ['leads', 'calls', 'closed', 'ads'];
+// Phrases de lecture incomplète (k.erreursLecture) qui ne concernent pas ce
+// tableau ou qui parlent de coûts internes : jamais transmises.
+const LECTURE_HORS_LIEN = [/^Lecture des coûts/, /^Lecture des commissions/, /^Lecture du journal/,
+  /^Lecture de l.équipe/, /^Lecture des visites/, /^Lecture des ré-optins/, /^Liste des ré-optins/];
 
 function pick(src, fields) {
   const o = {};
   fields.forEach(function (f) { if (src && src[f] !== undefined) o[f] = src[f]; });
   return o;
 }
+/* Une phrase d'erreur sans le message technique entre parenthèses (texte
+   brut de Firestore : chemin, lien d'index…) : la média buyeuse lit ce qui
+   manque, pas le détail interne. */
+function phrasePublique(s) {
+  if (typeof s !== 'string' || !s) return null;
+  for (let i = 0; i < LECTURE_HORS_LIEN.length; i++) if (LECTURE_HORS_LIEN[i].test(s)) return null;
+  const a = s.indexOf(' (');
+  const b = s.lastIndexOf(') :');
+  if (a >= 0 && b > a) s = s.slice(0, a) + s.slice(b + 1);
+  return s.slice(0, 300);
+}
 function shareData(k) {
   const rows = {};
+  const unattr = {};
   AXES.forEach(function (ax) {
     rows[ax] = ((k.utmRowsByAxis && k.utmRowsByAxis[ax]) || []).map(function (r) { return pick(r, ROW_FIELDS); });
+    const u = k.utmUnattrByAxis && k.utmUnattrByAxis[ax];
+    if (u) unattr[ax] = pick(u, UNATTR_FIELDS);
   });
-  return JSON.parse(JSON.stringify({ rowsByAxis: rows, coverage: pick(k, K_FIELDS) }));
+  const erreurs = (k.erreursLecture || []).map(phrasePublique).filter(function (x) { return !!x; });
+  const partiel = {};
+  PARTIEL_FIELDS.forEach(function (f) { if (k.partiel && k.partiel[f] !== undefined) partiel[f] = !!k.partiel[f]; });
+  return JSON.parse(JSON.stringify({ rowsByAxis: rows, coverage: pick(k, K_FIELDS), unattrByAxis: unattr,
+    lecture: { erreurs: erreurs, partiel: partiel } }));
 }
 
 function tokenMatches(expected, given) {
