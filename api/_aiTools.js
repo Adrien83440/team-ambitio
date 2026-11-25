@@ -602,7 +602,7 @@ const TOOLS = [
   },
   {
     name: 'calls_stats',
-    description: 'Appels téléphoniques (Ringover) sur la période, même périmètre que le Stats funnel : équipe sales (setters, closers, admins, anciens membres compris) + appels sans auteur. Par membre (auteur = compte relié à l\'appel, sinon prénom Ringover ; appels sans auteur sur la ligne « Non attribué », anciens membres sur « Anciens membres ») : appels (SORTANTS seulement), décrochés (au moins 5 s de conversation, répondeurs écartés), taux de décroché, temps d\'appel (conversation des sortants décrochés, en minutes), appels reçus (entrants, à part), note IA moyenne des appels analysés. `equipe` = somme des lignes de parPersonne. Les appels de la CSM et des coachs sont à part dans `horsEquipeSales` : jamais dans equipe. Champ `definitions`.',
+    description: 'Appels téléphoniques (Ringover) sur la période, même périmètre que le Stats funnel : équipe sales (setters, closers, admins, anciens membres compris) + appels sans auteur. Par membre (auteur = compte relié à l\'appel, sinon prénom Ringover ; ligne « Non attribué » = appels sans auteur + appels datés d\'avant l\'arrivée d\'un membre, détaillés dans parPersonne[« Non attribué »].detail ; anciens membres sur « Anciens membres ») : appels (SORTANTS seulement), décrochés (au moins 5 s de conversation, répondeurs écartés), taux de décroché, temps d\'appel (conversation des sortants décrochés, en minutes), appels reçus (entrants, à part), note IA moyenne des appels analysés. `equipe` = somme des lignes de parPersonne. Les appels de la CSM et des coachs sont à part dans `horsEquipeSales` : jamais dans equipe. Champ `definitions`.',
     input_schema: { type: 'object', properties: RANGE_PROPS, additionalProperties: false },
     run: async function (i) {
       const r = range(i);
@@ -648,7 +648,7 @@ const TOOLS = [
       if (avert.length) out.avertissements = avert;
       out.definitions = definitions({ appels: 'appels', decroches: 'decroches', tauxDecroche: 'taux_decroche', tempsAppelMin: ['temps_appel', 'En minutes.'],
         dureeMoyenneMin: ['duree_moyenne_appel', 'En minutes.'], appelsRecus: 'appels_recus', appelsRecusDecroches: 'appels_recus_decroches',
-        noteIAMoyenne: 'note_ia_appel', equipe: ['equipe', 'Ici : équipe sales et appels sans auteur, comme le Stats funnel.'], horsEquipeSales: 'hors_equipe_sales', nonAttribue: 'appels_sans_auteur', anciensMembres: 'anciens_membres', sansSens: 'appels_sens_inconnu' });
+        noteIAMoyenne: 'note_ia_appel', equipe: ['equipe', 'Ici : équipe sales et appels sans auteur, comme le Stats funnel.'], horsEquipeSales: 'hors_equipe_sales', nonAttribue: ['non_attribue', 'Ici : appels sans auteur (poste relié à aucun compte) et appels datés d’avant l’arrivée d’un membre ; le champ detail donne la part de chaque cas « Prénom (avant son arrivée) ».'], detail: 'non_attribue_contenu', anciensMembres: 'anciens_membres', sansSens: 'appels_sens_inconnu' });
       return out;
     },
   },

@@ -3230,6 +3230,8 @@
       if (l._ttc == null) return;
       var who = l._ttcBy || nomAffiche(null);
       if (!ltsBy[who.key]) ltsBy[who.key] = { key: who.key, name: who.name, unassigned: !!who.unassigned, anciens: !!who.anciens, delays: [] };
+      /* Détail de « Non attribué » : { 'Prénom (avant son arrivée)': n leads }. */
+      if (who.precision) { ltsBy[who.key].detail = ltsBy[who.key].detail || {}; ltsBy[who.key].detail[who.precision] = (ltsBy[who.key].detail[who.precision] || 0) + 1; }
       ltsBy[who.key].delays.push(l._ttc);
     });
     function rangFin(u) { return u.unassigned ? 2 : (u.anciens ? 1 : 0); }
@@ -3238,7 +3240,7 @@
       var u5 = 0, u60 = 0;
       d.forEach(function (ms) { if (ms <= 5 * 60000) u5++; if (ms <= 3600000) u60++; });
       return { key: u.key, name: u.name, unassigned: u.unassigned, anciens: u.anciens, n: d.length, median: median(d),
-        under5: u5, under60: u60, under5Pct: u5 / d.length * 100, under60Pct: u60 / d.length * 100 };
+        under5: u5, under60: u60, under5Pct: u5 / d.length * 100, under60Pct: u60 / d.length * 100, detail: u.detail || null };
     }).sort(function (a, b) {
       if (rangFin(a) !== rangFin(b)) return rangFin(a) - rangFin(b);
       return a.median - b.median || b.n - a.n;

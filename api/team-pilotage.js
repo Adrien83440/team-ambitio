@@ -1786,7 +1786,11 @@ async function handleJournal(req, res, body) {
   if (fusionsMiennes) notes.push(phraseFusions(fusionsMiennes));
   res.status(200).json({ ok: true, date: date, member: publicMember(m), members: membersList, summary: sum, rappels: rappels,
     events: ev.slice(0, 5000), total: ev.length, plafonds: plafonds.filter(function (x, i, a) { return a.indexOf(x) === i; }), warnings: warnings,
-    notes: notes, fusionsAppels: fusionsMiennes });
+    notes: notes, fusionsAppels: fusionsMiennes,
+    // Journée d'avant la date d'arrivée de la personne : l'onglet Activité
+    // range ces chiffres en « Non attribué » (StatsCore.rangPersonne) — la
+    // page le dit au-dessus du journal.
+    avantArrivee: rangDe(m, date).cas === 'avant_arrivee' });
 }
 
 // ─── RECHERCHE ET HISTORIQUE D'UN PROSPECT ──────────────────────────────────

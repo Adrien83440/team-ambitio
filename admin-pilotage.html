@@ -1040,7 +1040,9 @@ function renderJournal() {
   var S = J.summary || {};
   var rp = S.rappels || {};
   var RV = S.rdv || {};
-  $('jrBanner').innerHTML = partielBanner(J.plafonds, J.warnings);
+  $('jrBanner').innerHTML = partielBanner(J.plafonds, J.warnings) +
+    (J.avantArrivee ? '<div class="pl-banner">ℹ️ <b>Journée antérieure à la date d’arrivée' + (J.member && J.member.name ? ' de ' + esc(J.member.name) : '') +
+      '</b> — dans l’onglet Activité (et sur Set NB, le Dashboard, le Stats funnel), ces chiffres sont rangés en « Non attribué ».</div>' : '');
   /* Mêmes clés et mêmes règles que l'onglet Activité (une journée de
      l'Activité = ce journal) et que l'En direct pour aujourd'hui. */
   $('jrKpis').innerHTML =
