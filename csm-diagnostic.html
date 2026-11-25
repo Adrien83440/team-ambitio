@@ -202,7 +202,7 @@ function renderDiagnostic(d){
       h += '<td>' + esc(co.programme||'—') + '</td>';
       h += '<td>' + done + '/' + total + '</td>';
       h += '<td>' + statutTag + '</td>';
-      h += '<td>' + fmtDate(co.dateEntree) + '</td>';
+      h += '<td>' + fmtJourClient(co.dateEntree) + '</td>';
       h += '<td><button class="diag-btn" onclick="createLeadFromCoaching(\'' + esc(co._id) + '\')">+ Lead</button></td>';
       h += '</tr>';
     });
@@ -330,8 +330,16 @@ function phoneNormalized(raw) {
    vraiment illisible : l'heure du serveur, comme avant. Sans stats-core.js :
    refus (exception), jamais de texte ni d'heure du serveur à la place d'une
    date d'entrée connue. Même fonction dans csm-clients.html. */
+/* Date d'entrée à LIRE pour écrire clientSince : texte non vide, map
+   { seconds, nanoseconds } (Timestamp passé par JSON) ou Date. Un vrai
+   Timestamp est gardé tel quel ; un nombre n'est jamais lu (0 = 1970). */
+function dateEntreeALire(v){
+  if(typeof v === 'string') return v.trim() !== '';
+  return !!(v && typeof v === 'object' && typeof v.toDate !== 'function' &&
+    (typeof v.seconds === 'number' || typeof v.getTime === 'function'));
+}
 function clientSinceRefus(v){
-  if(typeof v === 'string' && v.trim() !== '' && !outilDates()){
+  if(dateEntreeALire(v) && !outilDates()){
     return "Lecture des dates indisponible (stats-core.js non chargé) : recharge la page. Rien n'a été écrit.";
   }
   return null;
@@ -340,7 +348,8 @@ function clientSinceDepuisDateEntree(v){
   if(v && typeof v.toDate === 'function') return v;
   var refus = clientSinceRefus(v);
   if(refus) throw new Error(refus);
-  var ms = outilDates().dateTexteMs(v);
+  var sc = outilDates();
+  var ms = (sc && dateEntreeALire(v)) ? sc.instantMs(v) : null;
   if(ms != null) return firebase.firestore.Timestamp.fromDate(new Date(ms));
   return firebase.firestore.FieldValue.serverTimestamp();
 }

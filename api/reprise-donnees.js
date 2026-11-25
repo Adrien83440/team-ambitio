@@ -11,7 +11,8 @@
 //
 // AUCUNE DONNÉE PERSONNELLE EN SORTIE : ni nom, ni e-mail, ni téléphone, ni
 // note — des comptes, des dates, des montants, des identifiants de fiche et
-// des empreintes.
+// des empreintes. Erreurs comprises : une exception ne sort (réponse et trace)
+// que par son statut gRPC ou « <nom> : (détail masqué) » (msgSur).
 //
 // JOB 1 — ?job=clientsince  (À BLANC par défaut : n'écrit rien)
 //   leads.clientSince écrit en TEXTE par d'anciennes pages CSM
@@ -25,17 +26,29 @@
 //     ?job=clientsince&apply=1&confirm=CONVERTIR&attendu=N
 //                                      écriture (N = nombre de fiches
 //                                      convertibles annoncé par la lecture)
-//   Écriture : UNIQUEMENT clientSince (Timestamp), clientSinceTexte (valeur
-//   d'origine gardée, rien n'est perdu) et clientSinceConvertiLe. Aucun autre
-//   champ (pas d'updatedAt). Trace : reprise_client_since_log/{id}, son
+//     ?job=clientsince&fiche=<id>      diagnostic d'une fiche (lecture seule) :
+//                                      paiements rattachés et bilan du moteur
+//   Formes reprises : TEXTE, et MAP { seconds, nanoseconds } (ou { _seconds,
+//   _nanoseconds }) laissée par l'ancienne fusion de clients-dedup.html
+//   (aller-retour JSON d'un Timestamp, révision 3e3724b) — invisible des
+//   requêtes par date comme un texte. Maps lues par toutes les fiches
+//   isClient == true (voie sûre) + where('clientSince','>=',{}) (complément,
+//   son échec est rendu dans lecture.maps.inegaliteErreur). Un NOMBRE est
+//   signalé, jamais converti.
+//   Écriture : UNIQUEMENT clientSince (Timestamp), la valeur d'origine gardée
+//   (clientSinceTexte pour un texte, clientSinceAvant pour une map, recopiée
+//   telle quelle — rien n'est perdu) et clientSinceConvertiLe. Aucun autre
+//   champ (pas d'updatedAt). Une map est réécrite aux MÊMES secondes et
+//   nanosecondes. Trace : reprise_client_since_log/{id}, son
 //   compteur `ecrit` mis à jour après chaque lot (un MINIMUM : la relecture à
 //   blanc fait foi). L'instant vient de LA règle unique StatsCore.dateTexteMs
 //   (stats-core.js, celle des pages) ; une date-heure ISO n'est convertie que
 //   si « T » (ou une espace) et « Z » sont en majuscules et que la contre-
 //   lecture par FunnelCore.parseFlexMs donne la même seconde ; sinon
 //   « illisible », jamais écrite.
-//   Une fiche qui porte DÉJÀ clientSinceTexte (reprise une fois, puis remise
-//   en texte par une ancienne page) est classée 'deja_reprise' : jamais
+//   Une fiche qui porte DÉJÀ le champ de la valeur d'origine (clientSinceTexte
+//   pour un texte, clientSinceAvant pour une map : reprise une fois, puis
+//   réécrite par une ancienne page) est classée 'deja_reprise' : jamais
 //   écrite (la valeur d'origine serait perdue), comptée (dejaReprises) et
 //   listée à part, pour décision.
 //   Simulation : les fiches ajoutées sont triées comme Firestore trie une
@@ -72,7 +85,9 @@
 //     une espace. Calculée pour chaque fiche leads isClient == true et chaque
 //     document clients, sur nom, name, nomComplet, fullName, leadName,
 //     clientName, prenom + nom, prenom + name, firstName + lastName (lecture
-//     restreinte à ces champs par select). Rend { demandes, trouves,
+//     restreinte à ces champs par select). Rend { demandes, listeDemandee
+//     (16 hex de sha256 de la liste demandée triée, jointe par des virgules),
+//     trouves, trouvesListe: [empreintes demandées ET trouvées, triées],
 //     absents: [empreintes demandées non trouvées], parCollection, lus } —
 //     jamais un nom.
 // ============================================================================
@@ -122,12 +137,45 @@ function r2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
      'vide'      chaîne vide       → rien
      'illisible' tout autre texte  → rien, signalé (jour impossible, heure
                                      hors bornes, « t » / « z » minuscules…)
-     'nombre'    nombre            → rien, signalé (jour indicatif seulement) */
+     'nombre'    nombre            → rien, signalé (jour indicatif seulement)
+     'map'       map { seconds, nanoseconds } (ou { _seconds, _nanoseconds })
+                                   → le MÊME instant, réécrit en vrai Timestamp
+                                     (seconds / nanoseconds recopiés à
+                                     l'identique). Forme laissée par l'ancienne
+                                     fusion de clients-dedup.html (aller-retour
+                                     JSON d'un Timestamp) : invisible des
+                                     requêtes par date comme un texte. Toute
+                                     autre map → 'illisible'. */
 const RE_JOUR = /^\d{4}-\d{2}-\d{2}$/;
 const RE_FR = /^\d{1,2}\/\d{1,2}\/\d{4}$/;
 const RE_ISO = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/;
 function msValide(ms) { return ms != null && isFinite(ms) && isFinite(new Date(ms).getTime()); }
+/* Map qui porte un Timestamp : EXACTEMENT deux clés (seconds + nanoseconds, ou
+   _seconds + _nanoseconds), entières, dans les bornes d'un Timestamp Firestore
+   (0001-01-01 → 9999-12-31, nanosecondes 0 … 999 999 999). Un vrai Timestamp
+   (toMillis) n'en est pas une. Rend { sec, ns } ou null. */
+const TS_MIN_S = -62135596800, TS_MAX_S = 253402300799;
+function mapTimestamp(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v) || typeof v.toMillis === 'function') return null;
+  const proto = Object.getPrototypeOf(v);
+  if (proto !== Object.prototype && proto !== null) return null;
+  const ks = Object.keys(v).sort();
+  let sec, ns;
+  if (ks.length === 2 && ks[0] === 'nanoseconds' && ks[1] === 'seconds') { sec = v.seconds; ns = v.nanoseconds; }
+  else if (ks.length === 2 && ks[0] === '_nanoseconds' && ks[1] === '_seconds') { sec = v._seconds; ns = v._nanoseconds; }
+  else return null;
+  if (!Number.isInteger(sec) || !Number.isInteger(ns) || sec < TS_MIN_S || sec > TS_MAX_S || ns < 0 || ns > 999999999) return null;
+  return { sec: sec, ns: ns };
+}
 function analyser(v) {
+  if (v && typeof v === 'object') {
+    const m = mapTimestamp(v);
+    if (!m) return { format: 'illisible', ms: null };
+    /* Même calcul que StatsCore.instantMs / FunnelCore.parseFlexMs sur une map. */
+    const msM = m.sec * 1000 + Math.floor(m.ns / 1e6);
+    if (!msValide(msM)) return { format: 'illisible', ms: null };
+    return { format: 'map', ms: msM, sec: m.sec, ns: m.ns };
+  }
   if (typeof v === 'number') {
     const msN = Core.parseFlexMs(v);
     /* Nombre hors des bornes de Date (> 8,64e15 ms…) : pas de jour indicatif,
@@ -145,6 +193,11 @@ function analyser(v) {
   const ms = SC.dateTexteMs(s);
   if (!msValide(ms)) return { format: 'illisible', ms: null };
   if (format === 'iso') {
+    /* Décalage horaire hors bornes (heures > 14 ou minutes > 59 : « +24:00 »,
+       « +01:60 ») : illisible. StatsCore.dateTexteMs ne les borne pas (défaut
+       signalé, à corriger là-bas) et la contre-lecture V8 en accepte certains. */
+    const dec = /([+-])(\d{2}):?(\d{2})$/.exec(s.slice(10));
+    if (dec && (parseInt(dec[2], 10) > 14 || parseInt(dec[3], 10) > 59)) return { format: 'illisible', ms: null };
     /* Contre-lecture indépendante (FunnelCore.parseFlexMs, autre code) : tout
        désaccord, à la seconde près, classe la valeur « illisible » plutôt que
        d'écrire un instant douteux. (parseFlexMs ignore la fraction de seconde
@@ -155,23 +208,68 @@ function analyser(v) {
   return { format: format, ms: ms };
 }
 
-/* Fiches dont clientSince n'est PAS un Timestamp : les TEXTES (>= '') et les
-   NOMBRES (>= -MAX). Un même document ne peut sortir des deux requêtes. */
+/* Fiches dont clientSince n'est PAS un Timestamp : les TEXTES (>= ''), les
+   NOMBRES (>= -MAX) et les MAPS { seconds, nanoseconds }. Un filtre d'inégalité
+   ne rend qu'un même type : un document ne sort que d'une des lectures.
+   Maps, deux voies réunies (dédoublonnées par identifiant) :
+   • SÛRE : toutes les fiches isClient == true, réduites à clientSince
+     (select) — l'ancienne fusion posait isClient = true sur la fiche qu'elle
+     écrivait ;
+   • COMPLÉMENT : where('clientSince', '>=', {}) (une map vide est la plus
+     petite des maps). Non garantie : en échec, l'erreur est rendue dans
+     lecture.maps.inegaliteErreur et la voie sûre suffit.
+   Une map candidate est RELUE en entier (doc(id).get()) : données complètes et
+   updateTime pour la précondition d'écriture.
+   Rend { list, lecture } (lecture : comptes par voie, rien de personnel). */
 async function lireNonTimestamp() {
-  const out = [];
+  const docs = [];
   const textes = await db.collection('leads').where('clientSince', '>=', '').get();
-  textes.forEach(function (doc) { out.push(doc); });
+  textes.forEach(function (doc) { docs.push(doc); });
   const nombres = await db.collection('leads').where('clientSince', '>=', -Number.MAX_VALUE).get();
-  nombres.forEach(function (doc) { out.push(doc); });
-  return out.map(function (doc) {
+  nombres.forEach(function (doc) { docs.push(doc); });
+
+  const vus = {};
+  docs.forEach(function (doc) { vus[doc.id] = 1; });
+  const candidats = {};
+  const lecture = { textes: textes.size, nombres: nombres.size, maps: { lusIsClient: 0, parIsClient: 0, parInegalite: null, inegaliteErreur: null, retenues: 0 } };
+  function estMap(v) { return !!v && typeof v === 'object' && !Array.isArray(v) && typeof v.toMillis !== 'function'; }
+  const qC = db.collection('leads').where('isClient', '==', true);
+  const sC = await qC.select('clientSince').get();
+  sC.forEach(function (doc) {
+    lecture.maps.lusIsClient++;
+    const d = doc.data() || {};
+    if (estMap(d.clientSince)) { lecture.maps.parIsClient++; candidats[doc.id] = 1; }
+  });
+  try {
+    const sI = await db.collection('leads').where('clientSince', '>=', {}).select('clientSince').get();
+    let n = 0;
+    sI.forEach(function (doc) {
+      const d = doc.data() || {};
+      if (estMap(d.clientSince)) { n++; candidats[doc.id] = 1; }
+    });
+    lecture.maps.parInegalite = n;
+  } catch (e) {
+    lecture.maps.inegaliteErreur = msgSur(e);
+  }
+  const ids = Object.keys(candidats).filter(function (id) { return !vus[id]; }).sort();
+  for (const id of ids) {
+    const doc = await db.collection('leads').doc(id).get();
+    /* Relue : toujours une map (sinon elle a changé entre-temps : ignorée ici,
+       une nouvelle lecture à blanc la verra sous sa forme actuelle). */
+    if (doc && doc.exists && estMap((doc.data() || {}).clientSince)) { docs.push(doc); lecture.maps.retenues++; }
+  }
+
+  const list = docs.map(function (doc) {
     const d = doc.data() || {};
     const a = analyser(d.clientSince);
-    /* Fiche DÉJÀ reprise une fois (clientSinceTexte présent) puis réécrite en
-       texte (ancien onglet CSM resté ouvert…) : jamais réécrite d'office, sinon
-       la valeur d'origine gardée dans clientSinceTexte serait perdue. Comptée
-       et listée à part (format 'deja_reprise', formatTexte = lecture du texte
-       actuel) pour décision. */
-    if (Object.prototype.hasOwnProperty.call(d, 'clientSinceTexte')) {
+    /* Fiche DÉJÀ reprise une fois puis réécrite (ancien onglet CSM resté
+       ouvert…) : le champ où la conversion garderait la valeur d'origine existe
+       déjà (clientSinceTexte pour un texte, clientSinceAvant pour une map).
+       Jamais réécrite d'office, sinon cette valeur d'origine serait perdue.
+       Comptée et listée à part (format 'deja_reprise', formatTexte = lecture
+       de la valeur actuelle) pour décision. */
+    const champAvant = a.format === 'map' ? 'clientSinceAvant' : 'clientSinceTexte';
+    if (Object.prototype.hasOwnProperty.call(d, champAvant)) {
       const ind = a.ms != null ? a.ms : (a.msIndicatif == null ? null : a.msIndicatif);
       return {
         id: doc.id, doc: doc, data: d, avant: d.clientSince,
@@ -180,9 +278,48 @@ async function lireNonTimestamp() {
     }
     return {
       id: doc.id, doc: doc, data: d, avant: d.clientSince,
-      format: a.format, ms: a.ms, msIndicatif: a.msIndicatif == null ? null : a.msIndicatif
+      format: a.format, ms: a.ms, msIndicatif: a.msIndicatif == null ? null : a.msIndicatif,
+      sec: a.sec, ns: a.ns
     };
   });
+  return { list: list, lecture: lecture };
+}
+
+/* Timestamp à écrire : une map est recopiée À L'IDENTIQUE (secondes et
+   nanosecondes) ; un texte donne l'instant de StatsCore.dateTexteMs. */
+function tsDe(f) {
+  if (f.format === 'map') return new admin.firestore.Timestamp(f.sec, f.ns);
+  return admin.firestore.Timestamp.fromMillis(f.ms);
+}
+/* Valeur d'origine dans la trace (texte) : une map en JSON. */
+function avantTexte(v) {
+  if (v && typeof v === 'object') { try { return JSON.stringify(v).slice(0, 120); } catch (e) { return '[map]'; } }
+  return String(v);
+}
+
+/* Message d'erreur SANS donnée personnelle (réponse JSON et trace) : jamais
+   le texte libre d'une exception (il peut recopier une valeur de champ). On ne
+   garde que le STATUT gRPC (« FAILED_PRECONDITION », « DEADLINE_EXCEEDED »…)
+   lu en tête du message ou dans e.code, avec son numéro ; sinon le nom de
+   l'erreur suivi de « (détail masqué) ». Seule exception : le message fixe de
+   la simulation de cette route. */
+const GRPC = ['CANCELLED', 'UNKNOWN', 'INVALID_ARGUMENT', 'DEADLINE_EXCEEDED', 'NOT_FOUND', 'ALREADY_EXISTS', 'PERMISSION_DENIED',
+  'RESOURCE_EXHAUSTED', 'FAILED_PRECONDITION', 'ABORTED', 'OUT_OF_RANGE', 'UNIMPLEMENTED', 'INTERNAL', 'UNAVAILABLE', 'DATA_LOSS', 'UNAUTHENTICATED'];
+const MSG_SIMULATION = 'simulation : aucune écriture';
+function msgSur(e) {
+  const brut = (e && typeof e === 'object') ? String(e.message == null ? '' : e.message) : String(e == null ? '' : e);
+  if (brut === MSG_SIMULATION) return MSG_SIMULATION;
+  const code = (e && typeof e === 'object') ? e.code : undefined;
+  const num = (typeof code === 'number' && Number.isInteger(code) && code >= 0 && code <= 16) ? code
+    : (/^(\d{1,2}) /.test(brut) && +brut.split(' ')[0] <= 16 ? +brut.split(' ')[0] : null);
+  let statut = null;
+  const tete = /^(?:\d{1,2} )?([A-Z_]+)/.exec(brut);
+  if (tete && GRPC.indexOf(tete[1]) >= 0) statut = tete[1];
+  else if (typeof code === 'string' && GRPC.indexOf(code.toUpperCase().replace(/-/g, '_')) >= 0) statut = code.toUpperCase().replace(/-/g, '_');
+  else if (num != null && num >= 1) statut = GRPC[num - 1];
+  if (statut) return statut + (num != null ? ' (code ' + num + ')' : '');
+  const nom = (e && typeof e === 'object' && ['Error', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError', 'FirebaseError', 'GoogleError'].indexOf(e.name) >= 0) ? e.name : 'Erreur';
+  return nom + ' : (détail masqué)';
 }
 
 function strOuNull(v) { return (typeof v === 'string' && v) ? v.slice(0, 60) : (v == null ? null : String(v).slice(0, 60)); }
@@ -192,7 +329,7 @@ function strOuNull(v) { return (typeof v === 'string' && v) ? v.slice(0, 60) : (
 function resume(list) {
   const out = {
     total: list.length, convertibles: 0, parFormat: {}, parMois: {}, parSource: {},
-    fusionnees: 0, dejaIsClient: 0, nombres: 0, illisibles: 0, vides: 0, dejaReprises: 0, fiches: []
+    fusionnees: 0, dejaIsClient: 0, nombres: 0, maps: 0, illisibles: 0, vides: 0, dejaReprises: 0, fiches: []
   };
   list.forEach(function (f) {
     out.parFormat[f.format] = (out.parFormat[f.format] || 0) + 1;
@@ -201,6 +338,7 @@ function resume(list) {
     if (f.data._merged === true) out.fusionnees++;
     if (f.data.isClient === true) out.dejaIsClient++;
     if (f.format === 'nombre') out.nombres++;
+    if (f.format === 'map') out.maps++;
     if (f.format === 'illisible') out.illisibles++;
     if (f.format === 'vide') out.vides++;
     if (f.format === 'deja_reprise') out.dejaReprises++;
@@ -304,7 +442,7 @@ function enveloppe(realDb, conv) {
 
 function totaux(res) {
   const t = Core.sumCloses(res.rows || []);
-  return { closes: t.closes, contracte: r2(t.con), collecte: r2(t.paid), sansSignal: (res.sansSignal || []).length, erreur: res.erreur || null, tronque: !!res.tronque };
+  return { closes: t.closes, contracte: r2(t.con), collecte: r2(t.paid), sansSignal: (res.sansSignal || []).length, erreur: res.erreur ? msgSur(res.erreur) : null, tronque: !!res.tronque };
 }
 
 async function simuler(list, moisTxt) {
@@ -314,7 +452,7 @@ async function simuler(list, moisTxt) {
   const conv = {};
   list.forEach(function (f) {
     if (f.ms == null) return;
-    conv[f.id] = { ms: f.ms, ts: admin.firestore.Timestamp.fromMillis(f.ms), data: f.data };
+    conv[f.id] = { ms: f.ms, ts: tsDe(f), data: f.data };
   });
   const avant = await Core.loadCloses(db, { start: P.start, end: P.end, typeMap: typeMap });
   const apres = await Core.loadCloses(enveloppe(db, conv), { start: P.start, end: P.end, typeMap: typeMap });
@@ -371,7 +509,7 @@ async function appliquer(list, attendu) {
   const now = new Date();
   const idTrace = 'cs_' + now.toISOString().replace(/[-:.]/g, '').slice(0, 15) + 'Z_' + crypto.randomBytes(3).toString('hex');
   const traceRef = db.collection(LOG_COLLECTION).doc(idTrace);
-  const fichesTrace = aEcrire.map(function (f) { return { leadId: f.id, avant: String(f.avant), apres: new Date(f.ms).toISOString() }; });
+  const fichesTrace = aEcrire.map(function (f) { return { leadId: f.id, avant: avantTexte(f.avant), apres: new Date(f.ms).toISOString() }; });
   /* Trace d'abord (état en cours) : un passage interrompu reste visible. */
   await traceRef.set({
     at: admin.firestore.FieldValue.serverTimestamp(), mode: 'apply', etat: 'en_cours',
@@ -387,11 +525,11 @@ async function appliquer(list, attendu) {
     for (let i = 0; i < aEcrire.length; i += LOT) {
       const batch = db.batch();
       aEcrire.slice(i, i + LOT).forEach(function (f) {
-        const data = {
-          clientSince: admin.firestore.Timestamp.fromMillis(f.ms),
-          clientSinceTexte: f.avant,
-          clientSinceConvertiLe: admin.firestore.FieldValue.serverTimestamp()
-        };
+        /* Valeur d'origine gardée à côté : clientSinceTexte (texte) ou
+           clientSinceAvant (map, recopiée telle quelle). */
+        const data = { clientSince: tsDe(f), clientSinceConvertiLe: admin.firestore.FieldValue.serverTimestamp() };
+        if (f.format === 'map') data.clientSinceAvant = Object.assign({}, f.avant);
+        else data.clientSinceTexte = f.avant;
         /* Précondition : la fiche n'a pas changé depuis la lecture (sinon le
            lot échoue en entier, rien n'est écrit pour ce lot). */
         if (f.doc && f.doc.updateTime) batch.update(f.doc.ref, data, { lastUpdateTime: f.doc.updateTime });
@@ -404,7 +542,7 @@ async function appliquer(list, attendu) {
       try { await traceRef.update({ ecrit: ecrit, ecritEstUnMinimum: true }); } catch (eT) { /* trace en retard, la relecture à blanc fait foi */ }
     }
   } catch (e) {
-    const msg = String((e && e.message) || e).slice(0, 300);
+    const msg = msgSur(e);
     let traceOk = true;
     try {
       await traceRef.update({ etat: 'interrompu', ecrit: ecrit, ecritEstUnMinimum: true, erreur: msg, finLe: admin.firestore.FieldValue.serverTimestamp() });
@@ -418,8 +556,55 @@ async function appliquer(list, attendu) {
   return { code: 200, corps: { ok: true, ecrit: ecrit, trace: idTrace, traceAJour: traceFinOk } };
 }
 
+/* ── Diagnostic d'UNE fiche (lecture seule) ─────────────────────────
+   ?job=clientsince&fiche=<identifiant> : les paiements que le moteur
+   rattache à cette fiche (par son identifiant, son e-mail ou son téléphone —
+   ni l'un ni l'autre ne sortent) et le bilan que revClient en tire. Sert à
+   expliquer un écart de contracté / collecté annoncé par la simulation.
+   Des dates, des statuts et des montants HT : rien de personnel. */
+async function diagFiche(leadId) {
+  const snap = await db.collection('leads').doc(leadId).get();
+  if (!snap.exists) return { code: 200, corps: { ok: false, erreur: 'fiche introuvable' } };
+  const l = snap.data() || {};
+  const ps = await db.collection('payments').get();
+  const payments = [];
+  ps.forEach(function (doc) { const d = doc.data() || {}; d._id = doc.id; payments.push(d); });
+  const idx = Core.revIndex(payments);
+  const pays = Core.revPaymentsFor(idx, leadId, l.email, l.telephone || l.phone);
+  function jourOuNull(v) { const ms = SC.instantMs(v); return ms == null ? null : SC.jourParis(new Date(ms)); }
+  const bilan = Core.revClient(pays, l, null);
+  return {
+    code: 200,
+    corps: {
+      ok: true, mode: 'diagnostic', leadId: leadId,
+      fiche: {
+        clientSinceJour: jourOuNull(l.clientSince), clientSinceEnTexte: typeof l.clientSince === 'string',
+        stage: strOuNull(l.stage), isClient: l.isClient === true, fusionnee: l._merged === true,
+        clientStatus: strOuNull(l.clientStatus), aClosedData: !!l.closedData
+      },
+      nbPaiements: pays.length,
+      paiements: pays.map(function (p) {
+        return {
+          rattachePar: p.leadId === leadId ? 'identifiant de la fiche' : (p.leadId ? 'e-mail ou téléphone (le paiement porte une autre fiche)' : 'e-mail ou téléphone'),
+          creeLe: jourOuNull(p.createdAt), statut: strOuNull(p.status), type: strOuNull(p.type),
+          contratHT: r2(Core.revHT(p, p.totalAmount)), encaisseHT: r2(Core.revPaidHT(p)),
+          prelevementsPasses: Core.revPaidEntries(p).length
+        };
+      }),
+      bilan: { annule: !!bilan.cancelled, contracte: r2(bilan.con), collecte: r2(bilan.paid), enAttente: r2(bilan.pending), aUnPaiement: !!bilan.hasPay }
+    }
+  };
+}
+
 async function jobClientSince(q) {
-  const list = await lireNonTimestamp();
+  if (q.fiche != null) {
+    if (typeof q.fiche !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(q.fiche) || q.apply != null) {
+      return { code: 400, corps: { ok: false, erreur: 'fiche : un identifiant de fiche (lettres, chiffres, tiret, souligné), sans apply' } };
+    }
+    return diagFiche(q.fiche);
+  }
+  const lu = await lireNonTimestamp();
+  const list = lu.list;
   if (q.apply != null && String(q.apply) === '1') {
     /* Des TEXTES exactement (un tableau [x] donnerait String([x]) === x). */
     if (typeof q.apply !== 'string' || q.confirm !== 'CONVERTIR' || typeof q.attendu !== 'string' || !/^\d+$/.test(q.attendu)) {
@@ -431,7 +616,7 @@ async function jobClientSince(q) {
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(q.mois))) return { code: 400, corps: { ok: false, erreur: 'mois attendu au format AAAA-MM' } };
     return { code: 200, corps: { ok: true, mode: 'simulation', simulation: await simuler(list, String(q.mois)) } };
   }
-  return { code: 200, corps: Object.assign({ ok: true, mode: 'lecture' }, resume(list)) };
+  return { code: 200, corps: Object.assign({ ok: true, mode: 'lecture' }, resume(list), { lecture: lu.lecture }) };
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -564,11 +749,18 @@ async function jobEtat(q) {
     const qC = db.collection('clients');
     const sC = await qC.select.apply(qC, CHAMPS_NOM).get();
     sC.forEach(function (doc) { examiner('clients', doc); });
-    const liste = Object.keys(demandes);
+    const liste = Object.keys(demandes).sort();
+    const trouvesListe = liste.filter(function (h) { return trouves[h]; });
     corps.noms = {
       demandes: liste.length,
-      trouves: liste.filter(function (h) { return trouves[h]; }).length,
-      absents: liste.filter(function (h) { return !trouves[h]; }).sort(),
+      /* Empreinte de la liste DEMANDÉE (triée, sans doublon) : relie une
+         réponse à la liste qui l'a produite. */
+      listeDemandee: crypto.createHash('sha256').update(liste.join(','), 'utf8').digest('hex').slice(0, 16),
+      trouves: trouvesListe.length,
+      /* Empreintes demandées ET trouvées (fournies par l'appelant : rien de
+         personnel) : compare-noms ne tient pour retrouvé que ce qui y figure. */
+      trouvesListe: trouvesListe,
+      absents: liste.filter(function (h) { return !trouves[h]; }),
       parCollection: { leads: Object.keys(parCol.leads).length, clients: Object.keys(parCol.clients).length },
       lus: lus
     };
@@ -588,8 +780,8 @@ module.exports = async function (req, res) {
     else r = { code: 400, corps: { ok: false, erreur: 'job=clientsince, job=commissions ou job=etat' } };
     res.status(r.code).json(r.corps);
   } catch (e) {
-    res.status(500).json({ ok: false, erreur: String((e && e.message) || e).slice(0, 300) });
+    res.status(500).json({ ok: false, erreur: msgSur(e) });
   }
 };
 module.exports.config = { maxDuration: 60 };
-module.exports._test = { analyser: analyser, empreinte: empreinte, enveloppe: enveloppe, empreinteNom: empreinteNom, normNom: normNom };
+module.exports._test = { analyser: analyser, empreinte: empreinte, enveloppe: enveloppe, empreinteNom: empreinteNom, normNom: normNom, msgSur: msgSur, mapTimestamp: mapTimestamp };

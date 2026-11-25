@@ -801,11 +801,31 @@ function jourEntreeDate(v){
 function sinceDate(v){
   return jourEntreeDate(v) || toDate(v);
 }
+/* Origine des délais comptés en HEURES depuis l'entrée (RDV 72H) et du mois
+   de début. Une date d'entrée SANS heure ('AAAA-MM-JJ', 'JJ/MM/AAAA') part de
+   00:00 UTC de son jour (lu par StatsCore.jourDe) : exactement l'ancien
+   new Date('AAAA-MM-JJ'), donc seuils du RDV 72H inchangés ; une date-heure ou
+   un Timestamp : son instant (sinceDate). Sans stats-core.js : new Date(v),
+   comme avant. Jamais midi UTC+1 ici : l'alerte partirait 11 h plus tard. */
+function debutJourEntree(v){
+  var sc = outilDates();
+  var k = (sc && typeof v === 'string' && /^\s*(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{4})\s*$/.test(v)) ? sc.jourDe(v) : null;
+  if(k){ var p = k.split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])); }
+  return sinceDate(v);
+}
 /* Écrire leads.clientSince exige la règle commune : une date d'entrée en
    texte ne part jamais telle quelle ni remplacée par l'heure du serveur.
    Renvoie le message de refus, ou null si l'écriture peut partir. */
+/* Date d'entrée à LIRE pour écrire clientSince : texte non vide, map
+   { seconds, nanoseconds } (Timestamp passé par JSON) ou Date. Un vrai
+   Timestamp est gardé tel quel ; un nombre n'est jamais lu (0 = 1970). */
+function dateEntreeALire(v){
+  if(typeof v === 'string') return v.trim() !== '';
+  return !!(v && typeof v === 'object' && typeof v.toDate !== 'function' &&
+    (typeof v.seconds === 'number' || typeof v.getTime === 'function'));
+}
 function clientSinceRefus(v){
-  if(typeof v === 'string' && v.trim() !== '' && !outilDates()){
+  if(dateEntreeALire(v) && !outilDates()){
     return "Lecture des dates indisponible (stats-core.js non chargé) : recharge la page. Rien n'a été écrit.";
   }
   return null;
@@ -820,8 +840,9 @@ function clientSinceDepuisDateEntree(v){
   if(v && typeof v.toDate === 'function') return v;
   var refus = clientSinceRefus(v);
   if(refus) throw new Error(refus);
-  var dt = jourEntreeDate(v);
-  if(dt) return firebase.firestore.Timestamp.fromDate(dt);
+  var sc = outilDates();
+  var ms = (sc && dateEntreeALire(v)) ? sc.instantMs(v) : null;
+  if(ms != null) return firebase.firestore.Timestamp.fromDate(new Date(ms));
   return firebase.firestore.FieldValue.serverTimestamp();
 }
 /* 'AAAA-MM-JJ' du jour de Paris (StatsCore.jourParis ; sans stats-core.js :
@@ -1489,7 +1510,7 @@ function getRdv72h(coachingDoc){
         marqué CRITIQUE pour absence de coaching dans le passé.        */
 function getCoachingStartReference(coachingDoc){
   if(!coachingDoc) return null;
-  var entry = coachingDoc.dateEntree ? new Date(coachingDoc.dateEntree) : null;
+  var entry = coachingDoc.dateEntree ? debutJourEntree(coachingDoc.dateEntree) : null;
   if(entry && isNaN(entry.getTime())) entry = null;
   var firstSess = null;
   var allSess = getAllCoachingSessions(coachingDoc).filter(function(s){
@@ -2036,7 +2057,7 @@ function computeSignals(c){
 
   // 2. RDV 72H raté (signal critique côté CSM)
   var rdv72 = coachingDoc ? getRdv72h(coachingDoc) : null;
-  var entryD = coachingDoc && coachingDoc.dateEntree ? new Date(coachingDoc.dateEntree) : null;
+  var entryD = coachingDoc && coachingDoc.dateEntree ? debutJourEntree(coachingDoc.dateEntree) : null;
   if(coachingDoc && (!rdv72 || rdv72.statut !== 'fait')){
     if(entryD && !isNaN(entryD.getTime())){
       var hSince = (Date.now() - entryD)/3600000;
@@ -2044,7 +2065,7 @@ function computeSignals(c){
         signals.push({
           level: 'crit', icon: '🔴',
           title: 'RDV 72H raté',
-          desc: 'Entré le ' + fmtDate(entryD) + ' · ' + Math.round(hSince/24) + 'j de retard sur l\'onboarding',
+          desc: 'Entré le ' + fmtJourClient(coachingDoc.dateEntree) + ' · ' + Math.round(hSince/24) + 'j de retard sur l\'onboarding',
           actionLabel: 'Caller le coach',
           actionFn: 'switchModalTab(\'coaching\')'
         });
@@ -2781,7 +2802,7 @@ function renderModal(){
 
     // Mini indicateur RDV 72H : un petit badge en haut à droite de la card
     var rdv72ov = getRdv72h(coaching);
-    var entryDov = coaching.dateEntree ? new Date(coaching.dateEntree) : null;
+    var entryDov = coaching.dateEntree ? debutJourEntree(coaching.dateEntree) : null;
     var entryValOv = entryDov && !isNaN(entryDov.getTime());
     var rdv72ovBadge = '';
     if(rdv72ov && rdv72ov.statut === 'fait'){
@@ -2904,7 +2925,7 @@ function renderModal(){
       h += '<span>🏷 ' + esc(coaching.activite || coaching.secteur) + '</span>';
     }
     if(coaching.dateEntree){
-      h += '<span>📅 Entré le ' + fmtDate(coaching.dateEntree) + '</span>';
+      h += '<span>📅 Entré le ' + fmtJourClient(coaching.dateEntree) + '</span>';
     }
     h += '<span>👤 Coach : <strong style="color:var(--ink)">' + esc(coachName) + '</strong></span>';
     h += '</div></div>';
@@ -2913,7 +2934,7 @@ function renderModal(){
     // C'est la session d'onboarding faite dans les 72h après l'inscription.
     // Indicateur critique côté CSM : si raté → mauvais démarrage.
     var rdv72 = getRdv72h(coaching);
-    var entryD72 = coaching.dateEntree ? new Date(coaching.dateEntree) : null;
+    var entryD72 = coaching.dateEntree ? debutJourEntree(coaching.dateEntree) : null;
     var entryValid = entryD72 && !isNaN(entryD72.getTime());
 
     var rdvIcon, rdvBg, rdvBorder, rdvLabel, rdvSubtext;

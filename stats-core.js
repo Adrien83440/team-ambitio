@@ -149,7 +149,11 @@
       var dec = 0;
       if (m[8] !== 'Z') {
         var t = m[8].replace(':', '');
-        dec = (t.charAt(0) === '-' ? -1 : 1) * (parseInt(t.slice(1, 3), 10) * 60 + parseInt(t.slice(3, 5), 10));
+        var dh = parseInt(t.slice(1, 3), 10), dm = parseInt(t.slice(3, 5), 10);
+        /* Aucun fuseau réel ne dépasse ±14:00 : « +24:00 », « +01:60 » ne
+           sont pas des décalages, le texte est illisible. */
+        if (dh > 14 || dm > 59) return null;
+        dec = (t.charAt(0) === '-' ? -1 : 1) * (dh * 60 + dm);
       }
       return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], ss, milli) - dec * 60000;
     }
@@ -160,17 +164,19 @@
      par JSON), Date, nombre (secondes sous 1e12, sinon millisecondes — comme
      FunnelCore.parseFlexMs). null si vide ou illisible. */
   function instantMs(v) {
-    var t;
+    var t = null;
     if (v == null || v === '') return null;
-    if (typeof v === 'string') return dateTexteMs(v);
-    if (typeof v === 'number') return isFinite(v) ? (v < 1e12 ? v * 1000 : v) : null;
-    if (typeof v !== 'object') return null;
-    if (typeof v.toMillis === 'function') { try { t = v.toMillis(); } catch (e) { return null; } return isFinite(t) ? t : null; }
-    if (typeof v.toDate === 'function') { try { t = v.toDate().getTime(); } catch (e2) { return null; } return isFinite(t) ? t : null; }
-    if (typeof v.seconds === 'number') return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
-    if (typeof v._seconds === 'number') return v._seconds * 1000 + (v._nanoseconds ? Math.floor(v._nanoseconds / 1e6) : 0);
-    if (typeof v.getTime === 'function') { t = v.getTime(); return isFinite(t) ? t : null; }
-    return null;
+    if (typeof v === 'string') t = dateTexteMs(v);
+    else if (typeof v === 'number') t = v < 1e12 ? v * 1000 : v;
+    else if (typeof v !== 'object') return null;
+    else if (typeof v.toMillis === 'function') { try { t = v.toMillis(); } catch (e) { return null; } }
+    else if (typeof v.toDate === 'function') { try { t = v.toDate().getTime(); } catch (e2) { return null; } }
+    else if (typeof v.seconds === 'number') t = v.seconds * 1000 + (typeof v.nanoseconds === 'number' ? Math.floor(v.nanoseconds / 1e6) : 0);
+    else if (typeof v._seconds === 'number') t = v._seconds * 1000 + (typeof v._nanoseconds === 'number' ? Math.floor(v._nanoseconds / 1e6) : 0);
+    else if (typeof v.getTime === 'function') t = v.getTime();
+    /* Jamais NaN, jamais un instant hors des bornes d'une Date (±8,64e15 ms) :
+       une valeur corrompue est « illisible », pas une date. */
+    return (typeof t === 'number' && isFinite(t) && Math.abs(t) <= 8.64e15) ? t : null;
   }
   /* Le JOUR DE PARIS ('AAAA-MM-JJ') de cette date, la même chaîne que la date
      soit en texte ou en Timestamp, sur tout appareil. null si illisible. */
