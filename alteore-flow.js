@@ -367,16 +367,16 @@
   }
   /* Un membre est « parti » si sa fiche _meta/team_members (window.TEAM_MEMBERS,
      chargé par nav.js — les partis y restent, hors de TEAM_MEMBERS_LIST) porte
-     departed === true, ou active === false AVEC une date de fin (un membre
-     seulement désactivé, sans date de fin, n'est pas « parti ») ; à défaut,
-     s'il figure dans la liste historique (StatsCore.PARTIS_HISTORIQUES). */
+     departed === true ou est archivée (active === false) ; à défaut, s'il
+     figure dans la liste historique. UNE règle pour tous les écrans et pour le
+     serveur : StatsCore.estParti. (Lecture seule : la commission de setting,
+     elle, ne lit que la liste historique — voir departedSetter.) */
   function isDeparted(slug) {
     if (!slug) return false;
     slug = String(slug);
     var map = window.TEAM_MEMBERS || {};
     var m = Object.prototype.hasOwnProperty.call(map, slug) ? map[slug] : null;
-    if (m && (m.departed === true || (m.active === false && !!memberEndDate(m)))) return true;
-    return partiHistorique(slug);
+    return statsCore().estParti(m, slug);
   }
   /* Tous les slugs des membres partis (roster + liste historique), triés.
      Sert aux pages pour ranger leur activité passée sur la ligne « Anciens

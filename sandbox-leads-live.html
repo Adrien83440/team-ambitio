@@ -3515,8 +3515,13 @@ function ldCloseSteps(l) {
   var pays = (_ldPayCache[l.id] || []).filter(function (p) { return p.status !== 'cancelled'; });
   var anyRdv = function (fn) { for (var i = 0; i < rdvs.length; i++) if (fn(rdvs[i])) return rdvs[i]; return null; };
 
-  var held    = anyRdv(function (b) { return AF ? AF.isPresent(b.outcome) : b.status === 'completed'; });
-  var pitched = anyRdv(function (b) { return AF ? AF.isPitched(b.outcome) : false; });
+  /* Présent / pitché : règles uniques de stats-core.js (25/11/2026) — un RDV
+     marqué « terminé » sans résultat compte comme présent, comme dans les
+     rapports. Affichage seul. */
+  var SC = window.StatsCore;
+  var held    = anyRdv(function (b) { return SC ? SC.estPresent(b) : (AF ? AF.isPresent(b.outcome) : b.status === 'completed'); });
+  var pitched = anyRdv(function (b) { return SC ? SC.estPitche(b) : (AF ? AF.isPitched(b.outcome) : false); });
+  var sansDetail = !!held && !anyRdv(function (b) { return SC ? (SC.estPresent(b) && !!b.outcome) : !!b.outcome; });
   var sent    = sigs.length ? sigs[0] : null;
   var signed  = null;
   for (var i = 0; i < sigs.length; i++) if (sigs[i].status === 'signed') { signed = sigs[i]; break; }
@@ -3529,8 +3534,8 @@ function ldCloseSteps(l) {
   var won = !!(l.isClient === true || l.clientSince || String(l.stage || '').indexOf('closed_won') === 0);
 
   return [
-    { k: 'rdv',    l: 'RDV tenu',       done: !!held,       hint: held ? '' : 'statue le RDV ci-dessous' },
-    { k: 'offre',  l: 'Offre pitchée',  done: !!pitched,    hint: pitched ? '' : 'résultat « Offre » ou « Close »' },
+    { k: 'rdv',    l: 'Prospect présent', done: !!held,     hint: held ? (sansDetail ? 'présent sans détail : saisis le résultat' : '') : 'statue le RDV ci-dessous' },
+    { k: 'offre',  l: 'Pitché',         done: !!pitched,    hint: pitched ? '' : 'résultat « Offre », « Close » ou « Non close »' },
     { k: 'contrat',l: 'Contrat envoyé', done: !!sent,       act: 'sig',  actLabel: 'Envoyer' },
     { k: 'signe',  l: 'Signé',          done: !!signed,     act: sent && !signed ? 'sig' : null, actLabel: 'Relancer' },
     { k: 'pay',    l: 'Paiement créé',  done: !!payCreated, act: 'pay',  actLabel: 'Créer' },
@@ -3761,7 +3766,7 @@ function paintLeadRdvBox(leadId, items) {
     var personName = b.personName || '';
     var sb = AF ? AF.isSB(b, _ldTypeMap || {}) : (b.source === 'self_booking');
     var meta = escHtml(typeName) + (personName ? ' · ' + escHtml(personName) : '');
-    var chip = window.RdvOutcome ? window.RdvOutcome.chip(b) : '';
+    var chip = ldRdvChip(b);
     /* Lien visio — même chaîne de repli que le panneau de booking-admin,
        filtrée : on n'injecte dans un href que du http(s) (le lien vient de la
        synchro Google Agenda, mais il transite par un doc Firestore). */
@@ -7695,6 +7700,18 @@ function ldAgSetDay(key) {
   ldAgRender();
 }
 
+/* Pastille d'état d'un RDV (25/11/2026, vocabulaire des chiffres) : celle de
+   rdv-outcome.js, sauf pour un RDV marqué « terminé » sans résultat, qui
+   s'affiche « Présent (sans détail) » (StatsCore.estSansDetail) au lieu de
+   « Tenu ». Affichage seul : rien n'est écrit. */
+function ldRdvChip(b) {
+  var SC = window.StatsCore;
+  if (b && SC && SC.estSansDetail(b)) {
+    var mot = (SC.DETAILS && SC.DETAILS.sans_detail && SC.DETAILS.sans_detail.mot) || 'Présent (sans détail)';
+    return '<span class="rvo-chip" title="' + escHtml(SC.titre('sans_detail')).replace(/"/g, '&quot;') + '" style="color:#34d399;border-color:#34d39955;background:#34d3991c">✅ ' + escHtml(mot) + '</span>';
+  }
+  return window.RdvOutcome ? window.RdvOutcome.chip(b) : '';
+}
 function ldAgRow(b, now, isToday) {
   var role = ldAgRole(b);
   var st = ldAgStartMs(b), en = ldAgEndMs(b);
@@ -7710,9 +7727,9 @@ function ldAgRow(b, now, isToday) {
   if (noLead) meta = 'Aucune fiche Leads Live liée à ce RDV';
 
   var side = '';
-  if (cx) side = window.RdvOutcome ? window.RdvOutcome.chip(b) : '';
+  if (cx) side = ldRdvChip(b);
   else if (live) side = '<span class="l2ag-st now">EN COURS</span>';
-  else if (past) side = window.RdvOutcome ? window.RdvOutcome.chip(b) : '';
+  else if (past) side = ldRdvChip(b);
   else if (isToday) {
     var mins = Math.max(1, Math.round((st - now) / 60000));
     side = mins <= 60

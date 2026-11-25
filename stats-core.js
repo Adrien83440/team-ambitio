@@ -194,7 +194,7 @@
     if (b.outcome === 'replanifie') return true;
     if (b.outcome) return false;
     if (b.status !== 'cancelled') return false;
-    return b.rescheduled === true || !!b.transferredTo || !!VIA_REMPLACE[viaAnnulation(b)];
+    return b.rescheduled === true || !!b.transferredTo || VIA_REMPLACE[viaAnnulation(b)] === 1;
   }
   function estAnnule(b) {
     if (!b || estDoublon(b) || estReplanifie(b)) return false;
@@ -206,9 +206,9 @@
   }
   function estPresent(b) {
     if (!b) return false;
-    return b.outcome ? !!PRESENT[b.outcome] : b.status === 'completed';
+    return b.outcome ? PRESENT[b.outcome] === 1 : b.status === 'completed';
   }
-  function estPitche(b) { return !!(b && PITCHE[b.outcome]); }
+  function estPitche(b) { return !!(b && PITCHE[b.outcome] === 1); }
   function estSansDetail(b) { return !!(b && !b.outcome && b.status === 'completed'); }
 
   function etat(b, now) {
@@ -395,12 +395,15 @@
      serveur (alteore-flow.js, funnel-core.js, api/*). Un nouveau départ se
      marque sur la fiche (_meta/team_members : departed + endDate), pas ici. */
   var PARTIS_HISTORIQUES = { guillaume: 1, guillaumes: 1, elodie: 1 };
-  function estPartiHistorique(slug) { return !!PARTIS_HISTORIQUES[String(slug || '')]; }
-  /* Un membre est « parti » : drapeau de sa fiche, ou fiche archivée avec une
-     date de fin, ou liste historique. m = fiche du membre (ou null). */
+  function estPartiHistorique(slug) { return Object.prototype.hasOwnProperty.call(PARTIS_HISTORIQUES, String(slug || '')); }
+  /* Un membre est « parti » : drapeau `departed` de sa fiche, ou fiche
+     ARCHIVÉE (active === false — Admin → Utilisateurs ; aucune page n'écrit
+     de date de fin, on ne l'exige donc pas), ou liste historique. Un membre
+     archivé n'a plus d'onglet et n'est plus nommé : son activité passée va
+     dans « Anciens membres ». m = fiche du membre (ou null). */
   function estParti(m, slug) {
     if (m && m.departed === true) return true;
-    if (m && m.active === false && m.endDate) return true;
+    if (m && m.active === false) return true;
     return estPartiHistorique(slug || (m && m.slug));
   }
 
@@ -715,11 +718,14 @@
     rdv_type_suivi: { mot: 'RDV du type suivi', texte: 'RDV d’un seul type de consultation choisi dans le Data Center, RDV de coaching exclus, annulés, RDV déplacés et leurs nouveaux créneaux compris. Ni les RDV ni les RDV pris des autres écrans.' },
     non_annules_type_suivi: { mot: 'Non annulés (type suivi)', texte: 'RDV du type suivi dont le statut n’est pas « annulé » : no-show et RDV à venir compris ; un RDV déplacé en sort, son nouveau créneau y entre. Proche du Kept sans en suivre la règle.' },
     closes_rdv_hors_periode: { mot: 'Closes au RDV closé hors période', texte: 'Closes de la période dont le RDV au résultat Close est daté avant ou après la période (ex. RDV du 28/10 closé le 05/11), ou hors du filtre affiché : comptés dans Closes, absents de RDV closés.' },
-    montants_masques_non_attribue: { mot: 'Montants masqués', texte: 'Cette ligne contient des ventes d’un membre de l’équipe sans onglet ici (admin, autre rôle) ou antérieures à son arrivée : ses montants ne sont visibles que par lui et par un admin. Les totaux de l’équipe restent visibles de tous.' }
+    montants_masques_non_attribue: { mot: 'Montants masqués', texte: 'Cette ligne contient des ventes d’un membre de l’équipe sans onglet ici (admin, autre rôle) ou antérieures à son arrivée : ses montants ne sont visibles que par lui et par un admin. Les totaux de l’équipe restent visibles de tous.' },
+    appels_sens_inconnu: { mot: 'Appels sans sens', texte: 'Appels sans sens (entrant / sortant) enregistré : comptés ni dans les Appels ni dans les reçus, signalés à part.' },
+    fusion_lancements_appel: { mot: 'Lancements fusionnés', texte: 'Un lancement d’appel resté « sans suite » (sonnerie jamais terminée) à moins de 90 s de l’appel réel au même numéro n’est affiché qu’une fois dans les listes ; les compteurs le gardent, comme Set NB et le Stats funnel.' }
   };
 
-  function mot(cle) { return G[cle] ? G[cle].mot : ''; }
-  function texte(cle) { return G[cle] ? G[cle].texte : ''; }
+  function aTerme(cle) { return Object.prototype.hasOwnProperty.call(G, String(cle)); }
+  function mot(cle) { return aTerme(cle) ? G[cle].mot : ''; }
+  function texte(cle) { return aTerme(cle) ? G[cle].texte : ''; }
   /* Texte brut pour un attribut title="" (repli là où un « i » ne tient pas). */
   function titre(cle, precision) {
     var t = texte(cle);
@@ -862,7 +868,7 @@
      HTML ; chaîne vide côté serveur ou si la clé n'existe pas. */
   function info(cle, precision) {
     if (!hasDom()) return '';
-    if (!G[cle]) {
+    if (!aTerme(cle)) {
       if (typeof console !== 'undefined' && console.warn) console.warn('[StatsCore] terme absent du glossaire : ' + cle);
       return '';
     }

@@ -96,8 +96,8 @@
   /* ══ ÉQUIPE — qui est parti, qui est « sales » (décision D10) ══
      Un membre parti n'a plus de nom à l'écran, mais son activité passée RESTE
      dans les totaux (ligne « Anciens membres »). Source : sa fiche
-     _meta/team_members (departed === true, ou active === false avec une date
-     de fin), OU liste historique StatsCore.PARTIS_HISTORIQUES (membres partis
+     _meta/team_members (departed === true, ou fiche archivée : active ===
+     false), OU liste historique StatsCore.PARTIS_HISTORIQUES (membres partis
      avant que la fiche porte le drapeau) : la règle est SC.estParti, la même
      dans le navigateur ET sur le serveur (revue D09 : côté Vercel, l'assistant
      et le brief du matin nommaient encore un ancien membre). Dans le
