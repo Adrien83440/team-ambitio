@@ -594,8 +594,8 @@ var RDV_ISSUES = [
   { value: 'disqualifie', label: 'Disqualifié 🚫' }
 ];
 
-/* Jour par défaut : aujourd'hui à l'heure de Paris (quel que soit le fuseau de l'appareil). */
-document.getElementById('eodDate').value = (SC && SC.jourParis) ? SC.jourParis(new Date()) : fmtDate(new Date());
+/* Jour de l'appareil, inchangé : la date est la clé du document eod/{uid}/jours/{date} (un fuseau commun ferait écraser un EOD par le suivant). */
+document.getElementById('eodDate').value = fmtDate(new Date());
 
 // ══════════ AUTH ══════════
 // On écrit toujours sous le vrai UID Firebase du membre (jamais un nom ni un
@@ -605,7 +605,9 @@ document.getElementById('eodDate').value = (SC && SC.jourParis) ? SC.jourParis(n
 // l'ÉQUIPE SALES portant un firebaseUid (setter, closer, closer_setter,
 // setter_ecrit). Les anciens membres (window.isDepartedMember de nav.js, ou
 // drapeau departed de la fiche) ne sont jamais proposés ni nommés ; leurs EOD
-// restent en base sous eod/{uid}.
+// restent en base sous eod/{uid}. Seul écart d'écriture avec 7b07164 (déclaré) :
+// l'ancien membre codé en dur avant n'est plus proposé — plus de saisie sous
+// son UID, et l'admin ne consulte plus ses anciens EOD depuis cette page.
 var MEMBER_MAP = {};
 var EOD_SALES_ROLES = { setter: 1, closer: 1, closer_setter: 1, setter_ecrit: 1 };
 var EOD_SETTER_ONLY = { setter: 1, setter_ecrit: 1 };   // pas de panneau Closing

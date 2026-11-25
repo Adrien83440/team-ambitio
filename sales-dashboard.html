@@ -1689,7 +1689,9 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
     if (!who) return { key: '_na', name: SC.mot('non_attribue'), color: '#6b7280', sous: SC.mot('appels_sans_auteur') };
     if (who.departed || (who.slug && AF.isDeparted(who.slug))) return { key: '_anciens', name: SC.mot('anciens_membres'), color: '#6b7280', sous: '' };
     var m = (who.slug && (window.TEAM_MEMBERS || {})[who.slug]) || {};
-    return { key: 'p:' + who.key, name: who.name || who.slug || '', color: m.color || '#6b7280', active: m.active !== false, sous: '' };
+    /* Une fiche archivée (active === false) est partie (StatsCore.estParti) :
+       elle tombe dans « Anciens membres » ci-dessus, jamais ici. */
+    return { key: 'p:' + who.key, name: who.name || who.slug || '', color: m.color || '#6b7280', sous: '' };
   }
 
   /* ── Lecture ── */
@@ -1708,9 +1710,17 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
     var byRow = {}, byDay = {}, tot = { calls: 0, decroches: 0, talk: 0 }, hors = { calls: 0, decroches: 0, talk: 0 };
     var equipe = state.role === 'admin' && state.filterUid === 'all';
     var CIDX = FC.callerIndex(rosterComplet());
+    /* Filtre d'une personne (admin) : même règle d'auteur que la vue « Toute
+       l'équipe » (FunnelCore.callerOf : compte relié, sinon prénom Ringover),
+       pour qu'un appel nommé par le seul prénom compte dans les deux vues. */
+    var filtre = state.role === 'admin' && state.filterUid !== 'all';
+    var cible = filtre ? (CIDX.byUid[state.filterUid] || null) : null;
     (logs || []).forEach(function (c) {
       if (!c || c.direction !== 'outbound') return;
-      if (state.role === 'admin' && state.filterUid !== 'all' && c.userId !== state.filterUid) return;
+      if (filtre) {
+        var auteur = FC.callerOf(c, CIDX);
+        if (cible ? !(auteur && auteur.key === cible.key) : c.userId !== state.filterUid) return;
+      }
       var ms = c.initiatedAt && c.initiatedAt.toMillis ? c.initiatedAt.toMillis() : null;
       if (ms == null) return;
       var dk = SC.jourParis(ms);
@@ -1720,7 +1730,7 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
         return;
       }
       var L = ligneDe(FC.callerOf(c, CIDX));
-      var r = byRow[L.key] || (byRow[L.key] = { key: L.key, name: L.name, color: L.color, active: L.active, sous: {}, calls: 0, decroches: 0, talk: 0 });
+      var r = byRow[L.key] || (byRow[L.key] = { key: L.key, name: L.name, color: L.color, sous: {}, calls: 0, decroches: 0, talk: 0 });
       if (L.sous) r.sous[L.sous] = 1;
       var d = byDay[dk] || (byDay[dk] = { calls: 0, decroches: 0, talk: 0 });
       var dec = AF.isAnswered(c), talk = dec ? (Number(c.durationSec) || 0) : 0;
@@ -1740,11 +1750,16 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
     ];
     var filterHtml = '';
     if (state.role === 'admin') {
-      var members = (window.TEAM_MEMBERS_LIST || []).filter(function (m) { return m && m.firebaseUid; });
+      /* Règle commune (D10) : une fiche archivée ou partie est un ancien membre,
+         jamais nommée ni proposée ici ; son activité reste dans « Toute
+         l’équipe », ligne « Anciens membres ». */
+      var members = (window.TEAM_MEMBERS_LIST || []).filter(function (m) {
+        return m && m.firebaseUid && !SC.estParti(m, m.slug) && !(m.slug && AF.isDeparted(m.slug));
+      });
       filterHtml = '<select class="cr-filter-select" id="cr-filter"><option value="all">Toute l’équipe</option>' +
         members.map(function (m) {
           var nm = m.shortName || m.displayName || m.slug;
-          return '<option value="' + esc(m.firebaseUid) + '"' + (state.filterUid === m.firebaseUid ? ' selected' : '') + '>' + esc(nm) + (m.active === false ? ' (archivé)' : '') + '</option>';
+          return '<option value="' + esc(m.firebaseUid) + '"' + (state.filterUid === m.firebaseUid ? ' selected' : '') + '>' + esc(nm) + '</option>';
         }).join('') + '</select>';
     }
     root.innerHTML = '<div class="cr-section"><div class="cr-card">' +
@@ -1819,7 +1834,6 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
           var extra = '';
           if (r.key === '_anciens') extra = SC.info('anciens_membres');
           else if (r.key === '_na') extra = SC.info('non_attribue') + (r.sous[SC.mot('appels_sans_auteur')] ? ' <span class="cr-archived">' + esc(SC.mot('appels_sans_auteur')) + '</span>' + SC.info('appels_sans_auteur') : '');
-          else if (r.active === false) extra = '<span class="cr-archived">archivé</span>';
           html += '<tr><td><span class="cr-dot" style="background:' + esc(r.color) + '"></span>' + esc(r.name) + extra + '</td>' +
             '<td class="num">' + fmtNum(r.calls) + '</td><td class="num">' + fmtNum(r.decroches) + '</td>' +
             '<td class="num">' + SC.fmtPct(SC.pct(r.decroches, r.calls)) + '</td>' +

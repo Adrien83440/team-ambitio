@@ -182,12 +182,14 @@ function isAnsweredCall(c) {
 function isInbound(c) { return c.direction === 'inbound'; }
 function isOutbound(c) { return c.direction === 'outbound'; }
 // Appels « hors équipe sales » (CSM, coachs…) : rôles hors de ceux du
-// téléphone commercial — même liste que le Stats funnel (funnel-core.js,
-// SALES_CALL_ROLES). Ils ne comptent ni dans Appels, ni dans Décrochés, ni
-// dans le Lead to speech ; un ancien membre reste dans le total (« Non
-// attribué »), un appel sans auteur aussi.
-const CALL_ROLES_EQUIPE = { setter: 1, setter_ecrit: 1, closer: 1, closer_setter: 1, admin: 1 };
-function estHorsEquipe(m) { return !!m && !m.departed && !CALL_ROLES_EQUIPE[m.role]; }
+// téléphone commercial — LA liste du Stats funnel (FunnelCore.SALES_CALL_ROLES),
+// et la même règle que FunnelCore.perimetreAppel : le RÔLE seul décide, qu'un
+// membre soit parti ou non. Ils ne comptent ni dans Appels, ni dans Décrochés,
+// ni dans le Lead to speech ; un ancien setter / closer reste dans le total
+// (« Non attribué »), un appel sans auteur aussi. (Relecture du 25/11/2026 :
+// un ancien coach / CSM était compté ici et pas sur Set NB ni au Dashboard.)
+const CALL_ROLES_EQUIPE = Core.SALES_CALL_ROLES;
+function estHorsEquipe(m) { return !!m && !CALL_ROLES_EQUIPE[m.role]; }
 
 const CALL_FIELDS = [
   'direction', 'status', 'leadId', 'leadNameSnapshot', 'leadName',
@@ -340,7 +342,11 @@ async function loadRoster() {
   const snap = await db.collection('_meta').doc('team_members').get();
   const raw = snap.exists ? (snap.data() || {}).members : null;
   const list = Array.isArray(raw) ? raw : Object.values(raw || {});
-  const R = { list: [], bySlug: {}, byUid: {}, byFirst: {} };
+  const R = { list: [], bySlug: {}, byUid: {}, byFirst: {}, callIdx: null };
+  // Auteur d'un appel : L'index du Stats funnel (FunnelCore.callerIndex), sur
+  // les mêmes fiches — compte relié, sinon prénom Ringover, anciens membres
+  // compris, membre en place prioritaire à prénom égal.
+  R.callIdx = Core.callerIndex(list.filter(function (m) { return m && m.slug; }));
   list.forEach(function (m) {
     if (!m || !m.slug) return;
     const role = String(m.role || '');
@@ -402,10 +408,11 @@ async function loadPersons() {
   return out;
 }
 
+// Auteur d'un appel : FunnelCore.callerOf, LA règle de Set NB, du Dashboard,
+// du Stats funnel et de l'assistant (compte relié, sinon prénom Ringover).
 function callMember(c, R) {
-  if (c.userId && R.byUid[c.userId]) return R.byUid[c.userId];
-  const n = normName(c.userName || c.ringoverUserName).split(' ')[0];
-  return (n && R.byFirst[n]) || null;
+  const who = Core.callerOf(c, R.callIdx);
+  return (who && who.slug && R.bySlug[who.slug]) || null;
 }
 
 // Closeur d'un RDV — StatsCore.closerDuRdv, la règle de Close SB / Global

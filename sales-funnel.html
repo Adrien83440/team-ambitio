@@ -1748,11 +1748,17 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     annules: ['Closes annulés', 'closes_annules', 'Jour du close'],
     rdvClosesHorsListe: ['RDV closés sans close sur la période', 'rdv_closes_hors_periode', 'RDV'],
     doublonsRdv: ['Clients à deux RDV closés', 'doublons_rdv_closes', 'Dernier RDV'],
+    /* Termes de l'égalité (revue F05), absents du glossaire commun : « i » au
+       texte libre (FD_COH_LIBRE). */
+    rdvDeClosesAnnules: ['RDV closés de closes annulés', '', 'RDV'],
+    rdvEnTrop: ['RDV closés en plus du premier', '', 'RDV'],
     /* Terme absent du glossaire commun : « i » au texte libre (FD_COH_LIBRE). */
     closesRdvHorsPeriode: ['Closes au RDV closé hors période', '', 'Jour du close']
   };
   var FD_COH_LIBRE = {
-    closesRdvHorsPeriode: 'Closes de la période dont le RDV au résultat Close est daté avant ou après la période (ex. RDV du 28/10 closé le 05/11), ou hors du filtre affiché : comptés dans Closes, absents de RDV closés.'
+    closesRdvHorsPeriode: 'Closes de la période dont le RDV au résultat Close est daté avant ou après la période (ex. RDV du 28/10 closé le 05/11), ou hors du filtre affiché : comptés dans Closes, absents de RDV closés.',
+    rdvDeClosesAnnules: 'RDV au résultat Close de la période dont le close a été annulé : comptés dans RDV closés, mais le close est retiré de Closes. Un close annulé sans RDV closé dans la période n’est pas dans cette liste.',
+    rdvEnTrop: 'RDV au résultat Close de la période pour un client dont le close est déjà porté par un autre RDV (son premier RDV closé, dans la période ou avant) : un seul close est compté, ces RDV en plus n’en ajoutent pas.'
   };
 
   /* Personnes : membre du roster (anciens membres compris, DATA.teamFull).
@@ -1899,10 +1905,21 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     function n(x) { return (x || []).length; }
     var nInconnu = (k.closesCanalSrc && k.closesCanalSrc.inconnu) || 0;
     var aVerifier = n(c.ecartsCanal) + nInconnu + n(c.sansSignal) + n(c.rdvClosesHorsListe) + n(c.doublonsRdv);
+    /* Égalité (revue F05) : une PARTITION des RDV closés de la période
+       (porteur · close annulé · en plus du premier · sans close) et des
+       closes (RDV de la période · RDV hors période · sans RDV closé), vraie
+       par construction. Les listes « closes annulés » et « clients à deux RDV
+       closés » restent affichées pour information, hors de l'égalité. */
     var eqRdv = Number(c.rdvCloses) || 0;
-    var eqCalc = eqRdv + n(c.closesSansRdv) + n(c.closesRdvHorsPeriode) - n(c.annules) - n(c.doublonsRdv) - n(c.rdvClosesHorsListe);
-    var eqCloses = Number((k.closes || {}).closes) || 0;
-    if (eqCalc !== eqCloses) aVerifier += 1;
+    /* Le calcul vit à UN endroit, dans le moteur (coh.egalite) : la page ne le
+       refait pas. Absent (funnel-core.js d'une version précédente encore en
+       cache) → la ligne d'égalité n'est pas affichée, plutôt qu'une fausse
+       alerte. */
+    var eg = c.egalite || null;
+    var eqCalc = eg ? eg.calcul : null;
+    var eqCloses = eg ? eg.closes : (Number((k.closes || {}).closes) || 0);
+    if (eg && !eg.ok) aVerifier += 1;
+    var filtreActif = tunnelFilter !== 'all' || sourceFilter !== 'all';
     function ligne(nb, ref, txt, cle, suite, infoHtml) {
       return '<li style="margin:0 0 6px">' + (nb > 0 ? SDF.cell('<strong>' + fmtNum(nb) + '</strong> ' + txt, ref) : '<strong>0</strong> ' + txt) +
         (infoHtml || (cle ? SC.info(cle) : '')) + (suite ? ' — ' + suite : '') + '</li>';
@@ -1922,20 +1939,31 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     h += ligne(n(c.ecartsCanal), 'coh:ecartsCanal', 'écart(s) de canal', 'ecart_canal', 'comptés au canal du RDV ; la commission suit la réponse du closer');
     h += ligne(nInconnu, 'canalInconnu', 'close(s) au canal inconnu', 'canal_inconnu', 'rangés en Setting (NB) faute d’information');
     h += ligne(n(c.sansSignal), 'coh:sansSignal', 'fiche(s) cliente(s) sans vente enregistrée', 'clientes_sans_vente', 'NON comptées dans Closes');
-    h += ligne(n(c.annules), 'coh:annules', 'close(s) annulé(s)', 'closes_annules', 'retirés des Closes, du Contracté et du Collecté');
+    h += ligne(n(c.rdvDeClosesAnnules), 'coh:rdvDeClosesAnnules', 'RDV closé(s) de closes annulés', '', 'comptés dans RDV closés, close retiré de Closes',
+      SC.infoLibre('RDV closés de closes annulés', FD_COH_LIBRE.rdvDeClosesAnnules));
+    h += ligne(n(c.rdvEnTrop), 'coh:rdvEnTrop', 'RDV closé(s) en plus du premier', '', 'le client n’est compté qu’une fois, au RDV qui porte son close',
+      SC.infoLibre('RDV closés en plus du premier', FD_COH_LIBRE.rdvEnTrop));
     h += ligne(n(c.rdvClosesHorsListe), 'coh:rdvClosesHorsListe', 'RDV closé(s) sans close sur la période', 'rdv_closes_hors_periode', '');
+    h += '</ul>';
+    h += '<p style="margin:0 0 4px">Pour information (hors de l’égalité) :</p><ul style="margin:0 0 10px;padding-left:18px">';
+    h += ligne(n(c.annules), 'coh:annules', 'close(s) annulé(s)', 'closes_annules', 'retirés des Closes, du Contracté et du Collecté');
     h += ligne(n(c.doublonsRdv), 'coh:doublonsRdv', 'client(s) à deux RDV closés', 'doublons_rdv_closes', 'un seul close compté');
     h += '</ul>';
     /* L'égalité, refaisable à la main (revue D07) : chaque terme est une
        ligne ci-dessus. Écarts de canal, canal inconnu et fiches sans vente
        n'y entrent pas (ils ne changent ni Closes ni RDV closés). */
-    h += '<p>RDV closés ' + fmtNum(eqRdv) + ' + sans RDV closé ' + fmtNum(n(c.closesSansRdv)) + ' + RDV closé hors période ' + fmtNum(n(c.closesRdvHorsPeriode)) +
-      ' − closes annulés ' + fmtNum(n(c.annules)) + ' − 2e RDV closé ' + fmtNum(n(c.doublonsRdv)) + ' − RDV closés sans close ' + fmtNum(n(c.rdvClosesHorsListe)) +
-      ' = <strong>' + fmtNum(eqCalc) + '</strong> ' + (eqCalc === eqCloses
-        ? '= Closes ' + fmtNum(eqCloses) + ' ✅'
-        : '≠ Closes ' + fmtNum(eqCloses) + ' ⚠️ — écart de ' + fmtNum(Math.abs(eqCloses - eqCalc)) + ' non expliqué : à signaler') + '</p>';
-    if (tunnelFilter !== 'all' || sourceFilter !== 'all') {
-      h += '<p style="color:var(--muted)">Filtre de tunnel ou de source actif : les pages équipe n’ont pas de filtre, leurs totaux ne retombent sur ceux-ci que sur « Tous ».</p>';
+    function terme(nb, ref, txt) { return nb > 0 ? SDF.cell(txt + ' ' + fmtNum(nb), ref) : txt + ' 0'; }
+    if (eg) h += '<p>' + terme(eqRdv, 'rdvCloses', 'RDV closés') +
+      ' − ' + terme(n(c.rdvDeClosesAnnules), 'coh:rdvDeClosesAnnules', 'RDV closés de closes annulés') +
+      ' − ' + terme(n(c.rdvEnTrop), 'coh:rdvEnTrop', 'RDV closés en plus du premier') +
+      ' − ' + terme(n(c.rdvClosesHorsListe), 'coh:rdvClosesHorsListe', 'RDV closés sans close sur la période') +
+      ' + ' + terme(n(c.closesSansRdv), 'coh:closesSansRdv', 'closes sans RDV closé') +
+      ' + ' + terme(n(c.closesRdvHorsPeriode), 'coh:closesRdvHorsPeriode', 'closes au RDV closé hors période') +
+      ' = <strong>' + fmtNum(eqCalc) + '</strong> ' + (eg.ok
+        ? '= ' + terme(eqCloses, 'closes', 'Closes') + ' ✅'
+        : '≠ ' + terme(eqCloses, 'closes', 'Closes') + ' ⚠️ — écart de ' + fmtNum(Math.abs(eqCloses - eqCalc)) + ' : anomalie de données (par exemple deux closes rattachés au même RDV), à signaler') + '</p>';
+    if (filtreActif) {
+      h += '<p style="color:var(--muted)">Filtre de tunnel ou de source actif : les RDV sont filtrés par la fiche liée au RDV, les closes par la fiche gagnée (ou le paiement). Un RDV closé et son close peuvent donc tomber de part et d’autre du filtre : ils apparaissent alors dans « RDV closés sans close sur la période » ou « closes au RDV closé hors période », et l’égalité reste juste. Les pages équipe n’ont pas de filtre : leurs totaux ne retombent sur ceux-ci que sur « Tous ».</p>';
     }
     return h + '</div></details>';
   }

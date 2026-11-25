@@ -618,14 +618,42 @@
     try { Object.defineProperty(arr, nom, { value: v, enumerable: false, configurable: true, writable: true }); } catch (e) { arr[nom] = v; }
     return arr;
   }
-  /* Appels d'un membre parmi ceux de l'équipe (même résultat que la lecture
-     admin d'un onglet : ses appels, et le nombre de sortants sans auteur). */
-  function appelsDe(all, uid) {
+  /* Index des auteurs d'appels (FunnelCore.callerIndex) sur le roster COMPLET
+     de window.TEAM_MEMBERS (anciens membres compris) : LE même pour l'onglet
+     Équipe et pour l'onglet d'un membre en vue admin. null si funnel-core.js
+     manque. */
+  function indexAppels() {
+    if (!FC || typeof FC.perimetreAppel !== 'function' || typeof FC.callerIndex !== 'function' || typeof FC.callerOf !== 'function') return null;
+    var map = window.TEAM_MEMBERS || {};
+    var complet = Object.keys(map).map(function (k) {
+      var m = map[k] || {};
+      if (m.slug) return m;
+      var cp = {};
+      Object.keys(m).forEach(function (f) { cp[f] = m[f]; });
+      cp.slug = k;
+      return cp;
+    });
+    /* Même ORDRE que le Stats funnel et le Dashboard : d'abord les membres en
+       place (TEAM_MEMBERS_LIST, triés), puis le reste du roster. À prénom
+       égal, callerIndex garde le premier rencontré : sans cet ordre, un appel
+       reconnu par le seul prénom Ringover pouvait aller à un ancien membre
+       ici et au membre en place sur les autres écrans. */
+    return FC.callerIndex(typeof FC.mergeTeam === 'function' ? FC.mergeTeam(window.TEAM_MEMBERS_LIST || [], complet) : complet);
+  }
+  var MSG_FC_APPELS = 'funnel-core.js absent : périmètre des appels de l’équipe indisponible';
+  /* Appels d'un membre parmi ceux de l'équipe (vue admin) : même règle que
+     l'onglet Équipe — auteur = FunnelCore.callerOf (userId, puis prénom
+     Ringover) ; « sans auteur » = FunnelCore.perimetreAppel 'sans_auteur',
+     sortant. Ainsi Équipe = Σ onglets + Non attribué, colonne par colonne. */
+  function appelsDe(all, member) {
     if (!all || all._erreur) return all;
+    var CIDX = indexAppels();
+    if (!CIDX) return marquerAppels([], '_erreur', MSG_FC_APPELS);
     var out = [], sansAuteur = 0;
     all.forEach(function (c) {
-      if (c.userId === uid) out.push(c);
-      else if (!c.userId && c.direction === 'outbound') sansAuteur++;
+      var who = FC.callerOf(c, CIDX);
+      if (who && who.slug && who.slug === member.slug) out.push(c);
+      else if (c.direction === 'outbound' && FC.perimetreAppel(c, CIDX) === 'sans_auteur') sansAuteur++;
     });
     if (all._tronque) marquerAppels(out, '_tronque', true);
     if (sansAuteur) marquerAppels(out, '_sansAuteur', sansAuteur);
@@ -663,8 +691,10 @@
     var canSeeCalls = !ecrit && (admin || ownTab);
     var callsP;
     if (!canSeeCalls) callsP = Promise.resolve(null);
+    /* Admin : la même lecture et la même règle que l'Équipe, y compris pour un
+       membre sans compte relié (ses appels reconnus par le prénom Ringover). */
+    else if (admin) callsP = callsDeLaPeriode(fromDay, toDay, from, to, null).then(function (all) { return team ? all : appelsDe(all, member); });
     else if (!team && !member.firebaseUid) callsP = Promise.resolve({ noUid: true });
-    else if (admin) callsP = callsDeLaPeriode(fromDay, toDay, from, to, null).then(function (all) { return team ? all : appelsDe(all, member.firebaseUid); });
     else callsP = callsDeLaPeriode(fromDay, toDay, from, to, member.firebaseUid);
 
     /* Journal d'actions lu à J−1 / J+1 puis rangé au jour de PARIS de chaque
@@ -716,7 +746,7 @@
       return Promise.all([closesP, readLeads(Object.keys(ids))]);
     }).then(function (res2) {
       build(base, res2[0], res2[1], {
-        team: team, member: member, targets: targets, extras: extras, ecrit: ecrit, canSeeCalls: canSeeCalls,
+        team: team, member: member, targets: targets, extras: extras, ecrit: ecrit, canSeeCalls: canSeeCalls, callsSiens: canSeeCalls && !admin,
         fromDay: fromDay, toDay: toDay, errs: errs
       });
       S.loading = false;
@@ -779,19 +809,10 @@
          comptent ni dans Appels ni dans Décrochés : affichés à part. */
       var CIDX = null;
       if (team) {
-        if (FC && typeof FC.perimetreAppel === 'function' && typeof FC.callerIndex === 'function') {
-          var map = window.TEAM_MEMBERS || {};
-          CIDX = FC.callerIndex(Object.keys(map).map(function (k) {
-            var m = map[k] || {};
-            if (m.slug) return m;
-            var cp = {};
-            Object.keys(m).forEach(function (f) { cp[f] = m[f]; });
-            cp.slug = k;
-            return cp;
-          }));
-        } else {
+        CIDX = indexAppels();   // le même index que l'onglet d'un membre (appelsDe)
+        if (!CIDX) {
           callsOk = false;
-          callsMsg = 'funnel-core.js absent : périmètre des appels de l’équipe indisponible';
+          callsMsg = MSG_FC_APPELS;
           errs.push(callsMsg);
         }
       }
@@ -1016,6 +1037,7 @@
       buckets: buckets,
       days: buckets[0].days,   // valeurs de la base du membre affiché (modale ✎)
       callsOk: callsOk, callsMsg: callsMsg, sansAuteur: sansAuteur, horsOut: horsOut, horsAns: horsAns,
+      callsSiens: !!o.callsSiens && callsOk,   // sales, son onglet : seuls ses appels (userId) sont lisibles
       enteredOk: entered != null,
       rdvKo: !!bookings._erreur,   // RDV illisibles : sets, RDV NB et reçus en « — »
       closesKo: !!CL.erreur && !(CL.rows || []).length && !(CL.annules || []).length,
@@ -1116,7 +1138,18 @@
     if (c.grp === 'tel' && S.data && !S.data.callsOk) {
       return S.data.callsMsg === 'non_lisibles' ? SC.info('appels_equipe_non_lisibles') : SC.info('lecture_incomplete', S.data.callsMsg);
     }
+    if (c.grp === 'tel' && S.data && S.data.callsSiens) return infoSiens(c.info || null, c.infoT, c.infoPlus);
     return colInfo(c);
+  }
+  /* Sales sur son propre onglet : les règles ne laissent lire que les appels
+     enregistrés sous son compte (userId). Ceux reconnus par le seul prénom
+     Ringover ne sont visibles que par un admin (onglet Équipe et onglet du
+     membre). Précision ajoutée au « i » des chiffres d'appels. */
+  var NOTE_APPELS_SIENS = 'Ici : seulement les appels enregistrés sous ton compte. Un appel reconnu par le seul prénom Ringover (poste relié à aucun compte) n’est visible que par un admin : il compte dans ta ligne de l’onglet Équipe et dans ton onglet vu par un admin.';
+  function infoSiens(cle, infoT, plus) {
+    if (cle) return SC.info(cle, (plus ? plus + ' ' : '') + NOTE_APPELS_SIENS);
+    if (infoT) return SC.infoLibre(infoT[0], infoT[1] + ' ' + NOTE_APPELS_SIENS);
+    return SC.infoLibre(SC.mot('appels'), NOTE_APPELS_SIENS);
   }
   function kv(val, txt, key) { return val > 0 ? SD.cell(txt, key + '|t') : txt; }
   function kpi(v, l, s, color) {
@@ -1271,11 +1304,11 @@
       var saTxt = D.sansAuteur > 0 ? '<br/>' + D.sansAuteur + ' ' + plural(D.sansAuteur, 'appel') + ' sans auteur' + SC.info('appels_sans_auteur') + (team ? ' (ligne Non attribué)' : ' (dans aucun onglet)') : '';
       if (team && D.horsOut > 0) saTxt += '<br/>' + SC.mot('hors_equipe_sales') + ' : ' + fmtN(D.horsOut) + ' ' + plural(D.horsOut, 'appel') + ' (' + fmtN(D.horsAns) + ' ' + plural(D.horsAns, 'décroché') + '), non comptés' + SC.info('hors_equipe_sales');
       kpis =
-        kpi(telOk ? fmtDurSec(tot.tempsAppelSec) : '—', esc(TXT.temps[0]) + SC.infoLibre(TXT.temps[0], TXT.temps[1]), telOk ? 'appels sortants décrochés' : 'non affiché' + telWhy, '#2dd4bf') +
-        kpi(telOk ? fmtN(tot.calls) : '—', lbl('appels'),
+        kpi(telOk ? fmtDurSec(tot.tempsAppelSec) : '—', esc(TXT.temps[0]) + (D.callsSiens ? infoSiens(null, TXT.temps) : SC.infoLibre(TXT.temps[0], TXT.temps[1])), telOk ? 'appels sortants décrochés' : 'non affiché' + telWhy, '#2dd4bf') +
+        kpi(telOk ? fmtN(tot.calls) : '—', D.callsSiens ? esc(SC.mot('appels')) + infoSiens('appels') : lbl('appels'),
           telOk ? fmtN(tot.decroches) + ' décrochés' + SC.info('decroches') + ' · ' + fmtPct(SC.pct(tot.decroches, tot.calls)) + SC.info('taux_decroche') + saTxt : 'non affiché' + telWhy, '#5b7cfa') +
         kpi(kv(tot.leads, String(tot.leads), 'leads'), lbl('leads_travailles', team ? 'Équipe : chaque fiche compte une fois, même travaillée par deux setters.' : null), leadsSub, '#5b7cfa') +
-        kpi(setsV, lbl('sets'), D.rdvKo ? koTxt : 'Sets / décrochés ' + (telOk ? fmtPct(SC.pct(tot.sets, tot.decroches)) : '—') + SC.info('taux_set') + stTxt, '#a78bfa') +
+        kpi(setsV, lbl('sets'), D.rdvKo ? koTxt : 'Sets / décrochés ' + (telOk ? fmtPct(SC.pct(tot.sets, tot.decroches)) : '—') + (D.callsSiens ? infoSiens('taux_set') : SC.info('taux_set')) + stTxt, '#a78bfa') +
         kpiRdv;
       var steps = [{ l: 'Leads travaillés', v: tot.leads, cle: 'leads_travailles' }];
       if (telOk) steps.push({ l: 'Décrochés', v: tot.decroches, cle: 'decroches', noPct: true });

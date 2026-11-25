@@ -2290,7 +2290,12 @@
         sales: !!SALES_CALL_ROLES[m.role], departed: isDeparted(m) };
       if (m.firebaseUid) byUid[m.firebaseUid] = who;
       var f = firstTok(m.shortName || m.displayName || m.fullName);
-      if (f && !byFirst[f]) byFirst[f] = who;
+      /* À prénom égal : un membre EN PLACE prime sur un ancien membre, quel
+         que soit l'ordre de la liste reçue (navigateur : membres en place
+         d'abord ; serveur : ordre du document) — sinon le même appel, reconnu
+         par le seul prénom Ringover, changeait d'auteur d'un écran à l'autre.
+         Deux membres en place du même prénom : le premier rencontré. */
+      if (f && (!byFirst[f] || (byFirst[f].departed && !who.departed))) byFirst[f] = who;
     });
     return { byUid: byUid, byFirst: byFirst };
   }
@@ -3351,12 +3356,26 @@
                             commission suit la réponse du closer)
          sansSignal         fiches marquées clientes sans vente enregistrée
                             (NON comptées dans Closes)
-         annules            closes annulés (retirés partout)
+         annules            closes annulés (retirés partout) — INFORMATION,
+                            pas un terme de l'égalité (un close annulé n'a
+                            pas forcément de RDV closé dans la période)
          rdvClosesHorsListe RDV closés de la période dont le client n'est pas
                             une ligne de la période (gagné à une autre date,
                             ou fiche jamais passée cliente)
+         rdvDeClosesAnnules RDV closés de la période dont la ligne de close
+                            est annulée (terme de l'égalité)
+         rdvEnTrop          RDV closés de la période dont la ligne de close
+                            est comptée mais portée par un AUTRE RDV (terme
+                            de l'égalité : les RDV closés EN TROP)
+         porteurs           (nombre) RDV closés de la période porteurs d'un
+                            close compté
          doublonsRdv        clients ayant deux RDV au résultat close (un seul
-                            close compté)
+                            close compté) — INFORMATION, pas un terme de
+                            l'égalité (les RDV en trop peuvent être hors
+                            période)
+       Égalité (vraie par construction, revue F05) :
+         Closes = RDV closés − rdvDeClosesAnnules − rdvEnTrop − rdvClosesHorsListe
+                  + closesSansRdv + closesRdvHorsPeriode
          closesRdvHorsPeriode closes de la période dont le RDV closé (porteur)
                             n'est pas parmi les « RDV closés » de la période :
                             RDV daté avant (ou après) la période — typique d'un
@@ -3437,11 +3456,58 @@
         var p9 = phone9(b.prospect && (b.prospect.telephone || b.prospect.phone));
         return (p9 && ligneParP9[p9]) || null;
       }
+      /* RANGEMENT des « RDV closés » de la période (revue F05) : chaque RDV
+         de TL.rdvCloses va dans UNE case, et une seule :
+           porteur      il est le RDV porteur (bookingId) d'une ligne de
+                        close COMPTÉE ;
+           annule       sa ligne de close est annulée (rv.cancelled) ;
+           enTrop       sa ligne est comptée, mais un AUTRE RDV en est le
+                        porteur (2e, 3e RDV closé du même client) ;
+           horsListe    aucune ligne de close sur la période.
+         La ligne se cherche D'ABORD par l'identifiant du RDV (ligneParRdv),
+         puis par la fiche / l'e-mail / le téléphone : un RDV porteur est
+         ainsi reconnu des deux côtés de la même façon, même si sa fiche a
+         été fusionnée. D'où, vrai par construction :
+           RDV closés = porteurs + annule + enTrop + horsListe
+           Closes     = porteurs (RDV de la période) + closesRdvHorsPeriode
+                        + closesSansRdv. */
+      function rangeRdvClose(b) {
+        var id = b._id || b.id;
+        var lg = (id && ligneParRdv[id]) || ligneDuRdv(b);
+        if (!lg) return { cas: 'horsListe', ligne: null };
+        if (lg.rv && lg.rv.cancelled) return { cas: 'annule', ligne: lg };
+        if (id && lg.bookingId === id) return { cas: 'porteur', ligne: lg };
+        return { cas: 'enTrop', ligne: lg };
+      }
+      coh.rdvDeClosesAnnules = [];
+      coh.rdvEnTrop = [];
+      coh.porteurs = 0;
+      var rdvParId = {};
+      TL.rdvCloses.forEach(function (b) { var id = b._id || b.id; if (id) rdvParId[id] = b; });
+      function entreeRdv(b, why) {
+        return { name: nomRdv(b), leadId: b.leadId || null, date: b.date || '', why: why,
+          sb: b._class === 'self', con: 0, paid: 0, rdvDate: b.date || '', bookingId: b._id || b.id || null };
+      }
       var ficheConnue = {};
       (DATA.closedLeads || []).forEach(function (l) { if (l && l._id) ficheConnue[l._id] = l; });
       var ps = P.start.getTime(), pe = P.end.getTime();
       TL.rdvCloses.forEach(function (b) {
-        if (ligneDuRdv(b)) return;
+        var rg = rangeRdvClose(b), lg = rg.ligne;
+        if (rg.cas === 'porteur') { coh.porteurs++; return; }
+        if (rg.cas === 'annule') {
+          coh.rdvDeClosesAnnules.push(entreeRdv(b, 'RDV au résultat « Close » d’un close annulé (' + ((lg.rv && lg.rv.reason) || 'annulé') + ', client gagné le ' + frJour(lg.day) +
+            ') : le close est retiré de Closes, ce RDV reste compté dans RDV closés.'));
+          return;
+        }
+        if (rg.cas === 'enTrop') {
+          var porteur = lg.bookingId ? (rdvParId[lg.bookingId] || null) : null;
+          var whyT = lg.bookingId
+            ? 'Autre RDV au résultat « Close » pour un client déjà compté (gagné le ' + frJour(lg.day) + ') : un seul close, porté par le RDV du ' +
+              (lg.rdvDate ? frJour(lg.rdvDate) : '(date inconnue)') + (porteur ? '' : ' (hors des RDV closés de la période)') + '. Ce RDV-ci n’ajoute pas de close.'
+            : 'RDV au résultat « Close » d’un client déjà compté (gagné le ' + frJour(lg.day) + ') dont le close n’a pas de RDV porteur (il figure dans « closes sans RDV closé ») : ce RDV n’ajoute pas de close.';
+          coh.rdvEnTrop.push(entreeRdv(b, whyT));
+          return;
+        }
         var why;
         var l = b.leadId ? (ficheConnue[b.leadId] || leadsById[b.leadId] || null) : null;
         var since = l ? parseFlexMs(l.clientSince) : null;
@@ -3499,6 +3565,12 @@
       /* Repères chiffrés du bloc : Closes (liste) et RDV closés (date du RDV). */
       coh.closes = k.closes.closes;
       coh.rdvCloses = k.tenue.rdvCloses;
+      /* L'égalité du bloc, calculée UNE fois (la page l'affiche telle
+         quelle). ok = false seulement sur une vraie anomalie de données
+         (p. ex. deux lignes de close au même RDV porteur). */
+      var eqCalc = (Number(coh.rdvCloses) || 0) - coh.rdvDeClosesAnnules.length - coh.rdvEnTrop.length - coh.rdvClosesHorsListe.length +
+        coh.closesSansRdv.length + coh.closesRdvHorsPeriode.length;
+      coh.egalite = { calcul: eqCalc, closes: Number(coh.closes) || 0, ok: eqCalc === (Number(coh.closes) || 0) };
       /* Alias de TRANSITION (ancien bloc « funnel ↔ pages équipe ») : à ne plus
          lire — gardés pour qu'une page pas encore mise à jour ne casse pas. */
       coh.onlyFunnel = coh.closesSansRdv;

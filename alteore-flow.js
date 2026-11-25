@@ -412,10 +412,31 @@
      l'équipe n'est pas là. Pas d'attente de « team-members-loaded » ici : le
      closer et le setter sont choisis par l'appelant AVANT l'appel (closeData) ;
      attendre puis écrire garderait des noms vides. Revalider recalcule tout.
+     « Pas là » = roster (window.TEAM_MEMBERS_LIST de nav.js, ou celui du Labo /
+     bac à sable) absent ou vide. Une équipe CHARGÉE sans aucun rôle sales n'est
+     pas refusée (sinon le refus serait définitif) : le close s'enregistre, mais
+     SANS commission — resolveClosingActors n'y trouve ni closer ni setter (avant
+     le chantier, elles allaient à Élodie, partie, par l'ancien repli). Écart
+     d'écriture déclaré, à trancher par Adrien (option : refuser aussi ce cas
+     avec un message distinct). Au refus, l'équipe est relue (loadTeamMembers(true),
+     sans attendre, erreurs avalées) : une lecture échouée ne se relance pas
+     seule dans nav.js.
      Renvoie une Promise rejetée, ou null si l'équipe est chargée. */
-  var MSG_EQUIPE_NON_CHARGEE = 'L\u2019équipe n\u2019est pas encore chargée : attends quelques secondes et valide de nouveau.';
+  var MSG_EQUIPE_NON_CHARGEE = 'L\u2019équipe n\u2019est pas encore chargée : attends quelques secondes et valide de nouveau. Si le refus persiste, recharge la page.';
+  function equipeChargee() {
+    var list = window.TEAM_MEMBERS_LIST;
+    return !!(list && list.length > 0);
+  }
+  function relireEquipe() {
+    if (typeof window.loadTeamMembers !== 'function') return;
+    try {
+      var p = window.loadTeamMembers(true);
+      if (p && typeof p.then === 'function') p.then(null, function () {});
+    } catch (err) { /* relecture au mieux : l'erreur est avalée */ }
+  }
   function refusCloseSansEquipe() {
-    if (salesMembers().length > 0) return null;
+    if (equipeChargee()) return null;
+    relireEquipe();
     var e = new Error(MSG_EQUIPE_NON_CHARGEE);
     e.code = 'equipe_non_chargee';
     return Promise.reject(e);

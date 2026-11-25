@@ -127,7 +127,17 @@ module.exports = async function (req, res) {
       clientsDeuxRdvCloses: ((k.coh && k.coh.doublonsRdv) || []).length,
       jourDesCloses: rows.map(function (r) { return { leadId: r.leadId || null, jour: r.day, rdv: r.rdvDate || null, src: r.src, canal: r.canal, con: r2(r.rv.con), paid: r2(r.rv.paid) }; }),
       erreursLecture: k.erreursLecture || [],
-      fichesGagneesTronquees: !!k.closedLeadsTruncated
+      fichesGagneesTronquees: !!k.closedLeadsTruncated,
+      /* Égalité du « Contrôle de cohérence » du funnel (des comptes, aucun nom). */
+      egalite: (k.coh && k.coh.egalite) ? {
+        rdvCloses: k.coh.rdvCloses,
+        moinsRdvDeClosesAnnules: (k.coh.rdvDeClosesAnnules || []).length,
+        moinsRdvEnTrop: (k.coh.rdvEnTrop || []).length,
+        moinsRdvClosesSansClose: (k.coh.rdvClosesHorsListe || []).length,
+        plusClosesSansRdvClose: (k.coh.closesSansRdv || []).length,
+        plusClosesRdvHorsPeriode: (k.coh.closesRdvHorsPeriode || []).length,
+        calcul: k.coh.egalite.calcul, closes: k.coh.egalite.closes, ok: k.coh.egalite.ok
+      } : null
     };
 
     /* ── ANCIENNES règles, rejouées pour comparaison ── */

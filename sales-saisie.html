@@ -627,7 +627,11 @@ window.getMonthWeeks=getMonthWeeks; window.ALL_WEEKS=ALL_WEEKS;
 <script>
 /* ── Ancienne saisie (25/11/2026, audit des chiffres, D27) ──
    Bandeau + libellés « déclaré » + « i » du glossaire commun. Aucune
-   redirection, et la page écrit exactement comme avant (saisies/{uid}). */
+   redirection ; la page écrit comme avant (saisies/{uid}), À UNE EXCEPTION
+   PRÈS : les 5 deals d'exemple nominatifs retirés de DB._raw.deals (D28) ne
+   peuvent plus être réécrits — avant, sur un mois sans champ deals en base,
+   removeDeal (saisies/{uid}/mois, tableau entier) ou l'ajout hors connexion
+   (localStorage) enregistraient ces exemples avec le deal saisi. */
 var SC_SAISIE = window.StatsCore || null;
 function saisieEsc(t) {
   return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) {
