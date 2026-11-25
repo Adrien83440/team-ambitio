@@ -1128,9 +1128,29 @@ async function traiterRdv(it, ctx, sortie, o) {
   }
 
   const motif = horsParcours(b, typeMap, cfg);
-  if (motif) return;
-  sortie.rdv++;
+  /* RDV réservé AVANT l'activation (ou le passage en réel) : l'agenda garde
+     ses rappels e-mail et SMS, le parcours n'ajoute QUE le WhatsApp de la
+     veille (et lit sa réponse). Aucune confirmation, aucun SMS, aucune
+     étiquette ActiveCampaign, donc aucune séquence d'après-RDV : pas de
+     doublon, pas de rattrapage du passé. Coupé par `veilleAnciens: false`. */
+  const ancien = motif === 'cree_avant_activation' && cfg.veilleAnciens !== false;
+  if (motif && !ancien) return;
   const debut = MT.bookingStartMs(b);
+  if (ancien) {
+    if (!debut || now >= debut || b.outcome) return;
+    const etsA = ((b.parcoursRdv || {}).etapes) || {};
+    const duesA = etapesDues({ cfg: cfg, now: now, debut: debut, cree: msDe(b.createdAt), nowMin: o.st.min, faites: etsA, outcome: null,
+      estDemain: b.date === o.demain, presenceConfirmee: !!b.presenceConfirmed, lienPret: false, waEchec: false });
+    if (duesA.indexOf('wa_veille') < 0) return;
+    sortie.rdv++;
+    sortie.anciens = (sortie.anciens || 0) + 1;
+    const lA = await executerEtape('wa_veille', it, ctx);
+    lA.ancien = true;
+    if (ctx.simulation) delete lA.params; // aucun prénom dans une simulation
+    sortie.detail.push(lA);
+    return;
+  }
+  sortie.rdv++;
   if (!debut || now > debut + 60 * 60000) return;
 
   // ── ActiveCampaign : RDV pris → nurturing en pause (rejoué si échec) ──
