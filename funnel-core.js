@@ -111,32 +111,10 @@
      horodate initiatedAt et answeredAt, dont l'écart EST la sonnerie.
      Sans ces trois-là, on renvoie null et rien n'est exclu : mieux vaut un
      décroché de trop qu'une conversation jetée sur une supposition. */
-  function ringingSecOf(c) {
-    if (!c) return null;
-    var r = Number(c.ringingDurationSec);
-    if (isFinite(r) && r >= 0) return r;          // 1. posé au sync (depuis le 17/08)
+  function ringingSecOf(c) { return SC.sonnerieSec(c); }
 
-    var ansMs = parseFlexMs(c.answeredAt);        // 2. horodatages du webhook
-    var iniMs = parseFlexMs(c.initiatedAt);
-    if (ansMs != null && iniMs != null && ansMs >= iniMs) {
-      return Math.round((ansMs - iniMs) / 1000);
-    }
-
-    var tot = Number(c.totalDurationSec);         // 3. déduction totale − conversation
-    var talk = Number(c.durationSec) || 0;
-    if (!isFinite(tot) || tot <= 0) return null;  // inconnue → aucune exclusion
-    var diff = tot - talk;
-    return diff > 0 ? diff : 0;
-  }
-
-  function isAnsweredCall(c) {
-    var talk = Number(c && c.durationSec) || 0;
-    if (talk < ANSWERED_MIN_SEC) return false;
-    var ring = ringingSecOf(c);
-    if (ring == null) return true;                // sonnerie inconnue : on garde
-    if (ring >= VOICEMAIL_MIN_RING_SEC && talk < VOICEMAIL_MAX_TALK_SEC) return false;
-    return true;
-  }
+  /* Règle unique du « décroché » : stats-core.js (audit du 25/11/2026). */
+  function isAnsweredCall(c) { return SC.estDecroche(c); }
 
   /* ── Décodage UTM défensif (identique sales-leads.html) ── */
   function decodeUtm(v) {

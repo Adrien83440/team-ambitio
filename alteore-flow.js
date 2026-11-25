@@ -419,7 +419,9 @@
   function isSB(b, typeMap) { return classifyBooking(b, typeMap) === 'self'; }
   function isPresent(outcome) { return !!PRESENT_SET[outcome]; }
   function isPitched(outcome) { return !!PITCHED_SET[outcome]; }
-  function isAnswered(call) { return (Number(call && call.durationSec) || 0) >= ANSWERED_MIN_SEC; }
+  /* Décroché : règle unique de stats-core.js (≥ 5 s, répondeurs écartés) —
+     avant le 25/11/2026 cette copie comptait les répondeurs. */
+  function isAnswered(call) { return statsCore().estDecroche(call); }
 
   /* ═══ 1. JOURNAL D'ACTIONS SETTING ═════════════════════════════════════
      Une action = un événement immuable dans lead_actions/{slug}/items.

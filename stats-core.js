@@ -366,6 +366,42 @@
   }
 
   /* ══════════════════════════════════════════════════════════════════════
+     5 bis. TÉLÉPHONE — un appel « décroché », une seule règle
+     ══════════════════════════════════════════════════════════════════════
+     Décroché = au moins 5 secondes de conversation, répondeurs écartés. La
+     signature du répondeur (mesurée sur les appels réels le 17/08/2026) :
+     une sonnerie longue (≥ 15 s) suivie d'une conversation courte (< 15 s).
+     Sonnerie inconnue → on garde l'appel (mieux vaut un décroché de trop
+     qu'une conversation jetée sur une supposition). */
+  var DECROCHE_MIN_SEC = 5;
+  var REPONDEUR_SONNERIE_MIN_SEC = 15;
+  var REPONDEUR_PAROLE_MAX_SEC = 15;
+  function msOf(v) {
+    if (v == null || v === '') return null;
+    var t = toDate(v).getTime();
+    return isNaN(t) ? null : t;
+  }
+  function sonnerieSec(c) {
+    if (!c) return null;
+    var r = Number(c.ringingDurationSec);
+    if (c.ringingDurationSec != null && isFinite(r) && r >= 0) return r;
+    var ansMs = msOf(c.answeredAt), iniMs = msOf(c.initiatedAt);
+    if (ansMs != null && iniMs != null && ansMs >= iniMs) return Math.round((ansMs - iniMs) / 1000);
+    var tot = Number(c.totalDurationSec), talk = Number(c.durationSec) || 0;
+    if (!isFinite(tot) || tot <= 0) return null;
+    var diff = tot - talk;
+    return diff > 0 ? diff : 0;
+  }
+  function estDecroche(c) {
+    var talk = Number(c && c.durationSec) || 0;
+    if (talk < DECROCHE_MIN_SEC) return false;
+    var ring = sonnerieSec(c);
+    if (ring == null) return true;
+    if (ring >= REPONDEUR_SONNERIE_MIN_SEC && talk < REPONDEUR_PAROLE_MAX_SEC) return false;
+    return true;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
      6. GLOSSAIRE — un mot = un calcul = un texte
      ══════════════════════════════════════════════════════════════════════
      Toute explication d'un chiffre affiché vient d'ici. Un écran qui a besoin
@@ -630,6 +666,8 @@
     pct: pct, showUp: showUp, tauxClose: tauxClose, fmtPct: fmtPct,
     /* Qui */
     setterDuRdv: setterDuRdv, closerDuRdv: closerDuRdv,
+    /* Téléphone */
+    DECROCHE_MIN_SEC: DECROCHE_MIN_SEC, estDecroche: estDecroche, sonnerieSec: sonnerieSec,
     /* Glossaire et « i » */
     GLOSSAIRE: G, mot: mot, texte: texte, titre: titre,
     info: info, infoLibre: infoLibre, motInfo: motInfo, fermerInfo: fermer
