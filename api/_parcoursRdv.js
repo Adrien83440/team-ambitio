@@ -1137,17 +1137,22 @@ async function traiterRdv(it, ctx, sortie, o) {
   if (motif && !ancien) return;
   const debut = MT.bookingStartMs(b);
   if (ancien) {
-    if (!debut || now >= debut || b.outcome) return;
+    if (!debut || b.outcome) return;
     const etsA = ((b.parcoursRdv || {}).etapes) || {};
+    // Seulement ce que l'agenda ne fait pas : le WhatsApp de la veille et le
+    // rattrapage d'un prospect absent (SMS + alerte au closer).
     const duesA = etapesDues({ cfg: cfg, now: now, debut: debut, cree: msDe(b.createdAt), nowMin: o.st.min, faites: etsA, outcome: null,
-      estDemain: b.date === o.demain, presenceConfirmee: !!b.presenceConfirmed, lienPret: false, waEchec: false });
-    if (duesA.indexOf('wa_veille') < 0) return;
+      estDemain: b.date === o.demain, presenceConfirmee: !!b.presenceConfirmed, lienPret: false, waEchec: false })
+      .filter(function (e) { return e === 'wa_veille' || e === 'rattrapage'; });
+    if (!duesA.length) return;
     sortie.rdv++;
     sortie.anciens = (sortie.anciens || 0) + 1;
-    const lA = await executerEtape('wa_veille', it, ctx);
-    lA.ancien = true;
-    if (ctx.simulation) delete lA.params; // aucun prénom dans une simulation
-    sortie.detail.push(lA);
+    for (let k = 0; k < duesA.length; k++) {
+      const lA = await executerEtape(duesA[k], it, ctx);
+      lA.ancien = true;
+      if (ctx.simulation) delete lA.params; // aucun prénom dans une simulation
+      sortie.detail.push(lA);
+    }
     return;
   }
   sortie.rdv++;
