@@ -533,7 +533,19 @@
     formulaires_page: { mot: 'Formulaires', texte: 'Formulaires remplis (opt-in) depuis la page pendant la période : nouveaux leads entrés par cette page et ré-optins revenus par elle.' },
     debriefs_appel: { mot: 'Débriefs d’appel', texte: 'Fiches de débrief ajoutées à la main sur cet appareil (ce navigateur seulement). Ce n’est pas le nombre d’appels passés : celui-ci est dans Set NB.' },
     objectif_personnel: { mot: 'Objectif personnel', texte: 'Note libre enregistrée dans ce navigateur, lue par aucun autre écran. L’objectif de l’équipe est celui fixé dans Projections.' },
-    bareme_commission: { mot: 'Barème de commission', texte: 'Rappel du type de contrat seulement : aucune commission n’est calculée sur cette page. Le barème appliqué est celui de la page Commissions (et du contrat du membre).' }
+    bareme_commission: { mot: 'Barème de commission', texte: 'Rappel du type de contrat seulement : aucune commission n’est calculée sur cette page. Le barème appliqué est celui de la page Commissions (et du contrat du membre).' },
+    nrp1___nrp2___nrp3___all_nrp: { mot: 'NRP 1 / NRP 2 / NRP 3 / All NRP', texte: 'Fiches passées au statut NRP N (appel sans réponse) ce jour-là, d’après le journal d’actions de Leads Live.' },
+    messagerie: { mot: 'Messageries', texte: 'Fiches passées au statut Messagerie (répondeur) ce jour-là, d’après le journal d’actions de Leads Live.' },
+    follow_up: { mot: 'Follow-up', texte: 'Fiches passées en follow-up (rappel programmé) ce jour-là, d’après le journal d’actions de Leads Live.' },
+    out: { mot: 'Out', texte: 'Fiches passées en faux numéro, pas intéressé, disqualifié ou poubelle ce jour-là. Ce sont des actions du journal sur les fiches, pas des RDV.' },
+    dm_envoyes___dm_recus___conv_ouvertes___reponses_dm___conv_entrantes: { mot: 'DM envoyés / DM reçus / Conversations ouvertes / Réponses / Conversations entrantes', texte: 'Messages Instagram sortants (échos Meta) ou entrants, comptés le jour de l’envoi ou de la réception ; conversations ouvertes par nous ; conversations ouvertes par nous ayant reçu leur première réponse ce jour-là ; conversations ouvertes par le prospect.' },
+    taux_set_reponses: { mot: 'Sets / réponses', texte: 'Sets de la période ÷ conversations qui ont reçu une réponse pendant la période : efficacité du setting écrit.' },
+    lecture_funnel_bloc: { mot: 'Lecture du bloc', texte: 'Chaque pourcentage se lit sur l’étape juste avant. Pas de pourcentage entre deux étapes qui ne comptent pas la même chose (leads et appels ; Sets, jour de la pose, et RDV NB, jour du RDV). Présents : le show-up. Closes : Close / pitchés.' },
+    heure_paris: { mot: 'Heure de Paris', texte: 'Jours et mois comptés à l’heure de Paris, quel que soit l’endroit d’où tu regardes.' },
+    poses_apres: { mot: 'Posés après la période', texte: 'RDV de la période créés après sa fin (saisis après coup dans l’agenda). Ils ne sont pas dans les Sets de la période.' },
+    pose_inconnue: { mot: 'Date de pose inconnue', texte: 'RDV de la période sans date de création enregistrée : on ne sait pas quand il a été posé.' },
+    repris_2e_setter: { mot: 'Repris par un deuxième setter', texte: 'Fiches travaillées pendant la période par plusieurs setters : chacun la compte dans son onglet, l’Équipe ne la compte qu’une fois.' },
+    non_attribue_contenu: { mot: 'Contenu de la ligne Non attribué', texte: 'Ce qui est rangé ici : anciens membres (sans nom), personnes sans onglet sur cette page, setter inconnu, appels sans auteur, ou éléments datés d’avant l’arrivée de la personne.' }
   };
 
   function mot(cle) { return G[cle] ? G[cle].mot : ''; }

@@ -13,6 +13,8 @@
 .au-startbar input[type="date"] { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.12); border-radius: 8px; color: inherit; padding: 5px 8px; font: inherit; font-size: 12px; }
 .au-startbar .warn { color: var(--gold); }
 .au-table td.au-before { color: rgba(255,255,255,.22); }
+/* Ancienne correction ✎ d'une colonne calculée, plus appliquée (décision D9). */
+.au-ovold { color: var(--gold); font-size: 10px; opacity: .8; }
 </style>
 
 <!-- ── Firebase v9 compat ── -->
@@ -67,6 +69,7 @@
       <button id="btnPrev" title="Période précédente">‹</button>
       <span class="au-mlabel" id="monthLbl">—</span>
       <button id="btnNext" title="Période suivante">›</button>
+      <span id="tzInfo"></span>
     </div>
     <button class="au-btn" id="btnToday">Aujourd'hui</button>
     <div style="flex:1"></div>
@@ -88,7 +91,7 @@
 <div class="au-modal-bg" id="ovModal">
   <div class="au-modal">
     <h3 id="ovTitle">✎ Corriger la journée</h3>
-    <div class="hint">Les valeurs automatiques restent la référence — une correction ne s'applique qu'à ce jour et ce champ. Vider un champ = retour à l'auto. <span style="color:var(--gold)">●</span> = valeur corrigée.</div>
+    <div class="hint">Les valeurs automatiques restent la référence — une correction ne s'applique qu'à ce jour et ce champ. Vider un champ = retour à l'auto. <span style="color:var(--gold)">●</span> = valeur corrigée. Seuls le téléphone, les messages et les actions de fiche se corrigent ici : les RDV, les sets, les leads reçus, les closes et les montants se corrigent à la source (résultat du RDV, module Paiements).</div>
     <div class="au-modal-grid" id="ovGrid"></div>
     <div class="au-modal-f" style="margin-bottom:12px">
       <label>Note (raison de la correction)</label>
@@ -104,115 +107,202 @@
 <script>
 (function () {
   'use strict';
+  /* ══ SET NB — rapport Setting (référentiel des chiffres du 25/11/2026) ══════
+     Audit de cohérence d'Adrien : le même mot = le même calcul sur tous les
+     écrans, et un « i » à côté de chaque chiffre. Cette page n'a plus AUCUN
+     prédicat local :
+       · état d'un RDV (annulé, no-show, présent, à statuer, à venir,
+         replanifié) : StatsCore.etat — RDV NB = annulés + no-show + à statuer
+         + à venir + présents, replanifiés à part ;
+       · setter d'un RDV : StatsCore.setterDuRdv (fiche lue en entier, par lots) ;
+       · un set = un RDV du setting CRÉÉ sur la période (un par RDV, hors
+         remplaçants et doublons) ; les statuts « Set » du journal sans RDV
+         sont listés à part, jamais additionnés ;
+       · Closes NB / Contracté / Collecté : la liste unique des closes
+         (FunnelCore.loadCloses), lignes Setting (sb === false), rangées chez
+         le setter du close au jour où le client est gagné ;
+       · décroché : AF.isAnswered (règle commune, répondeurs écartés) ;
+       · jours et bornes de période à l'heure de Paris.
+     Onglet Équipe = somme des onglets + ligne « Non attribué » (setter
+     inconnu, personne sans onglet, anciens membres, avant l'arrivée).
+     Corrections ✎ (décision D9) : téléphone, messages et actions de fiche
+     seulement ; une ancienne correction d'une colonne calculée n'est plus
+     appliquée (repère ✎ + « i »). Lecture seule, hors corrections ✎ et date
+     de début (déjà écrites par cette page auparavant). */
   var AF = window.AlteoreFlow;
+  var SC = window.StatsCore;
+  var FC = window.FunnelCore;
+  var SD = window.StatsDrill;
   var db = firebase.firestore();
   var $ = function (s) { return document.querySelector(s); };
 
   var MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
   var JOURS_FR = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
   var pad2 = function (n) { return String(n).padStart(2, '0'); };
+  var esc = SD.esc;
+
+  /* Notes de lecture qui ne sont pas (encore) des termes du glossaire commun
+     (StatsCore.infoLibre) — signalées pour ajout centralisé. */
+  var TXT = {
+    temps: ['Temps d’appel', 'Temps passé en conversation sur les appels sortants décrochés (au moins 5 secondes, répondeurs écartés). Les appels reçus ne sont pas comptés.'],
+    nrp1: ['NRP 1', 'Fiches passées au statut NRP 1 (premier appel sans réponse) ce jour-là, d’après le journal d’actions de Leads Live.'],
+    nrp2: ['NRP 2', 'Fiches passées au statut NRP 2 (deuxième appel sans réponse) ce jour-là, d’après le journal d’actions de Leads Live.'],
+    nrp3: ['NRP 3', 'Fiches passées au statut NRP 3 (troisième appel sans réponse) ce jour-là, d’après le journal d’actions de Leads Live.'],
+    all_nrp: ['All NRP', 'Fiches passées au statut All NRP (plus aucune réponse après tous les essais) ce jour-là, d’après le journal d’actions.'],
+    messagerie: ['Messageries', 'Fiches passées au statut Messagerie (répondeur) ce jour-là, d’après le journal d’actions de Leads Live.'],
+    follow_up: ['Follow-up', 'Fiches passées en follow-up (rappel programmé) ce jour-là, d’après le journal d’actions de Leads Live.'],
+    out: ['Out', 'Fiches passées en faux numéro, pas intéressé, disqualifié ou poubelle ce jour-là. Ce sont des actions du journal sur les fiches, pas des RDV (la colonne Disqua. des RDV est sous Présents).'],
+    dmOut: ['DM envoyés', 'Messages Instagram sortants (échos Meta), comptés le jour de l’envoi.'],
+    dmIn: ['DM reçus', 'Messages Instagram entrants, comptés le jour de la réception.'],
+    convOut: ['Conversations ouvertes', 'Conversations Instagram ouvertes par nous ce jour-là (démarchage).'],
+    replies: ['Réponses', 'Conversations ouvertes par nous qui ont reçu leur première réponse ce jour-là.'],
+    convIn: ['Conversations entrantes', 'Conversations Instagram ouvertes par le prospect ce jour-là.'],
+    setsReponses: ['Sets / réponses', 'Sets de la période ÷ conversations qui ont reçu une réponse pendant la période : efficacité du setting écrit.'],
+    funnel: ['Lecture du bloc', 'Chaque pourcentage se lit sur l’étape juste avant. Pas de pourcentage entre deux étapes qui ne comptent pas la même chose : des leads et des appels, ou des RDV posés (Sets, jour de la pose) et des RDV prévus (RDV NB, jour du RDV). Présents : le show-up. Closes : Close / pitchés.'],
+    paris: ['Heure de Paris', 'Jours et mois comptés à l’heure de Paris, quel que soit l’endroit d’où tu regardes.'],
+    posesApres: ['Posés après la période', 'RDV de la période créés après sa fin (saisis après coup dans l’agenda). Ils ne sont pas dans les Sets de la période.'],
+    poseInconnue: ['Date de pose inconnue', 'RDV de la période sans date de création enregistrée : on ne sait pas quand il a été posé.'],
+    repris: ['Repris par un deuxième setter', 'Fiches travaillées pendant la période par plusieurs setters : chacun la compte dans son onglet, l’Équipe ne la compte qu’une fois.'],
+    nonAttribueCats: ['Contenu de la ligne', 'Ce qui est rangé ici : anciens membres (sans nom), personnes sans onglet sur cette page, setter inconnu, appels sans auteur, ou éléments datés d’avant l’arrivée de la personne.']
+  };
 
   /* ══ Colonnes ═════════════════════════════════════════════════════════
      Deux rapports dans la même page :
        · SETTING TÉLÉPHONE (setter / closer_setter) — Ringover + journal
-         fiches + RDV. Inchangé.
+         fiches + RDV.
        · SETTING ÉCRIT (setter_ecrit, 10/09/2026) — messages Instagram
          (journal du webhook Meta : ig_dm_events / ig_dm_threads) + journal
          fiches + RDV. Aucune colonne téléphone : ce membre n'appelle pas.
-     grp : tel | dm | act | rdv — le hint « journal pas encore actif » ne
-     s'applique qu'au groupe act. */
+     grp : tel | dm | act (corrigeables ✎, StatsCore.correctionAutorisee) ;
+           lead | set | rdv | close (calculés : jamais corrigés à la main).
+     Le hint « journal pas encore actif » ne s'applique qu'au groupe act.
+     info : clé du glossaire (StatsCore) ; infoT : note libre (TXT). */
+  var COLS_RDV = [
+    { key: 'rdvNb',      label: 'RDV NB',    grp: 'rdv', fmt: 'n',    info: 'rdv_nb' },
+    { key: 'annulesNb',  label: 'Annulés',   grp: 'rdv', fmt: 'bad',  info: 'annules' },
+    { key: 'noshowNb',   label: 'No-show',   grp: 'rdv', fmt: 'bad',  info: 'no_show' },
+    { key: 'aStatuerNb', label: 'À statuer', grp: 'rdv', fmt: 'warn', info: 'a_statuer' },
+    { key: 'aVenirNb',   label: 'À venir',   grp: 'rdv', fmt: 'n',    info: 'a_venir' },
+    { key: 'presentsNb', label: 'Présents',  grp: 'rdv', fmt: 'good', info: 'presents' },
+    { key: 'pitchesNb',  label: 'Pitchés',   grp: 'rdv', fmt: 'hot',  info: 'pitches' },
+    { key: 'replanNb',   label: 'Replan.',   grp: 'rdv', fmt: 'n',    info: 'replanifie', infoPlus: 'Hors RDV NB.' },
+    { key: 'closesNb',   label: 'Closes NB', grp: 'close', fmt: 'good', info: 'closes_nb', infoPlus: 'Ici : closes du Setting (NB), rangés chez le setter du close, au jour où le client est gagné.' },
+    { key: 'contracteNb', label: 'Contracté', grp: 'close', fmt: 'eur', info: 'contracte', infoPlus: 'Ici : closes du Setting (NB) de la période, chez le setter du close.' },
+    { key: 'collecteNb', label: 'Collecté',  grp: 'close', fmt: 'eur', info: 'collecte', infoPlus: 'Ici : closes du Setting (NB) de la période, chez le setter du close.' }
+  ];
   var COLS_TEL = [
-    { key: 'tempsAppelSec', label: '⏱ Temps',   grp: 'tel', fmt: 'dur',  ovKey: 'tempsAppelMin', ovLabel: "Temps d'appel (min)" },
-    { key: 'calls',         label: 'Calls',      grp: 'tel', fmt: 'n' },
-    { key: 'decroches',     label: 'Décro.',     grp: 'tel', fmt: 'n' },
-    { key: 'recus',         label: 'Reçus',      grp: 'act', fmt: 'n', title: 'Leads NB reçus : leads entrés ce jour-là, sans RDV Self Booking, attribués à ce setter (Équipe : tous, attribués ou non). À comparer aux leads travaillés.' },
-    { key: 'leads',         label: 'Leads',      grp: 'act', fmt: 'n', title: 'Leads travaillés : première action du setter sur la fiche ce jour-là (quelle que soit la date d\'entrée du lead)' },
-    { key: 'nrp1',          label: 'NRP1',       grp: 'act', fmt: 'n' },
-    { key: 'nrp2',          label: 'NRP2',       grp: 'act', fmt: 'n' },
-    { key: 'nrp3',          label: 'NRP3',       grp: 'act', fmt: 'n' },
-    { key: 'all_nrp',       label: 'AllNRP',     grp: 'act', fmt: 'n' },
-    { key: 'messagerie',    label: 'Msg.',       grp: 'act', fmt: 'n' },
-    { key: 'follow_up',     label: 'FU',         grp: 'act', fmt: 'n' },
-    { key: 'out',           label: 'Out',        grp: 'act', fmt: 'n', title: 'Faux numéro + pas intéressé + disqualifié + poubelle' },
-    { key: 'sets',          label: 'Sets',       grp: 'act', fmt: 'hot' },
-    { key: 'rdvNb',         label: 'RDV NB',     grp: 'rdv', fmt: 'n',    title: 'RDV du setting qui ONT LIEU ce jour-là (replanifiés déduits, comme le Stats funnel). À ne pas confondre avec Sets = RDV POSÉS ce jour-là.' },
-    { key: 'annulesNb',     label: 'Annulé',     grp: 'rdv', fmt: 'bad' },
-    { key: 'noshowNb',      label: 'No-show',    grp: 'rdv', fmt: 'bad' },
-    { key: 'presentsNb',    label: 'Présents',   grp: 'rdv', fmt: 'good' },
-    { key: 'pitchesNb',     label: 'Pitchés',    grp: 'rdv', fmt: 'hot',  title: 'RDV pitchés (offre + close + non close) — même règle que Close SB' },
-    { key: 'closesNb',      label: 'Closes',     grp: 'rdv', fmt: 'good' },
-    { key: 'contracteNb',   label: 'Contracté',  grp: 'rdv', fmt: 'eur', title: 'Contrats des clients closés ce jour (module Paiements, HT) — closes annulés exclus' },
-    { key: 'collecteNb',    label: 'Collecté',   grp: 'rdv', fmt: 'eur', title: 'Prélèvements GoCardless réellement passés pour les clients closés (HT) — closes annulés exclus' }
-  ];
+    { key: 'tempsAppelSec', label: 'Temps',  grp: 'tel', fmt: 'dur', infoT: TXT.temps, ovKey: 'tempsAppelMin', ovLabel: "Temps d'appel (min)" },
+    { key: 'calls',         label: 'Appels', grp: 'tel', fmt: 'n', info: 'appels' },
+    { key: 'decroches',     label: 'Décrochés', grp: 'tel', fmt: 'n', info: 'decroches' },
+    { key: 'recus',         label: 'NB reçus', grp: 'lead', fmt: 'n', info: 'leads_nb_recus' },
+    { key: 'leads',         label: 'Travaillés', grp: 'act', fmt: 'n', info: 'leads_travailles' },
+    { key: 'nrp1',          label: 'NRP1',   grp: 'act', fmt: 'n', infoT: TXT.nrp1 },
+    { key: 'nrp2',          label: 'NRP2',   grp: 'act', fmt: 'n', infoT: TXT.nrp2 },
+    { key: 'nrp3',          label: 'NRP3',   grp: 'act', fmt: 'n', infoT: TXT.nrp3 },
+    { key: 'all_nrp',       label: 'AllNRP', grp: 'act', fmt: 'n', infoT: TXT.all_nrp },
+    { key: 'messagerie',    label: 'Msg.',   grp: 'act', fmt: 'n', infoT: TXT.messagerie },
+    { key: 'follow_up',     label: 'FU',     grp: 'act', fmt: 'n', infoT: TXT.follow_up },
+    { key: 'out',           label: 'Out',    grp: 'act', fmt: 'n', infoT: TXT.out },
+    { key: 'sets',          label: 'Sets',   grp: 'set', fmt: 'hot', info: 'sets' }
+  ].concat(COLS_RDV);
   var COLS_ECRIT = [
-    { key: 'dmOut',      label: 'DM envoyés',  grp: 'dm',  fmt: 'n',    title: 'Messages Instagram sortants (échos Meta), comptés le jour de l\'envoi' },
-    { key: 'dmIn',       label: 'DM reçus',    grp: 'dm',  fmt: 'n',    title: 'Messages Instagram entrants' },
-    { key: 'convOut',    label: 'Conv. ouv.',  grp: 'dm',  fmt: 'n',    title: 'Conversations ouvertes par nous ce jour (démarchage)' },
-    { key: 'replies',    label: 'Réponses',    grp: 'dm',  fmt: 'good', title: 'Conversations ouvertes par nous ayant reçu leur 1ʳᵉ réponse ce jour' },
-    { key: 'convIn',     label: 'Conv. entr.', grp: 'dm',  fmt: 'n',    title: 'Conversations ouvertes par le prospect ce jour' },
-    { key: 'recus',      label: 'Reçus',       grp: 'act', fmt: 'n', title: 'Leads NB reçus : leads entrés ce jour-là, sans RDV Self Booking, attribués à ce setter (Équipe : tous, attribués ou non). À comparer aux leads travaillés.' },
-    { key: 'leads',      label: 'Leads',       grp: 'act', fmt: 'n', title: 'Leads travaillés : première action du setter sur la fiche ce jour-là (quelle que soit la date d\'entrée du lead)' },
-    { key: 'follow_up',  label: 'FU',          grp: 'act', fmt: 'n' },
-    { key: 'out',        label: 'Out',         grp: 'act', fmt: 'n', title: 'Faux numéro + pas intéressé + disqualifié + poubelle' },
-    { key: 'sets',       label: 'Sets',        grp: 'act', fmt: 'hot' },
-    { key: 'rdvNb',      label: 'RDV NB',      grp: 'rdv', fmt: 'n',    title: 'RDV du setting qui ONT LIEU ce jour-là (replanifiés déduits, comme le Stats funnel). À ne pas confondre avec Sets = RDV POSÉS ce jour-là.' },
-    { key: 'annulesNb',  label: 'Annulé',      grp: 'rdv', fmt: 'bad' },
-    { key: 'noshowNb',   label: 'No-show',     grp: 'rdv', fmt: 'bad' },
-    { key: 'presentsNb', label: 'Présents',    grp: 'rdv', fmt: 'good' },
-    { key: 'pitchesNb',  label: 'Pitchés',     grp: 'rdv', fmt: 'hot',  title: 'RDV pitchés (offre + close + non close) — même règle que Close SB' },
-    { key: 'closesNb',   label: 'Closes',      grp: 'rdv', fmt: 'good' },
-    { key: 'contracteNb', label: 'Contracté',  grp: 'rdv', fmt: 'eur', title: 'Contrats des clients closés ce jour (module Paiements, HT) — closes annulés exclus' },
-    { key: 'collecteNb', label: 'Collecté',    grp: 'rdv', fmt: 'eur', title: 'Prélèvements GoCardless réellement passés pour les clients closés (HT) — closes annulés exclus' }
-  ];
+    { key: 'dmOut',      label: 'DM envoyés',  grp: 'dm',  fmt: 'n',    infoT: TXT.dmOut },
+    { key: 'dmIn',       label: 'DM reçus',    grp: 'dm',  fmt: 'n',    infoT: TXT.dmIn },
+    { key: 'convOut',    label: 'Conv. ouv.',  grp: 'dm',  fmt: 'n',    infoT: TXT.convOut },
+    { key: 'replies',    label: 'Réponses',    grp: 'dm',  fmt: 'good', infoT: TXT.replies },
+    { key: 'convIn',     label: 'Conv. entr.', grp: 'dm',  fmt: 'n',    infoT: TXT.convIn },
+    { key: 'recus',      label: 'NB reçus',    grp: 'lead', fmt: 'n', info: 'leads_nb_recus' },
+    { key: 'leads',      label: 'Travaillés',  grp: 'act', fmt: 'n', info: 'leads_travailles' },
+    { key: 'follow_up',  label: 'FU',          grp: 'act', fmt: 'n', infoT: TXT.follow_up },
+    { key: 'out',        label: 'Out',         grp: 'act', fmt: 'n', infoT: TXT.out },
+    { key: 'sets',       label: 'Sets',        grp: 'set', fmt: 'hot', info: 'sets' }
+  ].concat(COLS_RDV);
 
-  /* Chiffres cliquables + onglet Équipe (21/11/2026, demande Vincent).
-     Chaque colonne ci-dessous ouvre la liste nominative de ce qui est compté.
-     Les appels et les messages Instagram ne sont pas des listes de leads. */
-  var SD = window.StatsDrill;
-  var NA = '_na';   // RDV du setting sans setter identifiable (onglet Équipe)
-  var DRILL = { recus: 1, contracteNb: 1, leads: 1, nrp1: 1, nrp2: 1, nrp3: 1, all_nrp: 1, messagerie: 1, follow_up: 1, out: 1, sets: 1,
-    rdvNb: 1, annulesNb: 1, noshowNb: 1, presentsNb: 1, pitchesNb: 1, closesNb: 1, collecteNb: 1 };
+  function colOf(key) {
+    var all = COLS_TEL.concat(COLS_ECRIT);
+    for (var i = 0; i < all.length; i++) if (all[i].key === key) return all[i];
+    return null;
+  }
+  function corrigeable(c) { return !!c && SC.correctionAutorisee(c.grp); }
+  function colInfo(c) {
+    if (!c) return '';
+    if (c.info) return SC.info(c.info, c.infoPlus);
+    if (c.infoT) return SC.infoLibre(c.infoT[0], c.infoT[1]);
+    return '';
+  }
+
+  /* Chiffres cliquables (21/11/2026, demande Vincent) : chaque colonne
+     ci-dessous ouvre la liste nominative de ce qui est compté. Les appels et
+     les messages Instagram ne sont pas des listes de leads. */
+  var NA = '_na';   // ligne « Non attribué » de l'onglet Équipe
+  var DRILL = { recus: 1, leads: 1, nrp1: 1, nrp2: 1, nrp3: 1, all_nrp: 1, messagerie: 1, follow_up: 1, out: 1, sets: 1,
+    rdvNb: 1, annulesNb: 1, noshowNb: 1, aStatuerNb: 1, aVenirNb: 1, presentsNb: 1, pitchesNb: 1, replanNb: 1,
+    closesNb: 1, contracteNb: 1, collecteNb: 1 };
+  /* Titre et terme du glossaire de chaque liste (colonnes et sous-listes). */
   var DRILL_LBL = {
-    recus: 'Leads NB reçus', nonTrav: 'Leads NB reçus pas encore travaillés', contracteNb: 'Montants par client — contracté, encaissé, en attente',
-    leads: 'Leads travaillés', nrp1: 'NRP 1', nrp2: 'NRP 2', nrp3: 'NRP 3', all_nrp: 'All NRP', messagerie: 'Messageries',
-    follow_up: 'Follow-up', out: 'Sortis (faux numéro, pas intéressé, disqualifié, poubelle)', sets: 'Sets (RDV posés)',
-    rdvNb: 'RDV du setting (NB)', annulesNb: 'RDV annulés', noshowNb: 'No-show', presentsNb: 'Présents',
-    pitchesNb: 'Pitchés', closesNb: 'Closes NB', collecteNb: 'Montants par client — contracté, encaissé, en attente'
+    recus: 'Leads NB reçus', nonTrav: 'Leads NB reçus pas encore travaillés', leads: 'Leads travaillés',
+    repris: 'Leads travaillés repris par un deuxième setter',
+    nrp1: 'NRP 1', nrp2: 'NRP 2', nrp3: 'NRP 3', all_nrp: 'All NRP', messagerie: 'Messageries', follow_up: 'Follow-up',
+    out: 'Out (faux numéro, pas intéressé, disqualifié, poubelle)', sets: 'Sets', statutsSet: 'Statuts « Set » sans RDV',
+    s_due: 'Sets dont le RDV est prévu sur la période', s_later: 'Sets dont le RDV est prévu après la période', s_replan: 'Sets déplacés depuis',
+    rdvNb: 'RDV NB', annulesNb: 'RDV NB annulés', noshowNb: 'RDV NB no-show', aStatuerNb: 'RDV NB à statuer', aVenirNb: 'RDV NB à venir',
+    presentsNb: 'Présents (RDV NB)', pitchesNb: 'Pitchés (RDV NB)', replanNb: 'RDV NB replanifiés (hors RDV NB)', kept: 'Kept (RDV NB)',
+    disqua: 'Disqua. (RDV NB)', sansDetail: 'Présents sans détail (RDV NB)', offres: 'Offres en attente (RDV NB)',
+    nonCloses: 'Non closes (RDV NB)', rdvCloses: 'RDV closés (RDV NB)',
+    o_period: 'RDV NB posés sur la période', o_before: 'RDV NB posés avant la période', o_replace: 'RDV NB reportés à une nouvelle date',
+    o_after: 'RDV NB posés après la période', o_unknown: 'RDV NB sans date de pose',
+    closesNb: 'Closes NB', contracteNb: 'Closes NB — contracté, collecté, 1ers prélèvements en attente',
+    collecteNb: 'Closes NB — contracté, collecté, 1ers prélèvements en attente',
+    closesAnnules: 'Closes NB annulés', sansPaiement: 'Closes NB sans paiement', manuels: 'RDV manuels de la période'
+  };
+  var DRILL_INFO = {
+    recus: 'leads_nb_recus', nonTrav: 'pas_encore_travailles', leads: 'leads_travailles', repris: 'leads_travailles',
+    sets: 'sets', statutsSet: 'statuts_set_sans_rdv', s_due: 'sets', s_later: 'sets', s_replan: 'sets',
+    rdvNb: 'rdv_nb', annulesNb: 'annules', noshowNb: 'no_show', aStatuerNb: 'a_statuer', aVenirNb: 'a_venir',
+    presentsNb: 'presents', pitchesNb: 'pitches', replanNb: 'replanifie', kept: 'kept', disqua: 'disqua', sansDetail: 'sans_detail',
+    offres: 'offres_attente', nonCloses: 'non_closes', rdvCloses: 'rdv_closes',
+    o_period: 'rdv_nb', o_before: 'poses_avant', o_replace: 'reportes', o_after: 'rdv_nb', o_unknown: 'rdv_nb',
+    closesNb: 'closes_nb', contracteNb: 'contracte', collecteNb: 'collecte', closesAnnules: 'closes_annules',
+    sansPaiement: 'close_sans_paiement', manuels: 'rdv_manuels'
   };
   var ACT_LBL = { nrp1: 'NRP 1', nrp2: 'NRP 2', nrp3: 'NRP 3', all_nrp: 'All NRP', messagerie: 'Messagerie', follow_up_pm: 'Follow-up',
     faux_numero: 'Faux numéro', pas_interesse: 'Pas intéressé', disqualifie: 'Disqualifié', poubelle: 'Poubelle',
     set: 'Set', set_booking: 'Set (RDV posé)', rdv_pose: 'RDV posé', assign: 'Attribution' };
-  /* Colonnes de la carte « Par setter » de l'onglet Équipe. */
-  var TEAM_KEYS = ['recus', 'leads', 'sets', 'rdvNb', 'annulesNb', 'noshowNb', 'presentsNb', 'pitchesNb', 'closesNb', 'contracteNb', 'collecteNb'];
 
   var S = {
     mode: 'month',          // 'day' | '3d' | '7d' | 'month' — tous les KPIs suivent la période
-    anchor: null,           // Date de référence (jour affiché / fin de fenêtre / mois)
-    range: null,            // {from, to, days[]} — recalculé à chaque refresh
+    anchor: null,           // jour de référence (date de calendrier)
+    range: null,            // {days[]} — recalculé à chaque refresh
     members: [],            // setters affichés
-    slug: null,             // membre sélectionné
+    slug: null,             // membre sélectionné ('_all' = Équipe)
     role: localStorage.getItem('ambitio_role') || 'sales',
     typeMap: {}, personsMap: {},
-    data: null,             // { buckets: [{slug, name, days, ov, lists}], days, callsOk, dmOk, dmError }
+    data: null,
     overrides: {},
     legacy: null,           // doc saisies/{slug}/mois/{key} si existant (vue Mois)
     legacyOpen: false,
     startDate: null,        // date de début du membre sélectionné ('YYYY-MM-DD' | null)
-    loading: false
+    loading: false, again: false
   };
+  /* Le jour de référence est une DATE DE CALENDRIER (année, mois, jour) : on
+     la manipule en heure locale pour avancer d'un jour, et on la lit avec les
+     getters locaux — le même jour quel que soit le fuseau. « Aujourd'hui » et
+     les bornes de la période sont, elles, à l'heure de Paris. */
+  function calOf(iso) { var p = String(iso).split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function todayParis() { return SC.jourParis(Date.now()); }
   (function initPeriod() {
-    var now = new Date();
-    S.anchor = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    S.anchor = calOf(todayParis());
     try {
       var m = localStorage.getItem('setting_v2_mode');
       if (m === 'day' || m === '3d' || m === '7d' || m === 'month') S.mode = m;
       var a = localStorage.getItem('setting_v2_anchor');
-      if (a && /^\d{4}-\d{2}-\d{2}$/.test(a)) { var p = a.split('-'); S.anchor = new Date(+p[0], +p[1] - 1, +p[2]); }
+      if (a && /^\d{4}-\d{2}-\d{2}$/.test(a)) S.anchor = calOf(a);
     } catch (e) {}
   })();
 
   function monthKey() { return S.anchor.getFullYear() + '-' + pad2(S.anchor.getMonth() + 1); }
   function isoOf(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+  function shiftIso(iso, n) { var d = calOf(iso); return isoOf(new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)); }
   /* Fenêtre de la période courante : Jour = 1 jour, 3/7 jours = fenêtre
      glissante se terminant au jour de référence, Mois = mois calendaire. */
   function period() {
@@ -222,12 +312,12 @@
     else { var n = S.mode === '3d' ? 3 : 7; to = new Date(a); from = new Date(a.getFullYear(), a.getMonth(), a.getDate() - (n - 1)); }
     var days = [];
     for (var d = new Date(from); d <= to; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) days.push(isoOf(d));
-    return { from: from, to: to, days: days };
+    return { days: days };
   }
   function periodLabel() {
     if (S.mode === 'month') return MONTHS_FR[S.anchor.getMonth()] + ' ' + S.anchor.getFullYear();
     var R = S.range || period();
-    var f = function (iso) { var d = new Date(iso + 'T12:00:00'); return JOURS_FR[d.getDay()] + ' ' + pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1); };
+    var f = function (iso) { var d = calOf(iso); return JOURS_FR[d.getDay()] + ' ' + pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1); };
     if (S.mode === 'day') return f(R.days[0]);
     return f(R.days[0]) + ' → ' + f(R.days[R.days.length - 1]);
   }
@@ -236,14 +326,15 @@
     clearTimeout(window.__auTo); window.__auTo = setTimeout(function () { t.className = ''; }, 3200);
   }
   function fmtEuro(n) { return (Math.round(Number(n) || 0)).toLocaleString('fr-FR') + ' €'; }
-  function fmtPct(n) { return n == null ? '—' : (Math.round(n * 10) / 10).toLocaleString('fr-FR') + ' %'; }
-  function frOfIso(iso) { var d = new Date(iso + 'T12:00:00'); return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear(); }
+  function fmtPct(n) { return SC.fmtPct(n); }
+  function fmtN(n) { return (Number(n) || 0).toLocaleString('fr-FR'); }
+  function frOfIso(iso) { var d = calOf(iso); return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear(); }
   function isAdmin() { return S.role === 'admin'; }
+  function plural(n, s, p) { return n > 1 ? (p || s + 's') : s; }
 
   /* ── Membres : ÉQUIPE SALES uniquement (validé Adrien 14/07/2026) ──
      AF.salesMembers() = rôles setter/closer/closer_setter/setter_ecrit,
-     actifs, membres partis exclus. Ni admins, ni coachs, ni CSM ici.
-     Ici : les rôles SETTING seulement (AF.isSetterRole). */
+     actifs, membres partis exclus. Ici : les rôles SETTING seulement. */
   function computeMembers() {
     var setters = AF.salesMembers().filter(function (m) { return AF.isSetterRole(m.role); });
     if (!setters.length) setters = AF.salesMembers();
@@ -263,63 +354,63 @@
     /* Onglet « Équipe » : total de tous les setters (dès 2 setters). */
     if (S.members.length > 1) {
       h += '<button class="au-member' + (S.slug === '_all' ? ' active' : '') + '" style="--au-mc:#5b7cfa" data-slug="_all">' +
-        '<span class="au-member-av">Σ</span><span><span class="au-member-n">Équipe</span><br/><span class="au-member-r">tous les setters</span></span></button>';
+        '<span class="au-member-av">Σ</span><span><span class="au-member-n">Équipe</span><br/><span class="au-member-r">onglets + non attribué</span></span></button>';
     }
     S.members.forEach(function (m) {
       var name = m.shortName || m.displayName || m.slug;
       var initials = (m.initials || name.slice(0, 2)).toUpperCase();
       /* Cette page ne montre que la partie SETTING du membre (retour Vincent
-         22/11/2026) : « Setting + Closing » laissait croire que l'onglet
-         contenait aussi les RDV qu'il reçoit comme closer. */
+         22/11/2026). */
       var roleLbl = isEcrit(m) ? '✍️ Setting écrit' : 'Setting';
-      h += '<button class="au-member' + (m.slug === S.slug ? ' active' : '') + '" style="--au-mc:' + (m.color || '#5b7cfa') + '" data-slug="' + m.slug + '">' +
-        '<span class="au-member-av">' + initials + '</span>' +
-        '<span><span class="au-member-n">' + name + (m.active === false ? ' 🔒' : '') + '</span><br/><span class="au-member-r">' + roleLbl + '</span></span></button>';
+      h += '<button class="au-member' + (m.slug === S.slug ? ' active' : '') + '" style="--au-mc:' + esc(m.color || '#5b7cfa') + '" data-slug="' + esc(m.slug) + '">' +
+        '<span class="au-member-av">' + esc(initials) + '</span>' +
+        '<span><span class="au-member-n">' + esc(name) + (m.active === false ? ' 🔒' : '') + '</span><br/><span class="au-member-r">' + roleLbl + '</span></span></button>';
     });
     $('#memberTabs').innerHTML = h;
-    document.querySelectorAll('#memberTabs .au-member').forEach(function (b) {
-      b.addEventListener('click', function () {
-        S.slug = b.getAttribute('data-slug');
-        renderMembers();
-        refresh();
-      });
-    });
     renderStartBar();
   }
+  /* Onglets : délégation sur le conteneur (posée une fois). */
+  $('#memberTabs').addEventListener('click', function (e) {
+    var t = e.target;
+    while (t && t !== this && !(t.getAttribute && t.getAttribute('data-slug') != null)) t = t.parentNode;
+    if (!t || t === this) return;
+    S.slug = t.getAttribute('data-slug');
+    renderMembers();
+    refresh();
+  });
 
   /* ── Barre « date de début » (10/09/2026) ──
-     Un membre qui commence la semaine prochaine ne doit pas afficher des
-     zéros sur les jours d'avant : ces jours n'existent pas pour lui.
-     Admin : saisie directe ici (écrit _meta/team_members[].startDate via
-     AF.patchTeamMember). Sales : lecture seule. */
+     Avant sa date de début, un setter n'a pas de donnée dans son onglet
+     (« — », pas zéro). Ce qui lui est rattaché avant reste compté dans
+     l'onglet Équipe, ligne « Non attribué ». Admin : saisie directe ici
+     (écrit _meta/team_members[].startDate via AF.patchTeamMember). */
   function renderStartBar() {
     var bar = $('#startBar');
     var m = currentMember();
     if (!m) { bar.style.display = 'none'; return; }
     var sd = AF.memberStartDate(m);
     var name = m.shortName || m.displayName || m.slug;
-    var h = '<span class="lbl">📅 Date de début de ' + name + ' :</span>';
+    var h = '<span class="lbl">📅 Date de début de ' + esc(name) + SC.info('date_debut') + ' :</span>';
     if (isAdmin()) {
-      h += '<input type="date" id="startInput" value="' + (sd || '') + '"/>' +
+      h += '<input type="date" id="startInput" value="' + esc(sd || '') + '"/>' +
         '<button class="au-btn primary" id="startSave" style="padding:5px 10px;font-size:12px">💾 Enregistrer</button>' +
         (sd ? '<button class="au-btn ghost" id="startClear" style="padding:5px 10px;font-size:12px" title="Retirer la date de début">✕</button>' : '') +
-        '<span class="lbl" style="font-size:11px">les jours antérieurs affichent « — » et ne comptent pas dans les totaux</span>';
+        '<span class="lbl" style="font-size:11px">dans cet onglet, les jours antérieurs affichent « — » ; ce qui lui est rattaché avant reste dans Équipe, ligne « Non attribué »</span>';
     } else {
       h += sd ? '<strong>' + frOfIso(sd) + '</strong>' : '<span class="lbl">non renseignée</span>';
     }
     bar.innerHTML = h;
     bar.style.display = '';
-    var save = $('#startSave');
-    if (save) {
-      save.addEventListener('click', function () {
-        var v = ($('#startInput').value || '').trim();
-        if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) { toast('Date invalide', true); return; }
-        saveStartDate(m.slug, v);
-      });
-    }
-    var clear = $('#startClear');
-    if (clear) clear.addEventListener('click', function () { saveStartDate(m.slug, null); });
   }
+  $('#startBar').addEventListener('click', function (e) {
+    var m = currentMember();
+    if (!m || !e.target || !e.target.id) return;
+    if (e.target.id === 'startSave') {
+      var v = ($('#startInput').value || '').trim();
+      if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) { toast('Date invalide', true); return; }
+      saveStartDate(m.slug, v);
+    } else if (e.target.id === 'startClear') saveStartDate(m.slug, null);
+  });
   function saveStartDate(slug, value) {
     var btn = $('#startSave'); if (btn) btn.disabled = true;
     AF.patchTeamMember(slug, { startDate: value })
@@ -334,12 +425,8 @@
   function emptyDay() {
     var o = {};
     cols().forEach(function (c) { o[c.key] = 0; });
-    o._setLeadIds = {};
     return o;
   }
-  /* Incrément tolérant : une colonne absente du rapport courant (NRP en
-     mode écrit, DM en mode téléphone) est simplement ignorée. */
-  function bump(row, key, v) { if (row && row[key] != null) row[key] += (v == null ? 1 : v); }
 
   /* Journal des messages Instagram (webhook Meta) — mode écrit uniquement.
      Trois lectures : les messages du jour (ig_dm_events.date), les
@@ -364,66 +451,144 @@
     });
   }
 
+  /* Nom affiché d'une personne. Un ancien membre n'a plus de nom à l'écran
+     (décision D10) : « Anciens membres ». */
   function memberName(slug) {
     var m = (window.TEAM_MEMBERS || {})[slug];
     return m ? (m.shortName || m.displayName || slug) : (slug || '');
   }
-  /* Closer d'un RDV — même ordre que memberMatchesBooking. Le nom affiché est
-     celui du membre de l'équipe quand la fiche d'agenda lui est reliée. */
-  function closerName(b) {
-    if (b.closeData && b.closeData.closerSlug) return memberName(b.closeData.closerSlug);
-    if (b.expertSlug) return memberName(b.expertSlug);
-    var p = S.personsMap[b.personId];
-    if (p && p.firebaseUid) {
-      var list = window.TEAM_MEMBERS_LIST || [];
-      for (var i = 0; i < list.length; i++) {
-        if (list[i] && list[i].firebaseUid === p.firebaseUid) return list[i].shortName || list[i].displayName || list[i].slug;
-      }
-    }
-    if (b.personId && (window.TEAM_MEMBERS || {})[b.personId]) return memberName(b.personId);
-    if (p && p.name) return p.name;
-    return b.personId ? memberName(b.personId) : '';
+  function nomPersonne(slug) {
+    if (!slug) return '';
+    if (AF.isDeparted(slug)) return SC.mot('anciens_membres');
+    return memberName(slug);
   }
+  /* Membre de l'équipe derrière une fiche d'agenda (booking_config) : par
+     firebaseUid, anciens membres compris (window.TEAM_MEMBERS les garde). */
+  function resoudrePersonne(personId) {
+    if (!personId) return null;
+    var map = window.TEAM_MEMBERS || {};
+    var p = S.personsMap[personId];
+    if (p && p.firebaseUid) {
+      var ks = Object.keys(map);
+      for (var i = 0; i < ks.length; i++) { var m = map[ks[i]]; if (m && m.firebaseUid === p.firebaseUid) return m.slug || ks[i]; }
+    }
+    if (Object.prototype.hasOwnProperty.call(map, personId)) return personId;
+    return null;
+  }
+  /* Closer d'un RDV — StatsCore.closerDuRdv (validé au close → hôte figé →
+     hôte de la fiche d'agenda). Personne d'identifiable : « — ». */
+  function closerLabel(b) { return nomPersonne(SC.closerDuRdv(b, resoudrePersonne)); }
 
-  /* Un « seau » = un setter (ou les RDV sans setter identifiable, onglet
-     Équipe) : ses valeurs automatiques jour par jour, ses corrections
-     manuelles et les lignes derrière chaque chiffre. */
+  /* Un « seau » = un setter (ou la ligne « Non attribué » de l'Équipe) : ses
+     valeurs jour par jour, ses corrections manuelles et les lignes derrière
+     chaque chiffre. */
   function newBucket(slug, name, m) {
-    var bk = { slug: slug, name: name, m: m || null, days: {}, ov: {}, lists: {}, start: m ? AF.memberStartDate(m) : null };
+    var bk = { slug: slug, name: name, m: m || null, days: {}, ov: {}, lists: {}, cats: {}, start: m ? AF.memberStartDate(m) : null };
     (S.range || period()).days.forEach(function (dk) { bk.days[dk] = emptyDay(); });
     return bk;
   }
   function keep(bk, dk, key, it) { var d = bk.lists[dk] || (bk.lists[dk] = {}); (d[key] || (d[key] = [])).push(it); }
-  /* Incrément tolérant : une colonne absente du rapport courant (NRP en
-     mode écrit, DM en mode téléphone) est simplement ignorée. */
-  function add(bk, dk, key, it, v) {
-    var row = bk && bk.days[dk];
+  /* rt = { bk, lbl, cat } (voir router) — une colonne absente du rapport
+     courant (NRP en mode écrit, DM en mode téléphone) est ignorée. */
+  function add(rt, dk, key, it, v) {
+    if (!rt) return;
+    var row = rt.bk.days[dk];
     if (!row || row[key] == null) return;
     row[key] += (v == null ? 1 : v);
-    if (it) keep(bk, dk, key, it);
+    if (it) keep(rt.bk, dk, key, it);
+    if (rt.cat) rt.bk.cats[rt.cat] = 1;
+  }
+  function keepRt(rt, dk, key, it) {
+    if (!rt || !rt.bk.days[dk]) return;
+    keep(rt.bk, dk, key, it);
+    if (rt.cat) rt.bk.cats[rt.cat] = 1;
   }
 
-  /* Leads ENTRÉS sur la période (23/11/2026, demande Vincent : « combien de
-     leads NB sont tombés », à comparer aux leads travaillés). Même chargement
-     que le Stats funnel (FunnelCore.loadLeads : date d'entrée réelle, fiches
-     fusionnées écartées) ; les ré-optins ne sont pas des leads entrés. */
+  /* Où ranger un élément rattaché à « slug » au jour « dk ».
+     · Onglet d'un setter : ses éléments seulement (les jours avant sa date
+       de début sont masqués au rendu, « — »).
+     · Équipe : l'onglet du setter ; sinon la ligne « Non attribué » —
+       setter inconnu, ancien membre (sans nom), personne sans onglet, ou
+       élément daté d'avant l'arrivée du setter. Rien ne sort du total. */
+  function router(team, B, naBk, memberSlug) {
+    return function (slug, dk, sansAuteur) {
+      if (!team) return (slug && slug === memberSlug && B[slug]) ? { bk: B[slug], lbl: B[slug].name } : null;
+      if (sansAuteur) return { bk: naBk, lbl: SC.mot('appels_sans_auteur'), cat: 'sansAuteur' };
+      if (!slug) return { bk: naBk, lbl: 'Setter inconnu', cat: 'inconnu' };
+      var bk = B[slug];
+      if (bk) {
+        if (bk.start && dk && dk < bk.start) return { bk: naBk, lbl: bk.name + ' (avant son arrivée)', cat: 'avant' };
+        return { bk: bk, lbl: bk.name };
+      }
+      if (AF.isDeparted(slug)) return { bk: naBk, lbl: SC.mot('anciens_membres'), cat: 'anciens' };
+      return { bk: naBk, lbl: memberName(slug) + ' (hors onglets)', cat: 'hors' };
+    };
+  }
+
+  /* Leads ENTRÉS sur la période (23/11/2026, demande Vincent). Même
+     chargement que le Stats funnel (FunnelCore.loadLeads : date d'entrée
+     réelle, fiches fusionnées écartées) ; les ré-optins ne sont pas des
+     leads entrés. → { leads, tronque } ou null (lecture impossible). */
   function loadEntered(from, to) {
-    var FC = window.FunnelCore;
     if (!FC || typeof FC.loadLeads !== 'function') return Promise.resolve(null);
     var LD = {};
     return FC.loadLeads(db, { start: from, end: to }, LD)
-      .then(function () { return LD.leads || []; })
+      .then(function () { return { leads: LD.leads || [], tronque: !!LD.leadsTruncated }; })
       .catch(function (e) { console.warn('[setting] leads entrés :', e && e.message); return null; });
   }
 
+  /* Fiches des RDV du setting : TOUTES lues, par lots (plus de plafond de
+     150 / 300 fiches). Une fiche fusionnée est remplacée par la fiche gardée
+     (_mergedInto, 3 sauts au plus). → { byId: { id: fiche | null }, echecs: { id: 1 } } */
+  var LEADS_LOT = 30;
+  function readLeads(ids) {
+    var out = {}, echecs = {}, i = 0;
+    function lire(id, sauts) {
+      return db.collection('leads').doc(id).get().then(function (s) {
+        if (!s || !s.exists) return null;
+        var d = s.data() || {}; d._id = s.id;
+        if (d._merged === true) return (d._mergedInto && sauts < 3) ? lire(d._mergedInto, sauts + 1) : null;
+        return d;
+      });
+    }
+    function lot() {
+      if (i >= ids.length) return Promise.resolve();
+      var part = ids.slice(i, i + LEADS_LOT); i += LEADS_LOT;
+      return Promise.all(part.map(function (id) {
+        return lire(id, 0).then(function (d) { out[id] = d; }, function () { out[id] = null; echecs[id] = 1; });
+      })).then(lot);
+    }
+    return lot().then(function () { return { byId: out, echecs: echecs }; });
+  }
+
+  /* Membres dont le journal est lu en plus des onglets (Équipe) : anciens
+     membres et setters sans onglet (désactivés). Leur activité passée reste
+     dans le total, ligne « Non attribué ». */
+  function extraJournalSlugs() {
+    var tab = {}, out = [], seen = {};
+    S.members.forEach(function (m) { tab[m.slug] = 1; });
+    var map = window.TEAM_MEMBERS || {};
+    Object.keys(map).forEach(function (k) {
+      var m = map[k] || {}, slug = m.slug || k;
+      if (tab[slug] || seen[slug]) return;
+      if (AF.isDeparted(slug) ? (!m.role || AF.isSetterRole(m.role)) : AF.isSetterRole(m.role)) { seen[slug] = 1; out.push(slug); }
+    });
+    AF.departedSlugs().forEach(function (slug) { if (!tab[slug] && !seen[slug]) { seen[slug] = 1; out.push(slug); } });
+    return out;
+  }
+  function msOf(v) { if (!v) return null; if (typeof v.toMillis === 'function') return v.toMillis(); var t = SC.toDate(v).getTime(); return isNaN(t) ? null : t; }
+  /* Jour d'une action : jour de Paris de son horodatage (les actions écrites
+     avant le 25/11/2026 portent le jour de l'appareil) ; repli : day. */
+  function actionDay(a) { var ms = msOf(a.createdAt); return ms != null ? SC.jourParis(ms) : (a.day || ''); }
+
   function refresh() {
-    if (S.loading) return;
-    S.loading = true;
+    if (S.loading) { S.again = true; return; }
+    S.loading = true; S.again = false;
     var team = S.slug === '_all';
     var member = currentMember();
     var targets = team ? S.members.slice() : (member ? [member] : []);
     var ecrit = !team && isEcrit(member);
-    $('#content').innerHTML = '<div class="au-loading"><div class="au-spinner"></div>' + (ecrit ? 'Agrégation messages Instagram · actions · RDV…' : 'Agrégation Ringover · actions · RDV…') + '</div>';
+    $('#content').innerHTML = '<div class="au-loading"><div class="au-spinner"></div>' + (ecrit ? 'Agrégation messages Instagram · actions · RDV…' : 'Agrégation Ringover · actions · RDV · closes…') + '</div>';
     try { localStorage.setItem('setting_v2_mode', S.mode); localStorage.setItem('setting_v2_anchor', isoOf(S.anchor)); } catch (e) {}
     S.range = period();
     var R = S.range;
@@ -431,35 +596,33 @@
     $('#monthLbl').textContent = periodLabel();
     $('#btnToday').textContent = S.mode === 'month' ? 'Ce mois-ci' : 'Aujourd\'hui';
     $('#headSub').textContent = ecrit
-      ? 'Setting écrit — messages Instagram (webhook Meta), actions fiche Leads Live et RDV remontent automatiquement, jour après jour. RDV coaching & clients exclus.'
-      : 'Équipe sales uniquement — appels Ringover, actions fiche Leads Live et RDV remontent automatiquement, jour après jour. RDV coaching & clients exclus.';
+      ? 'Setting écrit — messages Instagram (webhook Meta), actions fiche Leads Live, RDV et closes remontent automatiquement, jour après jour. RDV coaching & clients exclus.'
+      : 'Équipe sales uniquement — appels Ringover, actions fiche Leads Live, RDV et closes remontent automatiquement, jour après jour. RDV coaching & clients exclus.';
 
     if (!targets.length) { $('#content').innerHTML = '<div class="au-empty"><span class="i">👤</span>Aucun membre setting.</div>'; S.loading = false; return; }
     S.startDate = team ? null : AF.memberStartDate(member);
 
-    var from = new Date(R.from.getFullYear(), R.from.getMonth(), R.from.getDate(), 0, 0, 0, 0);
-    var to = new Date(R.to.getFullYear(), R.to.getMonth(), R.to.getDate(), 23, 59, 59, 999);
     var fromDay = R.days[0], toDay = R.days[R.days.length - 1];
-    var isAdminRole = isAdmin();
+    var from = SC.debutJourParis(fromDay), to = SC.finJourParis(toDay);   // bornes à l'heure de Paris
+    var admin = isAdmin();
     var meM = AF.me();
-    var canSeeCalls = isAdminRole || (!team && meM && member.firebaseUid && meM.uid === member.firebaseUid);
-
-    /* Appels — un membre : les siens (comme avant). Équipe : un admin lit
-       toute la plage en une requête ; un sales ne voit que les siens. */
+    var ownTab = !team && member && meM && member.firebaseUid && meM.uid === member.firebaseUid;
+    /* Appels : un admin lit tout (Équipe) ou ceux du membre ; un sales ne lit
+       que les siens. Un total d'équipe partiel n'est jamais affiché. */
+    var canSeeCalls = !ecrit && (admin || ownTab);
     var callsP;
-    if (team) {
-      callsP = isAdminRole ? AF.loadCallsForMember(null, from, to, true)
-        : ((meM && meM.uid) ? AF.loadCallsForMember(meM.uid, from, to, false) : Promise.resolve([]));
-    } else {
-      callsP = (!ecrit && member.firebaseUid) ? AF.loadCallsForMember(member.firebaseUid, from, to, isAdminRole) : Promise.resolve([]);
-    }
-    /* Par setter : journal d'actions, corrections manuelles, date de la 1ʳᵉ
-       action du journal (pour distinguer « 0 action » de « journal pas encore
-       actif ce jour-là » — les clics de statut d'avant la mise en ligne n'ont
-       laissé aucune trace, non reconstituable). */
+    if (!canSeeCalls) callsP = Promise.resolve(null);
+    else if (team) callsP = AF.loadCallsForMember(null, from, to, true);
+    else if (!member.firebaseUid) callsP = Promise.resolve({ noUid: true });
+    else callsP = AF.loadCallsForMember(member.firebaseUid, from, to, admin);
+
+    /* Journal d'actions lu à J−1 / J+1 puis rangé au jour de PARIS de chaque
+       action (les anciennes portent le jour de l'appareil). */
+    var aFrom = shiftIso(fromDay, -1), aTo = shiftIso(toDay, 1);
+    var extras = team ? extraJournalSlugs() : [];
     var perMemberP = Promise.all(targets.map(function (m) {
       return Promise.all([
-        AF.loadActions(m.slug, fromDay, toDay),
+        AF.loadActions(m.slug, aFrom, aTo),
         AF.loadOverrides(m.slug, fromDay, toDay),
         db.collection('lead_actions').doc(m.slug).collection('items')
           .orderBy('createdAt', 'asc').limit(1).get()
@@ -467,10 +630,14 @@
           .catch(function () { return null; })
       ]);
     }));
+    var extrasP = Promise.all(extras.map(function (slug) { return AF.loadActions(slug, aFrom, aTo); }));
 
+    var errs = [];
+    var base;
     Promise.all([
       callsP,
       perMemberP,
+      extrasP,
       AF.loadBookingsRange(fromDay, toDay, from, to),
       AF.loadTypeMap(),
       (!team && S.mode === 'month')
@@ -480,311 +647,424 @@
       AF.loadPersonsMap(),
       loadEntered(from, to)
     ]).then(function (res) {
-      return AF.loadCloseRevenue(res[2]).then(function (revOf) { return { res: res, revOf: revOf }; });
-    }).then(function (pack) {
-      var res = pack.res, revOf = pack.revOf;
-      var rev = { cancelled: [], pending: 0, noPay: [] };
-      var calls = res[0], perMember = res[1], bookings = res[2];
-      S.typeMap = res[3] || {};
-      S.legacy = (res[4] && res[4].exists) ? res[4].data() : null;
-      var dm = res[5];
-      S.personsMap = res[6] || {};
-      var entered = res[7];
-      var todayIso = AF.dayKey(new Date());
-
-      /* Seaux : un par setter affiché, + « non attribué » pour l'Équipe. */
-      var B = {}, buckets = [];
-      S.journalStart = null;
-      targets.forEach(function (m, i) {
-        var bk = newBucket(m.slug, m.shortName || m.displayName || m.slug, m);
-        bk.actions = perMember[i][0] || [];
-        bk.ov = perMember[i][1] || {};
-        var j0 = perMember[i][2] || null;
-        if (j0 && (!S.journalStart || j0 < S.journalStart)) S.journalStart = j0;
-        B[m.slug] = bk; buckets.push(bk);
+      base = res;
+      var bookings = res[3] || [];
+      S.typeMap = res[4] || {};
+      S.personsMap = res[7] || {};
+      /* Drapeaux de lecture (non énumérables) : lus sur la valeur reçue. */
+      if (bookings._erreur) errs.push(bookings._erreur);
+      if (S.typeMap._erreur) errs.push(S.typeMap._erreur + ' — la répartition Self Booking / Setting peut être fausse');
+      if (S.personsMap._erreur) errs.push(S.personsMap._erreur + ' — le closer de certains RDV peut manquer');
+      var ids = {};
+      bookings.forEach(function (b) { if (b.leadId && SC.classifyBooking(b, S.typeMap) === 'setter') ids[b.leadId] = 1; });
+      /* La liste unique des closes : UN appel pour la période, puis rangement
+         par setter et par jour (jamais un recalcul par onglet). */
+      var closesP = (FC && typeof FC.loadCloses === 'function')
+        ? FC.loadCloses(db, { start: from, end: to, typeMap: S.typeMap, bookings: bookings, resoudrePersonne: resoudrePersonne })
+        : Promise.resolve({ rows: [], annules: [], erreur: 'funnel-core.js absent : liste des closes indisponible' });
+      return Promise.all([closesP, readLeads(Object.keys(ids))]);
+    }).then(function (res2) {
+      build(base, res2[0], res2[1], {
+        team: team, member: member, targets: targets, extras: extras, ecrit: ecrit, canSeeCalls: canSeeCalls,
+        fromDay: fromDay, toDay: toDay, errs: errs
       });
-      var naBk = team ? newBucket(NA, 'Non attribué', null) : null;
-      if (naBk) buckets.push(naBk);
-      /* La modale ✎ (un seul membre) lit et modifie S.overrides : même objet
-         que les corrections du seau, pour que le tableau suive sans recharger. */
-      S.overrides = team ? {} : buckets[0].ov;
-
-      /* — Attribution NB legacy : RDV setter sans bookedBySlug (antérieurs à
-         la refonte, ou pris via un lien public de type setter-only) → on
-         retombe sur le setter attribué du lead (leads.assignedTo).
-         Nécessaire dès qu'il y a ≥ 2 setters actifs. — */
-      var _needLead = {};
-      var _needLeadLock = {};
-      bookings.forEach(function (b) {
-        if (AF.classifyBooking(b, S.typeMap) !== 'setter') return;
-        if (!b.leadId) return;
-        /* Fiche lue aussi quand le RDV a un poseur : le setter 🔒 de la fiche
-           prime sur lui (18/09/2026). Les fiches du repli legacy passent en
-           premier pour rester sous le plafond de lectures. */
-        if (b.bookedBySlug || (b.closeData && b.closeData.setterSlug)) _needLeadLock[b.leadId] = 1;
-        else _needLead[b.leadId] = 1;
-      });
-      var _leadIds = Object.keys(_needLead).slice(0, 150);
-      Object.keys(_needLeadLock).forEach(function (k) { if (!_needLead[k] && _leadIds.length < 300) _leadIds.push(k); });
-      return Promise.all(_leadIds.map(function (id) {
-        return db.collection('leads').doc(id).get().catch(function () { return null; });
-      })).then(function (snaps) {
-        var leadSetter = {};
-        var leadLocked = {}; // setterSlug 🔒 de la fiche : prime sur le poseur du RDV (18/09/2026)
-        snaps.forEach(function (s) {
-          if (s && s.exists) { var d0 = s.data() || {}; var ls = d0.setterSlug || d0.assignedTo; if (ls) leadSetter[s.id] = ls; if (d0.setterSlug) leadLocked[s.id] = d0.setterSlug; }
-        });
-
-      /* — Ringover : calls / décrochés / temps (mode téléphone) — */
-      var uidSlug = {};
-      targets.forEach(function (m) { if (m.firebaseUid) uidSlug[m.firebaseUid] = m.slug; });
-      calls.forEach(function (c) {
-        if (c.direction !== 'outbound') return;
-        var ms = c.initiatedAt && c.initiatedAt.toMillis ? c.initiatedAt.toMillis() : null;
-        if (ms == null) return;
-        /* Un membre : la requête est déjà filtrée sur lui. Équipe : l'appel va
-           au setter qui l'a passé ; les appels des autres rôles sont ignorés. */
-        var bk = team ? B[uidSlug[c.userId]] : buckets[0];
-        if (!bk) return;
-        var dk = AF.dayKey(new Date(ms));
-        add(bk, dk, 'calls');
-        var dur = Number(c.durationSec) || 0;
-        if (dur >= AF.ANSWERED_MIN_SEC) { add(bk, dk, 'decroches'); add(bk, dk, 'tempsAppelSec', null, dur); }
-      });
-
-      /* — Messages Instagram (mode écrit) — tous les DM du compte sont ceux
-         du setter écrit : il est le seul à démarcher par messages. — */
-      if (dm && dm.ok) {
-        var bkDm = buckets[0];
-        dm.events.forEach(function (ev) {
-          if (ev.direction === 'out') add(bkDm, ev.date, 'dmOut');
-          else if (ev.direction === 'in') add(bkDm, ev.date, 'dmIn');
-        });
-        dm.opened.forEach(function (t) {
-          if (t.initiatedBy === 'us') add(bkDm, t.firstEventDate, 'convOut');
-          else if (t.initiatedBy === 'them') add(bkDm, t.firstEventDate, 'convIn');
-        });
-        dm.replied.forEach(function (t) {
-          if (t.initiatedBy !== 'us' || !t.repliedAtMs) return;
-          add(bkDm, AF.dayKey(new Date(Number(t.repliedAtMs))), 'replies');
-        });
-      }
-
-      /* — Actions fiche : leads (1ʳᵉ action), NRP, sets… — */
-      var setItems = {};   // setItems[seau][jour][lead] = ligne du set (unique lead / jour)
-      function setKeep(bk, dk, key, it, prefer) {
-        var a0 = setItems[bk.slug] || (setItems[bk.slug] = {});
-        var d0 = a0[dk] || (a0[dk] = {});
-        if (!d0[key] || prefer) d0[key] = it;
-      }
-      buckets.forEach(function (bk) {
-        (bk.actions || []).forEach(function (a) {
-          if (!bk.days[a.day]) return;
-          var act = a.action;
-          var it = { name: a.leadName || a.leadId || '', leadId: a.leadId || null, date: a.day, status: ACT_LBL[act] || act || '', statusColor: '#8f97b2', setter: bk.name };
-          if (a.firstTouchMember) add(bk, a.day, 'leads', it);
-          if (act === 'nrp1') add(bk, a.day, 'nrp1', it);
-          else if (act === 'nrp2') add(bk, a.day, 'nrp2', it);
-          else if (act === 'nrp3') add(bk, a.day, 'nrp3', it);
-          else if (act === 'all_nrp') add(bk, a.day, 'all_nrp', it);
-          else if (act === 'messagerie') add(bk, a.day, 'messagerie', it);
-          else if (act === 'follow_up_pm') add(bk, a.day, 'follow_up', it);
-          else if (act === 'faux_numero' || act === 'pas_interesse' || act === 'disqualifie' || act === 'poubelle') add(bk, a.day, 'out', it);
-          if (AF.SET_ACTIONS[act] && a.leadId) { // unique lead / jour
-            bk.days[a.day]._setLeadIds[a.leadId] = 1;
-            setKeep(bk, a.day, a.leadId, { name: it.name, leadId: it.leadId, date: a.day, status: it.status, statusColor: '#a78bfa', setter: bk.name, _cat: 'noRdv', info: 'statut posé sur la fiche — aucun RDV du setting lié' }, false);
-          }
-        });
-      });
-
-      /* — RDV NB du setter : sets réels + tenue + closes — */
-      var visibleSetters = S.members.filter(function (m) { return m.active !== false; });
-      /* Setter d'un RDV du setting, ou null si personne n'est identifiable. */
-      function attributedSlug(b) {
-        /* RDV closé : le setter réellement commissionné fait foi (deal figé). */
-        if (b.closeData && b.closeData.setterSlug) return b.closeData.setterSlug;
-        if (b.leadId && leadLocked[b.leadId]) return leadLocked[b.leadId];
-        if (b.bookedBySlug) return b.bookedBySlug;
-        /* fiche : setterSlug (setter qui l'a créée/travaillée) sinon assignedTo ;
-           sinon attribué si un seul setter actif */
-        if (b.leadId && leadSetter[b.leadId]) return leadSetter[b.leadId];
-        return visibleSetters.length === 1 ? visibleSetters[0].slug : null;
-      }
-      bookings.forEach(function (b) {
-        if (AF.classifyBooking(b, S.typeMap) !== 'setter') return;
-        var aSlug = attributedSlug(b);
-        /* Un membre : ses RDV seulement. Équipe : tout RDV du setting compte,
-           celui dont le setter n'est pas un des setters affichés va en
-           « non attribué » — il ne disparaît plus du total. */
-        var bk = B[aSlug] || (team ? naBk : null);
-        if (!bk || (!team && bk !== buckets[0])) return;
-        var oc = b.outcome || null;
-        var setterLbl = bk === naBk ? (aSlug ? memberName(aSlug) + ' (hors setters)' : 'Non attribué') : bk.name;
-        var rv = null, it = null;
-        /* D'où vient ce RDV (21/11/2026) : posé sur la période, posé avant, ou
-           RDV de remplacement d'un replanifié — c'est ce qui explique l'écart
-           entre « Sets » (RDV posés) et « RDV NB » (RDV qui ont lieu). */
-        var cMs = (b.createdAt && b.createdAt.toMillis) ? b.createdAt.toMillis() : null;
-        var cDay = cMs != null ? AF.dayKey(new Date(cMs)) : null;
-        var rdvCat = b.rescheduledFromId ? 'replace' : ((cDay && cDay >= fromDay && cDay <= toDay) ? 'period' : 'before');
-        var posePar = (b.bookedBySlug && b.bookedBySlug !== aSlug) ? ' · posé par ' + memberName(b.bookedBySlug) + ' (setter retenu : celui de la fiche ou du close)' : '';
-        var poseTxt = (rdvCat === 'replace' ? 'RDV reporté : nouvelle date d\'un RDV replanifié' : (cDay ? 'posé le ' + SD.frDate(cDay) + (rdvCat === 'before' ? ' — avant la période' : '') : 'date de pose inconnue')) + posePar;
-        function item() {
-          if (!it) {
-            it = SD.bookingItem(b, { todayIso: todayIso, setter: setterLbl, closer: closerName(b), rv: rv, decl: (oc === 'close' && !rv) ? (b.closeData || null) : null });
-            it.info = poseTxt; it._cat = rdvCat;
-          }
-          return it;
-        }
-        /* Set réel : compté le jour de CRÉATION du RDV (action de set).
-           Replanifications exclues — le set initial a déjà compté. */
-        if (b._inCreated && !b.rescheduledFromId && b.createdAt && b.createdAt.toMillis) {
-          var ck = AF.dayKey(new Date(b.createdAt.toMillis()));
-          if (bk.days[ck]) {
-            var sKey = b.leadId || ('bk_' + b.id);
-            bk.days[ck]._setLeadIds[sKey] = 1;
-            var bi = SD.bookingItem(b, { todayIso: todayIso, setter: setterLbl, closer: closerName(b) });
-            var biResched = oc === 'replanifie' || (!oc && b.status === 'cancelled' && b.rescheduled === true);
-            bi._cat = biResched ? 'replan' : ((b.date || '') > toDay ? 'later' : 'due');
-            bi.info = 'posé le ' + SD.frDate(ck) + (bi._cat === 'later' ? ' — RDV après la période' : (bi._cat === 'replan' ? ' — replanifié depuis' : '')) + posePar;
-            setKeep(bk, ck, sKey, bi, true);
-          }
-        }
-        /* Tenue : comptée le jour du RDV */
-        var dk = b.date;
-        if (!b._inDue || !bk.days[dk]) return;
-        if (oc === 'close') rv = revOf(b);   // un seul verdict REVENUE par RDV closé
-        var isResched = oc === 'replanifie' || (!oc && b.status === 'cancelled' && b.rescheduled === true);
-        /* RDV NB : RDV qui a lieu ce jour-là — replanifiés déduits (le RDV de
-           remplacement compte à sa place), comme « RDV du mois » du funnel. */
-        if (!isResched) add(bk, dk, 'rdvNb', item());
-        if (oc === 'annule' || (!oc && b.status === 'cancelled' && b.rescheduled !== true)) add(bk, dk, 'annulesNb', item());
-        else if (oc === 'no_show' || (!oc && b.status === 'no_show')) add(bk, dk, 'noshowNb', item());
-        if (oc ? AF.isPresent(oc) : b.status === 'completed') add(bk, dk, 'presentsNb', item());
-        if (oc ? AF.isPitched(oc) : false) add(bk, dk, 'pitchesNb', item());
-        if (oc === 'close') {
-          /* Règle REVENUE (13/10/2026) : close annulé retiré, collecté =
-             prélèvements réellement passés, mandat non prélevé à part. */
-          var nmC = (b.prospect && b.prospect.nom) || b.leadName || b.id;
-          keep(bk, dk, 'money', item());   // closes annulés compris : la liste dit pourquoi ils valent 0
-          if (rv && rv.cancelled) { if (!rv.dup) rev.cancelled.push(nmC + ' (' + rv.reason + ')'); }
-          else {
-            add(bk, dk, 'closesNb', item());
-            if (rv) {
-              add(bk, dk, 'contracteNb', null, rv.con);
-              add(bk, dk, 'collecteNb', null, rv.paid);
-              rev.pending += rv.pending;
-              if (!rv.hasPay && !rv.dup) rev.noPay.push(nmC + (rv.declCol > 0 ? ' — déclaré ' + fmtEuro(rv.declCol) : ''));
-            } else {
-              add(bk, dk, 'contracteNb', null, (b.closeData && Number(b.closeData.contracte)) || 0);
-              add(bk, dk, 'collecteNb', null, (b.closeData && Number(b.closeData.collecte)) || 0);
-            }
-          }
-        }
-      });
-
-      /* — Leads NB reçus : entrés sur la période, sans RDV Self Booking,
-         rangés chez le setter de la fiche. Sans setter (ou setter hors de la
-         liste) : comptés dans l'Équipe seulement, ligne « Non attribué ». — */
-      var sbLead = {};
-      bookings.forEach(function (b) { if (b.leadId && AF.classifyBooking(b, S.typeMap) === 'self') sbLead[b.leadId] = 1; });
-      (entered || []).forEach(function (l) {
-        if (sbLead[l._id]) return;
-        var lSlug = l.setterSlug || l.assignedTo || null;
-        var bkL = B[lSlug] || (team ? naBk : null);
-        if (!bkL || (!team && bkL !== buckets[0])) return;
-        var eDay = l._entry != null ? AF.dayKey(new Date(l._entry)) : null;
-        if (!eDay || !bkL.days[eDay]) return;
-        var worked = !!l.firstActionAt;
-        var itL = { name: l.nom || l.email || l._id, leadId: l._id, date: eDay,
-          status: worked ? 'Travaillé' : 'Pas encore travaillé', statusColor: worked ? '#34d399' : '#fbbf24',
-          setter: bkL === naBk ? (lSlug ? memberName(lSlug) + ' (hors setters)' : 'Non attribué') : bkL.name };
-        add(bkL, eDay, 'recus', itL);
-        if (!worked) keep(bkL, eDay, 'nonTrav', itL);
-      });
-
-      buckets.forEach(function (bk) {
-        Object.keys(bk.days).forEach(function (dk) {
-          bk.days[dk].sets = Object.keys(bk.days[dk]._setLeadIds).length;
-          var si = (setItems[bk.slug] || {})[dk] || {};
-          Object.keys(si).forEach(function (k) { keep(bk, dk, 'sets', si[k]); });
-        });
-      });
-
-      S.data = {
-        buckets: buckets,
-        days: buckets[0].days,   // valeurs automatiques du membre affiché (modale ✎)
-        rev: rev,
-        enteredOk: entered != null,
-        callsOk: ecrit ? true : (canSeeCalls || (!team && calls.length > 0)),
-        dmOk: !dm || dm.ok !== false,
-        dmError: dm && dm.ok === false ? dm.error : null,
-        dmCount: dm ? dm.events.length : 0
-      };
       S.loading = false;
       render();
-      }); // fin .then(leadSetter)
+      if (S.again) refresh();
     }).catch(function (e) {
       S.loading = false;
-      $('#content').innerHTML = '<div class="au-empty"><span class="i">⚠️</span>' + (e && e.message || 'Erreur de chargement') + '</div>';
+      console.error('[setting]', e);
+      $('#content').innerHTML = '<div class="au-empty"><span class="i">⚠️</span>' + esc(e && e.message || 'Erreur de chargement') + '</div>';
+      if (S.again) refresh();
     });
   }
 
-  /* Valeur effective d'un seau (override > auto). Temps : override saisi en
-     minutes. En Équipe, les jours antérieurs à la date de début d'un setter
-     ne comptent pas pour lui — comme dans son propre onglet. */
+  function build(res, CL, LR, o) {
+    var team = o.team, member = o.member, ecrit = o.ecrit, fromDay = o.fromDay, toDay = o.toDay, errs = o.errs;
+    var calls = res[0], perMember = res[1], extraActs = res[2], bookings = res[3] || [];
+    S.legacy = (res[5] && res[5].exists) ? res[5].data() : null;
+    var dm = res[6];
+    var entered = res[8];
+    var now = Date.now();
+    var leadsById = LR.byId || {}, leadEchecs = LR.echecs || {};
+
+    /* Seaux : un par setter affiché, + « Non attribué » pour l'Équipe. */
+    var B = {}, buckets = [];
+    S.journalStart = null;
+    o.targets.forEach(function (m, i) {
+      var bk = newBucket(m.slug, m.shortName || m.displayName || m.slug, m);
+      bk.actions = perMember[i][0] || [];
+      if (bk.actions._erreur) errs.push(bk.name + ' — ' + bk.actions._erreur);
+      bk.ov = perMember[i][1] || {};
+      if (bk.ov._erreur) errs.push(bk.name + ' — ' + bk.ov._erreur + ' (chiffres affichés sans les corrections ✎)');
+      var j0 = perMember[i][2] || null;
+      if (j0 && (!S.journalStart || j0 < S.journalStart)) S.journalStart = j0;
+      B[m.slug] = bk; buckets.push(bk);
+    });
+    var naBk = team ? newBucket(NA, SC.mot('non_attribue'), null) : null;
+    if (naBk) buckets.push(naBk);
+    var route = router(team, B, naBk, member ? member.slug : null);
+    /* La modale ✎ (un seul membre) lit et modifie S.overrides : même objet
+       que les corrections du seau, pour que le tableau suive sans recharger. */
+    S.overrides = team ? {} : buckets[0].ov;
+
+    /* — Ringover : appels sortants / décrochés / temps (mode téléphone) — */
+    var callsOk = false, callsMsg = '', sansAuteur = 0;
+    if (!o.canSeeCalls) {
+      callsMsg = ecrit ? '' : 'non_lisibles';
+    } else if (!calls || calls.noUid) {
+      callsMsg = 'appels : aucun compte relié à ce membre';
+      errs.push(callsMsg);
+    } else if (calls._erreur) {
+      callsMsg = calls._erreur;
+      errs.push(calls._erreur);
+    } else {
+      callsOk = true;
+      if (calls._tronque) errs.push('appels : plus de 30 000 appels sur la période, lecture arrêtée — chiffres de téléphone partiels');
+      sansAuteur = calls._sansAuteur || 0;
+      var uidSlug = {};
+      var map = window.TEAM_MEMBERS || {};
+      Object.keys(map).forEach(function (k) { var m = map[k]; if (m && m.firebaseUid) uidSlug[m.firebaseUid] = m.slug || k; });
+      calls.forEach(function (c) {
+        if (c.direction !== 'outbound') return;
+        var ms = msOf(c.initiatedAt);
+        if (ms == null) return;
+        var dk = SC.jourParis(ms);
+        var rt;
+        if (team) {
+          if (!c.userId) { sansAuteur++; rt = route(null, dk, true); }
+          else rt = route(uidSlug[c.userId] || null, dk);
+        } else rt = route(member.slug, dk);
+        add(rt, dk, 'calls');
+        if (AF.isAnswered(c)) { add(rt, dk, 'decroches'); add(rt, dk, 'tempsAppelSec', null, Number(c.durationSec) || 0); }
+      });
+    }
+
+    /* — Messages Instagram (mode écrit) — tous les DM du compte sont ceux
+       du setter écrit : il est le seul à démarcher par messages. — */
+    if (dm && dm.ok) {
+      var rtDm = function (dk) { return route(member.slug, dk); };
+      dm.events.forEach(function (ev) {
+        if (ev.direction === 'out') add(rtDm(ev.date), ev.date, 'dmOut');
+        else if (ev.direction === 'in') add(rtDm(ev.date), ev.date, 'dmIn');
+      });
+      dm.opened.forEach(function (t) {
+        if (t.initiatedBy === 'us') add(rtDm(t.firstEventDate), t.firstEventDate, 'convOut');
+        else if (t.initiatedBy === 'them') add(rtDm(t.firstEventDate), t.firstEventDate, 'convIn');
+      });
+      dm.replied.forEach(function (t) {
+        if (t.initiatedBy !== 'us' || !t.repliedAtMs) return;
+        var dk = SC.jourParis(Number(t.repliedAtMs));
+        add(rtDm(dk), dk, 'replies');
+      });
+    }
+
+    /* — Actions fiche : leads travaillés (1ʳᵉ action du setter), NRP… et
+       statuts « Set » (mis de côté : ce ne sont pas des sets). — */
+    var touches = [];      // premières actions (Équipe : fiches distinctes)
+    var setStatus = [];    // statuts Set du journal
+    var journals = buckets.filter(function (bk) { return bk.slug !== NA; }).map(function (bk) { return { slug: bk.slug, actions: bk.actions || [] }; });
+    o.extras.forEach(function (slug, i) {
+      var acts = extraActs[i] || [];
+      if (acts._erreur) errs.push(SC.mot('anciens_membres') + ' / hors onglets — ' + acts._erreur);
+      journals.push({ slug: slug, actions: acts });
+    });
+    journals.forEach(function (J) {
+      J.actions.forEach(function (a) {
+        var dk = actionDay(a);
+        if (!dk || dk < fromDay || dk > toDay) return;
+        var rt = route(J.slug, dk);
+        if (!rt) return;
+        var act = a.action;
+        var it = { name: a.leadName || a.leadId || '', leadId: a.leadId || null, date: dk, status: ACT_LBL[act] || act || '', statusColor: '#8f97b2', setter: rt.lbl };
+        if (a.firstTouchMember) {
+          add(rt, dk, 'leads', it);
+          touches.push({ leadId: a.leadId || ('_sansfiche_' + J.slug + '_' + (a._id || touches.length)), dk: dk, rt: rt, it: it, ms: msOf(a.createdAt) || 0 });
+        }
+        if (act === 'nrp1') add(rt, dk, 'nrp1', it);
+        else if (act === 'nrp2') add(rt, dk, 'nrp2', it);
+        else if (act === 'nrp3') add(rt, dk, 'nrp3', it);
+        else if (act === 'all_nrp') add(rt, dk, 'all_nrp', it);
+        else if (act === 'messagerie') add(rt, dk, 'messagerie', it);
+        else if (act === 'follow_up_pm') add(rt, dk, 'follow_up', it);
+        else if (act === 'faux_numero' || act === 'pas_interesse' || act === 'disqualifie' || act === 'poubelle') add(rt, dk, 'out', it);
+        if (AF.SET_ACTIONS[act] && a.leadId) setStatus.push({ leadId: a.leadId, dk: dk, rt: rt, slug: J.slug, name: it.name, status: it.status });
+      });
+    });
+
+    /* — RDV du setting : sets (jour de CRÉATION) et RDV NB (jour du RDV) — */
+    var setterLeadCreated = {};
+    var manuels = [];
+    var partiel = 0;
+    var cache = {};
+    bookings.forEach(function (b) {
+      var cls = SC.classifyBooking(b, S.typeMap);
+      if (cls === 'admin' && b._inDue && b.date >= fromDay && b.date <= toDay && SC.etat(b, now) !== 'doublon' && SC.etat(b, now) !== 'replanifie') {
+        manuels.push(SD.bookingItem(b, { now: now, classe: 'admin', closer: closerLabel(b) }));
+      }
+      if (cls !== 'setter') return;
+      var fiche = b.leadId ? (leadsById[b.leadId] || null) : null;
+      if (b.leadId && leadEchecs[b.leadId]) partiel++;
+      var slug = SC.setterDuRdv(b, fiche);
+      var e = SC.etat(b, now);
+      var cMs = msOf(b.createdAt);
+      var cDay = cMs != null ? SC.jourParis(cMs) : null;
+      var posePar = (b.bookedBySlug && b.bookedBySlug !== slug) ? ' · posé par ' + nomPersonne(b.bookedBySlug) + ' (setter retenu : celui du close ou de la fiche)' : '';
+      if (b._inCreated && b.leadId && cDay && cDay >= fromDay && cDay <= toDay) setterLeadCreated[b.leadId] = 1;
+
+      /* Set : un RDV du setting créé sur la période, un par RDV (clé = id),
+         hors remplaçants (report, transfert) et doublons supprimés. */
+      if (cDay && cDay >= fromDay && cDay <= toDay && !SC.estRemplacant(b) && e !== 'doublon') {
+        var rtS = route(slug, cDay);
+        if (rtS && rtS.bk.days[cDay]) {
+          var sCat = e === 'replanifie' ? 'replan' : ((b.date || '') > toDay ? 'later' : 'due');
+          var si = SD.bookingItem(b, { now: now, setter: rtS.lbl, closer: closerLabel(b) });
+          si.info = 'posé le ' + SD.frDate(cDay) + (sCat === 'later' ? ' — RDV après la période' : (sCat === 'replan' ? ' — déplacé depuis' : '')) + posePar;
+          add(rtS, cDay, 'sets', si);
+          keepRt(rtS, cDay, 's_' + sCat, si);
+        }
+      }
+
+      /* RDV NB : à la date du RDV, un état par RDV (StatsCore.etat). */
+      if (!b.date || b.date < fromDay || b.date > toDay || e === 'doublon') return;
+      var dk = b.date;
+      var rt = route(slug, dk);
+      if (!rt || !rt.bk.days[dk]) return;
+      var org = SC.estRemplacant(b) ? 'replace' : (!cDay ? 'unknown' : (cDay < fromDay ? 'before' : (cDay > toDay ? 'after' : 'period')));
+      var poseTxt = org === 'replace' ? 'RDV reporté : nouvelle date d\'un RDV déplacé' + posePar
+        : (org === 'unknown' ? 'date de pose inconnue' + posePar
+          : 'posé le ' + SD.frDate(cDay) + (org === 'before' ? ' — avant la période' : (org === 'after' ? ' — après la période' : '')) + posePar);
+      var it = SD.bookingItem(b, { now: now, setter: rt.lbl, closer: closerLabel(b) });
+      it.info = poseTxt;
+      if (e === 'replanifie') { add(rt, dk, 'replanNb', it); return; }
+      add(rt, dk, 'rdvNb', it);
+      keepRt(rt, dk, 'o_' + org, it);
+      if (e === 'annule') { add(rt, dk, 'annulesNb', it); return; }
+      keepRt(rt, dk, 'kept', it);
+      if (e === 'no_show') add(rt, dk, 'noshowNb', it);
+      else if (e === 'a_statuer') add(rt, dk, 'aStatuerNb', it);
+      else if (e === 'a_venir') add(rt, dk, 'aVenirNb', it);
+      else {
+        add(rt, dk, 'presentsNb', it);
+        var d = SC.detail(b);
+        if (d === 'disqualifie') keepRt(rt, dk, 'disqua', it);
+        else if (d === 'sans_detail') keepRt(rt, dk, 'sansDetail', it);
+        else {
+          add(rt, dk, 'pitchesNb', it);
+          keepRt(rt, dk, d === 'offre' ? 'offres' : (d === 'non_close' ? 'nonCloses' : 'rdvCloses'), it);
+        }
+      }
+    });
+    if (partiel) errs.push('fiches de ' + partiel + ' RDV illisibles : rangés d\'après le RDV seul (setter du close, puis personne qui l\'a posé) — attribution partielle');
+
+    /* Statuts « Set » du journal sans aucun RDV du setting créé sur la
+       période pour la fiche (tous setters) : listés à part, jamais des sets.
+       Une ligne par fiche et par setter. */
+    var seenSt = {};
+    setStatus.forEach(function (s) {
+      if (setterLeadCreated[s.leadId]) return;
+      var k = s.slug + '|' + s.leadId;
+      if (seenSt[k]) return;
+      seenSt[k] = 1;
+      keepRt(s.rt, s.dk, 'statutsSet', { name: s.name, leadId: s.leadId, date: s.dk, status: s.status, statusColor: '#a78bfa', setter: s.rt.lbl,
+        info: 'statut posé sur la fiche — aucun RDV du setting créé sur la période' });
+    });
+
+    /* Leads travaillés de l'Équipe = fiches DISTINCTES : une fiche compte au
+       jour de sa première action de la période, tous setters confondus ; les
+       suivantes sont « reprises par un deuxième setter ». */
+    var teamLeads = { days: {}, lists: {} }, repris = {};
+    if (team) {
+      touches.sort(function (a, b) { return a.dk < b.dk ? -1 : (a.dk > b.dk ? 1 : a.ms - b.ms); });
+      var seenL = {};
+      touches.forEach(function (t) {
+        if (!seenL[t.leadId]) {
+          seenL[t.leadId] = t;
+          teamLeads.days[t.dk] = (teamLeads.days[t.dk] || 0) + 1;
+          (teamLeads.lists[t.dk] || (teamLeads.lists[t.dk] = [])).push(t.it);
+        } else {
+          var first = seenL[t.leadId];
+          var cp = {};
+          Object.keys(t.it).forEach(function (k) { cp[k] = t.it[k]; });
+          cp.info = 'déjà travaillée le ' + SD.frDate(first.dk) + ' par ' + first.rt.lbl;
+          (repris[t.dk] || (repris[t.dk] = [])).push(cp);
+        }
+      });
+    }
+
+    /* — Leads NB reçus : entrés sur la période, sans RDV Self Booking,
+       rangés chez le setter de la fiche (Équipe : « Non attribué » sinon). — */
+    var sbLead = {};
+    bookings.forEach(function (b) { if (b.leadId && SC.classifyBooking(b, S.typeMap) === 'self') sbLead[b.leadId] = 1; });
+    if (entered && entered.tronque) errs.push('leads entrés : plafond de lecture atteint — Leads NB reçus incomplets (réduis la période)');
+    ((entered && entered.leads) || []).forEach(function (l) {
+      if (sbLead[l._id] || l._entry == null) return;
+      var eDay = SC.jourParis(l._entry);
+      var rtL = route(l.setterSlug || l.assignedTo || null, eDay);
+      if (!rtL || !rtL.bk.days[eDay]) return;
+      var worked = !!l.firstActionAt;
+      var itL = { name: l.nom || l.email || l._id, leadId: l._id, date: eDay,
+        status: worked ? 'Travaillé' : 'Pas encore travaillé', statusColor: worked ? '#34d399' : '#fbbf24', setter: rtL.lbl };
+      add(rtL, eDay, 'recus', itL);
+      if (!worked) keepRt(rtL, eDay, 'nonTrav', itL);
+    });
+
+    /* — Closes NB / Contracté / Collecté : la liste unique des closes —
+       lignes du Setting (sb === false), chez le setter du close, au jour où
+       le client est gagné. Rien d'autre (plus de RDV closés, plus de montant
+       déclaré). */
+    if (CL.erreur) errs.push('closes : ' + CL.erreur);
+    if (CL.tronque) errs.push('closes : liste des clients gagnés tronquée (plafond de lecture) — réduis la période');
+    (CL.rows || []).forEach(function (r) {
+      if (r.sb !== false) return;
+      var rt = route(r.setter || null, r.day);
+      if (!rt || !rt.bk.days[r.day]) return;
+      var it = SD.closeItem(r, { nomDe: nomPersonne });
+      it.setter = rt.lbl;
+      add(rt, r.day, 'closesNb', it);
+      add(rt, r.day, 'contracteNb', null, Number(r.rv && r.rv.con) || 0);
+      add(rt, r.day, 'collecteNb', null, Number(r.rv && r.rv.paid) || 0);
+      if (r.rv && !r.rv.hasPay) keepRt(rt, r.day, 'sansPaiement', it);
+      if (r.canalEcart) keepRt(rt, r.day, 'ecartCanal', it);
+      if (r.canalSrc === 'inconnu') keepRt(rt, r.day, 'canalInconnu', it);
+    });
+    (CL.annules || []).forEach(function (r) {
+      if (r.sb !== false) return;
+      var rt = route(r.setter || null, r.day);
+      if (!rt || !rt.bk.days[r.day]) return;
+      var it = SD.closeItem(r, { nomDe: nomPersonne });
+      it.setter = rt.lbl;
+      keepRt(rt, r.day, 'closesAnnules', it);
+    });
+
+    S.data = {
+      buckets: buckets,
+      days: buckets[0].days,   // valeurs de la base du membre affiché (modale ✎)
+      callsOk: callsOk, callsMsg: callsMsg, sansAuteur: sansAuteur,
+      enteredOk: entered != null,
+      rdvKo: !!bookings._erreur,   // RDV illisibles : sets, RDV NB et reçus en « — »
+      closesKo: !!CL.erreur && !(CL.rows || []).length && !(CL.annules || []).length,
+      /* Paiements illisibles : les montants ne sont pas affichés (jamais le
+         tarif déclaré à la place) et « sans paiement » ne veut plus rien dire. */
+      moneyKo: !!CL.erreur && /paiements\s*:|funnel-core/.test(CL.erreur),
+      teamLeads: teamLeads, repris: repris, manuels: manuels,
+      errs: errs,
+      dmOk: !dm || dm.ok !== false,
+      dmError: dm && dm.ok === false ? dm.error : null,
+      dmCount: dm ? dm.events.length : 0
+    };
+  }
+
+  /* ══ VALEURS AFFICHÉES ════════════════════════════════════════════════
+     Valeur d'un seau : la base, ou la correction ✎ quand la colonne en
+     accepte une (téléphone, messages, actions de fiche — décision D9). Une
+     ancienne correction d'une colonne calculée (RDV, sets, reçus, closes,
+     montants) n'est plus appliquée : « old » garde la valeur saisie pour le
+     repère ✎. Temps : correction saisie en minutes. */
   function effB(bk, dk, key) {
-    if (S.slug === '_all' && bk.start && dk < bk.start) return { v: 0, ov: false };
-    var ov = bk.ov[dk] && bk.ov[dk].setting;
-    if (ov) {
-      var ovKey = key === 'tempsAppelSec' ? 'tempsAppelMin' : key;
-      if (ov[ovKey] != null && ov[ovKey] !== '') {
-        var v = Number(ov[ovKey]) || 0;
-        return { v: key === 'tempsAppelSec' ? v * 60 : v, ov: true };
+    var row = bk && bk.days[dk];
+    var base = (row && row[key]) || 0;
+    if (!bk || bk.slug === NA || (S.slug === '_all' && bk.start && dk < bk.start)) return { v: base, ov: false, base: base };
+    var ovd = bk.ov[dk] && bk.ov[dk].setting;
+    var c = colOf(key);
+    if (ovd && c) {
+      var raw = ovd[c.ovKey || key];
+      if (raw != null && raw !== '') {
+        var n = Number(raw) || 0;
+        if (corrigeable(c)) return { v: key === 'tempsAppelSec' ? n * 60 : n, ov: true, base: base };
+        return { v: base, ov: false, old: n, base: base };
       }
     }
-    return { v: (bk.days[dk] && bk.days[dk][key]) || 0, ov: false };
+    return { v: base, ov: false, base: base };
   }
   /* Valeur affichée : un membre = son seau ; Équipe = somme des onglets
-     (corrections de chacun comprises) + RDV non attribués. */
+     (corrections de chacun comprises) + « Non attribué ». Exception écrite :
+     Leads travaillés de l'Équipe = fiches distinctes (+ corrections ✎). */
   function eff(dk, key) {
-    var v = 0, o = false;
-    ((S.data && S.data.buckets) || []).forEach(function (bk) { var e = effB(bk, dk, key); v += e.v; if (e.ov) o = true; });
-    return { v: v, ov: o };
+    var bks = (S.data && S.data.buckets) || [];
+    if (S.slug !== '_all') return effB(bks[0], dk, key);
+    var v = 0, b0 = 0, o = false;
+    bks.forEach(function (bk) { var e = effB(bk, dk, key); v += e.v; b0 += e.base; if (e.ov) o = true; });
+    if (key === 'leads') {
+      var dist = S.data.teamLeads.days[dk] || 0;
+      return { v: dist + (v - b0), ov: o, base: dist };
+    }
+    return { v: v, ov: o, base: b0 };
   }
   function beforeStart(dk) { return !!(S.startDate && dk < S.startDate); }
+  function visDays() { var R = S.range || period(); return R.days.filter(function (dk) { return !beforeStart(dk); }); }
+  /* Lignes d'une liste (colonne ou sous-liste) sur les jours visibles. */
+  function listOf(key, bks, dks) {
+    var out = [];
+    (bks || S.data.buckets).forEach(function (bk) {
+      (dks || visDays()).forEach(function (dk) {
+        if (beforeStart(dk)) return;
+        out = out.concat(((bk.lists[dk] || {})[key]) || []);
+      });
+    });
+    return out;
+  }
+  function cnt(key) { return listOf(key).length; }
+
+  /* Case non disponible : appels illisibles pour ce compte, leads entrés
+     ou liste des closes en échec. « — », jamais un zéro. */
+  function unavailable(c) {
+    if (!S.data) return false;
+    if (c.grp === 'tel' && !S.data.callsOk) return true;
+    if (c.key === 'recus' && (!S.data.enteredOk || S.data.rdvKo)) return true;
+    if ((c.grp === 'rdv' || c.grp === 'set') && S.data.rdvKo) return true;
+    if (c.grp === 'close' && S.data.closesKo) return true;
+    if (c.fmt === 'eur' && S.data.moneyKo) return true;
+    return false;
+  }
 
   /* ══ RENDER ═══════════════════════════════════════════════════════════ */
   function fmtCell(c, val) {
-    if (c.fmt === 'dur') return val > 0 ? AF.fmtDuration(val) : '<span class="z">—</span>';
+    if (c.fmt === 'dur') return val > 0 ? AF.fmtDuration(val) : '<span class="z">·</span>';
     if (c.fmt === 'eur') return val > 0 ? '<span class="eur">' + fmtEuro(val) + '</span>' : '<span class="z">·</span>';
     if (val === 0) return '<span class="z">·</span>';
-    if (c.fmt === 'hot') return '<span class="hot">' + val + '</span>';
+    if (c.fmt === 'hot' || c.fmt === 'warn') return '<span class="hot">' + val + '</span>';
     if (c.fmt === 'good') return '<span class="good">' + val + '</span>';
     if (c.fmt === 'bad') return '<span class="bad">' + val + '</span>';
     return String(val);
   }
+  function drillCell(c, val, scope) {
+    if (unavailable(c)) return '<span class="z">—</span>';
+    var html = fmtCell(c, val);
+    return (DRILL[c.key] && val > 0) ? SD.cell(html, c.key + '|' + scope) : html;
+  }
+  function oldMark(c, n) {
+    var txt = c.fmt === 'eur' ? fmtEuro(n) : (c.key === 'tempsAppelSec' ? n + ' min' : String(n));
+    return ' <span class="au-ovold">✎</span>' + SC.info('correction_ancienne', 'Valeur saisie à l’époque : ' + txt + '.');
+  }
+  function headInfo(c) {
+    if (c.grp === 'tel' && S.data && !S.data.callsOk) {
+      return S.data.callsMsg === 'non_lisibles' ? SC.info('appels_equipe_non_lisibles') : SC.info('lecture_incomplete', S.data.callsMsg);
+    }
+    return colInfo(c);
+  }
+  function kv(val, txt, key) { return val > 0 ? SD.cell(txt, key + '|t') : txt; }
+  function kpi(v, l, s, color) {
+    return '<div class="au-kpi accent" style="--au-kc:' + color + '"><div class="v">' + v + '</div><div class="l">' + l + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>';
+  }
+  function lbl(cle, precision) { return esc(SC.mot(cle)) + SC.info(cle, precision); }
+  function part(n, mot, key, cle) { return kv(n, n + ' ' + mot, key) + (cle ? SC.info(cle) : ''); }
 
   function render() {
     var member = currentMember();
     var team = S.slug === '_all';
-    var ecrit = isEcrit(member);
+    var ecrit = !team && isEcrit(member);
     var COLS = cols();
     var R = S.range || period();
-    var todayIso = AF.dayKey(new Date());
+    var todayIso = todayParis();
     var tot = emptyDay();
     var weekAgg = emptyDay(), weekStartIdx = 0, weekIdx = 1;
     var rowsH = '';
     var showWeeks = S.mode === 'month'; // lignes Semaine uniquement en vue Mois
-    var skippedBefore = 0;
+    var skippedBefore = 0, nOld = 0, nOv = 0;
 
     function addTo(agg, dk) {
       COLS.forEach(function (c) { agg[c.key] += eff(dk, c.key).v; });
-    }
-    /* Chiffre cliquable dès qu'il y a quelque chose à montrer derrière. */
-    function drillCell(c, val, scope) {
-      var html = fmtCell(c, val);
-      return (DRILL[c.key] && val > 0) ? SD.cell(html, c.key + '|' + scope) : html;
     }
     function aggRow(agg, label, cls, scope) {
       var h = '<tr class="' + cls + '"><td>' + label + '</td>';
@@ -797,7 +1077,7 @@
     }
 
     R.days.forEach(function (dk, di) {
-      var dt = new Date(dk + 'T12:00:00');
+      var dt = calOf(dk);
       var dow = dt.getDay();
       var isFuture = dk > todayIso;
       var before = beforeStart(dk);
@@ -806,22 +1086,23 @@
 
       rowsH += '<tr class="' + cls + '"><td>' + dayLbl + '</td>';
       COLS.forEach(function (c, i) {
-        var e = eff(dk, c.key);
         var grpStart = i > 0 && COLS[i - 1].grp !== c.grp;
         if (before) {
           /* Avant la date de début : pas de donnée, pas un zéro. */
-          rowsH += '<td class="' + (grpStart ? 'grp ' : '') + 'au-before" title="Avant la date de début (' + frOfIso(S.startDate) + ')">—</td>';
+          rowsH += '<td class="' + (grpStart ? 'grp ' : '') + 'au-before" title="Avant la date de début (' + frOfIso(S.startDate) + ') : compté dans Équipe, ligne Non attribué">—</td>';
           return;
         }
-        /* Colonnes issues du journal d'actions (Leads, NRP, Msg, FU, Out) :
-           avant la 1ʳᵉ action enregistrée, on affiche — (données inexistantes,
-           pas « zéro activité »). Sets exclu : il vient aussi des RDV. */
-        var preJournal = c.grp === 'act' && c.key !== 'sets' && !e.ov && e.v === 0 &&
-          (!S.journalStart || dk < S.journalStart);
-        rowsH += '<td class="' + (grpStart ? 'grp ' : '') + (e.ov ? 'au-ov' : '') + '"' + (c.title ? ' title="' + c.title + '"' : '') + '>' +
-          (preJournal ? '<span class="z" title="Journal d\'actions pas encore actif ce jour-là">—</span>' : drillCell(c, e.v, 'd|' + dk)) + '</td>';
+        var e = eff(dk, c.key);
+        if (e.ov) nOv++;
+        if (!team && e.old != null) nOld++;
+        /* Colonnes issues du journal d'actions : avant la 1ʳᵉ action
+           enregistrée, « — » (données inexistantes, pas « zéro activité »). */
+        var preJournal = c.grp === 'act' && !e.ov && e.v === 0 && (!S.journalStart || dk < S.journalStart);
+        rowsH += '<td class="' + (grpStart ? 'grp ' : '') + (e.ov ? 'au-ov' : '') + '">' +
+          (preJournal ? '<span class="z" title="Journal d\'actions pas encore actif ce jour-là">—</span>'
+            : drillCell(c, e.v, 'd|' + dk) + ((!team && e.old != null) ? oldMark(c, e.old) : '')) + '</td>';
       });
-      rowsH += '<td>' + ((before || team) ? '' : '<button class="au-day-edit" data-day="' + dk + '" title="Corriger cette journée">✎</button>') + '</td></tr>';
+      rowsH += '<td>' + ((before || team) ? '' : '<button class="au-day-edit" data-day="' + dk + '" title="Corriger cette journée (téléphone, messages, actions de fiche)">✎</button>') + '</td></tr>';
 
       if (before) skippedBefore++;
       else { addTo(tot, dk); addTo(weekAgg, dk); }
@@ -831,132 +1112,145 @@
       }
     });
 
-    /* — KPIs de la période — */
-    var kpis, fun;
-    function kv(val, txt, key) { return val > 0 ? SD.cell(txt, key + '|t') : txt; }
+    /* — Cartes de la période — */
+    var D = S.data;
+    var telOk = D.callsOk;
+    var telWhy = D.callsMsg === 'non_lisibles'
+      ? SC.info('appels_equipe_non_lisibles', team ? null : 'Les appels d’un autre membre ne sont lisibles que par lui et par un admin.')
+      : SC.info('lecture_incomplete', D.callsMsg || null);
+    var kept = tot.rdvNb - tot.annulesNb;
+    var showUp = SC.showUp(tot.presentsNb, kept, tot.aVenirNb);
+
     /* Leads NB reçus et, parmi eux, ceux que personne n'a encore travaillés. */
-    var nNonTrav = 0;
-    S.data.buckets.forEach(function (bk) {
-      R.days.forEach(function (dk) {
-        if (team ? (bk.start && dk < bk.start) : beforeStart(dk)) return;
-        nNonTrav += ((bk.lists[dk] || {}).nonTrav || []).length;
-      });
-    });
-    var recusSub = !S.data.enteredOk ? '1ʳᵉ action fiche · jamais recomptés'
-      : kv(tot.recus, tot.recus + ' leads NB reçus', 'recus') + ' sur la période' + (nNonTrav > 0 ? ' · ' + SD.cell('<strong style="color:var(--gold)">' + nNonTrav + ' pas encore travaillés</strong>', 'nonTrav|t') : (tot.recus > 0 ? ' · tous travaillés' : ''));
-    var txPitch = tot.presentsNb > 0 ? tot.pitchesNb / tot.presentsNb * 100 : null;
-    var kpiRdv =
-      kpi(kv(tot.presentsNb, String(tot.presentsNb), 'presentsNb'), 'Présents NB', kv(tot.rdvNb, tot.rdvNb + ' RDV NB', 'rdvNb') + ' sur la période' + (rdvOrigin(S.data.buckets, R, team) ? ' (' + rdvOrigin(S.data.buckets, R, team) + ')' : '') + ' · ' + tot.annulesNb + ' annulés · ' + tot.noshowNb + ' no-show', '#34d399') +
-      kpi(kv(tot.pitchesNb, String(tot.pitchesNb), 'pitchesNb'), 'Pitchés NB', fmtPct(txPitch) + ' des présents', '#a78bfa') +
-      kpi(kv(tot.closesNb, String(tot.closesNb), 'closesNb'), 'Closes NB', kv(tot.closesNb + tot.collecteNb + S.data.rev.pending, fmtEuro(tot.contracteNb) + ' contracté · ' + fmtEuro(tot.collecteNb) + ' collecté HT', 'collecteNb') + (S.data.rev.pending > 0 ? ' · ⏳ ' + fmtEuro(S.data.rev.pending) + ' de 1ers prélèvements en attente' : ''), '#34d399');
+    var nNonTrav = cnt('nonTrav');
+    var recusSub = (!D.enteredOk || D.rdvKo) ? 'Leads NB reçus : lecture impossible' + SC.info('lecture_incomplete')
+      : kv(tot.recus, tot.recus + ' leads NB reçus', 'recus') + SC.info('leads_nb_recus') +
+        (nNonTrav > 0 ? ' · ' + SD.cell('<strong style="color:var(--gold)">' + nNonTrav + ' pas encore travaillés</strong>', 'nonTrav|t') + SC.info('pas_encore_travailles') : (tot.recus > 0 ? ' · tous travaillés' : ''));
+    var leadsSub = recusSub;
+    if (team) {
+      var sumTabs = 0, nRepris = 0;
+      D.buckets.forEach(function (bk) { R.days.forEach(function (dk) { sumTabs += effB(bk, dk, 'leads').v; }); });
+      R.days.forEach(function (dk) { nRepris += (D.repris[dk] || []).length; });
+      leadsSub += '<br/>somme des onglets ' + sumTabs + ' − ' + kv(nRepris, nRepris + ' repris par un 2e setter', 'repris') + SC.infoLibre(TXT.repris[0], TXT.repris[1]) + ' = ' + tot.leads;
+    }
+    var nSt = cnt('statutsSet');
+    var stTxt = (nSt > 0 && !D.rdvKo) ? ' · ' + kv(nSt, nSt + ' statuts « Set » sans RDV', 'statutsSet') + SC.info('statuts_set_sans_rdv') : '';
+
+    var origin = rdvOriginTxt(D.buckets);
+    var kRdv = kpi(kv(tot.rdvNb, String(tot.rdvNb), 'rdvNb'), lbl('rdv_nb'),
+      '= ' + [part(tot.annulesNb, 'annulés', 'annulesNb', 'annules'), part(tot.noshowNb, 'no-show', 'noshowNb', 'no_show'),
+        part(tot.aStatuerNb, 'à statuer', 'aStatuerNb', 'a_statuer'), part(tot.aVenirNb, 'à venir', 'aVenirNb', 'a_venir'),
+        part(tot.presentsNb, 'présents', 'presentsNb', 'presents')].join(' + ') +
+      '<br/>' + esc(SC.mot('kept')) + ' ' + kv(kept, String(kept), 'kept') + SC.info('kept') + (tot.aVenirNb > 0 ? ' (dont ' + tot.aVenirNb + ' à venir)' : '') +
+      (origin ? ' · ' + origin : '') +
+      (tot.replanNb > 0 ? '<br/>' + part(tot.replanNb, 'replanifiés', 'replanNb', 'replanifie') + ' hors RDV NB' : ''), '#8f97b2');
+    var kPres = kpi(kv(tot.presentsNb, String(tot.presentsNb), 'presentsNb'), lbl('presents'),
+      'show-up ' + fmtPct(showUp) + SC.info('show_up') + ' = ' + tot.presentsNb + ' ÷ (' + kept + ' kept' + (tot.aVenirNb > 0 ? ' − ' + tot.aVenirNb + ' à venir' : '') + ')' +
+      '<br/>dont ' + part(cnt('disqua'), 'disqua.', 'disqua', 'disqua') + ' · ' + part(tot.pitchesNb, 'pitchés', 'pitchesNb', 'pitches') +
+      ' · ' + part(cnt('sansDetail'), 'sans détail', 'sansDetail', 'sans_detail'), '#34d399');
+    var kPitch = kpi(kv(tot.pitchesNb, String(tot.pitchesNb), 'pitchesNb'), lbl('pitches'),
+      'taux de pitch ' + fmtPct(SC.pct(tot.pitchesNb, tot.presentsNb)) + SC.info('taux_pitch') +
+      '<br/>' + part(cnt('offres'), 'offres en attente', 'offres', 'offres_attente') + ' · ' + part(cnt('nonCloses'), 'non closes', 'nonCloses', 'non_closes') +
+      ' · ' + part(cnt('rdvCloses'), 'RDV closés', 'rdvCloses', 'rdv_closes'), '#a78bfa');
+    var pending = 0;
+    if (!D.moneyKo) listOf('closesNb').forEach(function (it) { pending += Number(it.pending) || 0; });
+    var kClose = D.closesKo
+      ? kpi('—', lbl('closes_nb'), 'liste des closes indisponible' + SC.info('lecture_incomplete'), '#34d399')
+      : kpi(kv(tot.closesNb, String(tot.closesNb), 'closesNb'), lbl('closes_nb', 'Ici : rangés chez le setter du close, au jour où le client est gagné.'),
+        'Close / pitchés ' + fmtPct(SC.tauxClose(tot.closesNb, tot.pitchesNb)) + SC.info('taux_close_pitches') +
+        (D.moneyKo ? '<br/>montants non affichés : paiements illisibles' + SC.info('lecture_incomplete') :
+        '<br/>' + kv(tot.closesNb, fmtEuro(tot.contracteNb), 'contracteNb') + ' ' + esc(SC.mot('contracte').toLowerCase()) + SC.info('contracte') +
+        ' · ' + kv(tot.closesNb, fmtEuro(tot.collecteNb), 'collecteNb') + ' ' + esc(SC.mot('collecte').toLowerCase()) + SC.info('collecte') + ' · HT' + SC.info('ht')) +
+        (pending > 0 ? '<br/>⏳ ' + fmtEuro(pending) + ' de 1ers prélèvements en attente' + SC.info('premiers_prelevements') : ''), '#34d399');
+    var koTxt = 'RDV illisibles : non affiché' + SC.info('lecture_incomplete');
+    if (D.rdvKo) {
+      kRdv = kpi('—', lbl('rdv_nb'), koTxt, '#8f97b2');
+      kPres = kpi('—', lbl('presents'), koTxt, '#34d399');
+      kPitch = kpi('—', lbl('pitches'), koTxt, '#a78bfa');
+    }
+    var kpiRdv = kRdv + kPres + kPitch + kClose;
+    var setsV = D.rdvKo ? '—' : kv(tot.sets, String(tot.sets), 'sets');
+
+    var kpis, fun;
     if (ecrit) {
-      var txRep = tot.convOut > 0 ? tot.replies / tot.convOut * 100 : null;
-      var txSetConv = tot.replies > 0 ? tot.sets / tot.replies * 100 : null;
-      var txShowE = tot.sets > 0 ? tot.presentsNb / tot.sets * 100 : null;
+      var kLeadsE = kpi(kv(tot.leads, String(tot.leads), 'leads'), lbl('leads_travailles'), leadsSub, '#5b7cfa');
       kpis =
-        kpi(tot.dmOut.toLocaleString('fr-FR'), 'DM envoyés', tot.dmIn.toLocaleString('fr-FR') + ' reçus · Instagram', '#e1306c') +
-        kpi(String(tot.convOut), 'Conversations ouvertes', tot.replies + ' réponses · ' + fmtPct(txRep) + ' · ' + tot.convIn + ' entrantes', '#5b7cfa') +
-        kpi(kv(tot.leads, String(tot.leads), 'leads'), 'Leads travaillés', recusSub, '#5b7cfa') +
-        kpi(kv(tot.sets, String(tot.sets), 'sets'), 'Sets (NB)', 'Set % réponses ' + fmtPct(txSetConv) + ' · show-up ' + fmtPct(txShowE), '#a78bfa') +
+        kpi(fmtN(tot.dmOut), esc(TXT.dmOut[0]) + SC.infoLibre(TXT.dmOut[0], TXT.dmOut[1]), fmtN(tot.dmIn) + ' reçus' + SC.infoLibre(TXT.dmIn[0], TXT.dmIn[1]) + ' · Instagram', '#e1306c') +
+        kpi(String(tot.convOut), esc(TXT.convOut[0]) + SC.infoLibre(TXT.convOut[0], TXT.convOut[1]),
+          tot.replies + ' réponses' + SC.infoLibre(TXT.replies[0], TXT.replies[1]) + ' · ' + fmtPct(SC.pct(tot.replies, tot.convOut)) + ' · ' + tot.convIn + ' entrantes' + SC.infoLibre(TXT.convIn[0], TXT.convIn[1]), '#5b7cfa') +
+        kLeadsE +
+        kpi(setsV, lbl('sets'), D.rdvKo ? koTxt : 'Sets / réponses ' + fmtPct(SC.pct(tot.sets, tot.replies)) + SC.infoLibre(TXT.setsReponses[0], TXT.setsReponses[1]) + stTxt, '#a78bfa') +
         kpiRdv;
       fun = funnel([
-        { l: 'DM envoyés', v: tot.dmOut },
-        { l: 'Conv. ouvertes', v: tot.convOut },
-        { l: 'Réponses', v: tot.replies },
-        { l: 'Sets', v: tot.sets },
-        { l: 'Présents', v: tot.presentsNb },
-        { l: 'Pitchés', v: tot.pitchesNb },
-        { l: 'Closes', v: tot.closesNb }
+        { l: TXT.dmOut[0], v: tot.dmOut, it: TXT.dmOut },
+        { l: 'Conv. ouvertes', v: tot.convOut, it: TXT.convOut, noPct: true },
+        { l: 'Réponses', v: tot.replies, it: TXT.replies },
+        { l: 'Sets', v: tot.sets, cle: 'sets', pctLbl: 'des réponses' },
+        { l: 'RDV NB', v: tot.rdvNb, cle: 'rdv_nb', noPct: true },
+        { l: 'Kept', v: kept, cle: 'kept' },
+        { l: 'Présents', v: tot.presentsNb, cle: 'presents', pct: showUp, pctLbl: 'show-up' },
+        { l: 'Pitchés', v: tot.pitchesNb, cle: 'pitches' },
+        { l: 'Closes NB', v: tot.closesNb, cle: 'closes_nb', pct: SC.tauxClose(tot.closesNb, tot.pitchesNb), pctLbl: 'close / pitchés' }
       ]);
     } else {
-      var txDecro = tot.calls > 0 ? tot.decroches / tot.calls * 100 : null;
-      var txSet = tot.decroches > 0 ? tot.sets / tot.decroches * 100 : null;
-      var txShow = tot.sets > 0 ? tot.presentsNb / tot.sets * 100 : null;
+      var saTxt = D.sansAuteur > 0 ? '<br/>' + D.sansAuteur + ' ' + plural(D.sansAuteur, 'appel') + ' sans auteur' + SC.info('appels_sans_auteur') + (team ? ' (ligne Non attribué)' : ' (dans aucun onglet)') : '';
       kpis =
-        kpi(AF.fmtDuration(tot.tempsAppelSec), "Temps d'appel", 'Ringover · auto', '#2dd4bf') +
-        kpi(tot.calls.toLocaleString('fr-FR'), 'Calls passés', tot.decroches + ' décrochés · ' + fmtPct(txDecro), '#5b7cfa') +
-        kpi(kv(tot.leads, String(tot.leads), 'leads'), 'Leads travaillés', recusSub, '#5b7cfa') +
-        kpi(kv(tot.sets, String(tot.sets), 'sets'), 'Sets (NB)', 'Set % décro ' + fmtPct(txSet) + ' · show-up ' + fmtPct(txShow), '#a78bfa') +
+        kpi(telOk ? AF.fmtDuration(tot.tempsAppelSec) : '—', esc(TXT.temps[0]) + SC.infoLibre(TXT.temps[0], TXT.temps[1]), telOk ? 'appels sortants décrochés' : 'non affiché' + telWhy, '#2dd4bf') +
+        kpi(telOk ? fmtN(tot.calls) : '—', lbl('appels'),
+          telOk ? fmtN(tot.decroches) + ' décrochés' + SC.info('decroches') + ' · ' + fmtPct(SC.pct(tot.decroches, tot.calls)) + SC.info('taux_decroche') + saTxt : 'non affiché' + telWhy, '#5b7cfa') +
+        kpi(kv(tot.leads, String(tot.leads), 'leads'), lbl('leads_travailles', team ? 'Équipe : chaque fiche compte une fois, même travaillée par deux setters.' : null), leadsSub, '#5b7cfa') +
+        kpi(setsV, lbl('sets'), D.rdvKo ? koTxt : 'Sets / décrochés ' + (telOk ? fmtPct(SC.pct(tot.sets, tot.decroches)) : '—') + SC.info('taux_set') + stTxt, '#a78bfa') +
         kpiRdv;
-      fun = funnel([
-        { l: 'Leads', v: tot.leads },
-        { l: 'Décrochés', v: tot.decroches },
-        { l: 'Sets', v: tot.sets },
-        { l: 'Présents', v: tot.presentsNb },
-        { l: 'Pitchés', v: tot.pitchesNb },
-        { l: 'Closes', v: tot.closesNb }
+      var steps = [{ l: 'Leads travaillés', v: tot.leads, cle: 'leads_travailles' }];
+      if (telOk) steps.push({ l: 'Décrochés', v: tot.decroches, cle: 'decroches', noPct: true });
+      steps.push({ l: 'Sets', v: tot.sets, cle: 'sets', noPct: !telOk, pctLbl: 'des décrochés' });
+      steps = steps.concat([
+        { l: 'RDV NB', v: tot.rdvNb, cle: 'rdv_nb', noPct: true },
+        { l: 'Kept', v: kept, cle: 'kept' },
+        { l: 'Présents', v: tot.presentsNb, cle: 'presents', pct: showUp, pctLbl: 'show-up' },
+        { l: 'Pitchés', v: tot.pitchesNb, cle: 'pitches' },
+        { l: 'Closes NB', v: tot.closesNb, cle: 'closes_nb', pct: SC.tauxClose(tot.closesNb, tot.pitchesNb), pctLbl: 'close / pitchés' }
       ]);
+      fun = funnel(steps);
     }
 
-    var bridge = bridgeHtml(R, team);
-
-    /* — Onglet Équipe : un setter par ligne, + les RDV sans setter identifiable.
-       Le total de cette carte = la ligne TOTAL du tableau jour par jour. — */
-    var teamCard = '';
-    if (team) {
-      var tk = TEAM_KEYS.map(function (k) { return COLS.filter(function (c) { return c.key === k; })[0]; }).filter(function (c) { return !!c; });
-      var tH = '<tr><th>Setter</th>';
-      tk.forEach(function (c) { tH += '<th' + (c.title ? ' title="' + c.title + '"' : '') + '>' + (c.key === 'leads' ? 'Leads trav.' : (c.key === 'recus' ? 'Leads reçus' : c.label)) + '</th>'; });
-      tH += '</tr>';
-      var tB = '', tTot = {};
-      tk.forEach(function (c) { tTot[c.key] = 0; });
-      S.data.buckets.forEach(function (bk) {
-        var line = {}, any = false;
-        tk.forEach(function (c) {
-          var v = 0;
-          R.days.forEach(function (dk) { v += effB(bk, dk, c.key).v; });
-          line[c.key] = v; tTot[c.key] += v; if (v) any = true;
-        });
-        if (bk.slug === NA && !any) return;
-        tB += '<tr><td>' + SD.esc(bk.name) + (bk.slug === NA ? ' <span style="opacity:.6;font-weight:500">(sans setter identifiable)</span>' : '') + '</td>';
-        var org = rdvOrigin([bk], R, true);
-        tk.forEach(function (c) {
-          tB += '<td>' + ((DRILL[c.key] && line[c.key] > 0) ? SD.cell(fmtCell(c, line[c.key]), c.key + '|m|' + bk.slug) : fmtCell(c, line[c.key])) +
-            ((c.key === 'rdvNb' && org) ? '<div style="font-size:10.5px;font-weight:500;opacity:.65;white-space:nowrap">' + org + '</div>' : '') + '</td>';
-        });
-        tB += '</tr>';
-      });
-      tB += '<tr class="au-total"><td>ÉQUIPE</td>';
-      var orgT = rdvOrigin(S.data.buckets, R, true);
-      tk.forEach(function (c) {
-        tB += '<td>' + ((DRILL[c.key] && tTot[c.key] > 0) ? SD.cell(fmtCell(c, tTot[c.key]), c.key + '|t') : fmtCell(c, tTot[c.key])) +
-          ((c.key === 'rdvNb' && orgT) ? '<div style="font-size:10.5px;font-weight:500;opacity:.65;white-space:nowrap">' + orgT + '</div>' : '') + '</td>';
-      });
-      tB += '</tr>';
-      teamCard =
-        '<div class="au-card" style="padding:0;overflow:hidden">' +
-          '<div class="au-card-head" style="padding:16px 18px 0;margin-bottom:12px"><div class="au-card-title">Par setter — ' + periodLabel() + '</div>' +
-            '<div class="au-card-note">Sets = RDV posés sur la période · RDV NB = RDV qui ont lieu sur la période · clique un chiffre pour voir les noms</div></div>' +
-          '<div class="au-twrap" style="border:none;border-radius:0"><table class="au-table" style="min-width:900px"><thead>' + tH + '</thead><tbody>' + tB + '</tbody></table></div>' +
-        '</div>';
-    }
+    var bridge = bridgeHtml(tot, team);
+    var teamCard = team ? teamCardHtml(COLS, R, tot) : '';
 
     /* — Table — */
     var headH = '<tr><th>Jour</th>';
     COLS.forEach(function (c, i) {
       var grpStart = i > 0 && COLS[i - 1].grp !== c.grp;
-      headH += '<th class="' + (grpStart ? 'grp' : '') + '"' + (c.title ? ' title="' + c.title + '"' : '') + '>' + c.label + '</th>';
+      headH += '<th class="' + (grpStart ? 'grp' : '') + '">' + esc(c.label) + headInfo(c) + '</th>';
     });
     headH += '<th></th></tr>';
 
-    var callsNote = S.data.callsOk ? '' :
-      '<div style="font-size:11.5px;color:var(--gold);margin-top:10px">🔒 Les appels Ringover d\'un autre membre ne sont visibles que par un admin — colonnes ⏱/Calls/Décro. limitées à ton propre rapport' + (team ? ' : le total Équipe de ces trois colonnes est donc partiel' : '') + '.</div>';
-    var dmNote = '';
-    if (ecrit && !S.data.dmOk) {
-      dmNote = '<div style="font-size:11.5px;color:var(--gold);margin-top:10px">⚠️ Messages Instagram illisibles (' + (S.data.dmError || 'erreur') + ') — si le message parle de permissions, les règles Firestore <code>ig_dm_events</code> / <code>ig_dm_threads</code> ne sont pas déployées pour les rôles sales.</div>';
-    } else if (ecrit && S.data.dmCount === 0) {
-      dmNote = '<div style="font-size:11.5px;color:var(--muted);margin-top:10px">💬 Aucun message Instagram journalisé sur la période. Les DM ne comptent qu\'à partir du branchement du webhook Meta, et les envois manuels depuis l\'app Instagram ne remontent que si les échos Meta sont actifs (voir l\'onglet Instagram du Funnel).</div>';
+    var notes = [];
+    if (!ecrit && !telOk) {
+      notes.push('🔒 ' + (D.callsMsg === 'non_lisibles'
+        ? (team ? 'Appels de l’équipe non affichés : ton compte ne lit que tes propres appels. Un admin voit le total.' : 'Les appels d’un autre membre ne sont lisibles que par lui et par un admin.') + SC.info('appels_equipe_non_lisibles')
+        : 'Appels non affichés : ' + esc(D.callsMsg) + SC.info('lecture_incomplete')));
     }
+    if (ecrit && !D.dmOk) {
+      notes.push('⚠️ Messages Instagram illisibles (' + esc(D.dmError || 'erreur') + ') — si le message parle de permissions, les règles Firestore <code>ig_dm_events</code> / <code>ig_dm_threads</code> ne sont pas déployées pour les rôles sales.');
+    } else if (ecrit && D.dmCount === 0) {
+      notes.push('💬 Aucun message Instagram journalisé sur la période. Les DM ne comptent qu\'à partir du branchement du webhook Meta, et les envois manuels depuis l\'app Instagram ne remontent que si les échos Meta sont actifs (voir l\'onglet Instagram du Funnel).');
+    }
+    notes.push('RDV NB = Annulés + No-show + À statuer + À venir + Présents · Replan. hors RDV NB' + SC.info('rdv_nb') +
+      ' · Montants HT arrondis à l’euro' + SC.info('ht') + ' · jours à l’heure de Paris' + SC.infoLibre(TXT.paris[0], TXT.paris[1]));
+    if (nOv > 0) notes.push('<span style="color:var(--gold)">●</span> ' + nOv + ' ' + plural(nOv, 'case corrigée', 'cases corrigées') + ' à la main (téléphone, messages, actions de fiche)' + SC.info('correction'));
+    if (nOld > 0) notes.push('✎ ' + nOld + ' ' + plural(nOld, 'ancienne correction', 'anciennes corrections') + ' de colonnes calculées (RDV, sets, reçus, closes, montants) ne ' + (nOld > 1 ? 'sont' : 'est') + ' plus ' + plural(nOld, 'appliquée') + ' : le tableau montre le chiffre de la base' + SC.info('correction_ancienne'));
+    var notesH = '<div style="padding:0 18px 14px">' + notes.map(function (t) { return '<div style="font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.55">' + t + '</div>'; }).join('') + '</div>';
 
     /* — Bannière journal d'actions : zéros trompeurs interdits — */
     var journalNote = '';
     var lastDay = R.days[R.days.length - 1];
-    var actCols = ecrit ? 'Leads · FU · Out' : 'Leads · NRP1/2/3 · AllNRP · Msg · FU · Out';
+    var actCols = ecrit ? 'Travaillés · FU · Out' : 'Travaillés · NRP1/2/3 · AllNRP · Msg. · FU · Out';
     if (!S.journalStart) {
       journalNote =
         '<div class="au-card" style="border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.05);padding:14px 16px;font-size:12.5px;line-height:1.6">' +
         '📒 <strong>Journal d\'actions encore vide.</strong> Les colonnes <strong>' + actCols + '</strong> comptent chaque clic de statut sur les fiches Leads Live <strong>à partir de la mise en ligne (14/07/2026)</strong> — les clics d\'avant n\'ont laissé aucune trace datée en base, ils ne peuvent pas être reconstitués (contrairement aux ' + (ecrit ? 'messages' : 'appels Ringover') + ' et aux RDV, recalculés sur le passé).<br/>' +
-        '<span style="color:var(--gold)">🧪 Test rapide : change un statut sur une fiche dans Leads Live puis ⟳ Actualiser ici. Si tout reste à 0, les règles Firestore ne sont pas déployées → <code>firebase deploy --only firestore:rules</code>.</span></div>';
+        '<span style="color:var(--gold)">🧪 Test rapide : change un statut sur une fiche dans Leads Live puis ⟳ Actualiser ici. Si tout reste à 0, les règles Firestore ne sont pas déployées.</span></div>';
     } else if (R.days[0] < S.journalStart) {
       var jdFr = frOfIso(S.journalStart);
       journalNote =
@@ -970,82 +1264,135 @@
     if (skippedBefore > 0) {
       startNote = '<div class="au-card" style="border-color:rgba(91,124,250,.3);background:rgba(91,124,250,.05);padding:12px 16px;font-size:12px">📅 ' +
         (skippedBefore === R.days.length
-          ? 'Période entièrement antérieure à la date de début (<strong>' + frOfIso(S.startDate) + '</strong>) — aucune donnée à afficher.'
-          : skippedBefore + ' jour(s) antérieur(s) à la date de début (<strong>' + frOfIso(S.startDate) + '</strong>) — affichés « — », exclus des totaux.') +
-        '</div>';
+          ? 'Période entièrement antérieure à la date de début (<strong>' + frOfIso(S.startDate) + '</strong>) — rien dans cet onglet.'
+          : skippedBefore + ' jour(s) antérieur(s) à la date de début (<strong>' + frOfIso(S.startDate) + '</strong>) — affichés « — », hors de cet onglet.') +
+        ' Ce qui est rattaché à cette personne avant son arrivée reste compté dans Équipe, ligne « Non attribué ».' + SC.info('date_debut') + '</div>';
+    }
+    var errNote = '';
+    if (D.errs && D.errs.length) {
+      errNote = '<div class="au-card" style="border-color:var(--red);padding:12px 16px;font-size:12.5px;line-height:1.7">⚠️ <strong>Données incomplètes</strong>' + SC.info('lecture_incomplete') +
+        ' — ' + D.errs.map(function (t) { return esc(t); }).join('<br/>') + '<br/><span style="color:var(--muted)">Les chiffres concernés sont partiels. Clique sur ⟳ Actualiser ; si le message revient, réduis la période.</span></div>';
+    }
+    var manuelsNote = '';
+    if (D.manuels.length) {
+      manuelsNote = '<div class="au-card" style="padding:10px 16px;font-size:12px;color:var(--muted)">✍️ ' + kv(D.manuels.length, D.manuels.length + ' ' + plural(D.manuels.length, 'RDV manuel', 'RDV manuels'), 'manuels') +
+        SC.info('rdv_manuels') + ' sur la période : ni Self Booking ni Setting, ils ne sont pas sur cette page (comptés dans Global closing et le Stats funnel).</div>';
     }
 
     var h =
-      startNote + journalNote + revBanner(S.data.rev) +
-      '<div class="au-kpis">' + kpis + '</div>' + bridge + teamCard +
+      errNote + startNote + journalNote + revBanner() +
+      '<div class="au-kpis">' + kpis + '</div>' + bridge + manuelsNote + teamCard +
       '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Funnel ' + (ecrit ? 'Setting écrit' : (team ? 'Set NB — Équipe' : 'Set NB')) + ' — ' + periodLabel() + '</div>' +
-        '<div class="au-card-note">' + (ecrit ? 'DM = webhook Instagram (Meta) · ' : '') + 'sets = statuts SET/RDV posé + RDV setter créés (uniques par lead/jour)</div></div>' + fun + '</div>' +
+        '<div class="au-card-note">' + (ecrit ? 'DM = webhook Instagram (Meta) · ' : '') + 'Sets = jour de la pose · RDV NB et suivants = jour du RDV · Closes NB = jour de la vente' +
+        SC.infoLibre(TXT.funnel[0], TXT.funnel[1]) + '</div></div>' + fun + '</div>' +
       '<div class="au-card" style="padding:0;overflow:hidden">' +
         '<div class="au-card-head" style="padding:16px 18px 0;margin-bottom:12px"><div class="au-card-title">Jour par jour</div>' +
-          '<div class="au-card-note">' + (ecrit ? 'messages Instagram · actions fiche · RDV setting (NB)' : 'téléphonie · actions fiche · RDV setting (NB)') + '</div>' +
+          '<div class="au-card-note">' + (ecrit ? 'messages Instagram · actions fiche · RDV setting (NB) · closes NB' : 'téléphonie · actions fiche · RDV setting (NB) · closes NB') + '</div>' +
           '<div class="right"><span class="au-chip nb">' + (ecrit ? '✍️ Setting écrit' : 'Set NB') + '</span></div></div>' +
         '<div class="au-twrap" style="border:none;border-radius:0"><table class="au-table"><thead>' + headH + '</thead><tbody>' +
-        rowsH + (R.days.length > 1 ? aggRow(tot, 'TOTAL — ' + periodLabel().toUpperCase(), 'au-total', 't') : '') +
-        '</tbody></table></div>' + ((callsNote || dmNote) ? '<div style="padding:0 18px 14px">' + callsNote + dmNote + '</div>' : '') +
+        rowsH + (R.days.length > 1 ? aggRow(tot, 'TOTAL — ' + esc(periodLabel().toUpperCase()), 'au-total', 't') : '') +
+        '</tbody></table></div>' + notesH +
       '</div>' +
       legacyBlock();
 
     $('#content').innerHTML = h;
     $('#btnLegacy').style.display = (S.legacy && S.mode === 'month') ? '' : 'none';
-    document.querySelectorAll('.au-day-edit').forEach(function (b) {
-      b.addEventListener('click', function () { openOverride(b.getAttribute('data-day')); });
+  }
+  /* Crayon ✎ des journées : délégation sur le conteneur (posée une fois). */
+  $('#content').addEventListener('click', function (e) {
+    var t = e.target;
+    while (t && t !== this && !(t.className && String(t.className).indexOf('au-day-edit') >= 0)) t = t.parentNode;
+    if (t && t !== this) openOverride(t.getAttribute('data-day'));
+  });
+
+  /* — Onglet Équipe : un setter par ligne, + « Non attribué ». La ligne
+     ÉQUIPE = la ligne TOTAL du tableau jour par jour = la somme des lignes
+     (Leads travaillés : fiches distinctes, la somme des lignes est écrite). — */
+  var CAT_LBL = { anciens: 'anciens membres', hors: 'personnes sans onglet', inconnu: 'setter inconnu', avant: 'avant l’arrivée de la personne', sansAuteur: 'appels sans auteur' };
+  function teamCardHtml(COLS, R, tot) {
+    var tk = COLS.slice();   // toutes les colonnes : Équipe = somme des lignes, partout
+    var tH = '<tr><th>Setter' + SC.info('setter') + '</th>';
+    tk.forEach(function (c) { tH += '<th>' + esc(c.label) + headInfo(c) + '</th>'; });
+    tH += '</tr>';
+    var tB = '', sumLeads = 0;
+    S.data.buckets.forEach(function (bk) {
+      var line = {}, any = false;
+      tk.forEach(function (c) {
+        var v = 0;
+        R.days.forEach(function (dk) { v += effB(bk, dk, c.key).v; });
+        line[c.key] = v; if (v) any = true;
+      });
+      sumLeads += line.leads || 0;
+      if (bk.slug === NA && !any) return;
+      var cats = Object.keys(bk.cats).map(function (k) { return CAT_LBL[k]; }).filter(function (x) { return !!x; });
+      tB += '<tr><td>' + (bk.slug === NA
+        ? lbl('non_attribue') + (cats.length ? '<div style="font-size:10.5px;font-weight:500;opacity:.7;max-width:240px;white-space:normal">' + esc(cats.join(', ')) + SC.infoLibre(TXT.nonAttribueCats[0], TXT.nonAttribueCats[1]) + '</div>' : '')
+        : esc(bk.name)) + '</td>';
+      var org = rdvOriginTxt([bk]);
+      tk.forEach(function (c) {
+        var cell = unavailable(c) ? '<span class="z">—</span>'
+          : ((DRILL[c.key] && line[c.key] > 0) ? SD.cell(fmtCell(c, line[c.key]), c.key + '|m|' + bk.slug) : fmtCell(c, line[c.key]));
+        tB += '<td>' + cell + ((c.key === 'rdvNb' && org) ? '<div style="font-size:10.5px;font-weight:500;opacity:.65;white-space:nowrap">' + org + '</div>' : '') + '</td>';
+      });
+      tB += '</tr>';
     });
+    tB += '<tr class="au-total"><td>ÉQUIPE' + SC.info('equipe') + '</td>';
+    var orgT = rdvOriginTxt(S.data.buckets);
+    tk.forEach(function (c) {
+      var v = tot[c.key];
+      var cell = unavailable(c) ? '<span class="z">—</span>' : ((DRILL[c.key] && v > 0) ? SD.cell(fmtCell(c, v), c.key + '|t') : fmtCell(c, v));
+      tB += '<td>' + cell +
+        ((c.key === 'rdvNb' && orgT) ? '<div style="font-size:10.5px;font-weight:500;opacity:.65;white-space:nowrap">' + orgT + '</div>' : '') +
+        ((c.key === 'leads' && sumLeads !== v) ? '<div style="font-size:10.5px;font-weight:500;opacity:.65;white-space:nowrap">fiches distinctes (somme des lignes ' + sumLeads + ')</div>' : '') + '</td>';
+    });
+    tB += '</tr>';
+    return '<div class="au-card" style="padding:0;overflow:hidden">' +
+      '<div class="au-card-head" style="padding:16px 18px 0;margin-bottom:12px"><div class="au-card-title">Par setter — ' + esc(periodLabel()) + '</div>' +
+        '<div class="au-card-note">Équipe = somme des lignes, « Non attribué » compris' + SC.info('equipe') + ' · Sets = jour de la pose · RDV NB = jour du RDV · Closes NB = jour de la vente · clique un chiffre pour voir les noms</div></div>' +
+      '<div class="au-twrap" style="border:none;border-radius:0"><table class="au-table" style="min-width:1400px"><thead>' + tH + '</thead><tbody>' + tB + '</tbody></table></div>' +
+      '</div>';
   }
 
   /* ══ PONT « Sets » ↔ « RDV NB » (21/11/2026, retour Vincent) ═══════════════
-     Les deux chiffres ne comptent pas la même chose : un set est compté le
-     jour où le RDV est POSÉ, un RDV NB le jour où il A LIEU. Ce bloc dit, en
-     nombres, d'où vient l'écart. Compté sur les lignes en base (hors ✎). */
-  /* Origine des RDV NB d'un ensemble de seaux, sur la période : combien ont
-     été posés AVANT la période, combien remplacent un RDV replanifié. Affiché
-     à côté du chiffre « RDV NB », là où l'écart avec « Sets » se voit. */
-  function rdvOrigin(bks, R, team) {
-    var o = { before: 0, replace: 0 };
-    bks.forEach(function (bk) {
-      R.days.forEach(function (dk) {
-        if (team ? (bk.start && dk < bk.start) : beforeStart(dk)) return;
-        ((bk.lists[dk] || {}).rdvNb || []).forEach(function (it) { if (o[it._cat] != null) o[it._cat]++; });
-      });
-    });
+     Un set est compté le jour où le RDV est POSÉ, un RDV NB le jour où il
+     est PRÉVU. Ce bloc dit, en nombres, d'où vient l'écart. */
+  function rdvOriginTxt(bks) {
+    var nb = listOf('o_before', bks).length, nr = listOf('o_replace', bks).length;
+    var nA = listOf('o_after', bks).length, nU = listOf('o_unknown', bks).length;
     var parts = [];
-    if (o.before) parts.push(o.before + ' posé' + (o.before > 1 ? 's' : '') + ' avant la période');
-    if (o.replace) parts.push(o.replace + ' reporté' + (o.replace > 1 ? 's' : '') + ' à une nouvelle date');
+    if (nb) parts.push(nb + ' posé' + (nb > 1 ? 's' : '') + ' avant la période' + SC.info('poses_avant'));
+    if (nr) parts.push(nr + ' reporté' + (nr > 1 ? 's' : '') + ' à une nouvelle date' + SC.info('reportes'));
+    if (nA) parts.push(nA + ' posé' + (nA > 1 ? 's' : '') + ' après la période' + SC.infoLibre(TXT.posesApres[0], TXT.posesApres[1]));
+    if (nU) parts.push(nU + ' sans date de pose' + SC.infoLibre(TXT.poseInconnue[0], TXT.poseInconnue[1]));
     return parts.length ? 'dont ' + parts.join(', ') : '';
   }
-
-  function bridgeHtml(R, team) {
+  function bridgeHtml(tot, team) {
     if (!S.data || !S.data.buckets) return '';
-    var r = { period: 0, before: 0, replace: 0 }, st = { due: 0, later: 0, replan: 0, noRdv: 0 }, nR = 0, nS = 0;
-    S.data.buckets.forEach(function (bk) {
-      R.days.forEach(function (dk) {
-        if (team ? (bk.start && dk < bk.start) : beforeStart(dk)) return;
-        var L = bk.lists[dk] || {};
-        (L.rdvNb || []).forEach(function (it) { nR++; if (r[it._cat] != null) r[it._cat]++; });
-        (L.sets || []).forEach(function (it) { nS++; if (st[it._cat] != null) st[it._cat]++; });
-      });
-    });
-    if (!nR && !nS) return '';
-    function part(n, txt) { return n > 0 ? '<strong>' + n + '</strong> ' + txt : ''; }
+    var r = { period: cnt('o_period'), before: cnt('o_before'), replace: cnt('o_replace'), after: cnt('o_after'), unknown: cnt('o_unknown') };
+    var st = { due: cnt('s_due'), later: cnt('s_later'), replan: cnt('s_replan') };
+    var nR = tot.rdvNb, nS = tot.sets, nSt = cnt('statutsSet');
+    if (!nR && !nS && !nSt) return '';
+    function p(n, txt, key, info) { return n > 0 ? kv(n, '<strong>' + n + '</strong>', key) + ' ' + txt + (info || '') : ''; }
     function join(a) { return a.filter(function (x) { return !!x; }).join(' + '); }
-    var who = team ? 'Onglet Équipe : tous les setters.' : 'Cet onglet = les RDV dont <strong>' + SD.esc((S.data.buckets[0] || {}).name || '') + ' est le setter</strong>, quel que soit le closer qui les reçoit (colonne « Closer » des listes).';
+    var who = team ? 'Onglet Équipe : tous les setters, « Non attribué » compris.' : 'Cet onglet = les RDV dont <strong>' + esc((S.data.buckets[0] || {}).name || '') + ' est le setter</strong>, quel que soit le closer qui les reçoit (colonne « Closer » des listes).';
     return '<div class="au-card" style="padding:12px 16px;font-size:12.5px;line-height:1.75">' +
-      '🔁 <strong>Pourquoi « Sets » et « RDV NB » diffèrent</strong> — un set est compté le jour où le RDV est <em>posé</em>, un RDV NB le jour où il <em>a lieu</em>.<br/>' +
-      '<strong>' + nR + ' RDV NB</strong> = ' + (join([part(r.period, 'posés sur la période'), part(r.before, 'posés avant la période'), part(r.replace, 'reportés à une nouvelle date (le set avait déjà été compté au premier créneau)')]) || '0') + '.<br/>' +
-      '<strong>' + nS + ' sets</strong> = ' + (join([part(st.due, 'dont le RDV a lieu sur la période'), part(st.later, 'dont le RDV a lieu après la période'), part(st.replan, 'replanifiés depuis'), part(st.noRdv, 'statut « set » sans RDV lié')]) || '0') + '.<br/>' +
-      '<span style="color:var(--muted)">Annulés, no-show, présents, pitchés et closes se lisent sur les <strong>RDV NB</strong> (date du RDV), jamais sur les sets. ' + who + '</span></div>';
+      '🔁 <strong>Pourquoi « Sets » et « RDV NB » diffèrent</strong> — un set est compté le jour où le RDV est <em>posé</em>' + SC.info('sets') + ', un RDV NB le jour où il est <em>prévu</em>' + SC.info('rdv_nb') + '.<br/>' +
+      '<strong>' + nR + ' RDV NB</strong> = ' + (join([p(r.period, 'posés sur la période', 'o_period'), p(r.before, 'posés avant la période', 'o_before', SC.info('poses_avant')),
+        p(r.replace, 'reportés à une nouvelle date (le set avait été compté au premier créneau)', 'o_replace', SC.info('reportes')),
+        p(r.after, 'posés après la période', 'o_after', SC.infoLibre(TXT.posesApres[0], TXT.posesApres[1])),
+        p(r.unknown, 'sans date de pose', 'o_unknown', SC.infoLibre(TXT.poseInconnue[0], TXT.poseInconnue[1]))]) || '0') + '.<br/>' +
+      '<strong>' + nS + ' sets</strong> = ' + (join([p(st.due, 'dont le RDV est prévu sur la période', 's_due'), p(st.later, 'dont le RDV est prévu après la période', 's_later'),
+        p(st.replan, 'déplacés depuis (leur nouveau créneau compte en RDV NB)', 's_replan')]) || '0') + '.' +
+      (nSt > 0 ? '<br/>' + kv(nSt, '<strong>' + nSt + '</strong>', 'statutsSet') + ' statuts « Set » sans RDV' + SC.info('statuts_set_sans_rdv') + ' : ce ne sont pas des sets.' : '') + '<br/>' +
+      '<span style="color:var(--muted)">Annulés, no-show, présents, pitchés se lisent sur les <strong>RDV NB</strong> (date du RDV), jamais sur les sets ; les Closes NB au jour de la vente. ' + who + '</span></div>';
   }
 
   /* ══ LISTES CLIQUABLES ════════════════════════════════════════════════
      ref = « colonne|d|jour », « colonne|w|début|fin » (indices de jours),
-     « colonne|t » (toute la période) ou « colonne|m|setter » (un setter, toute
-     la période — carte « Par setter »). Aucune requête : les lignes viennent
-     de l'agrégation déjà faite. Une journée corrigée à la main (✎) est
-     signalée : le chiffre affiché n'est alors plus le nombre de lignes. */
+     « colonne|t » (toute la période) ou « colonne|m|setter » (une ligne de
+     la carte « Par setter »). Aucune requête : les lignes viennent de
+     l'agrégation déjà faite ; le nombre de lignes = le chiffre cliqué (sauf
+     correction ✎ de téléphone ou d'actions, signalée). */
   function drillResolve(ref) {
     if (!S.data || !S.data.buckets) return null;
     var p = String(ref).split('|');
@@ -1053,67 +1400,75 @@
     var R = S.range || period();
     var team = S.slug === '_all';
     var dks = kind === 'd' ? [p[2]] : (kind === 'w' ? R.days.slice(Number(p[2]), Number(p[3]) + 1) : R.days);
+    dks = dks.filter(function (dk) { return !beforeStart(dk); });
     var bks = kind === 'm' ? S.data.buckets.filter(function (bk) { return bk.slug === p[2]; }) : S.data.buckets;
     var money = key === 'collecteNb' || key === 'contracteNb';
-    var listKey = money ? 'money' : key;
-    var items = [], shown = 0, auto = 0, corrected = false;
-    bks.forEach(function (bk) {
+    var listKey = money ? 'closesNb' : key;
+    var c = DRILL[key] ? colOf(key) : null;
+    var items = [], note = '';
+    if (key === 'manuels') items = S.data.manuels.slice();
+    else if (key === 'repris') dks.forEach(function (dk) { items = items.concat(S.data.repris[dk] || []); });
+    else if (team && key === 'leads' && kind !== 'm') dks.forEach(function (dk) { items = items.concat(S.data.teamLeads.lists[dk] || []); });
+    else items = listOf(listKey, bks, dks);
+    if (c && !money && corrigeable(c)) {
+      var shown = 0, base = 0;
       dks.forEach(function (dk) {
-        if (team && bk.start && dk < bk.start) return;
-        if (!team && beforeStart(dk)) return;
-        items = items.concat((bk.lists[dk] || {})[listKey] || []);
-        if (key === 'nonTrav') return;   // liste seule, pas une colonne
-        var e = effB(bk, dk, key);
-        if (e.ov) corrected = true;
-        shown += e.v; auto += (bk.days[dk] && bk.days[dk][key]) || 0;
+        if (kind === 'm') { var e1 = effB(bks[0], dk, key); shown += e1.v; base += e1.base; }
+        else { var e2 = eff(dk, key); shown += e2.v; base += e2.base; }
       });
-    });
-    var who = kind === 'm' ? (bks[0] ? bks[0].name : '') : (team ? 'Équipe' : (bks[0] ? bks[0].name : ''));
-    var when = kind === 'd' ? SD.frDate(p[2]) : (kind === 'w' ? 'du ' + SD.frDate(dks[0]) + ' au ' + SD.frDate(dks[dks.length - 1]) : periodLabel());
-    var note = '';
-    if (corrected) {
-      note = money
-        ? 'Une journée de cette période a été corrigée à la main (✎) : le total affiché dans le tableau peut différer du détail ci-dessous, qui vient du module Paiements.'
-        : 'Chiffre corrigé à la main (✎) : ' + shown + ' affiché, ' + auto + ' en base. La liste ci-dessous montre ce qui est en base.';
+      if (shown !== base) note = 'Chiffre corrigé à la main (✎) : ' + shown + ' affiché, ' + base + ' en base. La liste ci-dessous montre ce qui est en base.';
     }
+    var who = kind === 'm' ? (bks[0] ? (bks[0].slug === NA ? SC.mot('non_attribue') : bks[0].name) : '') : (team ? 'Équipe' : (bks[0] ? bks[0].name : ''));
+    var when = kind === 'd' ? SD.frDate(p[2]) : (kind === 'w' ? 'du ' + SD.frDate(R.days[Number(p[2])]) + ' au ' + SD.frDate(R.days[Number(p[3])]) : periodLabel());
     var sub;
-    if (money) sub = 'Montants HT, règle du module Paiements : encaissé = prélèvements réellement passés ; « en attente » = premier prélèvement pas encore passé. Closes issus du setting uniquement — ceux du Self Booking sont dans Close SB.';
-    else if (key === 'sets') sub = 'Un set = un RDV setting posé, ou un lead passé en SET / RDV posé sur sa fiche, compté le jour où il est posé (un lead ne compte qu\'une fois par jour). La date affichée est celle du RDV ; la colonne Closer dit qui le reçoit.';
-    else if (key === 'leads') sub = 'Leads travaillés : première action du setter sur la fiche, jamais recomptée ensuite — quelle que soit la date d\'entrée du lead.';
+    var isClose = listKey === 'closesNb' || key === 'closesAnnules' || key === 'sansPaiement';
+    if (isClose) sub = 'Clients gagnés sur la période dont le close est classé Setting (NB), rangés chez le setter du close, au jour où le client est gagné (liste unique des closes, la même sur tous les écrans). Montants HT du module Paiements : collecté = prélèvements réellement passés à ce jour ; « 1er prélèvement en attente » = premier prélèvement pas encore passé. Les closes du Self Booking sont dans Close SB.';
+    else if (key === 'sets' || key.indexOf('s_') === 0) sub = 'Un set = un RDV du setting créé sur la période, un par RDV, compté le jour où il est posé (un RDV de report ne recompte pas). La date affichée est celle du RDV ; la colonne Précision dit quand il a été posé.';
+    else if (key === 'statutsSet') sub = 'Fiches passées au statut Set (ou RDV posé) dans Leads Live sans qu’aucun RDV du setting n’ait été créé sur la période pour elles : ce ne sont pas des sets.';
+    else if (key === 'leads') sub = team && kind !== 'm' ? 'Équipe : chaque fiche compte une fois, au jour de sa première action de la période (tous setters confondus).' : 'Première action de ce setter sur la fiche, jamais recomptée ensuite — quelle que soit la date d’entrée du lead.';
+    else if (key === 'repris') sub = 'Fiches déjà travaillées par un autre setter plus tôt dans la période : comptées dans les deux onglets, une seule fois dans l’Équipe.';
     else if (key === 'recus' || key === 'nonTrav') sub = 'Leads entrés sur la période, sans RDV Self Booking, rangés chez le setter de la fiche. « Pas encore travaillé » = aucune action enregistrée sur la fiche, par personne. Les ré-optins ne sont pas comptés.';
-    else if (key === 'rdvNb' || key === 'annulesNb' || key === 'noshowNb' || key === 'presentsNb' || key === 'pitchesNb' || key === 'closesNb') sub = 'RDV du setting (No Booking) comptés à la date du RDV, classés chez leur SETTER ; la colonne Closer dit qui a reçu le RDV, la colonne Précision quand il a été posé. Clique sur un nom pour ouvrir la fiche.';
-    else sub = 'Actions enregistrées sur les fiches Leads Live, au jour du clic.';
+    else if (key === 'manuels') sub = 'RDV de vente créés à la main dans l’Agenda : ni Self Booking ni Setting. Ils ne sont pas dans Set NB.';
+    else if (key === 'actions' || (c && c.grp === 'act')) sub = 'Actions enregistrées sur les fiches Leads Live, au jour du clic (heure de Paris).';
+    else sub = 'RDV du setting (NB) comptés à la date du RDV, chez leur setter ; la colonne Closer dit qui a reçu le RDV, la colonne Précision quand il a été posé. Clique sur un nom pour ouvrir la fiche.';
+    var infoPlus = (c && c.infoT) ? c.infoT[1] : (c && c.infoPlus ? c.infoPlus : '');
+    if (key === 'repris') infoPlus = TXT.repris[1];
     return {
       title: (DRILL_LBL[key] || key) + ' — ' + who + ' · ' + when,
       sub: sub, note: note, items: items,
-      money: money || key === 'closesNb',
-      dateLabel: (key === 'recus' || key === 'nonTrav') ? 'Entré le' : ((key === 'leads' || (!money && !/Nb$/.test(key) && key !== 'sets')) ? 'Jour' : 'RDV')
+      info: DRILL_INFO[key] || '', infoPlus: infoPlus,
+      money: isClose ? undefined : false,
+      dateLabel: (key === 'recus' || key === 'nonTrav') ? 'Entré le' : ((c && c.grp === 'act') || key === 'statutsSet' || key === 'repris' ? 'Jour' : 'RDV')
     };
   }
   SD.bind($('#content'), drillResolve);
 
-  /* Closes annulés / à encaisser / sans paiement — règle REVENUE (13/10/2026). */
-  function revBanner(rev) {
-    if (!rev) return '';
-    var esc = function (t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  /* Closes annulés / sans paiement / 1ers prélèvements en attente — mêmes
+     mots que Close SB. Sur les jours visibles de l'onglet. */
+  function revBanner() {
+    var ann = listOf('closesAnnules'), sp = S.data.moneyKo ? [] : listOf('sansPaiement'), ec = listOf('ecartCanal'), ci = listOf('canalInconnu');
     var parts = [];
-    if (rev.cancelled.length) parts.push('🚫 <strong>' + rev.cancelled.length + ' close(s) annulé(s)</strong> — ' + esc(rev.cancelled.join(', ')) + ' : retiré(s) des closes et du collecté.');
-    if (rev.pending > 0) parts.push('⏳ <strong>' + fmtEuro(rev.pending) + ' de 1ers prélèvements en attente</strong> — mandat signé, 1er prélèvement pas encore passé : non compté dans le collecté.');
-    if (rev.noPay.length) parts.push('💶 <strong>' + rev.noPay.length + ' close(s) sans paiement GoCardless</strong> — ' + esc(rev.noPay.join(', ')) + ' : encaissé déclaré non compté, crée le paiement dans le module Paiements.');
+    function noms(list) { return esc(list.map(function (it) { return it.name + (it.statusPlus ? ' (' + it.statusPlus + ')' : ''); }).join(', ')); }
+    if (ann.length) parts.push('🚫 ' + kv(ann.length, '<strong>' + ann.length + ' ' + plural(ann.length, 'close annulé', 'closes annulés') + '</strong>', 'closesAnnules') + SC.info('closes_annules') + ' — ' + noms(ann) + ' : retirés des Closes, du Contracté et du Collecté.');
+    if (sp.length) parts.push('💶 ' + kv(sp.length, '<strong>' + sp.length + ' ' + plural(sp.length, 'close sans paiement', 'closes sans paiement') + '</strong>', 'sansPaiement') + SC.info('close_sans_paiement') + ' — ' + noms(sp) + ' : contracté = tarif déclaré au close, collecté à 0. Crée le paiement dans le module Paiements.');
+    if (ec.length) parts.push('↔️ ' + ec.length + ' ' + plural(ec.length, 'écart', 'écarts') + ' de canal' + SC.info('ecart_canal') + ' — ' + noms(ec) + '.');
+    if (ci.length) parts.push('❔ ' + ci.length + ' ' + plural(ci.length, 'close', 'closes') + ' au canal inconnu' + SC.info('canal_inconnu') + ', rangés en Setting — ' + noms(ci) + '.');
     if (!parts.length) return '';
     return '<div class="au-card" style="border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.05);padding:12px 16px;font-size:12.5px;line-height:1.7">' + parts.join('<br/>') + '</div>';
   }
 
-  function kpi(v, l, s, color) {
-    return '<div class="au-kpi accent" style="--au-kc:' + color + '"><div class="v">' + v + '</div><div class="l">' + l + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>';
-  }
+  /* Bloc « Funnel » : chaque pourcentage se lit sur l'étape d'avant ; pas de
+     pourcentage entre deux étapes qui ne comptent pas la même chose
+     (noPct) ; une étape peut porter son propre taux (pct, pctLbl). */
   function funnel(steps) {
     var max = Math.max.apply(null, steps.map(function (s) { return s.v; }).concat([1]));
     var h = '<div class="au-funnel">';
     steps.forEach(function (s, i) {
-      var pct = i > 0 && steps[i - 1].v > 0 ? (s.v / steps[i - 1].v * 100) : null;
-      h += '<div class="au-fstep"><div class="v">' + s.v.toLocaleString('fr-FR') + '</div><div class="l">' + s.l + '</div>' +
-        '<div class="p">' + (pct != null ? fmtPct(pct) + ' de l\'étape préc.' : '&nbsp;') + '</div>' +
+      var pct = null;
+      if (i > 0 && !s.noPct) pct = s.pct !== undefined ? s.pct : SC.pct(s.v, steps[i - 1].v);
+      var inf = s.cle ? SC.info(s.cle) : (s.it ? SC.infoLibre(s.it[0], s.it[1]) : '');
+      h += '<div class="au-fstep"><div class="v">' + fmtN(s.v) + '</div><div class="l">' + esc(s.l) + inf + '</div>' +
+        '<div class="p">' + (pct != null ? fmtPct(pct) + ' ' + esc(s.pctLbl || 'de l\'étape préc.') : (i > 0 && s.noPct ? 'autre axe : pas de %' : (i > 0 && s.pct === null ? '— ' + esc(s.pctLbl || '') : '&nbsp;'))) + '</div>' +
         '<div class="au-fbar"><i style="width:' + Math.max(3, s.v / max * 100) + '%"></i></div></div>';
     });
     return h + '</div>';
@@ -1129,35 +1484,42 @@
       ['propRdv', 'Prop. RDV'], ['sets', 'Sets'], ['presents', 'Présents'], ['deposits', 'Deposits'], ['closes', 'Closes'], ['collecte', 'Collecté €']
     ];
     var weeks = Object.keys(raw).sort();
-    var h = '<div class="au-card au-legacy"><div class="au-legacy-title">📜 Ancienne saisie hebdomadaire — ' + MONTHS_FR[S.anchor.getMonth()] + ' ' + S.anchor.getFullYear() + ' (lecture seule, conservée)</div>';
+    var h = '<div class="au-card au-legacy"><div class="au-legacy-title">📜 Ancienne saisie hebdomadaire' + SC.info('ancienne_saisie') + ' — ' + MONTHS_FR[S.anchor.getMonth()] + ' ' + S.anchor.getFullYear() +
+      ' (lecture seule, conservée — chiffres tapés à la main, « déclaré »' + SC.info('declare') + ', à ne pas comparer au rapport ci-dessus)</div>';
     h += '<div class="au-twrap" style="background:transparent"><table class="au-table" style="min-width:640px"><thead><tr><th>Semaine</th>';
     FIELDS.forEach(function (f) { h += '<th>' + f[1] + '</th>'; });
     h += '</tr></thead><tbody>';
     weeks.forEach(function (w) {
-      h += '<tr><td>' + (w === '_total' ? 'Total mois' : w.toUpperCase()) + '</td>';
-      FIELDS.forEach(function (f) { var v = (raw[w] && raw[w][f[0]]) || 0; h += '<td>' + (v || '<span class="z">·</span>') + '</td>'; });
+      h += '<tr><td>' + (w === '_total' ? 'Total mois' : esc(w.toUpperCase())) + '</td>';
+      FIELDS.forEach(function (f) { var v = (raw[w] && raw[w][f[0]]) || 0; h += '<td>' + (v ? esc(v) : '<span class="z">·</span>') + '</td>'; });
       h += '</tr>';
     });
     h += '</tbody></table></div></div>';
     return h;
   }
 
-  /* ══ OVERRIDE MODAL ═══════════════════════════════════════════════════ */
+  /* ══ CORRECTIONS ✎ (décision D9 du 25/11/2026) ════════════════════════
+     Seules les colonnes téléphone, messages et actions de fiche se
+     corrigent à la main ; RDV, sets, reçus, closes et montants se corrigent
+     à la source (résultat du RDV, module Paiements). Une ancienne correction
+     d'une colonne calculée reste en base, intacte (rien n'est supprimé). */
   var ovDay = null;
   function openOverride(dk) {
+    if (!dk || !S.data) return;
     ovDay = dk;
-    var d = new Date(dk + 'T12:00:00');
+    var d = calOf(dk);
     $('#ovTitle').textContent = '✎ Corriger le ' + JOURS_FR[d.getDay()] + ' ' + pad2(d.getDate()) + ' ' + MONTHS_FR[d.getMonth()];
     var ov = (S.overrides[dk] && S.overrides[dk].setting) || {};
     var h = '';
     cols().forEach(function (c) {
+      if (!corrigeable(c)) return;
       var ovKey = c.ovKey || c.key;
       var auto = (S.data.days[dk] && S.data.days[dk][c.key]) || 0;
       var autoLbl = c.fmt === 'dur' ? AF.fmtDuration(auto) : (c.fmt === 'eur' ? fmtEuro(auto) : auto);
       var cur = ov[ovKey] != null ? ov[ovKey] : '';
-      h += '<div class="au-modal-f"><label>' + (c.ovLabel || c.label.replace(/^[^\w]*/, '')) + '</label>' +
-        '<input type="number" step="any" min="0" data-ovkey="' + ovKey + '" value="' + cur + '" placeholder="auto"/>' +
-        '<div class="auto-hint">auto : ' + autoLbl + '</div></div>';
+      h += '<div class="au-modal-f"><label>' + esc(c.ovLabel || c.label) + '</label>' +
+        '<input type="number" step="any" min="0" data-ovkey="' + esc(ovKey) + '" value="' + esc(cur) + '" placeholder="auto"/>' +
+        '<div class="auto-hint">auto : ' + esc(autoLbl) + '</div></div>';
     });
     $('#ovGrid').innerHTML = h;
     $('#ovNote').value = (S.overrides[dk] && S.overrides[dk].note) || '';
@@ -1167,7 +1529,14 @@
   $('#ovModal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('show'); });
   $('#ovSave').addEventListener('click', function () {
     if (!ovDay) return;
+    /* On repart des valeurs déjà enregistrées qui ne sont plus proposées
+       (anciennes corrections de colonnes calculées) : elles restent en base. */
+    var prev = (S.overrides[ovDay] && S.overrides[ovDay].setting) || {};
     var values = {};
+    Object.keys(prev).forEach(function (k) {
+      var c = colOf(k === 'tempsAppelMin' ? 'tempsAppelSec' : k);
+      if (!corrigeable(c)) values[k] = prev[k];
+    });
     document.querySelectorAll('#ovGrid input[data-ovkey]').forEach(function (inp) {
       var v = inp.value.trim();
       if (v !== '') values[inp.getAttribute('data-ovkey')] = Number(v) || 0;
@@ -1201,12 +1570,13 @@
   }
   $('#btnPrev').addEventListener('click', function () { shiftPeriod(-1); });
   $('#btnNext').addEventListener('click', function () { shiftPeriod(1); });
-  $('#btnToday').addEventListener('click', function () { var n = new Date(); S.anchor = new Date(n.getFullYear(), n.getMonth(), n.getDate()); refresh(); });
+  $('#btnToday').addEventListener('click', function () { S.anchor = calOf(todayParis()); refresh(); });
   document.querySelectorAll('#periodSeg button').forEach(function (b) {
     b.addEventListener('click', function () { if (S.mode !== b.dataset.mode) { S.mode = b.dataset.mode; refresh(); } });
   });
   $('#btnRefresh').addEventListener('click', refresh);
   $('#btnLegacy').addEventListener('click', function () { S.legacyOpen = !S.legacyOpen; render(); });
+  var tz = $('#tzInfo'); if (tz) tz.innerHTML = SC.infoLibre(TXT.paris[0], TXT.paris[1]);
 
   firebase.auth().onAuthStateChanged(function (user) {
     if (!user) { window.location.href = 'login.html'; return; }

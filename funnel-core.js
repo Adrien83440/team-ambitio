@@ -41,9 +41,23 @@
   if (!SC) throw new Error('funnel-core.js : stats-core.js doit être chargé avant ce fichier');
 
   /* ── Constantes métier (déplacées depuis sales-funnel.html) ── */
-  var LEADS_QUERY_LIMIT = 6000;
+  /* Plafonds de lecture (audit du 25/11/2026, étape 2) : leads, ré-optins et
+     appels sont lus PAR PAGES (lirePages) jusqu'à épuisement ; ces plafonds ne
+     sont plus qu'un garde-fou de mémoire. Atteints, ils sont DITS à l'écran
+     (k.erreursLecture, k.partiel), jamais tus. */
+  var LEADS_QUERY_LIMIT = 30000;
+  var REOPTINS_QUERY_LIMIT = 30000;
   var CLOSED_LEADS_LIMIT = 2000;   /* fiches gagnées sur une période — au-delà : « liste tronquée » affiché */
-  var CALLS_QUERY_LIMIT = 5000;
+  var CALLS_QUERY_LIMIT = 30000;
+  var PAGE_SIZE = 2000;            /* taille d'une page de lecture */
+  /* Rôles de l'« équipe sales » pour la téléphonie : setters, closers et
+     admins (le head of sales est admin). CSM et coachs = « hors équipe sales ». */
+  var SALES_CALL_ROLES = { setter: 1, setter_ecrit: 1, closer: 1, closer_setter: 1, admin: 1 };
+  /* Rôles dont le module Commissions porte des deals de setting. */
+  var SALES_ROLES = { setter: 1, setter_ecrit: 1, closer: 1, closer_setter: 1 };
+  /* Fenêtre du parcours d'un lead (Lead to speech, appelé, joint) : les
+     14 jours qui suivent son entrée — même plafond que Pilotage. */
+  var CONTACT_WINDOW_MS = 14 * 86400000;
   var ANSWERED_MIN_SEC  = 5;                  // même seuil que le Dashboard Sales
   /* Signature du répondeur (mesurée sur les appels réels le 17/08/2026) :
      une sonnerie longue suivie d'une conversation courte. Voir isAnsweredCall. */
@@ -56,6 +70,62 @@
      convertissent en Timestamp. tsOf documente ce choix et garde le code des
      loaders identique à celui d'origine. */
   function tsOf(d) { return d; }
+
+  /* Lecture PAR PAGES d'une requête triée (orderBy sur le champ de la plage) :
+     page après page (startAfter le dernier document lu) jusqu'à épuisement,
+     ou jusqu'au plafond. API commune aux deux SDK.
+     → Promise de { docs: [DocumentSnapshot…], truncated: bool }.
+     La promesse est REJETÉE si une page échoue : l'appelant décide (erreur
+     dite à l'écran, jamais un zéro muet). */
+  function lirePages(query, plafond, taille) {
+    var size = taille || PAGE_SIZE;
+    var docs = [];
+    function next(after) {
+      var q = after ? query.startAfter(after) : query;
+      return q.limit(size).get().then(function (snap) {
+        var last = null;
+        snap.forEach(function (doc) { docs.push(doc); last = doc; });
+        if (!last || snap.size < size) return { docs: docs, truncated: false };
+        if (docs.length >= plafond) return { docs: docs, truncated: true };
+        return next(last);
+      });
+    }
+    return next(null);
+  }
+
+  /* ══ ÉQUIPE — qui est parti, qui est « sales » (décision D10) ══
+     Un membre parti n'a plus de nom à l'écran, mais son activité passée RESTE
+     dans les totaux (ligne « Anciens membres »). Source : sa fiche
+     _meta/team_members (departed === true, ou active === false avec une date
+     de fin). Dans le navigateur, la règle de nav.js (window.isDepartedMember)
+     est consultée en plus : une seule source de vérité, aucune liste de
+     prénoms ici. */
+  function isDeparted(m) {
+    if (!m) return false;
+    if (m.departed === true) return true;
+    if (m.active === false && typeof m.endDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(m.endDate)) return true;
+    if (typeof window !== 'undefined' && window && typeof window.isDepartedMember === 'function') {
+      try { if (window.isDepartedMember(m)) return true; } catch (e) { /* règle indisponible */ }
+    }
+    return false;
+  }
+  /* Réunit deux listes du roster par slug (la première prime, les drapeaux
+     de départ de l'une ou l'autre sont gardés). Les pages passent souvent la
+     liste SANS les partis (TEAM_MEMBERS_LIST) : loadAll relit le roster
+     complet pour ne perdre l'activité d'aucun ancien membre. */
+  function mergeTeam(a, b) {
+    var out = [], bySlug = {};
+    (a || []).concat(b || []).forEach(function (m) {
+      if (!m || typeof m !== 'object') return;
+      var key = m.slug || m.firebaseUid;
+      if (!key) return;
+      var cur = bySlug[key];
+      if (!cur) { cur = {}; Object.keys(m).forEach(function (f) { cur[f] = m[f]; }); bySlug[key] = cur; out.push(cur); return; }
+      Object.keys(m).forEach(function (f) { if (cur[f] == null) cur[f] = m[f]; });
+      if (m.departed === true) cur.departed = true;
+    });
+    return out;
+  }
 
   /* Fin de recherche du 1er contact / 1er RDV : fenêtre + lookahead, jamais
      dans le futur. Un lead entré le 30 et appelé le 2 a un time-to-contact —
@@ -902,6 +972,46 @@
     return minDef(parseFlexMs(d.dateWebinaire), parseFlexMs(d.importedCreatedAt), parseFlexMs(d.createdAt));
   }
 
+  /* ══ LEADS — quelle fiche compte (audit du 25/11/2026, étape 2) ══
+     Une fiche compte comme lead si elle n'est ni fusionnée (_merged : le
+     doublon absorbé) ni marquée « fiche de test » (interne === true, posé à
+     l'opt-in d'une visite interne). Même test pour les nouveaux leads, les
+     ré-optins et tout écran qui compte des leads. */
+  function isCountedLead(d) { return !!d && d._merged !== true && d.interne !== true; }
+  function isClientLead(l) {
+    return !!l && (l.isClient === true || l.stage === 'closed_won_setting' || l.stage === 'closed_won_self');
+  }
+  /* VRAI ré-optin (règle de Leads Live, déplacée ici pour être la seule) :
+     moments (ms) où la personne a réellement rempli un formulaire, hors de sa
+     première entrée — engagementHistory[] (archivedFor 'optin' / 'form') et
+     lastOptinAt quand il vient d'un vrai formulaire. Ne comptent pas : un
+     message entrant, une fiche remontée à la main, une réparation de
+     visibilité. Un client qui se réinscrit n'est pas un ré-optin. */
+  function optinVrai(l, lo, hist) {
+    var i;
+    for (i = 0; i < hist.length; i++) if (Math.abs(hist[i] - lo) < 300000) return true;
+    function pres(v) { var m = parseFlexMs(v); return m != null && Math.abs(m - lo) < 60000; }
+    if (pres(l.lastInboundAt)) return false;                                  // message entrant
+    if (pres(l.visibilityResurrectedAt)) return !!l.resurrectedFromMergedTwin; // ré-optin sur un doublon : vrai ; réparation : non
+    var src = String(l.lastOptinSource || '');
+    if (src === 'manual' || src.indexOf('Remonté') === 0) return false;     // remonté à la main
+    return true;
+  }
+  function trueOptinTimes(l) {
+    var out = [];
+    if (!l || isClientLead(l)) return out;
+    var h = Array.isArray(l.engagementHistory) ? l.engagementHistory : [];
+    for (var i = 0; i < h.length; i++) {
+      var e = h[i];
+      if (!e || (e.archivedFor !== 'optin' && e.archivedFor !== 'form')) continue;
+      var m = parseFlexMs(e.archivedAt);
+      if (m != null) out.push(m);
+    }
+    var lo = parseFlexMs(l.lastOptinAt);
+    if (lo != null && optinVrai(l, lo, out)) out.push(lo);
+    return out;
+  }
+
   /* ── Formats ── */
   function pad2(n) { return SC.pad2(n); }
 
@@ -1042,11 +1152,16 @@
 
   function loadAds(db, P, DATA) {
     var sIso = isoDate(P.start), eIso = isoDate(P.end);
+    DATA.adsError = null;
     return db.collection('ads_insights').where('date', '>=', sIso).where('date', '<=', eIso).get().then(function (snap) {
       DATA.ads = [];
       snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; DATA.ads.push(d); });
-    }).catch(function (e) { console.warn('[funnel] ads', e.message); DATA.ads = []; });
+    }).catch(function (e) { console.warn('[funnel] ads', e.message); DATA.ads = []; DATA.adsError = e.message || 'lecture impossible'; });
   }
+  /* Tunnel d'une ligne de dépense ads_insights : 'business', sinon Élite
+     (règle UNIQUE : Stats funnel, onglet Données Ads, Qualité leads). Une
+     ligne d'un autre tunnel est comptée en Élite — k.adsDocsAutreTunnel le dit. */
+  function adsTunnelOf(a) { return a && a.tunnel === 'business' ? 'business' : 'elite'; }
 
   /* Insights AD-LEVEL — ads_insights_ad/{date}_{ad_id}, alimentés par
      api/ads-metrics-ingest.js quand Make envoie le breakdown par pub.
@@ -1059,7 +1174,7 @@
       .then(function (snap) {
         DATA.adsByAd = [];
         snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; DATA.adsByAd.push(d); });
-      }).catch(function (e) { console.warn('[funnel] adsByAd', e.message); DATA.adsByAd = []; });
+      }).catch(function (e) { console.warn('[funnel] adsByAd', e.message); DATA.adsByAd = []; DATA.adsByAdError = e.message || 'lecture impossible'; });
   }
 
   /* Référentiel créatives — ads_creatives/{ad_id} : { ad_id, ad_name,
@@ -1070,7 +1185,7 @@
     return db.collection('ads_creatives').get().then(function (snap) {
       DATA.creatives = [];
       snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; if (!d.ad_id) d.ad_id = doc.id; DATA.creatives.push(d); });
-    }).catch(function (e) { console.warn('[funnel] creatives', e.message); DATA.creatives = []; });
+    }).catch(function (e) { console.warn('[funnel] creatives', e.message); DATA.creatives = []; DATA.creativesError = e.message || 'lecture impossible'; });
   }
 
   function loadViews(db, P, DATA) {
@@ -1078,56 +1193,83 @@
     return db.collection('page_views_daily').where('date', '>=', sIso).where('date', '<=', eIso).get().then(function (snap) {
       DATA.views = [];
       snap.forEach(function (doc) { DATA.views.push(doc.data()); });
-    }).catch(function (e) { console.warn('[funnel] views', e.message); DATA.views = []; });
+    }).catch(function (e) { console.warn('[funnel] views', e.message); DATA.views = []; DATA.viewsError = e.message || 'lecture impossible'; });
   }
 
   /* Leads "entrés" dans la période = realEntry ∈ [start,end].
      realEntry ≤ createdAt toujours → on requête createdAt ≥ start.
      Borne haute createdAt = end + 45 j (attrape les imports tardifs)
-     puis filtrage client-side sur realEntry. _merged exclus. */
+     puis filtrage client-side sur realEntry. Fiches fusionnées et fiches de
+     test exclues (isCountedLead).
+     Lecture PAR PAGES (audit 25/11/2026) : plus de plafond muet à 6 000 ;
+     garde-fou LEADS_QUERY_LIMIT, atteint → DATA.leadsTruncated (dit à
+     l'écran). Échec de la lecture des leads : DATA.leadsError est posé PUIS
+     la promesse est rejetée (Set NB, Qualité leads s'appuient sur ce rejet) ;
+     loadAll, lui, l'attrape pour l'afficher (k.erreursLecture).
+     Ré-optins : fiches DÉJÀ connues (entrées avant la période) qui ont
+     réellement rempli un formulaire pendant la période — UNE fois par fiche,
+     vrai moment d'opt-in exigé (trueOptinTimes : ni message entrant, ni fiche
+     remontée à la main), clients exclus. Échec → DATA.reoptinsError. */
   function loadLeads(db, P, DATA) {
     var startTs = tsOf(P.start);
     var capMs = Math.min(P.end.getTime() + 45 * 86400000, Date.now() + 60000);
     var capTs = tsOf(new Date(capMs));
+    var ps = P.start.getTime(), pe = P.end.getTime();
+    DATA.leadsTruncated = false; DATA.leadsError = null; DATA.leadsTest = 0;
+    DATA.reoptinsTruncated = false; DATA.reoptinsError = null; DATA.reoptinsEcartes = 0;
     var q = db.collection('leads')
       .where('createdAt', '>=', startTs)
       .where('createdAt', '<=', capTs)
-      .limit(LEADS_QUERY_LIMIT);
-    var pLeads = q.get().then(function (snap) {
-      DATA.leadsTruncated = snap.size >= LEADS_QUERY_LIMIT;
-      var out = [];
-      snap.forEach(function (doc) {
+      .orderBy('createdAt', 'asc');
+    var pLeads = lirePages(q, LEADS_QUERY_LIMIT).then(function (res) {
+      DATA.leadsTruncated = res.truncated;
+      var out = [], test = 0;
+      res.docs.forEach(function (doc) {
         var d = doc.data(); d._id = doc.id;
         if (d._merged === true) return;
         var re = realEntryMs(d);
-        if (re == null || re < P.start.getTime() || re > P.end.getTime()) return;
+        if (re == null || re < ps || re > pe) return;
+        if (!isCountedLead(d)) { test++; return; }
         d._entry = re;
         d._tunnel = leadTunnel(d);
         d._p9 = phone9(d.telephone || d.phone);
         out.push(d);
       });
       DATA.leads = out;
+      DATA.leadsTest = test;
+    }, function (e) {
+      console.warn('[funnel] leads', e && e.message);
+      DATA.leads = [];
+      DATA.leadsError = (e && e.message) || 'lecture impossible';
+      throw e;
     });
-    var startTs2 = tsOf(P.start);
-    var endTs2 = tsOf(P.end);
-    var pReopt = db.collection('leads')
-      .where('lastOptinAt', '>=', startTs2)
-      .where('lastOptinAt', '<=', endTs2)
-      .limit(2000)
-      .get().then(function (snap) {
-        var out = [];
-        snap.forEach(function (doc) {
+    var pReopt = lirePages(db.collection('leads')
+      .where('lastOptinAt', '>=', tsOf(P.start))
+      .where('lastOptinAt', '<=', tsOf(P.end))
+      .orderBy('lastOptinAt', 'asc'), REOPTINS_QUERY_LIMIT).then(function (res) {
+        DATA.reoptinsTruncated = res.truncated;
+        var out = [], ecartes = 0;
+        res.docs.forEach(function (doc) {
           var d = doc.data(); d._id = doc.id;
-          if (d._merged === true) return;
+          if (!isCountedLead(d)) return;
           var re = realEntryMs(d);
-          if (re != null && re >= P.start.getTime()) return; // déjà dans la cohorte "nouveaux"
+          if (re != null && re >= ps) return; // déjà dans la cohorte "nouveaux"
+          /* Un vrai formulaire rempli pendant la période, sinon ce n'est pas
+             un ré-optin (message entrant, remontée à la main, client). */
+          var vrai = trueOptinTimes(d).some(function (t) { return t >= ps && t <= pe; });
+          if (!vrai) { ecartes++; return; }
           d._entry = re;
           d._tunnel = leadTunnel(d);
           d._p9 = phone9(d.telephone || d.phone);
           out.push(d);
         });
         DATA.reoptins = out;
-      }).catch(function (e) { console.warn('[funnel] reoptins', e.message); DATA.reoptins = []; });
+        DATA.reoptinsEcartes = ecartes;
+      }).catch(function (e) {
+        console.warn('[funnel] reoptins', e && e.message);
+        DATA.reoptins = [];
+        DATA.reoptinsError = (e && e.message) || 'lecture impossible';
+      });
     return Promise.all([pLeads, pReopt]);
   }
 
@@ -1719,19 +1861,23 @@
      période soit trouvé même s'il a lieu après (fix censure 15/07).
      _inPeriod sépare l'activité de la période (cartes appels / décrochés /
      par closer) du parcours par lead (TTC, joignabilité, tentatives). */
+  /* Lecture PAR PAGES (audit 25/11/2026) : la fenêtre va jusqu'à fin + 14 j
+     et consommait l'ancien plafond de 5 000 sans le dire. Garde-fou
+     CALLS_QUERY_LIMIT atteint → DATA.callsTruncated ; échec → DATA.callsError
+     (jamais « zéro appel »). */
   function loadCalls(db, P, DATA) {
     var startTs = tsOf(P.start);
     var endMs = P.end.getTime();
     var endTs = tsOf(new Date(lookaheadEndMsFor(P)));
-    return db.collection('call_logs')
+    DATA.callsTruncated = false;
+    DATA.callsError = null;
+    return lirePages(db.collection('call_logs')
       .where('initiatedAt', '>=', startTs)
       .where('initiatedAt', '<=', endTs)
-      .orderBy('initiatedAt', 'asc')
-      .limit(CALLS_QUERY_LIMIT)
-      .get().then(function (snap) {
-        DATA.callsTruncated = snap.size >= CALLS_QUERY_LIMIT;
+      .orderBy('initiatedAt', 'asc'), CALLS_QUERY_LIMIT).then(function (res) {
+        DATA.callsTruncated = res.truncated;
         var out = [];
-        snap.forEach(function (doc) {
+        res.docs.forEach(function (doc) {
           var d = doc.data();
           d._ms = parseFlexMs(d.initiatedAt) || parseFlexMs(d.startTime);
           d._inPeriod = d._ms == null || d._ms <= endMs;
@@ -1739,7 +1885,7 @@
           out.push(d);
         });
         DATA.calls = out;
-      }).catch(function (e) { console.warn('[funnel] calls', e.message); DATA.calls = []; });
+      }).catch(function (e) { console.warn('[funnel] calls', e && e.message); DATA.calls = []; DATA.callsError = (e && e.message) || 'lecture impossible'; });
   }
 
   /* Coûts setting RÉELS — _config/funnel_costs : { months: { 'YYYY-MM':
@@ -1749,7 +1895,7 @@
   function loadFunnelCosts(db, DATA) {
     return db.collection('_config').doc('funnel_costs').get().then(function (snap) {
       DATA.costs = (snap.exists && snap.data().months) || {};
-    }).catch(function (e) { console.warn('[funnel] costs', e.message); DATA.costs = null; });
+    }).catch(function (e) { console.warn('[funnel] costs', e.message); DATA.costs = null; DATA.costsError = e.message || 'lecture impossible'; });
   }
 
   /* Commissions Setting RÉELLES — deals du module Commissions
@@ -1764,29 +1910,39 @@
      indisponible (DATA.settingDealsUnavailable), jamais un 0 silencieux. */
   function loadSettingDealsReader(P, DATA) {
     var u = window.firebase && firebase.auth && firebase.auth().currentUser;
-    if (!u) { DATA.settingDealsUnavailable = true; return Promise.resolve(); }
+    if (!u) { DATA.settingDealsUnavailable = true; DATA.settingDealsError = 'session absente'; return Promise.resolve(); }
     return u.getIdToken().then(function (tok) {
       return fetch('/api/funnel-lecture?part=setting&start=' + P.start.getTime() + '&end=' + P.end.getTime(),
         { headers: { Authorization: 'Bearer ' + tok } });
     }).then(function (r) {
       return r.json().then(function (j) {
         if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
-        (j.deals || []).forEach(function (d) { DATA.settingDeals.push({ slug: null, comm: Number(d.comm) || 0, ok: d.ok === true, client: '' }); });
+        /* sb : vrai si le deal paie le setting d'un close Self Booking
+           (sous-type 'selfBooking') ; null si la route ne le transmet pas
+           encore (compté côté Setting, signalé par k.commSettingSbInconnu). */
+        (j.deals || []).forEach(function (d) { DATA.settingDeals.push({ slug: null, comm: Number(d.comm) || 0, ok: d.ok === true, client: '', sb: typeof d.sb === 'boolean' ? d.sb : null }); });
       });
     }).catch(function (e) {
       console.warn('[funnel-core] coût setting (lecteur)', e && e.message);
       DATA.settingDealsUnavailable = true;
+      DATA.settingDealsError = (e && e.message) || 'lecture impossible';
     });
   }
 
+  /* Membres lus : tout le roster de rôle sales (setter, setter écrit, closer,
+     closer-setter) ET tout ancien membre, quel que soit son rôle — plus de
+     prénoms en dur (audit 25/11/2026, décision D10 : la commission d'un
+     ancien membre reste un coût réel de sa période). Une lecture en échec
+     n'est plus avalée : DATA.settingDealsUnavailable + settingDealsError. */
   function loadSettingDeals(db, P, DATA, TEAM) {
     DATA.settingDeals = [];
     DATA.settingDealsUnavailable = false;
+    DATA.settingDealsError = null;
     if (typeof window !== 'undefined' && window.FUNNEL_READONLY === true) return loadSettingDealsReader(P, DATA);
     return Promise.resolve().then(function () {
-      var slugs = { elodie: 1, guillaume: 1 };
-      TEAM.forEach(function (m) {
-        if (m && m.slug && (m.role === 'setter' || m.role === 'closer' || m.role === 'closer_setter' || m.role === 'setter_ecrit')) slugs[m.slug] = 1;
+      var slugs = {};
+      (TEAM || []).forEach(function (m) {
+        if (m && m.slug && (SALES_ROLES[m.role] || isDeparted(m))) slugs[m.slug] = 1;
       });
       /* ⚠ Fenêtre ÉLARGIE d'un mois de chaque côté (26/07/2026) — depuis le
          décalage des commissions Setting, le deal d'un close de juillet est
@@ -1794,7 +1950,7 @@
          déplacé à la main vers juin. Le filtre qui compte reste `dl.date`
          ∈ période : élargir le balayage ne fait qu'aller CHERCHER le deal là
          où il dort, sans jamais en compter un hors période.
-         Sans ça, commSetting — donc le coût setting et le coût / RDV NB —
+         Sans ça, commSetting — donc le coût setting et le coût / RDV pris NB —
          serait silencieusement sous-évalué. */
       var mks = {};
       /* Mois de Paris (référentiel §7), du mois précédant le début au mois
@@ -1811,9 +1967,13 @@
               if (!dl || dl.type !== 'Setting') return;
               var ms = frDateMs(dl.date);
               if (ms == null || ms < P.start.getTime() || ms > P.end.getTime()) return;
-              DATA.settingDeals.push({ slug: slug, comm: (Number(dl.comm) || 0) + (Number(dl.bonus) || 0), ok: dl.ok === true, client: dl.client || '' });
+              DATA.settingDeals.push({ slug: slug, comm: (Number(dl.comm) || 0) + (Number(dl.bonus) || 0), ok: dl.ok === true,
+                client: dl.client || '', sb: dl.subtype === 'selfBooking' });
             });
-          }).catch(function () {}));
+          }).catch(function (e) {
+            DATA.settingDealsUnavailable = true;
+            DATA.settingDealsError = (e && e.message) || 'lecture impossible';
+          }));
         });
       });
       return Promise.all(proms);
@@ -1869,10 +2029,21 @@
       });
       return ids;
     }
+    /* Plus de plafond muet à 20 chaînons par tour (audit 25/11/2026) : tous
+       les chaînons manquants sont lus, par lots de 50 ; au-delà de 5 tours
+       (chaîne de plus de 5 reports), DATA.chainsTruncated le dit. */
+    DATA.chainsTruncated = false;
     function fetchRound(depth) {
       var ids = missingTargets();
-      if (!ids.length || depth > 4) return Promise.resolve();
-      var proms = ids.slice(0, 20).map(function (id) {
+      if (!ids.length) return Promise.resolve();
+      if (depth > 4) { DATA.chainsTruncated = true; return Promise.resolve(); }
+      var lots = [];
+      for (var iL = 0; iL < ids.length; iL += 50) lots.push(ids.slice(iL, iL + 50));
+      return lots.reduce(function (pr, lot) { return pr.then(function () { return fetchLot(lot); }); }, Promise.resolve())
+        .then(function () { return fetchRound(depth + 1); });
+    }
+    function fetchLot(lot) {
+      var proms = lot.map(function (id) {
         return db.collection('bookings').doc(id).get().then(function (snap) {
           if (!snap.exists) return;
           var d = snap.data(); d._id = snap.id; d._inCreated = false; d._inDue = false;
@@ -1882,7 +2053,7 @@
           DATA.bookingsById[d._id] = d;
         }).catch(function () {});
       });
-      return Promise.all(proms).then(function () { return fetchRound(depth + 1); });
+      return Promise.all(proms);
     }
     return fetchRound(0);
   }
@@ -1965,36 +2136,169 @@
     }).catch(function (e) { console.warn('[funnel] journal periode', e.message); DATA.journalPeriod = []; });
   }
 
-  /* Journal d'actions setting (lead_actions/{slug}/items — refonte 07/2026).
-     Une requête par membre — ÉQUIPE SALES uniquement (setter/closer/
-     closer_setter actifs, membres partis exclus — validé Adrien 14/07). */
+  /* Journal d'actions (lead_actions/{slug}/items — refonte 07/2026).
+     Une requête par membre du roster, ANCIENS MEMBRES ET ADMINS COMPRIS
+     (audit 25/11/2026, décisions D10 / D14) : « Leads travaillés » de
+     l'équipe = fiches distinctes, quelle que soit la personne ; l'activité
+     d'un ancien membre reste dans le total. Plus aucun prénom en dur. Chaque
+     action porte `_slug` (le membre dont c'est le journal). Une lecture en
+     échec est dite (DATA.actionsError), jamais un zéro muet. */
   function loadActionsAll(db, P, DATA, TEAM) {
     DATA.actions = [];
+    DATA.actionsError = null;
     return Promise.resolve().then(function () {
-      var members = TEAM.filter(function (m) {
-        return m && m.slug && m.slug !== 'guillaume' && m.slug !== 'guillaumes' && m.slug !== 'elodie' && m.active !== false
-          && (m.role === 'setter' || m.role === 'closer' || m.role === 'closer_setter' || m.role === 'setter_ecrit');
+      var seen = {};
+      var members = (TEAM || []).filter(function (m) {
+        if (!m || !m.slug || seen[m.slug]) return false;
+        seen[m.slug] = 1;
+        return true;
       });
-      if (!members.length) members = [{ slug: 'elodie' }];
       var sIso = isoDate(P.start), eIso = isoDate(P.end);
       var proms = members.map(function (m) {
         return db.collection('lead_actions').doc(m.slug).collection('items')
           .where('day', '>=', sIso).where('day', '<=', eIso).get()
           .then(function (snap) {
-            snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; DATA.actions.push(d); });
-          }).catch(function () {});
+            snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; d._slug = m.slug; DATA.actions.push(d); });
+          }).catch(function (e) { DATA.actionsError = (e && e.message) || 'lecture impossible'; });
       });
       return Promise.all(proms);
     });
   }
 
+  /* Leads travaillés (journal d'actions) — décomposition unique, la même
+     pour Set NB et le Stats funnel :
+       team    = fiches DISTINCTES contactées pour la première fois sur la
+                 période (firstTouch : 1ʳᵉ action de toute l'équipe)
+       bySlug  = { slug: fiches dont c'est la 1ʳᵉ action de CE membre
+                   (firstTouchMember) } — l'onglet d'un setter
+       sommeOnglets = Σ bySlug ; reprisParUnAutre = sommeOnglets − team
+                 (fiches déjà contactées par un autre membre, avant ou
+                 pendant la période)
+     keep(a) facultatif : ne garder que certaines actions (filtre tunnel). */
+  function leadsWorked(actions, keep) {
+    var teamIds = {}, team = 0, bySlug = {}, memberIds = {}, somme = 0;
+    (actions || []).forEach(function (a) {
+      if (!a || (keep && !keep(a))) return;
+      var id = a.leadId || a._id;
+      if (a.firstTouch && !teamIds[id]) { teamIds[id] = 1; team++; }
+      if (a.firstTouchMember && a._slug) {
+        var k2 = a._slug + '|' + id;
+        if (!memberIds[k2]) { memberIds[k2] = 1; bySlug[a._slug] = (bySlug[a._slug] || 0) + 1; somme++; }
+      }
+    });
+    return { team: team, bySlug: bySlug, sommeOnglets: somme, reprisParUnAutre: Math.max(0, somme - team), leadIds: teamIds };
+  }
+
+  /* Leads NB reçus — UNE règle (Set NB, Stats funnel) : leads entrés sur la
+     période qui n'ont AUCUN RDV Self Booking parmi les RDV fournis
+     (rattachement fiche → téléphone → e-mail), rangés chez le setter de la
+     fiche (setterSlug, sinon assignedTo, sinon null = « Non attribué »).
+     → [{ lead, self, setter, jour, travaille, parSonSetter, rdvSetter }]
+     pour TOUS les leads fournis : recus = ceux dont self est faux.
+     travaille = une action enregistrée sur la fiche (firstActionAt) ;
+     parSonSetter = son setter y a agi (firstActionAtBy[setter]) ;
+     rdvSetter = un RDV du setting (classe 'setter') existe pour la fiche. */
+  function leadsNbRecus(leads, bookings, typeMap) {
+    var sbId = {}, sbP9 = {}, sbEm = {}, stId = {}, stP9 = {}, stEm = {};
+    (bookings || []).forEach(function (b) {
+      if (!b) return;
+      var cls = b._class || SC.classifyBooking(b, typeMap || {});
+      if (cls !== 'self' && cls !== 'setter') return;
+      var p9 = b._p9 || phone9(b.prospect && (b.prospect.telephone || b.prospect.phone));
+      var em = lowerTrim(b.prospect && b.prospect.email);
+      var I = cls === 'self' ? [sbId, sbP9, sbEm] : [stId, stP9, stEm];
+      if (b.leadId) I[0][b.leadId] = 1;
+      if (p9) I[1][p9] = 1;
+      if (em) I[2][em] = 1;
+    });
+    return (leads || []).map(function (l) {
+      var p9 = l._p9 || phone9(l.telephone || l.phone), em = lowerTrim(l.email);
+      var self = !!(sbId[l._id] || (p9 && sbP9[p9]) || (em && sbEm[em]));
+      var setter = l.setterSlug || l.assignedTo || null;
+      var by = l.firstActionAtBy || {};
+      return { lead: l, self: self, setter: setter, jour: l._entry != null ? isoDate(l._entry) : null,
+        travaille: !!l.firstActionAt, parSonSetter: !!(setter && by[setter]),
+        rdvSetter: !!(stId[l._id] || (p9 && stP9[p9]) || (em && stEm[em])) };
+    });
+  }
+
+  /* Statistiques d'appels — UNE définition des compteurs et des durées
+     (Set NB, Stats funnel, Pilotage, assistant) :
+       out = sortants · answered = sortants décrochés (StatsCore.estDecroche)
+       talkSec = Σ durée de conversation des sortants décrochés
+       inbound / inboundAnswered / inboundTalkSec = la même chose en entrant. */
+  function callStats(calls) {
+    var o = { out: 0, answered: 0, talkSec: 0, inbound: 0, inboundAnswered: 0, inboundTalkSec: 0 };
+    (calls || []).forEach(function (c) {
+      if (!c) return;
+      var ans = isAnsweredCall(c), sec = Number(c.durationSec) || 0;
+      if (c.direction === 'outbound') { o.out++; if (ans) { o.answered++; o.talkSec += sec; } }
+      else if (c.direction === 'inbound') { o.inbound++; if (ans) { o.inboundAnswered++; o.inboundTalkSec += sec; } }
+    });
+    return o;
+  }
+
+  /* Auteur d'un appel — UNE règle : userId du call_log → membre du roster
+     (firebaseUid), sinon prénom du nom Ringover. → { key, slug, name, sales,
+     departed } ou null (« appel sans auteur »). sales = rôle de l'équipe sales
+     (setters, closers, admins) ; un ancien membre garde son rôle (son
+     activité passée reste dans l'équipe) mais departed est vrai : jamais de
+     nom affiché pour lui. L'index est calculé une fois par liste. */
+  function firstTok(s) {
+    var v = String(s || '');
+    try { v = v.normalize('NFD').replace(/[\u0300-\u036F]/g, ''); } catch (e) { /* vieux Safari */ }
+    return v.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').trim().split(' ')[0];
+  }
+  function callerIndex(TEAM) {
+    var byUid = {}, byFirst = {};
+    (TEAM || []).forEach(function (m) {
+      if (!m) return;
+      var who = { key: m.slug || m.firebaseUid, slug: m.slug || null,
+        name: m.shortName || m.displayName || m.fullName || m.slug,
+        sales: !!SALES_CALL_ROLES[m.role], departed: isDeparted(m) };
+      if (m.firebaseUid) byUid[m.firebaseUid] = who;
+      var f = firstTok(m.shortName || m.displayName || m.fullName);
+      if (f && !byFirst[f]) byFirst[f] = who;
+    });
+    return { byUid: byUid, byFirst: byFirst };
+  }
+  function callerOf(c, TEAMorIdx) {
+    var idx = (TEAMorIdx && TEAMorIdx.byUid) ? TEAMorIdx : callerIndex(TEAMorIdx);
+    if (!c) return null;
+    if (c.userId && idx.byUid[c.userId]) return idx.byUid[c.userId];
+    var f = firstTok(c.userName || c.ringoverUserName);
+    return (f && idx.byFirst[f]) || null;
+  }
+
+  /* Parcours de contact d'un lead — UNE règle (funnel, Qualité par pub,
+     onglet Leads) : appels SORTANTS de l'équipe vers son numéro, passés
+     entre son entrée et 14 jours après (même plafond que Pilotage).
+     appels = [{ ms, ans, who }] → { appele, joint, nbAppels, nbDecroches,
+     delai (ms jusqu'au 1er appel, ou null), auteur (who du 1er appel) }. */
+  function leadContact(l, appels) {
+    var o = { appele: false, joint: false, nbAppels: 0, nbDecroches: 0, delai: null, auteur: null };
+    if (!l || l._entry == null) return o;
+    var fin = l._entry + CONTACT_WINDOW_MS;
+    (appels || []).forEach(function (a) {
+      if (!a || a.ms == null || a.ms < l._entry || a.ms > fin) return;
+      o.nbAppels++;
+      if (a.ans) o.nbDecroches++;
+      var d = a.ms - l._entry;
+      if (o.delai == null || d < o.delai) { o.delai = d; o.auteur = a.who || null; }
+    });
+    o.appele = o.nbAppels > 0;
+    o.joint = o.nbDecroches > 0;
+    return o;
+  }
 
   /* ════════════════════════════════════════════════════════════════
      COMPUTE — agrège tout selon le filtre tunnel
      ════════════════════════════════════════════════════════════════ */
   function computeKpis(ctx) {
     var DATA = ctx.DATA, P = ctx.P, tunnelFilter = ctx.tunnelFilter;
-    var TEAM = ctx.teamMembers || [];
+    /* Roster : celui de la page + le roster COMPLET relu par loadAll (anciens
+       membres compris, décision D10). */
+    var TEAM = mergeTeam(ctx.teamMembers || [], DATA.teamFull || []);
     function tunnelMatch(t) { return tunnelFilter === 'all' || t === tunnelFilter; }
     /* Filtre Source (10/2026) : 'all' | 'youtube' | 'other' — se cumule au
        filtre tunnel partout où celui-ci s'applique. Absent (API agence) =
@@ -2023,8 +2327,31 @@
     if (DATA.bookingsError) k.erreursLecture.push('Lecture des RDV impossible (' + DATA.bookingsError + ') : RDV, Présents, Pitchés et RDV pris sont à zéro ou incomplets.');
     if (DATA.closedLeadsError) k.erreursLecture.push('Lecture des fiches gagnées impossible (' + DATA.closedLeadsError + ') : Closes, Contracté et Collecté sont incomplets.');
     if (DATA.paymentsError) k.erreursLecture.push('Lecture du module Paiements impossible (' + DATA.paymentsError + ') : le Contracté affiché est le tarif déclaré au close, le Collecté est à 0 et les closes repérés par le seul paiement manquent.');
+    if (DATA.chainsTruncated) k.erreursLecture.push('Certaines chaînes de reports ont plus de 5 RDV successifs : le résultat de leur dernier RDV peut manquer (RDV pris).');
     if (DATA.closeBookingsError) k.erreursLecture.push('Lecture des RDV porteurs des closes impossible (' + DATA.closeBookingsError + ') : le canal (Self Booking / Setting), le closer ou le setter de certains closes peuvent manquer.');
     if (k.closedLeadsTruncated) k.erreursLecture.push('Liste des clients gagnés tronquée : la période contient plus de ' + CLOSED_LEADS_LIMIT + ' fiches gagnées. Réduis la période pour un total exact.');
+    /* Étape 2 : leads, ré-optins, appels, dépense, équipe, journal, coûts. */
+    k.leadsTruncated = !!DATA.leadsTruncated;
+    k.reoptinsTruncated = !!DATA.reoptinsTruncated;
+    k.callsTruncated = !!DATA.callsTruncated;
+    k.partiel = { leads: k.leadsTruncated || !!DATA.leadsError, reoptins: k.reoptinsTruncated || !!DATA.reoptinsError,
+      calls: k.callsTruncated || !!DATA.callsError, closed: k.closedLeadsTruncated || !!DATA.closedLeadsError,
+      ads: !!DATA.adsError, team: !!DATA.teamError, actions: !!DATA.actionsError,
+      commissions: !!(DATA.settingDealsUnavailable || DATA.settingDealsError) };
+    if (DATA.leadsError) k.erreursLecture.push('Lecture des leads impossible (' + DATA.leadsError + ') : Leads, LTB, CPL et tout ce qui se calcule par lead sont à zéro ou incomplets.');
+    if (k.leadsTruncated) k.erreursLecture.push('Liste des leads tronquée à ' + LEADS_QUERY_LIMIT + ' fiches : Leads, LTB et CPL sont sous-estimés. Réduis la période.');
+    if (DATA.reoptinsError) k.erreursLecture.push('Lecture des ré-optins impossible (' + DATA.reoptinsError + ') : Ré-optins à zéro.');
+    if (k.reoptinsTruncated) k.erreursLecture.push('Liste des ré-optins tronquée à ' + REOPTINS_QUERY_LIMIT + ' fiches : Ré-optins sous-estimés. Réduis la période.');
+    if (DATA.callsError) k.erreursLecture.push('Lecture des appels impossible (' + DATA.callsError + ') : Appels, Décrochés et Lead to speech ne sont pas affichables.');
+    if (k.callsTruncated) k.erreursLecture.push('Liste des appels tronquée à ' + CALLS_QUERY_LIMIT + ' appels : Appels et Décrochés sont sous-estimés. Réduis la période.');
+    if (DATA.adsError) k.erreursLecture.push('Lecture de la dépense pub impossible (' + DATA.adsError + ') : Dépense, CPL, CPR, CAC et ROAS pub ne sont pas fiables.');
+    if (DATA.adsByAdError) k.erreursLecture.push('Lecture de la dépense par pub impossible (' + DATA.adsByAdError + ') : coûts par créative masqués.');
+    if (DATA.viewsError) k.erreursLecture.push('Lecture des visites des pages impossible (' + DATA.viewsError + ') : Vues et taux d’opt-in à zéro.');
+    if (DATA.creativesError) k.erreursLecture.push('Lecture du référentiel des pubs impossible (' + DATA.creativesError + ') : certaines pubs restent affichées par leur identifiant.');
+    if (DATA.costsError) k.erreursLecture.push('Lecture des coûts du setting impossible (' + DATA.costsError + ') : Coût setting et Coût / RDV pris NB non affichables.');
+    if (DATA.settingDealsError) k.erreursLecture.push('Lecture des commissions de setting impossible (' + DATA.settingDealsError + ') : le coût du setting est incomplet.');
+    if (DATA.actionsError) k.erreursLecture.push('Lecture du journal d’actions impossible pour au moins un membre (' + DATA.actionsError + ') : Leads travaillés et statuts Set incomplets.');
+    if (DATA.teamError && !(ctx.teamMembers && ctx.teamMembers.length)) k.erreursLecture.push('Lecture de l’équipe impossible (' + DATA.teamError + ') : appels et Lead to speech ne sont pas rangés par personne.');
 
     /* ── Index leads (cohorte + ré-optins) ── */
     var leadsById = {}, leadsByP9 = {}, leadsByEmail = {};
@@ -2041,25 +2368,55 @@
     var cohort = DATA.leads.filter(function (l) { return leadMatch(l); });
     var reopt  = DATA.reoptins.filter(function (l) { return leadMatch(l); });
 
+    /* Leads = fiches entrées (fusionnées et fiches de test exclues) ;
+       ré-optins = fiches déjà connues réinscrites par un VRAI formulaire,
+       une fois par fiche (loadLeads). Les deux restent séparés. */
     k.leads = cohort.length;
     k.reoptins = reopt.length;
+    k.leadsTest = DATA.leadsTest || 0;              /* fiches de test écartées (interne === true) */
+    k.reoptinsEcartes = DATA.reoptinsEcartes || 0;  /* lastOptinAt sans vrai formulaire (message, remontée à la main, client) */
     k.leadsByTunnel = { elite: 0, business: 0 };
     DATA.leads.forEach(function (l) { if (srcMatch(leadSrc(l))) k.leadsByTunnel[l._tunnel]++; });
+    /* Leads venus de la PUBLICITÉ (attribution du premier contact) — base du
+       « CPL pub » : la dépense pub n'achète que ceux-là. */
+    k.leadsAds = cohort.filter(function (l) { return isAdvertisingLead(l); }).length;
 
-    /* ── Ads ── */
-    var ads = DATA.ads.filter(function (a) { return adsInSource && tunnelMatch(a.tunnel === 'business' ? 'business' : 'elite'); });
-    k.spend = 0; k.impressions = 0; k.clicks = 0; k.leadsFb = 0; k.adsDays = 0;
+    /* ── Ads (ads_insights : LA source de la « Dépense pub ») ── */
+    var ads = DATA.ads.filter(function (a) { return adsInSource && tunnelMatch(adsTunnelOf(a)); });
+    k.spend = 0; k.impressions = 0; k.clicks = 0; k.leadsFb = 0;
+    /* Couverture en JOURS DISTINCTS (une ligne = un jour × un tunnel : la
+       compter comme un jour gonflait « N jour(s) de data »). Attendus : du
+       début de la période jusqu'à HIER (la dépense d'un jour n'arrive que le
+       lendemain), heure de Paris. */
+    var adsDates = {}, adsDatesAttendus = 0, adsDatesCouverts = 0;
+    k.adsDocsAutreTunnel = 0;
     ads.forEach(function (a) {
       k.spend += Number(a.spend) || 0;
       k.impressions += Number(a.impressions) || 0;
       k.clicks += Number(a.clicks) || 0;
       k.leadsFb += Number(a.leads) || 0;
-      if ((Number(a.spend) || 0) > 0 || (Number(a.impressions) || 0) > 0) k.adsDays++;
+      if (a.tunnel && a.tunnel !== 'business' && a.tunnel !== 'elite') k.adsDocsAutreTunnel++;
+      if (a.date && ((Number(a.spend) || 0) > 0 || (Number(a.impressions) || 0) > 0)) adsDates[a.date] = 1;
     });
+    k.adsDays = Object.keys(adsDates).length;
+    var hierIso = isoDate(NOW - 86400000);
+    var finAttenduIso = isoDate(P.end) < hierIso ? isoDate(P.end) : hierIso;
+    if (isoDate(P.start) <= finAttenduIso) {
+      joursEntre(isoDate(P.start), finAttenduIso).forEach(function (j) { adsDatesAttendus++; if (adsDates[j]) adsDatesCouverts++; });
+    }
+    k.adsDaysExpected = adsDatesAttendus;      /* jours attendus (jusqu'à hier) */
+    k.adsDaysCovered = adsDatesCouverts;       /* dont jours reçus */
+    /* Dépense complète : tous les jours attendus reçus ; période d'aujourd'hui
+       seulement → complète s'il y a de la donnée. */
+    k.adsSpendOk = adsDatesAttendus > 0 ? adsDatesCouverts >= adsDatesAttendus : k.adsDays > 0;
     k.hasAds = k.spend > 0 || k.impressions > 0 || k.clicks > 0;
     k.cpm = k.impressions > 0 ? k.spend / k.impressions * 1000 : null;
     k.ctr = k.impressions > 0 ? k.clicks / k.impressions * 100 : null;
     k.cpc = k.clicks > 0 ? k.spend / k.clicks : null;
+    /* CPL pub = dépense pub ÷ leads venus de la pub (k.leadsAds) — LE coût
+       par lead. k.cpl (dépense ÷ TOUS les leads, organiques compris) reste
+       pour la sous-ligne « en comptant aussi les leads hors pub ». */
+    k.cplAds = k.leadsAds > 0 && k.spend > 0 ? k.spend / k.leadsAds : null;
     k.cpl = k.leads > 0 && k.spend > 0 ? k.spend / k.leads : null;
 
     /* ── Vues opt-in (beacon) ── */
@@ -2068,8 +2425,14 @@
       return pageMatch(v.page);
     });
     k.views = 0;
-    views.forEach(function (v) { k.views += Number(v.views) || 0; });
-    k.optinReal = k.views > 0 ? k.leads / k.views * 100 : null;
+    var pagesVues = {};
+    views.forEach(function (v) { k.views += Number(v.views) || 0; if (v.page) pagesVues[v.page] = 1; });
+    /* Taux d'opt-in réel = leads entrés PAR une des pages comptées dans les
+       vues ÷ ces vues (même périmètre en haut et en bas : plus jamais un taux
+       au-dessus de 100 % parce que des leads venus d'ailleurs s'y ajoutent). */
+    k.optinLeads = cohort.filter(function (l) { var L = l.landingFirst; return !!(L && L.page && pagesVues[L.page]); }).length;
+    k.optinReal = k.views > 0 ? k.optinLeads / k.views * 100 : null;
+    /* Leads ÷ clics Meta (toutes pages, tous leads) — un autre ratio. */
     k.optinClicks = k.clicks > 0 ? k.leads / k.clicks * 100 : null;
 
     /* A/B tests opt-in — agrégation par page × variante (docs beacon
@@ -2178,7 +2541,7 @@
     k.vslVarLabels = {};
     function vslCell(pg, vr) {
       if (!vslByPage[pg]) vslByPage[pg] = {};
-      if (!vslByPage[pg][vr]) vslByPage[pg][vr] = { variant: vr, views: 0, ctas: 0, leads: 0, present: 0, closes: 0, bookings: 0 };
+      if (!vslByPage[pg][vr]) vslByPage[pg][vr] = { variant: vr, views: 0, ctas: 0, leads: 0, present: 0, rdvCloses: 0, bookings: 0, closes: 0, con: 0, col: 0 };
       return vslByPage[pg][vr];
     }
     /* Provenance d'un RDV : le bloc landing posé par booking.html (paramètre
@@ -2223,14 +2586,39 @@
       var cell = vslCell(L.page, L.variant || '_');
       cell.bookings++;
       k.vslBookings++;
-      /* Tenue et close : statués par le RDV terminal de la chaîne (un report
-         ne compte ni deux RDV, ni un RDV perdu) — règles StatsCore. `closes`
-         = RDV closés de ces RDV pris (ce n'est pas « Closes », qui compte les
-         clients le jour où ils sont gagnés) ; un RDV closé dont le close est
-         annulé n'y est pas compté. */
+      /* Tenue : statuée par le RDV terminal de la chaîne (un report ne compte
+         ni deux RDV, ni un RDV perdu) — règles StatsCore. `rdvCloses` = RDV
+         closés de ces RDV pris (un RDV closé dont le close est annulé n'y est
+         pas compté) : ce n'est PAS « Closes ». */
       var term = chainTerminal(b);
       if (SC.estPresent(term)) cell.present++;
-      if (SC.detail(term) === 'close' && !closeAnnuleDe(term)) cell.closes++;
+      if (SC.detail(term) === 'close' && !closeAnnuleDe(term)) cell.rdvCloses++;
+    });
+    /* Closes / Contracté / Collecté par page = LA LISTE UNIQUE (audit
+       25/11/2026, étape 2) : chaque client gagné sur la période est rangé sur
+       la page d'où il vient — page du RDV porteur (bloc landing posé par
+       booking.html), sinon page d'entrée de sa fiche à l'opt-in. Un close
+       sans page connue n'est rangé nulle part : k.vslClosesNonRattaches.
+       Pages + non rattachés = Closes. */
+    var closeBkById = {};
+    Object.keys(DATA.closeBookings || {}).forEach(function (lid) {
+      (DATA.closeBookings[lid] || []).forEach(function (cb) { if (cb && cb._id) closeBkById[cb._id] = cb; });
+    });
+    function pageDuClose(r) {
+      var b = r.bookingId ? ((DATA.bookingsById || {})[r.bookingId] || closeBkById[r.bookingId] || null) : null;
+      if (b && b.landing && b.landing.page) return b.landing;
+      var LF = r.lead && r.lead.landingFirst;
+      if (LF && LF.page && LF.via === 'optin') return LF;
+      return null;
+    }
+    k.vslClosesNonRattaches = 0;
+    CL.rows.forEach(function (r) {
+      var L = pageDuClose(r);
+      if (!L || !isVslPage(L.page) || !pageMatch(L.page)) { k.vslClosesNonRattaches++; return; }
+      var cell = vslCell(L.page, L.variant || '_');
+      cell.closes++;
+      cell.con += (r.rv && r.rv.con) || 0;
+      cell.col += (r.rv && r.rv.paid) || 0;
     });
     /* ── Lecture par tunnel › page › variante (28/09/2026) ──
        Seules les pages hébergées (clé tunnel__etape) entrent dans la vue
@@ -2238,7 +2626,7 @@
        rangées à part dans k.vslLegacy : historique, affiché sur demande. */
     var META = DATA.tunnelsMeta || {};
     function isTunnelKey(pg) { return /^[a-z0-9-]+__[a-z0-9-]+$/.test(String(pg || '')); }
-    var ZERO = ['views', 'ctas', 'leads', 'bookings', 'present', 'closes'];
+    var ZERO = ['views', 'ctas', 'leads', 'bookings', 'present', 'rdvCloses', 'closes', 'con', 'col'];
     function zero(o) { ZERO.forEach(function (f) { o[f] = 0; }); return o; }
     function addTo(o, c) { ZERO.forEach(function (f) { o[f] += c[f] || 0; }); }
     var byFunnel = {};
@@ -2284,7 +2672,15 @@
     var all = zero({});
     k.vslFunnels.forEach(function (f) { addTo(all, f); });
     k.vslViews = all.views; k.vslCtas = all.ctas; k.vslLeads = all.leads; k.vslBookings = all.bookings;
-    k.vslPresent = all.present; k.vslCloses = all.closes;
+    k.vslPresent = all.present;
+    k.vslCloses = all.closes;          /* closes de la liste unique rangés sur une page de tunnel */
+    k.vslRdvCloses = all.rdvCloses;    /* RDV closés des RDV pris depuis ces pages */
+    k.vslContracte = Math.round(all.con * 100) / 100;
+    k.vslCollecte = Math.round(all.col * 100) / 100;
+    /* Closes rangés sur une page hors des tunnels de conversion (anciennes
+       pages System.io, site vitrine) : Pages des tunnels + autres pages +
+       non rattachés = Closes. */
+    k.vslClosesAutresPages = Math.max(0, CL.rows.length - k.vslClosesNonRattaches - all.closes);
     var legacyAll = zero({});
     k.vslLegacy.forEach(function (c) { addTo(legacyAll, c); });
     k.vslLegacyTotals = legacyAll;
@@ -2296,11 +2692,10 @@
     k.selfShare = k.booked > 0 ? k.bookedSelf / k.booked * 100 : null;
     k.setterShare = k.booked > 0 ? k.bookedSetter / k.booked * 100 : null;
     k.ltb = k.leads > 0 ? k.booked / k.leads * 100 : null;
-    k.cpr = k.spend > 0 && k.booked > 0 ? k.spend / k.booked : null;
+    /* (k.cpr — dépense ÷ RDV pris — retiré le 25/11/2026 : aucun écran ne
+       l'affichait, et un calcul sans écran finit réutilisé sous un mauvais
+       nom. Les « CPR » affichés sont k.cprSB / cprKept / cprLive / cprOffre.) */
 
-    /* Récupération setting — cohorte : leads période avec RDV setter /
-       (leads période − leads période avec self-booking). */
-    var selfLeadIds = {}, setterLeadIds = {};
     var setterOld = 0, unknownLeadBookings = 0;
     /* TTB — 1er RDV de chaque lead cohorte depuis son entrée (min par lead).
        TTB séparés self / setting (audit 14/07 : la médiane globale était
@@ -2326,8 +2721,6 @@
          report en trop. */
       if (!l) { if (teteDeChaine(b)) unknownLeadBookings++; return; }
       if (!l._inCohort) { if (b._class === 'setter') setterOld++; return; }
-      if (b._class === 'self') selfLeadIds[l._id] = 1;
-      else setterLeadIds[l._id] = 1;
       applyTtb(b);
     });
     /* RDV créés APRÈS la fenêtre (≤ lookahead) — fix censure 15/07 : un lead
@@ -2343,14 +2736,24 @@
         if (!bookingMatches(b)) return;
         applyTtb(b);
       });
-    var cohortSelf = 0, cohortSetter = 0;
-    cohort.forEach(function (l) {
-      if (selfLeadIds[l._id]) cohortSelf++;
-      else if (setterLeadIds[l._id]) cohortSetter++;
+    /* Leads NB reçus — LA règle de Set NB (FunnelCore.leadsNbRecus) : lead
+       entré sans RDV Self Booking parmi les RDV chargés (créés OU datés sur
+       la période), rattachement fiche → téléphone → e-mail. Taux de
+       récupération = leads NB reçus ayant un RDV du setting ÷ leads NB reçus. */
+    var NBR = leadsNbRecus(cohort, DATA.bookings || [], ctx.typeMap || {});
+    var nbrSelf = {};
+    var cohortSelf = 0, cohortSetter = 0, nbTrav = 0;
+    NBR.forEach(function (x) {
+      if (x.self) { cohortSelf++; nbrSelf[x.lead._id] = 1; return; }
+      if (x.rdvSetter) cohortSetter++;
+      if (x.travaille) nbTrav++;
     });
-    k.cohortSelf = cohortSelf;
-    k.cohortSetter = cohortSetter;
-    k.recovery = (k.leads - cohortSelf) > 0 ? cohortSetter / (k.leads - cohortSelf) * 100 : null;
+    k.cohortSelf = cohortSelf;                  /* leads entrés ayant un RDV Self Booking */
+    k.cohortSetter = cohortSetter;              /* leads NB reçus ayant un RDV du setting */
+    k.leadsNbRecus = k.leads - cohortSelf;      /* = colonne « Leads NB reçus » de Set NB, onglet Équipe */
+    k.leadsNbRecusTravailles = nbTrav;
+    k.leadsNbRecusNonTravailles = k.leadsNbRecus - nbTrav;
+    k.recovery = k.leadsNbRecus > 0 ? cohortSetter / k.leadsNbRecus * 100 : null;
     k.setterOldLeads = setterOld;
     k.unknownLeadBookings = unknownLeadBookings;
 
@@ -2551,43 +2954,116 @@
     k.cprLive  = k.spend > 0 && k.chSB.present > 0 ? k.spend / k.chSB.present : null;
     k.cprOffre = k.spend > 0 && k.chSB.pitched > 0 ? k.spend / k.chSB.pitched : null;
 
-    /* Journal d'actions setting (lead_actions) — décomposition honnête :
-       le journal compte le 1er contact de la période sur TOUS les leads
-       (anciens, ré-optins et self-bookés inclus) → ventilation affichée pour
-       que « travaillés > cohorte » soit lisible, jamais suspect.
-       Avant la mise en ligne du journal (14/07/2026) : « — », le passé
-       n'existe pas et ne sera pas inventé. */
+    /* ══ JOURNAL D'ACTIONS (lead_actions) — audit 25/11/2026, étape 2 ══
+       Journaux de TOUT le roster (anciens membres et admins compris).
+       · Leads travaillés (équipe) = fiches DISTINCTES contactées pour la
+         première fois sur la période (FunnelCore.leadsWorked : un lead repris
+         par un 2e setter ne compte qu'une fois). Décomposition affichable :
+         Σ des onglets (k.actWorkedSommeOnglets) − repris par un autre membre
+         (k.actWorkedReprisParUnAutre) = k.actLeadsWorked.
+         Ventilation « travaillés > cohorte » : ré-optins, leads plus anciens,
+         self-bookés.
+       · Filtre tunnel / source : seules les fiches CHARGÉES (cohorte,
+         ré-optins) qui passent le filtre sont comptées ; les autres ne
+         peuvent pas être classées → k.actWorkedNonVentiles, dit à l'écran.
+       · Sets : UN set = UN RDV du setting créé (k.bookedSetter, décision
+         D13). Les statuts « Set » cliqués sur une fiche SANS aucun RDV du
+         setting créé sur la période ne sont PAS des sets : listés à part
+         (k.statutsSetSansRdv, k.statutsSetSansRdvListe — nominatif).
+       Avant la mise en ligne du journal (14/07/2026) : « — ». */
     var acts = DATA.actions || [];
-    k.actLeadsWorked = 0; k.actWorkedReopt = 0; k.actWorkedOld = 0; k.actWorkedSelf = 0;
-    var setKeys = {};
-    acts.forEach(function (a) {
-      if (a.firstTouch) {
-        k.actLeadsWorked++;
-        var la = a.leadId ? leadsById[a.leadId] : null;
-        if (la && la._inCohort) { if (selfLeadIds[la._id]) k.actWorkedSelf++; }
-        else if (la) k.actWorkedReopt++;
-        else k.actWorkedOld++;
-      }
-      if (a.action === 'set' || a.action === 'set_booking' || a.action === 'rdv_pose') {
-        setKeys[(a.leadId || a._id) + '_' + a.day] = 1;
-      }
+    var filtreActif = tunnelFilter !== 'all' || sourceFilter !== 'all';
+    var actNonVentiles = {};
+    function actionGardee(a) {
+      if (!filtreActif) return true;
+      var la = a.leadId ? leadsById[a.leadId] : null;
+      if (!la) { if (a.firstTouch) actNonVentiles[a.leadId || a._id] = 1; return false; }
+      return leadMatch(la);
+    }
+    var LW = leadsWorked(acts, actionGardee);
+    k.actLeadsWorked = LW.team;
+    k.actWorkedBySlug = LW.bySlug;                 /* nominatif interne (slug → fiches) */
+    k.actWorkedSommeOnglets = LW.sommeOnglets;
+    k.actWorkedReprisParUnAutre = LW.reprisParUnAutre;
+    k.actWorkedNonVentiles = Object.keys(actNonVentiles).length;
+    k.actWorkedReopt = 0; k.actWorkedOld = 0; k.actWorkedSelf = 0;
+    Object.keys(LW.leadIds).forEach(function (id) {
+      var la = leadsById[id] || null;
+      if (la && la._inCohort) { if (nbrSelf[la._id]) k.actWorkedSelf++; }
+      else if (la) k.actWorkedReopt++;
+      else k.actWorkedOld++;
     });
-    k.actSets = Object.keys(setKeys).length;
+    /* Statuts « Set » sans RDV : fiche passée au statut Set (journal) sans
+       aucun RDV du setting créé sur la période pour elle. */
+    var setRdvLead = {}, setRdvP9 = {};
+    createdFunnelAll.forEach(function (b) {
+      if (b._class !== 'setter') return;
+      var lb = bookingLead(b);
+      if (b.leadId) setRdvLead[b.leadId] = 1;
+      if (lb) setRdvLead[lb._id] = 1;
+      if (b._p9) setRdvP9[b._p9] = 1;
+    });
+    var ssr = {};
+    acts.forEach(function (a) {
+      if (!(a.action === 'set' || a.action === 'set_booking' || a.action === 'rdv_pose')) return;
+      if (!actionGardee(a)) return;
+      var id = a.leadId || a._id;
+      if (ssr[id] || setRdvLead[id]) return;
+      var la = a.leadId ? leadsById[a.leadId] : null;
+      if (la && la._p9 && setRdvP9[la._p9]) return;
+      ssr[id] = { leadId: a.leadId || null, name: a.leadName || (la && la.nom) || a.leadId || '', day: a.day || '', slug: a._slug || null };
+    });
+    k.statutsSetSansRdvListe = Object.keys(ssr).map(function (id) { return ssr[id]; });
+    k.statutsSetSansRdv = k.statutsSetSansRdvListe.length;
+    /* Alias de TRANSITION — l'ancien « sets du journal » comptait les clics de
+       statut, en double avec les RDV. Il vaut désormais les Sets (= RDV pris
+       NB). Ne plus le lire : k.bookedSetter / k.chNB.n. */
+    k.actSets = k.bookedSetter;
     k.journalLive = isoDate(P.end) >= JOURNAL_GOLIVE;
 
-    /* ── Téléphonie (call_logs) ── */
+    /* ══ TÉLÉPHONIE (call_logs) — audit 25/11/2026, étape 2 ══
+       Appels = SORTANTS. Périmètre = ÉQUIPE SALES (setters, closers, admins —
+       anciens membres compris, leur activité passée reste) + appels SANS
+       AUTEUR (poste Ringover relié à aucun compte : très majoritairement du
+       setting, ligne « Non attribué »). Les sortants des autres rôles (CSM,
+       coachs) sont comptés À PART : k.callsOutHorsSales — ligne « Hors
+       équipe sales ». Décroché = StatsCore.estDecroche (≥ 5 s, répondeurs
+       écartés), partout. Durées : FunnelCore.callStats. */
     function callMatches(c) {
       if (tunnelFilter === 'all' && sourceFilter === 'all') return true;
       var l = c._p9 ? leadsByP9[c._p9] : null;
       return !!(l && leadMatch(l));
     }
+    var CIDX = callerIndex(TEAM);
+    /* 'sales' | 'sans_auteur' | 'hors' — mémorisé sur l'appel (_who, _perim). */
+    function perimetre(c) {
+      if (c._perimIdx === CIDX) return c._perim;
+      var who = callerOf(c, CIDX);
+      c._perimIdx = CIDX;
+      c._who = who;
+      c._perim = !who ? 'sans_auteur' : (who.sales ? 'sales' : 'hors');
+      return c._perim;
+    }
+    function dansEquipe(c) { return perimetre(c) !== 'hors'; }
     /* Activité de la PÉRIODE (cartes appels sortants / décrochés / durée /
-       par closer) : strictement bornée à [start, end] — les appels chargés
-       en lookahead pour le TTC ne comptent jamais ici. */
-    var callsOut = DATA.calls.filter(function (c) { return c.direction === 'outbound' && c._inPeriod && callMatches(c); });
-    k.callsOut = callsOut.length;
-    k.callsAnswered = callsOut.filter(isAnsweredCall).length;
+       par personne) : strictement bornée à [start, end] — les appels chargés
+       en lookahead pour le Lead to speech ne comptent jamais ici. */
+    var callsOutTous = DATA.calls.filter(function (c) { return c.direction === 'outbound' && c._inPeriod && callMatches(c); });
+    var callsOut = callsOutTous.filter(dansEquipe);
+    var callsHors = callsOutTous.filter(function (c) { return !dansEquipe(c); });
+    var CS = callStats(callsOut), CSH = callStats(callsHors);
+    k.callsOut = CS.out;                         /* équipe sales + sans auteur */
+    k.callsAnswered = CS.answered;
     k.answerRate = k.callsOut > 0 ? k.callsAnswered / k.callsOut * 100 : null;
+    k.talkSec = CS.talkSec;                      /* temps d'appel : conversation des sortants décrochés */
+    k.callsSansAuteur = callsOut.filter(function (c) { return perimetre(c) === 'sans_auteur'; }).length;
+    k.callsOutHorsSales = CSH.out;               /* sortants CSM / coachs : hors des chiffres ci-dessus */
+    k.callsAnsweredHorsSales = CSH.answered;
+    k.callsOutTous = callsOutTous.length;        /* = callsOut + callsOutHorsSales */
+    /* Appels reçus de la période (équipe), à part : jamais dans « Appels ». */
+    var callsInEq = DATA.calls.filter(function (c) { return c.direction === 'inbound' && c._inPeriod && callMatches(c) && dansEquipe(c); });
+    var CSI = callStats(callsInEq);
+    k.callsIn = CSI.inbound; k.callsInAnswered = CSI.inboundAnswered; k.talkSecIn = CSI.inboundTalkSec;
     /* Appels sans aucune information de sonnerie : la règle « messagerie »
        ne peut pas s'y appliquer, ils sont comptés décrochés par défaut et
        gonflent le taux. C'est le cas des appels du JOUR — le sync Ringover
@@ -2596,52 +3072,32 @@
        81,8 % au lieu de ~60 %, constaté le 17/08. */
     k.callsNoRingData = callsOut.filter(function (c) { return ringingSecOf(c) == null; }).length;
 
-    /* time-to-first-contact — premier appel sortant vers chaque lead de la
-       cohorte, cherché jusqu'au lookahead (fix censure 15/07 : avant, un
-       lead appelé après la fin de fenêtre sortait de la médiane → chiffre
-       structurellement flatteur, plafonné à la taille de la fenêtre). */
-    /* Lead to speech par personne (23/10/2026) — le 1er appel est attribué
-       à celui qui l'a passé : userId du call_log → roster (firebaseUid),
-       sinon prénom du userName (≈ 40 appels Ringover sur 300 sans userId).
-       Hors roster (membre parti compris) = « Non attribué ». */
-    var callerByUid = {}, callerByFirst = {};
-    function firstTok(s) {
-      var v = String(s || '');
-      try { v = v.normalize('NFD').replace(/[\u0300-\u036F]/g, ''); } catch (e) { /* vieux Safari */ }
-      return v.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').trim().split(' ')[0];
-    }
-    TEAM.forEach(function (m) {
-      if (!m) return;
-      var who = { key: m.slug || m.firebaseUid, name: m.shortName || m.displayName || m.fullName || m.slug };
-      if (m.firebaseUid) callerByUid[m.firebaseUid] = who;
-      var f = firstTok(m.shortName || m.displayName || m.fullName);
-      if (f && !callerByFirst[f]) callerByFirst[f] = who;
-    });
-    function callerOf(c) {
-      if (c.userId && callerByUid[c.userId]) return callerByUid[c.userId];
-      var f = firstTok(c.userName || c.ringoverUserName);
-      return (f && callerByFirst[f]) || null;
+    /* ── Parcours de contact des leads de la cohorte (FunnelCore.leadContact) :
+       appels SORTANTS de l'équipe (même périmètre) vers le numéro du lead,
+       entre son entrée et 14 jours après (même plafond que Pilotage ; les
+       appels passés AVANT son entrée ne comptent plus). Un lead « appelé »
+       a donc toujours un Lead to speech : k.ttcCount = k.leadsCalled. ── */
+    function nomAffiche(who) {
+      if (!who) return { key: '_none', name: 'Non attribué', unassigned: true, anciens: false };
+      if (who.departed) return { key: '_anciens', name: SC.mot('anciens_membres') || 'Anciens membres', unassigned: false, anciens: true };
+      if (!who.sales) return { key: '_hors', name: 'Hors équipe sales', unassigned: false, anciens: false, hors: true };
+      return { key: who.key, name: who.name, unassigned: false, anciens: false };
     }
     var callsByP9 = {};
     DATA.calls.forEach(function (c) {
-      if (c.direction !== 'outbound' || !c._p9 || c._ms == null) return;
+      if (c.direction !== 'outbound' || !c._p9 || c._ms == null || !dansEquipe(c)) return;
       if (!callsByP9[c._p9]) callsByP9[c._p9] = [];
-      callsByP9[c._p9].push({ ms: c._ms, ans: isAnsweredCall(c), who: callerOf(c) });
+      callsByP9[c._p9].push({ ms: c._ms, ans: isAnsweredCall(c), who: c._who || null });
     });
     var ttcArr = [], ttbArr = [], ttbSelfArr = [], ttbSetArr = [];
+    var leadsCalled = 0, leadsReached = 0, attemptsSum = 0;
     cohort.forEach(function (l) {
-      l._nbCalls = 0; l._ttc = null; l._ttcBy = null;
-      l._nbAnswered = 0;
-      if (l._p9 && callsByP9[l._p9]) {
-        var arr = callsByP9[l._p9];
-        l._nbCalls = arr.length;
-        for (var i = 0; i < arr.length; i++) {
-          if (arr[i].ans) l._nbAnswered++;
-          if (l._entry != null && arr[i].ms >= l._entry) {
-            if (l._ttc == null || arr[i].ms - l._entry < l._ttc) { l._ttc = arr[i].ms - l._entry; l._ttcBy = arr[i].who; }
-          }
-        }
-      }
+      var LC = leadContact(l, l._p9 ? callsByP9[l._p9] : null);
+      l._nbCalls = LC.nbAppels;
+      l._nbAnswered = LC.nbDecroches;
+      l._ttc = LC.delai;
+      l._ttcBy = LC.auteur ? nomAffiche(LC.auteur) : null;
+      if (LC.appele) { leadsCalled++; attemptsSum += LC.nbAppels; if (LC.joint) leadsReached++; }
       /* SMS sortants depuis l'entrée du lead (communications[]) */
       l._nbSms = 0;
       var comms = l.communications || [];
@@ -2656,26 +3112,29 @@
       if (l._ttbSelf != null) ttbSelfArr.push(l._ttbSelf);
       if (l._ttbSet != null) ttbSetArr.push(l._ttbSet);
     });
+    k.contactWindowDays = CONTACT_WINDOW_MS / 86400000;
     k.ttcMedian = median(ttcArr);
     k.ttcCount = ttcArr.length;
     /* Lead to speech par personne : chaque lead appelé de la cohorte compte
-       UNE fois, pour l'auteur de son 1er appel. Tri du plus rapide au plus
-       lent (médiane), « Non attribué » en dernier. */
+       UNE fois, pour l'auteur de son 1er appel. Anciens membres réunis sur une
+       ligne sans nom ; tri du plus rapide au plus lent (médiane), « Anciens
+       membres » puis « Non attribué » en dernier. */
     var ltsBy = {};
     cohort.forEach(function (l) {
       if (l._ttc == null) return;
-      var key = l._ttcBy ? l._ttcBy.key : '_none';
-      if (!ltsBy[key]) ltsBy[key] = { key: key, name: l._ttcBy ? l._ttcBy.name : 'Non attribué', unassigned: !l._ttcBy, delays: [] };
-      ltsBy[key].delays.push(l._ttc);
+      var who = l._ttcBy || nomAffiche(null);
+      if (!ltsBy[who.key]) ltsBy[who.key] = { key: who.key, name: who.name, unassigned: !!who.unassigned, anciens: !!who.anciens, delays: [] };
+      ltsBy[who.key].delays.push(l._ttc);
     });
+    function rangFin(u) { return u.unassigned ? 2 : (u.anciens ? 1 : 0); }
     k.ltsByUser = Object.keys(ltsBy).map(function (key) {
       var u = ltsBy[key], d = u.delays;
       var u5 = 0, u60 = 0;
       d.forEach(function (ms) { if (ms <= 5 * 60000) u5++; if (ms <= 3600000) u60++; });
-      return { key: u.key, name: u.name, unassigned: u.unassigned, n: d.length, median: median(d),
+      return { key: u.key, name: u.name, unassigned: u.unassigned, anciens: u.anciens, n: d.length, median: median(d),
         under5: u5, under60: u60, under5Pct: u5 / d.length * 100, under60Pct: u60 / d.length * 100 };
     }).sort(function (a, b) {
-      if (a.unassigned !== b.unassigned) return a.unassigned ? 1 : -1;
+      if (rangFin(a) !== rangFin(b)) return rangFin(a) - rangFin(b);
       return a.median - b.median || b.n - a.n;
     });
     k.ttbMedian = median(ttbArr);
@@ -2688,49 +3147,35 @@
        ALLONGER les médianes (jamais les raccourcir). */
     k.ttxProvisional = P.end.getTime() + TTX_LOOKAHEAD_MS > Date.now();
 
-    /* Joignabilité & tentatives — parcours par lead de la cohorte : appels
-       comptés jusqu'au lookahead (un lead appelé le lendemain de la fenêtre
-       compte « appelé »), cohérent avec le TTC. */
-    var leadsCalled = 0, leadsReached = 0, attemptsSum = 0;
-    cohort.forEach(function (l) {
-      if ((l._nbCalls || 0) > 0) {
-        leadsCalled++;
-        attemptsSum += l._nbCalls;
-        if ((l._nbAnswered || 0) > 0) leadsReached++;
-      }
-    });
+    /* Joignabilité & tentatives — même fenêtre que le Lead to speech. */
     k.leadsCalled = leadsCalled;
     k.leadsReached = leadsReached;
-    k.leadsNeverCalled = k.leads - leadsCalled; // jamais appelés à ce jour (téléphone absent inclus)
+    k.leadsNeverCalled = k.leads - leadsCalled; // jamais appelés dans leurs 14 premiers jours (téléphone absent inclus)
     k.reachRate = leadsCalled > 0 ? leadsReached / leadsCalled * 100 : null;
     k.attemptsAvg = leadsCalled > 0 ? attemptsSum / leadsCalled : null;
 
-    /* Durée moyenne des appels décrochés (tous appels sortants période) */
-    var ansDurSum = 0, ansDurN = 0;
-    callsOut.forEach(function (c) {
-      var dSec = Number(c.durationSec) || 0;
-      if (isAnsweredCall(c)) { ansDurSum += dSec; ansDurN++; }
-    });
-    k.avgAnsweredDurSec = ansDurN > 0 ? ansDurSum / ansDurN : null;
+    /* Durée moyenne d'un appel décroché = temps d'appel ÷ décrochés. */
+    k.avgAnsweredDurSec = CS.answered > 0 ? CS.talkSec / CS.answered : null;
 
-    /* Répartition par closer (userId du call_log → nom d'équipe) */
+    /* Appels par personne : une ligne par membre de l'équipe sales, puis
+       « Anciens membres » (sans nom), « Non attribué » (appels sans auteur),
+       « Hors équipe sales » (CSM, coachs — HORS du total k.callsOut).
+       Lignes hors « Hors équipe sales » : Σ out = k.callsOut. */
     var byUser = {};
-    callsOut.forEach(function (c) {
-      var uid = c.userId || c.ringoverUserId || 'unknown';
-      if (!byUser[uid]) byUser[uid] = { name: null, out: 0, ans: 0, rawName: c.userName || c.ringoverUserName || null };
-      byUser[uid].out++;
-      if (isAnsweredCall(c)) byUser[uid].ans++;
-      if (!byUser[uid].rawName && (c.userName || c.ringoverUserName)) byUser[uid].rawName = c.userName || c.ringoverUserName;
+    callsOutTous.forEach(function (c) {
+      perimetre(c);
+      var who = nomAffiche(c._who);
+      if (!byUser[who.key]) byUser[who.key] = { key: who.key, name: who.name, out: 0, ans: 0, talkSec: 0, rawName: null,
+        unassigned: !!who.unassigned, anciens: !!who.anciens, horsEquipe: !!who.hors };
+      var u = byUser[who.key];
+      u.out++;
+      if (isAnsweredCall(c)) { u.ans++; u.talkSec += Number(c.durationSec) || 0; }
     });
-    var tmList = TEAM;
-    Object.keys(byUser).forEach(function (uid) {
-      var nm = null;
-      for (var i2 = 0; i2 < tmList.length; i2++) {
-        if (tmList[i2].firebaseUid === uid) { nm = tmList[i2].shortName || tmList[i2].displayName; break; }
-      }
-      byUser[uid].name = nm || byUser[uid].rawName || (uid === 'unknown' ? 'Non attribué' : uid.slice(0, 8) + '…');
+    function rangAppel(u) { return u.horsEquipe ? 3 : (u.unassigned ? 2 : (u.anciens ? 1 : 0)); }
+    k.callsByUser = Object.keys(byUser).map(function (kk) { return byUser[kk]; }).sort(function (a, b) {
+      if (rangAppel(a) !== rangAppel(b)) return rangAppel(a) - rangAppel(b);
+      return b.out - a.out;
     });
-    k.callsByUser = Object.keys(byUser).map(function (uid) { return byUser[uid]; }).sort(function (a, b) { return b.out - a.out; });
 
     /* ── Show-up : présents ÷ (Kept − à venir), règle unique StatsCore (D4).
        Le no-show reste au dénominateur : il fait baisser le taux. k.showup
@@ -3037,21 +3482,31 @@
        donnée, et le rendu masque les ratios tant que ce n'est pas complet.
        Borne haute = aujourd'hui : un mois en cours ne peut pas avoir de
        dépense pour ses jours à venir, ce n'est pas un trou. */
+    /* Jours couverts = dates DISTINCTES des lignes ad-level qui passent les
+       MÊMES filtres que la dépense (tunnel, source) ; jours attendus = du
+       début de la période jusqu'à HIER (même borne que k.adsDaysExpected :
+       la dépense d'un jour n'arrive que le lendemain). Période d'aujourd'hui
+       seulement : complète s'il y a de la donnée. */
     var adDates = {};
-    (DATA.adsByAd || []).forEach(function (a) { if (a && a.date) adDates[a.date] = 1; });
-    var covEnd = Math.min(P.end.getTime(), NOW);
-    var expected = 0, coveredDays = 0;
-    /* Jours de PARIS de la période (référentiel §7), jusqu'à aujourd'hui. */
-    joursEntre(isoDate(P.start), isoDate(covEnd)).forEach(function (jour) {
-      expected++;
-      if (adDates[jour]) coveredDays++;
+    (DATA.adsByAd || []).forEach(function (a) {
+      if (!a || !a.date || !adsInSource) return;
+      if (a.tunnel && !tunnelMatch(a.tunnel === 'business' ? 'business' : 'elite')) return;
+      adDates[a.date] = 1;
     });
+    var expected = 0, coveredDays = 0;
+    if (isoDate(P.start) <= finAttenduIso) {
+      joursEntre(isoDate(P.start), finAttenduIso).forEach(function (jour) {
+        expected++;
+        if (adDates[jour]) coveredDays++;
+      });
+    }
     k.adSpendDaysExpected = expected;
     k.adSpendDaysCovered = coveredDays;
     k.adSpendCoverage = expected > 0 ? coveredDays / expected * 100 : null;
     /* « Complet » se juge sur les jours attendus, pas sur un pourcentage
        arrondi : 16 jours sur 17 n'est pas complet. */
-    k.adSpendComplete = expected > 0 && coveredDays >= expected;
+    k.adSpendComplete = expected > 0 ? coveredDays >= expected : adLevelSpend > 0;
+    k.adSpendOk = k.adSpendComplete;
 
     /* 4 axes. « Canal » n'est PAS de la publicité : il répond à « d'où
        viennent mes leads » (VSL, webinaire, Skool, bio Instagram…), la
@@ -3088,14 +3543,10 @@
     });
     var AXES = ['creative', 'adset', 'campaign', 'channel', 'device', 'region'];
     var maps = { creative: {}, adset: {}, campaign: {}, channel: {}, device: {}, region: {} };
-    var unattr = {
-      creative: { booked: 0, cancelled: 0, noshow: 0, closes: 0 },
-      adset:    { booked: 0, cancelled: 0, noshow: 0, closes: 0 },
-      campaign: { booked: 0, cancelled: 0, noshow: 0, closes: 0 },
-      channel:  { booked: 0, cancelled: 0, noshow: 0, closes: 0 },
-      device:   { booked: 0, cancelled: 0, noshow: 0, closes: 0 },
-      region:   { booked: 0, cancelled: 0, noshow: 0, closes: 0 }
-    };
+    var unattr = {};
+    ['creative', 'adset', 'campaign', 'channel', 'device', 'region'].forEach(function (ax) {
+      unattr[ax] = { booked: 0, cancelled: 0, noshow: 0, pitched: 0, closes: 0 };
+    });
 
     function rowOf(axis, l) {
       var kk = leadAxisKey(l, axis, CRE_IDX);
@@ -3108,7 +3559,10 @@
           spend: 0, impressions: 0, clicks: 0, hasSpend: false,
           /* Qualité par pub (12/11/2026) */
           caKnown: 0, qualCa: 0, faux: 0, disq: 0, neverReached: 0, neverEligible: 0,
-          honored: 0, con: 0 };
+          /* pitched = RDV pitchés (offre · close · non close) ; honored = même
+             valeur, ancien nom gardé tant que ads-quality-tab.js et
+             api/ads-quality-share.js le lisent. */
+          pitched: 0, honored: 0, con: 0 };
       }
       var r = m[kk.group];
       /* Une ligne redevient « propre » dès qu'un seul lead y arrive avec
@@ -3147,9 +3601,10 @@
         var ul3 = bookingLead(b);
         if (ul3) rowOf(axis, ul3).noshow++; else unattr[axis].noshow++;
       });
-      TL.pitches.forEach(function (b) {          // champ « honored » = PITCHÉS (offre · close · non close)
+      TL.pitches.forEach(function (b) {          // pitched (alias honored) = PITCHÉS (offre · close · non close)
         var ul4 = bookingLead(b);
-        if (ul4) rowOf(axis, ul4).honored++;
+        if (ul4) { var r4 = rowOf(axis, ul4); r4.pitched++; r4.honored++; }
+        else unattr[axis].pitched++;
       });
       closedLeads.forEach(function (l) {
         var r3 = rowOf(axis, l);
@@ -3185,13 +3640,12 @@
         r.spend = Math.round(r.spend * 100) / 100;
         r.col = Math.round(r.col * 100) / 100;
         r.cpl  = (r.hasSpend && r.leads > 0)  ? r.spend / r.leads  : null;
-        r.cpr  = (r.hasSpend && r.booked > 0) ? r.spend / r.booked : null;
         r.roas = (r.hasSpend && r.spend > 0 && r.col > 0) ? r.col / r.spend : null;
         r.con = Math.round(r.con * 100) / 100;
         /* Les trois coûts mis en avant (Qualité par pub). Sans dépense connue
            → null (« — »), jamais un 0 € qui se lirait « pub gratuite ». */
         r.cpq = (r.hasSpend && r.qualCa > 0) ? r.spend / r.qualCa : null;
-        r.cph = (r.hasSpend && r.honored > 0) ? r.spend / r.honored : null;
+        r.cph = (r.hasSpend && r.pitched > 0) ? r.spend / r.pitched : null;   /* coût par RDV pitché */
         r.cpv = (r.hasSpend && r.closes > 0) ? r.spend / r.closes : null;
         r.smallSample = r.leads < 10;
         r.adIdList = Object.keys(r.adIds);
@@ -3220,6 +3674,15 @@
       region:   sortRows(maps.region)
     };
     k.utmUnattrByAxis = unattr;
+    /* Dépense pub « rattachée à une ligne » par axe (Σ des lignes) — la
+       Dépense pub du compte (k.spend) moins ce montant = dépense non rattachée
+       (pub sans lead, jour non reçu au niveau pub, saisie manuelle). */
+    k.utmSpendRattacheByAxis = {};
+    AXES.forEach(function (axis) {
+      var t = 0;
+      Object.keys(maps[axis]).forEach(function (g) { t += maps[axis][g].spend || 0; });
+      k.utmSpendRattacheByAxis[axis] = Math.round(t * 100) / 100;
+    });
     /* Compat : api/agency-funnel.js et l'export lisent encore ces deux clés. */
     k.utmRows = k.utmRowsByAxis.creative;
     k.utmUnattr = unattr.creative;
@@ -3261,9 +3724,13 @@
     k.aovAds  = (closesAds > 0 && wonColAds > 0) ? wonColAds / closesAds : null;
     k.panierMoyenAds = closesAds > 0 ? wonConAds / closesAds : null;
 
-    /* Conservé pour l'historique et la vue agence, mais ce n'est PAS un
-       ROAS : c'est le rapport de tout le chiffre à la seule dépense pub. */
-    k.roasOutcome = (k.spend > 0 && k.wonCollecte > 0) ? k.wonCollecte / k.spend : null;
+    /* « ROAS pub » = k.roasAds, et LUI SEUL porte le mot ROAS (audit
+       25/11/2026). Le rapport de TOUT le collecté (pub, organique, setting) à
+       la seule dépense pub n'est PAS un ROAS : il s'appelle « Collecté total ÷
+       dépense pub » (k.collecteSurDepense). k.roasOutcome = même valeur, ancien
+       nom gardé pour le lien Agence — à ne plus afficher sous le mot ROAS. */
+    k.collecteSurDepense = (k.spend > 0 && k.wonCollecte > 0) ? k.wonCollecte / k.spend : null;
+    k.roasOutcome = k.collecteSurDepense;
 
     /* ── Taux de close (décision D3) — UNE formule, StatsCore.tauxClose :
        numérateur = « Closes », le chiffre affiché (liste unique, date de la
@@ -3291,22 +3758,48 @@
     k.aovAll = (k.closesWonTotal > 0 && k.wonCollecte > 0) ? k.wonCollecte / k.closesWonTotal : null;
     k.aov = k.aovAll;
 
-    /* ── Coût setting RÉEL (remplace « dépense pub / RDV NB » — décision
-       Vincent + Adrien 14/07) : (fixe + commissions Setting + outils)
-       ÷ RDV NB créés.
-       · fixe & outils : _config/funnel_costs, proratisés au nombre de jours
-         de la fenêtre (report auto du dernier mois saisi)
-       · commissions : deals Setting RÉELS du module Commissions datés dans
-         la fenêtre (comm + bonus, validés ou en attente)
+    /* ── Coût du setting (décision Vincent + Adrien 14/07, revu le 25/11) ──
+       Coût setting = fixe + outils + commissions de setting de la période.
+       · fixe & outils : _config/funnel_costs, proratisés JOUR PAR JOUR (jours
+         de Paris) ; sur une période EN COURS, arrêtés à AUJOURD'HUI — comme
+         la dépense, les RDV et le collecté auxquels on les compare
+         (k.costDaysDone sur k.costDaysTotal). Rien ne change sur une période
+         passée.
+       · commissions : deals 'Setting' du module Commissions datés dans la
+         période (comm + bonus), DUES (validées ou non — k.commSettingOk =
+         part validée). k.commSettingSB = commissions de setting de closes
+         Self Booking, k.commSettingNB = le reste.
+       Coût / RDV pris NB = (fixe + outils + commissions NB) ÷ RDV pris NB
+       (= Sets, k.chNB.n — dénominateur k.costPerRdvNBBase). Les commissions
+       d'un close Self Booking n'achètent pas un RDV du setting.
+       Filtre tunnel / source actif (k.costFiltered) : les coûts du setting ne
+       se ventilent pas → les ratios qui les mélangent à des chiffres filtrés
+       sont null (« — »).
        Coûts non renseignés → « — », jamais un chiffre inventé. ── */
-    k.commSetting = 0; k.commSettingN = 0;
-    (DATA.settingDeals || []).forEach(function (dl) { k.commSetting += dl.comm; k.commSettingN++; });
+    k.costFiltered = tunnelFilter !== 'all' || sourceFilter !== 'all';
+    k.commSetting = 0; k.commSettingN = 0; k.commSettingSB = 0; k.commSettingNB = 0; k.commSettingOk = 0;
+    k.commSettingSbInconnu = 0;
+    (DATA.settingDeals || []).forEach(function (dl) {
+      var c = Number(dl.comm) || 0;
+      k.commSetting += c; k.commSettingN++;
+      if (dl.ok === true) k.commSettingOk += c;
+      if (dl.sb === true) k.commSettingSB += c;
+      else { k.commSettingNB += c; if (dl.sb == null) k.commSettingSbInconnu++; }
+    });
     k.commSetting = Math.round(k.commSetting * 100) / 100;
+    k.commSettingSB = Math.round(k.commSettingSB * 100) / 100;
+    k.commSettingNB = Math.round(k.commSettingNB * 100) / 100;
+    k.commSettingOk = Math.round(k.commSettingOk * 100) / 100;
     var fixeSum = 0, outilsSum = 0, daysMissing = 0, costSrc = null;
+    var costFinIso = isoDate(Math.min(P.end.getTime(), NOW));
+    var joursCout = isoDate(P.start) <= costFinIso ? joursEntre(isoDate(P.start), costFinIso) : [];
+    k.costDaysTotal = joursEntre(isoDate(P.start), isoDate(P.end)).length;
+    k.costDaysDone = joursCout.length;
+    k.costDaysElapsed = k.costDaysDone;          /* même valeur, autre nom (fiches d'audit) */
     if (DATA.costs) {
       /* Un jour de Paris à la fois (référentiel §7) : le mois d'un jour et le
          nombre de jours de ce mois se lisent sur sa clé 'AAAA-MM-JJ'. */
-      joursEntre(isoDate(P.start), isoDate(P.end)).forEach(function (jour) {
+      joursCout.forEach(function (jour) {
         var mk2 = jour.slice(0, 7);
         var eff = effectiveCosts(DATA.costs, mk2);
         if (!eff) { daysMissing++; return; }
@@ -3318,32 +3811,33 @@
     } else daysMissing = 1;
     k.costFixe = Math.round(fixeSum * 100) / 100;
     k.costOutils = Math.round(outilsSum * 100) / 100;
-    k.costConfigured = daysMissing === 0 && DATA.costs && Object.keys(DATA.costs).length > 0;
+    k.costConfigured = daysMissing === 0 && !!DATA.costs && Object.keys(DATA.costs).length > 0;
     k.costSrcMonth = costSrc;
     /* Le mois affiché a-t-il sa PROPRE entrée ? (les outils sont variables :
        une valeur reportée d'un mois précédent doit être signalée, pas subie) */
     var mkStart = SC.moisParis(P.start);
     k.costOwnEntry = !!(DATA.costs && DATA.costs[mkStart]);
     k.costSetting = k.costConfigured ? Math.round((k.costFixe + k.costOutils + k.commSetting) * 100) / 100 : null;
-    k.costPerRdvNB = (k.costSetting != null && k.chNB.n > 0) ? k.costSetting / k.chNB.n : null;
+    k.costPerRdvNBBase = k.chNB.n;               /* RDV pris NB = Sets */
+    k.costPerRdvNB = (k.costConfigured && !k.costFiltered && k.chNB.n > 0)
+      ? (k.costFixe + k.costOutils + k.commSettingNB) / k.chNB.n : null;
 
-    /* ── ROAS GLOBAL — tout le collecté ÷ TOUS les coûts connus ───────
-       Le ROAS pub répond « la pub est-elle rentable ». Celui-ci répond
-       « l'entreprise l'est-elle » : au dénominateur, la dépense
-       publicitaire ET le coût setting réel (fixe proratisé + outils +
-       commissions Setting du module Commissions).
-       Calculé ICI et non plus haut : costSetting n'existe qu'après le
-       prorata des coûts mensuels.
-       Sans coûts renseignés → null. La convention du funnel est constante :
-       un coût manquant donne « — » et une explication, jamais un ratio
-       calculé sur un dénominateur amputé — qui serait flatteur, donc pire
-       qu'une case vide. */
-    k.coutTotal = k.costSetting != null ? Math.round((k.spend + k.costSetting) * 100) / 100 : null;
-    k.roasGlobal = (k.coutTotal > 0 && k.wonCollecte > 0) ? k.wonCollecte / k.coutTotal : null;
-    k.margeGlobale = k.coutTotal != null ? Math.round((k.wonCollecte - k.coutTotal) * 100) / 100 : null;
+    /* ── ROAS pub + setting — tout le collecté ÷ (dépense pub + coût setting).
+       Ce n'est PAS « tous les coûts » : ni les commissions de closing, ni le
+       fixe des closers n'y sont. D'où son nom (k.roasPubSetting) et celui de
+       la marge (k.margeAvantClosing). k.roasGlobal / k.margeGlobale : mêmes
+       valeurs, anciens noms — à ne plus afficher sous « ROAS global ».
+       Sans coûts renseignés, ou sous filtre tunnel / source → null : jamais
+       un ratio sur un dénominateur amputé, flatteur donc pire qu'une case
+       vide. */
+    k.coutTotal = (k.costSetting != null && !k.costFiltered) ? Math.round((k.spend + k.costSetting) * 100) / 100 : null;
+    k.roasPubSetting = (k.coutTotal > 0 && k.wonCollecte > 0) ? k.wonCollecte / k.coutTotal : null;
+    k.margeAvantClosing = k.coutTotal != null ? Math.round((k.wonCollecte - k.coutTotal) * 100) / 100 : null;
+    k.roasGlobal = k.roasPubSetting;
+    k.margeGlobale = k.margeAvantClosing;
 
-    /* Leads restants côté setting = cohorte − leads ayant self-booké. */
-    k.leadsNoSB = Math.max(0, k.leads - k.cohortSelf);
+    /* Leads restants côté setting = Leads NB reçus (même règle que Set NB). */
+    k.leadsNoSB = k.leadsNbRecus;
 
     return k;
   }
@@ -3442,7 +3936,14 @@
       }
       list.sort(function (a, b) { return (a.order || 999) - (b.order || 999); });
       return list;
-    }).catch(function (e) { console.warn('[funnel-core] team', e.message); return []; });
+    }).catch(function (e) {
+      console.warn('[funnel-core] team', e.message);
+      /* Toujours un tableau (les appelants l'énumèrent), mais l'échec est
+         porté par une propriété non énumérable : loadAll le dit à l'écran. */
+      var vide = [];
+      try { Object.defineProperty(vide, '_erreur', { value: e.message || 'lecture impossible', enumerable: false }); } catch (x) { /* rien */ }
+      return vide;
+    });
   }
 
   /* ══════════════════════════════════════════════════════════════════
@@ -3458,7 +3959,12 @@
       leadsTruncated: false, callsTruncated: false,
       /* Lectures tronquées ou en échec : remontées dans K (k.erreursLecture). */
       closedLeadsTruncated: false, closedLeadsError: null, paymentsError: null,
-      bookingsError: null, closeBookingsError: null };
+      bookingsError: null, closeBookingsError: null,
+      leadsError: null, leadsTest: 0, reoptinsTruncated: false, reoptinsError: null, reoptinsEcartes: 0,
+      callsError: null, adsError: null, adsByAdError: null, viewsError: null, creativesError: null,
+      costsError: null, settingDealsError: null, actionsError: null, teamError: null,
+      /* Roster COMPLET (anciens membres compris), relu par loadAll. */
+      teamFull: [] };
   }
 
   /* opts = { P, typeMap, teamMembers } — typeMap/teamMembers sont chargés
@@ -3470,12 +3976,22 @@
     var TYPE_MAP = opts.typeMap;
     var TEAM = opts.teamMembers;
     if (!TYPE_MAP) pre.push(loadTypeMap(db).then(function (m) { TYPE_MAP = m; }));
-    if (!TEAM)     pre.push(loadTeamMembers(db).then(function (l) { TEAM = l; }));
+    /* Roster COMPLET, toujours relu (une lecture) : les pages passent souvent
+       la liste SANS les anciens membres, et leur journal, leurs commissions et
+       leurs appels doivent rester dans les totaux (décision D10). */
+    pre.push(loadTeamMembers(db).then(function (l) {
+      DATA.teamFull = l || [];
+      if (l && l._erreur) DATA.teamError = l._erreur;
+      TEAM = mergeTeam(TEAM || [], DATA.teamFull);
+    }));
 
     return Promise.all(pre).then(function () {
       return Promise.all([
         loadAds(db, P, DATA), loadAdsByAd(db, P, DATA), loadCreatives(db, DATA),
-        loadViews(db, P, DATA), loadLeads(db, P, DATA),
+        loadViews(db, P, DATA),
+        /* Leads : la lecture rejette en cas d'échec (contrat des autres
+           appelants) — ici l'échec est gardé pour être DIT (k.erreursLecture). */
+        loadLeads(db, P, DATA).catch(function () { DATA.leads = DATA.leads || []; DATA.reoptins = DATA.reoptins || []; }),
         loadBookings(db, P, DATA, TYPE_MAP), loadCalls(db, P, DATA),
         loadFunnelCosts(db, DATA), loadSettingDeals(db, P, DATA, TEAM),
         loadJournalPeriod(db, P, DATA), loadActionsAll(db, P, DATA, TEAM),
@@ -3552,6 +4068,14 @@
     loadPayments: loadPayments, loadCalls: loadCalls,
     loadFunnelCosts: loadFunnelCosts, loadSettingDeals: loadSettingDeals,
     loadJournalPeriod: loadJournalPeriod, loadActionsAll: loadActionsAll,
-    resolveChains: resolveChains, resolvePaymentLeads: resolvePaymentLeads
+    resolveChains: resolveChains, resolvePaymentLeads: resolvePaymentLeads,
+    /* Étape 2 de l'audit (25/11/2026) — règles uniques leads / appels / équipe */
+    REOPTINS_QUERY_LIMIT: REOPTINS_QUERY_LIMIT, PAGE_SIZE: PAGE_SIZE, CONTACT_WINDOW_MS: CONTACT_WINDOW_MS,
+    lirePages: lirePages,
+    isDeparted: isDeparted, mergeTeam: mergeTeam,
+    isCountedLead: isCountedLead, isClientLead: isClientLead, trueOptinTimes: trueOptinTimes,
+    leadsWorked: leadsWorked, leadsNbRecus: leadsNbRecus,
+    callStats: callStats, callerIndex: callerIndex, callerOf: callerOf, leadContact: leadContact,
+    adsTunnelOf: adsTunnelOf
   };
 }));
