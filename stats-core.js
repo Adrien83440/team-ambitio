@@ -646,7 +646,24 @@
     rythme_necessaire: { mot: 'Rythme nécessaire', texte: 'Objectif annuel moins le contracté depuis janvier, divisé par les mois restants (mois en cours compris).' },
     rdv_a_faire_prendre: { mot: 'RDV encore à faire prendre', texte: 'RDV nécessaires moins les RDV de vente déjà à venir d’ici la fin du mois.' },
     leads_a_faire_entrer: { mot: 'Leads à faire entrer', texte: 'RDV encore à faire prendre ÷ LTB des 90 derniers jours. Une estimation : une partie des RDV vient de leads plus anciens.' },
-    panier_defaut: { mot: 'Panier par défaut', texte: 'Aucun close ni sur les 90 derniers jours ni sur l’année : le calcul suppose un contrat de 6 000 €.' }
+    panier_defaut: { mot: 'Panier par défaut', texte: 'Aucun close ni sur les 90 derniers jours ni sur l’année : le calcul suppose un contrat de 6 000 €.' },
+    cout_kept_sb___cout_present_sb___cout_pitche_sb: { mot: 'Coût / RDV SB kept · Coût / présent SB · Coût / pitché SB', texte: 'Dépense pub ÷ Kept SB / présents SB / pitchés SB (RDV pris en Self Booking pendant la période).' },
+    cpm___ctr___cpc___impressions___clics_sortants: { mot: 'CPM, CTR, CPC, Impressions, Clics sortants', texte: 'Indicateurs Meta : dépense ÷ impressions × 1 000 ; clics sortants ÷ impressions ; dépense ÷ clics sortants ; affichages ; clics sur les pubs vers nos pages.' },
+    optin_reel___leads_par_clic___leads_pub: { mot: 'Taux d’opt-in · Leads ÷ clics Meta · Leads venus de la pub', texte: 'Textes repris à l’identique de FN_INFO de sales-funnel.html.' },
+    closes_pages___presents_pages: { mot: 'Closes des pages · Présents ÷ RDV pris (pages)', texte: 'Textes repris à l’identique de FN_INFO de sales-funnel.html.' },
+    depense_par_pub___non_ventilables___note_equipe__variante_: { mot: 'Dépense par pub · Non ventilables · Note équipe', texte: 'Textes de FN_INFO de sales-funnel.html. Note équipe est sans renvoi à Leads Live.' },
+    cout_lead_ca20k: { mot: '€ / lead CA ≥ 20 k€', texte: 'Dépense de la pub ÷ ses leads qui ont déclaré au quiz un chiffre d’affaires mensuel d’au moins 20 000 €. Ligne Total : dépense pub du compte ÷ total de la colonne CA ≥ 20 k€.' },
+    cout_rdv_pitche: { mot: '€ / RDV pitché', texte: 'Dépense de la pub ÷ ses RDV pitchés de la période (offre présentée : résultat Offre, Close ou Non close). C’est le tri par défaut. Ligne Total : dépense pub du compte ÷ total de la colonne Pitchés.' },
+    cac_pub_par_pub: { mot: '€ / close', texte: 'Dépense de la pub ÷ ses closes de la période (clients gagnés pendant la période, même si leur lead est entré avant) : le CAC pub, pub par pub. Ligne Total : dépense pub du compte ÷ total de la colonne Closes.' },
+    ca_20k: { mot: 'CA ≥ 20 k€', texte: 'Leads qui ont déclaré au quiz un chiffre d’affaires mensuel d’au moins 20 000 €. La part se calcule sur les leads qui ont déclaré un CA (n/a : aucun CA déclaré). Ce n’est ni la note LQS, ni la note équipe ★.' },
+    faux_numeros: { mot: 'Faux numéros', texte: 'Leads dont la fiche est aujourd’hui à l’étape Faux numéro ou Poubelle du Pipeline. Part sur les leads de la ligne.' },
+    fiches_disqualifiees: { mot: 'Fiches disqualifiées', texte: 'Leads dont la fiche est aujourd’hui à l’étape Disqualification ou Disqualifié en closing (faux numéros à part). Ce sont des fiches, pas des RDV : ce n’est pas la colonne « Disqua. » des pages équipe.' },
+    jamais_joints: { mot: 'Jamais joints', texte: 'Leads entrés depuis plus de 48 h sans aucun appel décroché (au moins 5 s de conversation, répondeurs écartés) ni aucun RDV ; faux numéros, fiches disqualifiées et clients exclus. Part sur ces leads de plus de 48 h.' },
+    depense_pub_compte: { mot: 'Dépense pub du compte', texte: 'Dépense Meta du compte sur la période, jour par jour, hors taxes (corrigeable dans l’onglet Données Ads). Une partie seulement est rattachée aux pubs listées : pubs sans lead, jours pas encore reçus pub par pub, corrections à la main.' },
+    ligne_total_pubs: { mot: 'Ligne Total', texte: 'Somme des lignes de pub listées ; Dépense = dépense pub du compte ; CPL = CPL pub du Stats funnel ; autres coûts = cette dépense ÷ total de leur colonne.' },
+    vente_meta: { mot: 'Vente (Meta) et colonne Closes', texte: 'L’événement « Vente » part quand un RDV est statué Close : un par RDV closé, au tarif HT déclaré au close. La colonne Closes suit la liste unique des clients gagnés et le Contracté lit le module Paiements : les deux peuvent différer.' },
+    vente_meta_montant: { mot: 'Montant de la Vente envoyée à Meta', texte: 'Tarif hors taxes choisi aux cartes du close, au moment du close. La colonne Contracté lit le contrat du module Paiements : elle peut différer (remise, paiement annulé).' },
+    deux_periodes: { mot: 'Deux périodes dans un tableau', texte: 'Les closes de la période ne viennent pas tous des leads entrés pendant la période : un lead entré en octobre et gagné en novembre compte en novembre, sur sa pub. Pour suivre les leads d’un mois jusqu’à la vente, voir Qualité leads.' }
   };
 
   function mot(cle) { return G[cle] ? G[cle].mot : ''; }
@@ -734,7 +751,9 @@
       if (e.key === 'Escape' || e.keyCode === 27) fermer();
     }, true);
     if (typeof window !== 'undefined') {
-      window.addEventListener('scroll', function () { if (_open) fermer(); }, true);
+      /* Un défilement ferme la bulle — sauf celui que le navigateur déclenche
+         lui-même en amenant le « i » cliqué à l'écran, juste après l'ouverture. */
+      window.addEventListener('scroll', function () { if (_open && Date.now() - _open.at > 300) fermer(); }, true);
       window.addEventListener('resize', function () { if (_open) fermer(); });
     }
   }
@@ -777,7 +796,7 @@
     p.style.top = Math.round(top) + 'px';
     if (_open && _open.el !== el) _open.el.className = _open.el.className.replace(/\s*sc-on/g, '');
     if (el.className.indexOf('sc-on') < 0) el.className += ' sc-on';
-    _open = { el: el, fixe: !!fixe };
+    _open = { el: el, fixe: !!fixe, at: Date.now() };
   }
   function fermer() {
     var p = hasDom() ? document.getElementById(POP_ID) : null;
