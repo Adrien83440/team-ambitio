@@ -710,12 +710,80 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
   function todayIso() { return SC.jourParis(Date.now()); }
   /* Jour voisin d'une clé 'AAAA-MM-JJ' (calendrier pur, aucun fuseau). */
   function isoShift(iso, n) { var p = String(iso).split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2] + n)).toISOString().slice(0, 10); }
-  function frDate(ms) { if (ms == null) return '—'; var d = new Date(ms); return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + String(d.getFullYear()).slice(2) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
+  /* Date et heure À PARIS (référentiel §7) — l'écran et l'export CSV
+     montrent le même jour, quel que soit le fuseau de l'appareil. */
+  function frDate(ms) { if (ms == null) return '—'; var o = SC.parisParts(ms); return o.day + '/' + o.month + '/' + String(o.year).slice(2) + ' ' + o.hour + ':' + o.minute; }
+  function isoDateTimeParis(ms) { if (ms == null) return ''; var o = SC.parisParts(ms); return o.year + '-' + o.month + '-' + o.day + ' ' + o.hour + ':' + o.minute; }
   function frDay(iso) { if (!iso) return '—'; var p = iso.split('-'); return p[2] + '/' + p[1]; }
   function fmtNum(v) { if (v == null || isNaN(v) || !isFinite(v)) return '—'; return Math.round(v).toLocaleString('fr-FR'); }
   function fmtEuro(v) { if (v == null || isNaN(v) || !isFinite(v)) return '—'; return Math.round(v).toLocaleString('fr-FR') + ' €'; }
   function fmtEuro2(v) { if (v == null || isNaN(v) || !isFinite(v)) return '—'; return (Math.round(v * 100) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; }
-  function fmtPct(v, dec) { if (v == null || isNaN(v) || !isFinite(v)) return '—'; var f = dec == null ? 1 : dec; return (Math.round(v * Math.pow(10, f)) / Math.pow(10, f)).toLocaleString('fr-FR') + ' %'; }
+  /* Un taux s'écrit comme partout (StatsCore.fmtPct : une décimale, virgule,
+     « — » si vide). dec : décimales, seulement pour les taux Meta (CTR). */
+  function fmtPct(v, dec) { if (v == null || isNaN(v) || !isFinite(v)) return '—'; return SC.fmtPct(v, dec == null ? 1 : dec); }
+  /* Un ROAS / un ratio « × » : deux décimales, virgule, « — » si vide. */
+  function fmtRoas(v) { if (v == null || isNaN(v) || !isFinite(v)) return '—'; return Number(v).toFixed(2).replace('.', ',') + '×'; }
+  /* « i » des chiffres de cette page qui ne sont pas (encore) des termes du
+     glossaire commun (stats-core.js, un seul rédacteur) : StatsCore.infoLibre.
+     Liste remontée pour ajout centralisé — ne jamais redéfinir ici un terme
+     qui existe dans le glossaire. */
+  var FN_INFO = {
+    depense_pub: ['Dépense pub', 'Dépense Meta du compte sur la période, jour par jour, telle que transmise par Make ou corrigée dans l’onglet Données Ads (corrections à saisir hors taxes, comme le collecté). Le détail par pub (Performance publicitaire, Qualité par pub) peut être plus bas : jours pas encore reçus au niveau pub, pubs sans aucun lead, montants corrigés à la main.'],
+    jours_depense: ['Jours de dépense reçus', 'Jours de la période, jusqu’à hier (heure de Paris), pour lesquels Meta a transmis une dépense : celle d’un jour n’arrive que le lendemain. S’il en manque, CPL pub, CPR, CAC pub et ROAS pub sont masqués : ils seraient faussement bas.'],
+    impressions: ['Impressions', 'Nombre d’affichages des pubs, transmis par Meta.'],
+    clics_sortants: ['Clics sortants', 'Clics sur les pubs qui mènent vers nos pages, transmis par Meta. Ce ne sont pas les clics sur le bouton des pages (tableau des pages du tunnel).'],
+    cpm: ['CPM', 'Dépense pub ÷ impressions × 1 000.'],
+    ctr: ['CTR', 'Clics sortants ÷ impressions (chiffres Meta).'],
+    cpc: ['CPC', 'Dépense pub ÷ clics sortants.'],
+    leads_pub: ['Leads venus de la pub', 'Leads entrés pendant la période dont le premier contact porte une attribution publicitaire (pub, ensemble ou campagne Meta).'],
+    cpl_pub: ['CPL pub', 'Dépense pub ÷ leads entrés pendant la période et venus d’une pub. Les leads venus d’ailleurs (Instagram, téléphone, lien partagé) ne sont pas au dénominateur : ils n’ont rien coûté en pub.'],
+    leads_pixel: ['Leads pixel Meta', 'Leads comptés par le pixel Meta (attribution Meta). L’écart avec Leads vient des doublons, des ré-optins et de la fenêtre d’attribution de Meta.'],
+    optin_reel: ['Taux d’opt-in', 'Leads entrés par une des pages mesurées ÷ vues de ces mêmes pages (mesure de la page, hors visites internes).'],
+    leads_par_clic: ['Leads ÷ clics Meta', 'Tous les leads de la période ÷ clics sortants Meta, toutes pages confondues. Un repère, pas un taux d’opt-in : une partie des leads vient d’ailleurs que de la pub.'],
+    cpr_sb: ['CPR SB', 'Dépense pub ÷ RDV pris seuls par les prospects (Self Booking) pendant la période, annulés compris, RDV de remplacement exclus.'],
+    cout_kept_sb: ['Coût / RDV SB kept', 'Dépense pub ÷ Kept SB : RDV pris en Self Booking pendant la période et non annulés (no-show compris).'],
+    cout_present_sb: ['Coût / présent SB', 'Dépense pub ÷ présents SB : RDV pris en Self Booking pendant la période où le prospect est venu.'],
+    cout_pitche_sb: ['Coût / pitché SB', 'Dépense pub ÷ pitchés SB : RDV pris en Self Booking pendant la période où l’offre a été présentée.'],
+    cpr_pages: ['CPR pages', 'Dépense pub ÷ RDV pris dont on sait qu’ils viennent des pages du tunnel (pris seuls ou posés par un setter). Ce n’est pas le CPR SB, qui compte tous les RDV Self Booking.'],
+    presents_pages: ['Présents ÷ RDV pris (pages)', 'RDV pris depuis ces pages dont le dernier RDV a vu le prospect présent ÷ RDV pris depuis ces pages. Ce n’est pas le show-up (présents ÷ (Kept − à venir)).'],
+    closes_pages: ['Closes des pages', 'Closes de la période (la liste unique) rangés sur la page de leur RDV closé, à défaut sur la page d’entrée de la fiche. Closes des pages + autres pages + non rattachés = Closes.'],
+    cac_pub: ['CAC pub', 'Dépense pub ÷ closes de la période venus d’une pub (fiche à attribution publicitaire). Différent du « CPA » de Meta (achat, RDV ou lead selon la campagne).'],
+    collecte_sur_depense: ['Collecté total ÷ dépense pub', 'Tout le collecté des closes de la période, clients hors pub compris, divisé par la dépense pub. Ce n’est pas un ROAS : il crédite la pub de ventes venues d’ailleurs. Le ROAS pub ne garde que les clients venus de la pub.'],
+    roas_pub_setting: ['ROAS pub + setting', 'Collecté des closes de la période ÷ (dépense pub + coût du setting). Les commissions et fixes des closers, les coachs et les autres charges ne sont pas déduits : ce n’est pas la rentabilité de l’entreprise.'],
+    marge_avant_closing: ['Marge avant closing', 'Collecté des closes de la période − (dépense pub + coût du setting), avant commissions et fixes des closers, coachs et autres charges.'],
+    cout_setting: ['Coût setting', 'Fixe du setting + outils (saisis dans 💶 Coûts, au prorata des jours) + commissions de setting dues des closes de la période (module Commissions). Sur une période en cours, fixe et outils sont comptés jusqu’à aujourd’hui seulement, comme les RDV, la dépense et le collecté auxquels on les compare. Montants à saisir hors taxes.'],
+    cout_rdv_pris_nb: ['Coût / RDV pris NB', '(Fixe + outils + commissions de setting des closes Setting (NB)) ÷ RDV pris NB (= Sets). Les commissions payées sur des closes Self Booking n’achètent aucun RDV du setting : elles restent dans le Coût setting. Ce n’est pas la colonne « RDV NB » de Set NB, qui compte les RDV qui ont lieu.'],
+    commissions_dues: ['Commissions dues', 'Commissions de setting des closes faits pendant la période, validées ou encore en attente, anciens membres compris. La page Commissions n’additionne que les commissions validées, rangées sur leur mois de versement.'],
+    fixe_setting: ['Fixe du setting', 'Montant saisi à la main dans 💶 Coûts, reporté sur les mois suivants tant qu’aucun autre n’est saisi. Il n’est pas lu dans les contrats de l’équipe : la page Commissions additionne, elle, le fixe des contrats (Admin → Utilisateurs) ; les deux peuvent différer.'],
+    couts_non_ventiles: ['Coûts non ventilés', 'Le fixe, les outils et les commissions du setting ne se répartissent ni par tunnel ni par source : repasse sur « Tous » pour voir les chiffres qui les utilisent.'],
+    taux_recuperation: ['Taux de récupération', 'Leads NB reçus de la période que le setting a amenés en RDV (au moins un RDV du setting) ÷ leads NB reçus. Même règle que Set NB. Les RDV posés sur des leads plus anciens ou des ré-optins n’y entrent pas.'],
+    lead_to_speech: ['Lead to speech', 'Délai entre l’arrivée du lead et son premier appel sortant de l’équipe (décroché ou non), dans ses 14 premiers jours, compté pour la personne qui a passé cet appel. Ici les leads sont rangés au mois de leur arrivée ; Pilotage les range au jour de l’appel : les médianes peuvent différer.'],
+    joignabilite: ['Taux de joignabilité', 'Appelé : au moins un appel sortant de l’équipe dans les 14 jours qui suivent l’arrivée du lead. Joint : au moins un de ces appels décroché. Taux = joints ÷ appelés. Jamais appelés = leads − appelés (téléphone absent compris).'],
+    tentatives: ['Tentatives / lead appelé', 'Appels sortants vers les leads appelés, dans leurs 14 premiers jours ÷ leads appelés.'],
+    time_to_book: ['Time-to-book', 'Délai entre l’arrivée du lead et la création de son premier RDV (pris seul en Self Booking, ou posé par le setting), pour les leads entrés pendant la période.'],
+    appels_par_personne: ['Appels par personne', 'Appels sortants de la période rangés par auteur : membres de l’équipe sales, puis « Anciens membres » (sans nom) et « Non attribué » (poste relié à aucun compte). Ces lignes s’additionnent aux Appels. « Hors équipe sales » (CSM, coachs) est affiché à part, hors du total.'],
+    appels_recus: ['Appels reçus', 'Appels entrants de la période reçus par l’équipe : comptés à part, jamais dans Appels.'],
+    hors_equipe_sales: ['Hors équipe sales', 'Appels sortants des CSM et des coachs : ils ne sont ni dans Appels, ni dans Décrochés, ni dans le Lead to speech.'],
+    note_equipe: ['Note équipe', 'Étoiles (1 à 5) posées par le setter ou le closer dans Leads Live après l’appel. Ce n’est ni la note LQS (calculée sur les réponses du lead, onglet Qualité leads) ni le « CA ≥ 20 k€ » (onglet Qualité par pub).'],
+    depense_par_pub: ['Dépense par pub', 'Dépense transmise pub par pub par Meta, rattachée à la ligne qui porte cette pub. La somme des lignes peut être inférieure à la Dépense pub du compte : pubs sans aucun lead, jours pas encore reçus au niveau pub, corrections manuelles.'],
+    non_ventilables: ['Non ventilables', 'RDV et closes comptés dans les totaux mais rangés sur aucune ligne : lead entré avant la période sans ré-optin (sa fiche n’est pas chargée), close sans fiche liée ou repéré par le paiement.'],
+    dernier_rdv: ['Dernier RDV', 'Résultat du dernier RDV du lead, après reports (Close, Non close, Offre en attente, Disqualifié, No-show, Annulé) ; sans résultat : « À statuer » si le créneau est passé, « À venir » sinon. RDV pris pendant la période ou dans les 14 jours qui suivent. Canal : celui de ce RDV.'],
+    filtre_rdv_leads: ['Filtre RDV', '« Avec RDV » = lead qui a pris un RDV pendant la période ou dans les 14 jours qui suivent. « Sans contact » = ni appel sortant dans ses 14 premiers jours, ni SMS, ni RDV. Ce n’est pas « Leads avec RDV » de Qualité leads (RDV à n’importe quelle date ensuite).'],
+    inscriptions_precedentes: ['Inscriptions précédentes', 'Nombre d’inscriptions précédentes archivées sur cette fiche. Ce n’est pas le nombre de ré-optins de la période.'],
+    leads_liste: ['Leads de la liste', 'Fiches entrées pendant la période (les Leads du héro), après les filtres de tunnel, de source et de cette liste. Les ré-optins n’y sont pas.'],
+    grille_ads_total: ['Total de la grille', 'Élite + Business = la Dépense pub de l’onglet Funnel en vue « Tous les tunnels / Toutes les sources ». Une ligne d’un autre tunnel (ni Élite ni Business) est comptée en Élite, comme dans le funnel.']
+  };
+  function infoL(cle, plus) {
+    var d = FN_INFO[cle];
+    if (!d) return '';
+    return SC.infoLibre(d[0], plus ? d[1] + ' ' + plus : d[1]);
+  }
+  /* Coûts publicitaires affichables : la dépense couvre tous les jours
+     attendus de la période (k.adsSpendOk, jusqu'à hier, heure de Paris). */
+  function adsCouts(k) { return !k || k.adsSpendOk !== false; }
+  function adsManque(k) {
+    return 'masqué : dépense reçue pour ' + fmtNum(k.adsDaysCovered) + ' jour' + (k.adsDaysCovered > 1 ? 's' : '') + ' sur ' + fmtNum(k.adsDaysExpected) + infoL('jours_depense');
+  }
   function fmtDelay(ms) {
     if (ms == null || isNaN(ms) || ms < 0) return '—';
     var min = Math.round(ms / 60000);
@@ -875,8 +943,19 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
      LOADERS — le gros du chargement vit dans funnel-core.js ; ne restent
      ici que ce qui est propre à cette page (cibles, journal complet).
      ════════════════════════════════════════════════════════════════ */
+  /* Table des types de RDV : lue ici (et non par FC.loadTypeMap, qui avale
+     l'erreur) pour pouvoir DIRE qu'elle manque — sans elle, un RDV du lien
+     setter peut passer en Self Booking (écart RDV-21). */
+  var TYPES_ERR = null;
   function loadTypes() {
-    return FC.loadTypeMap(db).then(function (m) { TYPE_MAP = m; });
+    TYPES_ERR = null;
+    return db.collection('booking_config').doc('_types').get().then(function (snap) {
+      TYPE_MAP = FC.buildTypeMap((snap.exists && snap.data().list) || []);
+      if (!snap.exists) TYPES_ERR = 'table des types absente';
+    }).catch(function (e) {
+      TYPE_MAP = {};
+      TYPES_ERR = (e && e.message) || 'lecture impossible';
+    });
   }
 
   /* Rechargements partiels après une sauvegarde — délégués au cœur partagé,
@@ -1236,7 +1315,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     h += '<td class="num">' + fmtAvg(perWork) + '</td>';
     h += '<td class="num">' + fmtNum(t.booked) + '</td>';
     h += '<td class="num">' + fmtNum(t.free) + '</td>';
-    h += '<td class="num">' + (fr == null ? '—' : fmtPct(fr, 0)) + '</td>';
+    h += '<td class="num">' + (fr == null ? '—' : fmtPct(fr)) + '</td>';
     h += '<td style="width:110px">' + dispoBar(t) + '</td>';
     h += '</tr>';
     return h;
@@ -1341,7 +1420,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       h += '<div class="fn-stage-note"><b style="color:var(--text);font-family:var(--font-m);font-size:14px">'
         + fmtNum(y.open) + '</b> créneaux ouverts du ' + frDay(DISPO.year.from) + ' au ' + frDay(DISPO.year.to)
         + ' · ' + fmtNum(y.booked) + ' pris · ' + fmtNum(y.free) + ' libres'
-        + (yFr != null ? ' · ' + fmtPct(yFr, 0) + ' de remplissage' : '')
+        + (yFr != null ? ' · ' + fmtPct(yFr) + ' de remplissage' : '')
         + (y.estimated > 0 ? ' <span class="fn-dispo-est">dont ' + y.estimated + ' j estimés</span>' : '')
         + '</div>';
     } else {
@@ -1441,7 +1520,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     } else if (k.attributedPct != null) {
       var ap = k.attributedPct;
       var apColor = ap >= 80 ? '#34d399' : (ap >= 40 ? '#f59e0b' : '#ef4444');
-      h += '<div class="fn-stage-note" style="margin-top:8px">📡 <strong style="color:' + apColor + '">' + fmtPct(ap, 0) + '</strong> des ' + fmtNum(k.leads) + ' leads de la période portent une attribution <strong>publicitaire</strong> structurée (' + fmtNum(k.attributedLeads) + ').';
+      h += '<div class="fn-stage-note" style="margin-top:8px">📡 <strong style="color:' + apColor + '">' + fmtPct(ap) + '</strong> des ' + fmtNum(k.leads) + ' leads de la période portent une attribution <strong>publicitaire</strong> structurée (' + fmtNum(k.attributedLeads) + ').';
       if (ap < 80) {
         h += ' Le reste est ventilé sur l\'ancien champ UTM — marqué <span style="color:var(--gold)">⚠</span> dans le tableau : ces lignes peuvent avoir été écrasées par un titre de formulaire ou un nom de tunnel. Les leads dont la seule origine connue est un canal (VSL, webinaire…) sont sur l\'axe <strong>Canal</strong>, pas ici.';
       }
@@ -1708,7 +1787,8 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
   /* Lecture en échec ou plafond atteint : dit en tête d'onglet, jamais un
      zéro muet (phrases prêtes, posées par funnel-core.js). */
   function erreursBanner(k) {
-    var e = k.erreursLecture || [];
+    var e = (k.erreursLecture || []).slice();
+    if (TYPES_ERR) e.push('Types de RDV illisibles (' + TYPES_ERR + ') : la répartition Self Booking / Setting (NB) peut être fausse.');
     if (!e.length) return '';
     return '<div class="fn-alert" style="margin-bottom:14px">⚠️ <strong>' + esc(SC.mot('lecture_incomplete')) + '</strong>' + SC.info('lecture_incomplete') +
       '<br>' + e.map(function (t) { return '⚠️ ' + esc(t); }).join('<br>') +
@@ -1840,7 +1920,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     h += '<div class="fn-hero-lbl">📥 Ligne 1 — Leads entrés pendant la période → les RDV PRIS pendant la période' + SC.info('rdv_pris') + '</div>';
     h += heroKpi(fmtNum(k.leads), 'Leads' + SC.info('leads'), k.reoptins ? '+ ' + fmtNum(k.reoptins) + ' ré-optins 🔄' + SC.info('reoptins') : 'entrés pendant la période');
     h += heroKpi(fmtNum(ch.n), 'RDV pris' + SC.info('rdv_pris'),
-      ltbTxt('LTB', ch.n),
+      ltbTxt('LTB', ch.n) + targetBadge('ltb', SC.pct(ch.n, k.leads)),
       split3({ v: fmtNum(cS.n), p: k.leads > 0 ? 'LTB ' + pctOf(cS.n, k.leads) : '' },
              { v: fmtNum(cN.n), p: k.leads > 0 ? 'LTB ' + pctOf(cN.n, k.leads) : '',
                info: SC.info('sets', 'Les RDV pris du setting sont les Sets de Set NB : même nombre, même règle.') }, null));
@@ -1918,29 +1998,26 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     h += revBanner(k);
     h += cohBlock(k);
 
-    /* ── Bandeau ROAS (demande Adrien 17/08) ─────────────────────────
-       DEUX lectures, pas trois. Un ROAS « organique » a été écarté : sans
-       budget média propre, le rapporter à la dépense publicitaire n'aurait
-       mesuré l'efficacité de rien.
-         · ROAS pub    — la publicité est-elle rentable ?
-         · ROAS global — l'entreprise l'est-elle ? Tout le collecté sur TOUS
-                         les coûts connus, dépense pub + coût setting réel.
-       Le second reste vide tant que les coûts ne sont pas renseignés : un
-       ratio calculé sur un dénominateur amputé serait flatteur, donc pire
-       qu'une case vide. */
-    if (k.roasAds != null || k.roasGlobal != null || k.hasAds) {
-      var roasFmt = function (v) { return v == null ? '—' : (Math.round(v * 100) / 100).toLocaleString('fr-FR') + '×'; };
+    /* ── Bandeau ROAS (demande Adrien 17/08, renommé le 25/11/2026) ──
+       Un seul chiffre porte le mot « ROAS » seul : le ROAS pub (collecté des
+       closes venus de la pub ÷ dépense pub). Le second ratio s'appelle « ROAS
+       pub + setting » : il ne déduit ni le closing ni les autres charges, ce
+       n'est pas la rentabilité de l'entreprise. Vide tant que les coûts ne
+       sont pas renseignés, sous filtre tunnel / source, ou si la dépense pub
+       est incomplète : jamais un ratio flatteur sur un dénominateur amputé. */
+    if (k.roasAds != null || k.roasPubSetting != null || k.hasAds) {
+      var okAds = adsCouts(k);
       h += '<div class="fn-rates" style="margin-bottom:10px">';
-      h += '<div class="rt"><strong style="color:#34d399">' + roasFmt(k.roasAds) + '</strong>ROAS <strong style="font-size:11.5px;color:var(--text);margin:0">PUB</strong> <span style="color:var(--muted2)">('
-        + fmtEuro(k.wonCollecteAds) + ' de clients venus de la pub ÷ ' + fmtEuro(k.spend) + ' de dépense'
-        + (k.wonCollecteHorsPub > 0 ? ' · ' + fmtEuro(k.wonCollecteHorsPub) + ' hors pub exclus' : '') + ')</span></div>';
-      if (k.roasGlobal != null) {
-        h += '<div class="rt"><strong style="color:var(--gold)">' + roasFmt(k.roasGlobal) + '</strong>ROAS <strong style="font-size:11.5px;color:var(--text);margin:0">GLOBAL</strong> <span style="color:var(--muted2)">('
-          + fmtEuro(k.wonCollecte) + ' collectés ÷ ' + fmtEuro(k.coutTotal) + ' de coûts — pub ' + fmtEuro(k.spend)
-          + ' + setting ' + fmtEuro(k.costSetting) + ' · marge ' + fmtEuro(k.margeGlobale) + ')</span></div>';
-      } else {
-        h += '<div class="rt"><strong style="color:var(--muted2)">—</strong>ROAS <strong style="font-size:11.5px;color:var(--text);margin:0">GLOBAL</strong> <span style="color:var(--muted2)">(coûts setting non renseignés sur toute la période — renseigne-les via <strong>💶 Coûts</strong> pour l\'obtenir)</span></div>';
-      }
+      h += '<div class="rt"><strong style="color:#34d399">' + (okAds ? fmtRoas(k.roasAds) : '—') + '</strong>' + esc(SC.mot('roas_pub')) + SC.info('roas_pub') + ' <span style="color:var(--muted2)">('
+        + (okAds ? fmtEuro(k.wonCollecteAds) + ' collectés sur les clients venus de la pub ÷ ' + fmtEuro(k.spend) + ' de dépense pub'
+          + (k.wonCollecteHorsPub > 0 ? ' · ' + fmtEuro(k.wonCollecteHorsPub) + ' hors pub exclus' : '') : adsManque(k)) + ')</span></div>';
+      var rps;
+      if (k.costFiltered) rps = 'coûts du setting non ventilés par tunnel / source — repasse sur « Tous »' + infoL('couts_non_ventiles');
+      else if (k.roasPubSetting == null && k.costSetting == null) rps = 'coûts du setting non renseignés sur toute la période — bouton <strong>💶 Coûts</strong>';
+      else if (!okAds) rps = adsManque(k);
+      else rps = fmtEuro(k.wonCollecte) + ' collectés ÷ ' + fmtEuro(k.coutTotal) + ' de coûts (pub ' + fmtEuro(k.spend) + ' + setting ' + fmtEuro(k.costSetting) + infoL('cout_setting') + ')'
+        + ' · marge avant closing ' + fmtEuro(k.margeAvantClosing) + infoL('marge_avant_closing');
+      h += '<div class="rt"><strong style="color:var(--gold)">' + (okAds && !k.costFiltered ? fmtRoas(k.roasPubSetting) : '—') + '</strong>ROAS pub + setting' + infoL('roas_pub_setting') + ' <span style="color:var(--muted2)">(' + rps + ')</span></div>';
       h += '</div>';
     }
 

@@ -612,7 +612,7 @@ function renderLive() {
     kpi('📅 RDV du jour', (RV.rdv || 0) + (nLive ? ' · ' + nLive + ' en cours' : ''), I('rdv', rdvPhrase(RV))) +
     kpi('✅ Kept · Présents', (RV.kept || 0) + ' · ' + (RV.presents || 0) + (RV.aVenir ? ' (dont ' + RV.aVenir + ' à venir)' : ''), I('kept') + I('presents')) +
     kpi('⏳ À statuer', RV.aStatuer || 0, I('a_statuer')) +
-    kpi('☎️ Appels du jour', T.calls + ' · ' + T.answered + ' décrochés', I('appels', 'Toute l’équipe, appels sans auteur et anciens membres compris' + (T.sansCarte ? ' (' + T.sansCarte + ' hors des cartes ci-dessous)' : '') + ' : le même total que l’onglet Activité réglé sur aujourd’hui.') + I('decroches')) +
+    kpi('☎️ Appels du jour', T.calls + ' · ' + T.answered + ' décrochés', I('appels', 'Toute l’équipe, appels sans auteur et anciens membres compris' + (T.sansCarte ? ' (' + T.sansCarte + ' hors des cartes ci-dessous)' : '') + ' : le même total que l’onglet Activité réglé sur aujourd’hui.' + (T.horsEquipe ? ' ' + T.horsEquipe + ' appel(s) hors équipe sales (CSM, coachs) non comptés.' : '')) + I('decroches')) +
     kpi('📥 Appels reçus', T.callsIn, I('appels_recus', TXT.appelsRecusPilotage)) +
     kpi('⚡ Lead to speech du jour', L.lts && L.lts.n ? fmtDelay(L.lts.median) + ' · ' + L.lts.n + ' lead' + (L.lts.n > 1 ? 's' : '') : '—', I('lead_to_speech', TXT.ltsPilotage));
   $('liveClock').textContent = '· ' + parisTime(L.now);
@@ -748,6 +748,7 @@ var COLS = [
   ['answered', 'Décrochés', 'Appels sortants', function () { return I('decroches'); }],
   ['convos', '≥ 1 min', 'Appels sortants', function () { return IL(TXT.convos[0], TXT.convos[1]); }],
   ['talkSec', 'Temps d\'appel', 'Appels sortants', function () { return I('temps_appel'); }],
+  ['callsHors', 'Hors équipe', 'Appels sortants', function () { return I('hors_equipe_sales', 'Pilotage : rangés sur la ligne « Non attribué », hors du total des Appels.'); }],
   ['callsIn', 'Reçus', 'Appels reçus', function () { return I('appels_recus', TXT.appelsRecusPilotage); }],
   ['answeredIn', 'Décrochés', 'Appels reçus', function () { return IL(TXT.recusPris[0], TXT.recusPris[1]); }],
   ['talkInSec', 'Temps', 'Appels reçus', function () { return IL(TXT.tempsRecus[0], TXT.tempsRecus[1]); }],
@@ -781,7 +782,7 @@ var COLS = [
   ['clicks', 'Clics', 'Connexion', function () { return IL(TXT.connexion[0], TXT.connexion[1]); }]
 ];
 /* Catégorie du journal ouverte par un clic sur une cellule. */
-var COL_CAT = { callsOut: 'call', answered: 'call', convos: 'call', talkSec: 'call', callsIn: 'call', answeredIn: 'call', talkInSec: 'call',
+var COL_CAT = { callsOut: 'call', callsHors: 'call', answered: 'call', convos: 'call', talkSec: 'call', callsIn: 'call', answeredIn: 'call', talkInSec: 'call',
   sets: 'rdv', posesClic: 'rdv', rdv: 'rdv', annules: 'rdv', noshow: 'rdv', kept: 'rdv', presents: 'rdv', pitches: 'rdv', rdvCloses: 'rdv', aStatuer: 'rdv', aVenir: 'rdv',
   sms: 'msg', email: 'msg', whatsapp: 'msg', dmOut: 'msg', actStatus: 'fiche', actBooking: 'fiche', notes: 'fiche',
   rapDue: 'rappel', rapDone: 'rappel', rapLate: 'rappel', rapChecked: 'rappel', activeMs: 'nav', sessions: 'nav', clicks: 'click' };

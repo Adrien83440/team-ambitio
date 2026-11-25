@@ -587,7 +587,25 @@
     arrives: { mot: 'Arrivés', texte: 'Pages du quiz affichées, une fois par session (visites internes exclues).' },
     formulaire_envoye: { mot: 'Formulaire envoyé', texte: 'Envois du formulaire comptés sur la page ; peut dépasser le nombre de fiches (double envoi).' },
     nouveaux_leads: { mot: 'Nouveaux leads', texte: 'Nouvelles fiches dont la page d’entrée est ce quiz.' },
-    vus_q1: { mot: 'Ont vu la 1re question', texte: 'Visiteurs mesurés par le quiz lui-même (période comparable) ; diffère légèrement des Arrivés comptés par la page.' }
+    vus_q1: { mot: 'Ont vu la 1re question', texte: 'Visiteurs mesurés par le quiz lui-même (période comparable) ; diffère légèrement des Arrivés comptés par la page.' },
+    rdv_poses_clic: { mot: 'RDV posés par lui (clic)', texte: 'RDV de vente que la personne a créés elle-même dans l’agenda pendant la période, RDV déplacés exclus. Compte d’activité : le chiffre officiel est « Sets », rangé chez le setter de la fiche.' },
+    clics_rdv_pose: { mot: 'Clics RDV posé', texte: 'Actions « RDV posé » du journal de Leads Live (clic sur le statut). Un clic n’est pas un set : un set est un RDV réellement créé dans l’agenda.' },
+    envois_auto: { mot: 'Envois automatiques', texte: 'Messages partis sans personne derrière : relances, parcours RDV, rappels WhatsApp de RDV. Comptés à part, une seule fois, jamais dans les messages d’une personne ni comme contact d’un rappel.' },
+    leads_appeles: { mot: 'Leads appelés', texte: 'Leads dont le 1er appel sortant a été passé pendant la période (population du Lead to speech). Ce ne sont pas les « Leads » (fiches entrées).' },
+    decroches_1min: { mot: 'Décrochés ≥ 1 min', texte: 'Appels sortants décrochés dont la conversation a duré au moins 1 minute.' },
+    appels_recus_decroches: { mot: 'Reçus décrochés', texte: 'Appels reçus avec au moins 5 secondes de conversation, répondeurs écartés (même règle que Décrochés).' },
+    temps_appels_recus: { mot: 'Temps des appels reçus', texte: 'Conversation des appels reçus décrochés. À part du Temps d’appel, qui ne compte que les sortants.' },
+    rappel_fait: { mot: 'Rappels (faits)', texte: '« Fait » = un vrai contact de l’équipe avec le prospect (appel, message envoyé par une personne, action sur la fiche) entre 30 min avant l’heure prévue et la fin de la journée ; les envois automatiques ne comptent pas.' },
+    reste_du_ttc: { mot: 'Reste dû TTC', texte: 'Montant TTC du contrat moins ce qui a déjà été prélevé, TOUTES échéances comprises (y compris celles qui ne sont pas encore arrivées). Ce n’est pas un montant en retard.' },
+    reste_du_ht: { mot: 'Reste dû HT', texte: 'Le reste dû TTC converti hors taxes (÷ 1,2, sauf contrat déjà HT), toutes échéances comprises.' },
+    montant_en_retard: { mot: 'Montant en retard TTC', texte: 'Échéances déjà arrivées et non prélevées (nombre d’échéances en retard × montant d’une échéance), TTC. Absent quand le dossier n’est pas un plan en plusieurs fois.' },
+    echeances_en_retard: { mot: 'Échéances en retard', texte: 'Échéances qui auraient dû être prélevées à ce jour (une par mois depuis le début du plan) moins celles déjà prélevées.' },
+    dossiers_impayes: { mot: 'Dossiers impayés', texte: 'Plans de paiement avec un problème : mandat ou paiement en échec, prélèvement rejeté non rattrapé, échéances en retard, facturation en procédure ou dossier en recouvrement. Même règle que le module Impayés.' },
+    fiches_test: { mot: 'Fiches de test', texte: 'Fiches entrées pendant la période et marquées « fiche de test » (essais de l’équipe) : retirées des Leads.' },
+    leads_setter_fiche: { mot: 'Leads par setter de la fiche', texte: 'Leads entrés pendant la période, rangés chez le setter de la fiche (setter verrouillé, sinon personne assignée), Self Booking compris : ce ne sont pas les Leads NB reçus de Set NB.' },
+    manuels_crees: { mot: 'RDV manuels créés', texte: 'RDV créés à la main dans l’Agenda pendant la période. Jamais dans RDV pris, Sets ni LTB.' },
+    rdv_remplacants_crees: { mot: 'RDV de report créés', texte: 'Nouveaux créneaux créés pendant la période pour un RDV déplacé ou transféré : ce ne sont pas de nouveaux RDV pris.' },
+    jamais_contactes_24h: { mot: 'Jamais contactés depuis 24 h', texte: 'Leads des 7 derniers jours, entrés depuis plus de 24 h, toujours au statut « nouveau » et sans aucun appel ni SMS sur la fiche.' }
   };
 
   function mot(cle) { return G[cle] ? G[cle].mot : ''; }

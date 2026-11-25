@@ -145,6 +145,13 @@ function isAnsweredCall(c) {
   return SC.estDecroche(c);
 }
 function isInbound(c) { return c.direction === 'inbound'; }
+// Appels « hors équipe sales » (CSM, coachs…) : rôles hors de ceux du
+// téléphone commercial — même liste que le Stats funnel (funnel-core.js,
+// SALES_CALL_ROLES). Ils ne comptent ni dans Appels, ni dans Décrochés, ni
+// dans le Lead to speech ; un ancien membre reste dans le total (« Non
+// attribué »), un appel sans auteur aussi.
+const CALL_ROLES_EQUIPE = { setter: 1, setter_ecrit: 1, closer: 1, closer_setter: 1, admin: 1 };
+function estHorsEquipe(m) { return !!m && !m.departed && !CALL_ROLES_EQUIPE[m.role]; }
 
 const CALL_FIELDS = [
   'direction', 'status', 'leadId', 'leadNameSnapshot', 'leadName',
@@ -566,7 +573,7 @@ async function handleLive(req, res) {
   // Appels — le total d'équipe compte TOUS les appels du jour (appels sans
   // auteur et membres sans carte compris) : c'est le même total que l'onglet
   // Activité réglé sur aujourd'hui (ligne « Non attribué » comprise).
-  const team = { calls: 0, answered: 0, talkSec: 0, callsIn: 0, sansCarte: 0 };
+  const team = { calls: 0, answered: 0, talkSec: 0, callsIn: 0, sansCarte: 0, horsEquipe: 0 };
   const liveCalls = [];
   const phonesToResolve = [];
   dedupeSnap(callSnap, R).forEach(function (d) {
@@ -575,7 +582,8 @@ async function handleLive(req, res) {
     const ini = toMs(c.initiatedAt);
     const ans = toMs(c.answeredAt);
     const r = row(m);
-    if (ini >= dayStart) {
+    if (ini >= dayStart && estHorsEquipe(m)) { if (!isInbound(c)) team.horsEquipe += 1; }
+    else if (ini >= dayStart) {
       const inb = isInbound(c);
       const ok = !inb && isAnsweredCall(c);
       if (inb) team.callsIn += 1;
@@ -836,6 +844,8 @@ async function computeLeadSpeech(R, fromMs, toMs_) {
   snaps[1].forEach(function (d) {
     const c = d.data() || {};
     if (c.direction !== 'outbound') return;
+    // Appels hors équipe sales (CSM, coachs) : pas un 1er appel du setting.
+    if (estHorsEquipe(callMember(c, R))) return;
     const p9 = Core.phone9(c.toNumber);
     const ms = toMs(c.initiatedAt);
     if (!p9 || !ms) return;
@@ -893,7 +903,7 @@ async function leadSpeechToday(R, dayStart, now) {
 // fiche, jour de création) ; posesClic = RDV créés par la personne (clic).
 // msgAuto = envois automatiques (relances, parcours RDV, rappels WhatsApp).
 const STAT_KEYS = [
-  'callsOut', 'answered', 'convos', 'talkSec', 'callsIn', 'answeredIn', 'talkInSec',
+  'callsOut', 'answered', 'convos', 'talkSec', 'callsIn', 'answeredIn', 'talkInSec', 'callsHors',
 ].concat(RDV_KEYS).concat([
   'sets', 'posesClic',
   'sms', 'email', 'whatsapp', 'dmOut', 'dmIn', 'msgAuto', 'actStatus', 'actBooking', 'actAssign', 'notes',
@@ -1031,6 +1041,7 @@ async function handleActivity(req, res, body) {
     const c = d.data() || {};
     const m = callMember(c, R);
     const day = parisDayOfMs(toMs(c.initiatedAt));
+    if (estHorsEquipe(m)) { if (!isInbound(c)) add(null, day, 'callsHors'); return; }
     callKeys(c).forEach(function (kv) { add(m, day, kv[0], kv[1]); });
   });
 
