@@ -724,11 +724,33 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   - **Preuve** : banc d'essai croisé (même jeu de données chargé sur tous les écrans, 2 fuseaux, ~2 900 égalités, dont l'égalité du
     contrôle de cohérence sur chaque jour et chaque semaine) + contrôle sur les données réelles de septembre à novembre 2026 (novembre :
     69 RDV, 6 closes, 40 000 € contracté, 23 000 € collecté, identiques partout).
-  - **Non traité, à connaître** : `Functions/index.js` et `firestore.rules` non touchés ; `pipeline-etapes.js`, `rdv-outcome.js`,
-    `close-wizard.js` gardent leurs règles d'écriture ; second contrat d'un client déjà gagné (son montant rejoint le premier close) ;
-    `clientSince` écrit en TEXTE par d'anciennes pages CSM (fiche invisible des requêtes : reprise de données à faire, à blanc d'abord) ;
-    un close corrigé puis refait plus tard garde sa première date ; deals de janvier-février 2026 en dur dans `sales-commissions.html`
-    et fichier mort `sales-data.js` (noms / e-mails de clients servis sans connexion : à verser en base puis retirer).
+  - **Non traité, à connaître** : `Functions/index.js` et `firestore.rules` non touchés (`Functions/index.js` repose encore `clientSince`
+    quand `isClient` est faux alors qu'une date existe : à corriger au prochain déploiement des functions) ; `pipeline-etapes.js`,
+    `rdv-outcome.js`, `close-wizard.js` gardent leurs règles d'écriture ; second contrat d'un client déjà gagné (son montant rejoint le
+    premier close) ; un close corrigé puis refait plus tard garde sa première date.
+  - **Date de gain : toujours un Timestamp, lue par UNE règle (reprise du 25/11/2026)**. D'anciennes pages CSM écrivaient
+    `leads.clientSince` en TEXTE (`'AAAA-MM-JJ'`, la date d'entrée de la fiche coaching) : fiche invisible des requêtes par date, close
+    compté par son paiement seul. Désormais : (1) la lecture d'une date écrite en texte vit à UN endroit, `StatsCore.dateTexteMs`
+    (jour seul ou `JJ/MM/AAAA` → midi UTC+1 de ce jour ; date-heure ISO → l'instant, sans fuseau = heure de Paris ; le reste → null),
+    avec `StatsCore.instantMs` (toute forme → ms) et `StatsCore.jourDe` (toute forme → jour de Paris) ; `csm-clients.html`,
+    `csm-diagnostic.html`, `clients-dedup.html`, `sales-clients.html` chargent `stats-core.js` pour cela — ne jamais recoder cette
+    lecture dans une page. (2) Toute écriture de `clientSince` pose un Timestamp et ne réécrit JAMAIS une date existante : pages CSM
+    (`clientSinceDepuisDateEntree`, transaction de `csmMarkLeadAsClient`), Pipeline (`majLeadClient` de `sales-crm-app.js`), fiche
+    contact (`svClient`), fusion de doublons (`clientSinceFusion` : la date de la fiche principale n'est jamais remplacée par celle
+    d'un doublon). Sans `stats-core.js` (script bloqué), l'écriture est refusée (« recharge la page »), jamais repliée en silence.
+    (3) Une date reprise garde sa valeur d'origine sur la fiche : `clientSinceTexte` (texte) ou `clientSinceAvant` (map
+    `{seconds, nanoseconds}` laissée par l'ancienne fusion) + `clientSinceConvertiLe` ; trace `reprise_client_since_log` (Admin SDK
+    seul). Ne jamais effacer ces champs. Contrôle à blanc du 25/11/2026 sur la base réelle : 4 fiches en texte (1 d'avril, 3 de mai
+    2026), aucune map ; la route temporaire `api/reprise-donnees.js` est dans l'historique git (commit 6798824), pas sur `main`.
+  - **Plus de données nominatives dans le code (25/11/2026)**. Une page statique est servie à tout le monde, SANS connexion : aucun
+    nom, e-mail ou téléphone de client ou de prospect ne s'écrit dans un fichier servi, même en commentaire ou en exemple (exemples :
+    `prenom@exemple.com`, `+33600000000`). Retirés : les lignes de commission en dur de `sales-commissions.html` (les 33 lignes des
+    deux anciens membres sont en base, `commissions/{uid}/mois/{AAAA-MM}`, vérifié sur la base réelle) et le fichier mort
+    `sales-data.js`. Plus déployés (`.vercelignore`, fichiers gardés dans le dépôt) : `import-bigin.html`, `migrate-clients.html`,
+    `retargeting-migrate.html`, `retargeting-data.js` (import déjà joué : `_meta/retargeting_migrated` existe) et l'ancienne page
+    hors menu `sales-suivi-client.html`. Restent à l'appréciation d'Adrien : les téléphones de l'équipe dans les pages
+    `process-onboarding-*`, et les anciens déploiements Vercel (ils contiennent encore les anciens fichiers ; la protection Vercel
+    du projet ne couvre que les previews).
 
 - **Chiffres cliquables Set NB / Close SB / Funnel (21/11/2026, demande Vincent)** : `stats-drill.js`
   (partagé, lecture seule, aucune requête : la page fournit les lignes déjà chargées ; styles injectés par

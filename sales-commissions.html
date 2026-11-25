@@ -740,17 +740,13 @@ function _finalPayOpen(uid) {
    les deux entrées ci-dessous portaient dans `data` leurs lignes de
    commission de janvier à avril 2026, avec les noms et e-mails des clients,
    servies à quiconque ouvrait ce fichier (page statique, sans connexion).
-   migrateCommToFirestore DEVAIT les avoir recopiées en base à chaque
-   ouverture (commissions/{uid}/mois/{AAAA-MM}), et la base fait foi dès que
-   le document du mois porte un tableau `deals` (loadAllCommFromFirestore
-   ignore un document sans ce champ : l'ancienne page retombait alors sur le
-   dur). Si c'est le cas pour chaque mois en dur, le bloc ne servait plus que
-   de repli et les montants, points et paliers affichés ne bougent pas.
-   À VÉRIFIER sur la vraie base avant mise en production :
-   api/reprise-donnees.js?job=commissions&uids=guillaume,elodie puis
-   compare.js (empreintes sans nom) en code de sortie 0 — contrôle fait le :
-   (pas encore fait au 25/11/2026). Un mois absent, ou présent sans tableau
-   `deals`, s'afficherait désormais vide (aucune ligne écrite en base).
+   Ces lignes sont en base (commissions/{uid}/mois/{AAAA-MM}) et la base
+   faisait déjà foi : dès que le document du mois porte un tableau `deals`,
+   loadAllCommFromFirestore l'emporte sur le code. Contrôle fait le
+   25/11/2026 sur la base réelle, par empreintes (sans nom) : 7 mois sur 7
+   présents avec leur tableau, 33 lignes sur 33 retrouvées dans leur mois —
+   rien ne change à l'écran. Ne jamais remettre une ligne nominative ici :
+   une ligne de commission s'ajoute dans la page (elle part en base).
    `data` reste un objet vide : uid, rôle, couleur, departed, careerPtsBase
    et bonus sont toujours lus par la page. */
 const MEMBERS_COMM = [
