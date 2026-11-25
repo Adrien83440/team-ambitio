@@ -711,7 +711,10 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
     place prime sur un ancien membre) et `FunnelCore.perimetreAppel` (`sales` / `sans_auteur` compté en « Non attribué » / `hors` = coach,
     CSM, jamais dans les Appels, parti ou non). Set NB (onglet Équipe ET onglet d'un membre), Dashboard (tableau ET filtre par personne),
     Pilotage (`callMember`), assistant et funnel passent par elle : ne jamais refiltrer un appel par `c.userId === uid` côté admin. Seule
-    limite : un compte sales ne lit que ses appels `userId == uid` (règles Firestore) — dit dans le « i » de son onglet.
+    limite : un compte sales ne lit que ses appels `userId == uid` (règles Firestore) — dit dans le « i » (terme `appels_sous_ton_compte`).
+    Ligne d'un appel dans une vue par personne = `FunnelCore.ligneAppel(who, jour)` : un appel daté d'AVANT l'arrivée du membre
+    (`startDate`) va en « Non attribué », précision « Prénom (avant son arrivée) », sur tous les écrans. À prénom égal, l'auteur est le
+    même partout (membre en place, puis plus petit `order`, puis clé).
   - **Contrôle de cohérence du funnel** : l'égalité « RDV closés ↔ Closes » est une PARTITION calculée UNE fois dans le moteur
     (`k.coh.egalite`, listes `rdvDeClosesAnnules`, `rdvEnTrop`, `rdvClosesHorsListe`, `closesSansRdv`, `closesRdvHorsPeriode`) ; la page
     l'affiche sans la recalculer. `coh.annules` et `coh.doublonsRdv` ne sont que des listes d'information, jamais des termes de l'égalité.

@@ -2461,7 +2461,10 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       var sumOut = 0;
       function callBar(u) {
         var rate = u.out > 0 ? u.ans / u.out * 100 : null;
-        var lbl = esc(u.name) + (u.unassigned ? SC.info('appels_sans_auteur') : (u.anciens ? SC.info('anciens_membres') : (u.horsEquipe ? infoL('hors_equipe_sales') : '')));
+        /* « Non attribué » : appels sans auteur + appels datés d'avant l'arrivée
+           d'un membre (u.detail, même règle que Set NB et le Dashboard). */
+        var dets = u.detail ? Object.keys(u.detail).map(function (pr) { return u.detail[pr] + ' de ' + pr; }) : [];
+        var lbl = esc(u.name) + (u.unassigned ? SC.info('appels_sans_auteur', dets.length ? 'Ici, la ligne compte aussi : ' + dets.join(', ') + '.' : '') : (u.anciens ? SC.info('anciens_membres') : (u.horsEquipe ? infoL('hors_equipe_sales') : '')));
         return '<div class="fn-minibar"' + (u.unassigned || u.horsEquipe ? ' style="opacity:.65"' : '') + '><span class="mb-l" title="' + escAttr(u.name) + '">' + lbl + '</span><span class="mb-track"><span class="mb-fill" style="width:' + (u.out / maxOut * 100).toFixed(1) + '%;background:#f472b6"></span></span><span class="mb-v" style="width:240px">' + fmtNum(u.out) + ' appels · ' + fmtNum(u.ans) + ' décrochés · ' + fmtPct(rate) + ' · ' + fmtSec(u.talkSec || 0) + '</span></div>';
       }
       h += '<div style="margin-top:12px"><div style="font-size:10.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.7px;margin-bottom:8px">Appels par personne — équipe sales' + infoL('appels_par_personne') + '</div><div class="fn-minibars">';

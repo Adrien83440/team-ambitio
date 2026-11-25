@@ -541,6 +541,7 @@
     leads_travailles: { mot: 'Leads travaillés', texte: 'Fiches contactées pour la première fois pendant la période, quelle que soit leur date d’entrée. Dans l’onglet d’un setter : celles que LUI a contactées pour la première fois. Dans Équipe : fiches distinctes.' },
     pas_encore_travailles: { mot: 'Pas encore travaillés', texte: 'Leads reçus pendant la période sur lesquels aucune action de l’équipe n’a encore été enregistrée.' },
     appels: { mot: 'Appels', texte: 'Appels sortants passés pendant la période.' },
+    appels_sous_ton_compte: { mot: 'Tes appels', texte: 'Ici : seulement les appels enregistrés sous ton compte. Un appel reconnu par le seul prénom Ringover (poste relié à aucun compte) n’est visible que par un admin : il compte dans ta ligne quand un admin regarde la page, pas dans ce que tu vois ici.' },
     appels_sans_auteur: { mot: 'Appels sans auteur', texte: 'Appels sortants passés depuis un poste téléphonique qui n’est relié à aucun compte de l’équipe. Ils ne peuvent être rangés dans l’onglet de personne.' },
     appels_equipe_non_lisibles: { mot: 'Appels de l’équipe', texte: 'Ton compte ne peut lire que tes propres appels : le total de l’équipe n’est pas affiché plutôt que d’être faux. Un admin le voit.' },
     decroches: { mot: 'Décrochés', texte: 'Appels sortants où quelqu’un a répondu : au moins 5 secondes de conversation, répondeurs écartés.' },

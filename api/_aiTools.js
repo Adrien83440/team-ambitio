@@ -248,7 +248,14 @@ function construireContexte(typeMap, persons, team, avert) {
     if (perim === 'hors') return { perim: perim, key: SC.mot('hors_equipe_sales') };
     const who = FC.callerOf(c, idxAppels) || {};
     const depart = who.departed || parti(who.slug);
-    return { perim: perim, key: depart ? SC.mot('anciens_membres') : (who.name || SC.mot('non_attribue')) };
+    if (depart) return { perim: perim, key: SC.mot('anciens_membres') };
+    /* Appel daté d'avant l'arrivée du membre : « Non attribué », précision
+       « Prénom (avant son arrivée) » — la règle de Set NB, du Dashboard et de
+       Pilotage (FunnelCore.ligneAppel → StatsCore.rangPersonne). */
+    const ms = FC.parseFlexMs(c.initiatedAt) || FC.parseFlexMs(c.startTime);
+    const la = FC.ligneAppel(who, ms ? SC.jourParis(ms) : null);
+    if (la.cas === 'avant_arrivee') return { perim: perim, key: SC.mot('non_attribue'), precision: la.precision };
+    return { perim: perim, key: who.name || SC.mot('non_attribue') };
   }
   return { typeMap: typeMap || {}, persons: persons, team: team, bySlug: bySlug, resoudre: resoudre, nomDe: nomDe,
     nomEnClair: nomEnClair, parti: parti, rang: rang, auteurAppel: auteurAppel, avert: avert || [] };
@@ -603,7 +610,7 @@ const TOOLS = [
       const s = await db.collection('call_logs').where('initiatedAt', '>=', r.start).where('initiatedAt', '<=', r.end).get();
       /* Périmètre du Stats funnel (ctx.auteurAppel) : équipe sales + sans
          auteur dans equipe ; CSM / coachs à part (horsEquipeSales). */
-      const groupes = {}, notes = {};
+      const groupes = {}, notes = {}, details = {};
       let sansSens = 0;
       const tous = [], hors = [];
       s.forEach(function (d) {
@@ -613,6 +620,7 @@ const TOOLS = [
         if (a.perim === 'hors') { hors.push(c); return; }
         const k = a.key;
         (groupes[k] = groupes[k] || []).push(c);
+        if (a.precision) { const gd = (details[k] = details[k] || {}); (gd[a.precision] = gd[a.precision] || []).push(c); }
         tous.push(c);
         if (c.aiCall && c.aiCall.notation) { inc(notes, k, 'n'); inc(notes, k, 'somme', Number(c.aiCall.notation.score) || 0); }
       });
@@ -625,7 +633,14 @@ const TOOLS = [
         return o;
       }
       const parPersonne = {};
-      Object.keys(groupes).forEach(function (k) { parPersonne[k] = bloc(groupes[k], k); });
+      Object.keys(groupes).forEach(function (k) {
+        parPersonne[k] = bloc(groupes[k], k);
+        /* Détail de « Non attribué » : appels datés d'avant l'arrivée d'un membre. */
+        if (details[k]) {
+          parPersonne[k].detail = {};
+          Object.keys(details[k]).forEach(function (pr) { parPersonne[k].detail[pr] = bloc(details[k][pr], null); });
+        }
+      });
       const out = { periode: r.label, equipe: bloc(tous, null), parPersonne: parPersonne };
       if (hors.length) out.horsEquipeSales = bloc(hors, null);
       const avert = ctx.avert.slice();

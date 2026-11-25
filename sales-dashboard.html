@@ -904,7 +904,7 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
     if (!S.isAdmin) {
       var me = moi(), mine = me && C.B[me];
       return { ok: false, val: '—' + info('appels_equipe_non_lisibles'),
-        sub: mine ? 'Les tiens : ' + fmtNum(mine.calls) + ' appel' + (mine.calls > 1 ? 's' : '') + ' · ' + fmtNum(mine.decroches) + ' ' + esc(SC.mot('decroches').toLowerCase()) + info('decroches') : esc(SC.texte('appels_equipe_non_lisibles')) };
+        sub: mine ? 'Les tiens : ' + fmtNum(mine.calls) + ' appel' + (mine.calls > 1 ? 's' : '') + ' · ' + fmtNum(mine.decroches) + ' ' + esc(SC.mot('decroches').toLowerCase()) + info('decroches', SC.texte('appels_sous_ton_compte')) : esc(SC.texte('appels_equipe_non_lisibles')) };
     }
     return { ok: true, val: fmtNum(C.TOT.calls) + (r.calls._tronque ? ' ⚠' + info('lecture_incomplete') : ''), sub: '' };
   }
@@ -1685,9 +1685,14 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
     });
     return out;
   }
-  function ligneDe(who) {
+  function ligneDe(who, jourIso) {
     if (!who) return { key: '_na', name: SC.mot('non_attribue'), color: '#6b7280', sous: SC.mot('appels_sans_auteur') };
     if (who.departed || (who.slug && AF.isDeparted(who.slug))) return { key: '_anciens', name: SC.mot('anciens_membres'), color: '#6b7280', sous: '' };
+    /* Appel daté d'avant l'arrivée du membre : « Non attribué », précision
+       « Prénom (avant son arrivée) » — la règle de Set NB, de la Performance
+       équipe et de Pilotage (FunnelCore.ligneAppel → StatsCore.rangPersonne). */
+    var la = (FC && typeof FC.ligneAppel === 'function') ? FC.ligneAppel(who, jourIso) : null;
+    if (la && la.cas === 'avant_arrivee') return { key: '_na', name: SC.mot('non_attribue'), color: '#6b7280', sous: la.precision, avant: true };
     var m = (who.slug && (window.TEAM_MEMBERS || {})[who.slug]) || {};
     /* Une fiche archivée (active === false) est partie (StatsCore.estParti) :
        elle tombe dans « Anciens membres » ci-dessus, jamais ici. */
@@ -1708,6 +1713,7 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
      Vue d'une personne (filtre admin, ou « Mes appels ») : tous ses appels. */
   function aggregate(logs) {
     var byRow = {}, byDay = {}, tot = { calls: 0, decroches: 0, talk: 0 }, hors = { calls: 0, decroches: 0, talk: 0 };
+    var avant = { calls: 0, sous: '' };
     var equipe = state.role === 'admin' && state.filterUid === 'all';
     var CIDX = FC.callerIndex(rosterComplet());
     /* Filtre d'une personne (admin) : même règle d'auteur que la vue « Toute
@@ -1729,7 +1735,12 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
         hors.calls++; if (dh) { hors.decroches++; hors.talk += Number(c.durationSec) || 0; }
         return;
       }
-      var L = ligneDe(FC.callerOf(c, CIDX));
+      var L = ligneDe(FC.callerOf(c, CIDX), dk);
+      /* Vue d'UNE personne (filtre admin, « Mes appels ») : seulement les
+         appels de SA ligne. Un appel daté d'avant son arrivée reste en « Non
+         attribué » — le même chiffre que sa ligne de « Toute l'équipe », de
+         Set NB et de Pilotage : compté à part, dit sous les cartes. */
+      if (!equipe && L.avant) { avant.calls++; avant.sous = L.sous; return; }
       var r = byRow[L.key] || (byRow[L.key] = { key: L.key, name: L.name, color: L.color, sous: {}, calls: 0, decroches: 0, talk: 0 });
       if (L.sous) r.sous[L.sous] = 1;
       var d = byDay[dk] || (byDay[dk] = { calls: 0, decroches: 0, talk: 0 });
@@ -1737,7 +1748,7 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
       r.calls++; d.calls++; tot.calls++;
       if (dec) { r.decroches++; d.decroches++; tot.decroches++; r.talk += talk; d.talk += talk; tot.talk += talk; }
     });
-    return { byRow: byRow, byDay: byDay, tot: tot, hors: hors };
+    return { byRow: byRow, byDay: byDay, tot: tot, hors: hors, avant: avant };
   }
 
   /* ── Rendu ── */
@@ -1764,7 +1775,7 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
     }
     root.innerHTML = '<div class="cr-section"><div class="cr-card">' +
       '<div class="cr-hdr"><div class="cr-title">📞 Activité téléphonique</div>' +
-      '<span class="cr-badge">' + (state.role === 'admin' ? 'Équipe' : 'Mes appels') + '</span>' +
+      '<span class="cr-badge">' + (state.role === 'admin' ? 'Équipe' : 'Mes appels' + SC.info('appels_sous_ton_compte')) + '</span>' +
       '<span class="cr-archived">période propre à ce bloc · heure de Paris</span></div>' +
       '<div class="cr-controls" id="cr-controls">' +
       presets.map(function (p) { return '<button type="button" class="cr-preset' + (state.preset === p.key ? ' active' : '') + '" data-preset="' + p.key + '">' + p.label + '</button>'; }).join('') +
@@ -1814,6 +1825,11 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
       stat('Durée moyenne' + avgInfo, t.decroches > 0 ? fmtDuration(avg) : '—') +
       stat('Plage', '<span style="font-size:15px">' + esc(rangeLabel()) + '</span>') +
       '</div>';
+    if (agg.avant && agg.avant.calls) {
+      html += '<div class="cr-archived" style="display:block;margin:6px 0 0">' + fmtNum(agg.avant.calls) + ' appel' + (agg.avant.calls > 1 ? 's' : '') +
+        ' daté' + (agg.avant.calls > 1 ? 's' : '') + ' d’avant la date d’arrivée — ' + esc(agg.avant.sous) + ' — non compté' + (agg.avant.calls > 1 ? 's' : '') +
+        ' ici : rangé' + (agg.avant.calls > 1 ? 's' : '') + ' en « ' + esc(SC.mot('non_attribue')) + ' », comme sur la vue « Toute l’équipe », Set NB et Pilotage.</div>';
+    }
 
     if (state.role === 'admin' && state.filterUid === 'all') {
       var rows = Object.keys(agg.byRow).map(function (k) { return agg.byRow[k]; });
@@ -1833,7 +1849,11 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
           tt.calls += r.calls; tt.decroches += r.decroches; tt.talk += r.talk;
           var extra = '';
           if (r.key === '_anciens') extra = SC.info('anciens_membres');
-          else if (r.key === '_na') extra = SC.info('non_attribue') + (r.sous[SC.mot('appels_sans_auteur')] ? ' <span class="cr-archived">' + esc(SC.mot('appels_sans_auteur')) + '</span>' + SC.info('appels_sans_auteur') : '');
+          else if (r.key === '_na') {
+            extra = SC.info('non_attribue') + (r.sous[SC.mot('appels_sans_auteur')] ? ' <span class="cr-archived">' + esc(SC.mot('appels_sans_auteur')) + '</span>' + SC.info('appels_sans_auteur') : '');
+            /* Autres précisions de la ligne : « Prénom (avant son arrivée) ». */
+            Object.keys(r.sous).forEach(function (sx) { if (sx !== SC.mot('appels_sans_auteur')) extra += ' <span class="cr-archived">' + esc(sx) + '</span>'; });
+          }
           html += '<tr><td><span class="cr-dot" style="background:' + esc(r.color) + '"></span>' + esc(r.name) + extra + '</td>' +
             '<td class="num">' + fmtNum(r.calls) + '</td><td class="num">' + fmtNum(r.decroches) + '</td>' +
             '<td class="num">' + SC.fmtPct(SC.pct(r.decroches, r.calls)) + '</td>' +

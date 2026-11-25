@@ -2287,17 +2287,27 @@
       if (!m) return;
       var who = { key: m.slug || m.firebaseUid, slug: m.slug || null,
         name: m.shortName || m.displayName || m.fullName || m.slug,
-        sales: !!SALES_CALL_ROLES[m.role], departed: isDeparted(m) };
+        sales: !!SALES_CALL_ROLES[m.role], departed: isDeparted(m),
+        /* Date d'arrivée ('AAAA-MM-JJ') et rang d'affichage de la fiche : lus
+           par ligneAppel() et par le départage des prénoms ci-dessous. */
+        debut: (typeof m.startDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(m.startDate)) ? m.startDate : null,
+        order: Number(m.order) || 999 };
       if (m.firebaseUid) byUid[m.firebaseUid] = who;
       var f = firstTok(m.shortName || m.displayName || m.fullName);
-      /* À prénom égal : un membre EN PLACE prime sur un ancien membre, quel
-         que soit l'ordre de la liste reçue (navigateur : membres en place
-         d'abord ; serveur : ordre du document) — sinon le même appel, reconnu
-         par le seul prénom Ringover, changeait d'auteur d'un écran à l'autre.
-         Deux membres en place du même prénom : le premier rencontré. */
-      if (f && (!byFirst[f] || (byFirst[f].departed && !who.departed))) byFirst[f] = who;
+      /* À prénom égal, le MÊME auteur quel que soit l'ordre de la liste reçue
+         (navigateur : membres en place triés par `order` ; Pilotage : ordre du
+         document) — sinon le même appel, reconnu par le seul prénom Ringover,
+         changeait d'auteur d'un écran à l'autre : un membre EN PLACE prime sur
+         un ancien membre, puis le plus petit `order` (le tri de nav.js), puis
+         la clé dans l'ordre alphabétique. */
+      if (f && (!byFirst[f] || primeAuteur(who, byFirst[f]))) byFirst[f] = who;
     });
     return { byUid: byUid, byFirst: byFirst };
+  }
+  function primeAuteur(a, b) {
+    if (!!a.departed !== !!b.departed) return !a.departed;
+    if (a.order !== b.order) return a.order < b.order;
+    return String(a.key || '') < String(b.key || '');
   }
   function callerOf(c, TEAMorIdx) {
     var idx = (TEAMorIdx && TEAMorIdx.byUid) ? TEAMorIdx : callerIndex(TEAMorIdx);
@@ -2324,6 +2334,30 @@
   /* Vrai si l'appel compte dans les chiffres d'appels de l'équipe (Appels,
      Décrochés, temps d'appel) : 'sales' ou 'sans_auteur'. */
   function appelEquipeSales(c, TEAMouIndex) { return perimetreAppel(c, TEAMouIndex) !== 'hors'; }
+  /* LIGNE D'UN APPEL dans une vue PAR PERSONNE — une règle (relecture du
+     25/11/2026), celle de StatsCore.rangPersonne déjà suivie par Set NB, la
+     Performance équipe du Dashboard et Pilotage, à utiliser par tout écran
+     qui range des appels par personne :
+       'sans_auteur'    pas d'auteur → ligne « Non attribué »
+       'hors'           autre rôle (CSM, coach) → « Hors équipe sales »
+       'anciens'        ancien membre → « Anciens membres » (jamais son nom)
+       'avant_arrivee'  appel daté AVANT l'arrivée du membre (startDate) →
+                        « Non attribué », précision « Prénom (avant son arrivée) »
+       'personne'       sa ligne
+     who = callerOf(appel, index) ; jourIso = jour de l'appel, heure de Paris.
+     → { cas, precision } */
+  function ligneAppel(who, jourIso) {
+    if (!who) return { cas: 'sans_auteur', precision: '' };
+    if (!who.sales) return { cas: 'hors', precision: '' };
+    var r = SC.rangPersonne(who.slug || who.key || '?', jourIso || null, {
+      parti: function () { return !!who.departed; },
+      prenom: function () { return who.name || ''; },
+      debut: function () { return who.debut || null; }
+    });
+    if (r.cas === 'ancien') return { cas: 'anciens', precision: '' };
+    if (r.cas === 'avant_arrivee') return { cas: 'avant_arrivee', precision: r.precision };
+    return { cas: 'personne', precision: '' };
+  }
 
   /* Parcours de contact d'un lead — UNE règle (funnel, Qualité par pub,
      onglet Leads) : appels SORTANTS de l'équipe vers son numéro, passés
@@ -3143,12 +3177,16 @@
        entre son entrée et 14 jours après (même plafond que Pilotage ; les
        appels passés AVANT son entrée ne comptent plus). Un lead « appelé »
        a donc toujours un Lead to speech : k.ttcCount = k.leadsCalled. ── */
-    function nomAffiche(who) {
+    function nomAffiche(who, jourIso) {
       if (!who) return { key: '_none', name: 'Non attribué', unassigned: true, anciens: false };
       /* « Hors équipe sales » d'abord : une ancienne CSM n'est pas une ancienne
          de l'équipe sales — ses appels ne sont pas dans les appels sortants de l'équipe. */
       if (!who.sales) return { key: '_hors', name: 'Hors équipe sales', unassigned: false, anciens: false, hors: true };
       if (who.departed) return { key: '_anciens', name: SC.mot('anciens_membres') || 'Anciens membres', unassigned: false, anciens: true };
+      /* Appel daté d'avant l'arrivée du membre : « Non attribué », avec la
+         précision — la règle de Set NB, du Dashboard et de Pilotage (ligneAppel). */
+      var la = ligneAppel(who, jourIso);
+      if (la.cas === 'avant_arrivee') return { key: '_none', name: 'Non attribué', unassigned: true, anciens: false, precision: la.precision };
       return { key: who.key, name: who.name, unassigned: false, anciens: false };
     }
     var callsByP9 = {};
@@ -3164,7 +3202,7 @@
       l._nbCalls = LC.nbAppels;
       l._nbAnswered = LC.nbDecroches;
       l._ttc = LC.delai;
-      l._ttcBy = LC.auteur ? nomAffiche(LC.auteur) : null;
+      l._ttcBy = LC.auteur ? nomAffiche(LC.auteur, LC.delai != null ? SC.jourParis(l._entry + LC.delai) : null) : null;
       if (LC.appele) { leadsCalled++; attemptsSum += LC.nbAppels; if (LC.joint) leadsReached++; }
       /* SMS sortants depuis l'entrée du lead (communications[]) */
       l._nbSms = 0;
@@ -3232,10 +3270,12 @@
     var byUser = {};
     callsOutTous.forEach(function (c) {
       perimetre(c);
-      var who = nomAffiche(c._who);
+      var who = nomAffiche(c._who, c._ms != null ? SC.jourParis(c._ms) : null);
       if (!byUser[who.key]) byUser[who.key] = { key: who.key, name: who.name, out: 0, ans: 0, talkSec: 0, rawName: null,
         unassigned: !!who.unassigned, anciens: !!who.anciens, horsEquipe: !!who.hors };
       var u = byUser[who.key];
+      /* Détail de la ligne « Non attribué » : { 'Prénom (avant son arrivée)': n }. */
+      if (who.precision) { u.detail = u.detail || {}; u.detail[who.precision] = (u.detail[who.precision] || 0) + 1; }
       u.out++;
       if (isAnsweredCall(c)) { u.ans++; u.talkSec += Number(c.durationSec) || 0; }
     });
@@ -4294,6 +4334,7 @@
     callStats: callStats, callerIndex: callerIndex, callerOf: callerOf, leadContact: leadContact,
     /* Revue contradictoire (25/11/2026) */
     perimetreAppel: perimetreAppel, appelEquipeSales: appelEquipeSales, SALES_CALL_ROLES: SALES_CALL_ROLES,
+    ligneAppel: ligneAppel,
     jourAction: jourAction, resoudreAvec: resoudreAvec, resoudrePersonneDe: resoudrePersonneDe, loadPersons: loadPersons,
     adsTunnelOf: adsTunnelOf
   };
