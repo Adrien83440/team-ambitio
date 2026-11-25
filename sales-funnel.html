@@ -781,6 +781,14 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
   /* Coûts publicitaires affichables : la dépense couvre tous les jours
      attendus de la période (k.adsSpendOk, jusqu'à hier, heure de Paris). */
   function adsCouts(k) { return !k || k.adsSpendOk !== false; }
+  /* Sous-ligne du CPL pub : son dénominateur, et le CPL « tous leads » pour
+     mémoire (k.cpl — n'est plus jamais affiché seul sous le mot CPL). */
+  function cplSub(k) {
+    if (!adsCouts(k)) return adsManque(k);
+    var hors = (k.leads || 0) - (k.leadsAds || 0);
+    return 'dépense pub ÷ ' + fmtNum(k.leadsAds) + ' leads venus de la pub' + infoL('leads_pub') +
+      (hors > 0 && k.cpl != null ? ' · ' + fmtEuro2(k.cpl) + ' en comptant aussi les ' + fmtNum(hors) + ' leads hors pub' : '');
+  }
   function adsManque(k) {
     return 'masqué : dépense reçue pour ' + fmtNum(k.adsDaysCovered) + ' jour' + (k.adsDaysCovered > 1 ? 's' : '') + ' sur ' + fmtNum(k.adsDaysExpected) + infoL('jours_depense');
   }
@@ -854,11 +862,11 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
 
   var DEFAULT_TARGETS = {
     ctr:         { min: 1,  max: null, label: 'CTR (%)' },
-    cpl:         { min: null, max: 10, label: 'CPL (€)' },
-    optin:       { min: 25, max: null, label: "Taux d'opt-in (%)" },
-    ltb:         { min: 10, max: null, label: 'LTB — Lead to Booking (%)' },
+    cpl:         { min: null, max: 10, label: 'CPL pub (€) — dépense ÷ leads venus de la pub' },
+    optin:       { min: 25, max: null, label: "Taux d'opt-in — leads des pages ÷ vues (%)" },
+    ltb:         { min: 10, max: null, label: 'LTB — RDV pris ÷ leads (%)' },
     selfShare:   { min: 60, max: 70,   label: 'Part self-booking / VSL (%)' },
-    recovery:    { min: 15, max: 35,   label: 'Taux de récupération setting (%)' },
+    recovery:    { min: 15, max: 35,   label: 'Taux de récupération — leads NB reçus amenés en RDV (%)' },
     kept:        { min: 80, max: null, label: 'Kept % — Kept ÷ RDV de la période (%)' },
     showup:      { min: 75, max: null, label: 'Show-up — présents ÷ (Kept − à venir) (%)' },
     /* Relevée de 10 à 40 le 17/08 : l'ancienne valeur avait été posée quand
@@ -866,8 +874,8 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
        à 81 %. Un plancher à 10 % était alors toujours vert, donc muet.
        Mesuré depuis la correction : 50 % sur la journée, 60 % sur le mois —
        40 % est un plancher qui alerte vraiment. */
-    decroche:    { min: 40, max: null, label: 'Taux de décroché (%)' },
-    reach:       { min: 40, max: null, label: 'Joignabilité — leads joints (%)' },
+    decroche:    { min: 40, max: null, label: 'Taux de décroché — décrochés ÷ appels (%)' },
+    reach:       { min: 40, max: null, label: 'Joignabilité — joints ÷ appelés (%)' },
     closingLive: { min: 20, max: null, label: 'Close / présents (%)' }
   };
 
@@ -2035,49 +2043,63 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
        période, et ce qui a été pris dessus (demande Vincent 07/08). */
     h += renderDisposSection();
 
-    /* 1. Publicité */
-    h += stageOpen('💰', 'Publicité (Meta)', k.hasAds ? k.adsDays + ' jour(s) de data · source Make / saisie' : 'Aucune donnée — onglet « Données Ads » ou scénario Make');
-    h += '<div class="fn-grid">';
-    h += kpiCard(fmtEuro2(k.spend || null), 'Dépense pub', null, null, !k.hasAds);
-    h += kpiCard(fmtNum(k.impressions || null), 'Impressions', null, null, !k.hasAds);
-    h += kpiCard(fmtEuro2(k.cpm), 'CPM', 'coût / 1000 impressions');
-    h += kpiCard(fmtNum(k.clicks || null), 'Clics sortants', null, null, !k.hasAds);
-    h += kpiCard(fmtPct(k.ctr, 2), 'CTR', 'clics / impressions', targetBadge('ctr', k.ctr));
-    h += kpiCard(fmtEuro2(k.cpc), 'CPC', 'coût / clic');
-    /* ROAS isolé à la publicité (17/08). L'ancienne carte divisait TOUT le
-       collecté par la dépense pub — Instagram organique, setting
-       téléphonique et liens partagés compris. Le dénominateur étant une
-       dépense publicitaire, seul le chiffre venu de la pub a sa place au
-       numérateur. Le détail est affiché sous la carte : sans lui, un ROAS
-       qui baisse de moitié passe pour une contre-performance. */
-    var roasSub = 'collecté des clients venus de la PUB (HT) ÷ dépense pub';
-    if (k.wonCollecteHorsPub > 0 || k.wonCollecteNonRattache > 0) {
-      var horsParts = [];
-      if (k.wonCollecteHorsPub > 0) horsParts.push(fmtEuro(k.wonCollecteHorsPub) + ' hors pub');
-      if (k.wonCollecteNonRattache > 0) horsParts.push(fmtEuro(k.wonCollecteNonRattache) + ' non rattaché');
-      roasSub += ' · ' + fmtEuro(k.wonCollecteAds) + ' retenus sur ' + fmtEuro(k.wonCollecte)
-        + ' — ' + horsParts.join(' · ') + ' exclus';
+    /* 1. Publicité — « N jour(s) sur M » compte des JOURS (dates distinctes
+       reçues, jusqu'à hier), plus des lignes jour × tunnel. Dépense
+       incomplète → CPL pub, CPR, CAC pub et ROAS pub masqués, et dit. */
+    var okAds1 = adsCouts(k);
+    var pubNote = k.hasAds
+      ? fmtNum(k.adsDaysCovered) + ' jour' + (k.adsDaysCovered > 1 ? 's' : '') + ' de dépense reçu' + (k.adsDaysCovered > 1 ? 's' : '') + ' sur ' + fmtNum(k.adsDaysExpected) + ' attendu' + (k.adsDaysExpected > 1 ? 's' : '') + ' (jusqu’à hier)' + infoL('jours_depense') + ' · source Make / saisie'
+      : 'Aucune donnée — onglet « Données Ads » ou scénario Make';
+    h += stageOpen('💰', 'Publicité (Meta)', pubNote);
+    if (k.hasAds && !okAds1) {
+      h += '<div class="fn-alert" style="margin:8px 0 0">⚠️ <strong>Dépense incomplète : ' + fmtNum(k.adsDaysCovered) + ' jour' + (k.adsDaysCovered > 1 ? 's' : '') + ' reçu' + (k.adsDaysCovered > 1 ? 's' : '') + ' sur ' + fmtNum(k.adsDaysExpected) + '.</strong> CPL pub, CPR, CAC pub et ROAS pub sont masqués sur tout l’onglet : divisée par des leads ou des RDV de toute la période, une dépense partielle les rendrait faussement bas. Fais rejouer l’ingestion Make sur les jours manquants (ou saisis-les dans Données Ads).</div>';
     }
-    h += kpiCard(k.roasAds != null ? (Math.round(k.roasAds * 100) / 100).toLocaleString('fr-FR') + '×' : '—', 'ROAS pub', roasSub, null, k.roasAds == null);
+    if (k.adsDocsAutreTunnel > 0) {
+      h += '<div class="fn-stage-note" style="margin-top:6px">ℹ ' + fmtNum(k.adsDocsAutreTunnel) + ' ligne(s) de dépense d’un tunnel ni Élite ni Business : comptées en Élite' + infoL('grille_ads_total') + '.</div>';
+    }
+    h += '<div class="fn-grid">';
+    h += kpiCard(fmtEuro2(k.spend || null), 'Dépense pub' + infoL('depense_pub'), null, null, !k.hasAds);
+    h += kpiCard(fmtNum(k.impressions || null), 'Impressions' + infoL('impressions'), null, null, !k.hasAds);
+    h += kpiCard(fmtEuro2(k.cpm), 'CPM' + infoL('cpm'), 'dépense ÷ impressions × 1 000');
+    h += kpiCard(fmtNum(k.clicks || null), 'Clics sortants' + infoL('clics_sortants'), null, null, !k.hasAds);
+    h += kpiCard(fmtPct(k.ctr, 2), 'CTR' + infoL('ctr'), 'clics sortants ÷ impressions', targetBadge('ctr', k.ctr));
+    h += kpiCard(fmtEuro2(k.cpc), 'CPC' + infoL('cpc'), 'dépense ÷ clics sortants');
+    /* ROAS pub (17/08) : seul le collecté des clients venus de la pub au
+       numérateur. Le collecté hors pub et non rattaché est dit dessous ;
+       « Collecté total ÷ dépense pub » est dans « Coûts & rentabilité », sous
+       son nom, jamais sous le mot ROAS. */
+    var roasSub;
+    if (!okAds1) roasSub = adsManque(k);
+    else {
+      roasSub = fmtEuro(k.wonCollecteAds) + ' collectés sur les clients venus de la pub ÷ ' + fmtEuro(k.spend) + ' de dépense pub';
+      if (k.wonCollecteHorsPub > 0 || k.wonCollecteNonRattache > 0) {
+        var horsParts = [];
+        if (k.wonCollecteHorsPub > 0) horsParts.push(fmtEuro(k.wonCollecteHorsPub) + ' hors pub');
+        if (k.wonCollecteNonRattache > 0) horsParts.push(fmtEuro(k.wonCollecteNonRattache) + ' non rattaché');
+        roasSub += ' · sur ' + fmtEuro(k.wonCollecte) + ' de collecté : ' + horsParts.join(' · ') + ' exclus';
+      }
+    }
+    h += kpiCard(okAds1 ? fmtRoas(k.roasAds) : '—', esc(SC.mot('roas_pub')) + SC.info('roas_pub'), roasSub, null, !okAds1 || k.roasAds == null);
     h += '</div></div>';
     h += '<div class="fn-arrow">▼</div>';
 
     /* 1b. VSL à prise de RDV directe (23/09/2026) — remplace l'opt-in */
     if (k.vslActive) h += renderVslStage(k);
 
-    /* 2. Opt-in */
+    /* 2. Opt-in — taux d'opt-in = leads entrés PAR les pages mesurées ÷
+       vues de ces pages (même périmètre en haut et en bas, k.optinLeads). */
     h += stageOpen('📄', k.vslActive ? 'Page d\'opt-in (ancien tunnel)' : 'Page d\'opt-in',
       k.views > 0 ? 'Vues réelles via beacon'
         : (k.vslActive ? 'Tunnel arrêté : la pub envoie droit sur la VSL — voir l\'étape ci-dessus' : 'Vues : pose le snippet sur les pages system.io pour le taux réel'));
     h += '<div class="fn-grid">';
-    h += kpiCard(k.views > 0 ? fmtNum(k.views) : '—', 'Vues page opt-in', k.views > 0 ? null : 'beacon non actif', null, k.views === 0);
-    h += kpiCard(fmtNum(k.leads), 'Leads (réels)', 'entrés sur la période');
-    if (k.views > 0) h += kpiCard(fmtPct(k.optinReal), 'Taux d\'opt-in réel', 'leads / vues', targetBadge('optin', k.optinReal));
-    if (!k.vslActive) h += kpiCard(fmtPct(k.optinClicks), 'Taux d\'opt-in / clics', 'leads / clics Meta', k.views > 0 ? '' : targetBadge('optin', k.optinClicks));
-    h += kpiCard(fmtEuro2(k.cpl), 'CPL réel', 'dépense / leads réels', targetBadge('cpl', k.cpl));
-    if (!k.vslActive) h += kpiCard(k.leadsFb > 0 ? fmtNum(k.leadsFb) : '—', 'Leads pixel Meta',
+    h += kpiCard(k.views > 0 ? fmtNum(k.views) : '—', 'Vues page opt-in' + SC.info('vues_page'), k.views > 0 ? null : 'beacon non actif', null, k.views === 0);
+    h += kpiCard(fmtNum(k.leads), 'Leads' + SC.info('leads'), 'entrés pendant la période');
+    if (k.views > 0) h += kpiCard(fmtPct(k.optinReal), 'Taux d\'opt-in' + infoL('optin_reel'), fmtNum(k.optinLeads) + ' leads entrés par ces pages ÷ ' + fmtNum(k.views) + ' vues', targetBadge('optin', k.optinReal));
+    if (!k.vslActive) h += kpiCard(fmtPct(k.optinClicks), 'Leads ÷ clics Meta' + infoL('leads_par_clic'), fmtNum(k.leads) + ' leads ÷ ' + fmtNum(k.clicks) + ' clics sortants (toutes pages)');
+    h += kpiCard(okAds1 ? fmtEuro2(k.cplAds) : '—', 'CPL pub' + infoL('cpl_pub'), cplSub(k), okAds1 ? targetBadge('cpl', k.cplAds) : '', !okAds1 || k.cplAds == null);
+    if (!k.vslActive) h += kpiCard(k.leadsFb > 0 ? fmtNum(k.leadsFb) : '—', 'Leads pixel Meta' + infoL('leads_pixel'),
       k.leadsFb > 0 && k.leads > 0
-        ? 'comptage Meta (attribution) vs ' + fmtNum(k.leads) + ' réels en base — l\'écart (' + fmtNum(k.leadsFb - k.leads) + ') vient des doublons, des ré-optins (déjà en CRM, non recomptés) et de la fenêtre d\'attribution Meta'
+        ? 'comptage Meta vs ' + fmtNum(k.leads) + ' leads en base (écart ' + fmtNum(k.leadsFb - k.leads) + ')'
         : 'leads comptés par le pixel Meta (attribution)', null, k.leadsFb === 0);
     h += '</div>';
     /* 🧪 A/B tests opt-in (beacon par variante — significativité z-test) */
@@ -2106,19 +2128,32 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     h += '</div>';
     h += '<div class="fn-arrow">▼</div>';
 
-    /* 3. Leads */
+    /* 3. Leads — Leads = fiches entrées (fusionnées et fiches de test
+       exclues) ; ré-optins à part (vrai formulaire rempli pendant la période,
+       une fois par fiche). Plafond de lecture : bandeau en tête d'onglet. */
     var totalT = k.leadsByTunnel.elite + k.leadsByTunnel.business;
-    h += stageOpen('👥', 'Leads', DATA.leadsTruncated ? '⚠ liste tronquée à ' + LEADS_QUERY_LIMIT : null);
+    h += stageOpen('👥', 'Leads', (k.partiel && (k.partiel.leads || k.partiel.reoptins)) ? '⚠ chiffres partiels — voir « Lecture incomplète » en haut de l’onglet' + SC.info('lecture_incomplete') : null);
     h += '<div class="fn-grid">';
-    h += kpiCard(fmtNum(k.leads), 'Nouveaux leads', 'date d\'entrée réelle dans la période');
-    h += kpiCard('<span class="fn-reopt">' + fmtNum(k.reoptins) + '</span>', 'Ré-optins 🔄', 'leads antérieurs revenus via opt-in');
-    h += '<div class="fn-kpi" style="grid-column:span 2;min-width:320px"><div class="l" style="margin-top:0;margin-bottom:6px">Répartition par tunnel (tous) — leads &amp; RDV pris</div><div class="fn-minibars">';
+    var leadsSub = 'date d\'entrée réelle dans la période';
+    if (k.leadsTest > 0) leadsSub += ' · ' + fmtNum(k.leadsTest) + ' fiche(s) de test écartée(s)';
+    h += kpiCard(fmtNum(k.leads), 'Leads' + SC.info('leads'), leadsSub);
+    var reoSub = 'fiches plus anciennes réinscrites par un formulaire pendant la période — hors Leads, absentes de l’onglet 👥 Leads';
+    if (k.reoptinsEcartes > 0) reoSub += ' · ' + fmtNum(k.reoptinsEcartes) + ' fiche(s) réactivée(s) sans formulaire (message, remontée à la main, client) écartée(s)';
+    h += kpiCard('<span class="fn-reopt">' + fmtNum(k.reoptins) + '</span>', 'Ré-optins 🔄' + SC.info('reoptins'), reoSub);
+    h += kpiCard(fmtNum(k.leadsAds), 'Leads venus de la pub' + infoL('leads_pub'), fmtPct(SC.pct(k.leadsAds, k.leads)) + ' = ' + fmtNum(k.leadsAds) + ' ÷ ' + fmtNum(k.leads) + ' leads · base du CPL pub', null, !k.leadsAds);
+    h += '<div class="fn-kpi" style="grid-column:span 2;min-width:320px"><div class="l" style="margin-top:0;margin-bottom:6px">Répartition par tunnel — leads (filtre de source appliqué) &amp; RDV pris' + SC.info('rdv_pris') + '</div><div class="fn-minibars">';
     [['elite', '#a78bfa'], ['business', '#60a5fa']].forEach(function (row) {
       var t = row[0], color = row[1], n = k.leadsByTunnel[t];
       var pct = totalT > 0 ? n / totalT * 100 : 0;
       var rdvT = (k.bookedByTunnel && k.bookedByTunnel[t]) || 0;
-      h += '<div class="fn-minibar"><span class="mb-l">' + tunnelLabel(t) + '</span><span class="mb-track"><span class="mb-fill" style="width:' + pct.toFixed(1) + '%;background:' + color + '"></span></span><span class="mb-v" style="width:190px">' + fmtNum(n) + ' leads · ' + fmtPct(pct, 0) + ' · <strong>' + fmtNum(rdvT) + ' RDV pris</strong></span></div>';
+      h += '<div class="fn-minibar"><span class="mb-l">' + tunnelLabel(t) + '</span><span class="mb-track"><span class="mb-fill" style="width:' + pct.toFixed(1) + '%;background:' + color + '"></span></span><span class="mb-v" style="width:210px">' + fmtNum(n) + ' leads · ' + fmtPct(pct) + ' · <strong>' + fmtNum(rdvT) + ' RDV pris</strong></span></div>';
     });
+    if (tunnelFilter === 'all') {
+      h += '<div class="fn-minibar"><span class="mb-l">Hors tunnel</span><span class="mb-track"></span><span class="mb-v" style="width:210px"><strong>' + fmtNum(k.bookedNoTunnel || 0) + ' RDV pris</strong>' + SC.info('rdv_pris_hors_tunnel') + '</span></div>';
+      h += '<div class="s" style="margin-top:6px">Élite ' + fmtNum((k.bookedByTunnel || {}).elite || 0) + ' + Business ' + fmtNum((k.bookedByTunnel || {}).business || 0) + ' + hors tunnel ' + fmtNum(k.bookedNoTunnel || 0) + ' = ' + fmtNum(ch.n) + ' RDV pris</div>';
+    } else if (k.bookedNoTunnel > 0) {
+      h += '<div class="s" style="margin-top:6px">+ ' + fmtNum(k.bookedNoTunnel) + ' RDV pris par des leads plus anciens ou sans fiche, dans aucun tunnel' + SC.info('rdv_pris_hors_tunnel') + '</div>';
+    }
     h += '</div></div>';
     h += '</div></div>';
     h += '<div class="fn-arrow">▼</div>';
