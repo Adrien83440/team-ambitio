@@ -29,15 +29,20 @@
 //   d'origine gardée, rien n'est perdu) et clientSinceConvertiLe. Aucun autre
 //   champ (pas d'updatedAt). Trace : reprise_client_since_log/{id}, son
 //   compteur `ecrit` mis à jour après chaque lot (un MINIMUM : la relecture à
-//   blanc fait foi). Une date-heure ISO n'est convertie que si « T » et « Z »
-//   sont en majuscules et que la contre-lecture des composants donne le même
-//   instant ; sinon « illisible », jamais écrite.
+//   blanc fait foi). L'instant vient de LA règle unique StatsCore.dateTexteMs
+//   (stats-core.js, celle des pages) ; une date-heure ISO n'est convertie que
+//   si « T » (ou une espace) et « Z » sont en majuscules et que la contre-
+//   lecture par FunnelCore.parseFlexMs donne la même seconde ; sinon
+//   « illisible », jamais écrite.
 //   Une fiche qui porte DÉJÀ clientSinceTexte (reprise une fois, puis remise
 //   en texte par une ancienne page) est classée 'deja_reprise' : jamais
 //   écrite (la valeur d'origine serait perdue), comptée (dejaReprises) et
 //   listée à part, pour décision.
 //   Simulation : les fiches ajoutées sont triées comme Firestore trie une
 //   inégalité (clientSince puis identifiant) avant la coupe au plafond.
+//   La simulation liste nouveauxCloses, closesDisparus, sourceChangee et
+//   closesModifies (fiche présente avant ET après dont le jour, le signal, le
+//   contracté ou le collecté change : { leadId, avant, apres, aConvertir }).
 //   Déclencheurs onUpdate de leads/{leadId} vérifiés (les trois existants) :
 //   • onLeadNoteMentionNotify (index.js) : ne réagit qu'à un ajout dans
 //     notesHistory ;
@@ -52,7 +57,24 @@
 // JOB 2 — ?job=commissions&uids=a,b  (lecture seule)
 //   commissions/{uid}/mois/* → lignes réduites à leur empreinte
 //   h = sha256(email.toLowerCase().trim()|type|subtype|date) sur 16 caractères
-//   hexadécimaux, pour comparer la base au code sans sortir un nom.
+//   hexadécimaux, pour comparer la base au code sans sortir un nom. Par mois :
+//   aDeals (!!deals, la règle de la page : vrai ⇒ la base l'emportait déjà sur
+//   les lignes en dur), estTableau, moisPage (mois lu par la page, AAAA-MM).
+//
+// JOB 3 — ?job=etat[&h=e1,e2,…]  (lecture seule)
+//   Contrôles avant de ne plus servir d'anciens fichiers.
+//   • retargeting : { migre (le document _meta/retargeting_migrated existe),
+//     leadsWb (fiches leads dont l'identifiant commence par 'wb_' : plage sur
+//     l'identifiant, agrégat count(), repli select() sans champ), methode }.
+//   • noms (seulement avec h = 1 à 200 empreintes de 16 hex, sinon 400) :
+//     empreinte d'un nom = 16 premiers hex de sha256 du nom en minuscules,
+//     sans accents (NFD), tout hors a-z 0-9 → espace, mots triés, joints par
+//     une espace. Calculée pour chaque fiche leads isClient == true et chaque
+//     document clients, sur nom, name, nomComplet, fullName, leadName,
+//     clientName, prenom + nom, prenom + name, firstName + lastName (lecture
+//     restreinte à ces champs par select). Rend { demandes, trouves,
+//     absents: [empreintes demandées non trouvées], parCollection, lus } —
+//     jamais un nom.
 // ============================================================================
 'use strict';
 
@@ -398,8 +420,9 @@ async function appliquer(list, attendu) {
 
 async function jobClientSince(q) {
   const list = await lireNonTimestamp();
-  if (String(q.apply || '') === '1') {
-    if (String(q.confirm || '') !== 'CONVERTIR' || !/^\d+$/.test(String(q.attendu || ''))) {
+  if (q.apply != null && String(q.apply) === '1') {
+    /* Des TEXTES exactement (un tableau [x] donnerait String([x]) === x). */
+    if (typeof q.apply !== 'string' || q.confirm !== 'CONVERTIR' || typeof q.attendu !== 'string' || !/^\d+$/.test(q.attendu)) {
       return { code: 400, corps: { ok: false, erreur: 'apply exige confirm=CONVERTIR et attendu=N (nombre de fiches convertibles) : rien n\'est écrit' } };
     }
     return appliquer(list, parseInt(q.attendu, 10));
@@ -460,6 +483,99 @@ async function jobCommissions(q) {
   return { code: 200, corps: { ok: true, commissions: out } };
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   JOB 3 — état avant de ne plus servir d'anciens fichiers (lecture seule)
+   ══════════════════════════════════════════════════════════════════ */
+/* Nombre de documents d'une requête : agrégat count() (firebase-admin 12,
+   @google-cloud/firestore 7 : une seule lecture facturée par lot de 1 000) ;
+   repli sur select() sans champ (identifiants seuls) si l'agrégat échoue. */
+async function compter(q) {
+  if (typeof q.count === 'function') {
+    try {
+      const s = await q.count().get();
+      const n = s && typeof s.data === 'function' ? s.data().count : null;
+      if (typeof n === 'number' && isFinite(n)) return { n: n, methode: 'count' };
+    } catch (e) { /* repli ci-dessous */ }
+  }
+  const snap = await q.select().get();
+  return { n: snap.size, methode: 'select' };
+}
+
+/* Empreinte d'un nom : 16 premiers hex de sha256 du nom normalisé —
+   minuscules, accents retirés (NFD), tout caractère hors a-z 0-9 remplacé
+   par une espace, mots triés, joints par une espace. « Jean DUPONT » et
+   « Dupont Jean » ont la même empreinte. null si rien ne reste. */
+function normNom(v) {
+  if (typeof v !== 'string') return '';
+  const mots = v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean);
+  mots.sort();
+  return mots.join(' ');
+}
+function empreinteNom(v) {
+  const n = normNom(v);
+  return n ? crypto.createHash('sha256').update(n, 'utf8').digest('hex').slice(0, 16) : null;
+}
+function texte(v) { return typeof v === 'string' ? v : ''; }
+/* Toutes les façons plausibles dont une fiche porte le nom de la personne
+   (lues dans migrate-clients.html : leads.nom ; csm-clients.html : nom ||
+   name, précédé de prenom ; fiches coaching : nom, name…). */
+const CHAMPS_NOM = ['nom', 'name', 'prenom', 'firstName', 'lastName', 'nomComplet', 'fullName', 'leadName', 'clientName'];
+function nomsPossibles(d) {
+  const out = [];
+  ['nom', 'name', 'nomComplet', 'fullName', 'leadName', 'clientName'].forEach(function (k) { out.push(texte(d[k])); });
+  out.push(texte(d.prenom) + ' ' + texte(d.nom), texte(d.prenom) + ' ' + texte(d.name), texte(d.firstName) + ' ' + texte(d.lastName));
+  return out;
+}
+
+async function jobEtat(q) {
+  /* Paramètre h (facultatif) validé AVANT toute lecture. */
+  let demandes = null;
+  if (q.h != null) {
+    if (typeof q.h !== 'string') return { code: 400, corps: { ok: false, erreur: 'h : une seule liste d\'empreintes séparées par des virgules' } };
+    const l = q.h.split(',').map(function (x) { return x.trim().toLowerCase(); });
+    if (!l.length || l.length > 200 || l.some(function (x) { return !/^[0-9a-f]{16}$/.test(x); })) {
+      return { code: 400, corps: { ok: false, erreur: 'h : 1 à 200 empreintes de 16 caractères hexadécimaux, séparées par des virgules' } };
+    }
+    demandes = {};
+    l.forEach(function (x) { demandes[x] = 1; });
+  }
+
+  /* Retargeting : import des contacts webinaire déjà fait ? */
+  const FP = admin.firestore.FieldPath.documentId();
+  const migreSnap = await db.collection('_meta').doc('retargeting_migrated').get();
+  const wb = await compter(db.collection('leads').where(FP, '>=', 'wb_').where(FP, '<', 'wb`'));
+  const corps = { ok: true, mode: 'lecture', retargeting: { migre: !!(migreSnap && migreSnap.exists), leadsWb: wb.n, methode: wb.methode }, noms: null };
+
+  if (demandes) {
+    const trouves = {}, parCol = { leads: {}, clients: {} }, lus = { leads: 0, clients: 0 };
+    function examiner(col, doc) {
+      lus[col]++;
+      const d = doc.data() || {};
+      nomsPossibles(d).forEach(function (n) {
+        const h = empreinteNom(n);
+        if (h && demandes[h]) { trouves[h] = 1; parCol[col][h] = 1; }
+      });
+    }
+    /* Seuls les champs de nom sont lus (select) : rien d'autre ne quitte la base. */
+    const qL = db.collection('leads').where('isClient', '==', true);
+    const sL = await qL.select.apply(qL, CHAMPS_NOM).get();
+    sL.forEach(function (doc) { examiner('leads', doc); });
+    const qC = db.collection('clients');
+    const sC = await qC.select.apply(qC, CHAMPS_NOM).get();
+    sC.forEach(function (doc) { examiner('clients', doc); });
+    const liste = Object.keys(demandes);
+    corps.noms = {
+      demandes: liste.length,
+      trouves: liste.filter(function (h) { return trouves[h]; }).length,
+      absents: liste.filter(function (h) { return !trouves[h]; }).sort(),
+      parCollection: { leads: Object.keys(parCol.leads).length, clients: Object.keys(parCol.clients).length },
+      lus: lus
+    };
+  }
+  return { code: 200, corps: corps };
+}
+
 module.exports = async function (req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'GET' || !keyOk(req)) { res.status(404).end(); return; }
@@ -468,11 +584,12 @@ module.exports = async function (req, res) {
     let r;
     if (q.job === 'clientsince') r = await jobClientSince(q);
     else if (q.job === 'commissions') r = await jobCommissions(q);
-    else r = { code: 400, corps: { ok: false, erreur: 'job=clientsince ou job=commissions' } };
+    else if (q.job === 'etat') r = await jobEtat(q);
+    else r = { code: 400, corps: { ok: false, erreur: 'job=clientsince, job=commissions ou job=etat' } };
     res.status(r.code).json(r.corps);
   } catch (e) {
     res.status(500).json({ ok: false, erreur: String((e && e.message) || e).slice(0, 300) });
   }
 };
 module.exports.config = { maxDuration: 60 };
-module.exports._test = { analyser: analyser, empreinte: empreinte, enveloppe: enveloppe };
+module.exports._test = { analyser: analyser, empreinte: empreinte, enveloppe: enveloppe, empreinteNom: empreinteNom, normNom: normNom };
