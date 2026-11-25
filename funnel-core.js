@@ -868,7 +868,16 @@
     if (!s) return null;
     var iso = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/);
     if (iso) {
-      var d = new Date(+iso[1], +iso[2] - 1, +iso[3], +(iso[4] || 0), +(iso[5] || 0), +(iso[6] || 0));
+      /* Fuseau écrit dans le texte (« …Z », « …+02:00 ») : l'instant est donné,
+         on le lit tel quel. Avant le 25/11/2026 le « Z » était ignoré et la
+         date lue comme une heure locale (1 à 2 h de décalage). */
+      if (iso[4] != null && /(?:Z|[+-]\d{2}:?\d{2})$/i.test(s)) {
+        var pz = Date.parse(s);
+        if (!isNaN(pz)) return pz;
+      }
+      /* Sans fuseau : c'est une heure de PARIS (import Bigin, date d'un
+         prélèvement…), quel que soit le fuseau de l'appareil ou du serveur. */
+      var d = SC.dateParis(+iso[1], +iso[2] - 1, +iso[3], +(iso[4] || 0), +(iso[5] || 0), +(iso[6] || 0), 0);
       return isNaN(d.getTime()) ? null : d.getTime();
     }
     var fr = s.match(/(\d{1,2})\s+([A-Za-zàâäéèêëïîôöûüç]+)\.?\s+(\d{4})/);
@@ -876,7 +885,7 @@
       var table = [['janv',0],['févr',1],['fevr',1],['mars',2],['avri',3],['mai',4],['juin',5],['juil',6],['aout',7],['août',7],['sept',8],['octo',9],['nove',10],['déce',11],['dece',11]];
       var mn = fr[2].toLowerCase(); var idx = -1;
       for (var i = 0; i < table.length; i++) { if (mn.indexOf(table[i][0]) === 0) { idx = table[i][1]; break; } }
-      if (idx >= 0) { var d2 = new Date(+fr[3], idx, +fr[1]); return isNaN(d2.getTime()) ? null : d2.getTime(); }
+      if (idx >= 0) { var d2 = SC.dateParis(+fr[3], idx, +fr[1], 0, 0, 0, 0); return isNaN(d2.getTime()) ? null : d2.getTime(); }
     }
     var p = Date.parse(s);
     return isNaN(p) ? null : p;
@@ -894,9 +903,29 @@
   }
 
   /* ── Formats ── */
-  function pad2(n) { return String(n).padStart(2, '0'); }
+  function pad2(n) { return SC.pad2(n); }
 
-  function isoDate(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+  /* Clé de jour 'AAAA-MM-JJ' — TOUJOURS à l'heure de Paris (référentiel §7).
+     Avant le 25/11/2026 : jour de l'appareil (ou du serveur, en UTC), ce qui
+     rangeait un événement de 00 h 30 dans la veille côté serveur. Accepte un
+     Date, des millisecondes ou un Timestamp. */
+  function isoDate(d) { return SC.jourParis(d); }
+  /* Calendrier pur (aucun fuseau) : jour suivant d'une clé 'AAAA-MM-JJ',
+     nombre de jours d'un mois (m1 de 1 à 12), liste des jours d'une plage. */
+  function jourSuivant(iso) {
+    var p = String(iso).split('-');
+    return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2] + 1)).toISOString().slice(0, 10);
+  }
+  function joursDuMois(y, m1) { return new Date(Date.UTC(y, m1, 0)).getUTCDate(); }
+  function joursEntre(aIso, bIso) {
+    var out = [], cur = String(aIso), guard = 0;
+    while (cur <= bIso && guard++ < 4000) { out.push(cur); cur = jourSuivant(cur); }
+    return out;
+  }
+  function frJour(iso) {
+    var p = String(iso || '').split('-');
+    return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : String(iso || '');
+  }
 
   function median(arr) {
     if (!arr || !arr.length) return null;
@@ -982,7 +1011,7 @@
   function frDateMs(v) {
     var m = String(v || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
     if (!m) return parseFlexMs(v);
-    var d = new Date(+m[3], +m[2] - 1, +m[1], 12, 0, 0, 0);
+    var d = SC.dateParis(+m[3], +m[2] - 1, +m[1], 12, 0, 0, 0);   /* midi à Paris, quel que soit l'appareil */
     return isNaN(d.getTime()) ? null : d.getTime();
   }
 
@@ -1114,6 +1143,7 @@
     var endTs = tsOf(P.end);
     var sIso = isoDate(P.start), eIso = isoDate(P.end);
     var byId = {};
+    DATA.bookingsError = null;
     var qA = db.collection('bookings').where('createdAt', '>=', startTs).where('createdAt', '<=', endTs).get();
     var qB = db.collection('bookings').where('date', '>=', sIso).where('date', '<=', eIso).get();
     var laMs = lookaheadEndMsFor(P);
@@ -1149,7 +1179,13 @@
         d._createdMs = parseFlexMs(d.createdAt);
         DATA.bookingsTtb.push(d);
       });
-    }).catch(function (e) { console.warn('[funnel] bookings', e.message); DATA.bookings = []; DATA.bookingsTtb = []; });
+    }).catch(function (e) {
+      console.warn('[funnel] bookings', e.message);
+      DATA.bookings = []; DATA.bookingsById = {}; DATA.bookingsTtb = [];
+      /* Lecture des RDV en échec : dit à l'écran (k.erreursLecture), jamais
+         des zéros muets (audit 25/11/2026). */
+      DATA.bookingsError = e.message || 'lecture impossible';
+    });
   }
 
   /* Leads devenus CLIENTS dans la période (clientSince) — source de vérité
@@ -1179,16 +1215,23 @@
      il n'est alors pas dans DATA.bookings. On le lit par fiche (quelques
      dizaines de lectures au plus) pour connaître le canal (Self Booking /
      Setting), le closer et le setter du close par la même règle partout.
-     → DATA.closeBookings = { leadId: [RDV close…] } */
+     → DATA.closeBookings = { leadId: [RDV close…] }
+
+     Correctif du 25/11/2026 : la lecture se fait pour TOUTES les fiches
+     gagnées, y compris celles qui ont déjà un RDV « close » dans la période
+     chargée. Avant, une fiche à deux RDV closés (28/10 Self Booking, 05/11
+     setting) prenait pour porteur celui que la période affichée contenait :
+     son canal, son closer et son setter changeaient avec la période choisie.
+     Le porteur est désormais le PREMIER RDV closé de la fiche, toujours le
+     même. Une lecture en échec est dite (DATA.closeBookingsError). */
   function loadCloseBookings(db, DATA, TYPE_MAP) {
     DATA.closeBookings = {};
-    var known = {};
-    (DATA.bookings || []).forEach(function (b) { if (b && b.outcome === 'close' && b.leadId) known[b.leadId] = 1; });
+    DATA.closeBookingsError = null;
     var ids = {};
-    (DATA.closedLeads || []).forEach(function (l) { if (l && l._id && !known[l._id]) ids[l._id] = 1; });
+    (DATA.closedLeads || []).forEach(function (l) { if (l && l._id) ids[l._id] = 1; });
     (DATA.payments || []).forEach(function (p) {
       var l = p && p._payClose && p._payClose.lead;
-      if (l && l._id && !known[l._id]) ids[l._id] = 1;
+      if (l && l._id) ids[l._id] = 1;
     });
     var list = Object.keys(ids);
     if (!list.length) return Promise.resolve();
@@ -1201,7 +1244,10 @@
           d._class = classifyBooking(d, TYPE_MAP || {});
           (DATA.closeBookings[id] = DATA.closeBookings[id] || []).push(d);
         });
-      }).catch(function (e) { console.warn('[funnel] RDV porteur', e.message); });
+      }).catch(function (e) {
+        console.warn('[funnel] RDV porteur', e.message);
+        DATA.closeBookingsError = e.message || 'lecture impossible';
+      });
     }));
   }
 
@@ -1342,9 +1388,11 @@
           l'e-mail ni le téléphone ne sont ceux d'une fiche de ① ;
        ③ les paiements créés dans la période sans fiche gagnée (résolus par
           resolvePaymentLeads), regroupés par client.
-     Un paiement n'est rattaché qu'UNE fois ; un paiement qui porte un leadId
-     ne sert jamais une autre fiche. Les closes annulés (verdict revClient)
-     sortent dans `annules`.
+     Un paiement n'est rattaché qu'UNE fois ; un paiement qui porte le leadId
+     d'une fiche gagnée de la période ne sert jamais une autre fiche (si sa
+     fiche n'est pas une fiche gagnée de la période, il suit le client par
+     e-mail / téléphone). Les closes annulés (verdict revClient) sortent dans
+     `annules`.
 
      Canal d'un close (Self Booking / Setting) : classe du RDV porteur ; à
      défaut la réponse du closer (closedData.sb) ; à défaut l'étape de la
@@ -1371,12 +1419,28 @@
     payments.forEach(function (p) { if (p) p._matched = false; });
 
     function clsOf(b) { return b._class || SC.classifyBooking(b, typeMap); }
+    /* Fiches gagnées de la période (filtre de l'écran ou non) : chacune
+       réclame elle-même les paiements qui portent son identifiant. */
+    var ficheGagnee = {};
+    (o.closedLeads || []).forEach(function (l) {
+      if (!l || l._merged === true || !l._id) return;
+      var ms0 = parseFlexMs(l.clientSince);
+      if (ms0 == null || ms0 < startMs || ms0 > endMs) return;
+      ficheGagnee[l._id] = 1;
+    });
     function payListFor(leadId, email, phone) {
       var list = revPaymentsFor(idx, leadId, email, phone).filter(function (p) {
         if (p._matched) return false;
-        /* Un paiement rattaché à une fiche ne sert jamais une AUTRE fiche
-           (ni un RDV sans fiche) : même e-mail ou même téléphone ne suffit pas. */
-        if (p.leadId && p.leadId !== leadId) return false;
+        /* Un paiement rattaché à une AUTRE fiche gagnée de la période lui
+           revient : même e-mail ou même téléphone ne suffit pas (deux clients
+           qui partagent un numéro ne se prennent pas leurs contrats).
+           Correctif du 25/11/2026 : si la fiche du paiement n'est PAS une
+           fiche gagnée de la période (doublon jamais passé client, fiche
+           fusionnée, RDV closé sans fiche liée), le rapprochement par
+           e-mail / téléphone s'applique — c'est la règle de Qualité leads
+           (08/11/2026). Sans ce repli, ce paiement n'était compté nulle part
+           et le close sortait « sans paiement » alors que le paiement existe. */
+        if (p.leadId && p.leadId !== leadId && ficheGagnee[p.leadId]) return false;
         return true;
       });
       list.forEach(function (p) { p._matched = true; });
@@ -1531,7 +1595,11 @@
       if (ms == null) ms = startMs;
       var carrier = lead ? carrierOf(lead._id) : null;
       var rv = revClient(g.list, lead, null);
-      var cn = canalDe(carrier, lead, typeof pc.sb === 'boolean' && lead ? pc.sb : null);
+      /* Correctif du 25/11/2026 : pc.sb ne dit rien de plus que l'étape de la
+         fiche (déjà lue par canalDe). Le passer en repli faisait écrire
+         « canal lu sur l'étape » pour une fiche qui n'est à aucune étape
+         gagnée : c'est un canal INCONNU, et il doit le rester. */
+      var cn = canalDe(carrier, lead, null);
       push({
         key: key, leadId: lead ? lead._id : null, name: pc.name, ms: ms, day: SC.jourParis(ms), src: 'paiement', signal: 'paiement',
         sb: cn.canal === 'self', canal: cn.canal, canalSrc: cn.src, canalEcart: cn.ecart,
@@ -1587,6 +1655,7 @@
       })
       .then(function () { return loadCloseBookings(db, D, o.typeMap || {}); })
       .then(function () {
+        if (D.closeBookingsError) erreurs.push('RDV porteurs des closes (canal, closer et setter peuvent manquer) : ' + D.closeBookingsError);
         var res = buildCloses({
           closedLeads: D.closedLeads, bookings: D.bookings, closeBookings: D.closeBookings, payments: D.payments,
           typeMap: o.typeMap || {}, start: o.start, end: o.end, leadOk: o.leadOk, rdvOk: o.rdvOk, payCloseOk: o.payCloseOk,
@@ -1606,9 +1675,12 @@
      (validé Adrien 14/07). Chaque doc : totalAmount (contrat TTC),
      paidAmount (encaissé réel à date), paymentsHistory[] (chaque
      prélèvement daté), leadId / leadEmail, closerSlug, status.
-     Croisement par client gagné : collecté = paidAmount du client (→ HT),
-     repli sur l'encaissé déclaré aux cartes du Close. La collection est
-     petite (dizaines de docs) → chargée en entier, croisée côté client. */
+     Croisement par client gagné : collecté = prélèvements réellement passés
+     (→ HT). Le « collecté déclaré » aux cartes du Close n'y entre JAMAIS
+     (règle du 13/10/2026) : un close sans paiement a un collecté à 0 et il
+     est signalé « sans paiement ». La collection est petite (dizaines de
+     docs) → chargée en entier, croisée côté client. Lecture en échec :
+     DATA.paymentsError, dit à l'écran. */
   function loadPayments(db, DATA) {
     DATA.payments = [];
     DATA.paymentsError = null;
@@ -1703,12 +1775,11 @@
          Sans ça, commSetting — donc le coût setting et le coût / RDV NB —
          serait silencieusement sous-évalué. */
       var mks = {};
-      var d = new Date(P.start.getFullYear(), P.start.getMonth() - 1, 1);
-      var lastMk = new Date(P.end.getFullYear(), P.end.getMonth() + 1, 1);
-      while (d.getTime() <= lastMk.getTime()) {
-        mks[d.getFullYear() + '-' + pad2(d.getMonth() + 1)] = 1;
-        d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-      }
+      /* Mois de Paris (référentiel §7), du mois précédant le début au mois
+         suivant la fin. */
+      var mkA = SC.moisParis(P.start).split('-'), mkB = SC.moisParis(P.end).split('-');
+      var iA = (+mkA[0]) * 12 + (+mkA[1] - 1) - 1, iB = (+mkB[0]) * 12 + (+mkB[1] - 1) + 1;
+      for (var iM = iA; iM <= iB; iM++) mks[Math.floor(iM / 12) + '-' + pad2(iM % 12 + 1)] = 1;
       var proms = [];
       Object.keys(slugs).forEach(function (slug) {
         Object.keys(mks).forEach(function (mk) {
@@ -1727,20 +1798,50 @@
     });
   }
 
-  /* Chaînes de replanification — un RDV replanifié pointe vers son
-     remplaçant (rescheduledToId). Pour statuer une chaîne créée dans la
-     période il faut son RDV TERMINAL, qui peut avoir été créé après la fin
-     de la période (absent des 2 requêtes bookings) → on va chercher les
-     chaînons manquants un par un (rarissime : quelques docs max). Ils vont
-     dans bookingsById UNIQUEMENT (jamais dans les compteurs pris/tenue). */
+  /* Chaînes de replanification — un RDV déplacé pointe vers son remplaçant :
+     rescheduledToId (report) ou transferredTo (transfert à un autre expert,
+     traité comme un report — décision D7). Une seule lecture du lien :
+     StatsCore.suivantId. Pour statuer une chaîne créée dans la période il
+     faut son RDV TERMINAL, qui peut avoir été créé après la fin de la période
+     (absent des 2 requêtes bookings) → on va chercher les chaînons manquants
+     un par un (rarissime : quelques docs max). Ils vont dans bookingsById
+     UNIQUEMENT (jamais dans les compteurs pris/tenue). */
+  /* RDV terminal d'une chaîne : on suit les remplaçants connus (byId) tant
+     qu'il y en a. Exporté (FunnelCore.rdvTerminal) : une liste nominative
+     doit afficher le résultat du DERNIER RDV de la chaîne, pas le statut du
+     premier. */
+  function rdvTerminal(b, byId) {
+    var cur = b, guard = 0;
+    while (cur && guard++ < 10) {
+      var nid = SC.suivantId(cur);
+      if (!nid) break;
+      var nxt = (byId || {})[nid];
+      if (!nxt || nxt === cur) break;
+      cur = nxt;
+    }
+    return cur;
+  }
+  /* Origine d'un RDV compté à sa date : 'reporte' (nouveau créneau d'un RDV
+     déplacé ou transféré), 'avant' (posé avant le début de la période),
+     'periode', ou 'inconnu' (date de pose absente — jamais rangé « avant »). */
+  function origineRdv(b, startMs) {
+    if (SC.estRemplacant(b)) return 'reporte';
+    var c = (b && b._createdMs != null) ? b._createdMs : parseFlexMs(b && b.createdAt);
+    if (c == null) return 'inconnu';
+    return c < startMs ? 'avant' : 'periode';
+  }
+
   function resolveChains(db, DATA, TYPE_MAP) {
     function missingTargets() {
       var ids = [];
       Object.keys(DATA.bookingsById).forEach(function (bid) {
         var cur = DATA.bookingsById[bid], guard = 0;
-        while (cur && cur.rescheduledToId && guard++ < 10) {
-          var nxt = DATA.bookingsById[cur.rescheduledToId];
-          if (!nxt) { if (ids.indexOf(cur.rescheduledToId) < 0) ids.push(cur.rescheduledToId); break; }
+        while (cur && guard++ < 10) {
+          var nid = SC.suivantId(cur);
+          if (!nid) break;
+          var nxt = DATA.bookingsById[nid];
+          if (!nxt) { if (ids.indexOf(nid) < 0) ids.push(nid); break; }
+          if (nxt === cur) break;
           cur = nxt;
         }
       });
@@ -1883,8 +1984,21 @@
     function lookaheadEndMs() { return lookaheadEndMsFor(P); }
 
     var k = {};
-    var todayIso = isoDate(new Date());
+    /* « Maintenant » : UN instant pour tout le calcul — c'est lui qui sépare
+       « à statuer » (créneau terminé) de « à venir ». ctx.now (millisecondes)
+       permet de rejouer un calcul à heure fixe (tests). */
+    var NOW = (typeof ctx.now === 'number' && isFinite(ctx.now)) ? ctx.now : Date.now();
     var laEnd = lookaheadEndMsFor(P); // borne des parcours par lead (TTC/TTB/SMS/joignabilité)
+
+    /* Lectures en échec ou tronquées : dites à l'écran, jamais un zéro muet
+       (référentiel P7). La page affiche chaque texte tel quel. */
+    k.closedLeadsTruncated = !!DATA.closedLeadsTruncated;
+    k.erreursLecture = [];
+    if (DATA.bookingsError) k.erreursLecture.push('Lecture des RDV impossible (' + DATA.bookingsError + ') : RDV, Présents, Pitchés et RDV pris sont à zéro ou incomplets.');
+    if (DATA.closedLeadsError) k.erreursLecture.push('Lecture des fiches gagnées impossible (' + DATA.closedLeadsError + ') : Closes, Contracté et Collecté sont incomplets.');
+    if (DATA.paymentsError) k.erreursLecture.push('Lecture du module Paiements impossible (' + DATA.paymentsError + ') : le Contracté affiché est le tarif déclaré au close, le Collecté est à 0 et les closes repérés par le seul paiement manquent.');
+    if (DATA.closeBookingsError) k.erreursLecture.push('Lecture des RDV porteurs des closes impossible (' + DATA.closeBookingsError + ') : le canal (Self Booking / Setting), le closer ou le setter de certains closes peuvent manquer.');
+    if (k.closedLeadsTruncated) k.erreursLecture.push('Liste des clients gagnés tronquée : la période contient plus de ' + CLOSED_LEADS_LIMIT + ' fiches gagnées. Réduis la période pour un total exact.');
 
     /* ── Index leads (cohorte + ré-optins) ── */
     var leadsById = {}, leadsByP9 = {}, leadsByEmail = {};
@@ -1970,25 +2084,60 @@
       return srcMatch(bookingSource(b, TMETA));
     }
 
+    /* ══ CLOSES — LA LISTE UNIQUE (FunnelCore.buildCloses, décision D1) ══
+       Construite ICI, une fois, avec les filtres de l'écran : tout ce qui
+       parle de closes plus bas (héro, montants, créatives, taux, contrôle de
+       cohérence, tableau des pages) lit cette liste — aucun autre compte. */
+    var CL = buildCloses({
+      closedLeads: DATA.closedLeads || [], bookings: DATA.bookings || [], closeBookings: DATA.closeBookings || {},
+      payments: DATA.payments || [], typeMap: ctx.typeMap || {}, start: P.start, end: P.end,
+      leadOk: function (l) { return tunnelMatch(leadTunnel(l)) && srcMatch(leadSource(l, TMETA)); },
+      rdvOk: bookingMatches,
+      payCloseOk: function (pc) {
+        if (pc.tunnel && !tunnelMatch(pc.tunnel)) return false;
+        if (!pc.tunnel && tunnelFilter !== 'all') return false;
+        return srcMatch(pc.lead ? leadSource(pc.lead, TMETA) : 'other');
+      },
+      resoudrePersonne: ctx.resoudrePersonne
+    });
+    /* Closes annulés, par fiche et par RDV porteur : un RDV closé dont le
+       close est annulé ne compte nulle part comme une vente. */
+    var annuleParFiche = {}, annuleParRdv = {};
+    CL.annules.forEach(function (r) {
+      if (r.leadId) annuleParFiche[r.leadId] = 1;
+      if (r.bookingId) annuleParRdv[r.bookingId] = 1;
+    });
+    function closeAnnuleDe(b) { return !!(b && ((b.leadId && annuleParFiche[b.leadId]) || annuleParRdv[b._id || b.id])); }
+
+    /* ══ AXE « CRÉATION » — RDV pris pendant la période (référentiel §2) ══
+       Population : Self Booking + Setting (StatsCore.estRdvPris) — un RDV créé
+       à la main dans l'Agenda n'est ni pris par le prospect ni posé par un
+       setter. Tête de chaîne : ni remplaçant (report OU transfert d'expert :
+       la prise a été comptée à la création du premier RDV), ni doublon
+       supprimé (compté nulle part). */
+    function teteDeChaine(b) { return !SC.estRemplacant(b) && !SC.estDoublon(b); }
+    function chainTerminal(b) { return rdvTerminal(b, DATA.bookingsById); }
     var created = DATA.bookings.filter(function (b) { return b._inCreated && b._class !== 'excluded' && bookingMatches(b); });
-    var createdFunnelAll = created.filter(function (b) { return b._class === 'self' || b._class === 'setter'; });
-    /* Replanifications exclues des « pris » : le RDV de remplacement porte
-       rescheduledFromId — le compter regonflerait LTB/CPR à chaque report
-       (refonte 07/2026). Il reste compté dans la tenue (date due). */
-    var createdFunnel = createdFunnelAll.filter(function (b) { return !b.rescheduledFromId; });
+    var createdFunnelAll = created.filter(function (b) { return SC.estRdvPris(b._class); });
+    var createdFunnel = createdFunnelAll.filter(teteDeChaine);
     k.booked = createdFunnel.length;
     k.bookedSelf = createdFunnel.filter(function (b) { return b._class === 'self'; }).length;
     k.bookedSetter = k.booked - k.bookedSelf;
-    k.bookedAdmin = created.filter(function (b) { return b._class === 'admin'; }).length;
-    k.rescheduledCreated = createdFunnelAll.length - createdFunnel.length;
+    k.bookedAdmin = created.filter(function (b) { return b._class === 'admin' && teteDeChaine(b); }).length;
+    k.rescheduledCreated = createdFunnelAll.filter(function (b) { return SC.estRemplacant(b) && !SC.estDoublon(b); }).length;
+    k.duplicatesCreated = createdFunnelAll.filter(function (b) { return SC.estDoublon(b); }).length;
     /* RDV pris par tunnel Élite / Business (demande head of sales 14/07) —
-       calculé sur TOUS les tunnels comme leadsByTunnel, via le lead du RDV. */
+       calculé sur TOUS les tunnels comme leadsByTunnel, via le lead du RDV.
+       k.bookedNoTunnel : RDV pris dont la fiche n'est pas dans les leads
+       chargés (lead plus ancien, ou RDV sans fiche) — sans filtre de tunnel,
+       Élite + Business + sans tunnel = RDV pris. */
     k.bookedByTunnel = { elite: 0, business: 0 };
+    k.bookedNoTunnel = 0;
     DATA.bookings.forEach(function (b) {
-      if (!b._inCreated || b.rescheduledFromId) return;
-      if (b._class !== 'self' && b._class !== 'setter') return;
+      if (!b._inCreated || !SC.estRdvPris(b._class) || !teteDeChaine(b)) return;
       var lbt = bookingLead(b);
-      if (lbt && k.bookedByTunnel[lbt._tunnel] != null && srcMatch(leadSrc(lbt))) k.bookedByTunnel[lbt._tunnel]++;
+      if (lbt) { if (k.bookedByTunnel[lbt._tunnel] != null && srcMatch(leadSrc(lbt))) k.bookedByTunnel[lbt._tunnel]++; }
+      else if (srcMatch(bookingSource(b, TMETA))) k.bookedNoTunnel++;
     });
     /* ── VSL à prise de RDV directe (23/09/2026) ──
        Vues et clics « Réserver » : beacon (page_views_daily, pages vsl_*).
@@ -2042,18 +2191,20 @@
       k.vslCtas += Number(v.ctas) || 0;
     });
     DATA.bookings.forEach(function (b) {
-      if (!b._inCreated || b.rescheduledFromId) return;
-      if (b._class !== 'self' && b._class !== 'setter') return;
+      if (!b._inCreated || !SC.estRdvPris(b._class) || !teteDeChaine(b)) return;
       var L = bookingLanding(b);
       if (!L || !isVslPage(L.page) || !pageMatch(L.page)) return;
       var cell = vslCell(L.page, L.variant || '_');
       cell.bookings++;
       k.vslBookings++;
       /* Tenue et close : statués par le RDV terminal de la chaîne (un report
-         ne compte ni deux RDV, ni un RDV perdu). */
+         ne compte ni deux RDV, ni un RDV perdu) — règles StatsCore. `closes`
+         = RDV closés de ces RDV pris (ce n'est pas « Closes », qui compte les
+         clients le jour où ils sont gagnés) ; un RDV closé dont le close est
+         annulé n'y est pas compté. */
       var term = chainTerminal(b);
-      if (ocPresent(term)) cell.present++;
-      if (ocOf(term) === 'close') cell.closes++;
+      if (SC.estPresent(term)) cell.present++;
+      if (SC.detail(term) === 'close' && !closeAnnuleDe(term)) cell.closes++;
     });
     /* ── Lecture par tunnel › page › variante (28/09/2026) ──
        Seules les pages hébergées (clé tunnel__etape) entrent dans la vue
@@ -2144,7 +2295,10 @@
        (replanifications incluses) pour ne pas perdre le marquage SB/NB du lead. */
     createdFunnelAll.forEach(function (b) {
       var l = bookingLead(b);
-      if (!l) { unknownLeadBookings++; return; }
+      /* Compté sur les têtes de chaîne seulement : le chiffre égale alors
+         orgSB.old + orgNB.old (« leads plus anciens »), plus jamais un RDV de
+         report en trop. */
+      if (!l) { if (teteDeChaine(b)) unknownLeadBookings++; return; }
       if (!l._inCohort) { if (b._class === 'setter') setterOld++; return; }
       if (b._class === 'self') selfLeadIds[l._id] = 1;
       else setterLeadIds[l._id] = 1;
@@ -2159,7 +2313,7 @@
         return !b._inCreated && b._createdMs != null && b._createdMs > P.end.getTime() && b._createdMs <= laEnd;
       }))
       .forEach(function (b) {
-        if (b._class !== 'self' && b._class !== 'setter') return;
+        if (!SC.estRdvPris(b._class)) return;
         if (!bookingMatches(b)) return;
         applyTtb(b);
       });
@@ -2174,40 +2328,92 @@
     k.setterOldLeads = setterOld;
     k.unknownLeadBookings = unknownLeadBookings;
 
-    /* ── Tenue — RDV dont la date tombe dans la période ──
-       Cohérence 14/07/2026 : les REPLANIFIÉS sont sortis des annulés (le RDV
-       de remplacement les remplace), et la ventilation se fait par nature
-       SB / NB — plus jamais « par personne » (le nom de l'opérateur qui
-       clique Annuler, ex. la CSM, n'est pas une donnée métier setting). */
-    var due = DATA.bookings.filter(function (b) { return b._inDue && (b._class === 'self' || b._class === 'setter') && bookingMatches(b); });
-    function dueRescheduledF(b) { return b.outcome === 'replanifie' || (b.status === 'cancelled' && b.rescheduled === true); }
-    function dueCancelledF(b) { return !dueRescheduledF(b) && (b.outcome === 'annule' || b.status === 'cancelled'); }
-    k.due = due.length;
-    k.dueRescheduled = due.filter(dueRescheduledF).length;
-    k.dueCancelled = due.filter(dueCancelledF).length;
-    k.dueNoShow = due.filter(function (b) { return b.status === 'no_show'; }).length;
-    k.dueCompleted = due.filter(function (b) { return b.status === 'completed'; }).length;
-    k.dueToStatus = due.filter(function (b) { return (b.status === 'confirmed' || b.status === 'pending') && b.date < todayIso; }).length;
-    k.dueUpcoming = due.filter(function (b) { return (b.status === 'confirmed' || b.status === 'pending') && b.date >= todayIso; }).length;
-    k.kept = k.due - k.dueCancelled - k.dueNoShow - k.dueRescheduled;
-    k.keptPct = k.due > 0 ? k.kept / k.due * 100 : null;
-    k.cancelRate = k.due > 0 ? (k.dueCancelled + k.dueNoShow) / k.due * 100 : null;
-    /* Ventilation SB / NB (demande Adrien : « combien annulation SB et
-       combien annulé du NB ») — mêmes prédicats, sous-ensembles du même due. */
+    /* ══ TENUE — RDV dont la DATE tombe dans la période (référentiel §2) ══
+       Population : RDV de vente (StatsCore.estRdvVente) — Self Booking,
+       Setting ET RDV créés à la main dans l'Agenda (« Manuels », décision
+       D12). Un RDV n'a qu'UN état (StatsCore.etat : le résultat saisi fait
+       foi, le statut ne sert que de repli), donc les colonnes s'additionnent :
+         RDV = annulés + no-show + présents + à statuer + à venir
+         (replanifiés et doublons supprimés hors RDV)
+         Kept = RDV − annulés (le no-show reste dedans)
+         Show-up = présents ÷ (Kept − à venir)
+       Aucun prédicat local : tout vient de StatsCore.compter. La ventilation
+       se fait par nature (SB / NB / Manuels), jamais « par personne ». */
+    var due = DATA.bookings.filter(function (b) { return b._inDue && SC.estRdvVente(b._class) && bookingMatches(b); });
     var dueSelf = due.filter(function (b) { return b._class === 'self'; });
     var dueSetter = due.filter(function (b) { return b._class === 'setter'; });
-    k.dueSB = dueSelf.length;
-    k.dueNB = dueSetter.length;
-    k.cancSB = dueSelf.filter(dueCancelledF).length;
-    k.cancNB = dueSetter.filter(dueCancelledF).length;
-    k.noshowSB = dueSelf.filter(function (b) { return b.status === 'no_show'; }).length;
-    k.noshowNB = dueSetter.filter(function (b) { return b.status === 'no_show'; }).length;
-    k.reschedSB = dueSelf.filter(dueRescheduledF).length;
-    k.reschedNB = dueSetter.filter(dueRescheduledF).length;
+    var dueAdmin = due.filter(function (b) { return b._class === 'admin'; });
+    k.tenue = SC.compter(due, NOW);
+    k.tenueSB = SC.compter(dueSelf, NOW);
+    k.tenueNB = SC.compter(dueSetter, NOW);
+    k.tenueMan = SC.compter(dueAdmin, NOW);
+
+    /* Listes nominatives des MÊMES états (même fonction, même instant). */
+    function listesTenue(list) {
+      var L = { rdv: [], replan: [], doublons: [], annules: [], kept: [], noshow: [], presents: [], pitches: [],
+        disqua: [], sansDetail: [], offres: [], nonCloses: [], rdvCloses: [], aStatuer: [], aVenir: [] };
+      list.forEach(function (b) {
+        var e = SC.etat(b, NOW);
+        if (e === 'doublon') { L.doublons.push(b); return; }
+        if (e === 'replanifie') { L.replan.push(b); return; }
+        L.rdv.push(b);
+        if (e === 'annule') { L.annules.push(b); return; }
+        L.kept.push(b);
+        if (e === 'no_show') L.noshow.push(b);
+        else if (e === 'a_statuer') L.aStatuer.push(b);
+        else if (e === 'a_venir') L.aVenir.push(b);
+        else {
+          L.presents.push(b);
+          var d = SC.detail(b);
+          if (d === 'disqualifie') L.disqua.push(b);
+          else if (d === 'sans_detail') L.sansDetail.push(b);
+          else {
+            L.pitches.push(b);
+            if (d === 'offre') L.offres.push(b);
+            else if (d === 'non_close') L.nonCloses.push(b);
+            else L.rdvCloses.push(b);
+          }
+        }
+      });
+      return L;
+    }
+    var TL = listesTenue(due);
+
+    /* Anciens champs, ALIMENTÉS par l'agrégat (les pages les lisent encore) —
+       sémantique du référentiel, voir le contrat de K :
+         rdvMois = RDV · due = RDV + replanifiés (doublons hors compte)
+         kept = RDV − annulés (no-show DEDANS) · keptPct = kept ÷ RDV
+         cancelRate = annulés ÷ RDV (sans les no-show) */
+    k.rdvMois = k.tenue.rdv;
+    k.due = k.tenue.rdv + k.tenue.replan;
+    k.dueRescheduled = k.tenue.replan;
+    k.dueDoublons = k.tenue.doublons;
+    k.dueCancelled = k.tenue.annules;
+    k.dueNoShow = k.tenue.noshow;
+    k.dueCompleted = k.tenue.presents;          /* « présents » : le résultat fait foi, plus le seul statut « terminé » */
+    k.dueToStatus = k.tenue.aStatuer;           /* créneau TERMINÉ (heure de Paris) sans résultat */
+    k.dueUpcoming = k.tenue.aVenir;
+    k.kept = k.tenue.kept;
+    k.keptPct = k.tenue.keptPct;
+    k.cancelRate = k.tenue.tauxAnnul;
+    k.noShowRate = k.tenue.tauxNoShow;          /* no-show ÷ (Kept − à venir) */
+    k.showUp = k.tenue.showUp;                  /* présents ÷ (Kept − à venir) */
+    /* Par nature — SB + NB + Manuels = total, pour chaque champ. */
+    k.rdvSB = k.tenueSB.rdv; k.rdvNB = k.tenueNB.rdv; k.rdvMan = k.tenueMan.rdv;
+    k.dueSB = k.tenueSB.rdv + k.tenueSB.replan;
+    k.dueNB = k.tenueNB.rdv + k.tenueNB.replan;
+    k.dueMan = k.tenueMan.rdv + k.tenueMan.replan;
+    k.cancSB = k.tenueSB.annules; k.cancNB = k.tenueNB.annules; k.cancMan = k.tenueMan.annules;
+    k.noshowSB = k.tenueSB.noshow; k.noshowNB = k.tenueNB.noshow; k.noshowMan = k.tenueMan.noshow;
+    k.reschedSB = k.tenueSB.replan; k.reschedNB = k.tenueNB.replan; k.reschedMan = k.tenueMan.replan;
+    k.keptSB = k.tenueSB.kept; k.keptNB = k.tenueNB.kept; k.keptMan = k.tenueMan.kept;
+    k.showUpSB = k.tenueSB.showUp; k.showUpNB = k.tenueNB.showUp; k.showUpMan = k.tenueMan.showUp;
+
     /* Origine des annulations (28/09/2026) : bloc `cancellation` posé par tous
        les chemins d'annulation ; repli sur cancelledOrigin (modale résultat
        d'avant) et cancelledReason (API : transfert coach, client désactivé).
-       « inconnu » = annulé avant la traçabilité, jamais estimé. */
+       « inconnu » = annulé avant la traçabilité, jamais estimé. Calculée sur
+       les annulés du MÊME agrégat : la somme des quatre origines = Annulés. */
     function cancOrigin(b) {
       var c = b.cancellation || null;
       var o = (c && c.origin) || b.cancelledOrigin || null;
@@ -2215,56 +2421,33 @@
       return (o === 'prospect' || o === 'equipe' || o === 'systeme') ? o : 'inconnu';
     }
     k.cancByOrigin = { prospect: 0, equipe: 0, systeme: 0, inconnu: 0 };
-    due.filter(dueCancelledF).forEach(function (b) { k.cancByOrigin[cancOrigin(b)]++; });
+    TL.annules.forEach(function (b) { k.cancByOrigin[cancOrigin(b)]++; });
 
-    /* ══ RÉSULTATS D'APPEL — helpers outcome (refonte 07/2026) ══
-       présent (live) = offre|close|non_close|disqualifie (repli : status
-       completed pour les RDV d'avant la refonte) · pitché = offre|close|
-       non_close · replanifié = remplacé par un autre RDV (chaîne). */
-    function ocOf(b) { return b.outcome || null; }
-    function ocCancelled(b) { var o = ocOf(b); return o === 'annule' || (!o && b.status === 'cancelled' && b.rescheduled !== true); }
-    function ocNoShow(b) { var o = ocOf(b); return o === 'no_show' || (!o && b.status === 'no_show'); }
-    function ocPresent(b) { var o = ocOf(b); return o ? (o === 'offre' || o === 'close' || o === 'non_close' || o === 'disqualifie') : b.status === 'completed'; }
-    function ocPitched(b) { var o = ocOf(b); return o === 'offre' || o === 'close' || o === 'non_close'; }
-
-    /* Fin de chaîne : un RDV replanifié est représenté par son remplaçant —
-       le résultat d'une chaîne créée dans la période compte dans la période,
-       même si le RDV final se tient plus tard (axe « RDV créés »). */
-    function chainTerminal(b) {
-      var cur = b, guard = 0;
-      while (cur && cur.rescheduledToId && guard++ < 10) {
-        var nxt = DATA.bookingsById[cur.rescheduledToId];
-        if (!nxt) break;
-        cur = nxt;
-      }
-      return cur;
-    }
-
-    /* Agrégat sur l'axe « RDV créés » : une entrée = une chaîne (RDV initial
-       créé dans la période), statuée par son RDV terminal.
-       KEPT (lignes) = pris − annulés — règle Vincent 14/07 : le no-show
-       reste DANS le kept (le RDV était maintenu), affiché à part. */
+    /* ══ AXE « CRÉATION » — résultat de chaque RDV pris, lu sur le RDV
+       TERMINAL de sa chaîne (report ou transfert suivis par
+       StatsCore.suivantId), par les mêmes règles d'état que la Tenue :
+         n (RDV pris) = annulés + no-show + présents + à statuer + à venir
+                        + sansSuite
+         kept = n − annulés − sansSuite · show-up = présents ÷ (kept − à venir)
+       sansSuite : RDV pris puis déplacé dont le nouveau créneau n'est pas
+       connu (lien de report absent) — ni annulé, ni maintenu : compté à part,
+       jamais dans le Kept ni dans le dénominateur du show-up. Presque
+       toujours 0. */
     function chainAgg(list) {
-      var a = { n: 0, cancelled: 0, noshow: 0, resched: 0, present: 0, disqua: 0, pitched: 0, closesOc: 0, nonCloses: 0, aStatuer: 0, aVenir: 0, sansDetail: 0 };
+      var terms = [], resched = 0;
       list.forEach(function (b0) {
-        var b = chainTerminal(b0);
-        a.n++;
-        if (b !== b0) a.resched++;
-        if (ocCancelled(b)) { a.cancelled++; return; }
-        if (ocNoShow(b)) a.noshow++;
-        if (ocPresent(b)) a.present++;
-        if (ocOf(b) === 'disqualifie') a.disqua++;
-        if (ocPitched(b)) a.pitched++;
-        if (ocOf(b) === 'close') a.closesOc++;
-        if (ocOf(b) === 'non_close') a.nonCloses++;
-        if (!ocOf(b)) {
-          if ((b.status === 'confirmed' || b.status === 'pending') && b.date >= todayIso) a.aVenir++;
-          else if (b.status === 'completed') a.sansDetail++;          // tenu, mais offre/close inconnus (avant refonte)
-          else if (b.status === 'confirmed' || b.status === 'pending') a.aStatuer++;
-        }
+        var t = chainTerminal(b0);
+        if (t !== b0) resched++;
+        terms.push(t);
       });
-      a.kept = a.n - a.cancelled;
-      return a;
+      var t = SC.compter(terms, NOW);
+      return {
+        n: t.total, resched: resched, sansSuite: t.replan + t.doublons, rdv: t.rdv,
+        cancelled: t.annules, noshow: t.noshow, present: t.presents, disqua: t.disqua, pitched: t.pitches,
+        offres: t.offres, closesOc: t.rdvCloses, nonCloses: t.nonCloses, sansDetail: t.sansDetail,
+        aStatuer: t.aStatuer, aVenir: t.aVenir, kept: t.kept, keptEchus: t.keptEchus,
+        keptPct: t.keptPct, showUp: t.showUp, tauxPitch: t.tauxPitch, tauxAnnul: t.tauxAnnul, tauxNoShow: t.tauxNoShow
+      };
     }
     k.chSB  = chainAgg(createdFunnel.filter(function (b) { return b._class === 'self'; }));
     k.chNB  = chainAgg(createdFunnel.filter(function (b) { return b._class === 'setter'; }));
@@ -2287,44 +2470,51 @@
     k.orgNB = rdvOrigin(createdFunnel.filter(function (b) { return b._class === 'setter'; }));
 
     /* Réconciliation des DEUX axes (« créés sur la période » vs « date dans
-       la période ») — chiffres exacts, affichés, plus jamais implicites :
-       · dueCreatedBefore = RDV du mois posés AVANT le début de période
-       · createdDueLater  = chaînes créées ce mois dont le RDV terminal se
-         tient APRÈS la fin de période. */
+       la période ») — chiffres exacts, affichés, plus jamais implicites.
+       Comptés sur les RDV NETS (ceux du chiffre « RDV », replanifiés et
+       doublons déduits), les RDV de report à part :
+       · rdvOrigine = { periode, avant, reporte, inconnu } — leur somme = RDV
+       · dueCreatedBefore = posés AVANT le début de la période
+       · dueReplacement   = nouveau créneau d'un RDV déplacé ou transféré
+       · dueUnknownOrigin = date de pose absente (jamais rangé « avant »)
+       · createdDueLater  = RDV pris sur la période dont le RDV terminal se
+         tient APRÈS la fin de la période. */
+    var startMsP = P.start.getTime();
+    function originesDe(list) {
+      var o = { periode: 0, avant: 0, reporte: 0, inconnu: 0 };
+      list.forEach(function (b) { o[origineRdv(b, startMsP)]++; });
+      return o;
+    }
+    k.rdvOrigine = originesDe(TL.rdv);
+    k.rdvOrigineSB = originesDe(TL.rdv.filter(function (b) { return b._class === 'self'; }));
+    k.rdvOrigineNB = originesDe(TL.rdv.filter(function (b) { return b._class === 'setter'; }));
+    k.rdvOrigineMan = originesDe(TL.rdv.filter(function (b) { return b._class === 'admin'; }));
+    k.dueCreatedBefore = k.rdvOrigine.avant;
+    k.dueReplacement = k.rdvOrigine.reporte;
+    k.dueUnknownOrigin = k.rdvOrigine.inconnu;
     var endIsoStr = isoDate(P.end);
-    k.dueCreatedBefore = due.filter(function (b) { return b._createdMs != null && b._createdMs < P.start.getTime(); }).length;
     k.createdDueLater = 0;
     createdFunnel.forEach(function (b) {
       var t = chainTerminal(b);
       if ((t.date || '') > endIsoStr) k.createdDueLater++;
     });
 
-    /* Résultats sur l'axe « date de RDV » — le mois en totalité (héro L2,
-       Tenue, show-up, taux de close). */
-    function dueAgg(list) {
-      var a = { n: 0, present: 0, disqua: 0, pitched: 0, closesOc: 0, nonCloses: 0, aStatuer: 0, sansDetail: 0 };
-      list.forEach(function (b) {
-        a.n++;
-        if (ocPresent(b)) a.present++;
-        if (ocOf(b) === 'disqualifie') a.disqua++;
-        if (ocPitched(b)) a.pitched++;
-        if (ocOf(b) === 'close') a.closesOc++;
-        if (ocOf(b) === 'non_close') a.nonCloses++;
-        if (!ocOf(b)) {
-          if ((b.status === 'confirmed' || b.status === 'pending') && b.date < todayIso) a.aStatuer++;
-          else if (b.status === 'completed') a.sansDetail++;
-        }
-      });
-      return a;
+    /* Résultats sur l'axe « date de RDV » (héro L2, Tenue, show-up, taux de
+       close) — reconstruits depuis les MÊMES agrégats, anciens noms de champs :
+       n = RDV · present = présents · pitched = pitchés · closesOc = RDV closés
+       (à la date du RDV : ce n'est PAS « Closes »). Identités : present =
+       disqua + pitched + sansDetail ; pitched = offres + nonCloses + closesOc. */
+    function ocDe(t) {
+      return { n: t.rdv, present: t.presents, disqua: t.disqua, pitched: t.pitches, closesOc: t.rdvCloses,
+        nonCloses: t.nonCloses, offres: t.offres, aStatuer: t.aStatuer, aVenir: t.aVenir, sansDetail: t.sansDetail };
     }
-    k.ocDue = dueAgg(due);
+    k.ocDue = ocDe(k.tenue);
     /* Même lecture par nature (23/11/2026, demande Vincent : Global / Self
-       Booking / Setting sous chaque carte du héro). */
-    k.ocDueSB = dueAgg(dueSelf);
-    k.ocDueNB = dueAgg(dueSetter);
-    k.keptSB = k.dueSB - k.cancSB - k.noshowSB - k.reschedSB;
-    k.keptNB = k.dueNB - k.cancNB - k.noshowNB - k.reschedNB;
-    k.ocHasData = due.length > 0 && (k.ocDue.present + k.ocDue.pitched + k.ocDue.closesOc + k.dueCancelled + k.dueNoShow) > 0;
+       Booking / Setting sous chaque carte du héro) + part « Manuels ». */
+    k.ocDueSB = ocDe(k.tenueSB);
+    k.ocDueNB = ocDe(k.tenueNB);
+    k.ocDueMan = ocDe(k.tenueMan);
+    k.ocHasData = k.tenue.rdv > 0 && (k.tenue.presents + k.tenue.annules + k.tenue.noshow) > 0;
 
     /* Échelle CPR — MÊME AXE que la carte « RDV pris SB » (RDV SB créés
        dans la période, chaînes dédupliquées, résultat de fin de chaîne) :
@@ -2516,179 +2706,246 @@
     });
     k.callsByUser = Object.keys(byUser).map(function (uid) { return byUser[uid]; }).sort(function (a, b) { return b.out - a.out; });
 
-    /* ── Show-up RÉEL : présents du mois (résultats RDV) / kept — plus
-       aucune saisie manuelle nulle part (décision Adrien 14/07). ── */
-    k.showup = (k.kept > 0 && k.ocHasData) ? k.ocDue.present / k.kept * 100 : null;
+    /* ── Show-up : présents ÷ (Kept − à venir), règle unique StatsCore (D4).
+       Le no-show reste au dénominateur : il fait baisser le taux. k.showup
+       (ancien nom) et k.showUp portent la même valeur. ── */
+    k.showup = k.showUp;
 
-    /* ── Closes « clients gagnés » — 100 % logiciel, trois chemins :
-       ① fiches passées clientes dans la période (clientSince — posé par le
-          résultat RDV, les cartes du Close, la fiche CRM) ;
-       ② closes RDV sans fiche liée ;
-       ③ paiements créés dans la période sans client gagné correspondant
-          (règle Adrien 14/07 : un paiement = un close commercial, sauf
-          rattrapage d'un client gagné dans une autre période — résolu au
-          chargement par resolvePaymentLeads).
+    /* ══ CLOSES — dérivés de LA LISTE UNIQUE (CL, construite plus haut) ══
+       Un close = un client gagné, compté une fois, le jour où il est gagné
+       (clientSince) — voir FunnelCore.buildCloses. Trois origines de ligne :
+       ① fiche gagnée avec un signal de vente ; ② RDV closé sans fiche ;
+       ③ paiement de la période sans fiche gagnée (resolvePaymentLeads).
+       Canal (Self Booking / Setting) : classe du RDV porteur, à défaut la
+       réponse du closer, à défaut l'étape de la fiche (décision D2) — plus
+       l'étape seule. Closes SB + Closes NB = Closes ; idem pour les montants.
 
-       Montants — règles REVENUE (validées Adrien 13/10/2026, voir revClient) :
-       · collecté  = prélèvements RÉELLEMENT passés (paymentsHistory) — plus
-         de repli sur l'encaissé déclaré aux cartes, plus de mensualité
-         comptée dès la signature du mandat (→ k.collecteMandat « à encaisser »).
-       · contracté = totalAmount des paiements non annulés, sinon tarif des
-         cartes. TTC → HT ÷ 1,2 (sauf vatType 'ht').
-       · CLOSE ANNULÉ (0 € encaissé + paiements annulés ou fiche stoppée) :
-         retiré des closes, du contracté et du collecté, listé à part
-         (k.closesCancelledNames).
-       Rattachement paiement → client : leadId → email → téléphone.
-       Un paiement déjà rattaché ne compte JAMAIS deux fois (_matched). ── */
-    var payIdx = revIndex(DATA.payments);
-    (DATA.payments || []).forEach(function (p) { if (p) p._matched = false; });
-    function payListFor(leadId, email, phone) {
-      var list = revPaymentsFor(payIdx, leadId, email, phone).filter(function (p) { return !p._matched; });
-      list.forEach(function (p) { p._matched = true; });
-      return list;
-    }
-    function declOf(cd) { return cd ? { contracte: Number(cd.contracte) || 0, collecte: Number(cd.collecte) || 0 } : null; }
-    var declByLead = {};   // tarif / encaissé déclarés aux cartes (closeData des RDV)
-    (DATA.bookings || []).forEach(function (b) {
-      if (b.outcome !== 'close' || !b.closeData || !b.leadId) return;
-      declByLead[b.leadId] = declOf(b.closeData);
-    });
+       Montants — règles REVENUE (validées Adrien 13/10/2026, voir revClient),
+       toujours HT, toujours lus dans le verdict `rv` de la ligne :
+       · collecté  = prélèvements RÉELLEMENT passés à ce jour (paymentsHistory).
+         Le « collecté déclaré » par le closer n'y entre JAMAIS ; un mandat
+         signé sans prélèvement va dans k.collecteMandat (1ers prélèvements en
+         attente), qui n'est qu'une PARTIE du reste à encaisser.
+       · contracté = totalAmount des paiements non annulés ; close sans
+         paiement → tarif déclaré au close, signalé (k.collecteMissingNames).
+       · CLOSE ANNULÉ (0 € encaissé + paiements annulés, fiche stoppée ou
+         retirée des clients) : retiré des closes, du contracté et du
+         collecté, listé à part (k.closesCancelledNames, k.coh.annules).
+       Un paiement n'est jamais compté deux fois (marquage dans buildCloses). ── */
+    var closeRowsOk = CL.rows;
+    k.closeRows = CL.toutes;                    /* comptés + annulés (rv.cancelled) — listes cliquables */
+    k.closes = sumCloses(closeRowsOk);
+    k.closesSB = sumCloses(closeRowsOk.filter(function (r) { return r.sb; }));
+    k.closesNB = sumCloses(closeRowsOk.filter(function (r) { return !r.sb; }));
+    k.wonSelf = k.closesSB.closes;
+    k.wonSetting = k.closesNB.closes;
+    k.closesWonTotal = k.closes.closes;
+    k.wonCollecteSB = k.closesSB.paid; k.wonCollecteNB = k.closesNB.paid;
+    k.wonContracteSB = k.closesSB.con; k.wonContracteNB = k.closesNB.con;
+    k.wonCollecte = k.closes.paid;
+    k.wonContracte = k.closes.con;
+    k.collecteMandat = k.closes.pending;        /* Σ rv.pending : 1ers prélèvements en attente */
+    k.resteAEncaisser = k.closes.reste;         /* contracté − collecté */
+    k.panierMoyen = k.closes.panier;            /* contracté ÷ closes */
+    k.collecteParClose = k.closes.collecteParClose;   /* collecté ÷ closes (l'ancien « AOV ») */
+    k.collecteMissing = k.closes.sansPaiement;
+    k.closesNoPayment = k.closes.sansPaiement;
+    k.collecteMissingNames = [];
+    k.payCloseNames = [];
+    /* Canal du close : d'où vient l'information (RDV, réponse du closer,
+       étape, inconnu) — « inconnu » est compté en Setting et signalé. */
+    k.closesCanalSrc = { rdv: 0, declare: 0, etape: 0, inconnu: 0 };
 
-    k.closesCancelledNames = [];
-    /* Une ligne par close compté (ou annulé) — sert aux listes cliquables du
-       héro et au contrôle de cohérence avec Set NB / Close SB (21/11/2026).
-       Rien n'est recalculé : c'est le verdict revClient utilisé ci-dessous. */
-    var closeRows = [];
-    var wonColSB = 0, wonConSB = 0, wonColNB = 0, wonConNB = 0;
-    /* Collecté isolé de la PUBLICITÉ PAYANTE — seul numérateur légitime
-       d'un ROAS, puisque le dénominateur est la dépense pub. */
+    /* Fiches gagnées NON annulées, utilisées en aval (section créatives) ;
+       ventilation publicité / hors publicité sur ces seules fiches : un close
+       sans fiche gagnée (RDV sans fiche, paiement seul) reste « non rattaché »
+       — on ne crédite pas la pub d'un chiffre dont on ignore l'origine. */
+    var closedLeads = [];
     var wonColAds = 0, wonConAds = 0, closesAds = 0;
     var wonColHorsPub = 0, closesHorsPub = 0;
-    var colMissing = 0, noPayCount = 0, mandatSum = 0, colMissingNames = [];
-
-    /* ① Fiches gagnées — les closes annulés sortent ICI de closedLeads, donc
-       de tous les compteurs en aval (créatives comprises). */
-    var closedLeadsAll = (DATA.closedLeads || []).filter(function (l) { return tunnelMatch(leadTunnel(l)) && srcMatch(leadSource(l, TMETA)); });
-    var closedLeads = [];
-    closedLeadsAll.forEach(function (l) {
-      var lem = (l.email || '').toLowerCase().trim();
-      var pays = payListFor(l._id, lem, l.telephone || l.phone);
-      var decl = declByLead[l._id] || declOf(l.closedData);
-      var rv = revClient(pays, l, decl);
-      closeRows.push({ name: l.nom || lem || l._id, leadId: l._id, sb: l.stage === 'closed_won_self', rv: rv, src: 'fiche' });
-      if (rv.cancelled) { k.closesCancelledNames.push((l.nom || lem || l._id) + ' (' + rv.reason + ')'); return; }
+    closeRowsOk.forEach(function (r) {
+      var rv = r.rv;
+      if (k.closesCanalSrc[r.canalSrc] != null) k.closesCanalSrc[r.canalSrc]++;
+      if (!rv.hasPay) k.collecteMissingNames.push(r.name + (rv.declCol > 0 ? ' — collecté déclaré ' + Math.round(rv.declCol) + ' €, non compté' : ''));
+      if (r.src === 'paiement') k.payCloseNames.push(r.name + (r.noLead ? ' (aucune fiche trouvée)' : ''));
+      if (r.src !== 'fiche' || !r.lead) return;
+      var l = r.lead;
       closedLeads.push(l);
-      var sb2 = l.stage === 'closed_won_self';
-      if (!rv.hasPay) {
-        noPayCount++; colMissing++;
-        colMissingNames.push((l.nom || lem || l._id) + (rv.declCol > 0 ? ' — déclaré ' + Math.round(rv.declCol) + ' €' : ''));
-      }
-      mandatSum += rv.pending;
-      var col = rv.paid, con = rv.con;
-      l._wonCol = col;   /* collecté consolidé par fiche — réutilisé par la section « par créative » */
-      l._wonCon = con;   /* contracté (signé HT) — colonne « Chiffre contracté » de Qualité par pub */
+      l._wonCol = rv.paid;   /* collecté consolidé par fiche — réutilisé par la section « par créative » */
+      l._wonCon = rv.con;    /* contracté HT — colonne « Contracté » de Qualité par pub */
       /* Ventilation pub / hors pub — le ROAS global divisait TOUT le
          collecté par la dépense publicitaire, créditant donc les pubs du
          chiffre venu d'Instagram organique, du setting téléphonique et des
          liens partagés à la main. Sur août : 8 600 € au numérateur dont
          5 650 € hors publicité. */
-      if (isAdvertisingLead(l)) { wonColAds += col; wonConAds += con; closesAds++; }
-      else { wonColHorsPub += col; closesHorsPub++; }
-      if (sb2) { wonColSB += col; wonConSB += con; } else { wonColNB += col; wonConNB += con; }
+      if (isAdvertisingLead(l)) { wonColAds += rv.paid; wonConAds += rv.con; closesAds++; }
+      else { wonColHorsPub += rv.paid; closesHorsPub++; }
     });
-    var wonSelfLeads = closedLeads.filter(function (l) { return l.stage === 'closed_won_self'; }).length;
+    var closesSansFiche = closeRowsOk.length - closedLeads.length;   /* RDV sans fiche + paiements seuls */
+    k.closesCancelledNames = CL.annules.map(function (r) { return r.name + ' (' + ((r.rv && r.rv.reason) || 'annulé') + ')'; });
+    k.closesCancelled = CL.annules.length;
+    /* Paiements de la période rattachés à un client gagné à une AUTRE date
+       (diagnostic, sans filtre seulement — ils n'ont pas de tunnel). */
+    k.payCloseOther = (tunnelFilter === 'all' && sourceFilter === 'all') ? CL.autres.map(function (x) { return x.name; }) : [];
 
-    /* ② Closes RDV sans fiche liée : Paiements par email/téléphone, repli cartes. */
-    var closesNoLeadSB = 0, closesNoLeadNB = 0;
-    due.forEach(function (b) {
-      if (b.outcome !== 'close' || b.leadId) return;
-      var bem = (b.prospect && b.prospect.email || '').toLowerCase().trim();
-      var pays3 = payListFor(null, bem, b.prospect && (b.prospect.telephone || b.prospect.phone));
-      var rv3 = revClient(pays3, null, declOf(b.closeData));
-      var nm3 = (b.prospect && b.prospect.nom) || bem || b._id;
-      closeRows.push({ name: nm3, leadId: null, sb: b._class === 'self', rv: rv3, src: 'rdv', date: b.date || '', bookingId: b._id || b.id || null });
-      if (rv3.cancelled) { k.closesCancelledNames.push(nm3 + ' (' + rv3.reason + ')'); return; }
-      if (!rv3.hasPay) { colMissing++; colMissingNames.push(nm3 + (rv3.declCol > 0 ? ' — déclaré ' + Math.round(rv3.declCol) + ' €' : '')); }
-      mandatSum += rv3.pending;
-      if (b._class === 'self') { closesNoLeadSB++; wonColSB += rv3.paid; wonConSB += rv3.con; }
-      else { closesNoLeadNB++; wonColNB += rv3.paid; wonConNB += rv3.con; }
-    });
-
-    /* ③ Closes détectés via Paiements (fiche jamais gagnée / introuvable). */
-    k.payCloseNames = []; k.payCloseOther = [];
-    var payClosesSB = 0, payClosesNB = 0;
-    (DATA.payments || []).forEach(function (p) {
-      if (!p || !p._payClose || p._matched) return;
-      var pc = p._payClose;
-      if (pc.kind === 'other') { if (tunnelFilter === 'all' && sourceFilter === 'all') k.payCloseOther.push(pc.name); return; }
-      if (pc.tunnel && !tunnelMatch(pc.tunnel)) return;
-      if (!pc.tunnel && tunnelFilter !== 'all') return;
-      if (!srcMatch(pc.lead ? leadSource(pc.lead, TMETA) : 'other')) return;
-      p._matched = true;
-      var rv4 = revClient([p], pc.lead || null, null);
-      closeRows.push({ name: pc.name, leadId: (pc.lead && pc.lead._id) || null, sb: !!pc.sb, rv: rv4, src: 'paiement' });
-      if (rv4.cancelled) { k.closesCancelledNames.push(pc.name + ' (' + rv4.reason + ')'); return; }
-      mandatSum += rv4.pending;
-      if (pc.sb) { payClosesSB++; wonColSB += rv4.paid; wonConSB += rv4.con; }
-      else { payClosesNB++; wonColNB += rv4.paid; wonConNB += rv4.con; }
-      k.payCloseNames.push(pc.name + (pc.noLead ? ' (aucune fiche trouvée)' : ''));
-    });
-
-    k.wonSelf = wonSelfLeads + closesNoLeadSB + payClosesSB;
-    k.wonSetting = (closedLeads.length - wonSelfLeads) + closesNoLeadNB + payClosesNB;
-    k.closesWonTotal = k.wonSelf + k.wonSetting;
-
-    /* ── Listes derrière les chiffres du héro (ligne 2) ──
-       Mêmes ensembles et mêmes prédicats que les compteurs : k.rdvMois,
-       k.kept, k.ocDue.present, k.ocDue.pitched, closes, montants. */
-    k.closeRows = closeRows;
+    /* ── Listes derrière les chiffres (héro, Tenue) : les MÊMES ensembles que
+       les compteurs de k.tenue, un RDV dans UN seul état. ──
+       rdvMois = RDV · kept = RDV − annulés (no-show dedans) · live = présents
+       · pitched = pitchés. Champs nominatifs : hors du lien Agence. */
     k.drill = {
-      rdvMois: due.filter(function (b) { return !dueRescheduledF(b); }),
-      kept: due.filter(function (b) { return !dueRescheduledF(b) && !dueCancelledF(b) && b.status !== 'no_show'; }),
-      live: due.filter(ocPresent),
-      pitched: due.filter(ocPitched)
+      rdvMois: TL.rdv, kept: TL.kept, live: TL.presents, pitched: TL.pitches,
+      annules: TL.annules, noshow: TL.noshow, aStatuer: TL.aStatuer, aVenir: TL.aVenir, replan: TL.replan,
+      disqua: TL.disqua, sansDetail: TL.sansDetail, offres: TL.offres, nonCloses: TL.nonCloses, rdvCloses: TL.rdvCloses,
+      manuels: TL.rdv.filter(function (b) { return b._class === 'admin'; }),
+      doublons: TL.doublons
     };
 
-    /* ── Contrôle de cohérence avec les pages équipe (décision Adrien 21/11/2026 :
-       les deux règles restent, chaque écart est NOMMÉ) ──
-       Pages Set NB / Close SB : un close = un RDV au résultat « close », à la
-       date du RDV, SB ou NB selon le RDV. Funnel : un close = une fiche gagnée
-       sur la période (+ RDV closé sans fiche, + paiement sans fiche), SB ou NB
-       selon l'étape de la fiche. Les closes annulés sortent des deux côtés. */
+    /* ══ CONTRÔLE DE COHÉRENCE (décision D1 du 25/11/2026) ══
+       Il ne compare PLUS deux règles de close : tous les écrans lisent la même
+       liste. Il NOMME ce qui explique l'écart entre « Closes » (clients gagnés,
+       à la date de la vente) et « RDV closés » (RDV au résultat close, à la
+       date du RDV), et ce qui mérite une vérification :
+         closesSansRdv      closes sans RDV au résultat close (vente validée
+                            sur la fiche, ou repérée par le paiement)
+         ecartsCanal        RDV porteur et réponse du closer divergent (la
+                            commission suit la réponse du closer)
+         sansSignal         fiches marquées clientes sans vente enregistrée
+                            (NON comptées dans Closes)
+         annules            closes annulés (retirés partout)
+         rdvClosesHorsListe RDV closés de la période dont le client n'est pas
+                            une ligne de la période (gagné à une autre date,
+                            ou fiche jamais passée cliente)
+         doublonsRdv        clients ayant deux RDV au résultat close (un seul
+                            close compté)
+       Chaque entrée : { name, leadId, date, why } en français simple
+       (+ con / paid / sb / rdvDate / bookingId quand ils existent). */
     (function () {
-      var rowByLead = {};
-      closeRows.forEach(function (r) { if (r.leadId) rowByLead[r.leadId] = r; });
-      var coh = { pagesCloses: 0, pagesSB: 0, pagesNB: 0, onlyPages: [], onlyFunnel: [], split: [], dup: [] };
-      var seenLead = {};
-      due.forEach(function (b) {
-        if (b.outcome !== 'close') return;
-        var nm = (b.prospect && b.prospect.nom) || b.leadName || (b.prospect && b.prospect.email) || b._id;
-        var r = b.leadId ? rowByLead[b.leadId] : null;
-        if (r && r.rv && r.rv.cancelled) return;                 // close annulé : retiré partout
-        coh.pagesCloses++;
-        if (b._class === 'self') coh.pagesSB++; else coh.pagesNB++;
-        if (!b.leadId) return;                                    // compté des deux côtés (② ci-dessus)
-        if (seenLead[b.leadId]) { coh.dup.push({ name: nm, leadId: b.leadId, why: 'deux RDV au résultat « close » pour le même client : 2 sur les pages équipe, 1 dans le funnel' }); return; }
-        seenLead[b.leadId] = 1;
-        if (!r) { coh.onlyPages.push({ name: nm, leadId: b.leadId, date: b.date || '', sb: b._class === 'self', why: 'RDV closé dans la période, mais fiche non comptée gagnée sur la période (gagnée à une autre date, pas passée en « gagné », ou hors du filtre affiché)' }); return; }
-        if (r.sb !== (b._class === 'self')) coh.split.push({ name: nm, leadId: b.leadId, date: b.date || '', why: 'RDV ' + (b._class === 'self' ? 'Self Booking' : 'du setting (NB)') + ', mais fiche classée ' + (r.sb ? 'Self Booking' : 'setting (NB)') + ' dans le funnel' });
+      function canalMot(sb) { return sb ? 'Self Booking' : 'Setting (NB)'; }
+      function entree(r, why, date) {
+        var rv = r.rv || {};
+        return { name: r.name, leadId: r.leadId || null, date: date != null ? date : (r.day || ''), why: why,
+          sb: !!r.sb, con: rv.cancelled ? 0 : (rv.con || 0), paid: rv.cancelled ? 0 : (rv.paid || 0),
+          rdvDate: r.rdvDate || '', bookingId: r.bookingId || null };
+      }
+      var coh = { closesSansRdv: [], ecartsCanal: [], sansSignal: [], annules: [], rdvClosesHorsListe: [], doublonsRdv: [] };
+
+      closeRowsOk.forEach(function (r) {
+        if (r.bookingId) return;
+        var why = r.src === 'paiement'
+          ? 'Vente repérée par le module Paiements' + (r.noLead ? ' (aucune fiche trouvée)' : '') + ' : aucun RDV au résultat « Close ». Comptée dans Closes, datée du premier paiement.'
+          : 'Vente validée sur la fiche (' + ({ etape: 'étape « gagné »', paiement: 'paiement rattaché', signature: 'contrat signé' }[r.signal] || 'fiche') + ') : aucun RDV au résultat « Close » n’est rattaché à cette fiche. Comptée dans Closes.';
+        coh.closesSansRdv.push(entree(r, why));
       });
-      closeRows.forEach(function (r) {
-        if (r.rv && r.rv.cancelled) return;
-        if (r.src === 'paiement') { coh.onlyFunnel.push({ name: r.name, leadId: r.leadId, sb: r.sb, why: 'close détecté par le module Paiements seul — aucun RDV au résultat « close »' }); return; }
-        if (r.src === 'fiche' && !seenLead[r.leadId]) coh.onlyFunnel.push({ name: r.name, leadId: r.leadId, sb: r.sb, why: 'fiche gagnée sur la période sans RDV au résultat « close » daté dans la période (RDV d\'un autre mois, close sans RDV, ou RDV non statué)' });
+      CL.ecartsCanal.forEach(function (r) {
+        coh.ecartsCanal.push(entree(r, 'RDV ' + canalMot(r.sb) + ', mais le closer a répondu « ' + canalMot(!r.sb) + ' » au close. Le close est compté ' + canalMot(r.sb) + ' (canal du RDV) ; la commission suit la réponse du closer.'));
       });
+      CL.sansSignal.forEach(function (x) {
+        coh.sansSignal.push({ name: x.name, leadId: x.leadId || null, date: x.day || '',
+          why: 'Fiche marquée cliente le ' + frJour(x.day) + ' sans vente enregistrée (ni étape « gagné », ni RDV au résultat « Close », ni paiement, ni contrat signé)' + (x.stage ? ' — étape actuelle : ' + x.stage : '') + '. Non comptée dans Closes : à vérifier sur la fiche.',
+          sb: false, con: 0, paid: 0, rdvDate: '', bookingId: null });
+      });
+      CL.annules.forEach(function (r) {
+        coh.annules.push(entree(r, 'Close annulé (' + ((r.rv && r.rv.reason) || 'annulé') + ') : retiré de Closes, du Contracté et du Collecté.'));
+      });
+
+      /* Le client d'un RDV est-il une ligne de la période (comptée ou annulée) ? */
+      var ligneParFiche = {}, ligneParRdv = {}, ligneParEmail = {}, ligneParP9 = {};
+      CL.toutes.forEach(function (r) {
+        if (r.leadId) ligneParFiche[r.leadId] = r;
+        if (r.bookingId) ligneParRdv[r.bookingId] = r;
+        var em = '', p9 = null;
+        if (r.lead) { em = lowerTrim(r.lead.email); p9 = phone9(r.lead.telephone || r.lead.phone); }
+        else {
+          /* Ligne sans fiche : e-mail / téléphone du RDV porteur, sinon ceux de la clé. */
+          var bk = r.bookingId ? (DATA.bookingsById || {})[r.bookingId] : null;
+          var pr = (bk && bk.prospect) || {};
+          em = lowerTrim(pr.email) || (r.key.indexOf('e:') === 0 ? r.key.slice(2) : '');
+          p9 = phone9(pr.telephone || pr.phone) || (r.key.indexOf('t:') === 0 ? r.key.slice(2) : null);
+        }
+        if (em && !ligneParEmail[em]) ligneParEmail[em] = r;
+        if (p9 && !ligneParP9[p9]) ligneParP9[p9] = r;
+      });
+      function nomRdv(b) { return (b.prospect && b.prospect.nom) || b.leadName || (b.prospect && b.prospect.email) || b._id || b.id || '—'; }
+      function ligneDuRdv(b) {
+        if (b.leadId) return ligneParFiche[b.leadId] || null;
+        var id = b._id || b.id;
+        if (id && ligneParRdv[id]) return ligneParRdv[id];
+        var em = lowerTrim(b.prospect && b.prospect.email);
+        if (em && ligneParEmail[em]) return ligneParEmail[em];
+        var p9 = phone9(b.prospect && (b.prospect.telephone || b.prospect.phone));
+        return (p9 && ligneParP9[p9]) || null;
+      }
+      var ficheConnue = {};
+      (DATA.closedLeads || []).forEach(function (l) { if (l && l._id) ficheConnue[l._id] = l; });
+      var ps = P.start.getTime(), pe = P.end.getTime();
+      TL.rdvCloses.forEach(function (b) {
+        if (ligneDuRdv(b)) return;
+        var why;
+        var l = b.leadId ? (ficheConnue[b.leadId] || leadsById[b.leadId] || null) : null;
+        var since = l ? parseFlexMs(l.clientSince) : null;
+        if (!b.leadId) why = 'RDV au résultat « Close » sans fiche liée, non retenu comme close sur cette période : à rattacher à la fiche du client.';
+        else if (l && since != null && (since < ps || since > pe)) why = 'Client gagné le ' + frJour(SC.jourParis(since)) + ' : son close est compté à cette date, pas sur cette période.';
+        else if (l && since == null) why = 'RDV au résultat « Close », mais la fiche n’a pas de date de vente (jamais passée cliente) : aucun close compté. À vérifier sur la fiche.';
+        else if (l) why = 'RDV au résultat « Close », mais la fiche n’est pas retenue comme close sur cette période (fiche fusionnée, ou hors du filtre affiché).';
+        else why = 'RDV au résultat « Close », mais la fiche n’est pas gagnée sur cette période (gagnée à une autre date, ou jamais passée cliente) : aucun close compté ici.';
+        coh.rdvClosesHorsListe.push({ name: nomRdv(b), leadId: b.leadId || null, date: b.date || '', why: why,
+          sb: b._class === 'self', con: 0, paid: 0, rdvDate: b.date || '', bookingId: b._id || b.id || null });
+      });
+
+      /* Clients à deux RDV closés : tous les RDV closés connus (période +
+         RDV porteurs lus par fiche), une fois chacun. */
+      var parClient = {}, ordre = [], vu = {};
+      function ajouteRdvClose(b) {
+        if (!b || SC.detail(b) !== 'close') return;
+        var cls = b._class || SC.classifyBooking(b, ctx.typeMap || {});
+        if (!SC.estRdvVente(cls)) return;
+        var id = b._id || b.id;
+        if (id) { if (vu[id]) return; vu[id] = 1; }
+        /* Clé du client : la fiche ; sinon la ligne de close déjà reconnue pour
+           ce RDV (même e-mail / téléphone qu'un client compté) ; sinon son
+           e-mail ou son téléphone. */
+        var key = null;
+        if (b.leadId) key = 'l:' + b.leadId;
+        else {
+          var lg = ligneDuRdv(b);
+          var em = lowerTrim(b.prospect && b.prospect.email);
+          var p9 = phone9(b.prospect && (b.prospect.telephone || b.prospect.phone));
+          key = lg ? lg.key : (em ? 'e:' + em : p9 ? 't:' + p9 : null);
+        }
+        if (!key) return;
+        if (!parClient[key]) { parClient[key] = []; ordre.push(key); }
+        parClient[key].push(b);
+      }
+      (DATA.bookings || []).forEach(ajouteRdvClose);
+      Object.keys(DATA.closeBookings || {}).forEach(function (id) { (DATA.closeBookings[id] || []).forEach(ajouteRdvClose); });
+      var dansPeriode = {};
+      TL.rdvCloses.forEach(function (b) { dansPeriode[b._id || b.id] = 1; });
+      ordre.forEach(function (key) {
+        var list = parClient[key];
+        if (list.length < 2) return;
+        list.sort(function (a, b) { var ka = rdvKey(a), kb = rdvKey(b); return ka < kb ? -1 : ka > kb ? 1 : 0; });
+        var ligne = ligneDuRdv(list[0]);
+        var concerne = !!ligne;
+        list.forEach(function (b) { if (dansPeriode[b._id || b.id]) concerne = true; });
+        if (!concerne) return;
+        var dates = list.map(function (b) { return frJour(b.date); });
+        coh.doublonsRdv.push({ name: nomRdv(list[0]), leadId: list[0].leadId || null, date: list[list.length - 1].date || '',
+          why: list.length + ' RDV au résultat « Close » pour le même client (' + dates.join(', ') + ') : un seul close est compté' + (ligne ? ', le ' + frJour(ligne.day) : '') + '. Le canal, le closer et le setter sont ceux du premier RDV.',
+          sb: list[0]._class === 'self', con: 0, paid: 0, rdvDate: list[0].date || '', bookingId: list[0]._id || list[0].id || null });
+      });
+
+      /* Repères chiffrés du bloc : Closes (liste) et RDV closés (date du RDV). */
+      coh.closes = k.closes.closes;
+      coh.rdvCloses = k.tenue.rdvCloses;
+      /* Alias de TRANSITION (ancien bloc « funnel ↔ pages équipe ») : à ne plus
+         lire — gardés pour qu'une page pas encore mise à jour ne casse pas. */
+      coh.onlyFunnel = coh.closesSansRdv;
+      coh.onlyPages = coh.rdvClosesHorsListe;
+      coh.split = coh.ecartsCanal;
+      coh.dup = coh.doublonsRdv;
+      coh.pagesCloses = k.closes.closes; coh.pagesSB = k.closesSB.closes; coh.pagesNB = k.closesNB.closes;
       k.coh = coh;
     })();
-    k.closesCancelled = k.closesCancelledNames.length;
-    k.wonCollecteSB = Math.round(wonColSB * 100) / 100; k.wonCollecteNB = Math.round(wonColNB * 100) / 100;
-    k.wonContracteSB = Math.round(wonConSB * 100) / 100; k.wonContracteNB = Math.round(wonConNB * 100) / 100;
-    k.wonCollecte = Math.round((wonColSB + wonColNB) * 100) / 100;
-    k.wonContracte = Math.round((wonConSB + wonConNB) * 100) / 100;
-    k.collecteMandat = Math.round(mandatSum * 100) / 100;
-    k.collecteMissing = colMissing;
-    k.collecteMissingNames = colMissingNames;
-    k.closesNoPayment = noPayCount;
 
     /* ── 🎨 Performance par créative — refonte attribution 17/08/2026 ──
        AXE : plus le champ `utm` (texte libre écrasé par le dernier
@@ -2703,7 +2960,8 @@
        (replanifs dédupliquées, comme Prise de RDV) · annulés / no-show =
        RDV ayant lieu dans la période (prédicats de la Tenue, replanifiés
        exclus) · closes = fiches gagnées clientSince période + collecté
-       consolidé (_wonCol — Paiements, repli cartes). Qualifiés = leadScore
+       consolidé (_wonCol — prélèvements réellement passés, liste unique des
+       closes ; jamais le collecté déclaré aux cartes). Qualifiés = leadScore
        4-5 (curseur Leads Live) ; non notés hors moyenne.
 
        ⚠ Le ratio RDV/leads N'EST PAS un LTB : son numérateur accepte les
@@ -2749,14 +3007,13 @@
        dépense pour ses jours à venir, ce n'est pas un trou. */
     var adDates = {};
     (DATA.adsByAd || []).forEach(function (a) { if (a && a.date) adDates[a.date] = 1; });
-    var covEnd = Math.min(P.end.getTime(), Date.now());
+    var covEnd = Math.min(P.end.getTime(), NOW);
     var expected = 0, coveredDays = 0;
-    var dCov = new Date(P.start.getFullYear(), P.start.getMonth(), P.start.getDate());
-    while (dCov.getTime() <= covEnd) {
+    /* Jours de PARIS de la période (référentiel §7), jusqu'à aujourd'hui. */
+    joursEntre(isoDate(P.start), isoDate(covEnd)).forEach(function (jour) {
       expected++;
-      if (adDates[isoDate(dCov)]) coveredDays++;
-      dCov = new Date(dCov.getFullYear(), dCov.getMonth(), dCov.getDate() + 1);
-    }
+      if (adDates[jour]) coveredDays++;
+    });
     k.adSpendDaysExpected = expected;
     k.adSpendDaysCovered = coveredDays;
     k.adSpendCoverage = expected > 0 ? coveredDays / expected * 100 : null;
@@ -2848,17 +3105,17 @@
         var ul = bookingLead(b);
         if (ul) rowOf(axis, ul).booked++; else unattr[axis].booked++;
       });
-      due.forEach(function (b) {
-        var isCancel = dueCancelledF(b);
-        var isNoShow = b.status === 'no_show';
-        if (!isCancel && !isNoShow) return;
+      /* Annulés / no-show / pitchés : les listes de la Tenue (StatsCore.etat),
+         plus aucun prédicat local. */
+      TL.annules.forEach(function (b) {
         var ul2 = bookingLead(b);
-        if (!ul2) { if (isCancel) unattr[axis].cancelled++; else unattr[axis].noshow++; return; }
-        var r2 = rowOf(axis, ul2);
-        if (isCancel) r2.cancelled++; else r2.noshow++;
+        if (ul2) rowOf(axis, ul2).cancelled++; else unattr[axis].cancelled++;
       });
-      due.forEach(function (b) {
-        if (!ocPitched(b)) return;               // honoré = issue close / non close / offre
+      TL.noshow.forEach(function (b) {
+        var ul3 = bookingLead(b);
+        if (ul3) rowOf(axis, ul3).noshow++; else unattr[axis].noshow++;
+      });
+      TL.pitches.forEach(function (b) {          // champ « honored » = PITCHÉS (offre · close · non close)
         var ul4 = bookingLead(b);
         if (ul4) rowOf(axis, ul4).honored++;
       });
@@ -2868,7 +3125,7 @@
         r3.col += (l._wonCol || 0);
         r3.con += (l._wonCon || 0);
       });
-      unattr[axis].closes = closesNoLeadSB + closesNoLeadNB + payClosesSB + payClosesNB;
+      unattr[axis].closes = closesSansFiche;
     });
 
     /* Dépense par ligne : somme des ad_id rattachés à la ligne.
@@ -2973,17 +3230,31 @@
        ROAS : c'est le rapport de tout le chiffre à la seule dépense pub. */
     k.roasOutcome = (k.spend > 0 && k.wonCollecte > 0) ? k.wonCollecte / k.spend : null;
 
-    /* ── Taux de close du mois (bandeau héro — demande Vincent 14/07) :
-       dénominateurs = le mois en totalité (axe date de RDV, replanifiés
-       remplacés déduits), numérateur = clients gagnés de la période. ── */
-    k.rdvMois = Math.max(0, k.due - k.dueRescheduled);
-    k.closeRateRdv   = k.rdvMois > 0 ? k.closesWonTotal / k.rdvMois * 100 : null;
-    k.closeRateLive  = k.ocDue.present > 0 ? k.closesWonTotal / k.ocDue.present * 100 : null;
-    k.closeRateOffre = k.ocDue.pitched > 0 ? k.closesWonTotal / k.ocDue.pitched * 100 : null;
+    /* ── Taux de close (décision D3) — UNE formule, StatsCore.tauxClose :
+       numérateur = « Closes », le chiffre affiché (liste unique, date de la
+       vente) ; dénominateur = RDV, Présents ou Pitchés de la MÊME période et
+       du MÊME périmètre (axe date du RDV). Un close est daté du jour de la
+       vente, un RDV du jour où il a lieu : si les closes dépassent la base
+       (période courte), le taux n'a pas de sens → null (« — »), jamais un
+       pourcentage au-dessus de 100. ── */
+    function tauxCloseDe(closes, t) {
+      return { rdv: SC.tauxClose(closes, t.rdv), presents: SC.tauxClose(closes, t.presents), pitches: SC.tauxClose(closes, t.pitches) };
+    }
+    k.tauxClose = tauxCloseDe(k.closes.closes, k.tenue);
+    k.tauxCloseSB = tauxCloseDe(k.closesSB.closes, k.tenueSB);
+    k.tauxCloseNB = tauxCloseDe(k.closesNB.closes, k.tenueNB);
+    /* Anciens noms (pages, lien Agence) : mêmes valeurs. */
+    k.closeRateRdv   = k.tauxClose.rdv;
+    k.closeRateLive  = k.tauxClose.presents;
+    k.closeRateOffre = k.tauxClose.pitches;
 
     /* ── Rentabilité — 100 % réel ── */
     k.cacMarketOnly = (k.spend > 0 && k.closesWonTotal > 0) ? k.spend / k.closesWonTotal : null;
+    /* k.aovAll / k.aov = « Collecté / close » (collecté à ce jour ÷ closes) :
+       le mot « AOV » disparaît des écrans. Le panier moyen (contracté ÷
+       closes) est k.panierMoyen. */
     k.aovAll = (k.closesWonTotal > 0 && k.wonCollecte > 0) ? k.wonCollecte / k.closesWonTotal : null;
+    k.aov = k.aovAll;
 
     /* ── Coût setting RÉEL (remplace « dépense pub / RDV NB » — décision
        Vincent + Adrien 14/07) : (fixe + commissions Setting + outils)
@@ -2998,19 +3269,17 @@
     k.commSetting = Math.round(k.commSetting * 100) / 100;
     var fixeSum = 0, outilsSum = 0, daysMissing = 0, costSrc = null;
     if (DATA.costs) {
-      var dIt = new Date(P.start.getFullYear(), P.start.getMonth(), P.start.getDate());
-      while (dIt.getTime() <= P.end.getTime()) {
-        var mk2 = dIt.getFullYear() + '-' + pad2(dIt.getMonth() + 1);
+      /* Un jour de Paris à la fois (référentiel §7) : le mois d'un jour et le
+         nombre de jours de ce mois se lisent sur sa clé 'AAAA-MM-JJ'. */
+      joursEntre(isoDate(P.start), isoDate(P.end)).forEach(function (jour) {
+        var mk2 = jour.slice(0, 7);
         var eff = effectiveCosts(DATA.costs, mk2);
-        if (!eff) daysMissing++;
-        else {
-          var dim = new Date(dIt.getFullYear(), dIt.getMonth() + 1, 0).getDate();
-          fixeSum += eff.fixe / dim;
-          outilsSum += eff.outils / dim;
-          costSrc = eff.src;
-        }
-        dIt = new Date(dIt.getFullYear(), dIt.getMonth(), dIt.getDate() + 1);
-      }
+        if (!eff) { daysMissing++; return; }
+        var dim = joursDuMois(+jour.slice(0, 4), +jour.slice(5, 7));
+        fixeSum += eff.fixe / dim;
+        outilsSum += eff.outils / dim;
+        costSrc = eff.src;
+      });
     } else daysMissing = 1;
     k.costFixe = Math.round(fixeSum * 100) / 100;
     k.costOutils = Math.round(outilsSum * 100) / 100;
@@ -3018,7 +3287,7 @@
     k.costSrcMonth = costSrc;
     /* Le mois affiché a-t-il sa PROPRE entrée ? (les outils sont variables :
        une valeur reportée d'un mois précédent doit être signalée, pas subie) */
-    var mkStart = P.start.getFullYear() + '-' + pad2(P.start.getMonth() + 1);
+    var mkStart = SC.moisParis(P.start);
     k.costOwnEntry = !!(DATA.costs && DATA.costs[mkStart]);
     k.costSetting = k.costConfigured ? Math.round((k.costFixe + k.costOutils + k.commSetting) * 100) / 100 : null;
     k.costPerRdvNB = (k.costSetting != null && k.chNB.n > 0) ? k.costSetting / k.chNB.n : null;
@@ -3046,30 +3315,31 @@
 
   /* ══════════════════════════════════════════════════════════════════
      PÉRIODES — un P = { mode, start, end } (end inclusif, 23:59:59.999)
+     ------------------------------------------------------------------
+     Bornes TOUJOURS à l'heure de PARIS (référentiel §7), quel que soit le
+     fuseau de l'appareil ou du serveur : « novembre » commence le 01/11 à
+     00:00 à Paris pour l'équipe, pour une média buyeuse à l'étranger et pour
+     une Vercel Function (qui tourne en UTC). Avant le 25/11/2026 les bornes
+     étaient à l'heure de l'appareil.
      ══════════════════════════════════════════════════════════════════ */
   function periodMonth(y, m) {
     return { mode: 'month', y: y, m: m,
-      start: new Date(y, m, 1, 0, 0, 0, 0),
-      end:   new Date(y, m + 1, 0, 23, 59, 59, 999) };
+      start: SC.dateParis(y, m, 1, 0, 0, 0, 0),
+      end:   SC.dateParis(y, m + 1, 0, 23, 59, 59, 999) };
   }
   function periodDay(iso) {
-    var p = String(iso).split('-');
-    return { mode: 'day', day: iso,
-      start: new Date(+p[0], +p[1] - 1, +p[2], 0, 0, 0, 0),
-      end:   new Date(+p[0], +p[1] - 1, +p[2], 23, 59, 59, 999) };
+    return { mode: 'day', day: iso, start: SC.debutJourParis(iso), end: SC.finJourParis(iso) };
   }
+  /* Les N derniers jours, aujourd'hui (jour de Paris) compris. */
   function periodPreset(days) {
-    var now = new Date();
-    var end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-    var s = new Date(end.getTime() - (days - 1) * 86400000);
+    var today = SC.jourParis(Date.now());
+    var p = today.split('-');
     return { mode: days + 'd',
-      start: new Date(s.getFullYear(), s.getMonth(), s.getDate(), 0, 0, 0, 0), end: end };
+      start: SC.dateParis(+p[0], +p[1] - 1, +p[2] - (days - 1), 0, 0, 0, 0),
+      end:   SC.finJourParis(today) };
   }
   function periodCustom(aIso, bIso) {
-    var a = String(aIso).split('-'), b = String(bIso).split('-');
-    return { mode: 'custom',
-      start: new Date(+a[0], +a[1] - 1, +a[2], 0, 0, 0, 0),
-      end:   new Date(+b[0], +b[1] - 1, +b[2], 23, 59, 59, 999) };
+    return { mode: 'custom', start: SC.debutJourParis(aIso), end: SC.finJourParis(bIso) };
   }
   function periodLabelParts(P) {
     return { startIso: isoDate(P.start), endIso: isoDate(P.end), mode: P.mode };
@@ -3148,7 +3418,12 @@
       bookings: [], bookingsById: {},
       bookingsTtb: [], calls: [], costs: null, settingDeals: [], journalPeriod: [],
       actions: [], closedLeads: [], payments: [],
-      leadsTruncated: false, callsTruncated: false };
+      /* RDV porteurs des closes, lus par fiche (loadCloseBookings). */
+      closeBookings: {},
+      leadsTruncated: false, callsTruncated: false,
+      /* Lectures tronquées ou en échec : remontées dans K (k.erreursLecture). */
+      closedLeadsTruncated: false, closedLeadsError: null, paymentsError: null,
+      bookingsError: null, closeBookingsError: null };
   }
 
   /* opts = { P, typeMap, teamMembers } — typeMap/teamMembers sont chargés
@@ -3174,6 +3449,11 @@
     })
     .then(function () { return resolveChains(db, DATA, TYPE_MAP); })
     .then(function () { return resolvePaymentLeads(db, P, DATA); })
+    /* RDV porteurs des closes (canal, closer, setter) : APRÈS
+       resolvePaymentLeads, qui dit quelles fiches portent un close repéré par
+       le paiement. Sans cette lecture, un close dont le RDV est daté hors de
+       la période n'aurait pas de RDV porteur. */
+    .then(function () { return loadCloseBookings(db, DATA, TYPE_MAP); })
     .then(function () { return { DATA: DATA, typeMap: TYPE_MAP, teamMembers: TEAM }; });
   }
 
@@ -3212,6 +3492,11 @@
     /* CLOSES — la liste unique (25/11/2026) */
     buildCloses: buildCloses, sumCloses: sumCloses, loadCloses: loadCloses, loadCloseBookings: loadCloseBookings,
     CLOSED_LEADS_LIMIT: CLOSED_LEADS_LIMIT,
+    /* RDV : terminal d'une chaîne (report / transfert) et origine d'un RDV
+       compté à sa date ('periode' | 'avant' | 'reporte' | 'inconnu'). */
+    rdvTerminal: rdvTerminal, origineRdv: origineRdv,
+    /* Calendrier pur : jours d'une plage 'AAAA-MM-JJ', jour suivant. */
+    joursEntre: joursEntre, jourSuivant: jourSuivant,
     isYoutubeSource: isYoutubeSource, leadSource: leadSource,
     bookingSource: bookingSource, pageSource: pageSource,
     effectiveCosts: effectiveCosts, classifyBooking: classifyBooking,
