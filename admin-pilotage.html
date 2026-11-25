@@ -337,11 +337,11 @@ function I(cle, precision) { return SC ? SC.info(cle, precision) : ''; }
 function IL(titre, texte) { return SC ? SC.infoLibre(titre, texte) : ''; }
 var TXT = {
   appels: 'Pilotage : appels passés par cette personne (téléphonie Ringover / dialer). Les appels sans auteur relié à un compte sont dans « Non attribué ».',
-  appelsRecus: ['Appels reçus', 'Appels entrants (prospects qui rappellent, standard). Comptés à part : ils ne sont ni dans « Appels » ni dans « Décrochés ».'],
+  appelsRecusPilotage: 'Pilotage : tous les appels entrants du journal téléphonique, décrochés ou non (le détail « Décrochés » des reçus suit la règle des 5 secondes). Ni dans « Appels » ni dans « Décrochés ».',
   recusPris: ['Reçus décrochés', 'Appels reçus avec au moins 5 secondes de conversation, répondeurs écartés (même règle que Décrochés).'],
   tempsRecus: ['Temps des appels reçus', 'Conversation des appels reçus décrochés. À part du Temps d’appel, qui ne compte que les appels sortants.'],
   convos: ['Décrochés ≥ 1 min', 'Appels sortants décrochés dont la conversation a duré au moins 1 minute.'],
-  lts: ['Lead to speech', 'Délai entre l’arrivée d’un nouveau lead et son premier appel sortant (décroché ou non, nuits et week-ends compris), compté pour la personne qui a passé ce 1er appel. Pilotage : leads appelés pour la première fois sur la période, arrivés au plus 14 jours avant, rangés au JOUR de l’appel. Le Stats funnel range les leads au MOIS de leur arrivée : les deux médianes peuvent différer. Dates d’arrivée lues à l’heure de Paris ; fiches de test et fiches fusionnées écartées.'],
+  ltsPilotage: 'Pilotage : compté pour la personne qui a passé ce 1er appel (nuits et week-ends compris), sur les leads appelés pour la première fois pendant la période, rangés au JOUR de l’appel. Le Stats funnel range les leads au MOIS de leur arrivée : les deux médianes peuvent différer. Dates d’arrivée lues à l’heure de Paris ; fiches de test et fiches fusionnées écartées.',
   ltsN: ['Leads appelés', 'Leads dont le 1er appel sortant a été passé sur la période (population du Lead to speech). Ce ne sont pas les « Leads » des autres écrans (fiches entrées sur la période).'],
   posesClic: ['RDV posés par lui (clic)', 'RDV de vente que la personne a créés elle-même dans l’agenda pendant la période, RDV déplacés exclus. Compte d’activité : le chiffre officiel est « Sets », rangé chez le setter de la fiche (celui de Set NB). Les deux diffèrent quand une personne pose le RDV d’une fiche dont le setter est un autre.'],
   clicsRdv: ['Clics RDV posé', 'Actions « RDV posé » du journal de Leads Live (clic sur le statut). Un clic n’est pas un set : un set est un RDV réellement créé dans l’agenda (colonne Sets).'],
@@ -613,8 +613,8 @@ function renderLive() {
     kpi('✅ Kept · Présents', (RV.kept || 0) + ' · ' + (RV.presents || 0) + (RV.aVenir ? ' (dont ' + RV.aVenir + ' à venir)' : ''), I('kept') + I('presents')) +
     kpi('⏳ À statuer', RV.aStatuer || 0, I('a_statuer')) +
     kpi('☎️ Appels du jour', T.calls + ' · ' + T.answered + ' décrochés', I('appels', 'Toute l’équipe, appels sans auteur et anciens membres compris' + (T.sansCarte ? ' (' + T.sansCarte + ' hors des cartes ci-dessous)' : '') + ' : le même total que l’onglet Activité réglé sur aujourd’hui.') + I('decroches')) +
-    kpi('📥 Appels reçus', T.callsIn, IL(TXT.appelsRecus[0], TXT.appelsRecus[1])) +
-    kpi('⚡ Lead to speech du jour', L.lts && L.lts.n ? fmtDelay(L.lts.median) + ' · ' + L.lts.n + ' lead' + (L.lts.n > 1 ? 's' : '') : '—', IL(TXT.lts[0], TXT.lts[1]));
+    kpi('📥 Appels reçus', T.callsIn, I('appels_recus', TXT.appelsRecusPilotage)) +
+    kpi('⚡ Lead to speech du jour', L.lts && L.lts.n ? fmtDelay(L.lts.median) + ' · ' + L.lts.n + ' lead' + (L.lts.n > 1 ? 's' : '') : '—', I('lead_to_speech', TXT.ltsPilotage));
   $('liveClock').textContent = '· ' + parisTime(L.now);
 
   if (!members.length) {
@@ -629,10 +629,10 @@ function renderLive() {
         '<div class="pl-today"><span><b>' + t.calls + '</b> appel' + (t.calls > 1 ? 's' : '') + I('appels') + '</span>' +
         '<span><b>' + t.answered + '</b> décroché' + (t.answered > 1 ? 's' : '') + I('decroches') + '</span>' +
         '<span><b>' + fmtTalk(t.talkSec) + '</b> d\'appel' + I('temps_appel') + '</span>' +
-        (t.callsIn ? '<span><b>' + t.callsIn + '</b> reçu' + (t.callsIn > 1 ? 's' : '') + IL(TXT.appelsRecus[0], TXT.appelsRecus[1]) + '</span>' : '') +
+        (t.callsIn ? '<span><b>' + t.callsIn + '</b> reçu' + (t.callsIn > 1 ? 's' : '') + I('appels_recus', TXT.appelsRecusPilotage) + '</span>' : '') +
         (t.lastCallAt ? '<span>dernier ' + esc(ago(t.lastCallAt)) + '</span>' : '') +
         (t.rdv && (t.rdv.rdv || t.rdv.replan) ? '<span>📅 <b>' + t.rdv.rdv + '</b> RDV · ' + t.rdv.presents + ' présent' + (t.rdv.presents > 1 ? 's' : '') + (t.rdv.aStatuer ? ' · ' + t.rdv.aStatuer + ' à statuer' : '') + I('rdv', TXT.rdvPilotage + ' ' + rdvPhrase(t.rdv)) + '</span>' : '') +
-        (t.lts && t.lts.n ? '<span>⚡ <b>' + esc(fmtDelay(t.lts.median)) + '</b> lead to speech · ' + t.lts.n + ' lead' + (t.lts.n > 1 ? 's' : '') + ' · ' + t.lts.under5 + ' en &lt; 5 min' + IL(TXT.lts[0], 'Médiane du jour sur les leads que cette personne a appelés en premier. ' + TXT.lts[1]) + '</span>' : '') +
+        (t.lts && t.lts.n ? '<span>⚡ <b>' + esc(fmtDelay(t.lts.median)) + '</b> lead to speech · ' + t.lts.n + ' lead' + (t.lts.n > 1 ? 's' : '') + ' · ' + t.lts.under5 + ' en &lt; 5 min' + I('lead_to_speech', 'Médiane du jour sur les leads que cette personne a appelés en premier. ' + TXT.ltsPilotage) + '</span>' : '') +
         (t.dmOut || t.dmIn || m.role === 'setter_ecrit' ? '<span><b>' + t.dmOut + '</b> DM envoyé' + (t.dmOut > 1 ? 's' : '') + ' · ' + t.dmIn + ' reçu' + (t.dmIn > 1 ? 's' : '') + (t.lastDmAt ? ' · dernier ' + esc(ago(t.lastDmAt)) : '') + '</span>' : '') +
         '<span>⏱ <b>' + fmtTalk(Math.round((t.activeMs || 0) / 1000)) + '</b> connecté' + (t.firstSeenAt ? ' · depuis ' + esc(parisTime(t.firstSeenAt)) : '') + (t.sessions > 1 ? ' · ' + t.sessions + ' sessions' : '') + (t.clicks ? ' · ' + t.clicks + ' clics' : '') + '</span>' +
         '</div>' +
@@ -748,11 +748,11 @@ var COLS = [
   ['answered', 'Décrochés', 'Appels sortants', function () { return I('decroches'); }],
   ['convos', '≥ 1 min', 'Appels sortants', function () { return IL(TXT.convos[0], TXT.convos[1]); }],
   ['talkSec', 'Temps d\'appel', 'Appels sortants', function () { return I('temps_appel'); }],
-  ['callsIn', 'Reçus', 'Appels reçus', function () { return IL(TXT.appelsRecus[0], TXT.appelsRecus[1]); }],
+  ['callsIn', 'Reçus', 'Appels reçus', function () { return I('appels_recus', TXT.appelsRecusPilotage); }],
   ['answeredIn', 'Décrochés', 'Appels reçus', function () { return IL(TXT.recusPris[0], TXT.recusPris[1]); }],
   ['talkInSec', 'Temps', 'Appels reçus', function () { return IL(TXT.tempsRecus[0], TXT.tempsRecus[1]); }],
   ['ltsN', 'Leads appelés', 'Lead to speech', function () { return IL(TXT.ltsN[0], TXT.ltsN[1]); }],
-  ['ltsMed', 'Médiane', 'Lead to speech', function () { return IL(TXT.lts[0], TXT.lts[1]); }],
+  ['ltsMed', 'Médiane', 'Lead to speech', function () { return I('lead_to_speech', TXT.ltsPilotage); }],
   ['sets', 'Sets', 'Setting', function () { return I('sets', 'Rangés chez le setter de la fiche (celui qui touche la commission) : même chiffre que Set NB.'); }],
   ['posesClic', 'Posés par lui (clic)', 'Setting', function () { return IL(TXT.posesClic[0], TXT.posesClic[1]); }],
   ['rdv', 'RDV', 'RDV (closer)', function () { return I('rdv', TXT.rdvPilotage); }],
@@ -825,9 +825,9 @@ function renderActivity() {
   tot.ltsMed = ltsT && ltsT.median ? ltsT.median : 0;   // une médiane ne s'additionne pas
   $('actKpis').innerHTML =
     kpi('☎️ Appels', tot.callsOut + ' · ' + tot.answered + ' décrochés', I('appels', TXT.appels) + I('decroches')) +
-    kpi('📥 Appels reçus', tot.callsIn + (tot.answeredIn ? ' · ' + tot.answeredIn + ' décrochés' : ''), IL(TXT.appelsRecus[0], TXT.appelsRecus[1])) +
+    kpi('📥 Appels reçus', tot.callsIn + (tot.answeredIn ? ' · ' + tot.answeredIn + ' décrochés' : ''), I('appels_recus', TXT.appelsRecusPilotage)) +
     kpi('🗣️ Temps d\'appel', fmtTalk(tot.talkSec) + (tot.talkInSec ? ' · reçus ' + fmtTalk(tot.talkInSec) : ''), I('temps_appel')) +
-    kpi('⚡ Lead to speech', ltsT && ltsT.n ? fmtDelay(ltsT.median) + ' · ' + ltsT.n + ' lead' + (ltsT.n > 1 ? 's' : '') : '—', IL(TXT.lts[0], TXT.lts[1])) +
+    kpi('⚡ Lead to speech', ltsT && ltsT.n ? fmtDelay(ltsT.median) + ' · ' + ltsT.n + ' lead' + (ltsT.n > 1 ? 's' : '') : '—', I('lead_to_speech', TXT.ltsPilotage)) +
     kpi('🗓️ Sets', tot.sets, I('sets', 'Même chiffre que Set NB (Équipe) sur la même période.')) +
     kpi('🖱️ RDV posés par clic', tot.posesClic, IL(TXT.posesClic[0], TXT.posesClic[1])) +
     kpi('📅 RDV', tot.rdv + ' · kept ' + tot.kept + ' · ' + tot.presents + ' présents', I('rdv', TXT.rdvPilotage + ' ' + rdvPhrase(tot)) + I('kept') + I('presents')) +
@@ -1046,7 +1046,7 @@ function renderJournal() {
     kpi('⏱ Connexion', fmtTalk(Math.round((S.activeMs || 0) / 1000)) + (S.firstSeenAt ? ' · ' + parisTime(S.firstSeenAt) + '→' + parisTime(S.lastSeenAt) : ''), IL(TXT.connexion[0], TXT.connexion[1])) +
     kpi('👆 Clics · pages', (S.clicks || 0) + ' · ' + (S.pages || 0), IL('Clics et pages', 'Pages ouvertes et clics relevés par Team depuis le 16/10/2026 (libellé du bouton, page, prospect concerné — jamais ce qui est tapé).')) +
     kpi('📞 Appels', (S.callsOut || 0) + ' · ' + (S.answered || 0) + ' décrochés · ' + fmtTalk(S.talkSec), I('appels') + I('decroches') + I('temps_appel')) +
-    kpi('📥 Appels reçus', (S.callsIn || 0) + (S.answeredIn ? ' · ' + S.answeredIn + ' décrochés' : ''), IL(TXT.appelsRecus[0], TXT.appelsRecus[1])) +
+    kpi('📥 Appels reçus', (S.callsIn || 0) + (S.answeredIn ? ' · ' + S.answeredIn + ' décrochés' : ''), I('appels_recus', TXT.appelsRecusPilotage)) +
     kpi('✉️ Envoyés', (S.sms || 0) + ' SMS · ' + (S.email || 0) + ' e-mails · ' + (S.whatsapp || 0) + ' WA' + (S.dm ? ' · ' + S.dm + ' DM' : ''), IL(TXT.msgs[0], TXT.msgs[1])) +
     kpi('📝 Fiches', (S.actions || 0) + ' actions · ' + (S.notes || 0) + ' notes', IL(TXT.statuts[0], TXT.statuts[1])) +
     kpi('🗓️ Sets', (S.sets || 0) + ' · ' + (S.posesClic || 0) + ' posés par clic', I('sets', 'Rangés chez le setter de la fiche : même chiffre que Set NB.') + IL(TXT.posesClic[0], TXT.posesClic[1])) +
