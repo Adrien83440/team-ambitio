@@ -390,6 +390,43 @@
     return null;
   }
 
+  /* Membres partis AVANT que la fiche d'équipe porte le drapeau `departed` :
+     la seule liste de prénoms du projet, lue par le navigateur ET par le
+     serveur (alteore-flow.js, funnel-core.js, api/*). Un nouveau départ se
+     marque sur la fiche (_meta/team_members : departed + endDate), pas ici. */
+  var PARTIS_HISTORIQUES = { guillaume: 1, guillaumes: 1, elodie: 1 };
+  function estPartiHistorique(slug) { return !!PARTIS_HISTORIQUES[String(slug || '')]; }
+  /* Un membre est « parti » : drapeau de sa fiche, ou fiche archivée avec une
+     date de fin, ou liste historique. m = fiche du membre (ou null). */
+  function estParti(m, slug) {
+    if (m && m.departed === true) return true;
+    if (m && m.active === false && m.endDate) return true;
+    return estPartiHistorique(slug || (m && m.slug));
+  }
+
+  /* OÙ RANGER UNE PERSONNE dans une vue par personne (onglets, lignes) — la
+     même règle sur Set NB, Close SB, Global closing, Dashboard, Projections,
+     Qualité leads › Closers et les outils de l'assistant :
+       · personne inconnue                          → « Non attribué »
+       · ancien membre                              → « Non attribué », précision « Anciens membres » (jamais son nom)
+       · personne sans onglet dans la vue           → « Non attribué », précision « Prénom (hors onglets) »
+       · élément daté avant son arrivée             → « Non attribué », précision « Prénom (avant son arrivée) »
+       · sinon                                      → son onglet
+     o = { parti(slug), aOnglet(slug), prenom(slug), debut(slug) → 'AAAA-MM-JJ' }
+     jourIso = le jour de l'élément (date du RDV, jour du close, jour de création du set).
+     → { key: slug | '_na', precision, cas } */
+  var NON_ATTRIBUE = '_na';
+  function rangPersonne(slug, jourIso, o) {
+    o = o || {};
+    if (!slug) return { key: NON_ATTRIBUE, precision: '', cas: 'inconnu' };
+    if (o.parti ? o.parti(slug) : estPartiHistorique(slug)) return { key: NON_ATTRIBUE, precision: 'Anciens membres', cas: 'ancien' };
+    var prenom = (o.prenom && o.prenom(slug)) || String(slug);
+    if (o.aOnglet && !o.aOnglet(slug)) return { key: NON_ATTRIBUE, precision: prenom + ' (hors onglets)', cas: 'hors_onglets' };
+    var debut = o.debut ? o.debut(slug) : null;
+    if (jourIso && debut && String(jourIso) < String(debut)) return { key: NON_ATTRIBUE, precision: prenom + ' (avant son arrivée)', cas: 'avant_arrivee' };
+    return { key: String(slug), precision: '', cas: 'onglet' };
+  }
+
   /* ══════════════════════════════════════════════════════════════════════
      5 bis. TÉLÉPHONE — un appel « décroché », une seule règle
      ══════════════════════════════════════════════════════════════════════
@@ -865,6 +902,8 @@
     pct: pct, showUp: showUp, tauxClose: tauxClose, fmtPct: fmtPct, fmtEuro: fmtEuro,
     /* Qui */
     setterDuRdv: setterDuRdv, closerDuRdv: closerDuRdv,
+    PARTIS_HISTORIQUES: PARTIS_HISTORIQUES, estPartiHistorique: estPartiHistorique, estParti: estParti,
+    NON_ATTRIBUE: NON_ATTRIBUE, rangPersonne: rangPersonne,
     /* Téléphone */
     DECROCHE_MIN_SEC: DECROCHE_MIN_SEC, estDecroche: estDecroche, sonnerieSec: sonnerieSec,
     /* Glossaire et « i » */
