@@ -805,7 +805,7 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   pas le prospect, visio non ouverte → alerte closer seule ; étapes `ac_*` rejouées en cas d'échec (`reserver` `rejouable`, 6 essais) ;
   aucune séquence d'après-RDV si un autre RDV du parcours est à venir, 45 min de grâce après une annulation, annulation par l'équipe
   (`cancellation.origin: 'equipe'`) → `rdv_equipe` (tag retiré, pas de « rendez-vous manqué ») ; `depuis` est REPOSÉ à chaque
-  réactivation et au passage en réel (un RDV pris avant garde les rappels de l'agenda : jamais de doublon). Après un `non_close` : `api/parcours-frein.js` (cron du matin) lit l'appel (`replay`, sinon note
+  réactivation et au passage en réel (un RDV pris avant garde les rappels de l'agenda : jamais de doublon). Exception (25/11/2026, constat d'Adrien le lendemain de la bascule : aucun WhatsApp la veille) : un RDV pris AVANT reçoit quand même du parcours ce que l'agenda ne fait pas — le WhatsApp de la veille et le rattrapage d'un prospect absent (SMS + alerte closer) — et RIEN d'autre (`ancien` dans `traiterRdv`, coupé par `veilleAnciens: false`) — pas de confirmation, pas de SMS, pas d'étiquette ActiveCampaign, donc pas de séquence d'après-RDV. Après un `non_close` : `api/parcours-frein.js` (cron du matin) lit l'appel (`replay`, sinon note
   du closer après J+3, sinon « général »), écrit `parcoursRdv.frein` et `leads.freinPrincipal` (jamais écrasé si
   `corrigePar`), puis séquence ActiveCampaign du frein (automatisations 36-41, textes
   `docs/parcours-rdv/sequences-freins.md`). **Séquences d'après-RDV envoyées par TEAM (24/11/2026, décision d'Adrien)** : `api/_parcoursSuite.js`, cron `api/parcours-suite.js`
