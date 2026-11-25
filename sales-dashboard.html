@@ -23,437 +23,18 @@
   }
 </script>
 
-<script>
-/* === sales-data.js inlined === */
-/**
- * sales-data.js — Data Store + Firebase + Utilitaires
- * Les données "a" (actuelles) viennent de Firestore en temps réel.
- * Les données "p" (projections) sont les références fixes.
- */
-
-/* ═══════════════════════════════════════════════════════════
-   PROJECTIONS FIXES — modifier ici pour changer les cibles
-═══════════════════════════════════════════════════════════ */
-const PROJECTIONS = {
-  closing: {
-    s1: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    s2: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    s3: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    s4: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    livesP:0.75, offresP:0.667, engP:0.5, cOffP:0.4, cCallP:0.2, cashLive:666.7,
-  },
-  setting: {
-    s1: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    s2: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    s3: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    s4: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    decrochesP:0.12, engP:0.222, setP:0.5, showupP:0.8, cCallP:0.8,
-  },
-};
-
-/* ═══════════════════════════════════════════════════════════
-   DATA STORE
-═══════════════════════════════════════════════════════════ */
-const ALL_WEEKS = ['s1','s2','s3','s4','s5','s6'];
-
-const DB = {
-  months: ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'],
-
-  // Données brutes saisies (remplacées par Firestore)
-  _raw: {
-    closing: {
-      s1: { calls:8,  lives:2, offres:1, closes:0, hc:0, fu:0, contracte:0,     collecte:0    },
-      s2: { calls:8,  lives:4, offres:2, closes:2, hc:2, fu:0, contracte:12000, collecte:1000 },
-      s3: { calls:9,  lives:6, offres:3, closes:1, hc:1, fu:0, contracte:5400,  collecte:400  },
-      s4: { calls:9,  lives:7, offres:2, closes:0, hc:0, fu:0, contracte:1800,  collecte:200  },
-    },
-    setting: {
-      s1: { leads:133, calls:231, decroches:56, propRdv:13, sets:9,  presents:2, closes:0 },
-      s2: { leads:191, calls:324, decroches:54, propRdv:17, sets:11, presents:4, closes:2 },
-      s3: { leads:127, calls:178, decroches:38, propRdv:16, sets:11, presents:4, closes:1 },
-      s4: { leads:100, calls:150, decroches:28, propRdv:15, sets:10, presents:4, closes:0 },
-    },
-    deals: [
-      { client:'Julie Berchoux',     email:'julieberchoux@icloud.com',         offre:'BP 12', type:'Closing', date:'24/01/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting après self booking', ok:true  },
-      { client:'Corinne Alaga',      email:'contact@lestabliersgourmands.com', offre:'BP 12', type:'Setting', date:'27/01/2026', cHT:null, coHT:null,  comm:125, bonus:0, notes:"Setting d'un close d'Elodie", ok:true  },
-      { client:'Belinda Giangiulio', email:'lesdemoisellesduvrac@gmail.com',   offre:'BP 12', type:'Closing', date:'30/01/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-      { client:'Cecile Auneau',      email:'domcecile@gmail.com',              offre:'BP 12', type:'Closing', date:'09/02/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-      { client:'Justine Biton',      email:'lephildesidees@hotmail.com',       offre:'BP 12', type:'Closing', date:'09/02/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-    ],
-  },
-
-  // Calculé depuis _raw
-  closing: null,
-  setting: null,
-  commissions: {
-    'Janvier 2026': { contracte:12000, collecte:0,    totalComm:0,    statut:'Validé',     deals:[] },
-    'Février 2026': { contracte:24000, collecte:2000, totalComm:2125, statut:'En attente', deals:[] },
-    'Mars 2026':    { contracte:0,     collecte:0,    totalComm:1625, statut:'En attente', deals:[] },
-  },
-  team: {
-    week: [
-      { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:22748, collecte:13629, calls:29, lives:24, offres:19, closes:7, showup:0.83, txOffre:0.792, txTransfoShow:0.292, txTransfoOffre:0.368, caCall:784.4  },
-    ],
-    month: [
-      { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:34069, collecte:3966, calls:46, lives:28, offres:13, closes:7, showup:0.609, txOffre:0.464, txTransfoShow:0.25,  txTransfoOffre:0.538, caCall:617.2 },
-    ],
-  },
-
-  // Recalcule toutes les métriques depuis _raw
-  compute() {
-    const rc = DB._raw.closing;
-    const rs = DB._raw.setting;
-    const pc = PROJECTIONS.closing;
-    const ps = PROJECTIONS.setting;
-
-    const sumC  = k => ALL_WEEKS.reduce((t,w) => t + ((rc[w]||{})[k]||0), 0);
-    const sumS  = k => ALL_WEEKS.reduce((t,w) => t + ((rs[w]||{})[k]||0), 0);
-    const projC = k => ALL_WEEKS.reduce((t,w) => t + ((pc[w]||{})[k]||0), 0);
-    const projS = k => ALL_WEEKS.reduce((t,w) => t + ((ps[w]||{})[k]||0), 0);
-
-    const ca=sumC('calls'), la=sumC('lives'), oa=sumC('offres'), cla=sumC('closes');
-    const cta=sumC('contracte'), cola=sumC('collecte');
-    const cp=projC('calls'), lp=projC('lives'), op=projC('offres'), clp=projC('closes');
-    const ctp=projC('contracte'), colp=projC('collecte');
-
-    DB.closing = {
-      mois: {
-        calls:     {a:ca,  p:cp  },
-        lives:     {a:la,  p:lp  },
-        offres:    {a:oa,  p:op  },
-        closes:    {a:cla, p:clp },
-        hc:        {a:sumC('hc'), p:clp},
-        fu:        {a:sumC('fu'), p:0  },
-        contracte: {a:cta, p:ctp },
-        collecte:  {a:cola,p:colp},
-        livesP:  {a:ca>0  ? la/ca   : 0, p:pc.livesP  },
-        offresP: {a:la>0  ? oa/la   : 0, p:pc.offresP },
-        engP:    {a:oa>0  ? cla/oa  : 0, p:pc.engP    },
-        cOffP:   {a:oa>0  ? cla/oa  : 0, p:pc.cOffP   },
-        cCallP:  {a:ca>0  ? cla/ca  : 0, p:pc.cCallP  },
-        cashLive:{a:la>0  ? cta/la  : 0, p:pc.cashLive},
-        atteinte: ctp>0 ? cta/ctp : 0,
-        delta:    Math.max(0, ctp-cta),
-      },
-      ...Object.fromEntries(ALL_WEEKS.filter(w => rc[w]).map(w => [w, DB._cw(w)])),
-    };
-
-    const sca=sumS('calls'), da=sumS('decroches'), pa=sumS('propRdv');
-    const sa=sumS('sets'), pra=sumS('presents'), sca2=sumS('closes');
-
-    DB.setting = {
-      mois: {
-        leads:     {a:sumS('leads'),  p:projS('leads')    },
-        calls:     {a:sca,            p:projS('calls')    },
-        decroches: {a:da,             p:projS('decroches')},
-        propRdv:   {a:pa,             p:projS('propRdv')  },
-        sets:      {a:sa,             p:projS('sets')     },
-        presents:  {a:pra,            p:projS('presents') },
-        closes:    {a:sca2,           p:projS('closes')   },
-        decrochesP:{a:sca>0?da/sca:0,  p:ps.decrochesP },
-        engP:      {a:da>0 ?pa/da:0,    p:ps.engP       },
-        setP:      {a:pa>0 ?sa/pa:0,    p:ps.setP       },
-        showupP:   {a:sa>0 ?pra/sa:0,   p:ps.showupP    },
-        cCallP:    {a:sca>0?sca2/sca:0, p:ps.cCallP     },
-      },
-      ...Object.fromEntries(ALL_WEEKS.filter(w => rs[w]).map(w => [w, DB._sw(w)])),
-    };
-
-    // Sync deals dans commissions
-    try {
-      const cmk = (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026';
-      if (DB.commissions[cmk]) DB.commissions[cmk].deals = DB._raw.deals;
-    } catch(e) {}
-  },
-
-  _cw(w) {
-    const d=DB._raw.closing[w]||{}, p=PROJECTIONS.closing[w]||PROJECTIONS.closing.s1||{};
-    return {
-      calls:{a:d.calls||0,p:p.calls||0}, lives:{a:d.lives||0,p:p.lives||0},
-      offres:{a:d.offres||0,p:p.offres||0}, closes:{a:d.closes||0,p:p.closes||0},
-      hc:{a:d.hc||0,p:p.closes||0}, fu:{a:d.fu||0,p:0},
-      contracte:{a:d.contracte||0,p:p.contracte||0}, collecte:{a:d.collecte||0,p:p.collecte||0},
-    };
-  },
-  _sw(w) {
-    const d=DB._raw.setting[w]||{}, p=PROJECTIONS.setting[w]||PROJECTIONS.setting.s1||{};
-    return {
-      leads:{a:d.leads||0,p:p.leads||0}, calls:{a:d.calls||0,p:p.calls||0},
-      decroches:{a:d.decroches||0,p:p.decroches||0}, propRdv:{a:d.propRdv||0,p:p.propRdv||0},
-      sets:{a:d.sets||0,p:p.sets||0}, presents:{a:d.presents||0,p:p.presents||0},
-      closes:{a:d.closes||0,p:p.closes||0},
-    };
-  },
-};
-
-DB.compute();
-
-/* ═══════════════════════════════════════════════════════════
-   FIREBASE — couche temps réel
-   Initialisé après que firebase SDK soit chargé + auth ready
-═══════════════════════════════════════════════════════════ */
-const Fire = {
-  db:  null,
-  uid: null,
-  _unsubs: [],
-
-  init(firestore, uid) {
-    Fire.db  = firestore;
-    Fire.uid = uid;
-  },
-
-  _key(label) {
-    const p = label.split(' ');
-    const m = DB.months.indexOf(p[0]);
-    return `${p[1]}-${String(m+1).padStart(2,'0')}`;
-  },
-
-  // Écoute en temps réel les données d'un user pour un mois
-  watchUser(userId, monthLabel, callback) {
-    if (!Fire.db) return () => {};
-    const ref = Fire.db
-      .collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    const unsub = ref.onSnapshot(snap => callback(snap.exists ? snap.data() : null));
-    Fire._unsubs.push(unsub);
-    return unsub;
-  },
-
-  // Sauvegarde une semaine de closing
-  async saveClosing(userId, monthLabel, week, data) {
-    if (!Fire.db) throw new Error('Firebase non init');
-    const ref = Fire.db.collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    await ref.set({ closing: { [week]: data } }, { merge: true });
-  },
-
-  // Sauvegarde une semaine de setting
-  async saveSetting(userId, monthLabel, week, data) {
-    if (!Fire.db) throw new Error('Firebase non init');
-    const ref = Fire.db.collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    await ref.set({ setting: { [week]: data } }, { merge: true });
-  },
-
-  // Sauvegarde un deal (append)
-  async saveDeal(userId, monthLabel, deal) {
-    if (!Fire.db) throw new Error('Firebase non init');
-    const ref = Fire.db.collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    const snap = await ref.get();
-    const deals = snap.exists ? (snap.data().deals || []) : [];
-    deals.push({ ...deal, _ts: Date.now() });
-    await ref.set({ deals }, { merge: true });
-  },
-
-  // Applique un snapshot Firestore dans DB puis recalcule
-  apply(data) {
-    if (!data) return;
-    if (data.closing) ALL_WEEKS.forEach(w => {
-      if (data.closing[w]) Object.assign(DB._raw.closing[w]||(DB._raw.closing[w]={}), data.closing[w]);
-    });
-    if (data.setting) ALL_WEEKS.forEach(w => {
-      if (data.setting[w]) Object.assign(DB._raw.setting[w]||(DB._raw.setting[w]={}), data.setting[w]);
-    });
-    if (data.deals) DB._raw.deals = data.deals;
-    DB.compute();
-    document.dispatchEvent(new CustomEvent('db:updated'));
-  },
-
-  stop() { Fire._unsubs.forEach(u => u()); Fire._unsubs = []; },
-};
-
-/* ═══════════════════════════════════════════════════════════
-   UTILITIES
-═══════════════════════════════════════════════════════════ */
-const U = {
-  euro:  v => v == null ? '—' : '€\u202f' + Number(v).toLocaleString('fr-FR'),
-  pct:   v => v == null ? '—' : (v * 100).toFixed(1) + '%',
-  num:   v => v == null ? '—' : Number(v).toLocaleString('fr-FR'),
-  pp:  (a, p) => p > 0 ? Math.min((a / p) * 100, 200) : 0,
-  ppv: (a, p) => p > 0 ? ((a / p) * 100).toFixed(0) + '%' : '—',
-  cb:  (a, p) => { const r = p > 0 ? a / p : 0; return r >= 1 ? '#34d399' : r >= 0.65 ? '#f59e0b' : '#ef4444'; },
-  g:   id => document.getElementById(id),
-  getCurrentMonth: () => (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026',
-  getCurrentUser:  () => ({
-    /* Aucun repli sur une personne : un utilisateur non identifie
-       s'affichait sous le nom d'un membre parti, et ecrivait dans son
-       espace de donnees. */
-    uid:  window._currentUserUid  || localStorage.getItem('ambitio_uid')  || '',
-    name: window._currentUserName || localStorage.getItem('ambitio_name') || 'Utilisateur',
-    role: window._currentRole     || localStorage.getItem('ambitio_role') || 'sales',
-  }),
-
-  progRow: (label, a, p, isEuro = false) => {
-    const col = U.cb(a, p);
-    return `<div class="pr">
-      <div class="pr-l">${label}</div>
-      <div class="pr-track"><div class="pr-fill" style="width:${Math.min(U.pp(a,p),100)}%;background:${col}"></div></div>
-      <div class="pr-val">${isEuro ? `${U.euro(a)} / ${U.euro(p)}` : `${a} / ${p}`}</div>
-      <div class="pr-pct" style="color:${col}">${U.ppv(a,p)}</div>
-    </div>`;
-  },
-
-  kpiCard: ({ label, val, sub, rawA, proj, color='#ef4444', pct:fp }) => {
-    const pc = fp!=null ? fp : (proj!=null ? U.pp(rawA??0, proj) : null);
-    return `<div class="kpi" style="--kc:${color}">
-      <div class="kpi-label">${label}</div>
-      <div class="kpi-value">${val}</div>
-      ${sub ? `<div class="kpi-sub">${sub}</div>` : ''}
-      ${pc!=null ? `<div class="kpi-prog">
-        <div class="kpi-prog-row"><span>Atteinte</span><span>${pc.toFixed(0)}%</span></div>
-        <div class="kpi-prog-track"><div class="kpi-prog-fill" style="width:${Math.min(pc,100)}%;background:${color}"></div></div>
-      </div>` : ''}
-    </div>`;
-  },
-
-  funnelStep: (label, val, max, isFirst=false, isEuro=false) => {
-    const ratio = max > 0 ? val / max : 0;
-    return `<div class="fs">
-      <div class="fs-label">${label}</div>
-      <div class="fs-track"><div class="fs-fill" style="width:${Math.min(ratio*100,100)}%"></div></div>
-      <div class="fs-val">${isEuro ? U.euro(val) : val}</div>
-      <div class="fs-rate">${!isFirst ? U.pct(ratio) : ''}</div>
-    </div>`;
-  },
-
-  weekCard: (label, mainVal, mainLabel, minis, isCurrent, dateRange) => `
-    <div class="wc${isCurrent?' wc-active':''}">
-      <div class="wc-label">${label}</div>
-      ${dateRange ? `<div class="wc-dates">${dateRange}</div>` : ''}
-      <div class="wc-main">${mainVal}</div>
-      <div class="wc-sub">${mainLabel}</div>
-      <div class="wc-grid">${minis.map(m=>`
-        <div class="wc-mini">
-          <div class="wc-mini-v"${m.color?` style="color:${m.color}"`:''} >${m.val}</div>
-          <div class="wc-mini-l">${m.label}</div>
-        </div>`).join('')}</div>
-    </div>`,
-
-  barChart: (labels, actuals, projs, unit='') => {
-    const mx = Math.max(...actuals, ...projs, 1);
-    return `<div class="chart-legend">
-        <span class="cl-dot cl-real"></span>Réel
-        <span class="cl-dot cl-proj" style="margin-left:14px"></span>Projection
-      </div>
-      <div class="chart-bars">
-        ${labels.map((l,i)=>`<div class="chart-col">
-          <div class="chart-pair">
-            <div class="chart-bar bar-real" style="height:${(actuals[i]/mx*100).toFixed(1)}%" title="${actuals[i]}${unit}"></div>
-            <div class="chart-bar bar-proj" style="height:${(projs[i]/mx*100).toFixed(1)}%" title="Proj:${projs[i]}${unit}"></div>
-          </div>
-          <div class="chart-lbl">${l}</div>
-        </div>`).join('')}
-      </div>`;
-  },
-
-  toast: (msg, type='success') => {
-    let t = document.getElementById('_toast');
-    if (!t) { t=document.createElement('div'); t.id='_toast'; document.body.appendChild(t); }
-    const s = { success:'background:#1a2e1a;border:1px solid rgba(52,211,153,.3);color:#6ee7b7', error:'background:#2e1a1a;border:1px solid rgba(239,68,68,.3);color:#fca5a5', info:'background:#1a1a2e;border:1px solid rgba(96,165,250,.3);color:#93c5fd' };
-    t.style.cssText = `position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(0);font-size:12px;font-weight:600;padding:9px 18px;border-radius:10px;z-index:9999;opacity:1;transition:all .28s;white-space:nowrap;font-family:var(--font-b);${s[type]||s.success}`;
-    t.textContent = msg;
-    clearTimeout(t._t);
-    t._t = setTimeout(()=>{ t.style.opacity='0'; t.style.transform='translateX(-50%) translateY(20px)'; }, 2800);
-  },
-};
-
-
-/* ═══════════════════════════════════════════════════════════
-   SEMAINES DU MOIS
-   Avant Mars 2026 : semaines lun→dim classiques (peuvent déborder)
-   À partir de Mars 2026 : semaines strictement dans le mois
-     - Segments ≤ 3 jours fusionnés avec la semaine adjacente
-═══════════════════════════════════════════════════════════ */
-function getMonthWeeks(monthLabel) {
-  const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin',
-                     'Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-  const parts = monthLabel.split(' ');
-  const month = MONTHS_FR.indexOf(parts[0]);
-  const year  = parseInt(parts[1]);
-  if (month === -1 || isNaN(year)) return [];
-
-  const pad = n => String(n).padStart(2,'0');
-  function fmt(d) { return pad(d.getDate()) + '/' + pad(d.getMonth()+1); }
-  function fmtShort(d) {
-    const M = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
-    return d.getDate() + ' ' + M[d.getMonth()];
-  }
-  function dayCount(a, b) { return Math.round((b - a) / 86400000) + 1; }
-
-  /* ── Ancien mode (avant Mars 2026) : semaines lun→dim, débordement OK ── */
-  if (year < 2026 || (year === 2026 && month < 2)) {
-    const firstOfMonth = new Date(year, month, 1);
-    const dayOfWeek = firstOfMonth.getDay();
-    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    let monday = new Date(year, month, 1 + daysToMonday);
-    const weeks = [];
-    while (true) {
-      const sunday = new Date(monday.getTime() + 6 * 86400000);
-      if (monday.getMonth() === month || sunday.getMonth() === month) {
-        weeks.push({
-          id: 's' + (weeks.length + 1), label: 'S' + (weeks.length + 1),
-          start: new Date(monday), end: new Date(sunday),
-          range: fmt(monday) + ' \u2192 ' + fmt(sunday),
-          short: fmtShort(monday) + ' \u2013 ' + fmtShort(sunday),
-          tab:   fmt(monday) + '\u2192' + fmt(sunday),
-        });
-      }
-      monday = new Date(monday.getTime() + 7 * 86400000);
-      if (monday.getMonth() !== month && monday.getMonth() !== (month === 0 ? 11 : month - 1)) {
-        if (monday.getMonth() !== month) break;
-      }
-      if (monday.getFullYear() > year + 1) break;
-      if (weeks.length >= 6) break;
-    }
-    return weeks;
-  }
-
-  /* ── Nouveau mode (Mars 2026+) : semaines dans le mois, fusion si ≤ 3j ── */
-  const lastDay = new Date(year, month + 1, 0);
-  const segs    = [];
-  let cursor    = new Date(year, month, 1);
-
-  while (cursor <= lastDay) {
-    const dow = cursor.getDay();
-    let end;
-    if (dow === 1) { end = new Date(cursor.getTime() + 6 * 86400000); }
-    else { end = new Date(cursor.getTime() + (dow === 0 ? 0 : 7 - dow) * 86400000); }
-    if (end > lastDay) end = new Date(lastDay);
-    segs.push({ start: new Date(cursor), end: new Date(end) });
-    cursor = new Date(end.getTime() + 86400000);
-  }
-
-  // Fusion début si ≤ 3 jours
-  if (segs.length >= 2 && dayCount(segs[0].start, segs[0].end) <= 3) {
-    segs[1].start = segs[0].start;
-    segs.shift();
-  }
-  // Fusion fin si ≤ 3 jours
-  if (segs.length >= 2 && dayCount(segs[segs.length-1].start, segs[segs.length-1].end) <= 3) {
-    segs[segs.length-2].end = segs[segs.length-1].end;
-    segs.pop();
-  }
-
-  return segs.map((s, i) => ({
-    id:    's' + (i + 1),
-    label: 'S' + (i + 1),
-    start: s.start,
-    end:   s.end,
-    range: fmt(s.start) + ' \u2192 ' + fmt(s.end),
-    short: fmtShort(s.start) + ' \u2013 ' + fmtShort(s.end),
-    tab:   fmt(s.start) + '\u2192' + fmt(s.end),
-  }));
-}
-
-window.DB=DB; window.U=U; window.Fire=Fire; window.PROJECTIONS=PROJECTIONS;
-window.getMonthWeeks=getMonthWeeks; window.ALL_WEEKS=ALL_WEEKS;
-
-/* === end sales-data.js === */
-
-/* sync-bridge loaded externally */
-</script>
-<script src="sync-bridge.js"></script>
+<!-- ── Règles communes des chiffres (audit de cohérence du 25/11/2026) ──
+     Ordre imposé : stats-core.js (règles, glossaire, « i ») AVANT
+     funnel-core.js (liste unique des closes) et alteore-flow.js (chargeurs),
+     puis stats-drill.js (listes cliquables). L'ancienne copie en ligne de
+     sales-data.js (données d'exemple, calculs morts) et sync-bridge.js
+     (saisie hebdo lue pour tous les mois) ne sont plus chargées.
+     sales-hist-data.js reste : repli en lecture de l'ancienne saisie
+     (mois d'avant juillet 2026), exactement comme Projections. -->
+<script src="stats-core.js"></script>
+<script src="funnel-core.js"></script>
+<script src="alteore-flow.js"></script>
+<script src="stats-drill.js"></script>
 <script src="sales-hist-data.js"></script>
 <script src="nav.js"></script>
 <script>(function(){var r=localStorage.getItem('ambitio_role');if(r==='coach')window.location.href='coaching.html';if(!r)window.location.href='login.html';})();</script>
@@ -468,12 +49,12 @@ window.getMonthWeeks=getMonthWeeks; window.ALL_WEEKS=ALL_WEEKS;
   <div class="tb-page">◈ Dashboard</div>
   <div class="tb-right">
     <div class="tb-month" id="year-nav">
-      <button onclick="prevYear()">&#9664;</button>
-      <span id="year-lbl" style="min-width:50px;text-align:center">2026</span>
-      <button onclick="nextYear()">&#9654;</button>
+      <button type="button" data-act="annee-prec" aria-label="Année précédente">&#9664;</button>
+      <span id="year-lbl" style="min-width:50px;text-align:center"></span>
+      <button type="button" data-act="annee-suiv" aria-label="Année suivante">&#9654;</button>
     </div>
     <div class="tb-user">
-      <div class="tb-av" id="tb-av">G</div>
+      <div class="tb-av" id="tb-av">?</div>
       <div><div class="tb-nm" id="tb-nm"></div></div>
     </div>
   </div>
@@ -586,6 +167,23 @@ tr.member-archived-admin td { opacity:.55; filter:grayscale(.65); transition:opa
 tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
 </style>
 
+<style>
+/* ═══ Rebranchement sur les calculs communs (25/11/2026) — peinture seule,
+   variables de thème uniquement (rien à régénérer pour le thème clair). ═══ */
+.dash-notes { margin-bottom:14px; font-size:12px; line-height:1.7; color:var(--muted); }
+.dash-notes b { color:var(--text); }
+.dash-notes .dash-warn { color:var(--gold); }
+.dash-part { font-size:12px; font-weight:700; color:var(--text); margin:6px 0 12px; }
+.dash-part small { font-weight:500; color:var(--muted); }
+.dash-mut { color:var(--muted); font-weight:500; }
+.dash-decl { font-size:9px; font-weight:700; color:var(--muted); margin-left:4px; text-transform:none; letter-spacing:0; }
+.dash-funnel .yr-funnel-label { width:132px; }
+.dash-funnel .yr-funnel-rate { width:auto; min-width:150px; }
+.yr-table tr.dash-legacy td { opacity:.8; }
+.yr-chart-bar.dash-legacy { opacity:.45; }
+.dash-act { cursor:pointer; color:var(--red3); }
+</style>
+
 <div class="page">
 
   <!-- Brief du matin IA (admins) — ai-brief-widget.js -->
@@ -594,7 +192,7 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
 
   <!-- OBJECTIVE BAR -->
   <div class="obj-bar-wrap">
-    <div class="obj-bar" id="obj-bar"></div>
+    <div class="obj-bar" id="obj-bar"><div class="obj-title">Chargement de l’objectif…</div></div>
   </div>
 
   <!-- PERIOD SELECTOR -->
@@ -605,665 +203,1140 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
   </div>
 
   <!-- MAIN CONTENT -->
-  <div id="main-content"></div>
+  <div id="main-content"><div class="cr-loading">Chargement…</div></div>
 
-  <!-- RAPPORT APPELS (L1 — source call_logs Twilio) -->
+  <!-- ACTIVITÉ TÉLÉPHONIQUE (call_logs, plage propre au bloc) -->
   <div id="call-report"></div>
 
 </div>
 
 <script>
-/* ═══════════════════════════════════════════════════════════
-   DASHBOARD — NOUVELLE VERSION
-   Features: Objectif 1M, Setting visible, Sélecteur période
-═══════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════
+   DASHBOARD SALES — rebranché sur les calculs communs (25/11/2026)
+   ───────────────────────────────────────────────────────────────────────
+   Décision d'Adrien (D11 du référentiel des chiffres commerciaux) : à partir
+   de juillet 2026, plus aucun chiffre de l'ancienne saisie hebdomadaire.
+     · RDV, Présents, Pitchés, Kept, Show-up : StatsCore.compter sur les RDV
+       de vente de la période (AlteoreFlow.loadBookingsRange, classe par
+       StatsCore.classifyBooking) — les mêmes règles que Global closing ;
+     · Closes, Contracté, Collecté, Panier moyen, Reste à encaisser :
+       FunnelCore.loadCloses + sumCloses, UN appel par période — la liste
+       unique des closes du Stats funnel et de Global closing ;
+     · Sets (RDV du setting créés, un par RDV, hors remplaçants et
+       doublons), RDV NB, Présents NB, Show-up : mêmes règles que Set NB ;
+     · Appels / Décrochés : AlteoreFlow.loadCallsForMember +
+       AlteoreFlow.isAnswered (règle commune du décroché). Un non-admin ne
+       peut lire que ses propres appels : les totaux d'équipe affichent
+       « — » avec un « i », jamais un total partiel (D22).
+   Avant juillet 2026 : l'ancienne saisie reste affichée, étiquetée
+   « ancienne saisie », SANS la mention « HT » (D19), dans une partie à part.
+   Une période à cheval est coupée en deux parties, dites à l'écran.
+   Objectif annuel : _config/sales_objectives (même source et même
+   projection de fin d'année que Projections).
+   Visibilité (D26) : totaux d'équipe identiques pour tous ; montants par
+   personne réservés aux admins et à la personne elle-même.
+   Lecture seule : la page n'écrit plus rien en base (l'ancienne recopie de
+   sales-hist-data.js vers saisies/ au chargement est retirée).
+   ES5 strict, aucun onclick en ligne (délégation + data-*).
+   ═══════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+  var SC = window.StatsCore, FC = window.FunnelCore, AF = window.AlteoreFlow, SD = window.StatsDrill;
+  var db = firebase.firestore();
 
-const OBJECTIF_ANNUEL = 1_000_000;
-const MF = DB.months;
-let _year = 2026;
+  var MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+  var MOIS_COURT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+  /* Premier mois calculé automatiquement — même seuil que Projections
+     (sales-projections.html, AUTO_FROM). Avant : ancienne saisie. */
+  var AUTO_FROM = '2026-07';
+  /* Repli de l'objectif annuel quand _config/sales_objectives n'a rien pour
+     l'année — copie EXACTE du repli de Projections (DEFAULT_OBJ), pour que
+     les deux écrans affichent le même objectif. La source reste la base. */
+  var DEFAULT_OBJ = { '2025': 500000, '2026': 1000000, '2027': 1500000 };
+  var FICHES_LOT = 30;
 
-// Modes: 'year', 'month', 'range'
-let _viewMode = 'year';
-let _selectedMonths = []; // pour mode 'month' (1 élément) ou 'range' (N éléments)
-let _rangeStart = null;   // index du premier mois cliqué pour range
+  var S = {
+    year: 0, mode: 'month', months: [], rangeStart: null,
+    role: '', isAdmin: false, uid: null,
+    objectives: null, objErreur: null, objP: null,
+    typeMapP: null, personsP: null,
+    annees: {},            // année → Promise des données de l'année (closes calculés + ancienne saisie)
+    tok: 0, data: null, calc: null, started: false
+  };
 
-function yearLabel() { return String(_year); }
-function getElapsedMonths() {
-  var now = new Date();
-  var cy = now.getFullYear();
-  if (_year < cy) return 12;
-  if (_year > cy) return 0;
-  return Math.min(now.getMonth() + 1, 12);
-}
-function prevYear() { _year--; _viewMode = 'year'; _selectedMonths = []; refreshYear(); }
-function nextYear() { _year++; _viewMode = 'year'; _selectedMonths = []; refreshYear(); }
-
-/* ═══════════════════════════════════════════════════════════
-   DONNÉES HISTORIQUES (identique)
-═══════════════════════════════════════════════════════════ */
-/* HIST_DATA vit maintenant dans sales-hist-data.js, chargé plus haut et
-   partagé avec l'autre page. Les deux copies précédentes avaient divergé
-   sur les champs `leads` et `tempsAppel` — ne pas en recréer une ici. */
-
-/* ── Helpers ── */
-function _mToFs(monthLabel) {
-  var parts = monthLabel.split(' ');
-  var m = MF.indexOf(parts[0]);
-  if (m < 0) return null;
-  return parts[1] + '-' + String(m+1).padStart(2,'0');
-}
-
-/* ── Migration Firestore (identique) ── */
-async function migrateHistToFirestore() {
-  var db = (typeof Fire !== 'undefined' && Fire.db) ? Fire.db : null;
-  if (!db) return;
-  try { if (localStorage.getItem('_hist_migrated_v2') === '1') return; } catch(e) {}
-  console.log('[dashboard] Migration des données historiques vers Firestore...');
-  var count = 0;
-  for (var u = 0; u < SYNC_UIDS.length; u++) {
-    var uid = SYNC_UIDS[u];
-    var h = HIST_DATA[uid];
-    if (!h) continue;
-    for (var mk in (h.closing || {})) {
-      var fsKey = _mToFs(mk); if (!fsKey) continue;
-      var ref = db.collection('saisies').doc(uid).collection('mois').doc(fsKey);
-      try { var snap = await ref.get(); var existing = snap.exists ? snap.data() : {};
-        if (!existing.closing_total) { await ref.set({ closing_total: h.closing[mk], _migrated: true }, { merge: true }); count++; }
-      } catch(e) { console.warn('[migration]', uid, mk, e.message); }
-    }
-    for (var mk in (h.closing_weekly || {})) {
-      var fsKey = _mToFs(mk); if (!fsKey) continue;
-      var ref = db.collection('saisies').doc(uid).collection('mois').doc(fsKey);
-      try { var snap = await ref.get(); var existing = snap.exists ? snap.data() : {};
-        if (!existing.closing) { await ref.set({ closing: h.closing_weekly[mk], _migrated: true }, { merge: true }); count++; }
-      } catch(e) { console.warn('[migration]', uid, mk, e.message); }
-    }
-    for (var mk in (h.setting || {})) {
-      var fsKey = _mToFs(mk); if (!fsKey) continue;
-      var ref = db.collection('saisies').doc(uid).collection('mois').doc(fsKey);
-      try { var snap = await ref.get(); var existing = snap.exists ? snap.data() : {};
-        if (!existing.setting_total) { await ref.set({ setting_total: h.setting[mk], _migrated: true }, { merge: true }); count++; }
-      } catch(e) { console.warn('[migration]', uid, mk, e.message); }
-    }
-    for (var mk in (h.setting_weekly || {})) {
-      var fsKey = _mToFs(mk); if (!fsKey) continue;
-      var ref = db.collection('saisies').doc(uid).collection('mois').doc(fsKey);
-      try { var snap = await ref.get(); var existing = snap.exists ? snap.data() : {};
-        if (!existing.setting) { await ref.set({ setting: h.setting_weekly[mk], _migrated: true }, { merge: true }); count++; }
-      } catch(e) { console.warn('[migration]', uid, mk, e.message); }
-    }
-  }
-  try { localStorage.setItem('_hist_migrated_v2', '1'); } catch(e) {}
-  console.log('[dashboard] Migration terminée: ' + count + ' documents écrits');
-}
-
-/* ═══════════════════════════════════════════════════════════
-   CHARGER TOUTES LES DONNÉES DE L'ANNÉE DEPUIS FIRESTORE
-═══════════════════════════════════════════════════════════ */
-async function loadYearData() {
-  var db = (typeof Fire !== 'undefined' && Fire.db) ? Fire.db : null;
-  var results = {};
-  for (var m = 0; m < 12; m++) {
-    var monthKey = MF[m] + ' ' + _year;
-    var fsKey = _year + '-' + String(m+1).padStart(2,'0');
-    results[monthKey] = {};
-    for (var u = 0; u < SYNC_UIDS.length; u++) {
-      var uid = SYNC_UIDS[u];
-      var data = null;
-      if (db) {
-        try {
-          var ref = db.collection('saisies').doc(uid).collection('mois').doc(fsKey);
-          var snap = await ref.get();
-          if (snap.exists) {
-            var raw = snap.data();
-            data = { closing: null, setting: null };
-            if (raw.closing_total) data.closing = raw.closing_total;
-            else if (raw.closing) {
-              var t = {}; ['calls','lives','offres','closes','hardClose','followUp','contracte','collecte'].forEach(function(k){t[k]=0;});
-              ALL_WEEKS.forEach(function(w){ if(raw.closing[w]) Object.keys(t).forEach(function(k){t[k]+=(raw.closing[w][k]||0);}); });
-              data.closing = t;
-            }
-            if (raw.setting_total) data.setting = raw.setting_total;
-            else if (raw.setting) {
-              var t = {}; ['leads','calls','decroches','propRdv','sets','presents','closes','collecte'].forEach(function(k){t[k]=0;});
-              ALL_WEEKS.forEach(function(w){ if(raw.setting[w]) Object.keys(t).forEach(function(k){t[k]+=(raw.setting[w][k]||0);}); });
-              data.setting = t;
-            }
-          }
-        } catch(e) { console.warn('[year] Firestore err', uid, monthKey, e.message); }
-      }
-      if (!data) {
-        var cls = null, set = null;
-        try { var v = localStorage.getItem('saisie_closing_'+uid+'_'+monthKey) || localStorage.getItem('closing_'+uid+'_'+monthKey); cls = v ? JSON.parse(v) : null; } catch(e){}
-        try { var v = localStorage.getItem('saisie_setting_'+uid+'_'+monthKey) || localStorage.getItem('setting_'+uid+'_'+monthKey); set = v ? JSON.parse(v) : null; } catch(e){}
-        if (cls || set) {
-          data = { closing: null, setting: null };
-          if (cls) {
-            if (cls._total) data.closing = cls._total;
-            else { var t = {}; ['calls','lives','offres','closes','hardClose','followUp','contracte','collecte'].forEach(function(k){t[k]=0;}); ALL_WEEKS.forEach(function(w){if(cls[w])Object.keys(t).forEach(function(k){t[k]+=(cls[w][k]||0);});}); data.closing = t; }
-          }
-          if (set) {
-            if (set._total) data.setting = set._total;
-            else { var t = {}; ['leads','calls','decroches','propRdv','sets','presents','closes','collecte'].forEach(function(k){t[k]=0;}); ALL_WEEKS.forEach(function(w){if(set[w])Object.keys(t).forEach(function(k){t[k]+=(set[w][k]||0);});}); data.setting = t; }
-          }
-        }
-      }
-      if (!data) {
-        var h = HIST_DATA[uid];
-        if (h) {
-          data = { closing: null, setting: null };
-          if (h.closing && h.closing[monthKey]) data.closing = h.closing[monthKey];
-          if (h.closing_weekly && h.closing_weekly[monthKey]) {
-            var weeks = h.closing_weekly[monthKey];
-            var t = {}; ['calls','lives','offres','closes','hardClose','followUp','contracte','collecte'].forEach(function(k){t[k]=0;});
-            Object.values(weeks).forEach(function(w){Object.keys(t).forEach(function(k){t[k]+=(w[k]||0);});});
-            data.closing = t;
-          }
-          if (h.setting && h.setting[monthKey]) data.setting = h.setting[monthKey];
-          if (h.setting_weekly && h.setting_weekly[monthKey]) {
-            var weeks = h.setting_weekly[monthKey];
-            var t = {}; ['leads','calls','decroches','propRdv','sets','presents','closes','collecte'].forEach(function(k){t[k]=0;});
-            Object.values(weeks).forEach(function(w){Object.keys(t).forEach(function(k){t[k]+=(w[k]||0);});});
-            data.setting = t;
-          }
-          if (!data.closing && !data.setting) data = null;
-        }
-      }
-      results[monthKey][uid] = data;
-    }
-  }
-  return results;
-}
-
-/* ═══════════════════════════════════════════════════════════
-   AGRÉGER — prend en compte closing + setting complet
-═══════════════════════════════════════════════════════════ */
-function aggregateData(yearData, monthKeys) {
-  var totals = { calls:0, lives:0, offres:0, closes:0, contracte:0, collecte:0,
-                 sLeads:0, sCalls:0, sDecroches:0, sPropRdv:0, sSets:0, sPresents:0, sCloses:0 };
-  var perMonth = {};
-  var perMember = {};
-  SYNC_UIDS.forEach(function(uid) { perMember[uid] = { calls:0, lives:0, offres:0, closes:0, contracte:0, collecte:0, sLeads:0, sCalls:0, sDecroches:0, sPropRdv:0, sSets:0, sPresents:0, sCloses:0 }; });
-
-  monthKeys.forEach(function(mk) {
-    var mData = yearData[mk] || {};
-    var mt = { calls:0, lives:0, offres:0, closes:0, contracte:0, collecte:0,
-               sLeads:0, sCalls:0, sDecroches:0, sPropRdv:0, sSets:0, sPresents:0, sCloses:0, hasData:false };
-    SYNC_UIDS.forEach(function(uid) {
-      var d = mData[uid];
-      if (!d) return;
-      if (d.closing) {
-        mt.hasData = true;
-        ['calls','lives','offres','closes','contracte','collecte'].forEach(function(k) {
-          var v = d.closing[k] || 0; mt[k] += v; totals[k] += v; perMember[uid][k] += v;
-        });
-      }
-      if (d.setting) {
-        mt.hasData = true;
-        var map = {leads:'sLeads',calls:'sCalls',decroches:'sDecroches',propRdv:'sPropRdv',sets:'sSets',presents:'sPresents',closes:'sCloses'};
-        Object.keys(map).forEach(function(sk) {
-          var v = d.setting[sk] || 0; var tk = map[sk]; mt[tk] += v; totals[tk] += v; perMember[uid][tk] += v;
-        });
-      }
+  /* ══ OUTILS ══════════════════════════════════════════════════════════ */
+  function $(id) { return document.getElementById(id); }
+  function esc(t) {
+    return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
-    perMonth[mk] = mt;
-  });
-  return { totals: totals, perMonth: perMonth, perMember: perMember };
-}
-
-/* ═══════════════════════════════════════════════════════════
-   RENDER
-═══════════════════════════════════════════════════════════ */
-var _yearData = null;
-
-async function refreshYear() {
-  document.getElementById('year-lbl').textContent = yearLabel();
-  _yearData = await loadYearData();
-  renderAll();
-}
-
-function renderAll() {
-  if (!_yearData) return;
-  var allMK = MF.map(function(m) { return m + ' ' + _year; });
-  var fullAgg = aggregateData(_yearData, allMK);
-
-  renderObjectiveBar(fullAgg.totals.contracte);
-  renderPeriodSelector(fullAgg.perMonth);
-
-  var activeMK, label;
-  if (_viewMode === 'year') {
-    activeMK = allMK;
-    label = 'Année ' + _year;
-  } else {
-    activeMK = _selectedMonths;
-    label = activeMK.length === 1 ? activeMK[0] : activeMK[0].split(' ')[0] + ' → ' + activeMK[activeMK.length-1].split(' ')[0] + ' ' + _year;
+  }
+  function moisCle(y, m0) { return y + '-' + SC.pad2(m0 + 1); }
+  function moisCourant() { var k = SC.moisParis(Date.now()); return { y: +k.slice(0, 4), m: +k.slice(5, 7) - 1, key: k }; }
+  function fmtEuro(n) { return (n == null || isNaN(n)) ? '—' : Math.round(Number(n)).toLocaleString('fr-FR') + ' €'; }
+  function fmtNum(n) { return (n == null || isNaN(n)) ? '—' : Math.round(Number(n)).toLocaleString('fr-FR'); }
+  function fmtPct(v) { return SC.fmtPct(v); }
+  function msOf(v) {
+    if (v == null || v === '') return null;
+    if (typeof v.toMillis === 'function') return v.toMillis();
+    var t = SC.toDate(v).getTime();
+    return isNaN(t) ? null : t;
+  }
+  function info(cle, precision) { return SC.info(cle, precision); }
+  function motInfo(cle, precision) { return esc(SC.mot(cle)) + SC.info(cle, precision); }
+  function clic(html, ref, n) { return (n > 0) ? SD.cell(html, ref) : html; }
+  function libelleMois(y, ms) {
+    if (!ms.length) return '';
+    if (ms.length === 12) return 'Année ' + y;
+    if (ms.length === 1) return MOIS[ms[0]] + ' ' + y;
+    return MOIS[ms[0]] + ' → ' + MOIS[ms[ms.length - 1]] + ' ' + y;
+  }
+  function libelleMoisCourt(ms) {
+    if (!ms.length) return '';
+    if (ms.length === 1) return MOIS_COURT[ms[0]];
+    return MOIS_COURT[ms[0]] + ' → ' + MOIS_COURT[ms[ms.length - 1]];
   }
 
-  var agg = (_viewMode === 'year') ? fullAgg : aggregateData(_yearData, activeMK);
-  renderContent(agg, fullAgg.perMonth, label);
-}
-
-/* ── OBJECTIVE BAR ── */
-function renderObjectiveBar(contracteTotal) {
-  var pct = Math.min(contracteTotal / OBJECTIF_ANNUEL * 100, 100);
-  var remaining = Math.max(OBJECTIF_ANNUEL - contracteTotal, 0);
-  var color = pct >= 100 ? '#34d399' : pct >= 50 ? '#f59e0b' : '#ef4444';
-  var gradient = pct >= 100 ? 'linear-gradient(90deg,#065f46,#34d399)' : pct >= 50 ? 'linear-gradient(90deg,#92400e,#f59e0b)' : 'linear-gradient(90deg,#991b1b,#ef4444)';
-  document.getElementById('obj-bar').innerHTML =
-    '<div class="obj-header">' +
-      '<div>' +
-        '<div class="obj-title">Objectif annuel ' + _year + '</div>' +
-        '<div class="obj-amount">' + U.euro(contracteTotal) + ' <small>/ ' + U.euro(OBJECTIF_ANNUEL) + '</small></div>' +
-      '</div>' +
-      '<div style="text-align:right">' +
-        '<div style="font-size:36px;font-weight:800;color:' + color + ';font-family:var(--font-d);line-height:1">' + pct.toFixed(1) + '%</div>' +
-        '<div class="obj-target">contracté</div>' +
-      '</div>' +
-    '</div>' +
-    '<div class="obj-track">' +
-      '<div class="obj-fill" data-pct="' + pct.toFixed(1) + '%" style="width:' + pct + '%;background:' + gradient + '"></div>' +
-    '</div>' +
-    '<div class="obj-stats">' +
-      '<div class="obj-stat">Restant : <b>' + U.euro(remaining) + '</b></div>' +
-      '<div class="obj-stat">Mois écoulés : <b>' + getElapsedMonths() + '/12</b></div>' +
-      (pct > 0 ? '<div class="obj-stat">Rythme projeté : <b>' + U.euro(contracteTotal / Math.max(getElapsedMonths(), 1) * 12) + '</b></div>' : '') +
-    '</div>';
-}
-
-/* ── PERIOD SELECTOR ── */
-function renderPeriodSelector(perMonth) {
-  // Tabs
-  var tabs = [
-    { mode:'year',  label:'📊 Année entière' },
-    { mode:'month', label:'📅 Mois' },
-    { mode:'range', label:'📐 Période' },
-  ];
-  document.getElementById('period-tabs').innerHTML = tabs.map(function(t) {
-    return '<div class="period-tab' + (_viewMode === t.mode ? ' active' : '') + '" onclick="setViewMode(\'' + t.mode + '\')">' + t.label + '</div>';
-  }).join('');
-
-  // Month grid
-  var html = MF.map(function(m, i) {
-    var mk = m + ' ' + _year;
-    var md = perMonth[mk];
-    var hasData = md && md.hasData;
-    var isActive = _selectedMonths.indexOf(mk) >= 0;
-    var inRange = false;
-    if (_viewMode === 'range' && _selectedMonths.length >= 2) {
-      var first = MF.indexOf(_selectedMonths[0].split(' ')[0]);
-      var last = MF.indexOf(_selectedMonths[_selectedMonths.length-1].split(' ')[0]);
-      inRange = i >= first && i <= last;
+  /* ══ ÉQUIPE ══════════════════════════════════════════════════════════
+     Lignes nominatives = AF.salesMembers() (rôles sales actifs, partis
+     exclus). Tout le reste va sur « Non attribué » (référentiel §3) :
+     personne inconnue, ancien membre (« Anciens membres », SANS nom),
+     personne sans ligne (« Prénom (hors onglets) »), élément antérieur à
+     l'arrivée de la personne (« Prénom (avant son arrivée) »). */
+  function membres() { return AF.salesMembers(); }
+  function nomMembre(m, slug) { return (m && (m.shortName || m.displayName || m.fullName || m.name)) || slug || ''; }
+  function membreConnu(slug) {
+    var map = window.TEAM_MEMBERS || {};
+    return (slug && Object.prototype.hasOwnProperty.call(map, slug)) ? map[slug] : null;
+  }
+  function indexMembres() {
+    var bySlug = {};
+    membres().forEach(function (m) { bySlug[m.slug] = m; });
+    return bySlug;
+  }
+  /* Rangement d'un élément : { key (slug ou '_na'), sous (précision de la
+     ligne « Non attribué ») }. */
+  function ranger(slug, jour, idx) {
+    if (!slug) return { key: '_na', sous: 'inconnu' };
+    var m = idx[slug];
+    if (m) {
+      if (jour && AF.isBeforeStart(m, jour)) return { key: '_na', sous: nomMembre(m, slug) + ' (avant son arrivée)' };
+      return { key: slug, sous: '' };
     }
-    var cls = 'month-btn';
-    if (isActive) cls += ' active';
-    else if (inRange) cls += ' in-range';
-    if (hasData) cls += ' has-data';
-    return '<div class="' + cls + '" onclick="clickMonth(' + i + ')" data-idx="' + i + '">' + m.slice(0, 3) + '</div>';
-  }).join('');
-  document.getElementById('month-grid').innerHTML = html;
-
-  // Info
-  var info = '';
-  if (_viewMode === 'range' && _rangeStart !== null && _selectedMonths.length < 2) {
-    info = '💡 Cliquer sur un second mois pour définir la plage';
-  } else if (_viewMode === 'range' && _selectedMonths.length >= 2) {
-    info = '📐 ' + _selectedMonths[0] + ' → ' + _selectedMonths[_selectedMonths.length - 1];
+    if (AF.isDeparted(slug)) return { key: '_na', sous: SC.mot('anciens_membres') };
+    var k = membreConnu(slug);
+    if (k) return { key: '_na', sous: nomMembre(k, slug) + ' (hors onglets)' };
+    return { key: '_na', sous: 'inconnu' };
   }
-  document.getElementById('period-info').textContent = info;
-}
-
-function setViewMode(mode) {
-  _viewMode = mode;
-  _selectedMonths = [];
-  _rangeStart = null;
-  renderAll();
-}
-
-function clickMonth(idx) {
-  var mk = MF[idx] + ' ' + _year;
-  if (_viewMode === 'year') {
-    // Passer en mode mois
-    _viewMode = 'month';
-    _selectedMonths = [mk];
-  } else if (_viewMode === 'month') {
-    _selectedMonths = [mk];
-  } else if (_viewMode === 'range') {
-    if (_rangeStart === null) {
-      _rangeStart = idx;
-      _selectedMonths = [mk];
-    } else {
-      var from = Math.min(_rangeStart, idx);
-      var to = Math.max(_rangeStart, idx);
-      _selectedMonths = [];
-      for (var i = from; i <= to; i++) _selectedMonths.push(MF[i] + ' ' + _year);
-      _rangeStart = null;
+  /* Nom affiché dans les listes (StatsDrill.closeItem / bookingItem). */
+  function nomDe(slug) {
+    if (!slug) return '';
+    var idx = (S.calc && S.calc.idx) || indexMembres();
+    if (idx[slug]) return nomMembre(idx[slug], slug);
+    if (AF.isDeparted(slug)) return SC.mot('anciens_membres');
+    var k = membreConnu(slug);
+    return k ? nomMembre(k, slug) + ' (hors onglets)' : '';
+  }
+  function slugDeUid(uid) {
+    if (!uid) return null;
+    var map = window.TEAM_MEMBERS || {};
+    var keys = Object.keys(map);
+    for (var i = 0; i < keys.length; i++) {
+      var m = map[keys[i]];
+      if (m && (m.firebaseUid === uid || m.uid === uid)) return m.slug || keys[i];
     }
+    return null;
   }
-  renderAll();
-}
-
-/* ── MAIN CONTENT ── */
-function renderContent(agg, perMonth, label) {
-  var T = agg.totals;
-  var isYear = _viewMode === 'year';
-  var h = '';
-
-  // Back button if not year
-  if (!isYear) {
-    h += '<div class="drill-back" onclick="setViewMode(\'year\')">◀ Retour année ' + _year + '</div>';
+  /* Hôte d'un RDV : fiche d'agenda (personId) → membre relié par son
+     compte ; à défaut un personId qui est lui-même un slug du roster. */
+  function resoudreAvec(persons) {
+    return function (personId) {
+      if (!personId) return null;
+      var p = (persons || {})[personId];
+      if (p && p.firebaseUid) { var s = slugDeUid(p.firebaseUid); if (s) return s; }
+      return membreConnu(personId) ? personId : null;
+    };
   }
+  function moi() {
+    try { var m = AF.me(); return (m && m.resolved) ? m.slug : null; } catch (e) { return null; }
+  }
+  /* D26 : montants par personne visibles d'un admin et de la personne. */
+  function argentVisible(key) { return S.isAdmin || (!!key && key === moi()); }
 
-  // ── KPIs CLOSING ──
-  h += '<div class="section-title" style="margin-top:0">Closing</div>';
-  h += '<div class="yr-grid">';
-  h += kpi('Contracté', U.euro(T.contracte), T.closes + ' closes', '#ef4444');
-  h += kpi('Collecté', U.euro(T.collecte), T.contracte > 0 ? (T.collecte/T.contracte*100).toFixed(0) + '% du contracté' : '', '#34d399');
-  h += kpi('Calls → Lives', U.num(T.calls), T.lives + ' lives · ' + T.offres + ' offres', '#f59e0b');
-  var txClose = T.offres > 0 ? (T.closes/T.offres*100).toFixed(1) + '%' : '—';
-  h += kpi('Tx Closing', txClose, T.closes + '/' + T.offres + ' offres', '#ef4444');
-  h += '</div>';
-
-  // ── KPIs SETTING ──
-  h += '<div class="section-title">Setting</div>';
-  h += '<div class="yr-grid">';
-  h += kpi('Appels Setting', U.num(T.sCalls), T.sDecroches + ' décrochés', '#60a5fa');
-  h += kpi('RDV posés', U.num(T.sSets), T.sPresents + ' présents · ' + T.sCloses + ' closes', '#818cf8');
-  var txDecroche = T.sCalls > 0 ? (T.sDecroches/T.sCalls*100).toFixed(1) + '%' : '—';
-  h += kpi('Tx Décroché', txDecroche, T.sDecroches + '/' + T.sCalls + ' appels', '#60a5fa');
-  var txShowup = T.sSets > 0 ? (T.sPresents/T.sSets*100).toFixed(1) + '%' : '—';
-  h += kpi('Tx Show-up', txShowup, T.sPresents + '/' + T.sSets + ' sets', '#34d399');
-  h += '</div>';
-
-  // ── CHART + FUNNELS ──
-  if (isYear || _selectedMonths.length > 1) {
-    // Chart contracté par mois
-    h += '<div class="yr-row-3">';
-    h += '<div class="yr-card">';
-    h += '<div class="yr-card-hdr"><div class="yr-card-title">Contracté & Collecté — ' + label + '</div></div>';
-    h += '<div class="chart-legend-row">';
-    h += '<div class="chart-legend-item"><div class="chart-legend-dot" style="background:#ef4444"></div>Contracté</div>';
-    h += '<div class="chart-legend-item"><div class="chart-legend-dot" style="background:#34d399"></div>Collecté</div>';
-    h += '<div class="chart-legend-item"><div class="chart-legend-dot" style="background:#60a5fa"></div>Sets</div>';
-    h += '</div>';
-    h += '<div class="yr-chart" id="yr-chart"></div>';
-    h += '</div>';
-
-    // Closing funnel
-    h += '<div class="yr-card">';
-    h += '<div class="yr-card-hdr"><div class="yr-card-title">Funnel Closing</div></div>';
-    h += renderFunnel(
-      [{l:'Calls',v:T.calls},{l:'Lives',v:T.lives},{l:'Offres',v:T.offres},{l:'Closes',v:T.closes}],
-      'closing'
-    );
-    h += '</div>';
-    h += '</div>';
-
-    // Setting funnel standalone
-    h += '<div class="yr-row">';
-    h += '<div class="yr-card">';
-    h += '<div class="yr-card-hdr"><div class="yr-card-title">Funnel Setting</div></div>';
-    h += renderFunnel(
-      [{l:'Appels',v:T.sCalls},{l:'Décrochés',v:T.sDecroches},{l:'Prop RDV',v:T.sPropRdv},{l:'Sets',v:T.sSets},{l:'Présents',v:T.sPresents},{l:'Closes',v:T.sCloses}],
-      'setting'
-    );
-    h += '</div>';
-
-    // Team table
-    h += '<div class="yr-card">';
-    h += '<div class="yr-card-hdr"><div class="yr-card-title">Performance équipe</div><div class="yr-card-badge">' + label + '</div></div>';
-    h += renderTeamTable(agg.perMember);
-    h += '</div>';
-    h += '</div>';
-  } else {
-    // Single month — funnels side by side
-    h += '<div class="yr-row">';
-    h += '<div class="yr-card">';
-    h += '<div class="yr-card-hdr"><div class="yr-card-title">Funnel Closing</div></div>';
-    h += renderFunnel(
-      [{l:'Calls',v:T.calls},{l:'Lives',v:T.lives},{l:'Offres',v:T.offres},{l:'Closes',v:T.closes}],
-      'closing'
-    );
-    h += '</div>';
-    h += '<div class="yr-card">';
-    h += '<div class="yr-card-hdr"><div class="yr-card-title">Funnel Setting</div></div>';
-    h += renderFunnel(
-      [{l:'Appels',v:T.sCalls},{l:'Décrochés',v:T.sDecroches},{l:'Prop RDV',v:T.sPropRdv},{l:'Sets',v:T.sSets},{l:'Présents',v:T.sPresents},{l:'Closes',v:T.sCloses}],
-      'setting'
-    );
-    h += '</div>';
-    h += '</div>';
-
-    // Team
-    h += '<div class="yr-card" style="margin-bottom:18px">';
-    h += '<div class="yr-card-hdr"><div class="yr-card-title">Performance équipe</div><div class="yr-card-badge">' + label + '</div></div>';
-    h += renderTeamTable(agg.perMember);
-    h += '</div>';
+  /* ══ PÉRIODE ═════════════════════════════════════════════════════════ */
+  function periode() {
+    var y = S.year;
+    var ms = S.mode === 'year' ? [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] : S.months.slice().sort(function (a, b) { return a - b; });
+    var calc = ms.filter(function (m) { return moisCle(y, m) >= AUTO_FROM; });
+    var anc = ms.filter(function (m) { return moisCle(y, m) < AUTO_FROM; });
+    return {
+      y: y, months: ms, label: libelleMois(y, ms),
+      calc: calc.length ? { months: calc, start: FC.periodMonth(y, calc[0]).start, end: FC.periodMonth(y, calc[calc.length - 1]).end } : null,
+      anc: anc
+    };
+  }
+  /* Partie calculée de toute l'année (objectif annuel). */
+  function partieAnnee(y) {
+    var calc = [];
+    for (var m = 0; m < 12; m++) if (moisCle(y, m) >= AUTO_FROM) calc.push(m);
+    return calc.length ? { months: calc, start: FC.periodMonth(y, calc[0]).start, end: FC.periodMonth(y, 11).end } : null;
   }
 
-  // ── MONTH DETAIL TABLE (year/range only) ──
-  if (isYear || _selectedMonths.length > 1) {
-    var monthKeys = isYear ? MF.map(function(m) { return m + ' ' + _year; }) : _selectedMonths;
-    var monthsWithData = monthKeys.filter(function(mk) { return perMonth[mk] && perMonth[mk].hasData; });
-    if (monthsWithData.length > 0) {
-      h += '<div class="yr-card">';
-      h += '<div class="yr-card-hdr"><div class="yr-card-title">Détail par mois</div></div>';
-      h += '<div class="yr-table-wrap"><table class="yr-table">';
-      h += '<thead><tr><th>Mois</th><th>Calls C.</th><th>Lives</th><th>Closes</th><th>Contracté</th><th>Collecté</th><th>Appels S.</th><th>Sets</th><th>Présents</th></tr></thead>';
-      h += '<tbody>';
-      monthsWithData.forEach(function(mk) {
-        var d = perMonth[mk];
-        var mName = mk.split(' ')[0];
-        h += '<tr style="cursor:pointer" onclick="clickMonth(' + MF.indexOf(mName) + ')">';
-        h += '<td style="color:var(--red3)">' + mName + '</td>';
-        h += '<td>' + d.calls + '</td><td>' + d.lives + '</td><td>' + d.closes + '</td>';
-        h += '<td>' + U.euro(d.contracte) + '</td><td>' + U.euro(d.collecte) + '</td>';
-        h += '<td>' + d.sCalls + '</td><td>' + d.sSets + '</td><td>' + d.sPresents + '</td>';
-        h += '</tr>';
+  /* ══ CHARGEMENTS ═════════════════════════════════════════════════════ */
+  function typeMapP() {
+    if (!S.typeMapP) S.typeMapP = AF.loadTypeMap().then(function (m) { if (m && m._erreur) S.typeMapP = null; return m; });
+    return S.typeMapP;
+  }
+  function personsP() {
+    if (!S.personsP) S.personsP = AF.loadPersonsMap().then(function (m) { if (m && m._erreur) S.personsP = null; return m; });
+    return S.personsP;
+  }
+  function chargerObjectifs() {
+    if (S.objP) return S.objP;
+    S.objP = db.collection('_config').doc('sales_objectives').get().then(function (snap) {
+      S.objectives = (snap.exists && (snap.data() || {}).years) || {};
+      S.objErreur = null;
+    }).catch(function (e) {
+      S.objectives = {};
+      S.objErreur = (e && e.message) || 'lecture impossible';
+      S.objP = null;
+    });
+    return S.objP;
+  }
+  function objAnnee(y) {
+    var o = (S.objectives || {})[String(y)] || {};
+    var regle = o.annual != null && o.annual !== '';
+    return { annual: regle ? (Number(o.annual) || 0) : (DEFAULT_OBJ[String(y)] || 0), months: o.months || {}, regle: regle };
+  }
+  function objMois(y, m0) {
+    var o = objAnnee(y);
+    var v = o.months[String(m0 + 1)];
+    return (v != null && v !== '') ? (Number(v) || 0) : o.annual / 12;
+  }
+
+  /* Ancienne saisie : mêmes membres lus que Projections (ceux de
+     sales-hist-data.js + le roster), mêmes champs, même repli. Plus de
+     lecture des copies gardées dans le navigateur (localStorage). */
+  function slugsAncienneSaisie() {
+    var seen = {}, out = [];
+    function add(s) { if (s && !seen[s]) { seen[s] = 1; out.push(s); } }
+    Object.keys(window.HIST_DATA || {}).forEach(add);
+    (window.TEAM_MEMBERS_LIST || []).forEach(function (m) { add(m && m.slug); });
+    return out;
+  }
+  var CH_CLOSING = ['calls', 'lives', 'offres', 'closes', 'contracte', 'collecte'];
+  var CH_SETTING = ['leads', 'calls', 'decroches', 'propRdv', 'sets', 'presents', 'closes'];
+  function sommeSemaines(obj, champs) {
+    var t = {}, any = false;
+    champs.forEach(function (k) { t[k] = 0; });
+    Object.keys(obj || {}).forEach(function (w) {
+      var x = obj[w] || {};
+      any = true;
+      champs.forEach(function (k) { t[k] += Number(x[k]) || 0; });
+    });
+    return any ? t : null;
+  }
+  function normaliser(obj, champs) {
+    if (!obj) return null;
+    var t = {};
+    champs.forEach(function (k) { t[k] = Number(obj[k]) || 0; });
+    return t;
+  }
+  function lireAncienMois(y, m0) {
+    var key = moisCle(y, m0), mk = MOIS[m0] + ' ' + y;
+    var erreurs = 0;
+    return Promise.all(slugsAncienneSaisie().map(function (slug) {
+      return db.collection('saisies').doc(slug).collection('mois').doc(key).get().then(function (s) {
+        return s.exists ? (s.data() || {}) : null;
+      }, function () { erreurs++; return null; }).then(function (raw) {
+        var h = (window.HIST_DATA || {})[slug] || null;
+        var cl = null, st = null;
+        if (raw && raw.closing_total) cl = normaliser(raw.closing_total, CH_CLOSING);
+        else if (raw && raw.closing) cl = sommeSemaines(raw.closing, CH_CLOSING);
+        if (!cl && h && h.closing && h.closing[mk]) cl = normaliser(h.closing[mk], CH_CLOSING);
+        if (!cl && h && h.closing_weekly && h.closing_weekly[mk]) cl = sommeSemaines(h.closing_weekly[mk], CH_CLOSING);
+        if (raw && raw.setting_total) st = normaliser(raw.setting_total, CH_SETTING);
+        else if (raw && raw.setting) st = sommeSemaines(raw.setting, CH_SETTING);
+        if (!st && h && h.setting && h.setting[mk]) st = normaliser(h.setting[mk], CH_SETTING);
+        if (!st && h && h.setting_weekly && h.setting_weekly[mk]) st = sommeSemaines(h.setting_weekly[mk], CH_SETTING);
+        return (cl || st) ? { slug: slug, closing: cl, setting: st } : null;
       });
-      h += '<tr class="tr-total"><td>Total</td>';
-      h += '<td>' + T.calls + '</td><td>' + T.lives + '</td><td>' + T.closes + '</td>';
-      h += '<td>' + U.euro(T.contracte) + '</td><td>' + U.euro(T.collecte) + '</td>';
-      h += '<td>' + T.sCalls + '</td><td>' + T.sSets + '</td><td>' + T.sPresents + '</td>';
-      h += '</tr></tbody></table></div>';
-      h += '</div>';
+    })).then(function (rows) {
+      var out = { m: m0, has: false, bySlug: {}, erreurs: erreurs };
+      rows.forEach(function (r) { if (r) { out.has = true; out.bySlug[r.slug] = r; } });
+      return out;
+    });
+  }
+
+  /* Données d'une année : closes de sa partie calculée (objectif annuel,
+     contracté mois par mois) et ancienne saisie de ses mois d'avant
+     juillet 2026. Mis en cache par année ; « Actualiser » vide le cache. */
+  function chargerAnnee(y) {
+    if (S.annees[y]) return S.annees[y];
+    var part = partieAnnee(y);
+    var anc = [];
+    for (var m = 0; m < 12; m++) if (moisCle(y, m) < AUTO_FROM) anc.push(m);
+    var pCloses = !part ? Promise.resolve(null) : Promise.all([typeMapP(), personsP()]).then(function (r) {
+      return FC.loadCloses(db, { start: part.start, end: part.end, typeMap: r[0] || {}, resoudrePersonne: resoudreAvec(r[1]) });
+    });
+    S.annees[y] = Promise.all([pCloses, Promise.all(anc.map(function (mm) { return lireAncienMois(y, mm); }))]).then(function (r) {
+      var legacy = {};
+      r[1].forEach(function (x) { legacy[x.m] = x; });
+      return { y: y, part: part, closes: r[0], legacy: legacy };
+    });
+    return S.annees[y];
+  }
+
+  /* Fiches des RDV du setting (setter de la fiche : référentiel §3,
+     StatsCore.setterDuRdv). Lues seulement quand le RDV ne porte pas déjà
+     le setter retenu au close. Lecture en échec : dite à l'écran. */
+  function chargerFiches(bookings, typeMap) {
+    var ids = {};
+    (bookings || []).forEach(function (b) {
+      if (!b || !b.leadId) return;
+      if (SC.classifyBooking(b, typeMap) !== 'setter') return;
+      if (b.closeData && b.closeData.setterSlug) return;
+      ids[b.leadId] = 1;
+    });
+    var list = Object.keys(ids), map = {}, illisibles = 0;
+    function lot(i) {
+      if (i >= list.length) return Promise.resolve();
+      return Promise.all(list.slice(i, i + FICHES_LOT).map(function (id) {
+        return db.collection('leads').doc(id).get().then(function (s) {
+          if (s.exists) { var d = s.data() || {}; map[id] = { setterSlug: d.setterSlug || null, assignedTo: d.assignedTo || null }; }
+        }, function () { illisibles++; });
+      })).then(function () { return lot(i + FICHES_LOT); });
     }
+    return lot(0).then(function () { return { map: map, illisibles: illisibles }; });
   }
 
-  document.getElementById('main-content').innerHTML = h;
-
-  // Render chart after DOM insertion
-  if ((isYear || _selectedMonths.length > 1) && document.getElementById('yr-chart')) {
-    renderChart(perMonth, isYear ? MF.map(function(m){return m+' '+_year;}) : _selectedMonths);
+  /* Partie calculée de la période choisie. Appels : un mois au plus
+     (plafond de lecture) ; au-delà, « — » et la raison dans le « i ». */
+  function chargerCalc(Pc, anneeP) {
+    if (!Pc) return Promise.resolve(null);
+    var fromDay = SC.jourParis(Pc.start), toDay = SC.jourParis(Pc.end);
+    var unMois = Pc.months.length === 1;
+    var pCalls = !unMois ? Promise.resolve(null)
+      : (S.isAdmin ? AF.loadCallsForMember(null, Pc.start, Pc.end, true)
+        : (S.uid ? AF.loadCallsForMember(S.uid, Pc.start, Pc.end, false) : Promise.resolve(null)));
+    return Promise.all([typeMapP(), personsP(), AF.loadBookingsRange(fromDay, toDay, Pc.start, Pc.end), pCalls]).then(function (r) {
+      var typeMap = r[0] || {}, persons = r[1] || {}, bookings = r[2] || [], calls = r[3];
+      var pa = partieAnnee(S.year);
+      var memeQueAnnee = !!pa && pa.start.getTime() === Pc.start.getTime() && pa.end.getTime() === Pc.end.getTime();
+      var pCloses = memeQueAnnee ? anneeP.then(function (a) { return a.closes; })
+        : FC.loadCloses(db, { start: Pc.start, end: Pc.end, typeMap: typeMap, bookings: bookings._erreur ? null : bookings, resoudrePersonne: resoudreAvec(persons) });
+      return Promise.all([pCloses, chargerFiches(bookings, typeMap)]).then(function (r2) {
+        return {
+          Pc: Pc, fromDay: fromDay, toDay: toDay, unMois: unMois,
+          typeMap: typeMap, persons: persons, bookings: bookings, calls: calls,
+          closes: r2[0] || { rows: [], annules: [], sansSignal: [], ecartsCanal: [], erreur: 'liste des closes indisponible' },
+          fiches: r2[1]
+        };
+      });
+    });
   }
-}
 
-/* ── HELPERS ── */
-function kpi(label, val, sub, color) {
-  return '<div class="yr-kpi" style="--kc:' + color + '">' +
-    '<div class="yr-kpi-label">' + label + '</div>' +
-    '<div class="yr-kpi-val">' + val + '</div>' +
-    '<div class="yr-kpi-sub">' + sub + '</div>' +
-  '</div>';
-}
+  /* ══ CALCUL — tout vient de StatsCore et de la liste unique des closes ══ */
+  function seau(key, label) {
+    return { key: key, label: label, rdv: SC.vide(), nb: SC.vide(), sets: 0, closes: [], calls: 0, decroches: 0, talk: 0, sous: {} };
+  }
+  function calculer(raw) {
+    var now = Date.now();
+    var idx = indexMembres();
+    var tm = raw.typeMap, fiches = (raw.fiches && raw.fiches.map) || {};
+    var res = resoudreAvec(raw.persons);
+    var B = {}, ordre = [];
+    membres().forEach(function (m) { B[m.slug] = seau(m.slug, nomMembre(m, m.slug)); ordre.push(m.slug); });
+    B._na = seau('_na', SC.mot('non_attribue'));
+    var TOT = seau('_all', SC.mot('equipe'));
+    var CLS = { self: SC.vide(), setter: SC.vide(), admin: SC.vide() };
+    var MO = {};
+    var L = {};   // L[scope][genre] = [entrées]
+    var callsNoAuthor = 0;
 
-function renderFunnel(steps, type) {
-  var maxV = Math.max.apply(null, steps.map(function(s){return s.v;}));
-  if (maxV === 0) maxV = 1;
-  var h = '<div class="yr-funnel">';
-  steps.forEach(function(s, i) {
-    var w = Math.max(s.v / maxV * 100, 3).toFixed(0);
-    var rate = '';
-    if (i > 0 && steps[i-1].v > 0) rate = (s.v / steps[i-1].v * 100).toFixed(1) + '%';
-    h += '<div class="yr-funnel-row">';
-    h += '<div class="yr-funnel-label">' + s.l + '</div>';
-    h += '<div class="yr-funnel-track"><div class="yr-funnel-fill ' + type + '" style="width:' + w + '%"></div></div>';
-    h += '<div class="yr-funnel-val">' + U.num(s.v) + '</div>';
-    h += '<div class="yr-funnel-rate">' + rate + '</div>';
-    h += '</div>';
-  });
-  h += '</div>';
-  return h;
-}
-
-/* Membre connecté, résolu via _meta/team_members.firebaseUid.
-   Retourne {slug, role} ou null si le roster n'est pas (encore) chargé. */
-function _dashMe() {
-  try {
-    var u = firebase.auth().currentUser;
-    if (!u) return null;
-    var list = window.TEAM_MEMBERS_LIST || [];
-    for (var i = 0; i < list.length; i++) {
-      if (list[i] && list[i].firebaseUid === u.uid) {
-        return { slug: list[i].slug, role: String(list[i].role || '') };
+    function mois(mk) {
+      if (!MO[mk]) MO[mk] = { rdv: SC.vide(), nb: SC.vide(), sets: 0, closes: [], calls: 0, decroches: 0 };
+      return MO[mk];
+    }
+    function place(slug, jour) {
+      var r = ranger(slug, jour, idx);
+      var s = B[r.key] || B._na;
+      if (s === B._na) s.sous[r.sous] = (s.sous[r.sous] || 0) + 1;
+      return s;
+    }
+    function garder(scopes, genre, ent) {
+      scopes.forEach(function (sc) {
+        var g = L[sc] || (L[sc] = {});
+        (g[genre] || (g[genre] = [])).push(ent);
+      });
+    }
+    /* Listes d'un RDV compté à sa date, rangées par état (StatsCore). */
+    function garderRdv(scopes, prefixe, b, e, ent) {
+      if (e === 'doublon' || e === 'replanifie') { garder(scopes, prefixe + e, ent); return; }
+      garder(scopes, prefixe + 'rdv', ent);
+      garder(scopes, prefixe + e, ent);
+      if (e !== 'annule') garder(scopes, prefixe + 'kept', ent);
+      if (e === 'present') {
+        var d = SC.detail(b);
+        if (d === 'disqualifie') garder(scopes, prefixe + 'disqua', ent);
+        else if (d !== 'sans_detail') garder(scopes, prefixe + 'pitche', ent);
       }
     }
-  } catch (e) {}
-  return null;
-}
 
-function renderTeamTable(perMember) {
-  var _role = window._currentRole || localStorage.getItem('ambitio_role') || '';
-  var _isAdmin = (_role === 'admin');
-  var _src = _isAdmin ? SYNC_MEMBERS : SYNC_MEMBERS.filter(function(m) { return m.active !== false; });
-
-  /* ─── Setters : leur propre ligne uniquement ───────────────────────────
-     Ce tableau expose le contracté et le collecté de chaque commercial. Un
-     setter n'a pas à voir le chiffre d'affaires des closers : on le réduit à
-     sa ligne. Les closers, closer_setters et admins gardent la vue équipe —
-     c'est leur outil de pilotage. Si le roster n'est pas encore chargé, on
-     n'affiche RIEN plutôt que tout : une donnée de paie ne se divulgue pas
-     par défaut le temps d'un chargement. */
-  var _me = _dashMe();
-  var _isSetterOnly = !!(_me && (_me.role === 'setter' || _me.role === 'setter_ecrit'));
-  var _rosterReady = !!(window.TEAM_MEMBERS_LIST && window.TEAM_MEMBERS_LIST.length);
-  if (!_isAdmin && _rosterReady && (_isSetterOnly || !_me)) {
-    var _mySlug = _me ? _me.slug : null;
-    _src = _src.filter(function(m) { return _mySlug && m.uid === _mySlug; });
-    if (!_src.length) {
-      return '<div class="yr-table-wrap" style="padding:18px;color:var(--muted);font-size:13px">'
-           + 'Vos chiffres apparaîtront ici dès que votre compte sera relié à un membre de l\'équipe.'
-           + '</div>';
-    }
-  }
-  var members = _src.map(function(m) {
-    var d = perMember[m.uid] || {};
-    return Object.assign({}, m, d, {
-      showup: d.calls > 0 ? d.lives/d.calls : 0,
-      txClose: d.offres > 0 ? d.closes/d.offres : 0,
-      sShowup: d.sSets > 0 ? d.sPresents/d.sSets : 0,
+    (raw.bookings || []).forEach(function (b) {
+      var cls = SC.classifyBooking(b, tm);
+      if (!SC.estRdvVente(cls)) return;
+      var fiche = b.leadId ? (fiches[b.leadId] || null) : null;
+      var setter = cls === 'setter' ? SC.setterDuRdv(b, fiche) : null;
+      /* Axe « date du RDV » : RDV, présents, pitchés… (self + setter + manuels) */
+      if (b._inDue && b.date && b.date >= raw.fromDay && b.date <= raw.toDay) {
+        var closer = SC.closerDuRdv(b, res);
+        var sc = place(closer, b.date);
+        var mk = b.date.slice(0, 7);
+        var e = SC.ajouter(TOT.rdv, b, now);
+        SC.ajouter(sc.rdv, b, now); SC.ajouter(CLS[cls], b, now); SC.ajouter(mois(mk).rdv, b, now);
+        var ent = { t: 'b', b: b, cls: cls, closer: closer, setter: setter };
+        garderRdv(['_all', sc.key, 'm:' + mk, 'cls:' + cls], 'b:', b, e, ent);
+        if (cls === 'setter') {
+          var ss = place(setter, b.date);
+          SC.ajouter(TOT.nb, b, now); SC.ajouter(ss.nb, b, now); SC.ajouter(mois(mk).nb, b, now);
+          garderRdv(['_all', ss.key, 'm:' + mk], 'nb:', b, e, ent);
+        }
+      }
+      /* Axe « création » : Sets = RDV du setting réellement créés, un par
+         RDV, hors remplaçants (report, transfert) et doublons supprimés. */
+      if (cls === 'setter' && b._inCreated && !SC.estRemplacant(b) && SC.etat(b, now) !== 'doublon') {
+        var cms = msOf(b.createdAt);
+        if (cms != null && cms >= raw.Pc.start.getTime() && cms <= raw.Pc.end.getTime()) {
+          var cday = SC.jourParis(cms);
+          var s2 = place(setter, cday);
+          TOT.sets++; s2.sets++; mois(cday.slice(0, 7)).sets++;
+          garder(['_all', s2.key, 'm:' + cday.slice(0, 7)], 'b:sets', { t: 'b', b: b, cls: cls, closer: SC.closerDuRdv(b, res), setter: setter, pose: cday });
+        }
+      }
     });
-  });
-  var tC = {calls:0,lives:0,offres:0,closes:0,contracte:0,collecte:0,sCalls:0,sSets:0,sPresents:0};
-  members.forEach(function(m) { Object.keys(tC).forEach(function(k){tC[k]+=(m[k]||0);}); });
 
-  var h = '<div class="yr-table-wrap"><table class="yr-table">';
-  h += '<thead><tr><th>Membre</th><th>Calls C.</th><th>Lives</th><th>Closes</th><th>Contracté</th><th>Collecté</th><th>Appels S.</th><th>Sets</th><th>Show-up S.</th></tr></thead>';
-  h += '<tbody>';
-  members.forEach(function(m) {
-    var rowCls = (m.active === false) ? ' member-archived-admin' : '';
-    h += '<tr class="yr-row' + rowCls + '">';
-    h += '<td><span class="member-dot" style="background:' + m.color + '"></span>' + m.name + (m.active === false ? ' <span class="archived-pill">📦 Archivé</span>' : '') + '</td>';
-    h += '<td>' + (m.calls||0) + '</td><td>' + (m.lives||0) + '</td><td>' + (m.closes||0) + '</td>';
-    h += '<td>' + U.euro(m.contracte||0) + '</td><td>' + U.euro(m.collecte||0) + '</td>';
-    h += '<td>' + (m.sCalls||0) + '</td><td>' + (m.sSets||0) + '</td>';
-    h += '<td>' + U.pct(m.sShowup) + '</td>';
-    h += '</tr>';
-  });
-  if (members.length > 1) {
-    h += '<tr class="tr-total"><td>Total</td>';
-    h += '<td>' + tC.calls + '</td><td>' + tC.lives + '</td><td>' + tC.closes + '</td>';
-    h += '<td>' + U.euro(tC.contracte) + '</td><td>' + U.euro(tC.collecte) + '</td>';
-    h += '<td>' + tC.sCalls + '</td><td>' + tC.sSets + '</td>';
-    h += '<td>' + (tC.sSets > 0 ? U.pct(tC.sPresents/tC.sSets) : '—') + '</td>';
-    h += '</tr>';
-  }
-  h += '</tbody></table></div>';
-  return h;
-}
+    /* Closes : la liste unique (FunnelCore.loadCloses), rangés chez leur
+       closer au jour de la vente (Global closing). */
+    var CR = raw.closes || {};
+    (CR.rows || []).forEach(function (r) {
+      var sc = place(r.closer, r.day);
+      var mk = String(r.day || '').slice(0, 7);
+      TOT.closes.push(r); sc.closes.push(r); mois(mk).closes.push(r);
+      var ent = { t: 'c', row: r };
+      garder(['_all', sc.key, 'm:' + mk], 'c:closes', ent);
+      garder(['_all'], r.sb ? 'c:sb' : 'c:nb', ent);
+    });
+    (CR.annules || []).forEach(function (r) { garder(['_all'], 'c:annules', { t: 'c', row: r }); });
+    (CR.sansSignal || []).forEach(function (r) { garder(['_all'], 'c:sansSignal', { t: 'c', row: r }); });
+    (CR.ecartsCanal || []).forEach(function (r) { garder(['_all'], 'c:ecarts', { t: 'c', row: r }); });
 
-function renderChart(perMonth, monthKeys) {
-  var el = document.getElementById('yr-chart');
-  if (!el) return;
-  var chartData = [];
-  monthKeys.forEach(function(mk) {
-    var md = perMonth[mk];
-    if (md && md.hasData) {
-      chartData.push({ label: mk.split(' ')[0].slice(0, 3), ct: md.contracte, co: md.collecte, sets: md.sSets || 0, mk: mk });
+    /* Appels sortants, décrochés par la règle commune. */
+    var calls = raw.calls;
+    if (calls && !calls._erreur) {
+      calls.forEach(function (c) {
+        if (!c || c.direction !== 'outbound') return;
+        var ms = msOf(c.initiatedAt);
+        if (ms == null) return;
+        var jour = SC.jourParis(ms);
+        var slug = c.userId ? slugDeUid(c.userId) : null;
+        if (!c.userId) callsNoAuthor++;
+        var sc = place(slug, jour);
+        var dec = AF.isAnswered(c);
+        var talk = dec ? (Number(c.durationSec) || 0) : 0;
+        TOT.calls++; sc.calls++; mois(jour.slice(0, 7)).calls++;
+        if (dec) { TOT.decroches++; sc.decroches++; TOT.talk += talk; sc.talk += talk; mois(jour.slice(0, 7)).decroches++; }
+      });
     }
-  });
-  if (chartData.length === 0) { el.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;width:100%;padding:40px 0">Aucune donnée</div>'; return; }
 
-  var maxCt = Math.max.apply(null, chartData.map(function(c){return c.ct;}));
-  var maxSets = Math.max.apply(null, chartData.map(function(c){return c.sets;}));
-  if (maxCt === 0) maxCt = 1;
-  if (maxSets === 0) maxSets = 1;
-
-  el.innerHTML = chartData.map(function(c) {
-    var hCt = (c.ct / maxCt * 170).toFixed(0);
-    var hCo = (c.co / maxCt * 170).toFixed(0);
-    var hSet = (c.sets / maxSets * 80).toFixed(0);
-    var mIdx = MF.indexOf(c.mk.split(' ')[0]);
-    return '<div class="yr-chart-col" onclick="clickMonth(' + mIdx + ')">' +
-      '<div class="yr-chart-tooltip">' + c.label + ': ' + U.euro(c.ct) + ' ct · ' + U.euro(c.co) + ' co · ' + c.sets + ' sets</div>' +
-      '<div style="display:flex;align-items:flex-end;gap:2px;height:190px;width:100%">' +
-        '<div class="yr-chart-bar bar-ct" style="height:' + hCt + 'px;flex:1"></div>' +
-        '<div class="yr-chart-bar bar-co" style="height:' + hCo + 'px;flex:1"></div>' +
-        '<div class="yr-chart-bar bar-set" style="height:' + hSet + 'px;flex:1"></div>' +
-      '</div>' +
-      '<div class="yr-chart-lbl">' + c.label + '</div>' +
-    '</div>';
-  }).join('');
-}
-
-/* ═══════════════════════════════════════════════════════════
-   INIT
-═══════════════════════════════════════════════════════════ */
-document.addEventListener('DOMContentLoaded', async function() {
-  var nmCache = localStorage.getItem('ambitio_name') || '';
-  document.getElementById('tb-nm').textContent = nmCache;
-  document.getElementById('tb-av').textContent = nmCache[0].toUpperCase();
-
-  var fbUser = null;
-  try {
-    fbUser = await Promise.race([
-      new Promise(function(resolve) {
-        var unsub = firebase.auth().onAuthStateChanged(function(u) { unsub(); resolve(u); });
-      }),
-      new Promise(function(resolve) { setTimeout(function() { resolve(null); }, 5000); })
-    ]);
-  } catch(e) { console.warn('[dashboard] Auth error:', e); }
-
-  if (!fbUser) {
-    if (!localStorage.getItem('ambitio_role')) { window.location.href = 'login.html'; return; }
-  } else {
-    try {
-      var uSnap = await firebase.firestore().collection('users').doc(fbUser.uid).get();
-      var uData = uSnap.exists ? uSnap.data() : {};
-      var role  = uData.role || localStorage.getItem('ambitio_role') || 'sales';
-      var name  = fbUser.displayName || fbUser.email.split('@')[0];
-      window._currentUserUid   = fbUser.uid;
-      window._currentRole      = role;
-      window._currentUserName  = name;
-      localStorage.setItem('ambitio_role',  role);
-      localStorage.setItem('ambitio_auth_uid', fbUser.uid);
-      localStorage.setItem('ambitio_name',  name);
-      document.getElementById('tb-nm').textContent = name;
-      document.getElementById('tb-av').textContent = name[0].toUpperCase();
-    } catch(e) { console.warn('[dashboard] Firestore user read:', e); }
-    if (!Fire.db) Fire.init(firebase.firestore(), fbUser.uid);
+    [TOT].concat(ordre.map(function (k) { return B[k]; })).concat([B._na]).forEach(function (s) {
+      SC.finir(s.rdv); SC.finir(s.nb);
+      s.money = FC.sumCloses(s.closes);
+    });
+    Object.keys(CLS).forEach(function (k) { SC.finir(CLS[k]); });
+    Object.keys(MO).forEach(function (k) { SC.finir(MO[k].rdv); SC.finir(MO[k].nb); MO[k].money = FC.sumCloses(MO[k].closes); });
+    var na = B._na;
+    var naVide = !na.rdv.total && !na.nb.total && !na.sets && !na.closes.length && !na.calls;
+    return {
+      raw: raw, idx: idx, now: now, B: B, ordre: ordre, naVide: naVide, TOT: TOT, CLS: CLS, MO: MO, L: L,
+      callsNoAuthor: callsNoAuthor,
+      moneyNb: FC.sumCloses((CR.rows || []).filter(function (r) { return !r.sb; })),
+      nSb: (CR.rows || []).filter(function (r) { return r.sb; }).length
+    };
   }
 
-  await migrateHistToFirestore();
-  await refreshYear();
-});
+  /* ══ RENDU ═══════════════════════════════════════════════════════════ */
+  function carte(label, val, sub, color) {
+    return '<div class="yr-kpi" style="--kc:' + color + '">' +
+      '<div class="yr-kpi-label">' + label + '</div>' +
+      '<div class="yr-kpi-val">' + val + '</div>' +
+      (sub ? '<div class="yr-kpi-sub">' + sub + '</div>' : '') +
+      '</div>';
+  }
+  function decl() { return '<span class="dash-decl">déclaré</span>'; }
+
+  function render() {
+    var D = S.data;
+    $('year-lbl').textContent = String(S.year);
+    renderSelecteur(D);
+    renderObjectif(D);
+    if (!D || !D.P) return;
+    var P = D.P, C = S.calc;
+    var h = '';
+    if (S.mode !== 'year') h += '<div class="drill-back" data-act="mode" data-mode="year">◀ Année ' + S.year + '</div>';
+    h += notes(D, C);
+    if (C) h += partieCalculee(D, C);
+    if (P.anc.length) h += partieAncienne(D);
+    if (P.months.length > 1) h += detailParMois(D, C);
+    $('main-content').innerHTML = h;
+    if (P.months.length > 1) renderGraphique(D, C);
+  }
+
+  /* Ce qui manque, ce qui est partiel, ce qui est retiré : rien de muet. */
+  function notes(D, C) {
+    var P = D.P, out = [];
+    if (C && P.anc.length) {
+      out.push('✂️ Période à cheval : <b>' + esc(libelleMoisCourt(P.anc)) + '</b> vient de l’ancienne saisie' + info('ancienne_saisie') +
+        ', <b>' + esc(libelleMoisCourt(C.raw.Pc.months)) + '</b> est calculé à partir des RDV et des paiements. Les deux parties sont affichées séparément et ne s’additionnent pas.');
+    }
+    var err = [];
+    if (C) {
+      var r = C.raw;
+      if (r.typeMap && r.typeMap._erreur) err.push(r.typeMap._erreur + ' (la répartition Self Booking / Setting peut être fausse)');
+      if (r.persons && r.persons._erreur) err.push(r.persons._erreur + ' (des RDV peuvent tomber en « Non attribué »)');
+      if (r.bookings && r.bookings._erreur) err.push(r.bookings._erreur);
+      if (r.closes && r.closes.erreur) err.push('closes : ' + r.closes.erreur);
+      if (r.closes && r.closes.tronque) err.push('fiches gagnées : plafond de lecture atteint, liste des closes tronquée');
+      if (r.fiches && r.fiches.illisibles) err.push(r.fiches.illisibles + ' fiche(s) illisible(s) : setter lu sur le RDV seul');
+      if (r.calls && r.calls._erreur) err.push(r.calls._erreur);
+      if (r.calls && r.calls._tronque) err.push('appels : plafond de lecture atteint, total partiel — réduis la période');
+    }
+    var A = D.annee;
+    if (A && A.closes && A.closes.erreur && !(C && C.raw.closes === A.closes)) err.push('objectif annuel — closes : ' + A.closes.erreur);
+    if (A && A.closes && A.closes.tronque) err.push('objectif annuel : liste des closes tronquée');
+    if (A) {
+      var ne = 0;
+      Object.keys(A.legacy || {}).forEach(function (k) { ne += A.legacy[k].erreurs || 0; });
+      if (ne) err.push(ne + ' lecture(s) de l’ancienne saisie en échec');
+    }
+    if (S.objErreur) err.push('objectifs : ' + S.objErreur);
+    if (err.length) out.push('<span class="dash-warn">⚠ Lecture incomplète' + info('lecture_incomplete') + ' : ' + esc(err.join(' · ')) + '</span>');
+    if (C) {
+      var L = C.L._all || {};
+      var nAnn = (L['c:annules'] || []).length, nSans = (L['c:sansSignal'] || []).length, nEc = (L['c:ecarts'] || []).length;
+      var nStat = C.TOT.rdv.aStatuer;
+      if (nAnn) out.push('🚫 ' + clic('<b>' + nAnn + ' close' + (nAnn > 1 ? 's' : '') + ' annulé' + (nAnn > 1 ? 's' : '') + '</b>', 'c|_all|annules', nAnn) + info('closes_annules') + ' : retiré' + (nAnn > 1 ? 's' : '') + ' des closes, du contracté et du collecté.');
+      if (nSans) out.push('❓ ' + clic('<b>' + nSans + ' fiche' + (nSans > 1 ? 's' : '') + ' cliente' + (nSans > 1 ? 's' : '') + ' sans vente enregistrée</b>', 'c|_all|sansSignal', nSans) + info('clientes_sans_vente') + ' : non comptée' + (nSans > 1 ? 's' : '') + ' dans les closes.');
+      if (nEc) out.push('↔️ ' + clic('<b>' + nEc + ' écart' + (nEc > 1 ? 's' : '') + ' de canal</b>', 'c|_all|ecarts', nEc) + info('ecart_canal') + '.');
+      if (nStat) out.push('⏳ ' + clic('<b>' + nStat + ' RDV à statuer</b>', 'b|_all|b:a_statuer', nStat) + info('a_statuer') + ' — à saisir depuis l’<a href="booking-admin.html?vue=mes-rdv" style="color:inherit;text-decoration:underline">Agenda</a> pour des chiffres exacts.');
+      if (S.isAdmin && C.callsNoAuthor) out.push('📞 ' + C.callsNoAuthor + ' ' + esc(SC.mot('appels_sans_auteur').toLowerCase()) + info('appels_sans_auteur') + ' : comptés dans l’équipe, ligne « Non attribué ».');
+    }
+    return out.length ? '<div class="dash-notes">' + out.join('<br/>') + '</div>' : '';
+  }
+
+  /* ── Partie calculée (à partir de juillet 2026) ── */
+  function partieCalculee(D, C) {
+    var T = C.TOT, A = T.rdv, N = T.nb, M = T.money, Pc = C.raw.Pc;
+    var nCloses = M.closes, nNb = C.moneyNb.closes, nSb = C.nSb;
+    var h = '<div class="dash-part">📊 Calculé à partir des RDV et des paiements — ' + esc(libelleMois(S.year, Pc.months)) +
+      ' <small>(heure de Paris · mêmes chiffres que Global closing, Set NB et le Stats funnel)</small></div>';
+
+    /* Closing */
+    h += '<div class="section-title" style="margin-top:0">Closing <span class="dash-mut">— RDV de vente : Self Booking + Setting + manuels</span></div>';
+    h += '<div class="yr-grid">';
+    var parts = clic('SB ' + fmtNum(C.CLS.self.rdv), 'b|cls:self|b:rdv', C.CLS.self.rdv) + info('rdv_sb') +
+      ' · ' + clic('NB ' + fmtNum(C.CLS.setter.rdv), 'b|cls:setter|b:rdv', C.CLS.setter.rdv) + info('rdv_nb') +
+      (C.CLS.admin.rdv > 0 ? ' · ' + clic('Manuels ' + fmtNum(C.CLS.admin.rdv), 'b|cls:admin|b:rdv', C.CLS.admin.rdv) + info('rdv_manuels') : '');
+    h += carte(motInfo('rdv'), clic(fmtNum(A.rdv), 'b|_all|b:rdv', A.rdv),
+      parts + '<br/>' +
+      clic(fmtNum(A.annules) + ' annulés', 'b|_all|b:annule', A.annules) + info('annules') + ' · ' +
+      clic(fmtNum(A.noshow) + ' no-show', 'b|_all|b:no_show', A.noshow) + info('no_show') + ' · ' +
+      clic('⏳ ' + fmtNum(A.aStatuer) + ' à statuer', 'b|_all|b:a_statuer', A.aStatuer) + info('a_statuer') + ' · ' +
+      clic(fmtNum(A.aVenir) + ' à venir', 'b|_all|b:a_venir', A.aVenir) + info('a_venir'), '#f59e0b');
+    h += carte(motInfo('presents'), clic(fmtNum(A.presents), 'b|_all|b:present', A.presents),
+      esc(SC.mot('show_up')) + ' ' + fmtPct(A.showUp) + info('show_up') + '<br/>' +
+      clic(esc(SC.mot('kept')) + ' ' + fmtNum(A.kept), 'b|_all|b:kept', A.kept) + info('kept') + ' dont ' + fmtNum(A.aVenir) + ' à venir', '#5b7cfa');
+    h += carte(motInfo('pitches'), clic(fmtNum(A.pitches), 'b|_all|b:pitche', A.pitches),
+      esc(SC.mot('taux_pitch')) + ' ' + fmtPct(A.tauxPitch) + info('taux_pitch') + '<br/>' +
+      clic(fmtNum(A.disqua) + ' ' + esc(SC.mot('disqua')), 'b|_all|b:disqua', A.disqua) + info('disqua'), '#a78bfa');
+    h += carte(motInfo('closes'), clic(fmtNum(nCloses), 'c|_all|closes', nCloses),
+      esc(SC.mot('taux_close_pitches')) + ' ' + fmtPct(SC.tauxClose(nCloses, A.pitches)) + info('taux_close_pitches') + '<br/>' +
+      clic(esc(SC.mot('closes_sb')) + ' ' + fmtNum(nSb), 'c|_all|sb', nSb) + info('closes_sb') + ' · ' +
+      clic(esc(SC.mot('closes_nb')) + ' ' + fmtNum(nNb), 'c|_all|nb', nNb) + info('closes_nb'), '#34d399');
+    h += '</div>';
+    h += '<div class="yr-grid-2">';
+    h += carte(motInfo('contracte'), clic(fmtEuro(M.con), 'c|_all|closes', nCloses),
+      esc(SC.mot('panier_moyen')) + ' ' + fmtEuro(M.panier) + info('panier_moyen') +
+      (M.sansPaiement ? ' · ' + fmtNum(M.sansPaiement) + ' ' + esc(SC.mot('close_sans_paiement').toLowerCase()) + info('close_sans_paiement') : ''), '#ef4444');
+    h += carte(motInfo('collecte'), clic(fmtEuro(M.paid), 'c|_all|closes', nCloses),
+      (M.con > 0 ? fmtPct(SC.pct(M.paid, M.con)) + ' du contracté · ' : '') + esc(SC.mot('reste_a_encaisser')) + ' ' + fmtEuro(M.reste) + info('reste_a_encaisser') +
+      (M.pending > 0 ? '<br/>dont ' + esc(SC.mot('premiers_prelevements').toLowerCase()) + ' ' + fmtEuro(M.pending) + info('premiers_prelevements') : '') +
+      ' · ' + esc(SC.mot('collecte_par_close')) + ' ' + fmtEuro(M.collecteParClose) + info('collecte_par_close'), '#34d399');
+    h += '</div>';
+
+    /* Setting */
+    var ap = appelsEquipe(C);
+    h += '<div class="section-title">Setting <span class="dash-mut">— RDV posés par les setters</span></div>';
+    h += '<div class="yr-grid">';
+    h += carte(motInfo('appels'), ap.val,
+      ap.ok ? (fmtNum(T.decroches) + ' ' + esc(SC.mot('decroches').toLowerCase()) + info('decroches') + ' · ' + esc(SC.mot('taux_decroche')) + ' ' + fmtPct(SC.pct(T.decroches, T.calls)) + info('taux_decroche')) : ap.sub, '#60a5fa');
+    h += carte(motInfo('sets', 'Les Sets sont comptés le jour où le RDV est posé, les RDV NB le jour où ils ont lieu : les deux chiffres ne se divisent pas l’un par l’autre.'),
+      clic(fmtNum(T.sets), 'b|_all|b:sets', T.sets),
+      esc(SC.mot('taux_set')) + ' ' + (ap.ok ? fmtPct(SC.pct(T.sets, T.decroches)) : '—') + info('taux_set'), '#818cf8');
+    h += carte(motInfo('rdv_nb'), clic(fmtNum(N.rdv), 'b|_all|nb:rdv', N.rdv),
+      clic(esc(SC.mot('presents')) + ' NB ' + fmtNum(N.presents), 'b|_all|nb:present', N.presents) + info('presents') + ' · ' +
+      esc(SC.mot('show_up')) + ' ' + fmtPct(N.showUp) + info('show_up') + '<br/>' +
+      clic(fmtNum(N.annules) + ' annulés', 'b|_all|nb:annule', N.annules) + ' · ' +
+      clic(fmtNum(N.noshow) + ' no-show', 'b|_all|nb:no_show', N.noshow) + ' · ' +
+      clic(esc(SC.mot('kept')) + ' ' + fmtNum(N.kept), 'b|_all|nb:kept', N.kept) + info('kept') + ' dont ' + fmtNum(N.aVenir) + ' à venir', '#34d399');
+    h += carte(motInfo('closes_nb'), clic(fmtNum(nNb), 'c|_all|nb', nNb),
+      esc(SC.mot('taux_close_pitches')) + ' NB ' + fmtPct(SC.tauxClose(nNb, N.pitches)) + info('taux_close_pitches') + '<br/>' +
+      esc(SC.mot('contracte')) + ' NB ' + fmtEuro(C.moneyNb.con) + info('contracte'), '#ef4444');
+    h += '</div>';
+
+    /* Funnels : étapes nommées, taux du glossaire (plus de « % de l'étape
+       précédente » sans nom). */
+    h += '<div class="yr-row">';
+    h += '<div class="yr-card"><div class="yr-card-hdr"><div class="yr-card-title">Funnel Closing</div><div class="yr-card-badge">date du RDV · closes au jour de la vente</div></div>' +
+      funnel([
+        { l: motInfo('rdv'), v: A.rdv, ref: 'b|_all|b:rdv' },
+        { l: motInfo('kept'), v: A.kept, ref: 'b|_all|b:kept', t: esc(SC.mot('kept_pct')) + ' ' + fmtPct(A.keptPct) + info('kept_pct') },
+        { l: motInfo('presents'), v: A.presents, ref: 'b|_all|b:present', t: esc(SC.mot('show_up')) + ' ' + fmtPct(A.showUp) + info('show_up') },
+        { l: motInfo('pitches'), v: A.pitches, ref: 'b|_all|b:pitche', t: esc(SC.mot('taux_pitch')) + ' ' + fmtPct(A.tauxPitch) + info('taux_pitch') },
+        { l: motInfo('closes'), v: nCloses, ref: 'c|_all|closes', t: esc(SC.mot('taux_close_pitches')) + ' ' + fmtPct(SC.tauxClose(nCloses, A.pitches)) + info('taux_close_pitches') }
+      ], 'closing') + '</div>';
+    var stepsTel = ap.ok ? [
+      { l: motInfo('appels'), v: T.calls },
+      { l: motInfo('decroches'), v: T.decroches, t: esc(SC.mot('taux_decroche')) + ' ' + fmtPct(SC.pct(T.decroches, T.calls)) + info('taux_decroche') },
+      { l: motInfo('sets'), v: T.sets, ref: 'b|_all|b:sets', t: esc(SC.mot('taux_set')) + ' ' + fmtPct(SC.pct(T.sets, T.decroches)) + info('taux_set') }
+    ] : [{ l: motInfo('sets'), v: T.sets, ref: 'b|_all|b:sets' }];
+    h += '<div class="yr-card"><div class="yr-card-hdr"><div class="yr-card-title">Funnel Setting</div><div class="yr-card-badge">pose ≠ tenue : deux blocs</div></div>' +
+      funnel(stepsTel, 'setting') +
+      (ap.ok ? '' : '<div class="dash-notes" style="margin:8px 0 0">' + ap.sub + '</div>') +
+      '<div style="height:12px"></div>' +
+      funnel([
+        { l: motInfo('rdv_nb'), v: N.rdv, ref: 'b|_all|nb:rdv' },
+        { l: esc(SC.mot('presents')) + ' NB' + info('presents'), v: N.presents, ref: 'b|_all|nb:present', t: esc(SC.mot('show_up')) + ' ' + fmtPct(N.showUp) + info('show_up') },
+        { l: esc(SC.mot('pitches')) + ' NB' + info('pitches'), v: N.pitches, ref: 'b|_all|nb:pitche', t: esc(SC.mot('taux_pitch')) + ' ' + fmtPct(N.tauxPitch) + info('taux_pitch') },
+        { l: motInfo('closes_nb'), v: nNb, ref: 'c|_all|nb', t: esc(SC.mot('taux_close_pitches')) + ' ' + fmtPct(SC.tauxClose(nNb, N.pitches)) + info('taux_close_pitches') }
+      ], 'setting') + '</div>';
+    h += '</div>';
+
+    h += '<div class="yr-card" style="margin-bottom:18px"><div class="yr-card-hdr"><div class="yr-card-title">Performance équipe' + info('equipe') + '</div><div class="yr-card-badge">' + esc(libelleMois(S.year, Pc.months)) + '</div></div>' +
+      tableEquipe(C) + '</div>';
+    return h;
+  }
+
+  /* Appels de l'équipe : « — » quand ils ne sont pas lisibles en entier. */
+  function appelsEquipe(C) {
+    var r = C.raw;
+    if (!r.unMois) return { ok: false, val: '—' + SC.infoLibre('Appels non chargés', 'Les appels ne sont chargés que pour un mois à la fois (plafond de lecture). Choisis un seul mois pour les voir.'), sub: 'Appels chargés pour un mois à la fois : choisis un seul mois.' };
+    if (!r.calls || r.calls._erreur) return { ok: false, val: '—' + SC.infoLibre('Appels illisibles', (r.calls && r.calls._erreur) || 'lecture impossible'), sub: 'Appels illisibles : ' + esc((r.calls && r.calls._erreur) || 'lecture impossible') };
+    if (!S.isAdmin) {
+      var me = moi(), mine = me && C.B[me];
+      return { ok: false, val: '—' + info('appels_equipe_non_lisibles'),
+        sub: mine ? 'Les tiens : ' + fmtNum(mine.calls) + ' appel' + (mine.calls > 1 ? 's' : '') + ' · ' + fmtNum(mine.decroches) + ' ' + esc(SC.mot('decroches').toLowerCase()) + info('decroches') : esc(SC.texte('appels_equipe_non_lisibles')) };
+    }
+    return { ok: true, val: fmtNum(C.TOT.calls) + (r.calls._tronque ? ' ⚠' + info('lecture_incomplete') : ''), sub: '' };
+  }
+
+  function funnel(steps, type) {
+    var maxV = 1;
+    steps.forEach(function (s) { if (s.v > maxV) maxV = s.v; });
+    var h = '<div class="yr-funnel dash-funnel">';
+    steps.forEach(function (s) {
+      var w = Math.max(s.v / maxV * 100, 3).toFixed(0);
+      h += '<div class="yr-funnel-row">' +
+        '<div class="yr-funnel-label">' + s.l + '</div>' +
+        '<div class="yr-funnel-track"><div class="yr-funnel-fill ' + type + '" style="width:' + w + '%"></div></div>' +
+        '<div class="yr-funnel-val">' + (s.ref ? clic(fmtNum(s.v), s.ref, s.v) : fmtNum(s.v)) + '</div>' +
+        '<div class="yr-funnel-rate">' + (s.t || '') + '</div></div>';
+    });
+    return h + '</div>';
+  }
+
+  /* Tableau par personne : membres de l'équipe sales + « Non attribué ».
+     Total = somme des lignes = cartes du haut. */
+  function tableEquipe(C) {
+    var r = C.raw, me = moi();
+    var appelsOk = r.unMois && r.calls && !r.calls._erreur;
+    var cadenas = S.isAdmin ? '' : SC.infoLibre('Montants par personne', 'Les montants par personne ne sont visibles que par la personne elle-même et par un admin. Les totaux de l’équipe sont visibles de tous.');
+    var appInfo = !r.unMois ? SC.infoLibre('Appels non chargés', 'Les appels ne sont chargés que pour un mois à la fois (plafond de lecture).')
+      : (!S.isAdmin ? info('appels_equipe_non_lisibles') : info('appels'));
+    var h = '<div class="yr-table-wrap"><table class="yr-table"><thead><tr>' +
+      '<th>Personne</th>' +
+      '<th>' + motInfo('rdv') + '</th><th>' + motInfo('presents') + '</th><th>' + motInfo('pitches') + '</th><th>' + motInfo('closes') + '</th>' +
+      '<th>' + esc(SC.mot('contracte')) + info('contracte') + cadenas + '</th><th>' + esc(SC.mot('collecte')) + info('collecte') + cadenas + '</th>' +
+      '<th>' + esc(SC.mot('appels')) + appInfo + '</th><th>' + motInfo('decroches') + '</th>' +
+      '<th>' + motInfo('sets') + '</th><th>' + motInfo('rdv_nb') + '</th><th>' + esc(SC.mot('show_up')) + ' NB' + info('show_up') + '</th>' +
+      '</tr></thead><tbody>';
+    var tot = { rdv: 0, presents: 0, pitches: 0, closes: 0, con: 0, paid: 0, calls: 0, decroches: 0, sets: 0, nbRdv: 0, nbPresents: 0, nbKept: 0, nbAVenir: 0 };
+    function ligne(s, nomHtml, cls) {
+      var key = s.key;
+      var argent = key === '_na' || argentVisible(key);
+      var appels = appelsOk && (S.isAdmin || (key !== '_na' && key === me));
+      tot.rdv += s.rdv.rdv; tot.presents += s.rdv.presents; tot.pitches += s.rdv.pitches; tot.closes += s.money.closes;
+      tot.con += s.money.con; tot.paid += s.money.paid; tot.calls += s.calls; tot.decroches += s.decroches;
+      tot.sets += s.sets; tot.nbRdv += s.nb.rdv; tot.nbPresents += s.nb.presents; tot.nbKept += s.nb.kept; tot.nbAVenir += s.nb.aVenir;
+      var x = '<tr class="' + (cls || '') + '"><td>' + nomHtml + '</td>' +
+        '<td>' + clic(fmtNum(s.rdv.rdv), 'b|' + key + '|b:rdv', s.rdv.rdv) + '</td>' +
+        '<td>' + clic(fmtNum(s.rdv.presents), 'b|' + key + '|b:present', s.rdv.presents) + '</td>' +
+        '<td>' + clic(fmtNum(s.rdv.pitches), 'b|' + key + '|b:pitche', s.rdv.pitches) + '</td>' +
+        '<td>' + clic(fmtNum(s.money.closes), 'c|' + key + '|closes', s.money.closes) + '</td>' +
+        '<td>' + (argent ? fmtEuro(s.money.con) : '<span class="dash-mut">🔒</span>') + '</td>' +
+        '<td>' + (argent ? fmtEuro(s.money.paid) : '<span class="dash-mut">🔒</span>') + '</td>' +
+        '<td>' + (appels ? fmtNum(s.calls) : '<span class="dash-mut">—</span>') + '</td>' +
+        '<td>' + (appels ? fmtNum(s.decroches) : '<span class="dash-mut">—</span>') + '</td>' +
+        '<td>' + clic(fmtNum(s.sets), 'b|' + key + '|b:sets', s.sets) + '</td>' +
+        '<td>' + clic(fmtNum(s.nb.rdv), 'b|' + key + '|nb:rdv', s.nb.rdv) + '</td>' +
+        '<td>' + fmtPct(s.nb.showUp) + '</td></tr>';
+      return x;
+    }
+    C.ordre.forEach(function (slug) {
+      var s = C.B[slug], m = C.idx[slug] || {};
+      h += ligne(s, '<span class="member-dot" style="background:' + esc(m.color || '#6b7280') + '"></span>' + esc(s.label) +
+        ' <span class="dash-mut">' + esc(AF.roleLabel(m.role)) + '</span>');
+    });
+    if (!C.naVide) {
+      var sous = Object.keys(C.B._na.sous).sort().map(function (k) { return esc(k === 'inconnu' ? 'personne inconnue' : k); });
+      h += ligne(C.B._na, '<span class="member-dot" style="background:#6b7280"></span>' + esc(SC.mot('non_attribue')) + info('non_attribue') +
+        (sous.length ? '<br/><span class="dash-mut" style="font-size:11px">' + sous.join(' · ') + (Object.prototype.hasOwnProperty.call(C.B._na.sous, SC.mot('anciens_membres')) ? info('anciens_membres') : '') + '</span>' : ''));
+    }
+    var appTot = (appelsOk && S.isAdmin) ? fmtNum(tot.calls) : '—' + (appelsOk ? info('appels_equipe_non_lisibles') : '');
+    var decTot = (appelsOk && S.isAdmin) ? fmtNum(tot.decroches) : '—';
+    h += '<tr class="tr-total" data-total="1"><td>Total ' + esc(SC.mot('equipe')) + info('equipe') + '</td>' +
+      '<td>' + clic(fmtNum(tot.rdv), 'b|_all|b:rdv', tot.rdv) + '</td><td>' + clic(fmtNum(tot.presents), 'b|_all|b:present', tot.presents) + '</td>' +
+      '<td>' + clic(fmtNum(tot.pitches), 'b|_all|b:pitche', tot.pitches) + '</td><td>' + clic(fmtNum(tot.closes), 'c|_all|closes', tot.closes) + '</td>' +
+      '<td>' + fmtEuro(tot.con) + '</td><td>' + fmtEuro(tot.paid) + '</td>' +
+      '<td>' + appTot + '</td><td>' + decTot + '</td>' +
+      '<td>' + clic(fmtNum(tot.sets), 'b|_all|b:sets', tot.sets) + '</td><td>' + clic(fmtNum(tot.nbRdv), 'b|_all|nb:rdv', tot.nbRdv) + '</td>' +
+      '<td>' + fmtPct(SC.showUp(tot.nbPresents, tot.nbKept, tot.nbAVenir)) + '</td></tr>';
+    h += '</tbody></table></div>';
+    h += '<div class="dash-notes" style="margin:10px 0 0">Montants hors taxes' + info('ht') + '. RDV, présents, pitchés et closes rangés chez le closer ; Sets et RDV NB chez le setter ; appels chez la personne qui appelle.</div>';
+    return h;
+  }
+
+  /* ── Ancienne saisie (mois d'avant juillet 2026) ── */
+  function ancienneAgreg(D) {
+    var A = D.annee, P = D.P;
+    var tot = { closing: {}, setting: {} }, parSeau = {}, has = false;
+    CH_CLOSING.forEach(function (k) { tot.closing[k] = 0; });
+    CH_SETTING.forEach(function (k) { tot.setting[k] = 0; });
+    var idx = indexMembres();
+    P.anc.forEach(function (m) {
+      var lm = A && A.legacy[m];
+      if (!lm || !lm.has) return;
+      has = true;
+      Object.keys(lm.bySlug).forEach(function (slug) {
+        var r = lm.bySlug[slug];
+        var rg = ranger(slug, null, idx);
+        var s = parSeau[rg.key] || (parSeau[rg.key] = { key: rg.key, sous: {}, closing: {}, setting: {} });
+        if (rg.key === '_na') s.sous[rg.sous] = 1;
+        CH_CLOSING.forEach(function (k) { var v = r.closing ? r.closing[k] : 0; tot.closing[k] += v; s.closing[k] = (s.closing[k] || 0) + v; });
+        CH_SETTING.forEach(function (k) { var v = r.setting ? r.setting[k] : 0; tot.setting[k] += v; s.setting[k] = (s.setting[k] || 0) + v; });
+      });
+    });
+    return { tot: tot, parSeau: parSeau, has: has, idx: idx };
+  }
+  function partieAncienne(D) {
+    var P = D.P, G = ancienneAgreg(D);
+    var lbl = libelleMois(S.year, P.anc);
+    var h = '<div class="dash-part" style="margin-top:18px">📜 Ancienne saisie' + info('ancienne_saisie') + ' — ' + esc(lbl) +
+      ' <small>(nombres tapés à la main chaque semaine, sans lien avec les RDV ni le module Paiements : ils ne se comparent pas aux mois calculés)</small></div>';
+    if (!G.has) return h + '<div class="dash-notes">Aucune saisie pour ' + esc(lbl) + '.</div>';
+    var c = G.tot.closing, s = G.tot.setting;
+    var prec = function (champ) { return 'Champ « ' + champ + ' » de l’ancienne saisie, tapé à la main.'; };
+    h += '<div class="section-title" style="margin-top:0">Closing <span class="dash-mut">— ancienne saisie</span></div><div class="yr-grid">';
+    h += carte(esc(SC.mot('rdv')) + decl() + info('ancienne_saisie', prec('Calls')), fmtNum(c.calls), '', '#f59e0b');
+    h += carte(esc(SC.mot('presents')) + decl() + info('ancienne_saisie', prec('Lives')), fmtNum(c.lives), '', '#5b7cfa');
+    h += carte(esc(SC.mot('pitches')) + decl() + info('ancienne_saisie', prec('Offres')), fmtNum(c.offres), '', '#a78bfa');
+    h += carte(esc(SC.mot('closes')) + decl() + info('ancienne_saisie', prec('Closes')), fmtNum(c.closes),
+      esc(SC.mot('taux_close_pitches')) + ' ' + fmtPct(SC.tauxClose(c.closes, c.offres)) + SC.infoLibre(SC.mot('taux_close_pitches'), 'Closes déclarés ÷ pitchés déclarés (champ « Offres ») de l’ancienne saisie.'), '#34d399');
+    h += '</div><div class="yr-grid-2">';
+    h += carte(esc(SC.mot('contracte')) + decl() + info('ancienne_saisie', 'Montant tapé à la main : on ne sait pas s’il était hors taxes.'), fmtEuro(c.contracte), '', '#ef4444');
+    h += carte(esc(SC.mot('collecte')) + decl() + info('ancienne_saisie', 'Montant tapé à la main : on ne sait pas s’il était hors taxes.'), fmtEuro(c.collecte),
+      c.contracte > 0 ? fmtPct(SC.pct(c.collecte, c.contracte)) + ' du contracté déclaré' : '', '#34d399');
+    h += '</div>';
+    h += '<div class="section-title">Setting <span class="dash-mut">— ancienne saisie</span></div><div class="yr-grid">';
+    h += carte(esc(SC.mot('appels')) + decl() + info('ancienne_saisie', prec('Appels')), fmtNum(s.calls), '', '#60a5fa');
+    h += carte(esc(SC.mot('decroches')) + decl() + info('ancienne_saisie', prec('Décrochés')), fmtNum(s.decroches),
+      esc(SC.mot('taux_decroche')) + ' ' + fmtPct(SC.pct(s.decroches, s.calls)), '#60a5fa');
+    h += carte(esc(SC.mot('sets')) + decl() + info('ancienne_saisie', prec('Sets')), fmtNum(s.sets), '', '#818cf8');
+    h += carte(esc(SC.mot('presents')) + ' NB' + decl() + info('ancienne_saisie', prec('Présents') + ' Ce n’est pas un show-up : les sets et les présents saisis ne datent pas des mêmes RDV.'), fmtNum(s.presents), '', '#34d399');
+    h += '</div>';
+    /* Tableau par personne : mêmes lignes que la partie calculée. */
+    var cad = S.isAdmin ? '' : SC.infoLibre('Montants par personne', 'Les montants par personne ne sont visibles que par la personne elle-même et par un admin. Les totaux de l’équipe sont visibles de tous.');
+    var t = '<div class="yr-table-wrap"><table class="yr-table"><thead><tr><th>Personne</th><th>RDV' + decl() + '</th><th>Présents' + decl() + '</th><th>Pitchés' + decl() + '</th><th>Closes' + decl() + '</th>' +
+      '<th>Contracté' + decl() + cad + '</th><th>Collecté' + decl() + cad + '</th><th>Appels' + decl() + '</th><th>Sets' + decl() + '</th></tr></thead><tbody>';
+    var tt = { calls: 0, lives: 0, offres: 0, closes: 0, contracte: 0, collecte: 0, sCalls: 0, sets: 0 };
+    function ligne(sx, nomHtml) {
+      var cl = sx.closing, st = sx.setting, arg = sx.key === '_na' || argentVisible(sx.key);
+      tt.calls += cl.calls || 0; tt.lives += cl.lives || 0; tt.offres += cl.offres || 0; tt.closes += cl.closes || 0;
+      tt.contracte += cl.contracte || 0; tt.collecte += cl.collecte || 0; tt.sCalls += st.calls || 0; tt.sets += st.sets || 0;
+      return '<tr class="dash-legacy"><td>' + nomHtml + '</td><td>' + fmtNum(cl.calls || 0) + '</td><td>' + fmtNum(cl.lives || 0) + '</td><td>' + fmtNum(cl.offres || 0) + '</td><td>' + fmtNum(cl.closes || 0) + '</td>' +
+        '<td>' + (arg ? fmtEuro(cl.contracte || 0) : '<span class="dash-mut">🔒</span>') + '</td><td>' + (arg ? fmtEuro(cl.collecte || 0) : '<span class="dash-mut">🔒</span>') + '</td>' +
+        '<td>' + fmtNum(st.calls || 0) + '</td><td>' + fmtNum(st.sets || 0) + '</td></tr>';
+    }
+    membres().forEach(function (m) {
+      var sx = G.parSeau[m.slug];
+      if (sx) t += ligne(sx, esc(nomMembre(m, m.slug)));
+    });
+    if (G.parSeau._na) {
+      var sous = Object.keys(G.parSeau._na.sous).sort().map(function (k) { return esc(k === 'inconnu' ? 'personne inconnue' : k); });
+      t += ligne(G.parSeau._na, esc(SC.mot('non_attribue')) + info('non_attribue') + (sous.length ? '<br/><span class="dash-mut" style="font-size:11px">' + sous.join(' · ') + '</span>' : ''));
+    }
+    t += '<tr class="tr-total" data-total="1"><td>Total ' + esc(SC.mot('equipe')) + '</td><td>' + fmtNum(tt.calls) + '</td><td>' + fmtNum(tt.lives) + '</td><td>' + fmtNum(tt.offres) + '</td><td>' + fmtNum(tt.closes) + '</td>' +
+      '<td>' + fmtEuro(tt.contracte) + '</td><td>' + fmtEuro(tt.collecte) + '</td><td>' + fmtNum(tt.sCalls) + '</td><td>' + fmtNum(tt.sets) + '</td></tr></tbody></table></div>';
+    h += '<div class="yr-card" style="margin-bottom:18px"><div class="yr-card-hdr"><div class="yr-card-title">Performance équipe — ancienne saisie' + info('ancienne_saisie') + '</div><div class="yr-card-badge">' + esc(lbl) + '</div></div>' + t + '</div>';
+    return h;
+  }
+
+  /* ── Détail par mois (année ou plage) : mois calculés et mois d'ancienne
+     saisie (📜), deux totaux séparés. ── */
+  function lignesMois(D, C) {
+    var P = D.P, cur = moisCourant(), out = [];
+    P.months.forEach(function (m) {
+      var key = moisCle(S.year, m);
+      if (key >= AUTO_FROM) {
+        var x = C && C.MO[key];
+        var futur = key > cur.key;
+        if (futur && !x) return;
+        x = x || { rdv: SC.finir(SC.vide()), nb: SC.finir(SC.vide()), sets: 0, closes: [], money: FC.sumCloses([]) };
+        out.push({ m: m, key: key, calc: true, rdv: x.rdv.rdv, presents: x.rdv.presents, pitches: x.rdv.pitches, closes: x.money.closes, con: x.money.con, paid: x.money.paid, sets: x.sets, nbRdv: x.nb.rdv });
+      } else {
+        var lm = D.annee && D.annee.legacy[m];
+        if (!lm || !lm.has) return;
+        var t = { calls: 0, lives: 0, offres: 0, closes: 0, contracte: 0, collecte: 0, sets: 0 };
+        Object.keys(lm.bySlug).forEach(function (s) {
+          var r = lm.bySlug[s];
+          if (r.closing) CH_CLOSING.forEach(function (k) { t[k] += r.closing[k] || 0; });
+          if (r.setting) t.sets += r.setting.sets || 0;
+        });
+        out.push({ m: m, key: key, calc: false, rdv: t.calls, presents: t.lives, pitches: t.offres, closes: t.closes, con: t.contracte, paid: t.collecte, sets: t.sets, nbRdv: null });
+      }
+    });
+    return out;
+  }
+  function detailParMois(D, C) {
+    var rows = lignesMois(D, C);
+    if (!rows.length) return '';
+    var h = '<div class="yr-row-3"><div class="yr-card"><div class="yr-card-hdr"><div class="yr-card-title">Contracté, Collecté et Sets par mois — ' + esc(D.P.label) + '</div></div>' +
+      '<div class="chart-legend-row">' +
+      '<div class="chart-legend-item"><div class="chart-legend-dot" style="background:#ef4444"></div>' + motInfo('contracte') + '</div>' +
+      '<div class="chart-legend-item"><div class="chart-legend-dot" style="background:#34d399"></div>' + motInfo('collecte') + '</div>' +
+      '<div class="chart-legend-item"><div class="chart-legend-dot" style="background:#60a5fa"></div>' + motInfo('sets') + '</div>' +
+      '<div class="chart-legend-item">📜 ' + motInfo('ancienne_saisie') + ' (barres pâles)</div>' +
+      '</div><div class="yr-chart" id="yr-chart"></div></div>';
+    h += '<div class="yr-card"><div class="yr-card-hdr"><div class="yr-card-title">Détail par mois</div></div><div class="yr-table-wrap"><table class="yr-table">' +
+      '<thead><tr><th>Mois</th><th>' + motInfo('rdv') + '</th><th>' + motInfo('presents') + '</th><th>' + motInfo('closes') + '</th><th>' + motInfo('contracte') + '</th><th>' + motInfo('collecte') + '</th><th>' + motInfo('sets') + '</th></tr></thead><tbody>';
+    var tc = { n: 0, rdv: 0, presents: 0, closes: 0, con: 0, paid: 0, sets: 0 }, ta = { n: 0, rdv: 0, presents: 0, closes: 0, con: 0, paid: 0, sets: 0 };
+    rows.forEach(function (r) {
+      var t = r.calc ? tc : ta;
+      t.n++; t.rdv += r.rdv; t.presents += r.presents; t.closes += r.closes; t.con += r.con; t.paid += r.paid; t.sets += r.sets;
+      var sc = 'm:' + r.key;
+      h += '<tr class="' + (r.calc ? '' : 'dash-legacy') + '">' +
+        '<td><span class="dash-act" data-act="mois" data-m="' + r.m + '">' + (r.calc ? '' : '📜 ') + esc(MOIS[r.m]) + '</span></td>' +
+        '<td>' + (r.calc ? clic(fmtNum(r.rdv), 'b|' + sc + '|b:rdv', r.rdv) : fmtNum(r.rdv)) + '</td>' +
+        '<td>' + (r.calc ? clic(fmtNum(r.presents), 'b|' + sc + '|b:present', r.presents) : fmtNum(r.presents)) + '</td>' +
+        '<td>' + (r.calc ? clic(fmtNum(r.closes), 'c|' + sc + '|closes', r.closes) : fmtNum(r.closes)) + '</td>' +
+        '<td>' + fmtEuro(r.con) + '</td><td>' + fmtEuro(r.paid) + '</td>' +
+        '<td>' + (r.calc ? clic(fmtNum(r.sets), 'b|' + sc + '|b:sets', r.sets) : fmtNum(r.sets)) + '</td></tr>';
+    });
+    function totLigne(t, lib) {
+      return '<tr class="tr-total" data-total="1"><td>' + lib + '</td><td>' + fmtNum(t.rdv) + '</td><td>' + fmtNum(t.presents) + '</td><td>' + fmtNum(t.closes) + '</td><td>' + fmtEuro(t.con) + '</td><td>' + fmtEuro(t.paid) + '</td><td>' + fmtNum(t.sets) + '</td></tr>';
+    }
+    if (tc.n) h += totLigne(tc, 'Total calculé');
+    if (ta.n) h += totLigne(ta, '📜 Total ancienne saisie' + info('ancienne_saisie'));
+    h += '</tbody></table></div>' + (tc.n && ta.n ? '<div class="dash-notes" style="margin:10px 0 0">Les deux totaux ne s’additionnent pas : l’ancienne saisie ne compte pas les mêmes choses.</div>' : '') + '</div></div>';
+    return h;
+  }
+  function renderGraphique(D, C) {
+    var el = $('yr-chart');
+    if (!el) return;
+    var rows = lignesMois(D, C);
+    if (!rows.length) { el.innerHTML = '<div class="dash-mut" style="font-size:12px;text-align:center;width:100%;padding:40px 0">Aucune donnée</div>'; return; }
+    var maxCt = 1, maxSets = 1;
+    rows.forEach(function (r) { maxCt = Math.max(maxCt, r.con, r.paid); maxSets = Math.max(maxSets, r.sets); });
+    el.innerHTML = rows.map(function (r) {
+      var lg = r.calc ? '' : ' dash-legacy';
+      return '<div class="yr-chart-col" data-act="mois" data-m="' + r.m + '">' +
+        '<div class="yr-chart-tooltip">' + (r.calc ? '' : '📜 ') + esc(MOIS_COURT[r.m]) + ' : ' + fmtEuro(r.con) + ' contracté · ' + fmtEuro(r.paid) + ' collecté · ' + fmtNum(r.sets) + ' sets</div>' +
+        '<div style="display:flex;align-items:flex-end;gap:2px;height:190px;width:100%">' +
+        '<div class="yr-chart-bar bar-ct' + lg + '" style="height:' + (r.con / maxCt * 170).toFixed(0) + 'px;flex:1"></div>' +
+        '<div class="yr-chart-bar bar-co' + lg + '" style="height:' + (r.paid / maxCt * 170).toFixed(0) + 'px;flex:1"></div>' +
+        '<div class="yr-chart-bar bar-set' + lg + '" style="height:' + (r.sets / maxSets * 80).toFixed(0) + 'px;flex:1"></div>' +
+        '</div><div class="yr-chart-lbl">' + (r.calc ? '' : '📜') + esc(MOIS_COURT[r.m]) + '</div></div>';
+    }).join('');
+  }
+
+  /* ── Objectif annuel : même source et même projection que Projections ── */
+  function contracteParMois(D) {
+    var A = D.annee, out = [], anc = 0;
+    for (var m = 0; m < 12; m++) {
+      var key = moisCle(S.year, m), v = 0;
+      if (key >= AUTO_FROM) {
+        ((A && A.closes && A.closes.rows) || []).forEach(function (r) { if (String(r.day).slice(0, 7) === key && r.rv && !r.rv.cancelled) v += r.rv.con; });
+      } else {
+        var lm = A && A.legacy[m];
+        if (lm && lm.has) Object.keys(lm.bySlug).forEach(function (s) { var c = lm.bySlug[s].closing; if (c) v += c.contracte || 0; });
+        anc += v;
+      }
+      out.push(v);
+    }
+    return { mois: out, anc: anc };
+  }
+  function renderObjectif(D) {
+    var el = $('obj-bar');
+    if (!D || !D.annee) { el.innerHTML = '<div class="obj-title">Chargement de l’objectif…</div>'; return; }
+    var y = S.year, cm = contracteParMois(D), months = cm.mois;
+    var o = objAnnee(y), objY = o.annual;
+    var cur = moisCourant();
+    var curIdx = cur.y === y ? cur.m : (cur.y > y ? 12 : -1);
+    var ytd = 0; months.forEach(function (v) { ytd += v; });
+    /* Projection fin d'année — formule de Projections : cumul + moyenne des
+       3 derniers mois terminés pour chaque mois restant (+ ce qui manque au
+       mois en cours pour atteindre cette moyenne). */
+    var done = [];
+    for (var i = Math.min(curIdx, 12) - 1; i >= 0 && done.length < 3; i--) done.push(months[i]);
+    var avg = done.length ? done.reduce(function (a, b) { return a + b; }, 0) / done.length : 0;
+    var monthsLeft = curIdx < 0 ? 12 : Math.max(0, 12 - curIdx - 1);
+    var projY = curIdx >= 12 ? ytd : ytd + avg * monthsLeft + ((curIdx >= 0 && curIdx < 12) ? Math.max(0, avg - months[curIdx]) : 0);
+    var moisRestants = curIdx < 0 ? 12 : (curIdx >= 12 ? 0 : 12 - curIdx);
+    var pct = objY > 0 ? ytd / objY * 100 : null;
+    var w = pct == null ? 0 : Math.min(pct, 100);
+    var gradient = (pct || 0) >= 100 ? 'linear-gradient(90deg,#065f46,#34d399)' : (pct || 0) >= 50 ? 'linear-gradient(90deg,#92400e,#f59e0b)' : 'linear-gradient(90deg,#991b1b,#ef4444)';
+    var color = (pct || 0) >= 100 ? '#34d399' : (pct || 0) >= 50 ? '#f59e0b' : '#ef4444';
+    var objTxt = 'Objectif de contracté fixé par la direction dans Projections (_config/sales_objectives), le même chiffre que Projections.' +
+      (o.regle ? '' : ' Aucun objectif enregistré pour ' + y + ' : repli par défaut de Projections.') + ' Un mois sans objectif propre reprend l’objectif annuel divisé par 12.';
+    var projTxt = 'Formule de Projections : contracté depuis janvier, plus la moyenne des 3 derniers mois terminés pour chaque mois restant (le mois en cours est complété jusqu’à cette moyenne).';
+    var h = '<div class="obj-header"><div>' +
+      '<div class="obj-title">Objectif annuel ' + y + SC.infoLibre('Objectif annuel', objTxt) + '</div>' +
+      '<div class="obj-amount">' + fmtEuro(ytd) + ' <small>/ ' + fmtEuro(objY) + '</small></div></div>' +
+      '<div style="text-align:right"><div style="font-size:36px;font-weight:800;color:' + color + ';font-family:var(--font-d);line-height:1">' + fmtPct(pct) + '</div>' +
+      '<div class="obj-target">' + esc(SC.mot('contracte').toLowerCase()) + info('contracte') + '</div></div></div>' +
+      '<div class="obj-track"><div class="obj-fill" data-pct="' + esc(fmtPct(pct)) + '" style="width:' + w + '%;background:' + gradient + '"></div></div>' +
+      '<div class="obj-stats">' +
+      (cm.anc > 0 ? '<div class="obj-stat">dont <b>' + fmtEuro(cm.anc) + '</b> d’ancienne saisie' + info('ancienne_saisie', 'Montants tapés à la main avant juillet 2026 : on ne sait pas s’ils étaient hors taxes.') + '</div>' : '') +
+      '<div class="obj-stat">Restant : <b>' + fmtEuro(Math.max(objY - ytd, 0)) + '</b></div>' +
+      '<div class="obj-stat"><b>' + moisRestants + '</b> mois restants, mois en cours compris</div>' +
+      '<div class="obj-stat">Projection fin d’année : <b>' + fmtEuro(projY) + '</b>' + SC.infoLibre('Projection fin d’année', projTxt) + '</div>';
+    if (S.mode === 'month' && S.months.length === 1) {
+      var m0 = S.months[0], om = objMois(y, m0), vm = months[m0];
+      if (D.P && D.P.calc && S.calc) vm = S.calc.TOT.money.con;
+      h += '<div class="obj-stat">Objectif de ' + esc(MOIS[m0].toLowerCase()) + ' : <b>' + fmtEuro(om) + '</b> · atteint <b>' + fmtPct(om > 0 ? vm / om * 100 : null) + '</b></div>';
+    }
+    h += '</div>';
+    el.innerHTML = h;
+  }
+
+  /* ── Sélecteur de période ── */
+  function renderSelecteur(D) {
+    var tabs = [{ mode: 'year', label: '📊 Année entière' }, { mode: 'month', label: '📅 Mois' }, { mode: 'range', label: '📐 Période' }];
+    $('period-tabs').innerHTML = tabs.map(function (t) {
+      return '<div class="period-tab' + (S.mode === t.mode ? ' active' : '') + '" data-act="mode" data-mode="' + t.mode + '" role="button" tabindex="0">' + t.label + '</div>';
+    }).join('');
+    var parMois = D && D.annee ? contracteParMois(D).mois : [];
+    var A = D && D.annee;
+    var h = MOIS.map(function (nom, i) {
+      var key = moisCle(S.year, i);
+      var has = key >= AUTO_FROM ? (parMois[i] > 0) : !!(A && A.legacy[i] && A.legacy[i].has);
+      var cls = 'month-btn';
+      if (S.mode !== 'year' && S.months.indexOf(i) >= 0) cls += S.mode === 'range' && S.months.length > 1 ? ' in-range' : ' active';
+      if (has) cls += ' has-data';
+      return '<div class="' + cls + '" data-act="mois" data-m="' + i + '" role="button" tabindex="0" title="' + esc(MOIS[i] + ' ' + S.year + (key < AUTO_FROM ? ' — ancienne saisie' : '')) + '">' + (key < AUTO_FROM ? '📜 ' : '') + esc(MOIS_COURT[i]) + '</div>';
+    }).join('');
+    $('month-grid').innerHTML = h;
+    var txt = '';
+    if (S.mode === 'range' && S.rangeStart !== null) txt = '💡 Clique sur un second mois pour définir la plage.';
+    else if (S.mode === 'range' && !S.months.length) txt = '💡 Clique sur le premier mois de la plage.';
+    else if (D && D.P) txt = '📅 ' + D.P.label;
+    $('period-info').innerHTML = esc(txt) + ' · <span class="dash-act" data-act="actualiser" role="button" tabindex="0">↻ Actualiser</span>';
+  }
+
+  /* ══ LISTES CLIQUABLES (stats-drill.js) ══════════════════════════════
+     ref = « b|portée|genre » (RDV) ou « c|portée|genre » (closes). Aucune
+     requête : les lignes viennent du calcul déjà fait. */
+  var GENRES = {
+    'b:rdv': ['rdv', 'RDV'], 'b:annule': ['annules'], 'b:no_show': ['no_show'], 'b:present': ['presents'], 'b:pitche': ['pitches'],
+    'b:disqua': ['disqua'], 'b:a_statuer': ['a_statuer'], 'b:a_venir': ['a_venir'], 'b:kept': ['kept'], 'b:sets': ['sets'],
+    'nb:rdv': ['rdv_nb'], 'nb:annule': ['annules', 'RDV NB annulés'], 'nb:no_show': ['no_show', 'RDV NB no-show'], 'nb:present': ['presents', 'Présents NB'],
+    'nb:pitche': ['pitches', 'Pitchés NB'], 'nb:kept': ['kept', 'Kept NB'],
+    'closes': ['closes'], 'sb': ['closes_sb'], 'nb': ['closes_nb'], 'annules': ['closes_annules'], 'sansSignal': ['clientes_sans_vente'], 'ecarts': ['ecart_canal']
+  };
+  function libellePortee(p) {
+    if (p === '_all') return SC.mot('equipe');
+    if (p === '_na') return SC.mot('non_attribue');
+    if (p.indexOf('m:') === 0) { var k = p.slice(2); return MOIS[+k.slice(5, 7) - 1] + ' ' + k.slice(0, 4); }
+    if (p.indexOf('cls:') === 0) return SC.CLASSES[p.slice(4)] || p;
+    return nomDe(p) || p;
+  }
+  function resoudreListe(ref) {
+    var C = S.calc;
+    if (!C) return null;
+    var p = String(ref).split('|');
+    var portee = p[1], genre = p[0] === 'c' ? 'c:' + p[2] : p[2];
+    var ents = ((C.L[portee] || {})[genre]) || [];
+    var g = GENRES[p[0] === 'c' ? p[2] : p[2]] || [];
+    var me = moi();
+    var montrerArgent = S.isAdmin || portee === me || portee.indexOf('m:') === 0 || portee === '_all' || portee === '_na';
+    var items = ents.map(function (e) {
+      if (e.t === 'c') {
+        var it = SD.closeItem(e.row, { nomDe: nomDe });
+        /* D26 : pour un non-admin, pas de montant rattaché au nom d'une autre personne. */
+        if (!S.isAdmin && e.row.closer !== me && e.row.setter !== me) { it.closer = ''; it.setter = ''; }
+        return it;
+      }
+      var b = e.b;
+      var it2 = SD.bookingItem(b, { now: C.now, classe: e.cls, closer: nomDe(e.closer) || SC.mot('non_attribue'),
+        setter: e.cls === 'setter' ? (nomDe(e.setter) || SC.mot('non_attribue')) : '' });
+      if (e.pose) it2.info = 'posé le ' + SD.frDate(e.pose) + ((b.date || '') !== e.pose ? ' · RDV le ' + SD.frDate(b.date) : '');
+      return it2;
+    });
+    var cle = g[0] || '';
+    var titre = (g[1] || SC.mot(cle) || genre) + ' — ' + libellePortee(portee) + ' · ' + libelleMois(S.year, C.raw.Pc.months);
+    var sub = p[0] === 'c'
+      ? 'Un close = un client gagné, compté le jour de la vente (liste unique du Stats funnel et de Global closing). Montants hors taxes, module Paiements.'
+      : (genre === 'b:sets' ? 'RDV du setting créés pendant la période, un par RDV, rangés chez le setter de la fiche. Clique sur un nom pour ouvrir la fiche.'
+        : 'RDV comptés à leur date (heure de Paris). Clique sur un nom pour ouvrir la fiche.');
+    return { title: titre, info: cle, sub: sub, items: items, money: p[0] === 'c' ? (montrerArgent && genre !== 'c:sansSignal') : false,
+      dateLabel: genre === 'b:sets' ? 'RDV' : 'RDV' };
+  }
+
+  /* ══ ORCHESTRATION ═══════════════════════════════════════════════════ */
+  function refresh() {
+    if (S.mode !== 'year' && !S.months.length) { var c0 = moisCourant(); S.months = [c0.y === S.year ? c0.m : 0]; if (S.mode === 'range') S.rangeStart = null; }
+    var tok = ++S.tok;
+    var P = periode();
+    S.calc = null;
+    S.data = { P: P, annee: null };
+    $('main-content').innerHTML = '<div class="cr-loading">Calcul des RDV, closes et paiements de ' + esc(P.label) + '…</div>';
+    renderSelecteur(S.data);
+    renderObjectif(null);
+    $('year-lbl').textContent = String(S.year);
+    var anneeP = chargerAnnee(S.year);
+    Promise.all([chargerObjectifs(), anneeP, chargerCalc(P.calc, anneeP)]).then(function (r) {
+      if (tok !== S.tok) return;
+      S.data = { P: P, annee: r[1], calcRaw: r[2] };
+      S.calc = r[2] ? calculer(r[2]) : null;
+      render();
+    }).catch(function (e) {
+      if (tok !== S.tok) return;
+      console.error('[dashboard]', e);
+      $('main-content').innerHTML = '<div class="cr-error">Chargement impossible : ' + esc((e && e.message) || 'erreur inconnue') + '. Recharge la page.</div>';
+    });
+  }
+  /* Le roster a changé (nav.js) : on recalcule à partir des données déjà
+     lues — le rangement par personne dépend de la liste des membres. */
+  function recalculer() {
+    if (!S.data || !S.data.P) return;
+    if (S.data.calcRaw) S.calc = calculer(S.data.calcRaw);
+    if (S.data.annee) render();
+  }
+
+  function onAction(el) {
+    var act = el.getAttribute('data-act');
+    if (act === 'annee-prec' || act === 'annee-suiv') {
+      S.year += act === 'annee-prec' ? -1 : 1;
+      S.mode = 'year'; S.months = []; S.rangeStart = null;
+      refresh();
+    } else if (act === 'mode') {
+      var mode = el.getAttribute('data-mode');
+      S.mode = mode; S.rangeStart = null;
+      if (mode === 'month') { var c = moisCourant(); S.months = [c.y === S.year ? c.m : 0]; }
+      else S.months = [];
+      if (mode === 'range') { renderSelecteur(S.data); return; }
+      refresh();
+    } else if (act === 'mois') {
+      var i = +el.getAttribute('data-m');
+      if (S.mode === 'range') {
+        if (S.rangeStart === null) { S.rangeStart = i; S.months = [i]; renderSelecteur(S.data); return; }
+        var a = Math.min(S.rangeStart, i), b = Math.max(S.rangeStart, i);
+        S.months = []; for (var k = a; k <= b; k++) S.months.push(k);
+        S.rangeStart = null;
+      } else { S.mode = 'month'; S.months = [i]; }
+      refresh();
+    } else if (act === 'actualiser') {
+      S.annees = {}; S.typeMapP = null; S.personsP = null; S.objP = null;
+      refresh();
+    }
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (t && t.closest && t.closest('[data-sc-i]')) return;
+    var el = t && t.closest ? t.closest('[data-act]') : null;
+    if (!el || el.closest('#call-report')) return;
+    onAction(el);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.keyCode !== 13) return;
+    var el = e.target && e.target.closest ? e.target.closest('[data-act]') : null;
+    if (el && !el.closest('#call-report') && el.tagName !== 'BUTTON') onAction(el);
+  });
+  SD.bind($('main-content'), resoudreListe);
+  window.addEventListener('team-members-loaded', recalculer);
+
+  /* ══ DÉMARRAGE ═══════════════════════════════════════════════════════ */
+  function demarrer() {
+    if (S.started) return;
+    S.started = true;
+    var c = moisCourant();
+    S.year = c.y; S.mode = 'month'; S.months = [c.m];
+    refresh();
+    window.__dashReady = { role: S.role, uid: S.uid };
+    try { window.dispatchEvent(new CustomEvent('dash-ready', { detail: window.__dashReady })); } catch (e) {}
+  }
+  function attendreRoster() {
+    /* Plus de course au chargement : on attend la liste de l'équipe avant
+       de calculer (sinon des RDV tombent en « Non attribué »), avec un
+       délai de garde ; un roster qui arrive plus tard relance le rangement. */
+    var fini = false;
+    function go() { if (!fini) { fini = true; demarrer(); } }
+    if (window.TEAM_MEMBERS_LIST && window.TEAM_MEMBERS_LIST.length) { go(); return; }
+    window.addEventListener('team-members-loaded', go);
+    if (typeof window.loadTeamMembers === 'function') {
+      try { Promise.resolve(window.loadTeamMembers()).then(go, go); } catch (e) { /* le délai de garde prend le relais */ }
+    }
+    setTimeout(go, 6000);
+  }
+  var nmCache = localStorage.getItem('ambitio_name') || '';
+  $('tb-nm').textContent = nmCache;
+  $('tb-av').textContent = (nmCache || '?').charAt(0).toUpperCase();
+  var authFait = false;
+  function apresAuth(user) {
+    if (authFait) return;
+    authFait = true;
+    if (!user) {
+      if (!localStorage.getItem('ambitio_role')) { window.location.href = 'login.html'; return; }
+      S.role = localStorage.getItem('ambitio_role') || '';
+      S.isAdmin = S.role === 'admin';
+      attendreRoster();
+      return;
+    }
+    S.uid = user.uid;
+    db.collection('users').doc(user.uid).get().then(function (snap) {
+      var u = snap.exists ? (snap.data() || {}) : {};
+      var role = u.role || localStorage.getItem('ambitio_role') || 'sales';
+      var name = user.displayName || (user.email ? user.email.split('@')[0] : '') || nmCache || 'Utilisateur';
+      window._currentUserUid = user.uid; window._currentRole = role; window._currentUserName = name;
+      try { localStorage.setItem('ambitio_role', role); localStorage.setItem('ambitio_auth_uid', user.uid); localStorage.setItem('ambitio_name', name); } catch (e) {}
+      $('tb-nm').textContent = name;
+      $('tb-av').textContent = (name || '?').charAt(0).toUpperCase();
+      S.role = role;
+    }).catch(function (e) {
+      console.warn('[dashboard] lecture du compte :', e && e.message);
+      S.role = localStorage.getItem('ambitio_role') || '';
+      window._currentUserUid = user.uid; window._currentRole = S.role;
+    }).then(function () {
+      S.isAdmin = S.role === 'admin';
+      attendreRoster();
+    });
+  }
+  firebase.auth().onAuthStateChanged(function (u) { apresAuth(u); });
+  setTimeout(function () { apresAuth(firebase.auth().currentUser || null); }, 5000);
+})();
 </script>
 
-<!-- ═══════════════════════════════════════════════════════════════════
-     RAPPORT APPELS HEBDO — L1 (source Twilio call_logs)
-     Outbound + completed + durationSec >= 5s. Plage libre. Admin voit
-     tous les closers + dropdown filtre ; Sales voit uniquement ses
-     propres stats.
-═══════════════════════════════════════════════════════════════════ -->
+<!-- ═══ Activité téléphonique — styles du bloc (inchangés) ═══ -->
 <style>
 .cr-section { margin-top: 24px; }
 .cr-card {
@@ -1431,545 +1504,283 @@ document.addEventListener('DOMContentLoaded', async function() {
 </style>
 
 <script>
+/* ═══════════════════════════════════════════════════════════════════════
+   ACTIVITÉ TÉLÉPHONIQUE — call_logs (Ringover / Twilio), plage propre au bloc
+   ───────────────────────────────────────────────────────────────────────
+   Audit de cohérence du 25/11/2026 :
+     · lecture par AlteoreFlow.loadCallsForMember (la même que Set NB) :
+       plus de plafond muet (« lecture incomplète » affichée), plus de
+       requête « 5 000 appels quelconques » pour un non-admin ;
+     · décroché = règle commune AlteoreFlow.isAnswered (StatsCore :
+       ≥ 5 s de conversation, répondeurs écartés), sortants seulement,
+       sans condition de statut ;
+     · jours et bornes à l'heure de Paris ;
+     · « Personne » (pas « Closer ») : la liste contient tous les appelants ;
+       un ancien membre est rangé sur « Anciens membres » (sans nom), un
+       poste non relié sur « Non attribué » (appels sans auteur).
+   Un admin voit toute l'équipe ; un membre ne voit que ses propres appels
+   (règles Firestore). ES5, délégation d'événements, aucun onclick en ligne.
+   ═══════════════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
+  var SC = window.StatsCore, FC = window.FunnelCore, AF = window.AlteoreFlow;
 
-  // ─── Config ────────────────────────────────────────────────────────────
-  // Seuil pour considérer un appel comme "décroché" (cohérent avec
-  // stats.connected du Dialer — exclut les répondeurs < 5s).
-  const ANSWERED_DURATION_THRESHOLD_SEC = 5;
-  const LOGS_QUERY_LIMIT = 5000;
-
-  // ─── State ─────────────────────────────────────────────────────────────
-  const state = {
-    rangeStart: null,
-    rangeEnd: null,
-    activePreset: 'week',
-    filterUid: 'all',
-    role: null,
-    myUid: null,
-    uidToMember: {},
-    loading: false,
-    logs: []
+  var state = {
+    startIso: null, endIso: null, preset: 'week', filterUid: 'all',
+    role: null, myUid: null, loading: false, logs: [], tok: 0
   };
 
-  // ─── Helpers date ─────────────────────────────────────────────────────
-  function startOfDay(d) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
-  function endOfDay(d) { const x = new Date(d); x.setHours(23,59,59,999); return x; }
-  function pad2(n) { return String(n).padStart(2, '0'); }
-  function isoDate(d) {
-    return d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate());
+  function $(id) { return document.getElementById(id); }
+  function esc(t) {
+    return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
   }
-  function getCurrentWeekRange() {
-    const now = new Date();
-    const dow = now.getDay(); // 0=dim
-    const diffToMon = dow === 0 ? -6 : 1 - dow;
-    const mon = new Date(now);
-    mon.setDate(now.getDate() + diffToMon);
-    const sun = new Date(mon);
-    sun.setDate(mon.getDate() + 6);
-    return { start: startOfDay(mon), end: endOfDay(sun) };
-  }
-  function getLastWeekRange() {
-    const cur = getCurrentWeekRange();
-    const s = new Date(cur.start); s.setDate(s.getDate() - 7);
-    const e = new Date(cur.end);   e.setDate(e.getDate() - 7);
-    return { start: startOfDay(s), end: endOfDay(e) };
-  }
-  function getCurrentMonthRange() {
-    const now = new Date();
-    const s = new Date(now.getFullYear(), now.getMonth(), 1);
-    const e = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    return { start: startOfDay(s), end: endOfDay(e) };
-  }
-  function getLast30DaysRange() {
-    const now = new Date();
-    const s = new Date(now); s.setDate(now.getDate() - 29);
-    return { start: startOfDay(s), end: endOfDay(now) };
-  }
+  function fmtNum(n) { return Math.round(Number(n) || 0).toLocaleString('fr-FR'); }
+  function pad2(n) { return SC.pad2(n); }
 
-  // ─── Helpers format ────────────────────────────────────────────────────
+  /* ── Jours de Paris ('AAAA-MM-JJ') ── */
+  function isoPlus(iso, n) {
+    var p = iso.split('-');
+    var d = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2] + n));
+    return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate());
+  }
+  function jourSemaine(iso) { var p = iso.split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])).getUTCDay(); }
+  function aujourdhui() { return SC.jourParis(Date.now()); }
+  function presetRange(key) {
+    var t = aujourdhui();
+    if (key === 'week' || key === 'lastweek') {
+      var dow = jourSemaine(t);
+      var lundi = isoPlus(t, dow === 0 ? -6 : 1 - dow);
+      if (key === 'lastweek') lundi = isoPlus(lundi, -7);
+      return { start: lundi, end: isoPlus(lundi, 6) };
+    }
+    if (key === 'month') {
+      var P = FC.periodMonth(+t.slice(0, 4), +t.slice(5, 7) - 1);
+      return { start: SC.jourParis(P.start), end: SC.jourParis(P.end) };
+    }
+    if (key === '30days') return { start: isoPlus(t, -29), end: t };
+    return null;
+  }
+  function frCourt(iso) { return +iso.slice(8, 10) + '/' + iso.slice(5, 7); }
+  function rangeLabel() { return state.startIso === state.endIso ? frCourt(state.startIso) : frCourt(state.startIso) + ' → ' + frCourt(state.endIso); }
+
   function fmtDuration(sec) {
     sec = Math.max(0, Math.round(sec || 0));
-    if (sec < 60) return sec + 's';
-    const h = Math.floor(sec / 3600);
-    const m = Math.floor((sec % 3600) / 60);
-    const s = sec % 60;
-    if (h > 0) return h + 'h ' + pad2(m) + 'min';
-    if (s === 0) return m + 'min';
-    return m + 'min ' + pad2(s) + 's';
-  }
-  function fmtDurationShort(sec) {
-    sec = Math.max(0, Math.round(sec || 0));
-    const h = Math.floor(sec / 3600);
-    const m = Math.floor((sec % 3600) / 60);
-    if (h > 0) return h + 'h' + (m > 0 ? pad2(m) : '');
-    return m + 'min';
-  }
-  function fmtShortDate(d) {
-    return d.getDate() + '/' + pad2(d.getMonth()+1);
-  }
-  function rangeLabel(start, end) {
-    const sd = new Date(start), ed = new Date(end);
-    if (isoDate(sd) === isoDate(ed)) return fmtShortDate(sd);
-    return fmtShortDate(sd) + ' → ' + fmtShortDate(ed);
+    if (sec < 60) return sec + ' s';
+    var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    if (h > 0) return h + ' h ' + pad2(m) + ' min';
+    if (s === 0) return m + ' min';
+    return m + ' min ' + pad2(s) + ' s';
   }
 
-  // ─── Attendre window._currentRole + TEAM_MEMBERS ──────────────────────
-  async function waitForReady() {
-    const startTs = Date.now();
-    while (Date.now() - startTs < 8000) {
-      if (window._currentRole && window._currentUserUid) {
-        // Le role est set. TEAM_MEMBERS peut encore se charger, mais nav.js
-        // a probablement déjà fini. On tolère un TEAM_MEMBERS vide et on
-        // retente après.
-        return true;
-      }
-      await new Promise(r => setTimeout(r, 100));
+  /* ── Personnes : uid → ligne (référentiel §3, D10) ── */
+  function ligneDeUid(uid) {
+    if (!uid) return { key: '_na', name: SC.mot('non_attribue'), color: '#6b7280', sous: SC.mot('appels_sans_auteur') };
+    var map = window.TEAM_MEMBERS || {};
+    var keys = Object.keys(map);
+    for (var i = 0; i < keys.length; i++) {
+      var m = map[keys[i]];
+      if (!m || (m.firebaseUid !== uid && m.uid !== uid)) continue;
+      var slug = m.slug || keys[i];
+      if (AF.isDeparted(slug)) return { key: '_anciens', name: SC.mot('anciens_membres'), color: '#6b7280', sous: '' };
+      return { key: uid, name: m.shortName || m.displayName || slug, color: m.color || '#6b7280', active: m.active !== false, sous: '' };
     }
-    return false;
+    return { key: '_na', name: SC.mot('non_attribue'), color: '#6b7280', sous: 'poste inconnu' };
   }
 
-  async function waitForTeamMembers() {
-    const startTs = Date.now();
-    while (Date.now() - startTs < 5000) {
-      if (window.TEAM_MEMBERS_LIST && window.TEAM_MEMBERS_LIST.length > 0) return true;
-      await new Promise(r => setTimeout(r, 100));
-    }
-    return false; // on continue quand même avec ce qu'on a
+  /* ── Lecture ── */
+  function fetchLogs() {
+    var start = SC.debutJourParis(state.startIso), end = SC.finJourParis(state.endIso);
+    var isAdmin = state.role === 'admin';
+    return AF.loadCallsForMember(isAdmin ? null : state.myUid, start, end, isAdmin);
   }
 
-  function buildUidToMember() {
-    const map = {};
-    const list = window.TEAM_MEMBERS_LIST || [];
-    for (const m of list) {
-      if (m && m.firebaseUid) {
-        map[m.firebaseUid] = {
-          slug: m.slug,
-          name: m.shortName || m.displayName || m.slug,
-          color: m.color || '#6b7280',
-          active: m.active !== false
-        };
-      }
-    }
-    state.uidToMember = map;
-  }
-
-  // ─── Query Firestore ───────────────────────────────────────────────────
-  async function fetchLogs() {
-    const db = firebase.firestore();
-    const start = state.rangeStart;
-    const end = state.rangeEnd;
-
-    try {
-      let q;
-      if (state.role === 'admin') {
-        // Admin : plage temporelle seule (pas de filter userId → composite index non requis)
-        q = db.collection('call_logs')
-          .where('initiatedAt', '>=', start)
-          .where('initiatedAt', '<=', end)
-          .limit(LOGS_QUERY_LIMIT);
-      } else {
-        // Sales : filtre par userId seul (aucun composite index requis)
-        // On filtre la plage temporelle côté client.
-        q = db.collection('call_logs')
-          .where('userId', '==', state.myUid)
-          .limit(LOGS_QUERY_LIMIT);
-      }
-      const snap = await q.get();
-      const logs = [];
-      snap.forEach(function (doc) {
-        const d = doc.data();
-        if (!d.initiatedAt || !d.initiatedAt.toDate) return;
-        const when = d.initiatedAt.toDate();
-        if (state.role === 'sales') {
-          // Filtre côté client sur la plage
-          if (when < start || when > end) return;
-        }
-        logs.push({
-          id: doc.id,
-          userId: d.userId || null,
-          direction: d.direction || null,
-          status: d.status || null,
-          durationSec: typeof d.durationSec === 'number' ? d.durationSec : 0,
-          initiatedAt: when
-        });
-      });
-      return logs;
-    } catch (e) {
-      console.error('[callReport] fetch error:', e);
-      throw e;
-    }
-  }
-
-  // ─── Aggrégation ──────────────────────────────────────────────────────
+  /* ── Agrégat : sortants, décrochés par la règle commune ── */
   function aggregate(logs) {
-    // Filtre métier : outbound + completed + décroché (>= 5s)
-    const answered = logs.filter(function (l) {
-      return l.direction === 'outbound'
-          && l.status === 'completed'
-          && (l.durationSec || 0) >= ANSWERED_DURATION_THRESHOLD_SEC;
+    var byRow = {}, byDay = {}, tot = { calls: 0, decroches: 0, talk: 0 };
+    (logs || []).forEach(function (c) {
+      if (!c || c.direction !== 'outbound') return;
+      if (state.role === 'admin' && state.filterUid !== 'all' && c.userId !== state.filterUid) return;
+      var ms = c.initiatedAt && c.initiatedAt.toMillis ? c.initiatedAt.toMillis() : null;
+      if (ms == null) return;
+      var dk = SC.jourParis(ms);
+      var L = ligneDeUid(c.userId || null);
+      var r = byRow[L.key] || (byRow[L.key] = { key: L.key, name: L.name, color: L.color, active: L.active, sous: {}, calls: 0, decroches: 0, talk: 0 });
+      if (L.sous) r.sous[L.sous] = 1;
+      var d = byDay[dk] || (byDay[dk] = { calls: 0, decroches: 0, talk: 0 });
+      var dec = AF.isAnswered(c), talk = dec ? (Number(c.durationSec) || 0) : 0;
+      r.calls++; d.calls++; tot.calls++;
+      if (dec) { r.decroches++; d.decroches++; tot.decroches++; r.talk += talk; d.talk += talk; tot.talk += talk; }
     });
-
-    // Par closer
-    const byUser = {};
-    // Par jour (global)
-    const byDay = {};
-
-    for (const l of answered) {
-      const uid = l.userId || '__unknown';
-      if (!byUser[uid]) byUser[uid] = { count: 0, totalSec: 0, uid: uid };
-      byUser[uid].count += 1;
-      byUser[uid].totalSec += l.durationSec;
-
-      const dk = isoDate(l.initiatedAt);
-      if (!byDay[dk]) byDay[dk] = { count: 0, totalSec: 0 };
-      byDay[dk].count += 1;
-      byDay[dk].totalSec += l.durationSec;
-    }
-
-    return { byUser: byUser, byDay: byDay, totalCount: answered.length };
+    return { byRow: byRow, byDay: byDay, tot: tot };
   }
 
-  function buildDaysSeries(byDay, start, end) {
-    // Série continue jour par jour (remplit les jours sans appel avec 0)
-    const days = [];
-    const cur = new Date(start); cur.setHours(0,0,0,0);
-    const endD = new Date(end);  endD.setHours(0,0,0,0);
-    // Cap à 60 jours pour éviter un barchart illisible sur très longue plage
-    let safety = 0;
-    while (cur <= endD && safety < 100) {
-      const dk = isoDate(cur);
-      const d = byDay[dk] || { count: 0, totalSec: 0 };
-      days.push({
-        date: new Date(cur),
-        dateKey: dk,
-        count: d.count,
-        totalSec: d.totalSec
-      });
-      cur.setDate(cur.getDate() + 1);
-      safety++;
-    }
-    return days;
-  }
-
-  // ─── Render ────────────────────────────────────────────────────────────
+  /* ── Rendu ── */
   function renderShell() {
-    const root = document.getElementById('call-report');
+    var root = $('call-report');
     if (!root) return;
-
-    const presets = [
-      { key: 'week',     label: 'Cette semaine' },
-      { key: 'lastweek', label: 'Semaine dernière' },
-      { key: 'month',    label: 'Ce mois-ci' },
-      { key: '30days',   label: '30 derniers jours' },
-      { key: 'custom',   label: 'Personnalisé' }
+    var presets = [
+      { key: 'week', label: 'Cette semaine' }, { key: 'lastweek', label: 'Semaine dernière' },
+      { key: 'month', label: 'Ce mois-ci' }, { key: '30days', label: '30 derniers jours' }, { key: 'custom', label: 'Personnalisé' }
     ];
-
-    let filterHtml = '';
+    var filterHtml = '';
     if (state.role === 'admin') {
-      const members = (window.TEAM_MEMBERS_LIST || []).filter(function (m) {
-        return m && m.firebaseUid;
-      });
-      filterHtml = '<select class="cr-filter-select" id="cr-filter">'
-        + '<option value="all">Tous les closers</option>'
-        + members.map(function (m) {
-            const nm = m.shortName || m.displayName || m.slug;
-            return '<option value="' + m.firebaseUid + '">' + nm
-                 + (m.active === false ? ' (archivé)' : '') + '</option>';
-          }).join('')
-        + '</select>';
+      var members = (window.TEAM_MEMBERS_LIST || []).filter(function (m) { return m && m.firebaseUid; });
+      filterHtml = '<select class="cr-filter-select" id="cr-filter"><option value="all">Toute l’équipe</option>' +
+        members.map(function (m) {
+          var nm = m.shortName || m.displayName || m.slug;
+          return '<option value="' + esc(m.firebaseUid) + '"' + (state.filterUid === m.firebaseUid ? ' selected' : '') + '>' + esc(nm) + (m.active === false ? ' (archivé)' : '') + '</option>';
+        }).join('') + '</select>';
     }
-
-    const titleBadge = state.role === 'admin'
-      ? '<span class="cr-badge">Équipe</span>'
-      : '<span class="cr-badge">Mes stats</span>';
-
-    root.innerHTML = ''
-      + '<div class="cr-section"><div class="cr-card">'
-      + '<div class="cr-hdr">'
-      +   '<div class="cr-title">📞 Activité téléphonique</div>'
-      +   titleBadge
-      + '</div>'
-      + '<div class="cr-controls" id="cr-controls">'
-      +   presets.map(function (p) {
-            return '<button class="cr-preset' + (state.activePreset === p.key ? ' active' : '')
-                 + '" data-preset="' + p.key + '">' + p.label + '</button>';
-          }).join('')
-      +   '<div class="cr-datepair">'
-      +     '<label>Du</label><input type="date" id="cr-date-start"/>'
-      +     '<label>Au</label><input type="date" id="cr-date-end"/>'
-      +   '</div>'
-      +   filterHtml
-      + '</div>'
-      + '<div id="cr-body"></div>'
-      + '</div></div>';
-
-    // Init date pickers
-    document.getElementById('cr-date-start').value = isoDate(state.rangeStart);
-    document.getElementById('cr-date-end').value = isoDate(state.rangeEnd);
-
-    // Event listeners
-    document.getElementById('cr-controls').addEventListener('click', function (e) {
-      const btn = e.target.closest('.cr-preset');
-      if (!btn) return;
-      onPresetClick(btn.dataset.preset);
+    root.innerHTML = '<div class="cr-section"><div class="cr-card">' +
+      '<div class="cr-hdr"><div class="cr-title">📞 Activité téléphonique</div>' +
+      '<span class="cr-badge">' + (state.role === 'admin' ? 'Équipe' : 'Mes appels') + '</span>' +
+      '<span class="cr-archived">période propre à ce bloc · heure de Paris</span></div>' +
+      '<div class="cr-controls" id="cr-controls">' +
+      presets.map(function (p) { return '<button type="button" class="cr-preset' + (state.preset === p.key ? ' active' : '') + '" data-preset="' + p.key + '">' + p.label + '</button>'; }).join('') +
+      '<div class="cr-datepair"><label for="cr-date-start">Du</label><input type="date" id="cr-date-start"/><label for="cr-date-end">Au</label><input type="date" id="cr-date-end"/></div>' +
+      filterHtml + '</div><div id="cr-body"></div></div></div>';
+    $('cr-date-start').value = state.startIso;
+    $('cr-date-end').value = state.endIso;
+    $('cr-controls').addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest('.cr-preset') : null;
+      if (btn) onPreset(btn.getAttribute('data-preset'));
     });
-    document.getElementById('cr-date-start').addEventListener('change', onDateChange);
-    document.getElementById('cr-date-end').addEventListener('change', onDateChange);
-    if (state.role === 'admin') {
-      document.getElementById('cr-filter').addEventListener('change', function (e) {
-        state.filterUid = e.target.value;
-        renderBody();
-      });
-    }
+    $('cr-date-start').addEventListener('change', onDateChange);
+    $('cr-date-end').addEventListener('change', onDateChange);
+    var f = $('cr-filter');
+    if (f) f.addEventListener('change', function (e) { state.filterUid = e.target.value; renderBody(); });
   }
-
-  function renderBodyLoading() {
-    const body = document.getElementById('cr-body');
-    if (body) body.innerHTML = '<div class="cr-loading">Chargement des appels…</div>';
+  function setActive() {
+    var list = document.querySelectorAll('#call-report .cr-preset');
+    for (var i = 0; i < list.length; i++) list[i].className = 'cr-preset' + (list[i].getAttribute('data-preset') === state.preset ? ' active' : '');
+    if ($('cr-date-start')) $('cr-date-start').value = state.startIso;
+    if ($('cr-date-end')) $('cr-date-end').value = state.endIso;
   }
+  function renderBodyLoading() { var b = $('cr-body'); if (b) b.innerHTML = '<div class="cr-loading">Chargement des appels…</div>'; }
 
-  function renderBodyError(msg) {
-    const body = document.getElementById('cr-body');
-    if (body) body.innerHTML = '<div class="cr-error">' + msg + '</div>';
+  function stat(label, val) {
+    return '<div class="cr-stat"><div class="cr-stat-label">' + label + '</div><div class="cr-stat-val">' + val + '</div></div>';
   }
-
   function renderBody() {
-    const body = document.getElementById('cr-body');
+    var body = $('cr-body');
     if (!body) return;
-
-    const agg = aggregate(state.logs);
-
-    // Appliquer filtre closer (admin only)
-    let filteredByUser = agg.byUser;
-    let filteredByDay = agg.byDay;
-    let filteredTotal = agg.totalCount;
-
-    if (state.role === 'admin' && state.filterUid !== 'all') {
-      // Re-agréger uniquement pour l'UID sélectionné
-      const uid = state.filterUid;
-      filteredByUser = agg.byUser[uid] ? { [uid]: agg.byUser[uid] } : {};
-      filteredByDay = {};
-      filteredTotal = 0;
-      for (const l of state.logs) {
-        if (l.userId !== uid) continue;
-        if (l.direction !== 'outbound' || l.status !== 'completed') continue;
-        if ((l.durationSec || 0) < ANSWERED_DURATION_THRESHOLD_SEC) continue;
-        const dk = isoDate(l.initiatedAt);
-        if (!filteredByDay[dk]) filteredByDay[dk] = { count: 0, totalSec: 0 };
-        filteredByDay[dk].count++;
-        filteredByDay[dk].totalSec += l.durationSec;
-        filteredTotal++;
-      }
+    var logs = state.logs || [];
+    var html = '';
+    if (logs._erreur) {
+      body.innerHTML = '<div class="cr-error">Appels illisibles : ' + esc(logs._erreur) + '. Aucun chiffre n’est affiché plutôt qu’un zéro faux.</div>';
+      return;
     }
+    if (logs._tronque) html += '<div class="cr-error">⚠ ' + esc(SC.mot('lecture_incomplete')) + SC.info('lecture_incomplete') + ' : trop d’appels sur la période, total partiel — réduis la période.</div>';
+    var agg = aggregate(logs), t = agg.tot;
+    var avg = t.decroches > 0 ? t.talk / t.decroches : 0;
+    var talkInfo = SC.infoLibre('Temps d’appel', 'Temps passé en conversation sur les appels sortants décrochés de la période. Les appels reçus et les messageries ne sont pas comptés.');
+    var avgInfo = SC.infoLibre('Durée moyenne', 'Temps d’appel ÷ appels décrochés de la période.');
+    html += '<div class="cr-stat-row">' +
+      stat(esc(SC.mot('appels')) + SC.info('appels'), fmtNum(t.calls)) +
+      stat(esc(SC.mot('decroches')) + SC.info('decroches'), fmtNum(t.decroches)) +
+      stat(esc(SC.mot('taux_decroche')) + SC.info('taux_decroche'), SC.fmtPct(SC.pct(t.decroches, t.calls))) +
+      stat('Temps d’appel' + talkInfo, fmtDuration(t.talk)) +
+      stat('Durée moyenne' + avgInfo, t.decroches > 0 ? fmtDuration(avg) : '—') +
+      stat('Plage', '<span style="font-size:15px">' + esc(rangeLabel()) + '</span>') +
+      '</div>';
 
-    // Total général (pour bannière stats)
-    let totalCount = 0, totalSec = 0;
-    Object.values(filteredByUser).forEach(function (u) {
-      totalCount += u.count;
-      totalSec += u.totalSec;
-    });
-    const avgSec = totalCount > 0 ? totalSec / totalCount : 0;
-
-    // ── Bannière stats ──────────────────────────────────────────────────
-    let html = '<div class="cr-stat-row">';
-    html += '<div class="cr-stat"><div class="cr-stat-label">Appels décrochés</div>'
-         + '<div class="cr-stat-val">' + totalCount + '</div></div>';
-    html += '<div class="cr-stat"><div class="cr-stat-label">Temps total</div>'
-         + '<div class="cr-stat-val">' + fmtDuration(totalSec) + '</div></div>';
-    html += '<div class="cr-stat"><div class="cr-stat-label">Durée moyenne</div>'
-         + '<div class="cr-stat-val">' + (totalCount > 0 ? fmtDuration(avgSec) : '—') + '</div></div>';
-    html += '<div class="cr-stat"><div class="cr-stat-label">Plage</div>'
-         + '<div class="cr-stat-val" style="font-size:15px">'
-         + rangeLabel(state.rangeStart, state.rangeEnd) + '</div></div>';
-    html += '</div>';
-
-    // ── Tableau (admin + vue "Tous") OR uniquement si plusieurs uid ────
-    const showTable = state.role === 'admin' && state.filterUid === 'all';
-    if (showTable) {
-      const rows = Object.values(filteredByUser)
-        .map(function (u) {
-          const m = state.uidToMember[u.uid] || null;
-          return {
-            uid: u.uid,
-            name: m ? m.name : ('Inconnu (' + String(u.uid || '').slice(0, 6) + ')'),
-            color: m ? m.color : '#6b7280',
-            active: m ? m.active : true,
-            count: u.count,
-            totalSec: u.totalSec,
-            avg: u.count > 0 ? (u.totalSec / u.count) : 0
-          };
-        })
-        .sort(function (a, b) { return b.totalSec - a.totalSec; });
-
-      html += '<div class="cr-table-wrap"><table class="cr-table">';
-      html += '<thead><tr>'
-            + '<th>Closer</th>'
-            + '<th class="num">Appels décrochés</th>'
-            + '<th class="num">Temps total</th>'
-            + '<th class="num">Temps moyen</th>'
-            + '</tr></thead><tbody>';
-
-      if (rows.length === 0) {
-        html += '<tr><td colspan="4"><div class="cr-empty">'
-             + 'Aucun appel décroché sur cette plage.</div></td></tr>';
-      } else {
+    if (state.role === 'admin' && state.filterUid === 'all') {
+      var rows = Object.keys(agg.byRow).map(function (k) { return agg.byRow[k]; });
+      /* Lignes nominatives d'abord (par temps d'appel), puis les deux lignes collectives. */
+      rows.sort(function (a, b) {
+        var ca = a.key.charAt(0) === '_' ? 1 : 0, cb = b.key.charAt(0) === '_' ? 1 : 0;
+        return ca !== cb ? ca - cb : b.talk - a.talk;
+      });
+      html += '<div class="cr-table-wrap"><table class="cr-table"><thead><tr>' +
+        '<th>Personne</th><th class="num">' + esc(SC.mot('appels')) + SC.info('appels') + '</th><th class="num">' + esc(SC.mot('decroches')) + SC.info('decroches') + '</th>' +
+        '<th class="num">' + esc(SC.mot('taux_decroche')) + SC.info('taux_decroche') + '</th><th class="num">Temps d’appel' + talkInfo + '</th><th class="num">Durée moyenne' + avgInfo + '</th>' +
+        '</tr></thead><tbody>';
+      if (!rows.length) html += '<tr><td colspan="6"><div class="cr-empty">Aucun appel sortant sur cette plage.</div></td></tr>';
+      else {
+        var tt = { calls: 0, decroches: 0, talk: 0 };
         rows.forEach(function (r) {
-          html += '<tr>';
-          html += '<td>'
-               +   '<span class="cr-dot" style="background:' + r.color + '"></span>'
-               +   r.name
-               +   (r.active === false ? '<span class="cr-archived">archivé</span>' : '')
-               + '</td>';
-          html += '<td class="num">' + r.count + '</td>';
-          html += '<td class="num">' + fmtDuration(r.totalSec) + '</td>';
-          html += '<td class="num">' + fmtDuration(r.avg) + '</td>';
-          html += '</tr>';
+          tt.calls += r.calls; tt.decroches += r.decroches; tt.talk += r.talk;
+          var extra = '';
+          if (r.key === '_anciens') extra = SC.info('anciens_membres');
+          else if (r.key === '_na') extra = SC.info('non_attribue') + (r.sous[SC.mot('appels_sans_auteur')] ? ' <span class="cr-archived">' + esc(SC.mot('appels_sans_auteur')) + '</span>' + SC.info('appels_sans_auteur') : '');
+          else if (r.active === false) extra = '<span class="cr-archived">archivé</span>';
+          html += '<tr><td><span class="cr-dot" style="background:' + esc(r.color) + '"></span>' + esc(r.name) + extra + '</td>' +
+            '<td class="num">' + fmtNum(r.calls) + '</td><td class="num">' + fmtNum(r.decroches) + '</td>' +
+            '<td class="num">' + SC.fmtPct(SC.pct(r.decroches, r.calls)) + '</td>' +
+            '<td class="num">' + fmtDuration(r.talk) + '</td><td class="num">' + (r.decroches > 0 ? fmtDuration(r.talk / r.decroches) : '—') + '</td></tr>';
         });
-        html += '<tr class="cr-total"><td>Total équipe</td>'
-             +   '<td class="num">' + totalCount + '</td>'
-             +   '<td class="num">' + fmtDuration(totalSec) + '</td>'
-             +   '<td class="num">' + (totalCount > 0 ? fmtDuration(avgSec) : '—') + '</td>'
-             + '</tr>';
+        html += '<tr class="cr-total"><td>Total équipe' + SC.info('equipe') + '</td><td class="num">' + fmtNum(tt.calls) + '</td><td class="num">' + fmtNum(tt.decroches) + '</td>' +
+          '<td class="num">' + SC.fmtPct(SC.pct(tt.decroches, tt.calls)) + '</td><td class="num">' + fmtDuration(tt.talk) + '</td>' +
+          '<td class="num">' + (tt.decroches > 0 ? fmtDuration(tt.talk / tt.decroches) : '—') + '</td></tr>';
       }
       html += '</tbody></table></div>';
     }
 
-    // ── Barchart par jour ──────────────────────────────────────────────
-    const days = buildDaysSeries(filteredByDay, state.rangeStart, state.rangeEnd);
-    const maxSec = days.reduce(function (mx, d) { return Math.max(mx, d.totalSec); }, 0) || 1;
-
-    html += '<div class="cr-chart-wrap">';
-    html += '<div class="cr-chart-title">Répartition par jour</div>';
-    html += '<div class="cr-chart">';
-    if (days.length === 0) {
-      html += '<div class="cr-empty" style="flex:1">Aucune donnée.</div>';
-    } else {
-      days.forEach(function (d) {
-        const pct = Math.max(d.totalSec / maxSec * 100, 2);
-        const isEmpty = d.totalSec === 0;
-        const dayLbl = ['D', 'L', 'M', 'M', 'J', 'V', 'S'][d.date.getDay()];
-        const dn = d.date.getDate();
-        const tip = isEmpty
-          ? (fmtShortDate(d.date) + ' : aucun appel')
-          : (fmtShortDate(d.date) + ' : ' + d.count + ' appels — ' + fmtDuration(d.totalSec));
-        html += '<div class="cr-chart-col' + (isEmpty ? ' empty' : '') + '">';
-        html += '<div class="cr-chart-tooltip">' + tip + '</div>';
-        html += '<div class="cr-chart-bar" style="height:' + pct.toFixed(1) + '%"></div>';
-        html += '<div class="cr-chart-lbl">' + dayLbl + dn + '</div>';
-        html += '</div>';
-      });
-    }
+    /* Décrochés par jour (Paris). */
+    var days = [], cur = state.startIso, guard = 0;
+    while (cur <= state.endIso && guard < 100) { days.push(cur); cur = isoPlus(cur, 1); guard++; }
+    var maxN = 1;
+    days.forEach(function (dk) { var d = agg.byDay[dk]; if (d && d.decroches > maxN) maxN = d.decroches; });
+    var JL = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
+    html += '<div class="cr-chart-wrap"><div class="cr-chart-title">' + esc(SC.mot('decroches')) + ' par jour' + (guard >= 100 ? ' (100 premiers jours)' : '') + '</div><div class="cr-chart">';
+    if (!days.length) html += '<div class="cr-empty" style="flex:1">Aucune donnée.</div>';
+    days.forEach(function (dk) {
+      var d = agg.byDay[dk] || { calls: 0, decroches: 0, talk: 0 };
+      var vide = d.decroches === 0;
+      var tip = frCourt(dk) + ' : ' + (d.calls ? fmtNum(d.calls) + ' appels · ' + fmtNum(d.decroches) + ' décrochés — ' + fmtDuration(d.talk) : 'aucun appel');
+      html += '<div class="cr-chart-col' + (vide ? ' empty' : '') + '"><div class="cr-chart-tooltip">' + esc(tip) + '</div>' +
+        '<div class="cr-chart-bar" style="height:' + Math.max(d.decroches / maxN * 100, 2).toFixed(1) + '%"></div>' +
+        '<div class="cr-chart-lbl">' + JL[jourSemaine(dk)] + (+dk.slice(8, 10)) + '</div></div>';
+    });
     html += '</div></div>';
-
     body.innerHTML = html;
   }
 
-  // ─── Event handlers ────────────────────────────────────────────────────
-  function setPreset(key) {
-    state.activePreset = key;
-    // Actualiser classes actives
-    document.querySelectorAll('.cr-preset').forEach(function (b) {
-      b.classList.toggle('active', b.dataset.preset === key);
-    });
-    // Actualiser dates
-    const pickStart = document.getElementById('cr-date-start');
-    const pickEnd = document.getElementById('cr-date-end');
-    if (pickStart) pickStart.value = isoDate(state.rangeStart);
-    if (pickEnd) pickEnd.value = isoDate(state.rangeEnd);
-  }
-
-  async function onPresetClick(key) {
-    let r = null;
-    switch (key) {
-      case 'week':     r = getCurrentWeekRange(); break;
-      case 'lastweek': r = getLastWeekRange(); break;
-      case 'month':    r = getCurrentMonthRange(); break;
-      case '30days':   r = getLast30DaysRange(); break;
-      case 'custom':
-        state.activePreset = 'custom';
-        document.querySelectorAll('.cr-preset').forEach(function (b) {
-          b.classList.toggle('active', b.dataset.preset === 'custom');
-        });
-        return; // on attend que l'user modifie les date pickers
-    }
+  /* ── Événements ── */
+  function onPreset(key) {
+    if (key === 'custom') { state.preset = 'custom'; setActive(); return; }
+    var r = presetRange(key);
     if (!r) return;
-    state.rangeStart = r.start;
-    state.rangeEnd = r.end;
-    setPreset(key);
-    await reload();
+    state.startIso = r.start; state.endIso = r.end; state.preset = key;
+    setActive();
+    reload();
   }
-
-  async function onDateChange() {
-    const s = document.getElementById('cr-date-start').value;
-    const e = document.getElementById('cr-date-end').value;
-    if (!s || !e) return;
-    const sd = new Date(s + 'T00:00:00');
-    const ed = new Date(e + 'T23:59:59');
-    if (isNaN(sd) || isNaN(ed)) return;
-    if (sd > ed) return; // ignorer l'input invalide
-    state.rangeStart = sd;
-    state.rangeEnd = ed;
-    state.activePreset = 'custom';
-    document.querySelectorAll('.cr-preset').forEach(function (b) {
-      b.classList.toggle('active', b.dataset.preset === 'custom');
-    });
-    await reload();
+  function onDateChange() {
+    var s = $('cr-date-start').value, e = $('cr-date-end').value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || !/^\d{4}-\d{2}-\d{2}$/.test(e) || s > e) return;
+    state.startIso = s; state.endIso = e; state.preset = 'custom';
+    setActive();
+    reload();
   }
-
-  async function reload() {
-    if (state.loading) return;
-    state.loading = true;
+  function reload() {
+    var tok = ++state.tok;
     renderBodyLoading();
-    try {
-      state.logs = await fetchLogs();
+    fetchLogs().then(function (logs) {
+      if (tok !== state.tok) return;
+      state.logs = logs || [];
       renderBody();
-    } catch (e) {
-      renderBodyError("Impossible de charger les appels : " + (e.message || e));
-    } finally {
-      state.loading = false;
-    }
-  }
-
-  // ─── Init ──────────────────────────────────────────────────────────────
-  async function init() {
-    const ok = await waitForReady();
-    if (!ok) { console.warn('[callReport] auth/role non prêts'); return; }
-
-    state.role = window._currentRole;
-    state.myUid = window._currentUserUid;
-
-    if (state.role !== 'admin' && state.role !== 'sales') {
-      // Coach n'est pas dans le scope L1
-      return;
-    }
-
-    await waitForTeamMembers();
-    buildUidToMember();
-
-    // Plage par défaut : cette semaine
-    const wk = getCurrentWeekRange();
-    state.rangeStart = wk.start;
-    state.rangeEnd = wk.end;
-
-    renderShell();
-    await reload();
-
-    // Réagir si TEAM_MEMBERS arrive tardivement (après un fetch team_members)
-    window.addEventListener('team-members-loaded', function () {
-      buildUidToMember();
-      renderShell();
-      renderBody();
+    }, function (e) {
+      if (tok !== state.tok) return;
+      var b = $('cr-body');
+      if (b) b.innerHTML = '<div class="cr-error">Impossible de charger les appels : ' + esc((e && e.message) || e) + '</div>';
     });
   }
 
-  // Lancement : on attend que le DOM soit prêt ET que l'auth soit traitée.
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { init(); });
-  } else {
-    init();
+  function init(detail) {
+    if (state.role) return;
+    state.role = (detail && detail.role) || window._currentRole || localStorage.getItem('ambitio_role') || '';
+    state.myUid = (detail && detail.uid) || window._currentUserUid || null;
+    if (state.role !== 'admin' && state.role !== 'sales') { state.role = null; return; }   // coach / autres : hors périmètre
+    var wk = presetRange('week');
+    state.startIso = wk.start; state.endIso = wk.end;
+    renderShell();
+    reload();
+    window.addEventListener('team-members-loaded', function () { renderShell(); renderBody(); });
   }
+  if (window.__dashReady) init(window.__dashReady);
+  else window.addEventListener('dash-ready', function (e) { init(e && e.detail); });
 })();
 </script>
 </body>

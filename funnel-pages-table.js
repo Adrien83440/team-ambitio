@@ -14,6 +14,14 @@
    - adresses absentes du tunnel (page renommée ou supprimée) regroupées
      sur une ligne repliable, toujours comptées dans le total.
    CSS injecté une fois, couleurs en variables uniquement (thème clair OK).
+
+   Vocabulaire et « i » (référentiel du 25/11/2026) : chaque colonne porte le
+   « i » du glossaire de stats-core.js (StatsCore.info), avec une précision
+   propre à ce tableau. Les deux dernières colonnes comptent des RDV PRIS
+   depuis la page, statués par leur dernier créneau : « Présents » n'est pas
+   le show-up (÷ RDV pris, annulés compris) et la colonne des closes s'appelle
+   « RDV closés » : ce n'est pas « Closes » (clients gagnés) du haut de page.
+   Sans stats-core.js (page Agence), les mêmes précisions passent en title.
    ============================================================================ */
 (function (root) {
   'use strict';
@@ -21,11 +29,28 @@
   var OPEN = {};   // tunnels dont les anciennes adresses sont dépliées
 
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function SC() { return root.StatsCore || null; }
   function fmtNum(v) { if (v == null || isNaN(v) || !isFinite(v)) return '—'; return Math.round(v).toLocaleString('fr-FR'); }
-  function fmtPct(v, dec) {
+  /* Une seule façon d'écrire un taux : StatsCore.fmtPct (une décimale,
+     virgule). Repli identique si stats-core.js n'est pas chargé. */
+  function fmtPct(v) {
     if (v == null || isNaN(v) || !isFinite(v)) return '—';
-    var f = dec == null ? (v > 0 && v < 1 ? 2 : 1) : dec;
-    return (Math.round(v * Math.pow(10, f)) / Math.pow(10, f)).toLocaleString('fr-FR') + ' %';
+    var sc = SC();
+    if (sc && sc.fmtPct) return sc.fmtPct(v);
+    return Number(v).toFixed(1).replace('.', ',') + ' %';
+  }
+  /* Mot du glossaire (repli : le mot écrit ici, identique). */
+  function mot(cle, repli) { var sc = SC(); return (sc && sc.mot && sc.mot(cle)) || repli; }
+  /* « i » : terme du glossaire + précision du tableau, ou note libre. Vide
+     sans stats-core.js : la précision passe alors dans un title. */
+  function iTerme(cle, precision) { var sc = SC(); return sc && sc.info ? sc.info(cle, precision) : ''; }
+  function iLibre(titre, texte) { var sc = SC(); return sc && sc.infoLibre ? sc.infoLibre(titre, texte) : ''; }
+  /* Valeur d'une cellule. Colonne des RDV closés : champ `rdvCloses` s'il
+     existe un jour dans K, sinon `closes` (contrat funnel-core : cellules
+     k.vslFunnels = RDV closés des RDV pris depuis la page). */
+  function val(c, f) {
+    if (f === 'closes') return (c.rdvCloses != null ? c.rdvCloses : c.closes) || 0;
+    return c[f] || 0;
   }
   function fmtP(p, dec) { return p.toFixed(dec).replace('.', ','); }
 
@@ -90,39 +115,65 @@
 
   var FIELDS = ['views', 'ctas', 'leads', 'bookings', 'present', 'closes'];
   function zero() { var o = {}; FIELDS.forEach(function (f) { o[f] = 0; }); return o; }
-  function addTo(o, c) { FIELDS.forEach(function (f) { o[f] += c[f] || 0; }); }
-  function hasData(c) { var n = 0; FIELDS.forEach(function (f) { n += c[f] || 0; }); return n > 0; }
+  function addTo(o, c) { FIELDS.forEach(function (f) { o[f] += val(c, f); }); }
+  function hasData(c) { var n = 0; FIELDS.forEach(function (f) { n += val(c, f); }); return n > 0; }
 
-  var OVER_TIP = 'Plus de RDV que de formulaires sur la période : une partie des RDV vient de leads entrés avant la période, ou de prospects qui ont réservé sans remplir le formulaire. Le taux n\'aurait pas de sens.';
+  /* Taux au-dessus de 100 % : « — » et une explication propre à la colonne
+     (« plus de RDV que de formulaires » ne vaut que pour la colonne RDV pris
+     rapportée aux formulaires). */
+  var OVER_RDV_FORMS = 'Plus de RDV pris que de formulaires sur la période : une partie des RDV vient de leads entrés avant la période, ou de prospects qui ont réservé sans remplir le formulaire. Le taux n\'aurait pas de sens.';
+  var OVER_RDV_VUES = 'Plus de RDV pris que de vues sur la période : une partie des RDV vient de visites d\'avant la période, ou d\'un lien de réservation ouvert sans passer par la page. Le taux n\'aurait pas de sens.';
+  var OVER_CLICS = 'Plus de clics que de vues : un visiteur peut cliquer plusieurs fois sur le bouton. Le taux n\'aurait pas de sens.';
+  var OVER_FORMS = 'Plus de formulaires que de vues sur la période : des formulaires remplis depuis une visite d\'avant la période, ou une vue non mesurée. Le taux n\'aurait pas de sens.';
 
-  /* Colonnes : base = étape de référence du taux affiché sous le chiffre. */
+  /* Colonnes : base = étape de référence du taux affiché sous le chiffre ;
+     cle = terme du glossaire (StatsCore) ; libre = note quand le chiffre
+     n'est pas un terme du glossaire ; tip = repli title sans stats-core.js. */
+  var P_PAGE = 'Ici : RDV pris pendant la période depuis cette page (page où le RDV a été réservé, sinon page d\'entrée du lead), statués par leur dernier créneau, même s\'il tombe après la période.';
   function columns(withForms) {
     var c = [
-      { f: 'views', t: 'Vues', sub: 'visites de la page' },
-      { f: 'ctas', t: 'Clics', sub: '% des vues', base: 'views', tip: 'Clics sur le bouton principal de la page (réserver, commencer le quiz…)' }
+      { f: 'views', t: 'Vues', sub: 'visites de la page',
+        libre: ['Vues', 'Visites de la page pendant la période (mesure de la page, hors visites internes).'] },
+      { f: 'ctas', t: 'Clics bouton', sub: '% des vues', base: 'views', over: OVER_CLICS,
+        libre: ['Clics bouton', 'Clics sur le bouton principal de la page (réserver, commencer le quiz…). Ce ne sont pas les clics sur la publicité.'] }
     ];
-    if (withForms) c.push({ f: 'leads', t: 'Formulaires', sub: '% des vues', base: 'views', tip: 'Formulaires remplis (opt-in) depuis la page' });
-    c.push({ f: 'bookings', t: 'RDV pris', sub: withForms ? '% des formulaires' : '% des vues', base: withForms ? 'leads' : 'views', tip: 'RDV créés sur la période, replanifications exclues' });
-    c.push({ f: 'present', t: 'Présents', sub: '% des RDV', base: 'bookings' });
-    c.push({ f: 'closes', t: 'Closes', sub: '% des RDV', base: 'bookings' });
+    if (withForms) c.push({ f: 'leads', t: 'Formulaires', sub: '% des vues', base: 'views', over: OVER_FORMS,
+      libre: ['Formulaires', 'Formulaires remplis (opt-in) depuis la page pendant la période : nouveaux leads entrés par cette page et ré-optins revenus par elle.'] });
+    c.push({ f: 'bookings', t: mot('rdv_pris', 'RDV pris'), sub: withForms ? '% des formulaires' : '% des vues', base: withForms ? 'leads' : 'views',
+      over: withForms ? OVER_RDV_FORMS : OVER_RDV_VUES, cle: 'rdv_pris',
+      prec: 'Ici : RDV réservés depuis cette page (ou pris par un lead entré par elle).',
+      tip: 'RDV pris pendant la période depuis cette page, annulés compris ; un RDV déplacé n\'est pas une nouvelle prise.' });
+    c.push({ f: 'present', t: mot('presents', 'Présents'), sub: '% des RDV pris', base: 'bookings', cle: 'presents',
+      prec: P_PAGE + ' Le % = Présents ÷ RDV pris, annulés et RDV à venir compris : ce n\'est pas le show-up.',
+      tip: 'RDV pris depuis cette page où le prospect est venu. Le % = Présents ÷ RDV pris, annulés compris : ce n\'est pas le show-up.' });
+    c.push({ f: 'closes', t: mot('rdv_closes', 'RDV closés'), sub: '% des RDV pris', base: 'bookings', cle: 'rdv_closes',
+      prec: P_PAGE + ' Ceux terminés par un close, même plus tard ; closes annulés retirés. Ce n\'est pas « Closes » du haut de page (clients gagnés pendant la période).',
+      tip: 'RDV pris depuis cette page sur la période qui se sont terminés par un close (closes annulés retirés). Ce n\'est pas le Closes du haut de page.' });
     return c;
   }
   function head(cols) {
     var h = '<thead><tr><th>Page</th>';
     cols.forEach(function (c) {
-      h += '<th' + (c.tip ? ' title="' + esc(c.tip) + '"' : '') + '>' + c.t + '<div class="fpt-hs">' + c.sub + '</div></th>';
+      var i = c.cle ? iTerme(c.cle, c.prec) : (c.libre ? iLibre(c.libre[0], c.libre[1]) : '');
+      var title = i ? '' : (c.tip || (c.libre ? c.libre[1] : ''));
+      h += '<th' + (title ? ' title="' + esc(title) + '"' : '') + '>' + esc(c.t) + i + '<div class="fpt-hs">' + esc(c.sub) + '</div></th>';
     });
     return h + '</tr></thead>';
   }
   function cell(c, col) {
-    var v = c[col.f] || 0;
+    var v = val(c, col.f);
     var h = '<td class="fpt-n"><div class="fpt-v' + (v === 0 ? ' z' : '') + '">' + fmtNum(v) + '</div>';
     var txt = '&nbsp;', tip = '';
     if (col.base) {
-      var b = c[col.base] || 0;
+      var b = val(c, col.base);
       if (b > 0) {
         var r = v / b * 100;
-        if (r > 100) { txt = '—'; tip = OVER_TIP; }
+        if (r > 100) {
+          tip = col.over || 'Taux au-dessus de 100 % : il n\'aurait pas de sens.';
+          var ii = iLibre('Taux non affiché', tip);
+          txt = '—' + ii;
+          if (ii) tip = '';
+        }
         else txt = fmtPct(r);
       }
     }
@@ -154,9 +205,10 @@
     function br(v) { return v.bookings / v.views * 100; }
     function cr(v) { return v.ctas / v.views * 100; }
     function list(fn) { return live.map(function (v) { return esc(vid(v)) + ' ' + fmtPct(fn(v)); }).join(' · '); }
+    /* (fmtPct : une décimale partout, comme les autres écrans.) */
     var ids = live.map(function (v) { return esc(vid(v)); });
     var idsTxt = ids.slice(0, -1).join(', ') + ' et ' + ids[ids.length - 1];
-    var clicks = 'Clics : ' + list(cr) + '.';
+    var clicks = 'Clics bouton par vue : ' + list(cr) + '.';
     var totalB = 0;
     live.forEach(function (v) { totalB += v.bookings || 0; });
     if (totalB === 0) return '⏳ <b>Pas encore de RDV</b> sur les versions en test — impossible de départager ' + idsTxt + '. ' + clicks;
@@ -177,14 +229,15 @@
   }
 
   function flowLine(f, withForms) {
+    var nc = val(f, 'closes');
     var parts = [
       '<b>' + fmtNum(f.views) + '</b> vues',
-      '<b>' + fmtNum(f.ctas) + '</b> clics'
+      '<b>' + fmtNum(f.ctas) + '</b> clics bouton'
     ];
     if (withForms) parts.push('<b>' + fmtNum(f.leads) + '</b> formulaires');
-    parts.push('<b>' + fmtNum(f.bookings) + '</b> RDV');
+    parts.push('<b>' + fmtNum(f.bookings) + '</b> RDV pris');
     parts.push('<b>' + fmtNum(f.present) + '</b> présents');
-    parts.push('<b>' + fmtNum(f.closes) + '</b> close' + (f.closes > 1 ? 's' : ''));
+    parts.push('<b>' + fmtNum(nc) + '</b> RDV closé' + (nc > 1 ? 's' : ''));
     return parts.join(' → ');
   }
 
@@ -230,7 +283,7 @@
     injectCss();
     var h = '';
     (k.vslFunnels || []).forEach(function (f) { h += renderFunnel(f); });
-    if (h) h += '<div class="fpt-legend">Sous chaque chiffre : le taux par rapport à l\'étape indiquée dans l\'en-tête. Survolez un nom de page pour voir son adresse.</div>';
+    if (h) h += '<div class="fpt-legend">Sous chaque chiffre : le taux par rapport à l\'étape indiquée dans l\'en-tête. Présents et RDV closés comptent les RDV pris depuis la page sur la période (statués par leur dernier créneau) : ce ne sont ni le show-up ni les Closes du haut de page. Survolez un nom de page pour voir son adresse.</div>';
     return h;
   }
 

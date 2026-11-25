@@ -6,801 +6,10 @@
 <title>Ambitio — Équipe</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
-<script>
-/* === sales-data.js inline === */
-/**
- * sales-data.js — Data Store + Firebase + Utilitaires
- * Les données "a" (actuelles) viennent de Firestore en temps réel.
- * Les données "p" (projections) sont les références fixes.
- */
-
-/* ═══════════════════════════════════════════════════════════
-   PROJECTIONS FIXES — modifier ici pour changer les cibles
-═══════════════════════════════════════════════════════════ */
-const PROJECTIONS = {
-  closing: {
-    s1: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    s2: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    s3: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    s4: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    livesP:0.75, offresP:0.667, engP:0.5, cOffP:0.4, cCallP:0.2, cashLive:666.7,
-  },
-  setting: {
-    s1: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    s2: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    s3: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    s4: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    decrochesP:0.12, engP:0.222, setP:0.5, showupP:0.8, cCallP:0.8,
-  },
-};
-
-/* ═══════════════════════════════════════════════════════════
-   DATA STORE
-═══════════════════════════════════════════════════════════ */
-const ALL_WEEKS = ['s1','s2','s3','s4','s5','s6'];
-
-const DB = {
-  months: ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'],
-
-  // Données brutes saisies (remplacées par Firestore)
-  _raw: {
-    closing: {
-      s1: { calls:8,  lives:2, offres:1, closes:0, hc:0, fu:0, contracte:0,     collecte:0    },
-      s2: { calls:8,  lives:4, offres:2, closes:2, hc:2, fu:0, contracte:12000, collecte:1000 },
-      s3: { calls:9,  lives:6, offres:3, closes:1, hc:1, fu:0, contracte:5400,  collecte:400  },
-      s4: { calls:9,  lives:7, offres:2, closes:0, hc:0, fu:0, contracte:1800,  collecte:200  },
-    },
-    setting: {
-      s1: { leads:133, calls:231, decroches:56, propRdv:13, sets:9,  presents:2, closes:0 },
-      s2: { leads:191, calls:324, decroches:54, propRdv:17, sets:11, presents:4, closes:2 },
-      s3: { leads:127, calls:178, decroches:38, propRdv:16, sets:11, presents:4, closes:1 },
-      s4: { leads:100, calls:150, decroches:28, propRdv:15, sets:10, presents:4, closes:0 },
-    },
-    deals: [
-      { client:'Julie Berchoux',     email:'julieberchoux@icloud.com',         offre:'BP 12', type:'Closing', date:'24/01/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting après self booking', ok:true  },
-      { client:'Corinne Alaga',      email:'contact@lestabliersgourmands.com', offre:'BP 12', type:'Setting', date:'27/01/2026', cHT:null, coHT:null,  comm:125, bonus:0, notes:"Setting d'un close d'Elodie", ok:true  },
-      { client:'Belinda Giangiulio', email:'lesdemoisellesduvrac@gmail.com',   offre:'BP 12', type:'Closing', date:'30/01/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-      { client:'Cecile Auneau',      email:'domcecile@gmail.com',              offre:'BP 12', type:'Closing', date:'09/02/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-      { client:'Justine Biton',      email:'lephildesidees@hotmail.com',       offre:'BP 12', type:'Closing', date:'09/02/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-    ],
-  },
-
-  // Calculé depuis _raw
-  closing: null,
-  setting: null,
-  commissions: {
-    'Janvier 2026': { contracte:12000, collecte:0,    totalComm:0,    statut:'Validé',     deals:[] },
-    'Février 2026': { contracte:24000, collecte:2000, totalComm:2125, statut:'En attente', deals:[] },
-    'Mars 2026':    { contracte:0,     collecte:0,    totalComm:1625, statut:'En attente', deals:[] },
-  },
-  team: {
-    week: [
-      { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:22748, collecte:13629, calls:29, lives:24, offres:19, closes:7, showup:0.83, txOffre:0.792, txTransfoShow:0.292, txTransfoOffre:0.368, caCall:784.4  },
-    ],
-    month: [
-      { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:34069, collecte:3966, calls:46, lives:28, offres:13, closes:7, showup:0.609, txOffre:0.464, txTransfoShow:0.25,  txTransfoOffre:0.538, caCall:617.2 },
-    ],
-  },
-
-  // Recalcule toutes les métriques depuis _raw
-  compute() {
-    const rc = DB._raw.closing;
-    const rs = DB._raw.setting;
-    const pc = PROJECTIONS.closing;
-    const ps = PROJECTIONS.setting;
-
-    const sumC  = k => ALL_WEEKS.reduce((t,w) => t + ((rc[w]||{})[k]||0), 0);
-    const sumS  = k => ALL_WEEKS.reduce((t,w) => t + ((rs[w]||{})[k]||0), 0);
-    const projC = k => ALL_WEEKS.reduce((t,w) => t + ((pc[w]||{})[k]||0), 0);
-    const projS = k => ALL_WEEKS.reduce((t,w) => t + ((ps[w]||{})[k]||0), 0);
-
-    const ca=sumC('calls'), la=sumC('lives'), oa=sumC('offres'), cla=sumC('closes');
-    const cta=sumC('contracte'), cola=sumC('collecte');
-    const cp=projC('calls'), lp=projC('lives'), op=projC('offres'), clp=projC('closes');
-    const ctp=projC('contracte'), colp=projC('collecte');
-
-    DB.closing = {
-      mois: {
-        calls:     {a:ca,  p:cp  },
-        lives:     {a:la,  p:lp  },
-        offres:    {a:oa,  p:op  },
-        closes:    {a:cla, p:clp },
-        hc:        {a:sumC('hc'), p:clp},
-        fu:        {a:sumC('fu'), p:0  },
-        contracte: {a:cta, p:ctp },
-        collecte:  {a:cola,p:colp},
-        livesP:  {a:ca>0  ? la/ca   : 0, p:pc.livesP  },
-        offresP: {a:la>0  ? oa/la   : 0, p:pc.offresP },
-        engP:    {a:oa>0  ? cla/oa  : 0, p:pc.engP    },
-        cOffP:   {a:oa>0  ? cla/oa  : 0, p:pc.cOffP   },
-        cCallP:  {a:ca>0  ? cla/ca  : 0, p:pc.cCallP  },
-        cashLive:{a:la>0  ? cta/la  : 0, p:pc.cashLive},
-        atteinte: ctp>0 ? cta/ctp : 0,
-        delta:    Math.max(0, ctp-cta),
-      },
-      ...Object.fromEntries(ALL_WEEKS.filter(w => rc[w]).map(w => [w, DB._cw(w)])),
-    };
-
-    const sca=sumS('calls'), da=sumS('decroches'), pa=sumS('propRdv');
-    const sa=sumS('sets'), pra=sumS('presents'), sca2=sumS('closes');
-
-    DB.setting = {
-      mois: {
-        leads:     {a:sumS('leads'),  p:projS('leads')    },
-        calls:     {a:sca,            p:projS('calls')    },
-        decroches: {a:da,             p:projS('decroches')},
-        propRdv:   {a:pa,             p:projS('propRdv')  },
-        sets:      {a:sa,             p:projS('sets')     },
-        presents:  {a:pra,            p:projS('presents') },
-        closes:    {a:sca2,           p:projS('closes')   },
-        decrochesP:{a:sca>0?da/sca:0,  p:ps.decrochesP },
-        engP:      {a:da>0 ?pa/da:0,    p:ps.engP       },
-        setP:      {a:pa>0 ?sa/pa:0,    p:ps.setP       },
-        showupP:   {a:sa>0 ?pra/sa:0,   p:ps.showupP    },
-        cCallP:    {a:sca>0?sca2/sca:0, p:ps.cCallP     },
-      },
-      ...Object.fromEntries(ALL_WEEKS.filter(w => rs[w]).map(w => [w, DB._sw(w)])),
-    };
-
-    // Sync deals dans commissions
-    try {
-      const cmk = (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026';
-      if (DB.commissions[cmk]) DB.commissions[cmk].deals = DB._raw.deals;
-    } catch(e) {}
-  },
-
-  _cw(w) {
-    const d=DB._raw.closing[w]||{}, p=PROJECTIONS.closing[w]||PROJECTIONS.closing.s1||{};
-    return {
-      calls:{a:d.calls||0,p:p.calls||0}, lives:{a:d.lives||0,p:p.lives||0},
-      offres:{a:d.offres||0,p:p.offres||0}, closes:{a:d.closes||0,p:p.closes||0},
-      hc:{a:d.hc||0,p:p.closes||0}, fu:{a:d.fu||0,p:0},
-      contracte:{a:d.contracte||0,p:p.contracte||0}, collecte:{a:d.collecte||0,p:p.collecte||0},
-    };
-  },
-  _sw(w) {
-    const d=DB._raw.setting[w]||{}, p=PROJECTIONS.setting[w]||PROJECTIONS.setting.s1||{};
-    return {
-      leads:{a:d.leads||0,p:p.leads||0}, calls:{a:d.calls||0,p:p.calls||0},
-      decroches:{a:d.decroches||0,p:p.decroches||0}, propRdv:{a:d.propRdv||0,p:p.propRdv||0},
-      sets:{a:d.sets||0,p:p.sets||0}, presents:{a:d.presents||0,p:p.presents||0},
-      closes:{a:d.closes||0,p:p.closes||0},
-    };
-  },
-};
-
-DB.compute();
-
-/* ═══════════════════════════════════════════════════════════
-   FIREBASE — couche temps réel
-   Initialisé après que firebase SDK soit chargé + auth ready
-═══════════════════════════════════════════════════════════ */
-const Fire = {
-  db:  null,
-  uid: null,
-  _unsubs: [],
-
-  init(firestore, uid) {
-    Fire.db  = firestore;
-    Fire.uid = uid;
-  },
-
-  _key(label) {
-    const p = label.split(' ');
-    const m = DB.months.indexOf(p[0]);
-    return `${p[1]}-${String(m+1).padStart(2,'0')}`;
-  },
-
-  // Écoute en temps réel les données d'un user pour un mois
-  watchUser(userId, monthLabel, callback) {
-    if (!Fire.db) return () => {};
-    const ref = Fire.db
-      .collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    const unsub = ref.onSnapshot(snap => callback(snap.exists ? snap.data() : null));
-    Fire._unsubs.push(unsub);
-    return unsub;
-  },
-
-  // Sauvegarde une semaine de closing
-  async saveClosing(userId, monthLabel, week, data) {
-    if (!Fire.db) throw new Error('Firebase non init');
-    const ref = Fire.db.collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    await ref.set({ closing: { [week]: data } }, { merge: true });
-  },
-
-  // Sauvegarde une semaine de setting
-  async saveSetting(userId, monthLabel, week, data) {
-    if (!Fire.db) throw new Error('Firebase non init');
-    const ref = Fire.db.collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    await ref.set({ setting: { [week]: data } }, { merge: true });
-  },
-
-  // Sauvegarde un deal (append)
-  async saveDeal(userId, monthLabel, deal) {
-    if (!Fire.db) throw new Error('Firebase non init');
-    const ref = Fire.db.collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    const snap = await ref.get();
-    const deals = snap.exists ? (snap.data().deals || []) : [];
-    deals.push({ ...deal, _ts: Date.now() });
-    await ref.set({ deals }, { merge: true });
-  },
-
-  // Applique un snapshot Firestore dans DB puis recalcule
-  apply(data) {
-    if (!data) return;
-    if (data.closing) ALL_WEEKS.forEach(w => {
-      if (data.closing[w]) Object.assign(DB._raw.closing[w]||(DB._raw.closing[w]={}), data.closing[w]);
-    });
-    if (data.setting) ALL_WEEKS.forEach(w => {
-      if (data.setting[w]) Object.assign(DB._raw.setting[w]||(DB._raw.setting[w]={}), data.setting[w]);
-    });
-    if (data.deals) DB._raw.deals = data.deals;
-    DB.compute();
-    document.dispatchEvent(new CustomEvent('db:updated'));
-  },
-
-  stop() { Fire._unsubs.forEach(u => u()); Fire._unsubs = []; },
-};
-
-/* ═══════════════════════════════════════════════════════════
-   UTILITIES
-═══════════════════════════════════════════════════════════ */
-const U = {
-  euro:  v => v == null ? '—' : '€\u202f' + Number(v).toLocaleString('fr-FR'),
-  pct:   v => v == null ? '—' : (v * 100).toFixed(1) + '%',
-  num:   v => v == null ? '—' : Number(v).toLocaleString('fr-FR'),
-  pp:  (a, p) => p > 0 ? Math.min((a / p) * 100, 200) : 0,
-  ppv: (a, p) => p > 0 ? ((a / p) * 100).toFixed(0) + '%' : '—',
-  cb:  (a, p) => { const r = p > 0 ? a / p : 0; return r >= 1 ? '#34d399' : r >= 0.65 ? '#f59e0b' : '#ef4444'; },
-  g:   id => document.getElementById(id),
-  getCurrentMonth: () => (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026',
-  getCurrentUser:  () => ({
-    /* Aucun repli sur une personne : un utilisateur non identifie prenait
-       l'identite d'un membre parti, et lisait son espace. */
-    uid:  window._currentUserUid  || localStorage.getItem('ambitio_uid')  || '',
-    name: window._currentUserName || localStorage.getItem('ambitio_name') || 'Utilisateur',
-    role: window._currentRole     || localStorage.getItem('ambitio_role') || 'sales',
-  }),
-
-  progRow: (label, a, p, isEuro = false) => {
-    const col = U.cb(a, p);
-    return `<div class="pr">
-      <div class="pr-l">${label}</div>
-      <div class="pr-track"><div class="pr-fill" style="width:${Math.min(U.pp(a,p),100)}%;background:${col}"></div></div>
-      <div class="pr-val">${isEuro ? `${U.euro(a)} / ${U.euro(p)}` : `${a} / ${p}`}</div>
-      <div class="pr-pct" style="color:${col}">${U.ppv(a,p)}</div>
-    </div>`;
-  },
-
-  kpiCard: ({ label, val, sub, rawA, proj, color='#ef4444', pct:fp }) => {
-    const pc = fp!=null ? fp : (proj!=null ? U.pp(rawA??0, proj) : null);
-    return `<div class="kpi" style="--kc:${color}">
-      <div class="kpi-label">${label}</div>
-      <div class="kpi-value">${val}</div>
-      ${sub ? `<div class="kpi-sub">${sub}</div>` : ''}
-      ${pc!=null ? `<div class="kpi-prog">
-        <div class="kpi-prog-row"><span>Atteinte</span><span>${pc.toFixed(0)}%</span></div>
-        <div class="kpi-prog-track"><div class="kpi-prog-fill" style="width:${Math.min(pc,100)}%;background:${color}"></div></div>
-      </div>` : ''}
-    </div>`;
-  },
-
-  funnelStep: (label, val, max, isFirst=false, isEuro=false) => {
-    const ratio = max > 0 ? val / max : 0;
-    return `<div class="fs">
-      <div class="fs-label">${label}</div>
-      <div class="fs-track"><div class="fs-fill" style="width:${Math.min(ratio*100,100)}%"></div></div>
-      <div class="fs-val">${isEuro ? U.euro(val) : val}</div>
-      <div class="fs-rate">${!isFirst ? U.pct(ratio) : ''}</div>
-    </div>`;
-  },
-
-  weekCard: (label, mainVal, mainLabel, minis, isCurrent, dateRange) => `
-    <div class="wc${isCurrent?' wc-active':''}">
-      <div class="wc-label">${label}</div>
-      ${dateRange ? `<div class="wc-dates">${dateRange}</div>` : ''}
-      <div class="wc-main">${mainVal}</div>
-      <div class="wc-sub">${mainLabel}</div>
-      <div class="wc-grid">${minis.map(m=>`
-        <div class="wc-mini">
-          <div class="wc-mini-v"${m.color?` style="color:${m.color}"`:''} >${m.val}</div>
-          <div class="wc-mini-l">${m.label}</div>
-        </div>`).join('')}</div>
-    </div>`,
-
-  barChart: (labels, actuals, projs, unit='') => {
-    const mx = Math.max(...actuals, ...projs, 1);
-    return `<div class="chart-legend">
-        <span class="cl-dot cl-real"></span>Réel
-        <span class="cl-dot cl-proj" style="margin-left:14px"></span>Projection
-      </div>
-      <div class="chart-bars">
-        ${labels.map((l,i)=>`<div class="chart-col">
-          <div class="chart-pair">
-            <div class="chart-bar bar-real" style="height:${(actuals[i]/mx*100).toFixed(1)}%" title="${actuals[i]}${unit}"></div>
-            <div class="chart-bar bar-proj" style="height:${(projs[i]/mx*100).toFixed(1)}%" title="Proj:${projs[i]}${unit}"></div>
-          </div>
-          <div class="chart-lbl">${l}</div>
-        </div>`).join('')}
-      </div>`;
-  },
-
-  toast: (msg, type='success') => {
-    let t = document.getElementById('_toast');
-    if (!t) { t=document.createElement('div'); t.id='_toast'; document.body.appendChild(t); }
-    const s = { success:'background:#1a2e1a;border:1px solid rgba(52,211,153,.3);color:#6ee7b7', error:'background:#2e1a1a;border:1px solid rgba(239,68,68,.3);color:#fca5a5', info:'background:#1a1a2e;border:1px solid rgba(96,165,250,.3);color:#93c5fd' };
-    t.style.cssText = `position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(0);font-size:12px;font-weight:600;padding:9px 18px;border-radius:10px;z-index:9999;opacity:1;transition:all .28s;white-space:nowrap;font-family:var(--font-b);${s[type]||s.success}`;
-    t.textContent = msg;
-    clearTimeout(t._t);
-    t._t = setTimeout(()=>{ t.style.opacity='0'; t.style.transform='translateX(-50%) translateY(20px)'; }, 2800);
-  },
-};
-
-
-/* ═══════════════════════════════════════════════════════════
-   SEMAINES DU MOIS
-   Avant Mars 2026 : semaines lun→dim classiques (peuvent déborder)
-   À partir de Mars 2026 : semaines strictement dans le mois
-     - Segments ≤ 3 jours fusionnés avec la semaine adjacente
-═══════════════════════════════════════════════════════════ */
-function getMonthWeeks(monthLabel) {
-  const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin',
-                     'Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-  const parts = monthLabel.split(' ');
-  const month = MONTHS_FR.indexOf(parts[0]);
-  const year  = parseInt(parts[1]);
-  if (month === -1 || isNaN(year)) return [];
-
-  const pad = n => String(n).padStart(2,'0');
-  function fmt(d) { return pad(d.getDate()) + '/' + pad(d.getMonth()+1); }
-  function fmtShort(d) {
-    const M = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
-    return d.getDate() + ' ' + M[d.getMonth()];
-  }
-  function dayCount(a, b) { return Math.round((b - a) / 86400000) + 1; }
-
-  /* ── Ancien mode (avant Mars 2026) : semaines lun→dim, débordement OK ── */
-  if (year < 2026 || (year === 2026 && month < 2)) {
-    const firstOfMonth = new Date(year, month, 1);
-    const dayOfWeek = firstOfMonth.getDay();
-    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    let monday = new Date(year, month, 1 + daysToMonday);
-    const weeks = [];
-    while (true) {
-      const sunday = new Date(monday.getTime() + 6 * 86400000);
-      if (monday.getMonth() === month || sunday.getMonth() === month) {
-        weeks.push({
-          id: 's' + (weeks.length + 1), label: 'S' + (weeks.length + 1),
-          start: new Date(monday), end: new Date(sunday),
-          range: fmt(monday) + ' \u2192 ' + fmt(sunday),
-          short: fmtShort(monday) + ' \u2013 ' + fmtShort(sunday),
-          tab:   fmt(monday) + '\u2192' + fmt(sunday),
-        });
-      }
-      monday = new Date(monday.getTime() + 7 * 86400000);
-      if (monday.getMonth() !== month && monday.getMonth() !== (month === 0 ? 11 : month - 1)) {
-        if (monday.getMonth() !== month) break;
-      }
-      if (monday.getFullYear() > year + 1) break;
-      if (weeks.length >= 6) break;
-    }
-    return weeks;
-  }
-
-  /* ── Nouveau mode (Mars 2026+) : semaines dans le mois, fusion si ≤ 3j ── */
-  const lastDay = new Date(year, month + 1, 0);
-  const segs    = [];
-  let cursor    = new Date(year, month, 1);
-
-  while (cursor <= lastDay) {
-    const dow = cursor.getDay();
-    let end;
-    if (dow === 1) { end = new Date(cursor.getTime() + 6 * 86400000); }
-    else { end = new Date(cursor.getTime() + (dow === 0 ? 0 : 7 - dow) * 86400000); }
-    if (end > lastDay) end = new Date(lastDay);
-    segs.push({ start: new Date(cursor), end: new Date(end) });
-    cursor = new Date(end.getTime() + 86400000);
-  }
-
-  // Fusion début si ≤ 3 jours
-  if (segs.length >= 2 && dayCount(segs[0].start, segs[0].end) <= 3) {
-    segs[1].start = segs[0].start;
-    segs.shift();
-  }
-  // Fusion fin si ≤ 3 jours
-  if (segs.length >= 2 && dayCount(segs[segs.length-1].start, segs[segs.length-1].end) <= 3) {
-    segs[segs.length-2].end = segs[segs.length-1].end;
-    segs.pop();
-  }
-
-  return segs.map((s, i) => ({
-    id:    's' + (i + 1),
-    label: 'S' + (i + 1),
-    start: s.start,
-    end:   s.end,
-    range: fmt(s.start) + ' \u2192 ' + fmt(s.end),
-    short: fmtShort(s.start) + ' \u2013 ' + fmtShort(s.end),
-    tab:   fmt(s.start) + '\u2192' + fmt(s.end),
-  }));
-}
-
-window.DB=DB; window.U=U; window.Fire=Fire; window.PROJECTIONS=PROJECTIONS;
-window.getMonthWeeks=getMonthWeeks; window.ALL_WEEKS=ALL_WEEKS;
-
-/* === end sales-data.js === */
-
-/* === sync-bridge v2 inline === */
-/**
- * sync-bridge.js — Bridge de synchronisation localStorage → DB
- * VERSION 2 — Robuste, source unique de vérité
- *
- * Lit les données saisies dans Closing, Setting, Commissions (par uid + mois)
- * et les injecte dans DB._raw + DB.commissions + DB.team pour que
- * Dashboard, Projections et Équipe soient toujours synchronisés.
- *
- * Clés localStorage :
- *   closing_{uid}_{monthKey}    → { s1..s5: {calls,lives,offres,closes,hardClose,followUp,contracte,collecte} }
- *   setting_{uid}_{monthKey}    → { s1..s5: {leads,calls,decroches,propRdv,sets,presents,closes} }
- *   comm_deals_{uid}_{monthKey} → [{client,offre,type,subtype,contracteHT,collecteHT,comm,bonus,ok,...}]
- *   comm_statut_{monthKey}      → 'Validé' | 'En attente' | 'Partiel'
- *
- * monthKey = "Février 2026" (identique à sales_month)
- */
-
-const SYNC_UIDS = ['elodie'];
-const SYNC_MEMBERS = [
-  { uid: 'elodie',    name: 'Élodie',    role: 'Closing',           color: '#60a5fa' },
-];
-
-/* ──────────────────────────────────────────────────────────
-   RÈGLES DE COMMISSION (miroir de sales-commissions.html)
-────────────────────────────────────────────────────────── */
-const _COMM_RULES = {
-  closing: {
-    'BP 6':  { mensualise: 250,  pif: 300  },
-    'BP 12': { mensualise: 500,  pif: 600  },
-    'Elite': { mensualise: 800,  pif: 900  },
-    'Titan': { mensualise: 1200, pif: 1500 },
-  },
-  setting: {
-    'BP 6':  { noBooking: 100, selfBooking: 50  },
-    'BP 12': { noBooking: 250, selfBooking: 125 },
-    'Elite': { noBooking: 300, selfBooking: 150 },
-    'Titan': { noBooking: 500, selfBooking: 250 },
-  },
-};
-
-function _calcDealComm(deal) {
-  if (!deal.ok) return 0;
-  // If comm already set manually, use it
-  const t = (deal.type || '').toLowerCase();
-  const rules = _COMM_RULES[t];
-  if (!rules) return deal.comm || 0;
-  const offre = deal.offre || 'BP 12';
-  const r = rules[offre] || rules['BP 12'];
-  if (!r) return deal.comm || 0;
-  const sub = (deal.subtype || '').toLowerCase().replace(/[^a-z]/g, '');
-  if (t === 'closing') {
-    return sub.includes('pif') ? r.pif : r.mensualise;
-  } else {
-    return sub.includes('self') ? r.selfBooking : r.noBooking;
-  }
-}
-
-/* ──────────────────────────────────────────────────────────
-   FONCTION PRINCIPALE
-────────────────────────────────────────────────────────── */
-function syncBridge_loadMonth(monthKey) {
-  if (!monthKey) monthKey = (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026';
-  if (typeof DB === 'undefined') return; // DB pas encore chargé
-
-  /* ── 1. Agréger closing et setting par semaine (tous membres) ── */
-  const closingAgg = { s1: {}, s2: {}, s3: {}, s4: {}, s5: {} };
-  const settingAgg = { s1: {}, s2: {}, s3: {}, s4: {}, s5: {} };
-  const closingPerMember = {};
-  const settingPerMember = {};
-
-  SYNC_UIDS.forEach(uid => {
-    /* ── Closing ── */
-    let cr = null;
-    try {
-      const v = localStorage.getItem(`closing_${uid}_${monthKey}`);
-      cr = v ? JSON.parse(v) : null;
-    } catch (e) {}
-    closingPerMember[uid] = cr;
-
-    if (cr) {
-      ['s1', 's2', 's3', 's4', 's5'].forEach(w => {
-        const d = cr[w] || {};
-        const a = closingAgg[w];
-        ['calls', 'lives', 'offres', 'closes', 'hardClose', 'followUp', 'contracte', 'collecte'].forEach(k => {
-          a[k] = (a[k] || 0) + (d[k] || 0);
-        });
-        // Alias hc/fu
-        a.hc = (a.hc || 0) + (d.hardClose || d.hc || 0);
-        a.fu = (a.fu || 0) + (d.followUp  || d.fu  || 0);
-      });
-    }
-
-    /* ── Setting ── */
-    let sr = null;
-    try {
-      const v = localStorage.getItem(`setting_${uid}_${monthKey}`);
-      sr = v ? JSON.parse(v) : null;
-    } catch (e) {}
-    settingPerMember[uid] = sr;
-
-    if (sr) {
-      ['s1', 's2', 's3', 's4', 's5'].forEach(w => {
-        const d = sr[w] || {};
-        const a = settingAgg[w];
-        ['leads', 'calls', 'decroches', 'propRdv', 'sets', 'presents', 'closes'].forEach(k => {
-          a[k] = (a[k] || 0) + (d[k] || 0);
-        });
-      });
-    }
-  });
-
-  /* ── Détecter si des données localStorage existent pour ce mois ── */
-  const hasClosingData = SYNC_UIDS.some(uid => closingPerMember[uid] !== null);
-  const hasSettingData = SYNC_UIDS.some(uid => settingPerMember[uid] !== null);
-
-  /* ── 2. Injecter dans DB._raw seulement si des données existent ── */
-  if (hasClosingData) {
-    ['s1', 's2', 's3', 's4'].forEach(w => {
-      const ca = closingAgg[w] || {};
-      DB._raw.closing[w] = {
-        calls:     ca.calls     || 0,
-        lives:     ca.lives     || 0,
-        offres:    ca.offres    || 0,
-        closes:    ca.closes    || 0,
-        hc:        ca.hc        || 0,
-        fu:        ca.fu        || 0,
-        contracte: ca.contracte || 0,
-        collecte:  ca.collecte  || 0,
-      };
-    });
-    // Fusionner s5 dans s4
-    const s5c = closingAgg.s5 || {};
-    if (Object.values(s5c).some(v => v > 0)) {
-      Object.keys(DB._raw.closing.s4).forEach(k => {
-        DB._raw.closing.s4[k] = (DB._raw.closing.s4[k] || 0) + (s5c[k] || 0);
-      });
-    }
-  }
-
-  if (hasSettingData) {
-    ['s1', 's2', 's3', 's4'].forEach(w => {
-      const sa = settingAgg[w] || {};
-      DB._raw.setting[w] = {
-        leads:     sa.leads     || 0,
-        calls:     sa.calls     || 0,
-        decroches: sa.decroches || 0,
-        propRdv:   sa.propRdv   || 0,
-        sets:      sa.sets      || 0,
-        presents:  sa.presents  || 0,
-        closes:    sa.closes    || 0,
-      };
-    });
-    // Fusionner s5 dans s4
-    const s5s = settingAgg.s5 || {};
-    if (Object.values(s5s).some(v => v > 0)) {
-      Object.keys(DB._raw.setting.s4).forEach(k => {
-        DB._raw.setting.s4[k] = (DB._raw.setting.s4[k] || 0) + (s5s[k] || 0);
-      });
-    }
-  }
-
-  /* ── 3. Agréger les deals de commissions ── */
-  let totalComm      = 0;
-  let totalContracte = 0;
-  let totalCollecte  = 0;
-  const allDeals     = [];
-  const commPerMember = {};
-  let hasDealsData = false;
-
-  SYNC_UIDS.forEach(uid => {
-    let deals = null;
-    try {
-      const v = localStorage.getItem(`comm_deals_${uid}_${monthKey}`);
-      deals = v ? JSON.parse(v) : null;
-    } catch (e) {}
-
-    if (deals && Array.isArray(deals) && deals.length > 0) {
-      hasDealsData = true;
-      const comm      = deals.reduce((t, d) => t + _calcDealComm(d), 0);
-      const contracte = deals.filter(d => d.ok).reduce((t, d) => t + (d.contracteHT || d.cHT || 0), 0);
-      const collecte  = deals.filter(d => d.ok).reduce((t, d) => t + (d.collecteHT  || d.coHT || 0), 0);
-      commPerMember[uid] = { comm, contracte, collecte, deals };
-      totalComm      += comm;
-      totalContracte += contracte;
-      totalCollecte  += collecte;
-      allDeals.push(...deals);
-    } else {
-      commPerMember[uid] = { comm: 0, contracte: 0, collecte: 0, deals: [] };
-    }
-  });
-
-  /* ── 4. Statut commission (persisté séparément) ── */
-  let statut = 'En attente';
-  try {
-    const savedStatut = localStorage.getItem(`comm_statut_${monthKey}`);
-    if (savedStatut) statut = savedStatut;
-  } catch (e) {}
-
-  /* ── 5. Mettre à jour DB.commissions ── */
-  // Toujours créer l'entrée pour ce mois
-  if (hasDealsData || hasClosingData) {
-    DB.commissions[monthKey] = {
-      totalComm,
-      contracte: totalContracte || (hasClosingData ? DB._raw.closing.s1.contracte + DB._raw.closing.s2.contracte + DB._raw.closing.s3.contracte + DB._raw.closing.s4.contracte : 0),
-      collecte:  totalCollecte,
-      statut,
-      deals:     allDeals,
-      perMember: commPerMember,
-    };
-  } else if (!DB.commissions[monthKey]) {
-    // Créer une entrée vide pour éviter les erreurs
-    DB.commissions[monthKey] = {
-      totalComm: 0, contracte: 0, collecte: 0,
-      statut: 'En attente', deals: [], perMember: {},
-    };
-  }
-
-  /* ── 6. Mettre à jour DB.team par membre ── */
-  const teamWeek  = [];
-  const teamMonth = [];
-
-  SYNC_MEMBERS.forEach(m => {
-    const cr   = closingPerMember[m.uid];
-    const sr   = settingPerMember[m.uid];
-    const comm = commPerMember[m.uid] || { comm: 0, contracte: 0, collecte: 0 };
-
-    function sumCk(k) {
-      if (!cr) return 0;
-      return ['s1', 's2', 's3', 's4', 's5'].reduce((t, w) => t + ((cr[w] || {})[k] || 0), 0);
-    }
-    function sumSk(k) {
-      if (!sr) return 0;
-      return ['s1', 's2', 's3', 's4', 's5'].reduce((t, w) => t + ((sr[w] || {})[k] || 0), 0);
-    }
-
-    const calls     = sumCk('calls');
-    const lives     = sumCk('lives');
-    const offres    = sumCk('offres');
-    const closes    = sumCk('closes');
-    const contracte = sumCk('contracte');
-    const collecte  = sumCk('collecte');
-    const sets      = sumSk('sets');
-    const presents  = sumSk('presents');
-
-    const entry = {
-      name:            m.name,
-      role:            m.role,
-      color:           m.color,
-      uid:             m.uid,
-      contracte,
-      collecte,
-      calls,
-      lives,
-      offres,
-      closes,
-      sets,
-      presents,
-      showup:          calls  > 0 ? lives  / calls  : 0,
-      txOffre:         lives  > 0 ? offres / lives  : 0,
-      txTransfoShow:   lives  > 0 ? closes / lives  : 0,
-      txTransfoOffre:  offres > 0 ? closes / offres : 0,
-      caCall:          calls  > 0 ? contracte / calls : 0,
-      comm:            comm.comm || 0,
-    };
-
-    teamMonth.push(entry);
-
-    // Semaine la plus récente avec données
-    const lastW = ['s4', 's3', 's2', 's1'].find(w => {
-      const d = (cr || {})[w] || {};
-      return Object.values(d).some(v => v > 0);
-    });
-
-    if (lastW) {
-      const wd = (cr || {})[lastW] || {};
-      const ws = (sr || {})[lastW] || {};
-      const wc = wd.calls || 0;
-      const wl = wd.lives || 0;
-      const wo = wd.offres || 0;
-      const wcl = wd.closes || 0;
-      const wct = wd.contracte || 0;
-      teamWeek.push({
-        ...entry,
-        calls:          wc,
-        lives:          wl,
-        offres:         wo,
-        closes:         wcl,
-        contracte:      wct,
-        collecte:       wd.collecte  || 0,
-        sets:           ws.sets      || 0,
-        presents:       ws.presents  || 0,
-        showup:         wc  > 0 ? wl  / wc  : 0,
-        txOffre:        wl  > 0 ? wo  / wl  : 0,
-        txTransfoShow:  wl  > 0 ? wcl / wl  : 0,
-        txTransfoOffre: wo  > 0 ? wcl / wo  : 0,
-        caCall:         wc  > 0 ? wct / wc  : 0,
-      });
-    } else {
-      teamWeek.push({
-        ...entry,
-        calls: 0, lives: 0, offres: 0, closes: 0, contracte: 0, collecte: 0,
-        sets: 0, presents: 0,
-        showup: 0, txOffre: 0, txTransfoShow: 0, txTransfoOffre: 0, caCall: 0,
-      });
-    }
-  });
-
-  if (teamWeek.length)  DB.team.week  = teamWeek;
-  if (teamMonth.length) DB.team.month = teamMonth;
-
-  /* ── 7. Recalculer toutes les métriques ── */
-  DB.compute();
-
-  /* ── 8. Notifier tous les modules ── */
-  document.dispatchEvent(new CustomEvent('db:updated', { detail: { monthKey } }));
-}
-
-/* ──────────────────────────────────────────────────────────
-   ÉCOUTE DES CHANGEMENTS CROSS-ONGLETS
-────────────────────────────────────────────────────────── */
-window.addEventListener('storage', function (e) {
-  const k = e.key || '';
-  if (k.startsWith('closing_') || k.startsWith('setting_') || k.startsWith('comm_deals_') || k.startsWith('comm_statut_')) {
-    const monthKey = (typeof currentMonthKey === 'function')
-      ? currentMonthKey()
-      : localStorage.getItem('sales_month') || 'Février 2026';
-    syncBridge_loadMonth(monthKey);
-    if (typeof renderAll === 'function') renderAll();
-  }
-});
-
-/* ──────────────────────────────────────────────────────────
-   HELPER : sauvegarder le statut commission
-────────────────────────────────────────────────────────── */
-function syncBridge_saveCommStatut(monthKey, statut) {
-  try {
-    localStorage.setItem(`comm_statut_${monthKey}`, statut);
-    // Mettre à jour en mémoire
-    if (typeof DB !== 'undefined' && DB.commissions[monthKey]) {
-      DB.commissions[monthKey].statut = statut;
-    }
-    document.dispatchEvent(new CustomEvent('db:updated', { detail: { monthKey } }));
-  } catch (e) {}
-}
-
-/* ──────────────────────────────────────────────────────────
-   HELPER : obtenir les données d'un membre pour un mois
-────────────────────────────────────────────────────────── */
-function syncBridge_getMemberData(uid, monthKey) {
-  let closing = null, setting = null, deals = null;
-  try { const v = localStorage.getItem(`closing_${uid}_${monthKey}`);    closing = v ? JSON.parse(v) : null; } catch (e) {}
-  try { const v = localStorage.getItem(`setting_${uid}_${monthKey}`);    setting = v ? JSON.parse(v) : null; } catch (e) {}
-  try { const v = localStorage.getItem(`comm_deals_${uid}_${monthKey}`); deals   = v ? JSON.parse(v) : null; } catch (e) {}
-  return { closing, setting, deals };
-}
-
-/* ──────────────────────────────────────────────────────────
-   EXPORT GLOBAL
-────────────────────────────────────────────────────────── */
-window.syncBridge_loadMonth   = syncBridge_loadMonth;
-window.syncBridge_saveCommStatut = syncBridge_saveCommStatut;
-window.syncBridge_getMemberData  = syncBridge_getMemberData;
-window.SYNC_UIDS    = SYNC_UIDS;
-window.SYNC_MEMBERS = SYNC_MEMBERS;
-
-/* === end sync-bridge === */
-</script>
+<!-- Ancien calcul « sales-data / sync-bridge » recopié ici (tableaux DB, barème de commission,
+     données d'exemple) retiré le 25/11/2026 : rien de la page ne le lisait. Les chiffres
+     viennent de Set NB, Close SB et Commissions ; le « i » vient de stats-core.js. -->
+<script src="stats-core.js"></script>
 <script src="nav.js" defer></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -1118,19 +327,34 @@ function lsGet(k, def) {
 }
 function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 
-/* ── Members ── */
-const MEMBERS = [
-  { uid:'guillaume', name:'Guillaume', surname:'Bilcke', role:'Closer + Setter', color:'#ef4444',
-    email:'guillaume@ambitiocorp.com', phone:'+33 6 00 00 00 00',
-    contrat:'Closing & Setting Full Cycle', dateDebut:'Septembre 2025', statut:'Actif',
-    linkedin:'https://linkedin.com/in/guillaumebilcke',
-  },
-  { uid:'elodie', name:'Élodie', surname:'', role:'Closer + Setter', color:'#60a5fa',
-    email:'elodie@ambitiocorp.com', phone:'',
-    contrat:'Closing & Setting Full Cycle', dateDebut:'Juillet 2025', statut:'Actif',
-    linkedin:'',
-  },
-];
+/* ── « i » d'explication (stats-core.js) ──
+   Cette page ne calcule aucun chiffre commercial : ses fiches (profils,
+   documents, messages, débriefs, meetings) sont gardées dans CE navigateur.
+   Les « i » le disent là où un nombre ou un réglage pourrait passer pour
+   un chiffre officiel. Notes de lecture propres à la page : infoLibre. */
+function _escEquipe(t) {
+  return String(t == null ? '' : t).replace(/[&<>"']/g, function(c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function _iLibre(titre, texte) {
+  return (window.StatsCore && StatsCore.infoLibre) ? StatsCore.infoLibre(titre, texte) : '';
+}
+function _iDebriefs() {
+  return _iLibre('Débriefs d\'appel', 'Fiches de débrief ajoutées à la main sur cet appareil (ce navigateur seulement : un autre poste ne les voit pas). Ce n\'est pas le nombre d\'appels passés : celui-ci est dans Set NB.');
+}
+function _iObjectif() {
+  return _iLibre('Objectif personnel', 'Note libre enregistrée dans ce navigateur, lue par aucun autre écran. L\'objectif de l\'équipe est celui fixé dans Projections.');
+}
+function _iBareme() {
+  return _iLibre('Barème de commission', 'Rappel du type de contrat seulement : aucune commission n\'est calculée sur cette page. Le barème appliqué est celui de la page Commissions (et du contrat du membre).');
+}
+
+/* ── Members ──
+   Aucun membre écrit en dur (25/11/2026) : la liste vient du roster
+   _meta/team_members (window.TEAM_MEMBERS_LIST, nav.js), complété des
+   profils enregistrés sur cet appareil. */
+const MEMBERS = [];
 
 /* ─── ROSTER DYNAMIQUE (10/09/2026) ──────────────────────────────────────
    MEMBERS n'est plus figé : tout membre de l'équipe sales actif du roster
@@ -1155,7 +379,7 @@ function _syncEquipeRoster() {
   var added = 0;
   list.forEach(function(m) {
     if (!m || !m.slug || !EQUIPE_SALES_ROLES[m.role]) return;
-    if (DEPARTED_EQUIPE[m.slug]) return;
+    if (_estPartiEquipe(m.slug)) return;
     var existing = MEMBERS.find(function(x) { return x.uid === m.slug; });
     if (existing) {
       /* Entrée historique : on complète seulement ce qui manque. */
@@ -1181,9 +405,6 @@ function _syncEquipeRoster() {
     var saved = lsGet('equipe_profile_' + m.slug, null);
     if (saved) Object.assign(entry, saved);
     MEMBERS.push(entry);
-    if (typeof SYNC_MEMBERS !== 'undefined' && !SYNC_MEMBERS.some(function(x) { return x.uid === m.slug; })) {
-      SYNC_MEMBERS.push({ uid: m.slug, name: entry.name, role: entry.role, color: entry.color });
-    }
     added++;
   });
   return added;
@@ -1197,36 +418,40 @@ function _markArchivedMembers() {
     var meta = tm[m.uid];
     m.archived = !!(meta && meta.active === false);
   });
-  // Marque aussi SYNC_MEMBERS si présent (pour les tableaux d'agrégation)
-  if (typeof SYNC_MEMBERS !== 'undefined') {
-    SYNC_MEMBERS.forEach(function(m) {
-      var meta = tm[m.uid];
-      m.archived = !!(meta && meta.active === false);
-      m.active = !m.archived;
-    });
-  }
 }
 function _isAdminView() {
   var role = window._currentRole || localStorage.getItem('ambitio_role') || '';
   return role === 'admin';
 }
-/* Membres partis de la societe : exclus de TOUS les affichages, admin
-   compris. Meme liste qu'alteore-flow.js et dispo-core.js. Leur fiche et
-   leurs series historiques restent en place — rien n'est supprime, la
-   donnee devient seulement inatteignable par l'interface. */
-var DEPARTED_EQUIPE = { guillaume: 1, guillaumes: 1, elodie: 1 }; // slug réel du roster : guillaumes · Élodie : fin de mission 10/10/2026
+/* Membres partis de la société : exclus de TOUS les affichages, admin
+   compris (ni espace, ni onglet, ni sélecteur). Plus de liste de prénoms
+   écrite ici (25/11/2026) : le drapeau `departed` vient de la fiche du
+   membre dans _meta/team_members (posé par nav.js, window.isDepartedMember
+   = la règle unique de l'équipe). Leur fiche et leurs séries historiques
+   restent en place : rien n'est supprimé. */
+function _estPartiEquipe(slug) {
+  if (!slug) return false;
+  var meta = (window.TEAM_MEMBERS || {})[slug] || null;
+  if (meta && meta.departed === true) return true;
+  if (typeof window.isDepartedMember === 'function') {
+    try { return !!window.isDepartedMember(meta || slug); } catch (e) { return false; }
+  }
+  return false;
+}
 function _visibleMembers() {
   _markArchivedMembers();
-  var vivants = MEMBERS.filter(function(m) { return !DEPARTED_EQUIPE[m.uid]; });
+  var vivants = MEMBERS.filter(function(m) { return !_estPartiEquipe(m.uid); });
   if (_isAdminView()) return vivants;
   return vivants.filter(function(m) { return !m.archived; });
 }
 if (window.TEAM_MEMBERS) _markArchivedMembers();
 window.addEventListener('team-members-loaded', function() {
   _markArchivedMembers();
-  if (typeof renderEspaces === 'function') {
-    try { renderEspaces(); } catch(e) {}
-  }
+  /* L'équipe arrive après le premier rendu : on redessine l'onglet ouvert. */
+  try {
+    if (typeof currentMainTab === 'undefined' || currentMainTab === 'espaces') renderEspaces();
+    else if (currentMainTab === 'breakdown') renderBreakdown();
+  } catch(e) {}
 });
 
 /* ── Meeting link (permanent — overridable per meeting) ── */
@@ -1237,75 +462,14 @@ function getMemberMsgs(uid)   { return lsGet(`equipe_msgs_${uid}`, []); }
 function setMemberMsgs(uid,v) { lsSet(`equipe_msgs_${uid}`, v); }
 function getMemberDocs(uid)   { return lsGet(`equipe_docs_${uid}`, []); }
 function setMemberDocs(uid,v) { lsSet(`equipe_docs_${uid}`, v); }
-function getCallBreakdowns(uid)   { return lsGet(`equipe_calls_${uid}`, getSampleCalls(uid)); }
+function getCallBreakdowns(uid)   { return lsGet(`equipe_calls_${uid}`, []); }
 function setCallBreakdowns(uid,v) { lsSet(`equipe_calls_${uid}`, v); }
-function getMeetings()   { return lsGet('equipe_meetings', getSampleMeetings()); }
+function getMeetings()   { return lsGet('equipe_meetings', []); }
 function setMeetings(v)  { lsSet('equipe_meetings', v); }
 
-/* ── Sample data ── */
-function getSampleCalls(uid) {
-  if (uid === 'guillaume') return [
-    { id: 'c1', date:'2026-02-10', client:'Julie Berchoux', type:'Closing', duree:'52 min',
-      lien:'', scores:{ ouverture:4, decouverte:4, pitch:5, objections:4, closing:5 },
-      points_forts:'Très bon rythme, excellente gestion des objections. Closing naturel.',
-      axes_amelioration:'Ouverture un peu rapide, prendre 30s de plus pour créer la connexion.',
-      note_head:'Belle performance. Continuer sur cette dynamique pour les prochains BP12.',
-      statut:'Débriefé' },
-    { id: 'c2', date:'2026-02-17', client:'Belinda Giangiulio', type:'Closing', duree:'48 min',
-      lien:'', scores:{ ouverture:3, decouverte:5, pitch:4, objections:3, closing:4 },
-      points_forts:'Découverte profonde, bonne qualification du budget.',
-      axes_amelioration:'Hésitations sur les objections prix. Travailler le script de gestion.',
-      note_head:'Bonne progression depuis janvier. La découverte est ton point fort. Travail objections semaine prochaine.',
-      statut:'Débriefé' },
-    { id: 'c3', date:'2026-03-04', client:'Fabienne Theres', type:'Closing', duree:'61 min',
-      lien:'', scores:{ ouverture:4, decouverte:4, pitch:4, objections:4, closing:5 },
-      points_forts:'', axes_amelioration:'', note_head:'', statut:'En attente' },
-  ];
-  if (uid === 'elodie') return [
-    { id: 'c4', date:'2026-01-21', client:'Isabelle Mittard', type:'Closing', duree:'45 min',
-      lien:'', scores:{ ouverture:5, decouverte:4, pitch:5, objections:5, closing:5 },
-      points_forts:'Parfaite maîtrise du script. Tone exceptionnel. Close très fluide.',
-      axes_amelioration:'RAS sur ce call, vraiment excellent.',
-      note_head:'Top performance. Utilise ce call comme référence pour tes futurs closes.',
-      statut:'Débriefé' },
-    { id: 'c5', date:'2026-02-19', client:'Franck Dulong', type:'Closing', duree:'55 min',
-      lien:'', scores:{ ouverture:4, decouverte:5, pitch:4, objections:4, closing:5 },
-      points_forts:'Gestion de la timeline PIF remarquable.', axes_amelioration:'Pitch à structurer davantage.',
-      note_head:'Belle gestion du PIF. Tu maîtrises bien les closes en 1 appel.', statut:'Débriefé' },
-  ];
-  return [];
-}
-
-function getSampleMeetings() {
-  return [
-    { id:'m1', date:'2026-02-24', jourSemaine:'Lundi', heure:'09h00',
-      lien_meet: MEETING_LINK,
-      sujets:['Bilan semaine S7','Points de progression Élodie','Objectifs S8','Nouvelles offres Q1'],
-      questions:[
-        { uid:'elodie', text:'Les leads cold sont-ils toujours disponibles cette semaine ?', reponse:'', ts: 1740355600000 },
-      ],
-      resume:'Morning meeting productif. Focus sur les objections prix BP12. Élodie progresse bien. Objectif S8 : 5 closes minimum chacun. Rappel : bien qualifier le budget avant le pitch.',
-      statut:'Terminé' },
-    { id:'m2', date:'2026-02-26', jourSemaine:'Mercredi', heure:'09h00',
-      lien_meet: MEETING_LINK,
-      sujets:['Flash S8 J3','Review calls Élodie','Point offre Elite Phénix'],
-      questions:[],
-      resume:'', statut:'Terminé' },
-    { id:'m3', date:'2026-02-28', jourSemaine:'Vendredi', heure:'09h00',
-      lien_meet: MEETING_LINK,
-      sujets:['Bilan S8','Préparation S9','Planning de la semaine','Tops & flops'],
-      questions:[{ uid:'elodie', text:'Comment bien gérer les no-show en setting ?', reponse:'', ts: Date.now() - 3600000 }],
-      resume:'', statut:'Terminé' },
-    { id:'m4', date:'2026-03-03', jourSemaine:'Lundi', heure:'09h00',
-      lien_meet: MEETING_LINK,
-      sujets:['Lancement semaine S9','Objectifs de la semaine','Mindset & énergie'],
-      questions:[], resume:'', statut:'À venir' },
-    { id:'m5', date:'2026-03-05', jourSemaine:'Mercredi', heure:'09h00',
-      lien_meet: MEETING_LINK,
-      sujets:['Flash mi-semaine S9','Review calls Élodie'],
-      questions:[], resume:'', statut:'À venir' },
-  ];
-}
+/* Données d'exemple (débriefs et meetings fictifs aux noms de vrais clients
+   et membres) retirées le 25/11/2026 : un poste sans saisie affiche une
+   liste vide, jamais des exemples présentés comme des données. */
 
 /* ════════════════════════════════════════════════════════════
    STATE
@@ -1321,13 +485,13 @@ let currentMemberUid = (function() {
     var tm = window.TEAM_MEMBERS || {};
     for (var i = 0; i < MEMBERS.length; i++) {
       var m = MEMBERS[i];
-      if (DEPARTED_EQUIPE[m.uid]) continue;   // parti : jamais sélectionné par défaut
+      if (_estPartiEquipe(m.uid)) continue;   // parti : jamais sélectionné par défaut
       var meta = tm[m.uid];
       var archived = !!(meta && meta.active === false);
       if (isAdmin || !archived) return m.uid;
     }
   } catch(e) {}
-  return 'elodie';
+  return '';
 })();
 let currentEspaceTab = {};  // uid → tab name
 let currentCbMember = (function() {
@@ -1337,13 +501,13 @@ let currentCbMember = (function() {
     var tm = window.TEAM_MEMBERS || {};
     for (var i = 0; i < MEMBERS.length; i++) {
       var m = MEMBERS[i];
-      if (DEPARTED_EQUIPE[m.uid]) continue;   // parti : jamais sélectionné par défaut
+      if (_estPartiEquipe(m.uid)) continue;   // parti : jamais sélectionné par défaut
       var meta = tm[m.uid];
       var archived = !!(meta && meta.active === false);
       if (isAdmin || !archived) return m.uid;
     }
   } catch(e) {}
-  return 'elodie';
+  return '';
 })();
 let currentMeeting = null;
 
@@ -1366,13 +530,18 @@ function setMainTab(name) {
 function renderEspaces() {
   _markArchivedMembers();
   var visible = _visibleMembers();
-  // Si le membre actuellement sélectionné n'est plus visible (non-admin qui
-  // avait 'guillaume' en cache), on bascule sur le premier visible.
-  if (currentMemberUid && !visible.find(m => m.uid === currentMemberUid) && visible.length) {
+  // Aucun membre sélectionné, ou membre plus visible (parti, archivé pour
+  // un non-admin) : on bascule sur le premier visible.
+  if ((!currentMemberUid || !visible.find(m => m.uid === currentMemberUid)) && visible.length) {
     currentMemberUid = visible[0].uid;
   }
   // Member selector buttons
   const sel = document.getElementById('member-selector');
+  if (!visible.length) {
+    sel.innerHTML = '<div class="empty-state"><div class="empty-icon">👥</div>' +
+      (window.TEAM_MEMBERS ? 'Aucun membre de l\'équipe sales à afficher' : 'Chargement de l\'équipe…') + '</div>';
+    return;
+  }
   sel.innerHTML = visible.map(m => `
     <div class="member-btn ${m.uid === currentMemberUid ? 'active' : ''}${m.archived ? ' member-archived-admin' : ''}" style="--mb-color:${m.color}" onclick="selectMember('${m.uid}')">
       <div class="member-btn-av" style="background:linear-gradient(135deg,${m.color}88,${m.color})">${m.name[0]}</div>
@@ -1386,9 +555,8 @@ function renderEspaces() {
   showEspace(currentMemberUid);
 }
 
-/* Le HTML ne porte qu'un conteneur statique (#espace-elodie) : les membres
-   venus du roster (Steven, Valentin…) n'avaient nulle part où s'afficher,
-   même sélectionnés. On crée le conteneur manquant à côté des existants. */
+/* Un conteneur par membre du roster, créé à la demande à côté du
+   sélecteur (le HTML n'en porte aucun : plus de membre écrit en dur). */
 function _ensureEspaceContainer(uid) {
   if (document.getElementById('espace-' + uid)) return;
   const ref = document.getElementById('member-selector');
@@ -1431,7 +599,7 @@ function renderEspace(m) {
         <div class="espace-role">${m.role}</div>
         <div class="espace-badges">
           <span class="badge" style="background:rgba(52,211,153,.1);border-color:rgba(52,211,153,.25);color:#34d399">● ${m.statut}</span>
-          <span class="badge" style="background:rgba(255,255,255,.05);border-color:var(--border);color:var(--muted)">${m.contrat}</span>
+          <span class="badge" style="background:rgba(255,255,255,.05);border-color:var(--border);color:var(--muted)">${_escEquipe(m.contrat)}${_iBareme()}</span>
           <span class="badge" style="background:rgba(255,255,255,.05);border-color:var(--border);color:var(--muted)">Depuis ${m.dateDebut}</span>
         </div>
       </div>
@@ -1532,7 +700,7 @@ function renderProfilEdit(m) {
           <option ${p.statut==='Congé'?'selected':''}>Congé</option>
         </select>
       </div>
-      <div class="info-field"><label>Objectif mensuel (€)</label><input type="text" id="pf-objectif-${m.uid}" value="${p.objectif||''}" placeholder="Ex: 10000"/></div>
+      <div class="info-field"><label>Objectif personnel (note libre, sur cet appareil)${_iObjectif()}</label><input type="text" id="pf-objectif-${m.uid}" value="${p.objectif||''}" placeholder="Ex: 10000"/></div>
     </div>
     <div class="info-card">
       <div class="info-card-title">Notes internes (admin)</div>
@@ -1658,12 +826,17 @@ function sendMsg(uid) {
 function renderBreakdown() {
   _markArchivedMembers();
   var visible = _visibleMembers();
-  // Fallback si le membre sélectionné n'est plus visible
-  if (currentCbMember && !visible.find(m => m.uid === currentCbMember) && visible.length) {
+  // Aucun membre sélectionné, ou membre plus visible : premier visible
+  if ((!currentCbMember || !visible.find(m => m.uid === currentCbMember)) && visible.length) {
     currentCbMember = visible[0].uid;
   }
   // Member tabs
   const tabs = document.getElementById('cb-member-tabs');
+  if (!visible.length) {
+    tabs.innerHTML = '<div class="empty-state"><div class="empty-icon">📞</div>' +
+      (window.TEAM_MEMBERS ? 'Aucun membre de l\'équipe sales à afficher' : 'Chargement de l\'équipe…') + '</div>';
+    return;
+  }
   tabs.innerHTML = visible.map(m => `
     <div class="cb-member-tab ${m.uid === currentCbMember ? 'active' : ''}${m.archived ? ' member-archived-admin' : ''}" style="--cbt-color:${m.color}" onclick="setCbMember('${m.uid}')">
       <div class="dot" style="background:${m.color}"></div>
@@ -1689,7 +862,7 @@ function renderCbPanel(m) {
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
       <div>
         <div style="font-family:var(--fh);font-size:16px;font-weight:800">Call Breakdown — ${m.name} ${m.surname}</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px">${calls.length} appels enregistrés · Cliquer sur un appel pour voir le débrief</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">${calls.length} débrief${calls.length > 1 ? 's' : ''} d'appel (saisi${calls.length > 1 ? 's' : ''} sur cet appareil)${_iDebriefs()} · Cliquer sur un débrief pour le lire</div>
       </div>
       <button class="btn btn-primary btn-sm" onclick="openAddCall('${m.uid}')">+ Ajouter un appel</button>
     </div>
@@ -1734,7 +907,7 @@ function renderCbPanel(m) {
 }
 
 function renderCallCards(uid, calls) {
-  if (!calls.length) return `<div class="empty-state"><div class="empty-icon">📞</div>Aucun appel enregistré pour l'instant</div>`;
+  if (!calls.length) return `<div class="empty-state"><div class="empty-icon">📞</div>Aucun débrief d'appel saisi sur cet appareil</div>`;
   return calls.slice().reverse().map((c, ri) => {
     const i = calls.length - 1 - ri;
     const avgScore = c.scores ? Object.values(c.scores).reduce((a,b)=>a+(+b||0),0) / Object.keys(c.scores).length : null;
@@ -2495,12 +1668,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   const savedTab = lsGet('equipe_active_tab', 'espaces');
 
-  // ── Sync live performance data from Closing/Setting localStorage ──
-  const _equipeMonthKey = localStorage.getItem('sales_month') || 'Février 2026';
-  if (typeof syncBridge_loadMonth === 'function') {
-    syncBridge_loadMonth(_equipeMonthKey);
-  }
-
   // ── Restrictions rôle : masquer les éléments admin pour le rôle "sales" ──
   const _role = localStorage.getItem('ambitio_role') || 'sales';
   if (_role !== 'admin') {
@@ -2513,16 +1680,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   setMainTab(savedTab);
-
-  // Refresh si données modifiées dans un autre onglet
-  window.addEventListener('storage', function(e) {
-    const k = e.key || '';
-    if (k.startsWith('closing_') || k.startsWith('setting_') || k.startsWith('comm_deals_')) {
-      if (typeof syncBridge_loadMonth === 'function') {
-        syncBridge_loadMonth(localStorage.getItem('sales_month') || 'Février 2026');
-      }
-    }
-  });
 });
 </script>
 
@@ -2556,13 +1713,11 @@ document.addEventListener('DOMContentLoaded', () => {
   <!-- SECTION ESPACES -->
   <div class="section active" id="sec-espaces">
     <div class="member-selector" id="member-selector"></div>
-    <div id="espace-elodie" class="espace"></div>
   </div>
 
   <!-- SECTION CALL BREAKDOWN -->
   <div class="section" id="sec-breakdown">
     <div class="cb-member-tabs" id="cb-member-tabs"></div>
-    <div id="cb-elodie" class="cb-panel"></div>
   </div>
 
   <!-- SECTION MORNING MEETING -->
@@ -2612,7 +1767,7 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn btn-ghost btn-sm" onclick="calGoToday()">Aujourd'hui</button>
-        ${isAdmin ? `<button class="btn btn-primary btn-sm" id="btn-add-meeting" onclick="openAddMeeting()">+ Nouveau meeting</button>` : ''}
+        <button class="btn btn-primary btn-sm" id="btn-add-meeting" onclick="openAddMeeting()">+ Nouveau meeting</button>
       </div>
     </div>
     <!-- Weekly calendar grid -->

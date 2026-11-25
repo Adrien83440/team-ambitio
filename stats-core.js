@@ -360,6 +360,13 @@
     return Number(v).toFixed(n).replace('.', ',') + ' %';
   }
 
+  /* Une seule façon d'écrire un montant : euros entiers, séparateur français.
+     L'arrondi se fait à l'affichage seulement, jamais avant une somme. */
+  function fmtEuro(n) {
+    if (n == null || isNaN(n)) return '—';
+    return Math.round(Number(n)).toLocaleString('fr-FR') + ' €';
+  }
+
   /* ══════════════════════════════════════════════════════════════════════
      5. QUI — setter et closer d'un RDV, une seule chaîne
      ══════════════════════════════════════════════════════════════════════
@@ -514,7 +521,19 @@
     rdv_closes_hors_periode: { mot: 'RDV closés sans close sur la période', texte: 'RDV de la période au résultat Close dont le client n’est pas un close de la période : il a été gagné à une autre date, ou sa fiche n’est jamais passée cliente.' },
     doublons_rdv_closes: { mot: 'Clients à deux RDV closés', texte: 'Clients qui ont deux RDV au résultat Close. Un seul close est compté ; son canal, son closer et son setter sont ceux du premier RDV.' },
     rdv_pris_hors_tunnel: { mot: 'RDV pris hors tunnel', texte: 'RDV pris pendant la période par un lead plus ancien ou sans fiche : il n’est rangé ni en Élite ni en Business. Élite + Business + hors tunnel = RDV pris.' },
-    lecture_incomplete: { mot: 'Lecture incomplète', texte: 'Une lecture a échoué ou a atteint son plafond : les chiffres concernés sont partiels. Recharge la page ou réduis la période.' }
+    lecture_incomplete: { mot: 'Lecture incomplète', texte: 'Une lecture a échoué ou a atteint son plafond : les chiffres concernés sont partiels. Recharge la page ou réduis la période.' },
+    objectif: { mot: 'Objectif annuel', texte: 'Objectif de contracté fixé par la direction dans Projections. Un mois sans objectif propre reprend l’objectif annuel divisé par 12.' },
+    projection_annee: { mot: 'Projection fin d’année', texte: 'Contracté depuis janvier, plus la moyenne des 3 derniers mois terminés pour chaque mois restant (le mois en cours est complété jusqu’à cette moyenne).' },
+    temps_appel: { mot: 'Temps d’appel', texte: 'Temps passé en conversation sur les appels sortants décrochés de la période. Les appels reçus et les messageries ne sont pas comptés.' },
+    duree_moyenne_appel: { mot: 'Durée moyenne', texte: 'Temps d’appel ÷ appels décrochés de la période.' },
+    montants_par_personne: { mot: 'Montants par personne', texte: 'Les montants par personne ne sont visibles que par la personne elle-même et par un admin. Les totaux de l’équipe sont visibles de tous.' },
+    appels_non_charges: { mot: 'Appels non chargés', texte: 'Les appels ne sont chargés que pour un mois à la fois (plafond de lecture). Choisis un seul mois pour les voir.' },
+    vues_page: { mot: 'Vues', texte: 'Visites de la page pendant la période (mesure de la page, hors visites internes).' },
+    clics_bouton: { mot: 'Clics bouton', texte: 'Clics sur le bouton principal de la page (réserver, commencer le quiz…). Ce ne sont pas les clics sur la publicité.' },
+    formulaires_page: { mot: 'Formulaires', texte: 'Formulaires remplis (opt-in) depuis la page pendant la période : nouveaux leads entrés par cette page et ré-optins revenus par elle.' },
+    debriefs_appel: { mot: 'Débriefs d’appel', texte: 'Fiches de débrief ajoutées à la main sur cet appareil (ce navigateur seulement). Ce n’est pas le nombre d’appels passés : celui-ci est dans Set NB.' },
+    objectif_personnel: { mot: 'Objectif personnel', texte: 'Note libre enregistrée dans ce navigateur, lue par aucun autre écran. L’objectif de l’équipe est celui fixé dans Projections.' },
+    bareme_commission: { mot: 'Barème de commission', texte: 'Rappel du type de contrat seulement : aucune commission n’est calculée sur cette page. Le barème appliqué est celui de la page Commissions (et du contrat du membre).' }
   };
 
   function mot(cle) { return G[cle] ? G[cle].mot : ''; }
@@ -698,7 +717,7 @@
     origineAnnulation: origineAnnulation, estNonHonore: estNonHonore, ORIGINES: ORIGINES,
     /* Agrégat et taux */
     vide: vide, ajouter: ajouter, finir: finir, compter: compter, sommer: sommer,
-    pct: pct, showUp: showUp, tauxClose: tauxClose, fmtPct: fmtPct,
+    pct: pct, showUp: showUp, tauxClose: tauxClose, fmtPct: fmtPct, fmtEuro: fmtEuro,
     /* Qui */
     setterDuRdv: setterDuRdv, closerDuRdv: closerDuRdv,
     /* Téléphone */
