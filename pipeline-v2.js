@@ -112,73 +112,22 @@
     var t = Date.parse(s);
     return isNaN(t) ? null : t;
   }
-  /* Date d'entrée écrite en TEXTE → instant (ms), MÊME règle que analyser() de
-     api/reprise-donnees.js (25/11/2026), pour que pages et reprise donnent le
-     même jour : 'AAAA-MM-JJ' et 'JJ/MM/AAAA' → midi à UTC+1 de ce jour (même
-     jour à Paris en hiver comme en été, quel que soit le fuseau de l'appareil) ;
-     date-heure ISO 'AAAA-MM-JJTHH:MM[:SS][fuseau]' → l'instant (fuseau écrit lu
-     tel quel, sans fuseau = heure de Paris) ; jour impossible, année hors
-     2000-2100 ou autre texte → null. */
-  function heureParisMs(y, m0, d, hh, mi, ss){
-    var guess = Date.UTC(y, m0, d, hh, mi, ss);
-    function commeParis(ms){
-      var o = {};
-      new Intl.DateTimeFormat('en-GB', { timeZone:'Europe/Paris', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hourCycle:'h23' })
-        .formatToParts(new Date(ms)).forEach(function(p){ o[p.type] = p.value; });
-      return Date.UTC(+o.year, +o.month - 1, +o.day, o.hour === '24' ? 0 : +o.hour, +o.minute, ss);
-    }
-    try {
-      var out = guess - (commeParis(guess) - guess);
-      var r = commeParis(out);
-      if(r !== guess) out = out - (r - guess);
-      return out;
-    } catch(e){ return guess - 3600000; }
-  }
-  function dateEntreeVersMs(v){
-    if(typeof v !== 'string') return null;
-    var s = v.trim(), m;
-    function jourOk(y, mo, d){
-      if(!(y >= 2000 && y <= 2100) || !(mo >= 1 && mo <= 12) || !(d >= 1 && d <= 31)) return false;
-      var t = new Date(Date.UTC(y, mo - 1, d));
-      return t.getUTCFullYear() === y && t.getUTCMonth() === mo - 1 && t.getUTCDate() === d;
-    }
-    m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
-    if(m) return jourOk(+m[1], +m[2], +m[3]) ? Date.UTC(+m[1], +m[2] - 1, +m[3], 11) : null;
-    m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
-    if(m) return jourOk(+m[3], +m[2], +m[1]) ? Date.UTC(+m[3], +m[2] - 1, +m[1], 11) : null;
-    m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/.exec(s);
-    if(!m || !jourOk(+m[1], +m[2], +m[3]) || +m[4] > 23 || +m[5] > 59 || (m[6] != null && +m[6] > 59)) return null;
-    if(m[7]){ var z = Date.parse(s); if(!isNaN(z)) return z; }
-    return heureParisMs(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0));
-  }
   /* Jour de PARIS ('AAAA-MM-JJ') de leads.clientSince (25/11/2026) : la date
      est en texte sur d'anciennes fiches ('AAAA-MM-JJ', parfois 'JJ/MM/AAAA' ou
-     date-heure ISO) et en Timestamp sur les autres (la reprise des données
-     convertit le texte par la règle de dateEntreeVersMs). Lue au
-     jour de Paris, elle s'affiche PAREIL sous les deux formes et sur tout
-     appareil (le texte lu comme minuit UTC tombait la veille à l'ouest de
-     l'Europe, le Timestamp le lendemain en Nouvelle-Zélande). null si illisible. */
-  function jourClientCle(v){
-    if(v == null || v === '') return null;
-    var dt;
-    if(typeof v === 'string'){
-      var ms = dateEntreeVersMs(v);
-      if(ms == null) return null;
-      dt = new Date(ms);
-    } else {
-      dt = (typeof v.toDate === 'function') ? v.toDate() : (v instanceof Date ? v : null);
-    }
-    if(!dt || isNaN(dt.getTime())) return null;
-    try {
-      var o = {};
-      new Intl.DateTimeFormat('en-GB', { timeZone:'Europe/Paris', year:'numeric', month:'2-digit', day:'2-digit' })
-        .formatToParts(dt).forEach(function(p){ o[p.type] = p.value; });
-      if(o.year && o.month && o.day) return o.year + '-' + o.month + '-' + o.day;
-    } catch(e){}
-    return dt.getFullYear() + '-' + ('0' + (dt.getMonth() + 1)).slice(-2) + '-' + ('0' + dt.getDate()).slice(-2);
+     date-heure ISO) et en Timestamp sur les autres. La règle de lecture vit à
+     UN seul endroit : StatsCore.jourDe / dateTexteMs (stats-core.js, chargé
+     avant ce fichier), la même que la reprise des données ; lue au jour de
+     Paris, la date s'affiche PAREIL sous les deux formes et sur tout appareil.
+     Seuls le texte, le Timestamp et la Date sont lus ici ; null sinon, si
+     illisible, ou sans stats-core.js (repli : lecture simple de toMs). */
+  function jourClient(v) {
+    var sc = (typeof window !== 'undefined' && window.StatsCore && typeof window.StatsCore.jourDe === 'function') ? window.StatsCore : null;
+    if (!sc || v == null || v === '') return null;
+    if (typeof v !== 'string' && typeof v.toDate !== 'function' && !(v instanceof Date)) return null;
+    try { return sc.jourDe(v); } catch (e) { return null; }
   }
-  /* « Client depuis le » : midi local du jour de Paris (voir jourClientCle). */
-  function jourClientMs(v) { var k = jourClientCle(v); if (!k) return toMs(v); var p = k.split('-'); return new Date(+p[0], +p[1] - 1, +p[2], 12).getTime(); }
+  /* « Client depuis le » : midi local du jour de Paris (voir jourClient). */
+  function jourClientMs(v) { var k = jourClient(v); if (!k) return toMs(v); var p = k.split('-'); return new Date(+p[0], +p[1] - 1, +p[2], 12).getTime(); }
   function startOfDay(ms) { var d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); }
   function daysSince(ms) { return ms == null ? null : Math.max(0, Math.floor((startOfDay(Date.now()) - startOfDay(ms)) / DAY)); }
   function fdate(ms) {
