@@ -21,11 +21,76 @@
      LqsTab.invalidate()        période changée → rechargement au prochain show
      LqsTab.refilter(ctx)       filtres tunnel / source → recalcul sans recharger
    ES5 strict, délégation d'événements (data-*), aucun onclick inline.
+
+   Audit de cohérence (25/11/2026, référentiel des chiffres commerciaux) :
+     · vocabulaire unique : Contracté / Collecté (jamais Signé / Encaissé),
+       Closes, Présents, Pitchés, « Prélevé sur la période » pour l'argent
+       rentré pendant la période (autre calcul) ;
+     · cartes du haut = closes DE LA PÉRIODE (liste unique FunnelCore.
+       buildCloses, la même que le Stats funnel) ; ce qui suit les leads
+       entrés porte toujours « des leads entrés » ou « Leads … » (unité :
+       un lead compte une fois) ;
+     · chaque chiffre porte son « i » (StatsCore.info, glossaire commun ;
+       StatsCore.infoLibre pour une note propre à l'onglet) ;
+     · lectures en échec et plafonds dits à l'écran (M.erreursLecture).
    ============================================================================ */
 (function () {
   'use strict';
   var LC = window.LqsCore, FC = window.FunnelCore;
   if (!LC || !FC) { if (window.console) console.error('[lqs] lqs-core.js / funnel-core.js manquants'); return; }
+  var SC = window.StatsCore || null;
+
+  /* ══ LE « i » ═════════════════════════════════════════════════════════
+     I(cle, precision) : terme du glossaire commun (stats-core.js).
+     IL(cle, precision) : terme propre à l'onglet, pas (encore) dans le
+     glossaire — texte local ci-dessous ; s'il entre un jour dans le
+     glossaire commun sous la même clé, c'est sa définition qui s'affiche.
+     Côté serveur ou sans stats-core.js : chaîne vide. */
+  var LOCAL = {
+    leads_et_reoptins: ['Leads + ré-optins', 'Nouveaux leads entrés pendant la période, plus les anciens leads qui ont rempli un nouveau formulaire pendant la période. Le Stats funnel affiche ces deux nombres séparément (Leads, puis « + N ré-optins »).'],
+    leads_avec_rdv: ['Leads avec RDV', 'Leads entrés pendant la période qui ont au moins un RDV de vente (Self Booking, Setting ou manuel), à n’importe quelle date jusqu’à aujourd’hui. Un lead compte une fois. Ce n’est pas « RDV pris » du Stats funnel, qui compte les RDV créés pendant la période, anciens leads compris.'],
+    leads_presents: ['Leads présents', 'Leads entrés pendant la période venus à au moins un de leurs RDV (lu sur le dernier RDV de chaque chaîne de report). Un lead compte une fois : ce chiffre ne se compare pas aux Présents du Stats funnel ou de Close SB, qui sont des RDV comptés à leur date.'],
+    taux_close_leads_presents: ['Close / leads présents', 'Closes des leads entrés venus au RDV ÷ leads présents. Calculé par lead : un lead compte une fois, même avec plusieurs RDV. Un close sans RDV enregistré n’y entre pas. Le taux de close par RDV est dans la vue Closers.'],
+    taux_close_leads_avec_rdv: ['Close / leads avec RDV', 'Closes des leads entrés qui avaient un RDV ÷ leads avec RDV. Calculé par lead : un lead compte une fois, même avec plusieurs RDV.'],
+    taux_close_lead: ['Close / lead', 'Closes des leads entrés ÷ leads (+ ré-optins) de la ligne.'],
+    close_sans_rdv_enregistre: ['Sans RDV enregistré', 'Client gagné directement depuis sa fiche ou repéré par le module Paiements, sans RDV de vente à son nom. Il compte dans les closes, ni dans les leads avec RDV ni dans les leads présents.'],
+    deja_client: ['Déjà client', 'Lead réinscrit pendant la période qui était déjà client avant son entrée. Ce n’est pas un close des leads entrés.'],
+    contracte_cohorte: ['Contracté des leads entrés', 'Valeur hors taxes des contrats des closes des leads entrés (leads entrés pendant la période et devenus clients depuis, à n’importe quelle date). Différent du Contracté des cartes du haut, qui suit les clients gagnés pendant la période.'],
+    collecte_cohorte: ['Collecté des leads entrés', 'Ce qui a déjà été prélevé, jusqu’à aujourd’hui, sur les closes des leads entrés (hors taxes).'],
+    contracte_par_lead: ['Contracté / lead', 'Contracté des leads entrés ÷ nombre de leads de la ligne : la valeur moyenne d’un lead.'],
+    part_contracte: ['Part du contracté', 'Part de la ligne dans le contracté total du tableau.'],
+    lqs: ['LQS', 'Lead Quality Score : note de 1 à 5 calculée uniquement à partir des réponses du lead (quiz, formulaires) avec le barème de l’onglet ⚙️. Ce n’est ni la note équipe ★, ni le CA déclaré.'],
+    lqs_45: ['LQS 4-5', 'Leads notés LQS 4 ou 5 ÷ leads notés. Les leads sans réponse exploitable n’ont pas de note et ne comptent pas dans ce pourcentage.'],
+    note_equipe: ['Note équipe ★', 'Moyenne du curseur ★ posé par le setter ou le closer dans Leads Live après le contact. Ce n’est pas la note LQS.'],
+    qualite_pipe: ['Qualité du pipe', 'LQS moyen des leads des RDV de la ligne (RDV dont le lead est noté).'],
+    mqs: ['MQS', 'Marketing Quality Score : 60 % qualité (LQS moyen des leads de la source) + 40 % résultats (contracté des leads entrés par lead, comparé à la moyenne ; sans aucun contrat sur la période, taux de leads présents). « n.s. » sous ' + (LC.MQS_MIN || 5) + ' leads notés.'],
+    depense_pub_ligne: ['Dépense par pub', 'Dépense Meta reçue pub par pub (hors taxes), rattachée à la ligne qui porte la pub. Elle peut être inférieure à la dépense du compte (onglet Funnel) : jours pas encore reçus, pubs sans aucun lead, montants corrigés à la main.'],
+    cpl_source: ['CPL de la source', 'Dépense de la ligne ÷ leads (+ ré-optins) de la ligne. Total : dépense ÷ leads des seules lignes venues de la pub.'],
+    cout_lead_45: ['Coût / lead LQS 4-5', 'Dépense ÷ leads notés LQS 4 ou 5 de la ligne.'],
+    filtre_closer: ['Filtre closer', 'Avec un closer choisi, seuls les leads rattachés à lui (closer de leur close, sinon de leur RDV) sont comptés : le nombre de leads n’est plus celui de la période, les taux par lead entré et les coûts pub ne sont pas calculés. Enlève le filtre pour voir tous les leads.'],
+    mode_periode: ['Closes de la période, par note', 'Dans ce mode, Closes, Contracté et Collecté sont ceux des clients gagnés pendant la période (même liste que le Stats funnel), rangés selon la note du lead, quel que soit son mois d’entrée. Les taux par lead ne sont pas calculés : ces closes ne viennent pas tous des leads entrés pendant la période.'],
+    non_calcule_periode: ['Non calculé dans ce mode', 'Les closes de la période ne viennent pas tous des leads entrés pendant la période : un taux par lead mélangerait deux populations.'],
+    plage_closers: ['Plage de la vue Closers', 'La plage choisie ici ne change que les tableaux des closers : les cartes de la vue d’ensemble restent sur la période choisie en haut de page.'],
+    depense_incomplete: ['Dépense incomplète', 'Jours de dépense reçus = jours de la période, jusqu’à hier, pour lesquels Meta a transmis la dépense pub par pub. S’il en manque, les coûts par lead et le contracté ÷ dépense sont masqués : ils seraient faussement bons.'],
+    arrives: ['Arrivés', 'Pages du quiz affichées, une fois par session (visites internes et tests exclus).'],
+    formulaire_envoye: ['Formulaire envoyé', 'Envois du formulaire de coordonnées comptés sur la page. Peut dépasser le nombre de fiches (double envoi) ; taux = ÷ ont fini les questions (sinon ÷ ont répondu Q1).'],
+    nouveaux_leads: ['Nouveaux leads', 'Nouvelles fiches Leads Live dont la page d’entrée est ce quiz. Taux = ÷ formulaires envoyés.'],
+    vus_q1: ['Ont vu la 1re question', 'Visiteurs mesurés par le quiz lui-même sur la période comparable (une fois par session). Diffère légèrement des « Arrivés » des chiffres de référence, comptés par la page.']
+  };
+  function hasG(cle) { return !!(SC && SC.GLOSSAIRE && SC.GLOSSAIRE[cle]); }
+  function I(cle, precision) { return SC && SC.info ? SC.info(cle, precision) : ''; }
+  function IL(cle, precision) {
+    if (hasG(cle)) return I(cle, precision);
+    var t = LOCAL[cle];
+    if (!t || !SC || !SC.infoLibre) return '';
+    return SC.infoLibre(t[0], t[1] + (precision ? ' ' + precision : ''));
+  }
+  /* Une note libre (pas un terme). */
+  function IN(titre, texte) { return SC && SC.infoLibre ? SC.infoLibre(titre, texte) : ''; }
+  /* Libellé + « i » d'un terme local. */
+  function ML(cle, precision) { var t = LOCAL[cle]; return esc(hasG(cle) ? SC.mot(cle) : (t ? t[0] : cle)) + IL(cle, precision); }
+  /* Libellé + « i » d'un terme du glossaire commun. */
+  function MG(cle, precision) { return esc(SC && SC.mot ? SC.mot(cle) : cle) + I(cle, precision); }
 
   var S = {
     mount: null, ctx: null, D: null, M: null,
@@ -42,13 +107,28 @@
   function ok(v) { return v != null && !isNaN(v) && isFinite(v); }
   function fNum(v) { return ok(v) ? Math.round(v).toLocaleString('fr-FR') : '—'; }
   function fEur(v) { return ok(v) ? Math.round(v).toLocaleString('fr-FR') + ' €' : '—'; }
-  function fPct(v, d) { if (!ok(v)) return '—'; var p = Math.pow(10, d == null ? 1 : d); return (Math.round(v * p) / p).toLocaleString('fr-FR') + ' %'; }
+  /* Taux : UNE écriture (StatsCore.fmtPct, une décimale, « — » si vide) —
+     audit 25/11/2026 (TRA-18, LQS-18) : le même taux s'écrivait 62,5 %,
+     63 % ou 62.5 %. Le second argument historique est ignoré. */
+  function fPct(v) {
+    if (!ok(v)) return '—';
+    if (SC && SC.fmtPct) return SC.fmtPct(v, 1);
+    return (Math.round(v * 10) / 10).toFixed(1).replace('.', ',') + ' %';
+  }
   function fDec(v, d) { if (!ok(v)) return '—'; return v.toLocaleString('fr-FR', { minimumFractionDigits: d == null ? 2 : d, maximumFractionDigits: d == null ? 2 : d }); }
   function fPts(v) { if (!ok(v)) return '—'; return (v > 0 ? '+' : '') + v.toLocaleString('fr-FR', { maximumFractionDigits: 1 }); }
-  function fRoas(v) { return ok(v) ? v.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' ×' : '—'; }
+  /* Ratio « × » : deux décimales, comme le Stats funnel. */
+  function fRoas(v) { return ok(v) ? v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '×' : '—'; }
   var MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
   function fMonth(mk) { var p = String(mk || '').split('-'); return p.length === 2 ? MONTHS[+p[1] - 1] + ' ' + p[0] : mk; }
-  function fDay(ms) { if (ms == null) return '—'; var d = new Date(ms); return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2) + '/' + String(d.getFullYear()).slice(2); }
+  /* Jour à l'heure de Paris (JJ/MM/AA), quel que soit l'appareil. */
+  function fDay(ms) {
+    if (ms == null) return '—';
+    var iso = SC && SC.jourParis ? SC.jourParis(ms) : FC.isoDate(new Date(ms));
+    var p = String(iso).split('-');
+    return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0].slice(2) : '—';
+  }
+  function fIso(iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : '—'; }
   function cap(s) { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); }
 
   var NOTE_LBL = { 5: 'Élite', 4: 'Très bon', 3: 'Bon', 2: 'Moyen', 1: 'Faible', 0: 'Non noté' };
@@ -78,20 +158,24 @@
   }
   /* Closes ventilés par offre vendue (closeData.offre : Élite / Business
      Phénix). « ? » = close sans offre renseignée (anciens closes). */
-  function offerSplit(a) {
-    if (!a || !a.closes) return '';
+  function offerSplit(a, per) {
+    var n = per ? a && a.signers : a && a.closes;
+    if (!n) return '';
+    var e = per ? a.signersE : a.closesE, b = per ? a.signersB : a.closesB, u = per ? a.signersU : a.closesU;
     var p = [];
-    if (a.closesE) p.push('<span class="lq-oe">' + fNum(a.closesE) + ' Élite</span>');
-    if (a.closesB) p.push('<span class="lq-ob">' + fNum(a.closesB) + ' Business</span>');
-    if (a.closesU) p.push('<span class="lq-muted" title="Close sans offre renseignée">' + fNum(a.closesU) + ' ?</span>');
+    if (e) p.push('<span class="lq-oe">' + fNum(e) + ' Élite</span>');
+    if (b) p.push('<span class="lq-ob">' + fNum(b) + ' Business</span>');
+    if (u) p.push('<span class="lq-muted" title="Close sans offre renseignée">' + fNum(u) + ' sans offre</span>');
     return p.join(' · ');
   }
   function plur(n, one, many) { return (n > 1 ? many : one); }
   function bar(pct, cls) { return '<div class="lq-bar"><span class="' + (cls || '') + '" style="width:' + (ok(pct) ? Math.max(0, Math.min(100, pct)).toFixed(1) : 0) + '%"></span></div>'; }
   function sub(v) { return '<div class="lq-sub">' + v + '</div>'; }
-  /* Signé (gros) + encaissé (dessous) — 08/11/2026 : les deux partout. */
-  function money(sig, paid) { return '<strong>' + fEur(sig) + '</strong>' + sub(fEur(paid) + ' encaissé'); }
+  /* Contracté (gros) + collecté (dessous) — vocabulaire unique (§6). */
+  function money(con, paid) { return '<strong>' + fEur(con) + '</strong>' + sub(fEur(paid) + ' collecté'); }
   function kpi(v, l, s) { return '<div class="fn-kpi"><div class="v">' + v + '</div><div class="l">' + l + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>'; }
+  /* Taux non calculé dans le mode « closes de la période ». */
+  function nonCalc() { return '<span class="lq-muted">—</span>' + IL('non_calcule_periode'); }
   function card(title, note, body, extraHead) {
     return '<div class="fn-stage"><div class="fn-stage-head"><div class="fn-stage-title">' + title + '</div>'
       + (extraHead || (note ? '<div class="fn-stage-note">' + note + '</div>' : '')) + '</div>' + body + '</div>';
