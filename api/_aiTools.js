@@ -141,9 +141,26 @@ async function contexte() {
     }),
     FC.loadTeamMembers(db),
   ]);
-  if (team && team._erreur) avert.push('Équipe illisible (' + team._erreur + ') : les noms ne sont pas résolus.');
+  if (team && team._erreur) avert.push('Équipe illisible (' + team._erreur + ') : les noms ne sont pas résolus, tout est rangé dans « Non attribué ».');
+  return construireContexte(cfg.typeMap, cfg.persons, team || [], avert);
+}
+
+/* Rôles qui ont un onglet (mêmes listes que alteore-flow.js : SETTER_ROLES
+   pour Set NB, CLOSER_ROLES pour Close SB / Global closing). */
+const ROLES_ONGLET = {
+  setter: { setter: 1, closer_setter: 1, setter_ecrit: 1 },
+  closer: { closer: 1, closer_setter: 1 },
+};
+const ROLES_SALES = { setter: 1, closer: 1, closer_setter: 1, setter_ecrit: 1 };
+
+/* Contexte à partir de données déjà lues — aussi le repli du brief du matin
+   quand la lecture échoue (construireContexte({}, {}, [], [])) : sans équipe,
+   tout le monde est « Non attribué », jamais un identifiant brut. */
+function construireContexte(typeMap, persons, team, avert) {
+  persons = persons || {};
+  team = team || [];
   const bySlug = {}, byUid = {};
-  (team || []).forEach(function (m) {
+  team.forEach(function (m) {
     if (!m || !m.slug) return;
     bySlug[m.slug] = m;
     if (m.firebaseUid) byUid[m.firebaseUid] = m;
@@ -153,20 +170,100 @@ async function contexte() {
   function resoudre(personId) {
     if (!personId) return null;
     if (bySlug[personId]) return personId;
-    const p = cfg.persons[personId];
+    const p = persons[personId];
     const m = p && p.firebaseUid ? byUid[p.firebaseUid] : null;
     return m ? m.slug : null;
   }
-  /* Nom affiché d'un slug : « Non attribué » si inconnu, « Anciens membres »
-     pour un membre parti (décision D10 : jamais son nom). */
+  /* Membre parti : drapeau de la fiche, fiche archivée avec date de fin, ou
+     liste historique commune (StatsCore.estParti — la même qu'à l'écran). */
+  function parti(slug) { return !!slug && SC.estParti(bySlug[slug] || null, slug); }
+  function prenom(slug) {
+    const m = bySlug[slug];
+    return m ? (m.shortName || m.displayName || m.fullName || String(slug)) : null;
+  }
+  /* Nom affiché d'un slug : « Anciens membres » pour un membre parti
+     (décision D10 : jamais son nom), « Non attribué » si inconnu — jamais
+     l'identifiant brut. */
   function nomDe(slug) {
     if (!slug) return SC.mot('non_attribue');
-    const m = bySlug[slug];
-    if (m && FC.isDeparted(m)) return SC.mot('anciens_membres');
-    if (m) return m.shortName || m.displayName || m.fullName || slug;
-    return String(slug);
+    if (parti(slug)) return SC.mot('anciens_membres');
+    return prenom(slug) || SC.mot('non_attribue');
   }
-  return { typeMap: cfg.typeMap, persons: cfg.persons, team: team || [], bySlug: bySlug, resoudre: resoudre, nomDe: nomDe, avert: avert };
+  /* Qui a un onglet dans la vue : membre actif, non parti, au rôle de la vue
+     (Set NB : à défaut de tout setter, toute l'équipe sales). */
+  const onglets = { setter: {}, closer: {} };
+  ['setter', 'closer'].forEach(function (vue) {
+    team.forEach(function (m) {
+      if (m && m.slug && !parti(m.slug) && m.active !== false && ROLES_ONGLET[vue][m.role]) onglets[vue][m.slug] = 1;
+    });
+  });
+  if (!Object.keys(onglets.setter).length) {
+    team.forEach(function (m) {
+      if (m && m.slug && !parti(m.slug) && m.active !== false && ROLES_SALES[m.role]) onglets.setter[m.slug] = 1;
+    });
+  }
+  function debut(slug) {
+    const v = bySlug[slug] && bySlug[slug].startDate;
+    return (typeof v === 'string' && RE_JOUR.test(v)) ? v : null;
+  }
+  /* OÙ RANGER une personne dans une vue par personne (StatsCore.rangPersonne,
+     la règle de Set NB, Global closing et du Dashboard). vue = 'setter' |
+     'closer' ; jourIso = date du RDV, jour de création (Paris) d'un set, jour
+     du close. → { key: libellé de la ligne, precision: détail de la ligne
+     « Non attribué » ('' sinon) }. */
+  function rang(slug, jourIso, vue) {
+    /* Slug absent de l'équipe (et pas un ancien membre) = personne inconnue. */
+    const s = slug && (bySlug[slug] || parti(slug)) ? slug : null;
+    const r = SC.rangPersonne(s, jourIso || null, {
+      parti: parti,
+      aOnglet: function (x) { return !!onglets[vue === 'closer' ? 'closer' : 'setter'][x]; },
+      prenom: prenom,
+      debut: debut,
+    });
+    if (r.key !== SC.NON_ATTRIBUE) return { key: nomDe(r.key), precision: '' };
+    return { key: SC.mot('non_attribue'), precision: r.precision || (vue === 'closer' ? 'Closer inconnu' : 'Setter inconnu') };
+  }
+  /* Auteur d'un appel et périmètre (règle du Stats funnel : FunnelCore.callerOf,
+     rôles de l'équipe sales = FunnelCore SALES_CALL_ROLES) :
+     'sales' | 'sans_auteur' | 'hors' (CSM, coachs → « Hors équipe sales »). */
+  const idxAppels = FC.callerIndex(team);
+  function auteurAppel(c) {
+    const who = FC.callerOf(c, idxAppels);
+    if (!who) return { perim: 'sans_auteur', key: SC.mot('non_attribue') };
+    if (!who.sales) return { perim: 'hors', key: SC.mot('hors_equipe_sales') };
+    const depart = who.departed || parti(who.slug);
+    return { perim: 'sales', key: depart ? SC.mot('anciens_membres') : (who.name || SC.mot('non_attribue')) };
+  }
+  return { typeMap: typeMap || {}, persons: persons, team: team, bySlug: bySlug, resoudre: resoudre, nomDe: nomDe,
+    parti: parti, rang: rang, auteurAppel: auteurAppel, avert: avert || [] };
+}
+
+/* Regroupement par ligne d'une vue par personne : la ligne « Non attribué »
+   garde le détail de ce qu'elle contient (champ `detail`, par précision). */
+function ranger(G, rg) {
+  const g = G[rg.key] = G[rg.key] || { rdv: [], closes: [], sets: 0 };
+  const cibles = [g];
+  if (rg.precision) {
+    g.detail = g.detail || {};
+    cibles.push(g.detail[rg.precision] = g.detail[rg.precision] || { rdv: [], closes: [], sets: 0 });
+  }
+  return cibles;
+}
+function finir(G, bloc) {
+  const out = {};
+  Object.keys(G).forEach(function (k) {
+    const o = bloc(G[k]);
+    if (G[k].detail) {
+      o.detail = {};
+      Object.keys(G[k].detail).forEach(function (p) { o.detail[p] = bloc(G[k].detail[p]); });
+    }
+    out[k] = o;
+  });
+  return out;
+}
+function jourCreation(b) {
+  const ms = tsToMs(b && b.createdAt);
+  return ms ? parisDate(ms) : null;
 }
 
 /* RDV dont la DATE tombe entre deux jours 'AAAA-MM-JJ' (inclus), classés. */
@@ -207,27 +304,48 @@ function blocPris(crees) {
     doublonsSupprimes: crees.filter(function (b) { return SC.estRdvVente(b._class) && SC.estDoublon(b); }).length,
   };
 }
-/* Fiches des RDV (setter de la fiche) : lecture groupée, fusionnées ignorées. */
+/* Fiches des RDV (setter de la fiche) : lecture groupée des seuls champs
+   utiles (masque de champs). Une fiche fusionnée est remplacée par la fiche
+   gardée (_mergedInto, 3 sauts au plus — même règle que Set NB et
+   Pilotage), enregistrée sous l'identifiant d'origine. */
+const CHAMPS_FICHE = ['setterSlug', 'assignedTo', '_merged', '_mergedInto'];
 async function lireFiches(ids) {
   const uniq = Object.keys(ids || {});
   const out = {};
   let echecs = 0;
   if (!uniq.length) return { byId: out, echecs: 0 };
   const LOT = 100;
-  for (let i = 0; i < uniq.length; i += LOT) {
-    const part = uniq.slice(i, i + LOT);
-    let snaps;
-    try {
-      if (typeof db.getAll === 'function') snaps = await db.getAll.apply(db, part.map(function (id) { return db.collection('leads').doc(id); }));
-      else snaps = await Promise.all(part.map(function (id) { return db.collection('leads').doc(id).get(); }));
-    } catch (e) { echecs += part.length; continue; }
-    snaps.forEach(function (s) {
-      if (!s || !s.exists) return;
-      const l = s.data() || {};
-      if (l._merged === true) return;
-      l._id = s.id;
-      out[s.id] = l;
+  async function lire(list) {
+    const got = {}, rate = {};
+    for (let i = 0; i < list.length; i += LOT) {
+      const part = list.slice(i, i + LOT);
+      let snaps;
+      try {
+        const refs = part.map(function (id) { return db.collection('leads').doc(id); });
+        if (typeof db.getAll === 'function') snaps = await db.getAll.apply(db, refs.concat([{ fieldMask: CHAMPS_FICHE }]));
+        else snaps = await Promise.all(refs.map(function (ref) { return ref.get(); }));
+      } catch (e) { part.forEach(function (id) { rate[id] = 1; }); continue; }
+      snaps.forEach(function (s) { if (s && s.exists) got[s.id] = s.data() || {}; });
+    }
+    return { got: got, rate: rate };
+  }
+  let attente = {};
+  uniq.forEach(function (id) { attente[id] = id; });
+  for (let sauts = 0; sauts <= 3 && Object.keys(attente).length; sauts++) {
+    const cibles = {};
+    Object.keys(attente).forEach(function (o) { cibles[attente[o]] = 1; });
+    const R = await lire(Object.keys(cibles));
+    const suivant = {};
+    Object.keys(attente).forEach(function (orig) {
+      const cur = attente[orig];
+      if (R.rate[cur]) { echecs++; return; }
+      const f = R.got[cur];
+      if (!f) return;
+      if (f._merged === true) { if (f._mergedInto && sauts < 3) suivant[orig] = String(f._mergedInto); return; }
+      f._id = cur;
+      out[orig] = f;
     });
+    attente = suivant;
   }
   return { byId: out, echecs: echecs };
 }
@@ -268,12 +386,16 @@ function blocCloses(CL, ctx, base) {
   const nb = FC.sumCloses(CL.rows.filter(function (r) { return !r.sb; }));
   const raisons = {};
   CL.annules.forEach(function (r) { const k = (r.rv && r.rv.reason) || 'raison inconnue'; raisons[k] = (raisons[k] || 0) + 1; });
-  const parCloser = {};
+  /* Par closer du close, rangé comme Global closing (jour du close). */
+  const GC = {};
   CL.rows.forEach(function (r) {
-    const k = ctx.nomDe(r.closer);
-    inc(parCloser, k, 'closes'); inc(parCloser, k, 'contracte', r.rv.con); inc(parCloser, k, 'collecte', r.rv.paid);
+    const rg = ctx.rang ? ctx.rang(r.closer, r.day, 'closer') : { key: ctx.nomDe(r.closer), precision: '' };
+    ranger(GC, rg).forEach(function (g) { g.closes.push(r); });
   });
-  Object.keys(parCloser).forEach(function (k) { parCloser[k].contracte = arrondi(parCloser[k].contracte); parCloser[k].collecte = arrondi(parCloser[k].collecte); });
+  const parCloser = finir(GC, function (g) {
+    const c = FC.sumCloses(g.closes);
+    return { closes: c.closes, contracte: arrondi(c.con), collecte: arrondi(c.paid) };
+  });
   const liste = CL.rows.slice(0, LISTE_MAX).map(function (r) {
     const o = { jour: r.day, canal: r.sb ? SC.CLASSES.self : SC.CLASSES.setter, closer: ctx.nomDe(r.closer), setter: ctx.nomDe(r.setter),
       contracte: arrondi(r.rv.con), collecte: arrondi(r.rv.paid), leadId: r.leadId || null };
@@ -363,7 +485,7 @@ const TOOLS = [
       '`rdv` : RDV de vente dont la DATE tombe dans la période (Self Booking + Setting + Manuels ; replanifiés et doublons hors compte, donnés à part) — rdv = annules + noshow + presents + aStatuer + aVenir ; presents = disqua + pitches + sansDetail ; pitches = offresEnAttente + nonCloses + rdvCloses ; kept = rdv − annules ; showUp = presents ÷ (kept − aVenir) ; parts parCanal.selfBooking / setting / manuels (manuels seulement s\'il y en a). ' +
       '`pris` : RDV PRIS (créés) pendant la période — rdvPris = selfBooking + sets ; les sets sont rangés chez le setter du RDV (setter du close, sinon setter de la fiche, sinon la personne qui l\'a posé, sinon la personne assignée). ' +
       '`closes` : la liste unique des clients gagnés pendant la période (un par client, daté du jour de la vente, closes annulés retirés) — closes, contracte, collecte (prélèvements passés à ce jour sur ces clients), resteAEncaisser, premiersPrelevementsEnAttente, panierMoyen, collecteParClose, taux de close (closes ÷ pitchés / présents / RDV, « — » quand il n\'a pas de sens), parCloser, parCanal, liste (jour, canal, closer, setter, montants, leadId). Montants HT. ' +
-      '`parCloser` (RDV par closer du RDV, + closes du closer) et `parSetter` (RDV du setting par setter + sets + closes Setting). Jamais de montant déclaré sous « contracté / collecté » : un close sans paiement porte `sansPaiement` et, au besoin, `declare`. ' +
+      '`parCloser` (RDV par closer du RDV, + closes du closer) et `parSetter` (RDV du setting par setter + sets + closes Setting) : une ligne par onglet de Global closing / Set NB, le reste sur la ligne « Non attribué » (ancien membre, personne sans onglet comme un admin, élément daté d\'avant l\'arrivée de la personne, personne inconnue), dont le contenu est dans `detail`. Jamais de montant déclaré sous « contracté / collecté » : un close sans paiement porte `sansPaiement` et, au besoin, `declare`. ' +
       'Champ `definitions` : le texte de l\'écran pour chaque chiffre ; `avertissements` : lecture incomplète à signaler. Pour les RDV, le show-up, les closes, le taux de close, le contracté et le collecté.',
     input_schema: { type: 'object', properties: RANGE_PROPS, additionalProperties: false },
     run: async function (i) {
@@ -394,48 +516,44 @@ const TOOLS = [
       if (P) P.pris.forEach(function (b) { if (b._class === 'setter' && b.leadId) ids[b.leadId] = 1; });
       const F = await lireFiches(ids);
       if (F.echecs) avert.push('Fiches de ' + F.echecs + ' RDV du setting illisibles : rangées d\'après le RDV seul (setter du close, puis personne qui l\'a posé).');
-      function setterDe(b) { return ctx.nomDe(SC.setterDuRdv(b, b.leadId ? (F.byId[b.leadId] || null) : null)); }
+      function setterSlugDe(b) { return SC.setterDuRdv(b, b.leadId ? (F.byId[b.leadId] || null) : null); }
 
-      /* Par closer (vue Global closing) : RDV de vente au closer du RDV, closes au closer du close. */
-      const groupesCloser = {};
-      vente.forEach(function (b) { const k = ctx.nomDe(SC.closerDuRdv(b, ctx.resoudre)); (groupesCloser[k] = groupesCloser[k] || []).push(b); });
-      const closesParCloser = {};
-      CL.rows.forEach(function (row) { const k = ctx.nomDe(row.closer); (closesParCloser[k] = closesParCloser[k] || []).push(row); });
-      const parCloser = {};
-      Object.keys(groupesCloser).concat(Object.keys(closesParCloser)).forEach(function (k) {
-        if (parCloser[k]) return;
-        const a = SC.compter(groupesCloser[k] || [], now);
-        const c = FC.sumCloses(closesParCloser[k] || []);
-        parCloser[k] = { rdv: a.rdv, annules: a.annules, noshow: a.noshow, presents: a.presents, pitches: a.pitches, aStatuer: a.aStatuer, aVenir: a.aVenir,
+      /* Vues par personne : StatsCore.rangPersonne (ctx.rang) — onglet pour un
+         membre de la vue, sinon la ligne « Non attribué » (ancien membre,
+         « Prénom (hors onglets) », « Prénom (avant son arrivée) », inconnu),
+         avec son détail. Mêmes lignes que Set NB, Global closing, Dashboard. */
+
+      /* Par closer (vue Global closing) : RDV de vente au closer du RDV (jour = date du RDV), closes au closer du close (jour du close). */
+      const GC = {};
+      vente.forEach(function (b) { ranger(GC, ctx.rang(SC.closerDuRdv(b, ctx.resoudre), b.date, 'closer')).forEach(function (g) { g.rdv.push(b); }); });
+      CL.rows.forEach(function (row) { ranger(GC, ctx.rang(row.closer, row.day, 'closer')).forEach(function (g) { g.closes.push(row); }); });
+      const parCloser = finir(GC, function (g) {
+        const a = SC.compter(g.rdv, now);
+        const c = FC.sumCloses(g.closes);
+        return { rdv: a.rdv, annules: a.annules, noshow: a.noshow, presents: a.presents, pitches: a.pitches, aStatuer: a.aStatuer, aVenir: a.aVenir,
           kept: a.kept, showUp: SC.fmtPct(a.showUp), closes: c.closes, contracte: arrondi(c.con), collecte: arrondi(c.paid),
           tauxCloseSurPitches: SC.fmtPct(SC.tauxClose(c.closes, a.pitches)) };
       });
 
-      /* Par setter (vue Set NB) : RDV NB au setter du RDV, sets au setter du RDV, closes Setting au setter du close. */
-      const parSetter = {};
+      /* Par setter (vue Set NB) : RDV NB au setter du RDV (jour = date du RDV), sets au setter du RDV (jour de création, Paris),
+         closes Setting au setter du close (jour du close). */
+      const GS = {};
       vente.forEach(function (b) {
         if (b._class !== 'setter') return;
-        const k = setterDe(b);
-        if (!parSetter[k]) parSetter[k] = { _rdv: [] };
-        parSetter[k]._rdv.push(b);
+        ranger(GS, ctx.rang(setterSlugDe(b), b.date, 'setter')).forEach(function (g) { g.rdv.push(b); });
       });
       if (P) P.pris.forEach(function (b) {
         if (b._class !== 'setter') return;
-        const k = setterDe(b);
-        if (!parSetter[k]) parSetter[k] = { _rdv: [] };
-        parSetter[k].sets = (parSetter[k].sets || 0) + 1;
+        ranger(GS, ctx.rang(setterSlugDe(b), jourCreation(b), 'setter')).forEach(function (g) { g.sets++; });
       });
       CL.rows.forEach(function (row) {
         if (row.sb) return;
-        const k = ctx.nomDe(row.setter);
-        if (!parSetter[k]) parSetter[k] = { _rdv: [] };
-        parSetter[k]._closes = (parSetter[k]._closes || []).concat([row]);
+        ranger(GS, ctx.rang(row.setter, row.day, 'setter')).forEach(function (g) { g.closes.push(row); });
       });
-      Object.keys(parSetter).forEach(function (k) {
-        const g = parSetter[k];
-        const a = SC.compter(g._rdv, now);
-        const c = FC.sumCloses(g._closes || []);
-        parSetter[k] = { sets: P ? (g.sets || 0) : null, rdvNB: a.rdv, presents: a.presents, pitches: a.pitches, closesNB: c.closes, contracte: arrondi(c.con), collecte: arrondi(c.paid) };
+      const parSetter = finir(GS, function (g) {
+        const a = SC.compter(g.rdv, now);
+        const c = FC.sumCloses(g.closes);
+        return { sets: P ? g.sets : null, rdvNB: a.rdv, presents: a.presents, pitches: a.pitches, closesNB: c.closes, contracte: arrondi(c.con), collecte: arrondi(c.paid) };
       });
 
       const out = {
@@ -453,7 +571,7 @@ const TOOLS = [
         definitions(DEF_CLOSES),
         definitions({ parCanal: 'canal', rdvSB: 'rdv_sb', rdvNB: 'rdv_nb', manuels: 'rdv_manuels', rdvPris: 'rdv_pris', sets: 'sets',
           manuelsCrees: 'manuels_crees', remplacantsCrees: 'rdv_remplacants_crees', parCloser: ['closer', 'Dans parCloser : RDV au closer du RDV, closes au closer du close.'],
-          parSetter: ['setter', 'Dans parSetter : RDV du setting (rdvNB) et sets au setter du RDV, closes Setting (closesNB) au setter du close.'],
+          parSetter: ['setter', 'Dans parSetter : RDV du setting (rdvNB) et sets au setter du RDV, closes Setting (closesNB) au setter du close.'], detail: 'non_attribue_contenu',
           lectureIncomplete: 'lecture_incomplete', heureParis: 'heure_paris' })
       );
       return out;

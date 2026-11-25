@@ -669,6 +669,54 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   Limite connue : `bookings.replay.summary/analysis` sont des champs du RDV, masqués à l'écran mais lisibles
   par le SDK (les règles ne filtrent pas les champs).
 
+- **Chiffres commerciaux : UN référentiel pour tous les écrans (25/11/2026, demande d'Adrien après les retours de Vincent)** :
+  audit de 1 026 chiffres sur tous les écrans → 264 écarts (le même mot calculé de dix façons). Désormais **un mot = un calcul**,
+  et ce calcul vit à UN endroit. Tout ce qui suit PRIME sur les entrées plus anciennes ci-dessous (dont « les deux règles de close restent »).
+  - **`stats-core.js`** (navigateur ↔ serveur, `require('../stats-core.js')`, chargé AVANT `alteore-flow.js` / `funnel-core.js` sur toute
+    page qui les charge) : classe d'un RDV (`classifyBooking` : self / setter / `admin` = « Manuel » / excluded), **état unique** d'un RDV
+    (`etat` : doublon, replanifié, annulé, no-show, présent, à statuer, à venir — le résultat saisi fait foi, le statut n'est qu'un repli ;
+    « passé » = fin du créneau, heure de Paris), agrégat `compter` aux identités garanties, `showUp`, `tauxClose`, `fmtPct`, `fmtEuro`,
+    `estDecroche`, `setterDuRdv`, `closerDuRdv`, `rangPersonne` (onglet / « Non attribué » : inconnu, « Anciens membres », « Prénom (hors
+    onglets) », « Prénom (avant son arrivée) »), `estParti` + `PARTIS_HISTORIQUES` (LA seule liste de prénoms de membres partis), temps de
+    Paris (`jourParis`, `dateParis`, `debutJourParis`…), et le **GLOSSAIRE** + le petit **« i »** (`StatsCore.info('cle')`, précision locale
+    en 2e argument, `infoLibre` pour une note hors glossaire). **Aucune page ne recode un de ces prédicats ni ne réécrit la définition d'un
+    terme** : un nouveau terme s'ajoute au glossaire de stats-core.js.
+  - **Règles** : RDV (à leur date) = annulés + no-show + présents + à statuer + à venir, replanifiés et doublons hors compte (le remplaçant
+    compte à sa date) ; RDV = SB + NB + Manuels ; **Kept = RDV − annulés** (no-show dedans, règle Vincent du 14/07) ; **Show-up = présents ÷
+    (Kept − à venir)** ; Présents = disqua. + pitchés + sans détail ; « RDV pris » / « Sets » = à la CRÉATION, hors remplaçants, **un set = un
+    RDV du setting réellement créé** (les statuts « Set » sans RDV sont listés à part) ; RDV manuels jamais dans RDV pris / Sets / LTB.
+  - **UN close = UN client gagné, compté une fois, le jour où il est gagné** (`leads.clientSince`, décision d'Adrien du 25/11 : plus de
+    « RDV closé à la date du RDV » sur les pages équipe). **Liste unique** : `FunnelCore.buildCloses` / `loadCloses` / `sumCloses` — funnel,
+    Qualité leads, Set NB, Close SB, Global closing, Dashboard, Projections, assistant lisent CETTE liste. Fiche gagnée = clientSince dans la
+    période + non fusionnée + un signal de vente (étape closed_won_*, RDV close, paiement, contrat signé ; `closedData` seul ne suffit pas) ;
+    + RDV closés sans fiche + paiements sans fiche gagnée. Canal d'un close = classe du RDV porteur, sinon réponse du closer, sinon étape
+    (`canalEcart` signale un désaccord : la commission suit la réponse du closer). Closer / setter d'un close : une chaîne. Close annulé
+    (verdict `revClient`) retiré partout. Contracté = Σ `rv.con`, Collecté = Σ `rv.paid` (à ce jour), Reste à encaisser = contracté −
+    collecté, « 1ers prélèvements en attente » = Σ `rv.pending`, Panier moyen = contracté ÷ closes (le mot AOV disparaît), « Prélevé sur la
+    période » = `FunnelCore.cashInPeriod` (autre chiffre, autre mot). Taux de close = closes ÷ pitchés de la période (« — » si > 100 %).
+  - **Vocabulaire unique** : Contracté (pas Signé), Collecté (pas Encaissé / Cash), Présents (pas Live / Honorés / Tenus), Pitchés (pas
+    Offres ; « Offre en attente » = le seul résultat offre), Closes (pas Ventes), Kept, Sets, « de la période » (pas « du mois »). Un chiffre
+    tapé à la main porte « déclaré » ; l'ancienne saisie hebdomadaire (arrêtée en juillet 2026) porte « ancienne saisie ».
+  - **Personnes** : onglet Équipe = somme des onglets + ligne « Non attribué » (`rangPersonne`) ; plus de raccourci « le seul closer / setter
+    reçoit tout » ; **membres partis** : plus d'onglet ni de nom, mais leur activité passée RESTE dans les totaux (« Anciens membres »).
+    **Corrections ✎** : plus appliquées aux colonnes tirées des RDV et des paiements (on corrige le résultat du RDV ou le paiement) ; gardées
+    pour téléphone, messages et actions de fiche ; les anciennes restent en base, affichées en repère.
+  - **Dashboard** rebranché sur ces calculs à partir de juillet 2026 (avant : ancienne saisie étiquetée) ; montants nominatifs réservés aux
+    admins et à la personne elle-même. **Lien Agence** : `api/agency-funnel.js` envoie une liste BLANCHE de champs (plus aucun champ
+    nominatif ou interne ne peut sortir) — tout nouveau champ lu par la page Agence doit y être ajouté. Qualité par pub : « Pitchés »,
+    « Closes », « RDV pris » (aucun chiffre ne bouge ; les événements Meta ne sont pas touchés).
+  - **Rien de muet** : plafond de lecture atteint, lecture en échec, repli sur un montant déclaré → message à l'écran (`k.erreursLecture`,
+    `_erreur` / `_tronque` des chargeurs d'AlteoreFlow, `res.erreur` de loadCloses).
+  - **Seule écriture modifiée** : `clientSince` n'est plus jamais réécrit s'il existe ; clés de jour / mois écrites à l'heure de Paris ; un
+    close est refusé (rien n'est écrit) si l'équipe n'est pas encore chargée, au lieu de partir sans commission.
+  - **Preuve** : banc d'essai croisé (même jeu de données chargé sur tous les écrans, 2 fuseaux, ~2 600 égalités) + contrôle sur les
+    données réelles de septembre à novembre 2026 (novembre : 69 RDV, 6 closes, 40 000 € contracté, 23 000 € collecté, identiques partout).
+  - **Non traité, à connaître** : `Functions/index.js` et `firestore.rules` non touchés ; `pipeline-etapes.js`, `rdv-outcome.js`,
+    `close-wizard.js` gardent leurs règles d'écriture ; second contrat d'un client déjà gagné (son montant rejoint le premier close) ;
+    `clientSince` écrit en TEXTE par d'anciennes pages CSM (fiche invisible des requêtes : reprise de données à faire, à blanc d'abord) ;
+    un close corrigé puis refait plus tard garde sa première date ; deals de janvier-février 2026 en dur dans `sales-commissions.html`
+    et fichier mort `sales-data.js` (noms / e-mails de clients servis sans connexion : à verser en base puis retirer).
+
 - **Chiffres cliquables Set NB / Close SB / Funnel (21/11/2026, demande Vincent)** : `stats-drill.js`
   (partagé, lecture seule, aucune requête : la page fournit les lignes déjà chargées ; styles injectés par
   variables de thème, rien à régénérer). `sales-setting.html` et `sales-closing.html` gardent les lignes

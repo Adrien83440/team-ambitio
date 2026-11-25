@@ -97,13 +97,16 @@
      Un membre parti n'a plus de nom à l'écran, mais son activité passée RESTE
      dans les totaux (ligne « Anciens membres »). Source : sa fiche
      _meta/team_members (departed === true, ou active === false avec une date
-     de fin). Dans le navigateur, la règle de nav.js (window.isDepartedMember)
-     est consultée en plus : une seule source de vérité, aucune liste de
-     prénoms ici. */
+     de fin), OU liste historique StatsCore.PARTIS_HISTORIQUES (membres partis
+     avant que la fiche porte le drapeau) : la règle est SC.estParti, la même
+     dans le navigateur ET sur le serveur (revue D09 : côté Vercel, l'assistant
+     et le brief du matin nommaient encore un ancien membre). Dans le
+     navigateur, la règle de nav.js (window.isDepartedMember) est consultée en
+     plus. Aucune liste de prénoms ici. m = fiche du membre, ou un slug. */
   function isDeparted(m) {
     if (!m) return false;
-    if (m.departed === true) return true;
-    if (m.active === false && typeof m.endDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(m.endDate)) return true;
+    if (typeof m === 'string') return SC.estParti(null, m);
+    if (SC.estParti(m, m.slug)) return true;
     if (typeof window !== 'undefined' && window && typeof window.isDepartedMember === 'function') {
       try { if (window.isDepartedMember(m)) return true; } catch (e) { /* règle indisponible */ }
     }
@@ -2143,6 +2146,26 @@
      d'un ancien membre reste dans le total. Plus aucun prénom en dur. Chaque
      action porte `_slug` (le membre dont c'est le journal). Une lecture en
      échec est dite (DATA.actionsError), jamais un zéro muet. */
+  /* JOUR D'UNE ACTION du journal (revue D08) — la règle de Set NB, reprise
+     telle quelle : jour de PARIS de son horodatage serveur (createdAt) ; repli
+     sur le champ `day` stocké si createdAt manque. Les actions écrites avant
+     le 25/11/2026 portent dans `day` le jour de l'APPAREIL (une action posée
+     depuis Montréal le 31/10 à 20 h 30 est le 01/11 à Paris), et `day` vient
+     de l'horloge du navigateur. Set NB, le Stats funnel, Qualité leads et
+     Pilotage rangent donc une action au même jour. */
+  function jourAction(a) {
+    if (!a) return '';
+    var v = a.createdAt, ms = null;
+    if (v) {
+      if (typeof v.toMillis === 'function') ms = v.toMillis();
+      else { var t = SC.toDate(v).getTime(); ms = isNaN(t) ? null : t; }
+    }
+    return ms != null ? SC.jourParis(ms) : (a.day || '');
+  }
+  function jourPrecedent(iso) {
+    var p = String(iso).split('-');
+    return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2] - 1)).toISOString().slice(0, 10);
+  }
   function loadActionsAll(db, P, DATA, TEAM) {
     DATA.actions = [];
     DATA.actionsError = null;
@@ -2154,11 +2177,20 @@
         return true;
       });
       var sIso = isoDate(P.start), eIso = isoDate(P.end);
+      /* Lu de J−1 à J+1 (le `day` stocké peut différer d'un jour du jour de
+         Paris), puis rangé au jour de Paris de chaque action (jourAction) :
+         rien de perdu, rien de compté hors période. */
+      var qFrom = jourPrecedent(sIso), qTo = jourSuivant(eIso);
       var proms = members.map(function (m) {
         return db.collection('lead_actions').doc(m.slug).collection('items')
-          .where('day', '>=', sIso).where('day', '<=', eIso).get()
+          .where('day', '>=', qFrom).where('day', '<=', qTo).get()
           .then(function (snap) {
-            snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; d._slug = m.slug; DATA.actions.push(d); });
+            snap.forEach(function (doc) {
+              var d = doc.data(); d._id = doc.id; d._slug = m.slug;
+              d._jour = jourAction(d);
+              if (d._jour < sIso || d._jour > eIso) return;
+              DATA.actions.push(d);
+            });
           }).catch(function (e) { DATA.actionsError = (e && e.message) || 'lecture impossible'; });
       });
       return Promise.all(proms);
@@ -2269,6 +2301,24 @@
     var f = firstTok(c.userName || c.ringoverUserName);
     return (f && idx.byFirst[f]) || null;
   }
+  /* PÉRIMÈTRE « ÉQUIPE SALES » D'UN APPEL — LE prédicat du Stats funnel
+     (revue D17), à utiliser tel quel par Set NB (onglet Équipe), le
+     Dashboard, Pilotage et l'assistant :
+       'sales'       auteur de l'équipe sales (setters, closers, admins —
+                     anciens membres compris : leur activité passée reste)
+       'sans_auteur' poste relié à aucun compte (ni userId connu, ni prénom
+                     Ringover reconnu) : COMPTÉ, ligne « Non attribué »
+       'hors'        auteur d'un autre rôle (CSM, coach) : hors des Appels et
+                     des Décrochés, affiché à part (« Hors équipe sales »)
+     Auteur = callerOf (userId → firebaseUid, sinon prénom Ringover).
+     TEAMouIndex = roster COMPLET (anciens membres compris) ou callerIndex(). */
+  function perimetreAppel(c, TEAMouIndex) {
+    var who = callerOf(c, TEAMouIndex);
+    return !who ? 'sans_auteur' : (who.sales ? 'sales' : 'hors');
+  }
+  /* Vrai si l'appel compte dans les chiffres d'appels de l'équipe (Appels,
+     Décrochés, temps d'appel) : 'sales' ou 'sans_auteur'. */
+  function appelEquipeSales(c, TEAMouIndex) { return perimetreAppel(c, TEAMouIndex) !== 'hors'; }
 
   /* Parcours de contact d'un lead — UNE règle (funnel, Qualité par pub,
      onglet Leads) : appels SORTANTS de l'équipe vers son numéro, passés
@@ -2299,6 +2349,11 @@
     /* Roster : celui de la page + le roster COMPLET relu par loadAll (anciens
        membres compris, décision D10). */
     var TEAM = mergeTeam(ctx.teamMembers || [], DATA.teamFull || []);
+    /* Hôte d'un RDV → membre (closer d'un close par son RDV porteur) : le
+       résolveur de la page s'il est fourni, sinon celui du chargement
+       (fiches d'agenda + roster, revue D13) — le même que Close SB, Global
+       closing, Qualité leads et l'assistant. */
+    var resoudreHote = typeof ctx.resoudrePersonne === 'function' ? ctx.resoudrePersonne : resoudreAvec(DATA.persons || {}, TEAM);
     function tunnelMatch(t) { return tunnelFilter === 'all' || t === tunnelFilter; }
     /* Filtre Source (10/2026) : 'all' | 'youtube' | 'other' — se cumule au
        filtre tunnel partout où celui-ci s'applique. Absent (API agence) =
@@ -2318,6 +2373,10 @@
        « à statuer » (créneau terminé) de « à venir ». ctx.now (millisecondes)
        permet de rejouer un calcul à heure fixe (tests). */
     var NOW = (typeof ctx.now === 'number' && isFinite(ctx.now)) ? ctx.now : Date.now();
+    /* Exposé (revue D27) : une liste cliquable ouverte plus tard relit l'état
+       d'un RDV (SC.libelle / etat) avec CE « maintenant », pas Date.now() —
+       sinon un RDV compté « À venir » s'afficherait « À statuer ». */
+    k.now = NOW;
     var laEnd = lookaheadEndMsFor(P); // borne des parcours par lead (TTC/TTB/SMS/joignabilité)
 
     /* Lectures en échec ou tronquées : dites à l'écran, jamais un zéro muet
@@ -2328,6 +2387,7 @@
     if (DATA.closedLeadsError) k.erreursLecture.push('Lecture des fiches gagnées impossible (' + DATA.closedLeadsError + ') : Closes, Contracté et Collecté sont incomplets.');
     if (DATA.paymentsError) k.erreursLecture.push('Lecture du module Paiements impossible (' + DATA.paymentsError + ') : le Contracté affiché est le tarif déclaré au close, le Collecté est à 0 et les closes repérés par le seul paiement manquent.');
     if (DATA.chainsTruncated) k.erreursLecture.push('Certaines chaînes de reports ont plus de 5 RDV successifs : le résultat de leur dernier RDV peut manquer (RDV pris).');
+    if (DATA.personsError && typeof ctx.resoudrePersonne !== 'function') k.erreursLecture.push('Lecture des fiches d’agenda impossible (' + DATA.personsError + ') : le closer d’un RDV ou d’un close sans closer validé peut manquer (« Non attribué »).');
     if (DATA.closeBookingsError) k.erreursLecture.push('Lecture des RDV porteurs des closes impossible (' + DATA.closeBookingsError + ') : le canal (Self Booking / Setting), le closer ou le setter de certains closes peuvent manquer.');
     if (k.closedLeadsTruncated) k.erreursLecture.push('Liste des clients gagnés tronquée : la période contient plus de ' + CLOSED_LEADS_LIMIT + ' fiches gagnées. Réduis la période pour un total exact.');
     /* Étape 2 : leads, ré-optins, appels, dépense, équipe, journal, coûts. */
@@ -2487,7 +2547,7 @@
         if (!pc.tunnel && tunnelFilter !== 'all') return false;
         return srcMatch(pc.lead ? leadSource(pc.lead, TMETA) : 'other');
       },
-      resoudrePersonne: ctx.resoudrePersonne
+      resoudrePersonne: resoudreHote
     });
     /* Closes annulés, par fiche et par RDV porteur : un RDV closé dont le
        close est annulé ne compte nulle part comme une vente. */
@@ -3013,7 +3073,7 @@
       if (ssr[id] || setRdvLead[id]) return;
       var la = a.leadId ? leadsById[a.leadId] : null;
       if (la && la._p9 && setRdvP9[la._p9]) return;
-      ssr[id] = { leadId: a.leadId || null, name: a.leadName || (la && la.nom) || a.leadId || '', day: a.day || '', slug: a._slug || null };
+      ssr[id] = { leadId: a.leadId || null, name: a.leadName || (la && la.nom) || a.leadId || '', day: a._jour || jourAction(a), slug: a._slug || null };
     });
     k.statutsSetSansRdvListe = Object.keys(ssr).map(function (id) { return ssr[id]; });
     k.statutsSetSansRdv = k.statutsSetSansRdvListe.length;
@@ -3040,10 +3100,9 @@
     /* 'sales' | 'sans_auteur' | 'hors' — mémorisé sur l'appel (_who, _perim). */
     function perimetre(c) {
       if (c._perimIdx === CIDX) return c._perim;
-      var who = callerOf(c, CIDX);
       c._perimIdx = CIDX;
-      c._who = who;
-      c._perim = !who ? 'sans_auteur' : (who.sales ? 'sales' : 'hors');
+      c._who = callerOf(c, CIDX);
+      c._perim = perimetreAppel(c, CIDX);   /* LA règle exportée (revue D17) */
       return c._perim;
     }
     function dansEquipe(c) { return perimetre(c) !== 'hors'; }
@@ -3298,6 +3357,12 @@
                             ou fiche jamais passée cliente)
          doublonsRdv        clients ayant deux RDV au résultat close (un seul
                             close compté)
+         closesRdvHorsPeriode closes de la période dont le RDV closé (porteur)
+                            n'est pas parmi les « RDV closés » de la période :
+                            RDV daté avant (ou après) la période — typique d'un
+                            début de mois (RDV du 28/10 closé le 05/11) — ou
+                            RDV hors du filtre affiché. COMPTÉS dans Closes,
+                            absents de RDV closés (revue D07).
        Chaque entrée : { name, leadId, date, why } en français simple
        (+ con / paid / sb / rdvDate / bookingId quand ils existent). */
     (function () {
@@ -3308,7 +3373,12 @@
           sb: !!r.sb, con: rv.cancelled ? 0 : (rv.con || 0), paid: rv.cancelled ? 0 : (rv.paid || 0),
           rdvDate: r.rdvDate || '', bookingId: r.bookingId || null };
       }
-      var coh = { closesSansRdv: [], ecartsCanal: [], sansSignal: [], annules: [], rdvClosesHorsListe: [], doublonsRdv: [] };
+      var coh = { closesSansRdv: [], ecartsCanal: [], sansSignal: [], annules: [], rdvClosesHorsListe: [], doublonsRdv: [],
+        closesRdvHorsPeriode: [] };
+      /* RDV closés de la période (ceux du compteur « RDV closés »). */
+      var rdvClosPeriode = {};
+      TL.rdvCloses.forEach(function (b) { var id = b._id || b.id; if (id) rdvClosPeriode[id] = 1; });
+      var sIsoCoh = isoDate(P.start), eIsoCoh = isoDate(P.end);
 
       closeRowsOk.forEach(function (r) {
         if (r.bookingId) return;
@@ -3316,6 +3386,17 @@
           ? 'Vente repérée par le module Paiements' + (r.noLead ? ' (aucune fiche trouvée)' : '') + ' : aucun RDV au résultat « Close ». Comptée dans Closes, datée du premier paiement.'
           : 'Vente validée sur la fiche (' + ({ etape: 'étape « gagné »', paiement: 'paiement rattaché', signature: 'contrat signé' }[r.signal] || 'fiche') + ') : aucun RDV au résultat « Close » n’est rattaché à cette fiche. Comptée dans Closes.';
         coh.closesSansRdv.push(entree(r, why));
+      });
+      /* Closes dont le RDV porteur n'est pas compté dans les RDV closés de la
+         période (revue D07) : sans eux, « Closes ↔ RDV closés » ne se refait
+         pas à la main. */
+      closeRowsOk.forEach(function (r) {
+        if (!r.bookingId || rdvClosPeriode[r.bookingId]) return;
+        var horsDates = !r.rdvDate || r.rdvDate < sIsoCoh || r.rdvDate > eIsoCoh;
+        var why = horsDates
+          ? 'Client gagné le ' + frJour(r.day) + ', RDV closé le ' + (r.rdvDate ? frJour(r.rdvDate) : '(date inconnue)') + ' (hors période) : compté dans Closes, pas dans RDV closés.'
+          : 'Client gagné le ' + frJour(r.day) + ', RDV closé le ' + frJour(r.rdvDate) + ' non retenu dans RDV closés (hors du filtre affiché, ou RDV remplacé / en double) : compté dans Closes, pas dans RDV closés.';
+        coh.closesRdvHorsPeriode.push(entree(r, why));
       });
       CL.ecartsCanal.forEach(function (r) {
         coh.ecartsCanal.push(entree(r, 'RDV ' + canalMot(r.sb) + ', mais le closer a répondu « ' + canalMot(!r.sb) + ' » au close. Le close est compté ' + canalMot(r.sb) + ' (canal du RDV) ; la commission suit la réponse du closer.'));
@@ -3921,6 +4002,62 @@
       return buildTypeMap((snap.exists && snap.data().list) || []);
     }).catch(function (e) { console.warn('[funnel-core] types', e.message); return {}; });
   }
+  /* FICHES D'AGENDA (booking_config, __type === 'person') → DATA.persons
+     { personId: { firebaseUid, name } }. Sert à trouver l'HÔTE d'un RDV
+     (closer d'un RDV et d'un close) quand le RDV ne porte pas de closer
+     validé : expertSlug n'est presque jamais posé, l'hôte n'est connu que par
+     personId. Lecture en échec : DATA.personsError, dit à l'écran (sinon les
+     RDV de cet hôte tomberaient en « Non attribué » sans explication). */
+  function loadPersons(db, DATA) {
+    DATA.persons = {};
+    DATA.personsError = null;
+    return db.collection('booking_config').get().then(function (snap) {
+      snap.forEach(function (doc) {
+        var d = doc.data() || {};
+        if (d.__type === 'person') DATA.persons[doc.id] = { firebaseUid: d.firebaseUid || null, name: d.name || doc.id };
+      });
+    }).catch(function (e) { DATA.personsError = (e && e.message) || 'lecture impossible'; });
+  }
+  /* RÉSOLVEUR D'HÔTE (revue D13) — la règle de Close SB / Global closing
+     (sales-closing.html), d'AlteoreFlow.loadPersonsMap et de Qualité leads
+     (lqs-core.js, resoudreLocal) : personId d'une fiche d'agenda → membre du
+     roster dont le slug est ce personId, sinon dont le firebaseUid est celui
+     de la fiche d'agenda. null = inconnu (« Non attribué »). Aucun repli
+     « même prénom ».
+     persons = { personId: { firebaseUid } } ; team = roster (tableau, ou
+     objet { slug: membre }), anciens membres compris : un ancien membre est
+     résolu (son activité reste dans les totaux), c'est l'écran qui le
+     range en « Anciens membres ».
+     → function (personId) → slug | null, à passer à StatsCore.closerDuRdv. */
+  function resoudreAvec(persons, team) {
+    var bySlug = {}, byUid = {};
+    var list = Array.isArray(team) ? team : Object.keys(team || {}).map(function (k) {
+      var m = team[k]; if (m && typeof m === 'object' && !m.slug) { var c = {}; Object.keys(m).forEach(function (f) { c[f] = m[f]; }); c.slug = k; return c; } return m;
+    });
+    list.forEach(function (m) {
+      if (!m || !m.slug) return;
+      bySlug[m.slug] = m;
+      if (m.firebaseUid && !byUid[m.firebaseUid]) byUid[m.firebaseUid] = m;
+    });
+    var P = persons || {};
+    return function (personId) {
+      if (!personId) return null;
+      if (bySlug[personId]) return personId;
+      var p = P[personId];
+      var m = p && p.firebaseUid ? byUid[p.firebaseUid] : null;
+      return m ? m.slug : null;
+    };
+  }
+  /* Le résolveur PAR DÉFAUT d'un chargement loadAll : fiches d'agenda lues
+     (DATA.persons) + roster complet (DATA.teamFull) réuni à `team` (liste
+     de la page, facultative). C'est celui qu'utilise computeKpis quand la
+     page n'en passe pas ; sales-funnel.html l'utilise pour ses listes
+     (closer d'un RDV : SC.closerDuRdv(b, FC.resoudrePersonneDe(DATA))). */
+  function resoudrePersonneDe(DATA, team) {
+    DATA = DATA || {};
+    return resoudreAvec(DATA.persons || {}, mergeTeam(team || [], DATA.teamFull || []));
+  }
+
   /* Équipe — même source de vérité que nav.js (_meta/team_members), qui
      accepte `members` en objet OU en tableau (Firestore array-ifie parfois). */
   function loadTeamMembers(db) {
@@ -3964,6 +4101,8 @@
       /* Lectures tronquées ou en échec : remontées dans K (k.erreursLecture). */
       closedLeadsTruncated: false, closedLeadsError: null, paymentsError: null,
       bookingsError: null, closeBookingsError: null,
+      /* Fiches d'agenda (hôte d'un RDV → membre), lues par loadPersons. */
+      persons: {}, personsError: null,
       leadsError: null, leadsTest: 0, reoptinsTruncated: false, reoptinsError: null, reoptinsEcartes: 0,
       callsError: null, adsError: null, adsByAdError: null, viewsError: null, creativesError: null,
       costsError: null, settingDealsError: null, actionsError: null, teamError: null,
@@ -3999,7 +4138,8 @@
         loadBookings(db, P, DATA, TYPE_MAP), loadCalls(db, P, DATA),
         loadFunnelCosts(db, DATA), loadSettingDeals(db, P, DATA, TEAM),
         loadJournalPeriod(db, P, DATA), loadActionsAll(db, P, DATA, TEAM),
-        loadClosedLeads(db, P, DATA), loadPayments(db, DATA), loadTunnelsMeta(db, DATA)
+        loadClosedLeads(db, P, DATA), loadPayments(db, DATA), loadTunnelsMeta(db, DATA),
+        loadPersons(db, DATA)
       ]);
     })
     .then(function () { return resolveChains(db, DATA, TYPE_MAP); })
@@ -4080,6 +4220,9 @@
     isCountedLead: isCountedLead, isClientLead: isClientLead, trueOptinTimes: trueOptinTimes,
     leadsWorked: leadsWorked, leadsNbRecus: leadsNbRecus,
     callStats: callStats, callerIndex: callerIndex, callerOf: callerOf, leadContact: leadContact,
+    /* Revue contradictoire (25/11/2026) */
+    perimetreAppel: perimetreAppel, appelEquipeSales: appelEquipeSales, SALES_CALL_ROLES: SALES_CALL_ROLES,
+    jourAction: jourAction, resoudreAvec: resoudreAvec, resoudrePersonneDe: resoudrePersonneDe, loadPersons: loadPersons,
     adsTunnelOf: adsTunnelOf
   };
 }));

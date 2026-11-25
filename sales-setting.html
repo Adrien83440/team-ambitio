@@ -145,6 +145,7 @@
      (StatsCore.infoLibre) — signalées pour ajout centralisé. */
   var TXT = {
     temps: ['Temps d’appel', 'Temps passé en conversation sur les appels sortants décrochés (au moins 5 secondes, répondeurs écartés). Les appels reçus ne sont pas comptés.'],
+    arrondiTemps: ['Durées arrondies', 'Chaque case de la colonne Temps arrondit ses secondes à la minute. La ligne TOTAL (et l’onglet Équipe) arrondit la somme des secondes : elle peut différer d’une ou deux minutes de la somme des cases affichées.'],
     nrp1: ['NRP 1', 'Fiches passées au statut NRP 1 (premier appel sans réponse) ce jour-là, d’après le journal d’actions de Leads Live.'],
     nrp2: ['NRP 2', 'Fiches passées au statut NRP 2 (deuxième appel sans réponse) ce jour-là, d’après le journal d’actions de Leads Live.'],
     nrp3: ['NRP 3', 'Fiches passées au statut NRP 3 (troisième appel sans réponse) ce jour-là, d’après le journal d’actions de Leads Live.'],
@@ -273,6 +274,7 @@
     mode: 'month',          // 'day' | '3d' | '7d' | 'month' — tous les KPIs suivent la période
     anchor: null,           // jour de référence (date de calendrier)
     range: null,            // {days[]} — recalculé à chaque refresh
+    callsCache: null,       // { key, p } — appels de la période, lus une fois (vidé par « Actualiser »)
     members: [],            // setters affichés
     slug: null,             // membre sélectionné ('_all' = Équipe)
     role: localStorage.getItem('ambitio_role') || 'sales',
@@ -509,19 +511,23 @@
        de début sont masqués au rendu, « — »).
      · Équipe : l'onglet du setter ; sinon la ligne « Non attribué » —
        setter inconnu, ancien membre (sans nom), personne sans onglet, ou
-       élément daté d'avant l'arrivée du setter. Rien ne sort du total. */
+       élément daté d'avant l'arrivée du setter. Rien ne sort du total.
+       La règle est celle de tous les écrans : StatsCore.rangPersonne. */
+  var RANG_CAT = { inconnu: 'inconnu', ancien: 'anciens', hors_onglets: 'hors', avant_arrivee: 'avant' };
   function router(team, B, naBk, memberSlug) {
+    var opts = {
+      parti: function (s) { return !B[s] && AF.isDeparted(s); },
+      aOnglet: function (s) { return !!B[s]; },
+      prenom: function (s) { return B[s] ? B[s].name : memberName(s); },
+      debut: function (s) { return B[s] ? B[s].start : null; }
+    };
     return function (slug, dk, sansAuteur) {
       if (!team) return (slug && slug === memberSlug && B[slug]) ? { bk: B[slug], lbl: B[slug].name } : null;
       if (sansAuteur) return { bk: naBk, lbl: SC.mot('appels_sans_auteur'), cat: 'sansAuteur' };
-      if (!slug) return { bk: naBk, lbl: 'Setter inconnu', cat: 'inconnu' };
-      var bk = B[slug];
-      if (bk) {
-        if (bk.start && dk && dk < bk.start) return { bk: naBk, lbl: bk.name + ' (avant son arrivée)', cat: 'avant' };
-        return { bk: bk, lbl: bk.name };
-      }
-      if (AF.isDeparted(slug)) return { bk: naBk, lbl: SC.mot('anciens_membres'), cat: 'anciens' };
-      return { bk: naBk, lbl: memberName(slug) + ' (hors onglets)', cat: 'hors' };
+      var r = SC.rangPersonne(slug || null, dk || null, opts);
+      if (r.key !== SC.NON_ATTRIBUE) return { bk: B[r.key], lbl: B[r.key].name };
+      var lbl = r.cas === 'inconnu' ? 'Setter inconnu' : (r.cas === 'ancien' ? SC.mot('anciens_membres') : r.precision);
+      return { bk: naBk, lbl: lbl, cat: RANG_CAT[r.cas] || 'inconnu' };
     };
   }
 
@@ -581,6 +587,42 @@
      avant le 25/11/2026 portent le jour de l'appareil) ; repli : day. */
   function actionDay(a) { var ms = msOf(a.createdAt); return ms != null ? SC.jourParis(ms) : (a.day || ''); }
 
+  /* Appels de la période : lus UNE fois par période (admin : tous les appels
+     de l'équipe, filtrés par membre à l'affichage ; sales : les siens), gardés
+     en mémoire de la page — un clic d'onglet ne relit rien. « Actualiser » et
+     un changement de période relisent. Une lecture en échec n'est pas gardée. */
+  function callsDeLaPeriode(fromDay, toDay, from, to, uid) {
+    var key = (uid ? 'u:' + uid : 'tous') + '|' + fromDay + '|' + toDay;
+    if (S.callsCache && S.callsCache.key === key) return S.callsCache.p;
+    var entree = { key: key, p: null };
+    entree.p = AF.loadCallsForMember(uid, from, to, !uid).then(function (r) {
+      if ((!r || r._erreur) && S.callsCache === entree) S.callsCache = null;
+      return r;
+    }, function (e) {
+      if (S.callsCache === entree) S.callsCache = null;
+      throw e;
+    });
+    S.callsCache = entree;
+    return entree.p;
+  }
+  function marquerAppels(arr, nom, v) {
+    try { Object.defineProperty(arr, nom, { value: v, enumerable: false, configurable: true, writable: true }); } catch (e) { arr[nom] = v; }
+    return arr;
+  }
+  /* Appels d'un membre parmi ceux de l'équipe (même résultat que la lecture
+     admin d'un onglet : ses appels, et le nombre de sortants sans auteur). */
+  function appelsDe(all, uid) {
+    if (!all || all._erreur) return all;
+    var out = [], sansAuteur = 0;
+    all.forEach(function (c) {
+      if (c.userId === uid) out.push(c);
+      else if (!c.userId && c.direction === 'outbound') sansAuteur++;
+    });
+    if (all._tronque) marquerAppels(out, '_tronque', true);
+    if (sansAuteur) marquerAppels(out, '_sansAuteur', sansAuteur);
+    return out;
+  }
+
   function refresh() {
     if (S.loading) { S.again = true; return; }
     S.loading = true; S.again = false;
@@ -612,9 +654,9 @@
     var canSeeCalls = !ecrit && (admin || ownTab);
     var callsP;
     if (!canSeeCalls) callsP = Promise.resolve(null);
-    else if (team) callsP = AF.loadCallsForMember(null, from, to, true);
-    else if (!member.firebaseUid) callsP = Promise.resolve({ noUid: true });
-    else callsP = AF.loadCallsForMember(member.firebaseUid, from, to, admin);
+    else if (!team && !member.firebaseUid) callsP = Promise.resolve({ noUid: true });
+    else if (admin) callsP = callsDeLaPeriode(fromDay, toDay, from, to, null).then(function (all) { return team ? all : appelsDe(all, member.firebaseUid); });
+    else callsP = callsDeLaPeriode(fromDay, toDay, from, to, member.firebaseUid);
 
     /* Journal d'actions lu à J−1 / J+1 puis rangé au jour de PARIS de chaque
        action (les anciennes portent le jour de l'appareil). */
@@ -709,7 +751,7 @@
     S.overrides = team ? {} : buckets[0].ov;
 
     /* — Ringover : appels sortants / décrochés / temps (mode téléphone) — */
-    var callsOk = false, callsMsg = '', sansAuteur = 0;
+    var callsOk = false, callsMsg = '', sansAuteur = 0, horsOut = 0, horsAns = 0;
     if (!o.canSeeCalls) {
       callsMsg = ecrit ? '' : 'non_lisibles';
     } else if (!calls || calls.noUid) {
@@ -722,18 +764,39 @@
       callsOk = true;
       if (calls._tronque) errs.push('appels : plus de 30 000 appels sur la période, lecture arrêtée — chiffres de téléphone partiels');
       sansAuteur = calls._sansAuteur || 0;
-      var uidSlug = {};
-      var map = window.TEAM_MEMBERS || {};
-      Object.keys(map).forEach(function (k) { var m = map[k]; if (m && m.firebaseUid) uidSlug[m.firebaseUid] = m.slug || k; });
-      calls.forEach(function (c) {
+      /* Équipe : périmètre « équipe sales » du Stats funnel
+         (FunnelCore.perimetreAppel, auteur = FunnelCore.callerOf : userId puis
+         prénom Ringover). Les sortants de la CSM et des coachs ('hors') ne
+         comptent ni dans Appels ni dans Décrochés : affichés à part. */
+      var CIDX = null;
+      if (team) {
+        if (FC && typeof FC.perimetreAppel === 'function' && typeof FC.callerIndex === 'function') {
+          var map = window.TEAM_MEMBERS || {};
+          CIDX = FC.callerIndex(Object.keys(map).map(function (k) {
+            var m = map[k] || {};
+            if (m.slug) return m;
+            var cp = {};
+            Object.keys(m).forEach(function (f) { cp[f] = m[f]; });
+            cp.slug = k;
+            return cp;
+          }));
+        } else {
+          callsOk = false;
+          callsMsg = 'funnel-core.js absent : périmètre des appels de l’équipe indisponible';
+          errs.push(callsMsg);
+        }
+      }
+      if (!team || CIDX) calls.forEach(function (c) {
         if (c.direction !== 'outbound') return;
         var ms = msOf(c.initiatedAt);
         if (ms == null) return;
         var dk = SC.jourParis(ms);
         var rt;
         if (team) {
-          if (!c.userId) { sansAuteur++; rt = route(null, dk, true); }
-          else rt = route(uidSlug[c.userId] || null, dk);
+          var perim = FC.perimetreAppel(c, CIDX);
+          if (perim === 'hors') { horsOut++; if (AF.isAnswered(c)) horsAns++; return; }
+          if (perim === 'sans_auteur') { sansAuteur++; rt = route(null, dk, true); }
+          else { var who = FC.callerOf(c, CIDX); rt = route((who && who.slug) || null, dk); }
         } else rt = route(member.slug, dk);
         add(rt, dk, 'calls');
         if (AF.isAnswered(c)) { add(rt, dk, 'decroches'); add(rt, dk, 'tempsAppelSec', null, Number(c.durationSec) || 0); }
@@ -893,16 +956,19 @@
     }
 
     /* — Leads NB reçus : entrés sur la période, sans RDV Self Booking,
-       rangés chez le setter de la fiche (Équipe : « Non attribué » sinon). — */
-    var sbLead = {};
-    bookings.forEach(function (b) { if (b.leadId && SC.classifyBooking(b, S.typeMap) === 'self') sbLead[b.leadId] = 1; });
+       rangés chez le setter de la fiche (Équipe : « Non attribué » sinon).
+       LA règle du Stats funnel : FunnelCore.leadsNbRecus (RDV Self Booking
+       rattaché par fiche, téléphone ou e-mail). — */
     if (entered && entered.tronque) errs.push('leads entrés : plafond de lecture atteint — Leads NB reçus incomplets (réduis la période)');
-    ((entered && entered.leads) || []).forEach(function (l) {
-      if (sbLead[l._id] || l._entry == null) return;
+    var NBR = (entered && FC && typeof FC.leadsNbRecus === 'function') ? FC.leadsNbRecus(entered.leads || [], bookings, S.typeMap) : [];
+    if (entered && !(FC && typeof FC.leadsNbRecus === 'function')) errs.push('funnel-core.js absent : Leads NB reçus non calculés');
+    NBR.forEach(function (x) {
+      var l = x.lead;
+      if (x.self || !l || l._entry == null) return;
       var eDay = SC.jourParis(l._entry);
-      var rtL = route(l.setterSlug || l.assignedTo || null, eDay);
+      var rtL = route(x.setter || null, eDay);
       if (!rtL || !rtL.bk.days[eDay]) return;
-      var worked = !!l.firstActionAt;
+      var worked = !!x.travaille;
       var itL = { name: l.nom || l.email || l._id, leadId: l._id, date: eDay,
         status: worked ? 'Travaillé' : 'Pas encore travaillé', statusColor: worked ? '#34d399' : '#fbbf24', setter: rtL.lbl };
       add(rtL, eDay, 'recus', itL);
@@ -940,7 +1006,7 @@
     S.data = {
       buckets: buckets,
       days: buckets[0].days,   // valeurs de la base du membre affiché (modale ✎)
-      callsOk: callsOk, callsMsg: callsMsg, sansAuteur: sansAuteur,
+      callsOk: callsOk, callsMsg: callsMsg, sansAuteur: sansAuteur, horsOut: horsOut, horsAns: horsAns,
       enteredOk: entered != null,
       rdvKo: !!bookings._erreur,   // RDV illisibles : sets, RDV NB et reçus en « — »
       closesKo: !!CL.erreur && !(CL.rows || []).length && !(CL.annules || []).length,
@@ -1194,6 +1260,7 @@
       ]);
     } else {
       var saTxt = D.sansAuteur > 0 ? '<br/>' + D.sansAuteur + ' ' + plural(D.sansAuteur, 'appel') + ' sans auteur' + SC.info('appels_sans_auteur') + (team ? ' (ligne Non attribué)' : ' (dans aucun onglet)') : '';
+      if (team && D.horsOut > 0) saTxt += '<br/>' + SC.mot('hors_equipe_sales') + ' : ' + fmtN(D.horsOut) + ' ' + plural(D.horsOut, 'appel') + ' (' + fmtN(D.horsAns) + ' ' + plural(D.horsAns, 'décroché') + '), non comptés' + SC.info('hors_equipe_sales');
       kpis =
         kpi(telOk ? AF.fmtDuration(tot.tempsAppelSec) : '—', esc(TXT.temps[0]) + SC.infoLibre(TXT.temps[0], TXT.temps[1]), telOk ? 'appels sortants décrochés' : 'non affiché' + telWhy, '#2dd4bf') +
         kpi(telOk ? fmtN(tot.calls) : '—', lbl('appels'),
@@ -1238,6 +1305,7 @@
     }
     notes.push('RDV NB = Annulés + No-show + À statuer + À venir + Présents · Replan. hors RDV NB' + SC.info('rdv_nb') +
       ' · Montants HT arrondis à l’euro' + SC.info('ht') + ' · jours à l’heure de Paris' + SC.infoLibre(TXT.paris[0], TXT.paris[1]));
+    if (!ecrit && telOk) notes.push('Temps : durées arrondies à la minute sur chaque ligne ; la ligne TOTAL et l’Équipe arrondissent la somme des secondes (écart possible d’une ou deux minutes avec la somme des cases)' + SC.infoLibre(TXT.arrondiTemps[0], TXT.arrondiTemps[1]));
     if (nOv > 0) notes.push('<span style="color:var(--gold)">●</span> ' + nOv + ' ' + plural(nOv, 'case corrigée', 'cases corrigées') + ' à la main (téléphone, messages, actions de fiche)' + SC.info('correction'));
     if (nOld > 0) notes.push('✎ ' + nOld + ' ' + plural(nOld, 'ancienne correction', 'anciennes corrections') + ' de colonnes calculées (RDV, sets, reçus, closes, montants) ne ' + (nOld > 1 ? 'sont' : 'est') + ' plus ' + plural(nOld, 'appliquée') + ' : le tableau montre le chiffre de la base' + SC.info('correction_ancienne'));
     var notesH = '<div style="padding:0 18px 14px">' + notes.map(function (t) { return '<div style="font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.55">' + t + '</div>'; }).join('') + '</div>';
@@ -1427,7 +1495,7 @@
     else if (key === 'statutsSet') sub = 'Fiches passées au statut Set (ou RDV posé) dans Leads Live sans qu’aucun RDV du setting n’ait été créé sur la période pour elles : ce ne sont pas des sets.';
     else if (key === 'leads') sub = team && kind !== 'm' ? 'Équipe : chaque fiche compte une fois, au jour de sa première action de la période (tous setters confondus).' : 'Première action de ce setter sur la fiche, jamais recomptée ensuite — quelle que soit la date d’entrée du lead.';
     else if (key === 'repris') sub = 'Fiches déjà travaillées par un autre setter plus tôt dans la période : comptées dans les deux onglets, une seule fois dans l’Équipe.';
-    else if (key === 'recus' || key === 'nonTrav') sub = 'Leads entrés sur la période, sans RDV Self Booking, rangés chez le setter de la fiche. « Pas encore travaillé » = aucune action enregistrée sur la fiche, par personne. Les ré-optins ne sont pas comptés.';
+    else if (key === 'recus' || key === 'nonTrav') sub = 'Leads entrés sur la période, sans RDV Self Booking (rattaché à la fiche, au téléphone ou à l’e-mail — même règle que le Stats funnel), rangés chez le setter de la fiche. « Pas encore travaillé » = aucune action enregistrée sur la fiche, par personne. Les ré-optins ne sont pas comptés.';
     else if (key === 'manuels') sub = 'RDV de vente créés à la main dans l’Agenda : ni Self Booking ni Setting. Ils ne sont pas dans Set NB.';
     else if (key === 'actions' || (c && c.grp === 'act')) sub = 'Actions enregistrées sur les fiches Leads Live, au jour du clic (heure de Paris).';
     else sub = 'RDV du setting (NB) comptés à la date du RDV, chez leur setter ; la colonne Closer dit qui a reçu le RDV, la colonne Précision quand il a été posé. Clique sur un nom pour ouvrir la fiche.';
@@ -1574,7 +1642,7 @@
   document.querySelectorAll('#periodSeg button').forEach(function (b) {
     b.addEventListener('click', function () { if (S.mode !== b.dataset.mode) { S.mode = b.dataset.mode; refresh(); } });
   });
-  $('#btnRefresh').addEventListener('click', refresh);
+  $('#btnRefresh').addEventListener('click', function () { S.callsCache = null; refresh(); });
   $('#btnLegacy').addEventListener('click', function () { S.legacyOpen = !S.legacyOpen; render(); });
   var tz = $('#tzInfo'); if (tz) tz.innerHTML = SC.infoLibre(TXT.paris[0], TXT.paris[1]);
 

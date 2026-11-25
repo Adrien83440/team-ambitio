@@ -99,6 +99,11 @@ const CALL_STATUS_FR = {
 // même numéro). On fusionne deux appels de la même personne vers le même
 // numéro à moins de 90 s d'écart quand l'un des deux n'est jamais terminé ;
 // on garde le plus renseigné, en lui reportant leadId / nom si besoin.
+// AFFICHAGE SEULEMENT (audit 25/11/2026, constat D06) : cette fusion sert aux
+// listes (appels en cours, frise du Journal, histoire d'un prospect). Les
+// COMPTEURS (Appels, Décrochés, temps, reçus) lisent tous les call_logs, sans
+// fusion, comme Set NB et le Stats funnel : le même mot = le même nombre. Le
+// nombre de lancements fusionnés dans une liste est dit (`fusionsAppels`).
 function callScore(c) {
   return (c.endedAt ? 4 : 0) + (c.answeredAt ? 2 : 0) + (Number(c.durationSec) ? 1 : 0) +
     (c.status === 'completed' ? 1 : 0) + (c.aiSummary ? 1 : 0);
@@ -112,6 +117,7 @@ function dedupeSnap(snap, R) {
   items.sort(function (a, b) { return toMs(a.c.initiatedAt) - toMs(b.c.initiatedAt); });
   const keep = [];
   const last = {};
+  let fusions = 0;
   items.forEach(function (x) {
     const c = x.c;
     const m = callMember(c, R);
@@ -125,12 +131,30 @@ function dedupeSnap(snap, R) {
       ['leadId', 'leadNameSnapshot', 'leadName', 'userId', 'campaignId'].forEach(function (k) { if (!win.c[k] && lose.c[k]) win.c[k] = lose.c[k]; });
       keep[prev.i] = win;
       prev.x = win;
+      fusions += 1;
       return;
     }
     last[key] = { t: t, i: keep.length, x: x };
     keep.push(x);
   });
-  return keep.map(function (x) { return { id: x.id, data: function () { return x.c; } }; });
+  const out = keep.map(function (x) { return { id: x.id, data: function () { return x.c; } }; });
+  out.fusions = fusions;
+  return out;
+}
+// Tous les call_logs d'une lecture, SANS fusion : la base des compteurs.
+function rawCalls(snap) {
+  const out = [];
+  if (snap) snap.forEach(function (d) { out.push({ id: d.id, data: function () { return d.data() || {}; } }); });
+  return out;
+}
+// Phrase de la réponse pour les appels sans sens (affichée par la page).
+function phraseSansSens(n) {
+  return n + ' appel' + (n > 1 ? 's' : '') + ' sans sens (entrant / sortant) enregistré' + (n > 1 ? 's' : '') +
+    ' : compté' + (n > 1 ? 's' : '') + ' ni dans les Appels ni dans les reçus, comme sur Set NB et le Stats funnel';
+}
+function phraseFusions(n) {
+  return n + ' lancement' + (n > 1 ? 's' : '') + ' d\'appel resté' + (n > 1 ? 's' : '') + ' « sans suite » fusionné' + (n > 1 ? 's' : '') +
+    ' dans la liste avec l\'appel réel au même numéro (moins de 90 s d\'écart) ; les compteurs les gardent, comme Set NB et le Stats funnel';
 }
 
 // Durée de conversation d'un appel : celle que lit la règle du décroché
@@ -144,7 +168,12 @@ function talkSecOf(c) {
 function isAnsweredCall(c) {
   return SC.estDecroche(c);
 }
+// Sens d'un appel — la règle du Stats funnel (FunnelCore.callStats) et de
+// Set NB : « Appels » = direction === 'outbound' ; « reçus » = 'inbound'.
+// Un appel SANS sens enregistré n'est ni l'un ni l'autre : compté à part
+// (callsSansSens), signalé dans la réponse, jamais rangé dans les Appels.
 function isInbound(c) { return c.direction === 'inbound'; }
+function isOutbound(c) { return c.direction === 'outbound'; }
 // Appels « hors équipe sales » (CSM, coachs…) : rôles hors de ceux du
 // téléphone commercial — même liste que le Stats funnel (funnel-core.js,
 // SALES_CALL_ROLES). Ils ne comptent ni dans Appels, ni dans Décrochés, ni
@@ -256,6 +285,14 @@ function parisDayOfMs(ms) {
 }
 // Début d'un jour 'AAAA-MM-JJ' à Paris, en ms (bornes de période).
 function dayStartMs(iso) { return SC.debutJourParis(iso).getTime(); }
+// Jour d'une action de fiche (lead_actions) : jour de PARIS de son createdAt,
+// repli sur le champ `day` stocké (jour de l'appareil qui l'a écrite) — la
+// règle de Set NB (actionDay). Les actions sont donc lues sur la période
+// élargie d'un jour de chaque côté, puis rangées par ce jour (constat D08).
+function jourAction(a) {
+  const ms = toMs(a && a.createdAt);
+  return ms ? SC.jourParis(ms) : String((a && a.day) || '');
+}
 function addDays(iso, n) {
   const d = new Date(iso + 'T12:00:00Z');
   d.setUTCDate(d.getUTCDate() + n);
@@ -308,7 +345,12 @@ async function loadRoster() {
       role: role,
       color: m.color || null,
       initials: m.initials || null,
-      departed: m.departed === true || m.active === false,
+      // Membre parti : LA règle commune (StatsCore.estParti : drapeau de la
+      // fiche, fiche archivée avec une date de fin, liste historique).
+      departed: SC.estParti(m, m.slug),
+      // Date d'arrivée (startDate 'AAAA-MM-JJ') : une activité datée d'avant
+      // va sur « Non attribué » (StatsCore.rangPersonne).
+      startDate: /^\d{4}-\d{2}-\d{2}$/.test(String(m.startDate || '')) ? String(m.startDate) : null,
       hidden: !!HIDDEN_ROLES[role],
       sales: !!SALES_ROLES[role],
     };
@@ -319,6 +361,20 @@ async function loadRoster() {
     if (first && !member.departed) R.byFirst[first] = R.byFirst[first] || member;
   });
   return R;
+}
+
+// Où ranger un membre dans la vue par personne (Activité) : LA règle commune
+// StatsCore.rangPersonne — inconnu, ancien membre (« Anciens membres », sans
+// nom), coach / CSM (« Prénom (hors onglets) »), activité datée d'avant son
+// arrivée (« Prénom (avant son arrivée) ») → « Non attribué » ; sinon sa ligne.
+function rangDe(m, day) {
+  if (!m) return SC.rangPersonne(null, day, {});
+  return SC.rangPersonne(m.slug, day || null, {
+    parti: function () { return !!m.departed; },
+    aOnglet: function () { return !m.hidden; },
+    prenom: function () { return m.name; },
+    debut: function () { return m.startDate || null; },
+  });
 }
 
 function publicMember(m) {
@@ -573,7 +629,31 @@ async function handleLive(req, res) {
   // Appels — le total d'équipe compte TOUS les appels du jour (appels sans
   // auteur et membres sans carte compris) : c'est le même total que l'onglet
   // Activité réglé sur aujourd'hui (ligne « Non attribué » comprise).
-  const team = { calls: 0, answered: 0, talkSec: 0, callsIn: 0, sansCarte: 0, horsEquipe: 0 };
+  // Compteurs : TOUS les call_logs du jour, sans fusion (règle du funnel) ;
+  // sens : 'outbound' = Appels, 'inbound' = reçus, sans sens = à part.
+  const team = { calls: 0, answered: 0, talkSec: 0, callsIn: 0, sansCarte: 0, horsEquipe: 0, sansSens: 0 };
+  rawCalls(callSnap).forEach(function (d) {
+    const c = d.data() || {};
+    const ini = toMs(c.initiatedAt);
+    if (ini < dayStart) return;
+    const m = callMember(c, R);
+    const r = row(m);
+    if (estHorsEquipe(m)) { if (isOutbound(c)) team.horsEquipe += 1; return; }
+    if (r && (!r.today.lastCallAt || ini > Date.parse(r.today.lastCallAt))) r.today.lastCallAt = isoOf(ini);
+    if (isInbound(c)) {
+      team.callsIn += 1;
+      if (r) r.today.callsIn += 1;
+      return;
+    }
+    if (!isOutbound(c)) { team.sansSens += 1; return; }
+    const ok = isAnsweredCall(c);
+    team.calls += 1;
+    if (ok) { team.answered += 1; team.talkSec += talkSecOf(c); }
+    if (!r) { team.sansCarte += 1; return; }
+    r.today.calls += 1;
+    if (ok) { r.today.answered += 1; r.today.talkSec += talkSecOf(c); }
+  });
+  // Appels EN COURS (liste) : fusion des lancements restés « sans suite ».
   const liveCalls = [];
   const phonesToResolve = [];
   dedupeSnap(callSnap, R).forEach(function (d) {
@@ -582,22 +662,6 @@ async function handleLive(req, res) {
     const ini = toMs(c.initiatedAt);
     const ans = toMs(c.answeredAt);
     const r = row(m);
-    if (ini >= dayStart && estHorsEquipe(m)) { if (!isInbound(c)) team.horsEquipe += 1; }
-    else if (ini >= dayStart) {
-      const inb = isInbound(c);
-      const ok = !inb && isAnsweredCall(c);
-      if (inb) team.callsIn += 1;
-      else { team.calls += 1; if (ok) { team.answered += 1; team.talkSec += talkSecOf(c); } }
-      if (!r && !inb) team.sansCarte += 1;
-      if (r) {
-        if (inb) r.today.callsIn += 1;
-        else {
-          r.today.calls += 1;
-          if (ok) { r.today.answered += 1; r.today.talkSec += talkSecOf(c); }
-        }
-        if (!r.today.lastCallAt || ini > Date.parse(r.today.lastCallAt)) r.today.lastCallAt = isoOf(ini);
-      }
-    }
     let state = null;
     if (!c.endedAt) {
       if (c.status === 'in-progress' && now - (ans || ini) < TALKING_MAX_MS) state = 'talking';
@@ -798,12 +862,15 @@ async function handleLive(req, res) {
   const plafonds = [];
   if (callSnap && callSnap.size >= LIVE_CALLS_LIMIT) plafonds.push('appels du jour (' + LIVE_CALLS_LIMIT + ' lus)');
   if (ltsRes && ltsRes.truncated) plafonds.push('lead to speech (fiches ou appels)');
+  // Appels sans sens : comptés nulle part, mais dits (jamais un zéro muet).
+  const warnings = [];
+  if (team.sansSens) warnings.push(phraseSansSens(team.sansSens));
 
   res.status(200).json({
     ok: true, now: isoOf(now), today: today,
     members: Object.keys(rows).map(function (k) { return rows[k]; }),
     // Totaux d'équipe du jour : appels (tous auteurs) et RDV (StatsCore).
-    team: team, rdv: rdvTeam, plafonds: plafonds,
+    team: team, rdv: rdvTeam, plafonds: plafonds, warnings: warnings,
     calls: liveCalls, bookings: outB, lts: ltsTeam,
     meet: { connected: !!(meetConn && meetConn.connected), email: meetConn ? meetConn.email : '', error: meetStatus },
   });
@@ -899,11 +966,13 @@ async function leadSpeechToday(R, dayStart, now) {
 // (StatsCore.estDecroche) ; convos = sortants décrochés d'1 min et plus ;
 // talkSec = temps d'appel (conversation des sortants décrochés) ; callsIn /
 // answeredIn / talkInSec = appels reçus, décrochés, temps — toujours à part.
+// callsSansSens = appels sans sens enregistré (ni Appels ni reçus). Tous les
+// call_logs sont comptés, sans fusion (règle du funnel, constat D06).
 // RDV (closer, date du RDV) : RDV_KEYS (StatsCore). sets = Sets (setter de la
 // fiche, jour de création) ; posesClic = RDV créés par la personne (clic).
 // msgAuto = envois automatiques (relances, parcours RDV, rappels WhatsApp).
 const STAT_KEYS = [
-  'callsOut', 'answered', 'convos', 'talkSec', 'callsIn', 'answeredIn', 'talkInSec', 'callsHors',
+  'callsOut', 'answered', 'convos', 'talkSec', 'callsIn', 'answeredIn', 'talkInSec', 'callsHors', 'callsSansSens',
 ].concat(RDV_KEYS).concat([
   'sets', 'posesClic',
   'sms', 'email', 'whatsapp', 'dmOut', 'dmIn', 'msgAuto', 'actStatus', 'actBooking', 'actAssign', 'notes',
@@ -927,6 +996,8 @@ function callKeys(c) {
     if (isAnsweredCall(c)) { out.push(['answeredIn', 1]); if (talk) out.push(['talkInSec', talk]); }
     return out;
   }
+  // Sans sens enregistré : ni Appels ni reçus (règle du funnel), compté à part.
+  if (!isOutbound(c)) { out.push(['callsSansSens', 1]); return out; }
   out.push(['callsOut', 1]);
   if (isAnsweredCall(c)) {
     out.push(['answered', 1]);
@@ -1000,7 +1071,7 @@ async function handleActivity(req, res, body) {
     waQ.select('contexte', 'statut', 'at', 'to').get(),
     Promise.all(slugs.map(function (s) {
       return db.collection('lead_actions').doc(s).collection('items')
-        .where('day', '>=', from).where('day', '<=', to).get()
+        .where('day', '>=', addDays(from, -1)).where('day', '<=', addDays(to, 1)).get()
         .then(function (snap) { return { slug: s, snap: snap }; });
     })),
     dmQ.select('direction', 'date').get(),
@@ -1024,9 +1095,20 @@ async function handleActivity(req, res, body) {
   const totals = {};     // slug → stats
   const byDay = {};      // slug → day → stats
   const unassigned = emptyStats();
+  // Détail de « Non attribué » (StatsCore.rangPersonne) : une ligne par
+  // précision — « Anciens membres » sans nom, « Prénom (hors onglets) »,
+  // « Prénom (avant son arrivée) », '' = personne inconnue.
+  const unassignedDetail = {};
   function add(m, day, key, n) {
     n = n || 1;
-    if (!m || m.departed || m.hidden) { unassigned[key] += n; return; }
+    const rg = rangDe(m, day);
+    if (rg.key === SC.NON_ATTRIBUE) {
+      unassigned[key] += n;
+      const dk = rg.cas + '|' + rg.precision;
+      const det = unassignedDetail[dk] = unassignedDetail[dk] || { cas: rg.cas, precision: rg.precision, stats: emptyStats() };
+      det.stats[key] += n;
+      return;
+    }
     if (!totals[m.slug]) { totals[m.slug] = emptyStats(); byDay[m.slug] = {}; }
     totals[m.slug][key] += n;
     if (day) {
@@ -1036,14 +1118,18 @@ async function handleActivity(req, res, body) {
   }
   function inRange(ms) { return ms >= fromMs && ms < toMs_; }
 
-  const callDocs = dedupeSnap(callSnap, R);
+  // Tous les call_logs, sans fusion : le même nombre que Set NB et le funnel.
+  const callDocs = rawCalls(callSnap);
+  let sansSens = 0;
   callDocs.forEach(function (d) {
     const c = d.data() || {};
     const m = callMember(c, R);
     const day = parisDayOfMs(toMs(c.initiatedAt));
-    if (estHorsEquipe(m)) { if (!isInbound(c)) add(null, day, 'callsHors'); return; }
+    if (estHorsEquipe(m)) { if (isOutbound(c)) add(null, day, 'callsHors'); return; }
+    if (!isInbound(c) && !isOutbound(c)) sansSens += 1;
     callKeys(c).forEach(function (kv) { add(m, day, kv[0], kv[1]); });
   });
+  if (sansSens) warnings.push(phraseSansSens(sansSens));
 
   // RDV de la période, à leur DATE, chez leur closer : StatsCore (un état par
   // RDV), population StatsCore.estRdvVente — le même compte que l'onglet En
@@ -1132,13 +1218,21 @@ async function handleActivity(req, res, body) {
     if (Number(s.pages)) add(m, s.date, 'pages', Number(s.pages));
   });
 
+  // Actions de fiche : rangées au jour de Paris de leur createdAt (repli :
+  // champ day), seulement celles de la période — la règle de Set NB.
+  const actsIn = [];       // { slug, a } de la période
   if (actRes) actRes.forEach(function (x) {
-    const m = R.bySlug[x.slug];
     x.snap.forEach(function (d) {
       const a = d.data() || {};
-      const key = a.action === 'set_booking' ? 'actBooking' : (a.action === 'assign' ? 'actAssign' : 'actStatus');
-      add(m, a.day, key);
+      const jour = jourAction(a);
+      if (!jour || jour < from || jour > to) return;
+      actsIn.push({ slug: x.slug, a: a, jour: jour });
     });
+  });
+  actsIn.forEach(function (y) {
+    const a = y.a;
+    const key = a.action === 'set_booking' ? 'actBooking' : (a.action === 'assign' ? 'actAssign' : 'actStatus');
+    add(R.bySlug[y.slug] || null, y.jour, key);
   });
 
   // Rappels : contacts relevés dans les appels, WhatsApp et actions déjà lus
@@ -1148,9 +1242,9 @@ async function handleActivity(req, res, body) {
     const ci = contactIndex();
     callDocs.forEach(function (d) { ci.call(d.data() || {}, R); });
     if (waSnap) waSnap.forEach(function (d) { ci.wa(d.data() || {}, R); });
-    if (actRes) actRes.forEach(function (x) {
-      const am = R.bySlug[x.slug];
-      x.snap.forEach(function (d) { const a = d.data() || {}; if (a.leadId) ci.action(a.leadId, toMs(a.createdAt), am ? am.name : x.slug); });
+    actsIn.forEach(function (y) {
+      const am = R.bySlug[y.slug];
+      if (y.a.leadId) ci.action(y.a.leadId, toMs(y.a.createdAt), am ? am.name : y.slug);
     });
     computeRappels(rappelLeads, R, ci, fromMs, toMs_, now).forEach(function (x) {
       add(x.owner, x.day, 'rapDue');
@@ -1169,7 +1263,8 @@ async function handleActivity(req, res, body) {
     ltsRes.items.forEach(function (it) {
       const m = it.member;
       add(m, it.day, 'ltsN');
-      const key = (m && !m.departed && !m.hidden) ? m.slug : '_un';
+      // Même rangement que add() (StatsCore.rangPersonne).
+      const key = rangDe(m, it.day).key === SC.NON_ATTRIBUE ? '_un' : m.slug;
       const g = groups[key] = groups[key] || { all: [], days: {} };
       g.all.push(it.delayMs);
       (g.days[it.day] = g.days[it.day] || []).push(it.delayMs);
@@ -1219,6 +1314,10 @@ async function handleActivity(req, res, body) {
     plafonds: plafonds,
     warnings: warnings,
     members: members, unassigned: unassigned,
+    // Décomposition de « Non attribué » (somme = unassigned) : [{ cas,
+    // precision, stats }] — cas 'inconnu' | 'ancien' | 'hors_onglets' |
+    // 'avant_arrivee' (StatsCore.rangPersonne). Jamais le nom d'un ancien membre.
+    unassignedDetail: Object.keys(unassignedDetail).map(function (k) { return unassignedDetail[k]; }),
     lts: { team: ltsTeam, items: ltsItems },
   });
 }
@@ -1373,9 +1472,16 @@ async function handleJournal(req, res, body) {
     // Actions de TOUTE l'équipe ce jour-là : l'index des contacts des rappels
     // est le même que celui de l'onglet Activité (un rappel fait par un
     // collègue est « fait » sur les deux onglets).
+    // Lues de la veille au lendemain (champ day = jour de l'appareil), puis
+    // gardées si leur jour de Paris (jourAction) est la date : règle de Set NB.
     safe(Promise.all(slugs.map(function (s) {
-      return db.collection('lead_actions').doc(s).collection('items').where('day', '==', date).get()
-        .then(function (snap) { return { slug: s, snap: snap }; });
+      return db.collection('lead_actions').doc(s).collection('items')
+        .where('day', '>=', addDays(date, -1)).where('day', '<=', addDays(date, 1)).get()
+        .then(function (snap) {
+          const docs = [];
+          snap.forEach(function (d) { if (jourAction(d.data() || {}) === date) docs.push(d); });
+          return { slug: s, snap: { size: docs.length, forEach: function (fn) { docs.forEach(fn); } } };
+        });
     }))),
     safe(loadRappelLeads()),
     loadPersons(),
@@ -1403,7 +1509,7 @@ async function handleJournal(req, res, body) {
   // sortants décrochés, talkSec = temps d'appel ; reçus à part. rdv = agrégat
   // StatsCore des RDV du jour dont la personne est le closer.
   const sum = { activeMs: 0, sessions: 0, firstSeenAt: null, lastSeenAt: null, clicks: 0, pages: 0,
-    callsOut: 0, answered: 0, convos: 0, talkSec: 0, callsIn: 0, answeredIn: 0, talkInSec: 0,
+    callsOut: 0, answered: 0, convos: 0, talkSec: 0, callsIn: 0, answeredIn: 0, talkInSec: 0, callsSansSens: 0,
     sms: 0, email: 0, whatsapp: 0, dm: 0, notes: 0, actions: 0, sets: 0, posesClic: 0, rdv: null };
   if (uaDoc && uaDoc.exists) {
     const u = uaDoc.data() || {};
@@ -1426,17 +1532,29 @@ async function handleJournal(req, res, body) {
   });
 
   // Appels (+ index des contacts pour les rappels)
+  // Compteurs : tous les call_logs de la personne, sans fusion (mêmes
+  // nombres que l'Activité, Set NB et le funnel). Frise : lancements restés
+  // « sans suite » fusionnés avec l'appel réel (dit dans `notes`).
   const ci = contactIndex();
   const phonesToResolve = [];
-  const myCalls = [];
-  dedupeSnap(callSnap, R).forEach(function (d) {
+  rawCalls(callSnap).forEach(function (d) {
     const c = d.data() || {};
     ci.call(c, R);
     if (callMember(c, R) !== m) return;
+    callKeys(c).forEach(function (kv) { sum[kv[0]] += kv[1]; });
+  });
+  const myCalls = [];
+  const callsVus = dedupeSnap(callSnap, R);
+  let fusionsMiennes = 0;
+  const brutsMiens = {};
+  rawCalls(callSnap).forEach(function (d) { if (callMember(d.data() || {}, R) === m) brutsMiens[d.id] = 1; });
+  callsVus.forEach(function (d) {
+    const c = d.data() || {};
+    if (callMember(c, R) !== m) return;
     myCalls.push(Object.assign({ id: d.id }, c));
   });
+  fusionsMiennes = Math.max(0, Object.keys(brutsMiens).length - myCalls.length);
   myCalls.forEach(function (c) {
-    callKeys(c).forEach(function (kv) { sum[kv[0]] += kv[1]; });
     const ok = isAnsweredCall(c);
     const talk = talkSecOf(c);
     const other = c.direction === 'inbound' ? c.fromNumber : c.toNumber;
@@ -1647,8 +1765,14 @@ async function handleJournal(req, res, body) {
   if (rappelLeads && rappelLeads._tronque) plafonds.push('fiches à rappels (' + RAPPEL_LEADS_LIMIT + ' lues)');
   const warnings = lectures.map(function (x) { return x + ' : lecture impossible'; });
   if (attributionPartielle) warnings.push('fiches des sets : lecture impossible — attribution partielle, sets rangés d\'après la personne qui a posé le RDV');
+  if (sum.callsSansSens) warnings.push(phraseSansSens(sum.callsSansSens));
+  // Notes d'explication (pas des données partielles) : écarts légitimes
+  // entre la frise et les compteurs.
+  const notes = [];
+  if (fusionsMiennes) notes.push(phraseFusions(fusionsMiennes));
   res.status(200).json({ ok: true, date: date, member: publicMember(m), members: membersList, summary: sum, rappels: rappels,
-    events: ev.slice(0, 5000), total: ev.length, plafonds: plafonds.filter(function (x, i, a) { return a.indexOf(x) === i; }), warnings: warnings });
+    events: ev.slice(0, 5000), total: ev.length, plafonds: plafonds.filter(function (x, i, a) { return a.indexOf(x) === i; }), warnings: warnings,
+    notes: notes, fusionsAppels: fusionsMiennes });
 }
 
 // ─── RECHERCHE ET HISTORIQUE D'UN PROSPECT ──────────────────────────────────
@@ -1802,7 +1926,11 @@ async function handleLead(req, res, body) {
   callSnaps.forEach(function (s) {
     if (s) s.forEach(function (d) { calls[d.id] = d.data() || {}; });
   });
-  dedupeSnap({ forEach: function (fn) { Object.keys(calls).forEach(function (id) { fn({ id: id, data: function () { return calls[id]; } }); }); } }, R).forEach(function (cd) {
+  // Histoire d'un prospect = une liste, pas un compteur : lancements restés
+  // « sans suite » fusionnés avec l'appel réel (nombre dit dans `notes`).
+  const callsVus = dedupeSnap({ forEach: function (fn) { Object.keys(calls).forEach(function (id) { fn({ id: id, data: function () { return calls[id]; } }); }); } }, R);
+  const fusionsAppels = callsVus.fusions || 0;
+  callsVus.forEach(function (cd) {
     const id = cd.id;
     const c = cd.data();
     const m = callMember(c, R);
@@ -1958,6 +2086,7 @@ async function handleLead(req, res, body) {
     },
     events: ev.slice(0, 800), total: ev.length,
     smsError: smsError,
+    notes: fusionsAppels ? [phraseFusions(fusionsAppels)] : [], fusionsAppels: fusionsAppels,
   });
 }
 

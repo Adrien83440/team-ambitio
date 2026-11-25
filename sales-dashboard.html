@@ -314,28 +314,46 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
     membres().forEach(function (m) { bySlug[m.slug] = m; });
     return bySlug;
   }
-  /* Rangement d'un élément : { key (slug ou '_na'), sous (précision de la
-     ligne « Non attribué ») }. */
+  /* Rangement d'un élément : LA règle commune StatsCore.rangPersonne
+     (référentiel §11). → { key (slug ou '_na'), sous (précision de la ligne
+     « Non attribué », 'inconnu' pour une personne inconnue), cas
+     ('onglet' | 'inconnu' | 'ancien' | 'hors_onglets' | 'avant_arrivee'),
+     slug }. Un slug absent du roster (ni membre, ni ancien membre) n'est
+     pas une personne identifiée : il est rangé comme « personne inconnue ». */
+  var CAS_NOMINATIF = { hors_onglets: 1, avant_arrivee: 1 };
   function ranger(slug, jour, idx) {
-    if (!slug) return { key: '_na', sous: 'inconnu' };
-    var m = idx[slug];
-    if (m) {
-      if (jour && AF.isBeforeStart(m, jour)) return { key: '_na', sous: nomMembre(m, slug) + ' (avant son arrivée)' };
-      return { key: slug, sous: '' };
-    }
-    if (AF.isDeparted(slug)) return { key: '_na', sous: SC.mot('anciens_membres') };
-    var k = membreConnu(slug);
-    if (k) return { key: '_na', sous: nomMembre(k, slug) + ' (hors onglets)' };
-    return { key: '_na', sous: 'inconnu' };
+    var s = (slug && (idx[slug] || membreConnu(slug) || AF.isDeparted(slug))) ? String(slug) : null;
+    var r = SC.rangPersonne(s, jour || null, {
+      parti: function (x) { return AF.isDeparted(x); },
+      aOnglet: function (x) { return !!idx[x]; },
+      prenom: function (x) { return nomMembre(idx[x] || membreConnu(x), x); },
+      debut: function (x) { return idx[x] ? AF.memberStartDate(idx[x]) : null; }
+    });
+    var na = r.key === SC.NON_ATTRIBUE;
+    return { key: na ? '_na' : r.key, sous: na ? (r.precision || 'inconnu') : '', cas: r.cas, slug: s };
   }
-  /* Nom affiché dans les listes (StatsDrill.closeItem / bookingItem). */
+  /* Nom affiché dans les listes (StatsDrill.closeItem / bookingItem) :
+     même règle (« Anciens membres », « Prénom (hors onglets) »). */
   function nomDe(slug) {
     if (!slug) return '';
     var idx = (S.calc && S.calc.idx) || indexMembres();
-    if (idx[slug]) return nomMembre(idx[slug], slug);
-    if (AF.isDeparted(slug)) return SC.mot('anciens_membres');
-    var k = membreConnu(slug);
-    return k ? nomMembre(k, slug) + ' (hors onglets)' : '';
+    var r = ranger(slug, null, idx);
+    if (r.key !== '_na') return nomMembre(idx[r.key], r.key);
+    return r.cas === 'inconnu' ? '' : r.sous;
+  }
+  /* Roster COMPLET (anciens membres compris) : celui que FunnelCore.callerIndex
+     attend pour trouver l'auteur d'un appel, comme le Stats funnel. */
+  function rosterComplet() {
+    var seen = {}, out = [];
+    function add(m) { var k = m && (m.slug || m.firebaseUid); if (k && !seen[k]) { seen[k] = 1; out.push(m); } }
+    (window.TEAM_MEMBERS_LIST || []).forEach(add);
+    var map = window.TEAM_MEMBERS || {};
+    Object.keys(map).forEach(function (k) {
+      var m = map[k];
+      if (m && !m.slug) { var c = { slug: k }; Object.keys(m).forEach(function (f) { c[f] = m[f]; }); m = c; }
+      add(m);
+    });
+    return out;
   }
   function slugDeUid(uid) {
     if (!uid) return null;
@@ -499,11 +517,22 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
       ids[b.leadId] = 1;
     });
     var list = Object.keys(ids), map = {}, illisibles = 0;
+    /* Fiche fusionnée : on suit la fiche gardée (_mergedInto, 3 sauts au
+       plus), exactement comme Set NB (readLeads) ; introuvable → pas de
+       fiche (setter lu sur le RDV seul). Enregistrée sous l'id d'origine. */
+    function lire(id, sauts) {
+      return db.collection('leads').doc(id).get().then(function (s) {
+        if (!s || !s.exists) return null;
+        var d = s.data() || {};
+        if (d._merged === true) return (d._mergedInto && sauts < 3) ? lire(d._mergedInto, sauts + 1) : null;
+        return d;
+      });
+    }
     function lot(i) {
       if (i >= list.length) return Promise.resolve();
       return Promise.all(list.slice(i, i + FICHES_LOT).map(function (id) {
-        return db.collection('leads').doc(id).get().then(function (s) {
-          if (s.exists) { var d = s.data() || {}; map[id] = { setterSlug: d.setterSlug || null, assignedTo: d.assignedTo || null }; }
+        return lire(id, 0).then(function (d) {
+          if (d) map[id] = { setterSlug: d.setterSlug || null, assignedTo: d.assignedTo || null };
         }, function () { illisibles++; });
       })).then(function () { return lot(i + FICHES_LOT); });
     }
@@ -538,7 +567,11 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
 
   /* ══ CALCUL — tout vient de StatsCore et de la liste unique des closes ══ */
   function seau(key, label) {
-    return { key: key, label: label, rdv: SC.vide(), nb: SC.vide(), sets: 0, closes: [], calls: 0, decroches: 0, talk: 0, sous: {} };
+    /* sous : précisions de la ligne « Non attribué » (→ cas) ; argentNomin :
+       personnes identifiables (hors onglets, avant leur arrivée) dont un
+       close est rangé sur cette ligne — ses montants sont alors réservés à
+       l'admin et à la personne elle-même (D26). */
+    return { key: key, label: label, rdv: SC.vide(), nb: SC.vide(), sets: 0, closes: [], calls: 0, decroches: 0, talk: 0, sous: {}, sousCas: {}, argentNomin: {} };
   }
   function calculer(raw) {
     var now = Date.now();
@@ -553,15 +586,21 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
     var MO = {};
     var L = {};   // L[scope][genre] = [entrées]
     var callsNoAuthor = 0;
+    var HORS = { calls: 0, decroches: 0 };   // appels hors équipe sales (CSM, coachs) : à part
 
     function mois(mk) {
       if (!MO[mk]) MO[mk] = { rdv: SC.vide(), nb: SC.vide(), sets: 0, closes: [], calls: 0, decroches: 0 };
       return MO[mk];
     }
-    function place(slug, jour) {
+    function place(slug, jour, argent) {
       var r = ranger(slug, jour, idx);
       var s = B[r.key] || B._na;
-      if (s === B._na) s.sous[r.sous] = (s.sous[r.sous] || 0) + 1;
+      if (s === B._na) {
+        var k = r.key === '_na' ? r.sous : 'inconnu';
+        s.sous[k] = (s.sous[k] || 0) + 1;
+        s.sousCas[k] = r.key === '_na' ? r.cas : 'inconnu';
+        if (argent && CAS_NOMINATIF[r.cas] && r.slug) s.argentNomin[r.slug] = 1;
+      }
       return s;
     }
     function garder(scopes, genre, ent) {
@@ -620,7 +659,7 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
        closer au jour de la vente (Global closing). */
     var CR = raw.closes || {};
     (CR.rows || []).forEach(function (r) {
-      var sc = place(r.closer, r.day);
+      var sc = place(r.closer, r.day, true);
       var mk = String(r.day || '').slice(0, 7);
       TOT.closes.push(r); sc.closes.push(r); mois(mk).closes.push(r);
       var ent = { t: 'c', row: r };
@@ -631,18 +670,24 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
     (CR.sansSignal || []).forEach(function (r) { garder(['_all'], 'c:sansSignal', { t: 'c', row: r }); });
     (CR.ecartsCanal || []).forEach(function (r) { garder(['_all'], 'c:ecarts', { t: 'c', row: r }); });
 
-    /* Appels sortants, décrochés par la règle commune. */
+    /* Appels sortants, décrochés par la règle commune. Périmètre = celui du
+       Stats funnel (D17) : auteur par FunnelCore.callerOf (compte relié,
+       sinon prénom Ringover) ; équipe sales + appels sans auteur dans
+       Appels / Décrochés, CSM et coachs à part (« Hors équipe sales »). */
     var calls = raw.calls;
     if (calls && !calls._erreur) {
+      var CIDX = FC.callerIndex(rosterComplet());
       calls.forEach(function (c) {
         if (!c || c.direction !== 'outbound') return;
         var ms = msOf(c.initiatedAt);
         if (ms == null) return;
         var jour = SC.jourParis(ms);
-        var slug = c.userId ? slugDeUid(c.userId) : null;
-        if (!c.userId) callsNoAuthor++;
-        var sc = place(slug, jour);
         var dec = AF.isAnswered(c);
+        var perim = FC.perimetreAppel(c, CIDX);
+        if (perim === 'hors') { HORS.calls++; if (dec) HORS.decroches++; return; }
+        var who = FC.callerOf(c, CIDX);
+        if (perim === 'sans_auteur') callsNoAuthor++;
+        var sc = place(who ? who.slug : null, jour);
         var talk = dec ? (Number(c.durationSec) || 0) : 0;
         TOT.calls++; sc.calls++; mois(jour.slice(0, 7)).calls++;
         if (dec) { TOT.decroches++; sc.decroches++; TOT.talk += talk; sc.talk += talk; mois(jour.slice(0, 7)).decroches++; }
@@ -659,7 +704,7 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
     var naVide = !na.rdv.total && !na.nb.total && !na.sets && !na.closes.length && !na.calls;
     return {
       raw: raw, idx: idx, now: now, B: B, ordre: ordre, naVide: naVide, TOT: TOT, CLS: CLS, MO: MO, L: L,
-      callsNoAuthor: callsNoAuthor,
+      callsNoAuthor: callsNoAuthor, hors: HORS,
       moneyNb: FC.sumCloses((CR.rows || []).filter(function (r) { return !r.sb; })),
       nSb: (CR.rows || []).filter(function (r) { return r.sb; }).length
     };

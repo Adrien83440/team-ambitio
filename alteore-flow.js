@@ -333,10 +333,15 @@
      Équipe (ligne « Anciens membres »). Ce fichier dit seulement QUI est parti
      (isDeparted, departedSlugs) : aucun chargeur ne retire leurs données, ce
      sont les pages qui les rangent.
-     DEPARTED : liste HISTORIQUE en dur, gardée comme REPLI (roster pas encore
-     chargé, fiche du roster pas encore marquée). La source est la fiche
-     _meta/team_members du membre — voir isDeparted(). */
-  var DEPARTED = { guillaume: 1, guillaumes: 1, elodie: 1 }; // Guillaume Bilcke — parti (07/2026) ; slug réel du roster : guillaumes · Élodie — fin de mission 10/10/2026
+     Liste HISTORIQUE des partis (repli : roster pas encore chargé, fiche du
+     roster pas encore marquée) : la SEULE du projet, StatsCore.PARTIS_HISTORIQUES
+     (stats-core.js, lue aussi par funnel-core.js et le serveur) — Guillaume
+     Bilcke (parti 07/2026, slug réel du roster : guillaumes) et Élodie (fin de
+     mission 10/10/2026). Plus aucune copie ici (constat D09). La source reste
+     la fiche _meta/team_members du membre — voir isDeparted(). */
+  function partiHistorique(slug) {
+    return Object.prototype.hasOwnProperty.call(statsCore().PARTIS_HISTORIQUES, String(slug));
+  }
   /* setter_ecrit (10/09/2026) : setter « écrit » — travaille les prospects
      par messages (DM Instagram / Meta), jamais au téléphone. Membre de
      l'équipe sales à part entière (Set NB, EOD, Commissions, Équipe), mais
@@ -364,14 +369,14 @@
      chargé par nav.js — les partis y restent, hors de TEAM_MEMBERS_LIST) porte
      departed === true, ou active === false AVEC une date de fin (un membre
      seulement désactivé, sans date de fin, n'est pas « parti ») ; à défaut,
-     s'il figure dans la liste historique DEPARTED. */
+     s'il figure dans la liste historique (StatsCore.PARTIS_HISTORIQUES). */
   function isDeparted(slug) {
     if (!slug) return false;
     slug = String(slug);
     var map = window.TEAM_MEMBERS || {};
     var m = Object.prototype.hasOwnProperty.call(map, slug) ? map[slug] : null;
     if (m && (m.departed === true || (m.active === false && !!memberEndDate(m)))) return true;
-    return Object.prototype.hasOwnProperty.call(DEPARTED, slug);
+    return partiHistorique(slug);
   }
   /* Tous les slugs des membres partis (roster + liste historique), triés.
      Sert aux pages pour ranger leur activité passée sur la ligne « Anciens
@@ -383,7 +388,7 @@
       var slug = (map[k] && map[k].slug) || k;
       if (!seen[slug] && isDeparted(slug)) { seen[slug] = 1; out.push(slug); }
     });
-    Object.keys(DEPARTED).forEach(function (slug) { if (!seen[slug]) { seen[slug] = 1; out.push(slug); } });
+    Object.keys(statsCore().PARTIS_HISTORIQUES).forEach(function (slug) { if (!seen[slug]) { seen[slug] = 1; out.push(slug); } });
     out.sort();
     return out;
   }
@@ -398,14 +403,33 @@
       return m && m.slug && !isDeparted(m.slug) && m.active !== false && SALES_ROLES[m.role];
     });
   }
+  /* GARDE « ÉQUIPE CHARGÉE » d'un close (constat D02 de la revue, 25/11/2026).
+     Sans équipe sales (roster pas encore lu, ou illisible), resolveClosingActors
+     ne trouve ni closer ni setter : le close s'enregistrait (RDV, fiche) SANS
+     AUCUNE ligne de commission, en silence — et une nouvelle validation passe
+     ensuite pour un « re-close » qui saute les commissions : le manque ne se
+     rattrapait plus. Un close est donc REFUSÉ avant toute écriture tant que
+     l'équipe n'est pas là. Pas d'attente de « team-members-loaded » ici : le
+     closer et le setter sont choisis par l'appelant AVANT l'appel (closeData) ;
+     attendre puis écrire garderait des noms vides. Revalider recalcule tout.
+     Renvoie une Promise rejetée, ou null si l'équipe est chargée. */
+  var MSG_EQUIPE_NON_CHARGEE = 'L\u2019équipe n\u2019est pas encore chargée : attends quelques secondes et valide de nouveau.';
+  function refusCloseSansEquipe() {
+    if (salesMembers().length > 0) return null;
+    var e = new Error(MSG_EQUIPE_NON_CHARGEE);
+    e.code = 'equipe_non_chargee';
+    return Promise.reject(e);
+  }
   /* Le setter de la fiche (verrou setterSlug) ou, à défaut, le poseur du RDV
      est un membre parti → vrai. ÉCRITURE (commission de setting, décision du
-     10/10/2026) : ce test lit toujours la liste historique DEPARTED seule —
-     le faire suivre isDeparted() changerait qui est commissionné, hors du
-     périmètre du chantier « chiffres cohérents » (à décider par Adrien). */
+     10/10/2026) : ce test lit toujours la liste historique SEULE (désormais
+     StatsCore.PARTIS_HISTORIQUES, même contenu que l'ancienne copie locale :
+     mêmes membres, même résultat) — le faire suivre isDeparted() changerait
+     qui est commissionné, hors du périmètre du chantier « chiffres
+     cohérents » (à décider par Adrien). */
   function departedSetter(lead, booking) {
-    if (lead && lead.setterSlug) return !!DEPARTED[lead.setterSlug];
-    return !!(booking && booking.bookedBySlug && DEPARTED[booking.bookedBySlug]);
+    if (lead && lead.setterSlug) return partiHistorique(lead.setterSlug);
+    return !!(booking && booking.bookedBySlug && partiHistorique(booking.bookedBySlug));
   }
   function isSalesMember(slug) {
     if (!slug || isDeparted(slug)) return false;
@@ -741,6 +765,8 @@
   function setOutcome(booking, outcome, opts) {
     opts = opts || {};
     if (!booking || !booking.id || !OUTCOMES[outcome]) return Promise.reject(new Error('Outcome invalide'));
+    /* Close sans équipe chargée → refus AVANT toute écriture (D02). */
+    if (outcome === 'close') { var refus = refusCloseSansEquipe(); if (refus) return refus; }
     /* closeData.sb explicite = réponse humaine des cartes du Close : elle
        prime sur toute classification, aucun typeMap n'est nécessaire. */
     var sbExplicit = !!(opts.closeData && typeof opts.closeData.sb === 'boolean');
@@ -888,6 +914,12 @@
          date, sinon la vente changeait de jour, voire de mois, sur tous les
          écrans. Retiré AVANT la photo : un champ non modifié n'a pas à être
          restauré par clearOutcome. */
+      /* LIMITE CONNUE (constat D03, laissée telle quelle : c'est une écriture,
+         à trancher par Adrien) : corriger un close en « Non close » / « Offre » /
+         « Disqua » par ✎ ne remet ni clientSince ni isClient à leur état d'avant
+         (seul « Réinitialiser » — clearOutcome — restaure la photo). Un close
+         corrigé puis REFAIT plus tard (autre RDV, autre mois) garde donc la date
+         du PREMIER close, et le Stats funnel le range dans l'ancien mois. */
       if (updates.clientSince !== undefined && before.clientSince) delete updates.clientSince;
       var undo = {};
       LEAD_OUTCOME_FIELDS.forEach(function (f) {
@@ -1401,6 +1433,9 @@
      résultat de RDV déjà saisi. */
   function applyFicheClose(leadId, lead, closeData, opts) {
     opts = opts || {};
+    /* Close sans équipe chargée → refus AVANT toute lecture ou écriture (D02). */
+    var refusEquipe = refusCloseSansEquipe();
+    if (refusEquipe) return refusEquipe;
     var _db = db();
     /* Un typeMap vide ({} posé en attendant le fetch) ne compte pas : on
        recharge — sinon un RDV coaching détectable par son type, ou un type
@@ -1485,6 +1520,7 @@
         console.warn('[AlteoreFlow] close fiche : relecture impossible, décision sur la copie de la page :', e && e.message);
         return lead || {};
       }).then(function (fiche) {
+        /* Même verrou, même limite connue (D03) : voir propagateOutcomeToLead. */
         if (!alreadyClient && !fiche.clientSince) updates.clientSince = ts();
         return leadRef.update(updates);
       }).then(function () {
@@ -1831,7 +1867,9 @@
     memberEndDate: memberEndDate,
     isBeforeStart: isBeforeStart,
     patchTeamMember: patchTeamMember,
-    DEPARTED: DEPARTED,
+    /* Ancien export, gardé pour compatibilité : c'est désormais LA liste
+       commune StatsCore.PARTIS_HISTORIQUES (même objet, lecture seule). */
+    DEPARTED: (typeof window !== 'undefined' && window.StatsCore && window.StatsCore.PARTIS_HISTORIQUES) || null,
     dayKey: dayKey,
     monthKey: monthKey,
     frDate: frDate,
