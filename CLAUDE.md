@@ -707,10 +707,20 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
     « Closes », « RDV pris » (aucun chiffre ne bouge ; les événements Meta ne sont pas touchés).
   - **Rien de muet** : plafond de lecture atteint, lecture en échec, repli sur un montant déclaré → message à l'écran (`k.erreursLecture`,
     `_erreur` / `_tronque` des chargeurs d'AlteoreFlow, `res.erreur` de loadCloses).
+  - **Auteur d'un appel : UNE règle** — `FunnelCore.callerOf` (compte relié `userId`, sinon prénom Ringover ; à prénom égal un membre en
+    place prime sur un ancien membre) et `FunnelCore.perimetreAppel` (`sales` / `sans_auteur` compté en « Non attribué » / `hors` = coach,
+    CSM, jamais dans les Appels, parti ou non). Set NB (onglet Équipe ET onglet d'un membre), Dashboard (tableau ET filtre par personne),
+    Pilotage (`callMember`), assistant et funnel passent par elle : ne jamais refiltrer un appel par `c.userId === uid` côté admin. Seule
+    limite : un compte sales ne lit que ses appels `userId == uid` (règles Firestore) — dit dans le « i » de son onglet.
+  - **Contrôle de cohérence du funnel** : l'égalité « RDV closés ↔ Closes » est une PARTITION calculée UNE fois dans le moteur
+    (`k.coh.egalite`, listes `rdvDeClosesAnnules`, `rdvEnTrop`, `rdvClosesHorsListe`, `closesSansRdv`, `closesRdvHorsPeriode`) ; la page
+    l'affiche sans la recalculer. `coh.annules` et `coh.doublonsRdv` ne sont que des listes d'information, jamais des termes de l'égalité.
   - **Seule écriture modifiée** : `clientSince` n'est plus jamais réécrit s'il existe ; clés de jour / mois écrites à l'heure de Paris ; un
-    close est refusé (rien n'est écrit) si l'équipe n'est pas encore chargée, au lieu de partir sans commission.
-  - **Preuve** : banc d'essai croisé (même jeu de données chargé sur tous les écrans, 2 fuseaux, ~2 600 égalités) + contrôle sur les
-    données réelles de septembre à novembre 2026 (novembre : 69 RDV, 6 closes, 40 000 € contracté, 23 000 € collecté, identiques partout).
+    close est refusé (rien n'est écrit) si l'équipe n'est pas encore chargée (`window.TEAM_MEMBERS_LIST` vide : la lecture est relancée),
+    au lieu de partir sans commission. L'EOD garde le jour de l'APPAREIL (la date est la clé du document `eod/{uid}/jours/{date}`).
+  - **Preuve** : banc d'essai croisé (même jeu de données chargé sur tous les écrans, 2 fuseaux, ~2 900 égalités, dont l'égalité du
+    contrôle de cohérence sur chaque jour et chaque semaine) + contrôle sur les données réelles de septembre à novembre 2026 (novembre :
+    69 RDV, 6 closes, 40 000 € contracté, 23 000 € collecté, identiques partout).
   - **Non traité, à connaître** : `Functions/index.js` et `firestore.rules` non touchés ; `pipeline-etapes.js`, `rdv-outcome.js`,
     `close-wizard.js` gardent leurs règles d'écriture ; second contrat d'un client déjà gagné (son montant rejoint le premier close) ;
     `clientSince` écrit en TEXTE par d'anciennes pages CSM (fiche invisible des requêtes : reprise de données à faire, à blanc d'abord) ;
