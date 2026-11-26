@@ -158,7 +158,8 @@ const DEFAULT_PROMPT = [
   '- Vouvoiement, ton direct et respectueux, phrases courtes. Aucun emoji.',
   '- Signé du prénom du closer, suivi de « équipe Adrien & Emily ».',
   '- N\'utilise QUE des faits présents dans le dossier. N\'invente rien : ni chiffre, ni résultat client, ni promesse. Si le dossier est vide ou ne dit rien d\'exploitable, écris un message ouvert qui demande quelle question lui reste avant de décider, et mets ficheVide à true.',
-  '- Une seule demande par message. Si un lien de réservation est fourni, c\'est l\'appel à l\'action ; sinon, il répond avec le créneau qui lui convient.',
+  '- Une seule demande par message : réserver son créneau par le lien fourni. Dans l\'e-mail, il peut aussi simplement répondre.',
+  '- LE PROSPECT NE PEUT PAS RÉPONDRE À UN SMS (expéditeur sans numéro). N\'écris jamais « répondez à ce SMS », « répondez-moi » ou « dites-moi » dans le SMS. Le SMS donne le lien de réservation, et rappelle qu\'il peut répondre à l\'e-mail.',
   '',
   'INTERDITS ABSOLUS :',
   '- Aucun prix, aucune fourchette de prix, aucun montant de l\'offre.',
@@ -170,7 +171,8 @@ const DEFAULT_PROMPT = [
   '',
   'FORMAT :',
   '- E-mail : objet court, concret, personnel (jamais « Relance »), puis 3 à 4 paragraphes brefs séparés par une ligne vide. La dernière phrase est l\'appel à l\'action.',
-  '- SMS : 160 caractères au plus si possible (320 si le closer reprend le dossier), commence par « Bonjour {prénom}, c\'est {prénom du closer} (Adrien & Emily). », donne en une phrase la raison de répondre, et renvoie vers l\'e-mail ou le lien.',
+  '- E-mail : le lien de réservation apparaît une seule fois, seul sur sa ligne, juste avant la signature.',
+  '- SMS : court (le lien compte dans la longueur ; 2 SMS au plus, soit 300 caractères), commence par « Bonjour {prénom}, c\'est {prénom du closer} (Adrien & Emily). », donne en une phrase la raison de réserver, puis le lien de réservation écrit tel quel, puis « ou répondez à mon e-mail ».',
 ].join('\n');
 
 function parisDate(ms) { return new Date(ms).toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' }); }
@@ -551,6 +553,35 @@ async function gardeImbrication(card, lead, days) {
   return { own: own };
 }
 
+/* Lien de prise de RDV proposé au prospect. Réglage `lienRdv` s'il existe ;
+   sinon la consultation de son rendez-vous d'origine (même type, donc même
+   closer ou même équipe), rattachée à sa fiche par leadId — aucune donnée
+   personnelle dans l'adresse. Un RDV repris par ce lien le sort du module. */
+async function lienDeReservation(cfg, b) {
+  if (cfg.lienRdv) return cfg.lienRdv;
+  let cle = String(b.type || b.typeId || '');
+  try {
+    const types = await P.lireTypes();
+    const t = types[cle];
+    if (t && t.slug) cle = String(t.slug);
+  } catch (e) { /* identifiant brut */ }
+  return 'https://team.alteore.com/booking.html?' + (cle ? 'type=' + encodeURIComponent(cle) + '&' : '') + 'leadId=' + encodeURIComponent(String(b.leadId || ''));
+}
+
+// Le prospect ne peut pas répondre à un SMS : pas d'invitation à le faire, et
+// toujours un moyen d'agir (lien de réservation, ou renvoi vers l'e-mail).
+const RE_REPONSE_SMS = /(r[ée]pond(ez|re)(-moi|-nous)?\s+(à|a|par|sur)\s+ce\s+(sms|message|texto|num[ée]ro)|par\s+retour\s+de\s+(sms|message)|r[ée]pond(ez|re)\s+(simplement\s+)?(oui|ok|stop)\b|par\s+sms)/i;
+function smsInterdit(sms, avecEmail) {
+  const x = String(sms || '');
+  if (RE_REPONSE_SMS.test(x)) return 'Le SMS invite à répondre par SMS, ce que le prospect ne peut pas faire : donnez le lien de réservation ou renvoyez vers l\'e-mail.';
+  const lien = /https?:\/\//i.test(x);
+  const mail = /e-?mail|courriel/i.test(x);
+  if (!lien && !(mail && avecEmail)) return avecEmail
+    ? 'Le SMS doit contenir le lien de réservation ou renvoyer vers l\'e-mail : le prospect ne peut pas répondre par SMS.'
+    : 'Envoyé sans e-mail, le SMS doit contenir le lien de réservation : le prospect ne peut pas répondre par SMS.';
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 //  Brouillon IA (à la demande, une carte à la fois)
 // ---------------------------------------------------------------------------
@@ -610,7 +641,8 @@ async function draftOffer(auth, body, me) {
     P.push('C\'est la relance n° ' + (sent.moduleCount + 1) + ' sur ' + cfg.maxSends + (sent.moduleCount + 1 >= cfg.maxSends ? ' : la dernière. Demande une décision claire, oui ou non, avec élégance.' : '.'));
   }
   P.push('');
-  P.push(cfg.lienRdv ? 'LIEN DE RÉSERVATION À PROPOSER (tel quel, une seule fois, dans l\'e-mail et le SMS) : ' + cfg.lienRdv : 'PAS DE LIEN DE RÉSERVATION : le prospect répond avec un créneau.');
+  const lienRdv = await lienDeReservation(cfg, b);
+  P.push('LIEN DE RÉSERVATION (à écrire tel quel, sans le modifier ni le raccourcir, une seule fois dans l\'e-mail et une seule fois dans le SMS) : ' + lienRdv);
   const bundle = await loadLeadBundle(b.leadId);
   if (bundle) { P.push(''); P.push(bundleToText(bundle, { maxCalls: 2, transcriptChars: 3000 })); }
   const instr = String(body.instruction || '').trim().slice(0, 500);
@@ -628,11 +660,19 @@ async function draftOffer(auth, body, me) {
       prompt: P.join('\n') + '\n\nTA PREMIÈRE VERSION A ÉTÉ REFUSÉE : ' + alerte + ' Réécris l\'e-mail et le SMS sans aucune allusion à une autre offre, une autre formule, une remise ou des conditions particulières.' });
     if (r2.ok && r2.json) { r = r2; j = r2.json; alerte = contenuInterdit([j.emailSubject, j.emailBody, j.sms].join(' ')); }
   }
+  let smsOut = String(j.sms || '').trim();
+  let mailOut = String(j.emailBody || '').trim();
+  if (j.categorie !== 'de_cote') {
+    if (smsOut && smsOut.indexOf(lienRdv) < 0) smsOut = smsOut.replace(/\s*https?:\/\/\S+/g, '').replace(/[\s.]+$/, '') + '. Réservez votre créneau : ' + lienRdv + ' ou répondez à mon e-mail.';
+    if (mailOut && mailOut.indexOf(lienRdv) < 0) mailOut = mailOut.replace(/\n\n(?=[^\n]*\n?[^\n]*$)/, '\n\nPour réserver votre créneau : ' + lienRdv + '\n\n');
+    if (mailOut && mailOut.indexOf(lienRdv) < 0) mailOut += '\n\nPour réserver votre créneau : ' + lienRdv;
+    if (!alerte) alerte = smsInterdit(smsOut, true);
+  }
   const draft = {
     emailSubject: String(j.emailSubject || '').trim().slice(0, 200),
-    emailBody: String(j.emailBody || '').trim().slice(0, 6000),
-    sms: String(j.sms || '').trim().slice(0, 640),
-    ficheVide: j.ficheVide === true, offrePresentee: j.offrePresentee || 'inconnue', alerte: alerte || null, signataire: signataire, generatedAt: Date.now(), model: r.model || null, instruction: instr || null,
+    emailBody: mailOut.slice(0, 6000),
+    sms: smsOut.slice(0, 640),
+    ficheVide: j.ficheVide === true, lienRdv: lienRdv, offrePresentee: j.offrePresentee || 'inconnue', alerte: alerte || null, signataire: signataire, generatedAt: Date.now(), model: r.model || null, instruction: instr || null,
   };
   const patch = {
     bookingId: card.id, leadId: b.leadId, category: j.categorie, categoryBy: 'ia',
@@ -730,6 +770,7 @@ async function sendOffer(auth, body, me) {
   if (wantEmail && (!subject || !mailBody)) return fail('empty_email', 400, 'L\'objet et le texte de l\'e-mail sont obligatoires.');
   if (wantEmail && email.indexOf('@') < 0) return fail('no_email', 409, 'Ce prospect n\'a pas d\'e-mail.');
   if (wantSms && !smsText) return fail('empty_sms', 400, 'Le SMS est vide.');
+  if (wantSms) { const ko = smsInterdit(smsText, wantEmail); if (ko) return fail('sms_no_reply', 400, ko); }
   const interdit = contenuInterdit((wantEmail ? subject + ' ' + mailBody : '') + ' ' + (wantSms ? smsText : ''));
   if (interdit) return fail('forbidden_content', 400, interdit);
   let toNumber = null, smsFrom = null;
