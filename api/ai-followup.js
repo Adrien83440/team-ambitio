@@ -24,6 +24,16 @@
 //                                            admin + all → toute l'équipe)
 //        { action:'decide', id, decision:'send'|'skip'|'stop'|'later',
 //          channel:'sms'|'email', sms, emailSubject, emailBody }
+//
+// Module « Relances d'offres » (26/11/2026, api/_offerRelances.js) : la page
+// sales-relances-offres.html liste, classe, rédige, et envoie au clic.
+//        { action:'offers', days?, all? }            → cartes par catégorie
+//        { action:'offer_draft', bookingId, instruction? } → e-mail + SMS (IA)
+//        { action:'offer_set', bookingId, category? | exclude+motif? | draft? }
+//        { action:'offer_send', bookingId, email, sms, emailSubject, emailBody,
+//          smsText } → envoi au clic, derrière _config/offer_relances.sendEnabled
+// _config/offer_relances.replaceLegacy === true : ce cron ne crée plus de
+// nouvelle séquence (les séquences déjà ouvertes vont à leur terme).
 // ============================================================================
 
 const { requireAuth } = require('./_verifyFirebaseAuth');
@@ -34,6 +44,7 @@ const { sendLeadEmail } = require('./_leadEmail');
 const { loadLeadBundle, bundleToText } = require('./_aiLeadContext');
 const { setOutcomeForBooking } = require('./_aiObjections');
 const { getRingoverCreds, ringoverFetch } = require('./_ringoverClient');
+const offerRelances = require('./_offerRelances');
 
 const ROLES = ['admin', 'sales'];
 const STEP_OFFSETS_DAYS = [0, 3, 7];
@@ -158,6 +169,9 @@ async function runCron(res) {
   const out = { ok: true, created: 0, generated: 0, stopped: 0, outcomesSynced: 0, errors: [] };
   const today = parisDate(Date.now());
   const recent = await db.collection('bookings').where('date', '>=', shiftDate(today, -4)).where('date', '<=', today).get();
+  // Le module « Relances d'offres » remplace la création de séquences ici
+  // quand Adrien l'a décidé (drapeau), pour ne pas proposer deux relances.
+  const legacyOff = (await offerRelances.loadConfig()).replaceLegacy;
   let gen = 0;
 
   for (const d of recent.docs) {
@@ -166,7 +180,7 @@ async function runCron(res) {
     if (b.outcome && b.replay && b.replay.analysis) {
       try { await setOutcomeForBooking(d.id, b.outcome); out.outcomesSynced++; } catch (e) { /* non bloquant */ }
     }
-    if (!NON_CLOSED[b.outcome] || !b.leadId) continue;
+    if (legacyOff || !NON_CLOSED[b.outcome] || !b.leadId) continue;
     if (Date.now() - tsToMs(b.outcomeAt) > 4 * 86400000) continue;
     const ref = db.collection('ai_followups').doc(d.id);
     const ex = await ref.get();
@@ -302,6 +316,17 @@ module.exports = async function (req, res) {
       });
       items.sort(function (a, b) { return (a.step.dueAt || 0) - (b.step.dueAt || 0); });
       res.status(200).json({ ok: true, items: items, teamPending: auth.role === 'admin' ? teamPending : 0, isAdmin: auth.role === 'admin' });
+      return;
+    }
+
+    if (body.action === 'offers' || body.action === 'offer_draft' || body.action === 'offer_set' || body.action === 'offer_send') {
+      let out;
+      if (body.action === 'offers') out = await offerRelances.listOffers(auth, { days: body.days, all: body.all });
+      else if (body.action === 'offer_draft') out = await offerRelances.draftOffer(auth, body);
+      else if (body.action === 'offer_send') out = await offerRelances.sendOffer(auth, body, await memberOf(auth.uid));
+      else out = await offerRelances.setOffer(auth, body, await memberOf(auth.uid));
+      if (out && out.error) { res.status(out.code || 400).json({ ok: false, error: out.error, message: out.message || null }); return; }
+      res.status(200).json(out);
       return;
     }
 

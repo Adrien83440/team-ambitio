@@ -67,6 +67,9 @@ const DEFAULT_TASKS = {
   closing_prep:     { model: SONNET, effort: 'medium', maxTokens: 6000 },
   closing_analysis: { model: SONNET, effort: 'medium', maxTokens: 8000 },
   closing_followup: { model: OPUS,  effort: 'medium', maxTokens: 3000 },
+  // Relances d'offres (api/_offerRelances.js, 26/11/2026) : classement +
+  // e-mail + SMS, à la demande, une carte à la fois.
+  offer_followup:   { model: OPUS,  effort: 'low', maxTokens: 3000 },
   objection_playbook: { model: OPUS, effort: 'medium', maxTokens: 4000 },
   call_summary:     { model: HAIKU, maxTokens: 2000 },
   call_rating:      { model: HAIKU, maxTokens: 2000 },

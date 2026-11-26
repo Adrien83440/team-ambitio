@@ -114,6 +114,11 @@
       // le client rattaché. Données servies par api/replay-closing.js. Ouvert à
       // toute l'équipe sales le 17/10/2026 en consultation seule.
       { id: 'admin-replay-closing', icon: '🎬', label: 'Replay closing', href: 'admin-replay-closing.html', perm: '_sales' },
+      // Relances d'offres (26/11/2026) : RDV non closés et offres sans retour
+      // depuis plus de 7 jours ; l'IA classe et rédige, le closer valide.
+      // Données servies par api/ai-followup.js (actions offer*). Un closer ne
+      // voit que ses prospects (contrôle serveur).
+      { id: 'sales-relances-offres', icon: '📨', label: 'Relances d\'offres', href: 'sales-relances-offres.html', perm: '_sales' },
     ]},
     { id: 'nav-contrats', icon: '✍️', label: 'Contrats & paiements', section: 'Commercial', children: [
       { id: 'signatures',        icon: '✍️', label: 'Signatures',    href: 'sales-signatures.html',  perm: 'signatures' },

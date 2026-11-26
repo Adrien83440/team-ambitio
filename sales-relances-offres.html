@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Relances d'offres</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}
+</script>
+<link rel="stylesheet" href="sales.css"/>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   sales-relances-offres.html — Relances d'offres (26/11/2026)
+   Rendez-vous non closés, et offres faites depuis plus de 7 jours sans
+   retour. L'IA classe et rédige un e-mail + un SMS par prospect, à la
+   demande ; le closer relit, modifie, met de côté.
+   Rien ne part sans un clic sur « Envoyer », confirmé une seconde fois.
+   L'envoi n'est ouvert que si _config/offer_relances.sendEnabled est vrai
+   (sinon : fiches de test listées dans testLeadIds uniquement).
+   Données via api/ai-followup.js (actions offers / offer_draft / offer_set /
+   offer_send, Admin SDK). Rôles sales + admin ; un closer ne voit que ses prospects.
+   ═══════════════════════════════════════════════════════════════════════ */
+.ro{padding:20px 24px 80px;max-width:1080px;margin:0 auto;font-family:'Figtree',sans-serif}
+.ro-top{display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.ro-top h1{font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:800;letter-spacing:-.3px}
+.ro-top small{font-size:12px;color:rgba(255,255,255,.48);display:block;margin-top:2px}
+.ro-top .sp{flex:1}
+.ro-ic{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#f59e0b,#ef4444);display:flex;align-items:center;justify-content:center;font-size:19px;box-shadow:0 3px 12px rgba(245,158,11,.3);flex-shrink:0}
+.bi{padding:8px 12px;background:var(--bg3,#141420);border:1.5px solid rgba(255,255,255,.07);border-radius:8px;color:#fff;font-family:'Figtree',sans-serif;font-size:13px;outline:0}
+.bi option{background:var(--bg3,#141420)}
+.bi:focus{border-color:rgba(245,158,11,.5)}
+.bb{padding:8px 14px;border:none;border-radius:8px;font-family:'Figtree',sans-serif;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px;line-height:1.3}
+.bb-p{background:#f59e0b;color:#1a1003}.bb-p:hover{background:#fbbf24}
+.bb-g{background:rgba(255,255,255,.07);color:rgba(255,255,255,.85)}.bb-g:hover{background:rgba(255,255,255,.12)}
+.bb-s{background:#34d399;color:#04140d}
+.bb[disabled]{opacity:.45;cursor:not-allowed}
+
+.ro-ban{border:1px solid rgba(96,165,250,.3);background:rgba(96,165,250,.07);color:#bfdbfe;border-radius:12px;padding:10px 14px;font-size:12.5px;line-height:1.5;margin-bottom:14px}
+.ro-ban b{color:#fff}
+.ro-st{display:flex;gap:18px;flex-wrap:wrap;border:1px solid rgba(255,255,255,.07);background:var(--bg2,#0f0f1a);border-radius:12px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:rgba(255,255,255,.55)}
+.ro-st b{font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:800;color:#fff;margin-right:5px}
+.cd-ck{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;color:rgba(255,255,255,.8);cursor:pointer}
+.cd-ck input{accent-color:#34d399;width:15px;height:15px}
+.cd-cf{border:1px solid rgba(52,211,153,.35);background:rgba(52,211,153,.07);border-radius:10px;padding:10px 12px;margin-top:10px;font-size:12.5px;line-height:1.5}
+
+.cats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.cat{border:1.5px solid rgba(255,255,255,.07);background:var(--bg2,#0f0f1a);border-radius:12px;padding:10px 12px;cursor:pointer;transition:all .15s;color:inherit;text-align:left;font-family:inherit}
+.cat:hover{border-color:rgba(255,255,255,.18)}
+.cat.on{border-color:rgba(245,158,11,.55);background:rgba(245,158,11,.07)}
+.cat .n{font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:800;line-height:1}
+.cat .l{font-size:11.5px;font-weight:700;color:rgba(255,255,255,.7);margin-top:4px}
+.cat .s{font-size:10.5px;color:rgba(255,255,255,.42);margin-top:3px;line-height:1.35}
+.ro-out{font-size:11.5px;color:rgba(255,255,255,.45);margin-bottom:16px;line-height:1.5}
+
+.list{display:flex;flex-direction:column;gap:10px}
+.cd{background:var(--bg2,#0f0f1a);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:14px 16px}
+.cd-h{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.cd-n{font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:800;letter-spacing:-.2px}
+.cd-n a{color:inherit;text-decoration:none}.cd-n a:hover{text-decoration:underline}
+.cd-m{font-size:12px;color:rgba(255,255,255,.5);margin-top:2px}
+.cd-h .sp{flex:1}
+.tag{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.12);white-space:nowrap}
+.tag.of{color:#fbbf24;border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.07)}
+.tag.nc{color:#fca5a5;border-color:rgba(248,113,113,.3);background:rgba(248,113,113,.06)}
+.tag.wr{color:#fdba74;border-color:rgba(251,146,60,.35);background:rgba(251,146,60,.08)}
+.tag.ia{color:#c4b5fd;border-color:rgba(167,139,250,.35);background:rgba(167,139,250,.08)}
+.cd-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.cd-why{font-size:12.5px;line-height:1.5;color:rgba(255,255,255,.78);margin-top:10px;padding:8px 11px;border-radius:10px;background:rgba(10,10,25,.35)}
+.cd-why b{color:#fff}
+.cd-note{font-size:12.5px;line-height:1.5;color:rgba(255,255,255,.62);margin-top:8px;white-space:pre-wrap}
+.cd-note b{color:rgba(255,255,255,.85);font-weight:700}
+.cd-d{margin-top:12px;border-top:1px solid rgba(255,255,255,.07);padding-top:12px}
+.cd-d label{display:block;font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:rgba(255,255,255,.4);margin:10px 0 5px}
+.cd-d label:first-child{margin-top:0}
+.cd-d label span{float:right;font-weight:600;letter-spacing:0;text-transform:none}
+.cd-d input.bi,.cd-d textarea.bi{width:100%;box-sizing:border-box}
+.cd-d textarea.bi{resize:vertical;line-height:1.55}
+.cd-a{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.cd-a .sp{flex:1}
+.cd-a input.bi{flex:1;min-width:180px}
+.cd-x{font-size:11px;color:rgba(255,255,255,.4);margin-top:8px}
+.empty{text-align:center;padding:50px 20px;color:rgba(255,255,255,.4);font-size:13px;line-height:1.7}
+.ro-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2e1a;border:1px solid rgba(16,185,129,.3);color:#6ee7b7;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none;max-width:90vw}
+.ro-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.ro-toast.err{background:#2e1a1a;border-color:rgba(239,68,68,.35);color:#fca5a5}
+.locked{text-align:center;padding:80px 20px;color:rgba(255,255,255,.35)}
+@media (max-width:640px){.ro{padding:14px 16px 80px}.cats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+</head>
+<body>
+<div class="ro" id="mainView" style="display:none">
+  <div class="ro-top">
+    <div class="ro-ic">📨</div>
+    <div><h1>Relances d'offres</h1><small id="sub">Rendez-vous non closés, et offres sans retour depuis plus de 7 jours</small></div>
+    <div class="sp"></div>
+    <select class="bi" id="fAll" style="display:none"><option value="1">Toute l'équipe</option><option value="0">Mes prospects</option></select>
+    <select class="bi" id="fDays"><option value="30">30 jours</option><option value="60" selected>60 jours</option><option value="90">90 jours</option><option value="180">6 mois</option></select>
+  </div>
+  <div class="ro-ban" id="ban" style="display:none"><b>L'envoi n'est pas encore activé.</b> Vous pouvez faire rédiger, relire, modifier et mettre de côté. Seules les fiches de test peuvent recevoir un message.</div>
+  <div class="ro-st" id="stats" style="display:none"></div>
+  <div class="cats" id="cats"></div>
+  <div class="ro-out" id="out"></div>
+  <div class="list" id="list"><div class="empty">Chargement…</div></div>
+</div>
+<div class="locked" id="lockedView" style="display:none">🔒 Réservé à l'équipe commerciale</div>
+<div class="ro-toast" id="toast"></div>
+
+<script>
+(function () {
+var API = '/api/ai-followup';
+var data = null;
+var cur = 'a_relancer';
+var busy = {};     // bookingId → true pendant une génération
+var asking = {};   // bookingId → true quand le champ « motif » est ouvert
+var confirming = {}; // bookingId → { email, sms } quand l'envoi attend sa confirmation
+var sending = {};  // bookingId → true pendant un envoi
+var CAT_HINT = {
+  a_relancer: 'Aucune réponse, aucune étape datée',
+  rappel_convenu: 'Transformer « on se rappelle » en date',
+  trop_recent: 'Offre de moins de 7 jours',
+  de_cote: 'Aucun message'
+};
+
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function toast(m, err) { var t = $('toast'); t.textContent = m; t.className = 'ro-toast show' + (err ? ' err' : ''); clearTimeout(toast._t); toast._t = setTimeout(function () { t.className = 'ro-toast'; }, 3800); }
+
+function api(body) {
+  var u = firebase.auth().currentUser;
+  if (!u) return Promise.reject(new Error('Session expirée'));
+  return u.getIdToken().then(function (tok) {
+    return fetch(API, { method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  }).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      if (!r.ok || j.ok === false) throw new Error(j.message || j.error || ('Erreur ' + r.status));
+      return j;
+    });
+  });
+}
+
+function find(id) {
+  var i;
+  for (i = 0; i < data.items.length; i++) if (data.items[i].bookingId === id) return data.items[i];
+  return null;
+}
+function recount() {
+  var c = { a_relancer: 0, rappel_convenu: 0, trop_recent: 0, de_cote: 0 };
+  data.items.forEach(function (x) { if (c[x.category] != null) c[x.category]++; });
+  data.counts = c;
+}
+
+function renderCats() {
+  var h = '';
+  ['a_relancer', 'rappel_convenu', 'trop_recent', 'de_cote'].forEach(function (k) {
+    var hint = k === 'trop_recent' ? 'Offre de moins de ' + data.minDays + ' jours' : CAT_HINT[k];
+    h += '<button type="button" class="cat' + (cur === k ? ' on' : '') + '" data-cat="' + k + '"><div class="n">' + (data.counts[k] || 0) + '</div>' +
+         '<div class="l">' + esc(data.categories[k]) + '</div><div class="s">' + esc(hint) + '</div></button>';
+  });
+  $('cats').innerHTML = h;
+  var s = data.sortis || {}, parts = [];
+  if (s.a_repondu) parts.push(s.a_repondu + ' ont répondu depuis le rendez-vous');
+  if (s.a_repris_rdv) parts.push(s.a_repris_rdv + ' ont repris rendez-vous');
+  if (s.client) parts.push(s.client + ' sont devenus clients');
+  if (s.bloque) parts.push(s.bloque + ' bloqués');
+  if (s.fiche) parts.push(s.fiche + ' fiches écartées (fusion, poubelle, introuvable)');
+  $('out').textContent = parts.length ? 'Sortis de la liste : ' + parts.join(' · ') + '.' : '';
+  $('sub').textContent = 'Rendez-vous non closés, et offres sans retour depuis plus de ' + data.minDays + ' jours';
+  $('ban').style.display = data.envoi ? 'none' : '';
+  var st = data.stats;
+  if (st && st.prospects) {
+    $('stats').style.display = '';
+    $('stats').innerHTML = '<span><b>' + st.prospects + '</b>prospects relancés</span><span><b>' + st.messages + '</b>messages envoyés</span>' +
+      '<span><b>' + st.reponses + '</b>réponses</span><span><b>' + st.rdvRepris + '</b>rendez-vous repris</span><span><b>' + st.ventes + '</b>ventes</span>';
+  } else $('stats').style.display = 'none';
+}
+
+function fr(ms) { return new Date(ms).toLocaleDateString('fr-FR'); }
+// Pourquoi « Envoyer » est fermé pour cette carte ('' = ouvert).
+function sendBlock(x) {
+  if (!x.envoiPossible) return 'L\'envoi n\'est pas encore activé';
+  if (x.plafond) return 'Plafond atteint : ' + x.dejaRelance + ' relances déjà envoyées';
+  if (x.nextAt) return 'Prochaine relance possible le ' + fr(x.nextAt);
+  return '';
+}
+
+function card(x) {
+  var id = esc(x.bookingId), d = x.draft, b = !!busy[x.bookingId];
+  var h = '<div class="cd" data-id="' + id + '"><div class="cd-h"><div>' +
+    '<div class="cd-n"><a href="sales-leads.html?lead=' + encodeURIComponent(x.leadId) + '" target="_blank" rel="noopener">' + esc(x.name) + '</a></div>' +
+    '<div class="cd-m">' + (x.entreprise ? esc(x.entreprise) + ' · ' : '') + esc(x.closerName) + ' · rendez-vous du ' + esc(x.rdvDateFr || x.rdvDate) + ' · il y a ' + x.days + ' jour' + (x.days > 1 ? 's' : '') + '</div>' +
+    '</div><div class="sp"></div><span class="tag ' + (x.outcome === 'offre' ? 'of">Offre en attente' : 'nc">Non closé') + '</span></div>';
+
+  var tags = '';
+  if (x.sensible) tags += '<span class="tag wr">⚠ Situation sensible signalée : à vous de décider</span>';
+  if (x.dejaRelance) tags += '<span class="tag wr">Relancé ' + x.dejaRelance + ' fois sur ' + x.maxSends + (x.derniereRelanceAt ? ', dernière le ' + fr(x.derniereRelanceAt) : '') + '</span>';
+  if (x.dernierEnvoi && x.dernierEnvoi.smsError) tags += '<span class="tag wr">Dernier SMS non parti</span>';
+  if (!x.note) tags += '<span class="tag wr">Note du rendez-vous manquante</span>';
+  if (!x.hasEmail) tags += '<span class="tag wr">Pas d\'e-mail</span>';
+  if (!x.hasPhone) tags += '<span class="tag wr">Pas de téléphone</span>';
+  if (x.smsStop) tags += '<span class="tag wr">A répondu STOP aux SMS</span>';
+  if (x.categoryBy === 'ia') tags += '<span class="tag ia">Classé par l\'IA</span>';
+  if (tags) h += '<div class="cd-tags">' + tags + '</div>';
+
+  h += '<div class="cd-why"><b>Pourquoi ici :</b> ' + esc(x.reason) + '</div>';
+  if (x.note) h += '<div class="cd-note"><b>Note du rendez-vous :</b> ' + esc(x.note) + '</div>';
+  if (x.freins && x.freins.length) h += '<div class="cd-note"><b>Freins relevés :</b> ' + x.freins.map(esc).join(' · ') + '</div>';
+
+  if (x.category === 'trop_recent') { h += '<div class="cd-x">Aucun message proposé pour l\'instant.</div></div>'; return h; }
+
+  if (x.category === 'de_cote') {
+    h += '<div class="cd-a"><button type="button" class="bb bb-g" data-act="restore">↩ Remettre dans les relances</button></div></div>';
+    return h;
+  }
+
+  if (d && (d.emailBody || d.sms)) {
+    h += '<div class="cd-d">' +
+      '<label>Objet de l\'e-mail</label><input class="bi" data-f="emailSubject" value="' + esc(d.emailSubject) + '"/>' +
+      '<label>E-mail</label><textarea class="bi" data-f="emailBody" rows="9">' + esc(d.emailBody) + '</textarea>' +
+      '<label>SMS <span data-count>' + (d.sms || '').length + ' caractères</span></label><textarea class="bi" data-f="sms" rows="3">' + esc(d.sms) + '</textarea>' +
+      (d.ficheVide ? '<div class="cd-x">La fiche ne contenait rien d\'exploitable : le message reste ouvert. Complétez la note du rendez-vous pour un message plus précis.</div>' : '') +
+      '<div class="cd-a"><input class="bi" data-f="instruction" placeholder="Consigne pour une nouvelle version (facultatif)"/>' +
+      '<button type="button" class="bb bb-g" data-act="draft"' + (b ? ' disabled' : '') + '>' + (b ? '⏳ Rédaction…' : '↻ Régénérer') + '</button></div>' +
+      '<div class="cd-a">';
+    var blk = sendBlock(x), sd = !!sending[x.bookingId];
+    if (blk) h += '<button type="button" class="bb bb-s" disabled>Envoyer</button><span class="cd-x" style="margin:0">' + esc(blk) + '</span>';
+    else h += '<label class="cd-ck"><input type="checkbox" data-f="ckEmail"' + (x.hasEmail ? ' checked' : ' disabled') + '/> E-mail</label>' +
+      '<label class="cd-ck"><input type="checkbox" data-f="ckSms"' + (x.hasPhone && !x.smsStop ? ' checked' : ' disabled') + '/> SMS</label>' +
+      '<button type="button" class="bb bb-s" data-act="send"' + (sd ? ' disabled' : '') + '>' + (sd ? '⏳ Envoi…' : 'Envoyer') + '</button>';
+    h += '<button type="button" class="bb bb-g" data-act="save">💾 Enregistrer mes modifications</button><span class="sp"></span>';
+  } else {
+    h += '<div class="cd-d"><div class="cd-a"><button type="button" class="bb bb-p" data-act="draft"' + (b ? ' disabled' : '') + '>' + (b ? '⏳ Rédaction…' : '✨ Rédiger l\'e-mail et le SMS') + '</button><span class="sp"></span>';
+  }
+  h += '<button type="button" class="bb bb-g" data-act="move">' + (x.category === 'a_relancer' ? '→ Rappel convenu' : '→ À relancer') + '</button>' +
+       '<button type="button" class="bb bb-g" data-act="ask">Laisser de côté</button></div>';
+  var cf = confirming[x.bookingId];
+  if (cf) {
+    h += '<div class="cd-cf">Envoyer ' + (cf.email && cf.sms ? 'l\'e-mail puis le SMS' : (cf.email ? 'l\'e-mail seul' : 'le SMS seul')) + ' à <b>' + esc(x.name) + '</b> ? Le message part tel qu\'il est affiché ci-dessus.' +
+         '<div class="cd-a"><button type="button" class="bb bb-s" data-act="sendok">Confirmer l\'envoi</button><button type="button" class="bb bb-g" data-act="sendno">Annuler</button></div></div>';
+  }
+  if (asking[x.bookingId]) {
+    h += '<div class="cd-a"><input class="bi" data-f="motif" placeholder="Motif (obligatoire)"/>' +
+         '<button type="button" class="bb bb-p" data-act="exclude">Confirmer</button><button type="button" class="bb bb-g" data-act="cancel">Annuler</button></div>';
+  }
+  if (d && d.generatedAt) h += '<div class="cd-x">Rédigé le ' + new Date(d.generatedAt).toLocaleString('fr-FR') + (d.editedAt ? ' · modifié le ' + new Date(d.editedAt).toLocaleString('fr-FR') : '') + '</div>';
+  h += '</div></div>';
+  return h;
+}
+
+function renderList() {
+  var items = data.items.filter(function (x) { return x.category === cur; });
+  if (!items.length) { $('list').innerHTML = '<div class="empty">Aucun prospect dans cette catégorie.</div>'; return; }
+  var h = '';
+  items.forEach(function (x) { h += card(x); });
+  $('list').innerHTML = h;
+}
+function render() { renderCats(); renderList(); }
+
+// Garde en mémoire ce qui est tapé avant tout nouveau rendu de la liste.
+function capture() {
+  if (!data) return;
+  var nodes = document.querySelectorAll('.cd[data-id]'), i;
+  for (i = 0; i < nodes.length; i++) {
+    var x = find(nodes[i].getAttribute('data-id'));
+    if (!x || !x.draft) continue;
+    var f = fields(nodes[i]);
+    if (f.emailSubject != null) x.draft.emailSubject = f.emailSubject;
+    if (f.emailBody != null) x.draft.emailBody = f.emailBody;
+    if (f.sms != null) x.draft.sms = f.sms;
+  }
+}
+function fields(node) {
+  var o = {}, els = node.querySelectorAll('[data-f]'), i;
+  for (i = 0; i < els.length; i++) o[els[i].getAttribute('data-f')] = els[i].type === 'checkbox' ? !!els[i].checked : els[i].value;
+  return o;
+}
+
+function load() {
+  $('list').innerHTML = '<div class="empty">Chargement…</div>';
+  var body = { action: 'offers', days: parseInt($('fDays').value, 10) };
+  if ($('fAll').style.display !== 'none') body.all = $('fAll').value === '1';
+  api(body).then(function (j) {
+    data = j;
+    if (j.isAdmin) $('fAll').style.display = '';
+    if (!data.counts[cur] && data.counts.a_relancer) cur = 'a_relancer';
+    render();
+  }).catch(function (e) { $('list').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; toast(e.message, true); });
+}
+
+function act(name, node) {
+  var id = node.getAttribute('data-id'), x = find(id);
+  if (!x) return;
+  var f = fields(node);
+
+  if (name === 'draft') {
+    if (busy[id]) return;
+    capture(); busy[id] = true; renderList();
+    api({ action: 'offer_draft', bookingId: id, instruction: f.instruction || '' }).then(function (j) {
+      x.draft = j.draft; x.reason = j.reason || x.reason; x.categoryBy = 'ia';
+      if (j.category === 'de_cote') { x.sensible = true; toast('L\'IA signale une situation sensible : aucun message rédigé. À vous de décider.', true); }
+      else if (j.category && j.category !== x.category) { x.category = j.category; recount(); toast('Classé « ' + data.categories[j.category] + ' » : ' + (j.reason || '')); }
+      else toast('Relance rédigée');
+    }).catch(function (e) { toast(e.message, true); }).then(function () { delete busy[id]; capture(); render(); });
+    return;
+  }
+  if (name === 'send') {
+    if (!f.ckEmail && !f.ckSms) { toast('Cochez l\'e-mail, le SMS ou les deux', true); return; }
+    if (f.ckEmail && (!(f.emailSubject || '').replace(/\s/g, '') || !(f.emailBody || '').replace(/\s/g, ''))) { toast('L\'objet et le texte de l\'e-mail sont obligatoires', true); return; }
+    if (f.ckSms && !(f.sms || '').replace(/\s/g, '')) { toast('Le SMS est vide', true); return; }
+    capture(); confirming[id] = { email: !!f.ckEmail, sms: !!f.ckSms }; renderList(); return;
+  }
+  if (name === 'sendno') { capture(); delete confirming[id]; renderList(); return; }
+  if (name === 'sendok') {
+    var cf = confirming[id];
+    if (!cf || sending[id]) return;
+    capture(); delete confirming[id]; sending[id] = true; renderList();
+    api({ action: 'offer_send', bookingId: id, email: cf.email, sms: cf.sms, emailSubject: x.draft.emailSubject, emailBody: x.draft.emailBody, smsText: x.draft.sms }).then(function (j) {
+      x.dejaRelance = (x.dejaRelance || 0) + 1; x.derniereRelanceAt = j.at;
+      x.nextAt = j.at + (data.gapDays || 5) * 86400000; x.plafond = x.dejaRelance >= x.maxSends;
+      x.dernierEnvoi = { at: j.at, email: j.email, sms: j.sms, smsError: j.smsError };
+      if (j.warning) toast(j.warning, true);
+      else toast((j.email && j.sms ? 'E-mail et SMS envoyés' : (j.email ? 'E-mail envoyé' : 'SMS envoyé')) + (j.callTask ? ' · rappel d\'appel posé pour demain' : ''));
+    }).catch(function (e) { toast(e.message, true); }).then(function () { delete sending[id]; capture(); render(); });
+    return;
+  }
+  if (name === 'save') {
+    api({ action: 'offer_set', bookingId: id, draft: { emailSubject: f.emailSubject, emailBody: f.emailBody, sms: f.sms } }).then(function () {
+      x.draft.emailSubject = f.emailSubject; x.draft.emailBody = f.emailBody; x.draft.sms = f.sms; x.draft.editedAt = Date.now();
+      toast('Modifications enregistrées');
+    }).catch(function (e) { toast(e.message, true); });
+    return;
+  }
+  if (name === 'move') {
+    var to = x.category === 'a_relancer' ? 'rappel_convenu' : 'a_relancer';
+    api({ action: 'offer_set', bookingId: id, category: to }).then(function () {
+      capture(); x.category = to; x.categoryBy = 'manuel'; x.reason = 'Classé à la main.'; recount(); render();
+      toast('Déplacé dans « ' + data.categories[to] + ' »');
+    }).catch(function (e) { toast(e.message, true); });
+    return;
+  }
+  if (name === 'ask') { capture(); asking[id] = true; renderList(); return; }
+  if (name === 'cancel') { capture(); delete asking[id]; renderList(); return; }
+  if (name === 'exclude') {
+    var motif = (f.motif || '').replace(/^\s+|\s+$/g, '');
+    if (!motif) { toast('Indiquez le motif', true); return; }
+    api({ action: 'offer_set', bookingId: id, exclude: true, motif: motif }).then(function () {
+      capture(); delete asking[id]; x._prev = x.category; x.category = 'de_cote'; x.categoryBy = 'manuel'; x.reason = 'Laissé de côté : ' + motif; recount(); render();
+      toast('Laissé de côté');
+    }).catch(function (e) { toast(e.message, true); });
+    return;
+  }
+  if (name === 'restore') {
+    api({ action: 'offer_set', bookingId: id, exclude: false }).then(function () { toast('Remis dans les relances'); load(); })
+      .catch(function (e) { toast(e.message, true); });
+  }
+}
+
+document.addEventListener('click', function (e) {
+  var t = e.target.closest ? e.target.closest('[data-cat],[data-act]') : null;
+  if (!t || !data) return;
+  if (t.hasAttribute('data-cat')) { capture(); cur = t.getAttribute('data-cat'); render(); return; }
+  if (t.disabled) return;
+  var node = t.closest('.cd[data-id]');
+  if (node) act(t.getAttribute('data-act'), node);
+});
+document.addEventListener('input', function (e) {
+  var t = e.target;
+  if (!t || !t.getAttribute || t.getAttribute('data-f') !== 'sms') return;
+  var c = t.closest('.cd').querySelector('[data-count]');
+  if (c) c.textContent = t.value.length + ' caractères';
+});
+document.addEventListener('change', function (e) { if (e.target && (e.target.id === 'fDays' || e.target.id === 'fAll')) load(); });
+
+firebase.auth().onAuthStateChanged(function (u) {
+  if (!u) return;
+  var role = localStorage.getItem('ambitio_role') || '';
+  if (['admin', 'sales'].indexOf(role) < 0) { $('lockedView').style.display = ''; return; }
+  $('mainView').style.display = '';
+  load();
+});
+})();
+</script>
+<script src="nav.js"></script>
+</body>
+</html>
