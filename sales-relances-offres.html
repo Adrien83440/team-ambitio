@@ -18,6 +18,10 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
    Rendez-vous non closés, et offres faites depuis plus de 7 jours sans
    retour. L'IA classe et rédige un e-mail + un SMS par prospect, à la
    demande ; le closer relit, modifie, met de côté.
+   Imbriqué avec ce qui écrit déjà au prospect : tant qu'il reçoit la
+   séquence automatique d'après-RDV ou une campagne de relance, la carte est
+   en « Séquence en cours », sans brouillon ni envoi ; les désinscrits et les
+   exclusions définitives ne sont pas listés (règles dans api/_offerRelances.js).
    Rien ne part sans un clic sur « Envoyer », confirmé une seconde fois.
    L'envoi n'est ouvert que si _config/offer_relances.sendEnabled est vrai
    (sinon : fiches de test listées dans testLeadIds uniquement).
@@ -47,7 +51,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
 .cd-ck input{accent-color:#34d399;width:15px;height:15px}
 .cd-cf{border:1px solid rgba(52,211,153,.35);background:rgba(52,211,153,.07);border-radius:10px;padding:10px 12px;margin-top:10px;font-size:12.5px;line-height:1.5}
 
-.cats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.cats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:10px}
 .cat{border:1.5px solid rgba(255,255,255,.07);background:var(--bg2,#0f0f1a);border-radius:12px;padding:10px 12px;cursor:pointer;transition:all .15s;color:inherit;text-align:left;font-family:inherit}
 .cat:hover{border-color:rgba(255,255,255,.18)}
 .cat.on{border-color:rgba(245,158,11,.55);background:rgba(245,158,11,.07)}
@@ -67,6 +71,8 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
 .tag.of{color:#fbbf24;border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.07)}
 .tag.nc{color:#fca5a5;border-color:rgba(248,113,113,.3);background:rgba(248,113,113,.06)}
 .tag.wr{color:#fdba74;border-color:rgba(251,146,60,.35);background:rgba(251,146,60,.08)}
+.tag.ht{color:#fda4af;border-color:rgba(244,63,94,.45);background:rgba(244,63,94,.1)}
+.tag.sq{color:#93c5fd;border-color:rgba(96,165,250,.35);background:rgba(96,165,250,.08)}
 .tag.ia{color:#c4b5fd;border-color:rgba(167,139,250,.35);background:rgba(167,139,250,.08)}
 .cd-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .cd-why{font-size:12.5px;line-height:1.5;color:rgba(255,255,255,.78);margin-top:10px;padding:8px 11px;border-radius:10px;background:rgba(10,10,25,.35)}
@@ -88,6 +94,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
 .ro-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .ro-toast.err{background:#2e1a1a;border-color:rgba(239,68,68,.35);color:#fca5a5}
 .locked{text-align:center;padding:80px 20px;color:rgba(255,255,255,.35)}
+@media (max-width:900px){.cats{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:640px){.ro{padding:14px 16px 80px}.cats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
@@ -121,6 +128,7 @@ var sending = {};  // bookingId → true pendant un envoi
 var CAT_HINT = {
   a_relancer: 'Aucune réponse, aucune étape datée',
   rappel_convenu: 'Transformer « on se rappelle » en date',
+  en_sequence: 'Reçoit déjà nos e-mails automatiques',
   trop_recent: 'Offre de moins de 7 jours',
   de_cote: 'Aucun message'
 };
@@ -148,14 +156,14 @@ function find(id) {
   return null;
 }
 function recount() {
-  var c = { a_relancer: 0, rappel_convenu: 0, trop_recent: 0, de_cote: 0 };
+  var c = { a_relancer: 0, rappel_convenu: 0, en_sequence: 0, trop_recent: 0, de_cote: 0 };
   data.items.forEach(function (x) { if (c[x.category] != null) c[x.category]++; });
   data.counts = c;
 }
 
 function renderCats() {
   var h = '';
-  ['a_relancer', 'rappel_convenu', 'trop_recent', 'de_cote'].forEach(function (k) {
+  ['a_relancer', 'rappel_convenu', 'en_sequence', 'trop_recent', 'de_cote'].forEach(function (k) {
     var hint = k === 'trop_recent' ? 'Offre de moins de ' + data.minDays + ' jours' : CAT_HINT[k];
     h += '<button type="button" class="cat' + (cur === k ? ' on' : '') + '" data-cat="' + k + '"><div class="n">' + (data.counts[k] || 0) + '</div>' +
          '<div class="l">' + esc(data.categories[k]) + '</div><div class="s">' + esc(hint) + '</div></button>';
@@ -165,6 +173,9 @@ function renderCats() {
   if (s.a_repondu) parts.push(s.a_repondu + ' ont répondu depuis le rendez-vous');
   if (s.a_repris_rdv) parts.push(s.a_repris_rdv + ' ont repris rendez-vous');
   if (s.client) parts.push(s.client + ' sont devenus clients');
+  if (s.a_dit_non) parts.push(s.a_dit_non + ' ont répondu non à nos e-mails');
+  if (s.desinscrit) parts.push(s.desinscrit + ' désinscrits');
+  if (s.exclu) parts.push(s.exclu + ' exclus définitivement (STOP, plus intéressé)');
   if (s.bloque) parts.push(s.bloque + ' bloqués');
   if (s.fiche) parts.push(s.fiche + ' fiches écartées (fusion, poubelle, introuvable)');
   $('out').textContent = parts.length ? 'Sortis de la liste : ' + parts.join(' · ') + '.' : '';
@@ -194,7 +205,10 @@ function card(x) {
     '<div class="cd-m">' + (x.entreprise ? esc(x.entreprise) + ' · ' : '') + esc(x.closerName) + ' · rendez-vous du ' + esc(x.rdvDateFr || x.rdvDate) + ' · il y a ' + x.days + ' jour' + (x.days > 1 ? 's' : '') + '</div>' +
     '</div><div class="sp"></div><span class="tag ' + (x.outcome === 'offre' ? 'of">Offre en attente' : 'nc">Non closé') + '</span></div>';
 
-  var tags = '';
+  var tags = '', sq = x.suite;
+  if (x.chaud) tags += '<span class="tag ht">🔥 A cliqué « réserver » : à appeler en priorité</span>';
+  if (sq && sq.envoyes) tags += '<span class="tag sq">Séquence « ' + esc(sq.libelle) + ' » : ' + sq.envoyes + ' e-mail' + (sq.envoyes > 1 ? 's' : '') + ' sur ' + sq.total + (sq.etat === 'terminee' ? ', terminée' : (sq.etat === 'arretee' ? ', arrêtée' : '')) + '</span>';
+  if (sq && sq.choix) tags += '<span class="tag sq">A choisi : ' + esc(sq.choix) + '</span>';
   if (x.sensible) tags += '<span class="tag wr">⚠ Situation sensible signalée : à vous de décider</span>';
   if (x.dejaRelance) tags += '<span class="tag wr">Relancé ' + x.dejaRelance + ' fois sur ' + x.maxSends + (x.derniereRelanceAt ? ', dernière le ' + fr(x.derniereRelanceAt) : '') + '</span>';
   if (x.dernierEnvoi && x.dernierEnvoi.smsError) tags += '<span class="tag wr">Dernier SMS non parti</span>';
@@ -208,6 +222,19 @@ function card(x) {
   h += '<div class="cd-why"><b>Pourquoi ici :</b> ' + esc(x.reason) + '</div>';
   if (x.note) h += '<div class="cd-note"><b>Note du rendez-vous :</b> ' + esc(x.note) + '</div>';
   if (x.freins && x.freins.length) h += '<div class="cd-note"><b>Freins relevés :</b> ' + x.freins.map(esc).join(' · ') + '</div>';
+
+  if (sq && sq.douleur) h += '<div class="cd-note"><b>Ce qui lui pèse le plus :</b> ' + esc(sq.douleur) + '</div>';
+  if (sq && sq.reponses && sq.reponses.length) h += '<div class="cd-note"><b>Sa dernière réponse à nos e-mails :</b> ' + esc(sq.reponses[sq.reponses.length - 1].resume || '') + '</div>';
+
+  if (x.category === 'en_sequence') {
+    h += '<div class="cd-x">Aucun message à écrire pour l\'instant : il reçoit déjà nos e-mails. ' + (x.chaud ? 'Un appel reste possible, et utile.' : 'Vous pouvez l\'appeler ; la relance écrite s\'ouvrira à la fin de la séquence.') + '</div>' +
+         '<div class="cd-a"><span class="sp"></span><button type="button" class="bb bb-g" data-act="ask">Laisser de côté</button></div>';
+    if (asking[x.bookingId]) {
+      h += '<div class="cd-a"><input class="bi" data-f="motif" placeholder="Motif (obligatoire)"/>' +
+           '<button type="button" class="bb bb-p" data-act="exclude">Confirmer</button><button type="button" class="bb bb-g" data-act="cancel">Annuler</button></div>';
+    }
+    return h + '</div>';
+  }
 
   if (x.category === 'trop_recent') { h += '<div class="cd-x">Aucun message proposé pour l\'instant.</div></div>'; return h; }
 

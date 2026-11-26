@@ -26,6 +26,23 @@
 //   maxSends, callTask (rappel d'appel le lendemain, vrai par défaut),
 //   replaceLegacy (coupe la création de séquences de l'ancien cron), prompt }
 //
+// IMBRICATION AVEC CE QUI ÉCRIT DÉJÀ AU PROSPECT (un prospect n'est jamais
+// dans deux cases) :
+//   - Séquence d'après-RDV automatique (api/_parcoursSuite.js, parcours_suites) :
+//     tant qu'elle est active ou en pause, la carte est en « Séquence en
+//     cours » — visible, sans brouillon ni envoi. Un RDV non closé de moins de
+//     4 jours attend aussi sa séquence (frein choisi à J+1). Quand elle est
+//     terminée, le prospect arrive en « À relancer » et l'IA sait ce qu'il a
+//     déjà reçu (frein, e-mails, choix cliqués) pour ne rien répéter.
+//   - Campagne du module Relances (relance_verrous actif) : idem, en cours.
+//   - Exclusion définitive (relance_exclusions : STOP, « plus intéressé »),
+//     désinscription e-mail (leads.emailDesinscrit) ou « non » répondu à la
+//     séquence : le prospect sort du module, aucun message possible.
+//   - Un clic « réserver » dans un e-mail de séquence sans RDV repris : la
+//     carte est marquée chaude et remonte en tête (appeler d'abord).
+//   L'issue « offre » n'a aucune séquence automatique : c'est ce module qui
+//   la relance.
+//
 // Données : offer_relances/{bookingId} (Admin SDK seul, pas de règle Firestore)
 //   { bookingId, leadId, category, categoryBy, reason, excluded:{by,byName,at,
 //     motif}|null, draft:{emailSubject, emailBody, sms, ficheVide, generatedAt,
@@ -42,6 +59,8 @@ const { estBloque } = require('./_blockedContacts');
 const { sendLeadEmail } = require('./_leadEmail');
 const { getTwilioClient, getTwilioCreds } = require('./_twilioClient');
 const { toE164 } = require('./_leadLookup');
+const Suite = require('./_parcoursSuite');
+const P = require('./_parcoursRdv');
 
 const COL = 'offer_relances';
 const OUTCOMES = ['offre', 'non_close'];
@@ -56,6 +75,7 @@ const RE_INTERDIT = /(titan|garantie\s+(de\s+)?30|30\s*jours\s+(satisfait|rembou
 const CATEGORIES = {
   a_relancer: 'À relancer',
   rappel_convenu: 'Rappel convenu',
+  en_sequence: 'Séquence en cours',
   trop_recent: 'Trop récent',
   de_cote: 'Laissé de côté',
 };
@@ -79,23 +99,36 @@ const SCHEMA = {
 
 // Prompt par défaut. Surchargé par _config/offer_relances.prompt s'il existe.
 const DEFAULT_PROMPT = [
-  'Tu prépares la relance d\'un prospect d\'Alteore (accompagnement de dirigeants) après un rendez-vous de vente qui n\'a pas abouti à une signature.',
+  'Tu écris pour un closer d\'Alteore (accompagnement de dirigeants de TPE et PME) à un prospect qui a eu son rendez-vous de vente et n\'a pas encore rejoint l\'accompagnement.',
+  '',
+  'TON BUT : qu\'il nous rejoigne. Chaque message doit le rapprocher d\'une décision, en lui faisant faire le prochain pas le plus simple : un échange de 15 à 20 minutes avec son closer pour lever ce qui le retient et décider. Tu ne relances pas « pour prendre des nouvelles » : tu donnes une raison de répondre maintenant.',
+  '',
+  'COMMENT CONVAINCRE (sans jamais forcer) :',
+  '- Pars de CE QU\'IL A DIT : son objectif, ce qui lui pèse, un chiffre qu\'il a donné. C\'est son problème qui vend, pas notre offre.',
+  '- Montre ce que lui coûte de ne rien changer, avec ses propres mots et ses propres chiffres (temps, trésorerie, marge, fatigue). Concret, jamais dramatique.',
+  '- Réponds à SON frein, celui du dossier, par un élément nouveau : une précision, une façon de démarrer, ce que l\'échange va régler. Ne rejoue pas l\'argumentaire du rendez-vous.',
+  '- Rends le pas facile : un seul appel à l\'action, précis, à faible engagement. S\'il existe des facilités pour démarrer, dis qu\'elles se voient pendant l\'échange, sans les chiffrer.',
+  '- S\'il a montré un signal d\'intérêt (clic sur « réserver », question posée), appuie-toi dessus : il y pensait, aide-le à conclure.',
+  '- Reste digne : un dirigeant écrit à un dirigeant. Aucune flatterie, aucune pression, aucune culpabilisation. La porte reste ouverte à un non, mais tu écris pour obtenir un oui.',
   '',
   'D\'ABORD, classe le prospect :',
   '- a_relancer : offre faite ou rendez-vous non closé, aucune réponse, aucune prochaine étape datée. Relance directe.',
-  '- rappel_convenu : le prospect a demandé du temps et une période de rappel a été évoquée (« début janvier », « après les fêtes », « après la saison »). Le message sert à FIXER UNE DATE précise, sans presser.',
-  '- de_cote : la fiche signale une situation personnelle (santé, famille, deuil), une procédure ou une difficulté grave de l\'entreprise, ou le prospect a demandé à ne plus être contacté. Aucun message : laisse emailSubject, emailBody et sms vides. Le closer décidera.',
+  '- rappel_convenu : il a demandé du temps et une période a été évoquée (« début janvier », « après les fêtes », « après la saison »). Le message sert à FIXER UNE DATE précise dans cette période, pour que le projet ne se dissolve pas.',
+  '- de_cote : le dossier signale une situation personnelle (santé, famille, deuil), une procédure ou une difficulté grave de l\'entreprise, ou il a demandé à ne plus être contacté. Aucun message : laisse emailSubject, emailBody et sms vides. Le closer décidera.',
   'Écris en une phrase pourquoi (champ raison).',
   '',
-  'ENSUITE, rédige un e-mail et un SMS :',
+  'SELON LA SITUATION :',
+  '- Offre en attente : rappelle la date du rendez-vous et ce qu\'il voulait régler, nomme le frein s\'il est connu, propose l\'échange pour décider.',
+  '- Rendez-vous non closé : ne discute pas son refus et ne le nie pas. Reviens par un angle différent de celui du rendez-vous, lié à son frein ou à ce qui a pu changer depuis, et propose l\'échange pour refaire le point.',
+  '- Rappel convenu : rappelle ce qui avait été convenu, propose deux dates précises en semaine (jour et quantième), postérieures à la date du jour.',
+  '- Dernière relance : dis-le simplement, et demande une réponse claire, oui ou non, pour ne pas le relancer inutilement.',
+  '- S\'il a déjà reçu nos e-mails automatiques ou une relance, n\'en reprends ni l\'angle ni les formules : ce message doit sonner comme écrit pour lui seul, par son closer.',
+  '',
+  'RÈGLES D\'ÉCRITURE :',
   '- Vouvoiement, ton direct et respectueux, phrases courtes. Aucun emoji.',
   '- Signé du prénom du closer, suivi de « équipe Adrien & Emily ».',
-  '- Pars de ce que le prospect a dit lui-même : son objectif, son frein, un chiffre qu\'il a donné.',
-  '- N\'utilise QUE des faits présents dans le dossier. N\'invente rien. Si le dossier est vide ou ne dit rien d\'exploitable, écris un message ouvert qui demande quelle question lui reste, et mets ficheVide à true.',
-  '- Une seule demande par message : répondre avec un créneau, pour un échange de 15 à 20 minutes.',
-  '- a_relancer : rappelle la date du rendez-vous, nomme le frein s\'il est connu, propose un échange court, laisse la porte ouverte à un oui comme à un non.',
-  '- rappel_convenu : ne presse pas. Propose deux dates précises en semaine (jour et quantième), dans la période évoquée par le prospect, postérieures à la date du jour.',
-  '- Rendez-vous non closé (refus exprimé) : prends acte du refus sans le discuter, apporte un élément utile lié à son frein, et demande simplement si la situation a évolué.',
+  '- N\'utilise QUE des faits présents dans le dossier. N\'invente rien : ni chiffre, ni résultat client, ni promesse. Si le dossier est vide ou ne dit rien d\'exploitable, écris un message ouvert qui demande quelle question lui reste avant de décider, et mets ficheVide à true.',
+  '- Une seule demande par message. Si un lien de réservation est fourni, c\'est l\'appel à l\'action ; sinon, il répond avec le créneau qui lui convient.',
   '',
   'INTERDITS ABSOLUS :',
   '- Aucun prix, aucune fourchette de prix, aucun montant de l\'offre.',
@@ -104,11 +137,11 @@ const DEFAULT_PROMPT = [
   '- Alteore (le logiciel) ne fait pas partie de l\'accompagnement : ne le présente pas comme inclus.',
   '- Ne cite jamais une information de santé, familiale ou judiciaire, même si elle figure dans le dossier.',
   '- Aucune adresse postale, aucun numéro de téléphone de l\'entreprise.',
-  '- Aucune promesse de résultat chiffré, aucune fausse urgence, aucune réduction.',
+  '- Aucune promesse de résultat chiffré, aucune fausse urgence, aucune fausse rareté, aucune réduction.',
   '',
   'FORMAT :',
-  '- E-mail : objet court et concret, puis 3 à 4 paragraphes brefs séparés par une ligne vide, terminé par « Répondez simplement à ce message avec le créneau qui vous arrange. » ou équivalent.',
-  '- SMS : 160 caractères au plus si possible, commence par « Bonjour {prénom}, c\'est {prénom du closer} (Adrien & Emily). », et renvoie vers l\'e-mail pour répondre.',
+  '- E-mail : objet court, concret, personnel (jamais « Relance »), puis 3 à 4 paragraphes brefs séparés par une ligne vide. La dernière phrase est l\'appel à l\'action.',
+  '- SMS : 160 caractères au plus si possible, commence par « Bonjour {prénom}, c\'est {prénom du closer} (Adrien & Emily). », donne en une phrase la raison de répondre, et renvoie vers l\'e-mail ou le lien.',
 ].join('\n');
 
 function parisDate(ms) { return new Date(ms).toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' }); }
@@ -158,6 +191,9 @@ async function loadConfig() {
     callTask: c.callTask !== false,
     replaceLegacy: c.replaceLegacy === true,
     prompt: String(c.prompt || '').trim() || DEFAULT_PROMPT,
+    // Lien de réservation à proposer dans les messages (facultatif). Vide :
+    // le prospect répond avec un créneau et le closer pose le RDV.
+    lienRdv: /^https:\/\//.test(String(c.lienRdv || '')) ? String(c.lienRdv).trim() : '',
   };
 }
 
@@ -167,6 +203,57 @@ function sendHistory(state, legacy) {
   const old = ((legacy && legacy.steps) || []).filter(function (x) { return x.status === 'sent'; });
   const times = mine.map(function (x) { return x.at || 0; }).concat(old.map(function (x) { return x.sentAt || 0; }));
   return { count: times.length, last: times.length ? Math.max.apply(null, times) : 0, moduleCount: mine.length };
+}
+
+// ---------------------------------------------------------------------------
+//  Imbrication : séquences automatiques, campagnes, exclusions définitives
+// ---------------------------------------------------------------------------
+
+const PREP_DAYS = 4; // non closé : la séquence automatique démarre entre J+1 et J+3
+
+async function loadContext() {
+  const ctx = { exclus: {}, campagne: {}, suiteActive: {}, suitesOn: false };
+  const r = await Promise.all([
+    db.collection('relance_exclusions').get().catch(function () { return null; }),
+    db.collection('relance_verrous').where('actif', '==', true).get().catch(function () { return null; }),
+    db.collection(Suite.COL).where('etat', 'in', ['active', 'pause']).get().catch(function () { return null; }),
+    P.lireConfig().catch(function () { return {}; }),
+  ]);
+  if (r[0]) r[0].forEach(function (d) { ctx.exclus[d.id] = (d.data() || {}).motif || 'exclu'; });
+  if (r[1]) r[1].forEach(function (d) { ctx.campagne[d.id] = (d.data() || {}).campagneId || 1; });
+  if (r[2]) r[2].forEach(function (d) { const x = d.data() || {}; if (x.leadId) ctx.suiteActive[x.leadId] = { id: d.id, s: x }; });
+  ctx.suitesOn = Object.assign({}, Suite.DEFAUTS, (r[3] && r[3].suites) || {}).actif === true;
+  return ctx;
+}
+
+// Ce que la séquence automatique a fait pour ce prospect (pour l'écran et l'IA).
+function suiteInfo(id, x) {
+  if (!x) return null;
+  let l;
+  try { l = Suite.ligneAdmin(id, x, Date.now()); } catch (e) { return null; }
+  const partis = (l.etapes || []).filter(function (e) { return e && e.ok; });
+  return {
+    libelle: l.sequenceLibelle || '', douleur: l.douleurLibelle || null, etat: l.etat, motif: l.motif || null, motifLibelle: l.motifLibelle || null,
+    envoyes: partis.length, total: l.total || 0, objets: partis.map(function (e) { return e.objet; }).filter(Boolean).slice(0, 6),
+    prochainJour: l.prochain && l.prochain.jour ? l.prochain.jour : null,
+    clics: l.clics || 0, aCliqueReserver: l.aCliqueReserver === true, choix: l.choixLibelle || null,
+    reponses: (l.reponses || []).map(function (r) { return { sens: r.sens, resume: r.resume }; }),
+  };
+}
+
+// Le prospect reçoit-il déjà quelque chose d'automatique ? → { reason } ou null.
+function enCours(ctx, leadId, b, days, ownSuite) {
+  const act = ctx.suiteActive[leadId];
+  if (act) {
+    const i = suiteInfo(act.id, act.s) || {};
+    return { reason: 'Reçoit la séquence automatique « ' + (i.libelle || 'après RDV') + ' »' + (act.s.etat === 'pause' ? ' (en pause)' : '') + ' : ' + (i.envoyes || 0) + ' e-mail' + ((i.envoyes || 0) > 1 ? 's' : '') + ' sur ' + (i.total || '?') + ' parti' + ((i.envoyes || 0) > 1 ? 's' : '') +
+      (i.prochainJour ? ', prochain le ' + frDay(i.prochainJour) : '') + '. La relance manuelle s\'ouvre à la fin.', info: i };
+  }
+  if (ctx.campagne[leadId]) return { reason: 'Dans une campagne de relance en cours (module Relances). La relance manuelle s\'ouvre à la fin.', info: null };
+  if (ctx.suitesOn && b.outcome === 'non_close' && !ownSuite && days < PREP_DAYS) {
+    return { reason: 'Séquence automatique en préparation : le frein est choisi le lendemain du rendez-vous, puis les e-mails partent seuls.', info: null };
+  }
+  return null;
 }
 
 // Closer du RDV : booking_config/{personId}.firebaseUid, repli outcomeBy.
@@ -251,7 +338,8 @@ async function listOffers(auth, opts) {
   const resolve = closerResolver();
   const entries = Object.keys(byLead).map(function (k) { return byLead[k]; });
   const out = [];
-  const sortis = { client: 0, a_repondu: 0, a_repris_rdv: 0, fiche: 0, bloque: 0 };
+  const sortis = { client: 0, a_repondu: 0, a_repris_rdv: 0, fiche: 0, bloque: 0, exclu: 0, desinscrit: 0, a_dit_non: 0 };
+  const ctx = await loadContext();
 
   for (let i = 0; i < entries.length; i += 25) {
     const chunk = entries.slice(i, i + 25);
@@ -260,11 +348,12 @@ async function listOffers(auth, opts) {
       refs.push(db.collection('leads').doc(e.b.leadId));
       refs.push(db.collection(COL).doc(e.id));
       refs.push(db.collection('ai_followups').doc(e.id));
+      refs.push(db.collection(Suite.COL).doc(e.id));
     });
     const docs = await db.getAll.apply(db, refs);
     for (let j = 0; j < chunk.length; j++) {
       const e = chunk[j], b = e.b;
-      const ls = docs[j * 3], st = docs[j * 3 + 1], old = docs[j * 3 + 2];
+      const ls = docs[j * 4], st = docs[j * 4 + 1], old = docs[j * 4 + 2], su = docs[j * 4 + 3];
       if (!ls.exists) { sortis.fiche++; continue; }
       const l = ls.data() || {};
       if (l._merged === true || l.stage === 'poubelle' || l.stage === 'faux_numero') { sortis.fiche++; continue; }
@@ -274,6 +363,11 @@ async function listOffers(auth, opts) {
         return c && isInbound(c.direction) && Date.parse(c.date || c.createdAt || '') > e.at;
       });
       if (replied) { sortis.a_repondu++; continue; }
+      // Exclusion définitive, désinscription, « non » répondu à la séquence.
+      const own = su.exists ? (su.data() || {}) : null;
+      if (ctx.exclus[b.leadId]) { sortis.exclu++; continue; }
+      if (l.emailDesinscrit === true || (own && own.motifArret === 'desinscription')) { sortis.desinscrit++; continue; }
+      if (own && own.motifArret === 'reponse_stop') { sortis.a_dit_non++; continue; }
 
       const closer = await resolve(b);
       if (!all && closer.uid !== auth.uid) continue;
@@ -288,7 +382,15 @@ async function listOffers(auth, opts) {
       const state = st.exists ? (st.data() || {}) : {};
       let category = h.category, reason = h.reason, categoryBy = 'regle';
       if (state.excluded) { category = 'de_cote'; reason = 'Laissé de côté' + (state.excluded.byName ? ' par ' + state.excluded.byName : '') + (state.excluded.motif ? ' : ' + state.excluded.motif : '.'); categoryBy = 'manuel'; }
-      else if (h.category !== 'trop_recent' && state.category && CATEGORIES[state.category]) { category = state.category; reason = state.reason || reason; categoryBy = state.categoryBy || 'ia'; }
+      else if (h.category !== 'trop_recent' && state.category && CATEGORIES[state.category] && state.category !== 'en_sequence') { category = state.category; reason = state.reason || reason; categoryBy = state.categoryBy || 'ia'; }
+      const cours = enCours(ctx, b.leadId, b, days, own);
+      if (cours && category !== 'de_cote') { category = 'en_sequence'; reason = cours.reason; categoryBy = 'regle'; }
+      const sInfo = (cours && cours.info) || (own ? suiteInfo(e.id, own) : null);
+      const chaud = !!(sInfo && sInfo.aCliqueReserver);
+      if (!cours && sInfo && category !== 'de_cote' && categoryBy === 'regle' && (sInfo.etat === 'terminee' || sInfo.etat === 'arretee')) {
+        reason = 'Séquence automatique « ' + sInfo.libelle + ' » ' + (sInfo.etat === 'terminee' ? 'terminée' : 'arrêtée') + ' (' + sInfo.envoyes + ' e-mail' + (sInfo.envoyes > 1 ? 's' : '') + '), sans reprise de rendez-vous. ' + reason;
+      }
+      if (chaud) reason = 'A cliqué « réserver » dans un e-mail sans reprendre rendez-vous : à appeler en priorité. ' + reason;
 
       const hist = sendHistory(state, old.exists ? old.data() : null);
       const nextAt = hist.last ? hist.last + cfg.gapDays * 86400000 : 0;
@@ -301,7 +403,7 @@ async function listOffers(auth, opts) {
         typeLabel: b.typeLabel || '', note: cap(String(b.outcomeNote || ''), 600),
         freins: an && an.prospect ? (an.prospect.freins || []).slice(0, 3) : [],
         conseil: an ? cap(String(an.conseilRelance || ''), 300) : '',
-        category: category, reason: reason, categoryBy: categoryBy, sensible: h.sensible,
+        category: category, reason: reason, categoryBy: categoryBy, sensible: h.sensible, chaud: chaud, suite: sInfo,
         hasEmail: !!email, hasPhone: !!phone, smsStop: l.smsOptedOut === true || l.smsOptOut === true,
         dejaRelance: hist.count, derniereRelanceAt: hist.last, maxSends: cfg.maxSends,
         nextAt: nextAt > Date.now() ? nextAt : 0, plafond: hist.count >= cfg.maxSends,
@@ -313,9 +415,9 @@ async function listOffers(auth, opts) {
     if (out.length >= MAX_ITEMS) break;
   }
 
-  const order = { a_relancer: 0, rappel_convenu: 1, trop_recent: 2, de_cote: 3 };
-  out.sort(function (a, b) { return (order[a.category] - order[b.category]) || (b.days - a.days); });
-  const counts = { a_relancer: 0, rappel_convenu: 0, trop_recent: 0, de_cote: 0 };
+  const order = { a_relancer: 0, rappel_convenu: 1, en_sequence: 2, trop_recent: 3, de_cote: 4 };
+  out.sort(function (a, b) { return (order[a.category] - order[b.category]) || ((b.chaud ? 1 : 0) - (a.chaud ? 1 : 0)) || (b.days - a.days); });
+  const counts = { a_relancer: 0, rappel_convenu: 0, en_sequence: 0, trop_recent: 0, de_cote: 0 };
   out.forEach(function (x) { counts[x.category]++; });
   let stats = null;
   try { stats = await computeStats(auth, all, bkByLead); } catch (e) { console.warn('[offer-relances] stats', e && e.message); }
@@ -372,6 +474,20 @@ async function loadCard(auth, bookingId) {
   return { id: id, b: b, closer: closer, ref: db.collection(COL).doc(id) };
 }
 
+// Refus communs au brouillon et à l'envoi : le prospect est ailleurs.
+async function gardeImbrication(card, lead, days) {
+  const leadId = card.b.leadId;
+  const ctx = await loadContext();
+  const su = await db.collection(Suite.COL).doc(card.id).get();
+  const own = su.exists ? (su.data() || {}) : null;
+  if (ctx.exclus[leadId]) return { error: 'excluded_final', code: 409, message: 'Ce prospect a demandé à ne plus être contacté.' };
+  if ((lead && lead.emailDesinscrit === true) || (own && own.motifArret === 'desinscription')) return { error: 'unsubscribed', code: 409, message: 'Ce prospect s\'est désinscrit de nos e-mails.' };
+  if (own && own.motifArret === 'reponse_stop') return { error: 'said_no', code: 409, message: 'Ce prospect a répondu qu\'il ne souhaitait pas donner suite.' };
+  const cours = enCours(ctx, leadId, card.b, days, own);
+  if (cours) return { error: 'in_sequence', code: 409, message: cours.reason };
+  return { own: own };
+}
+
 // ---------------------------------------------------------------------------
 //  Brouillon IA (à la demande, une carte à la fois)
 // ---------------------------------------------------------------------------
@@ -386,6 +502,10 @@ async function draftOffer(auth, body) {
   if (b.outcome === 'offre' && days < cfg.minDays) return { error: 'too_recent', code: 409, message: 'Offre trop récente : relance possible à partir de ' + cfg.minDays + ' jours.' };
   const st = await card.ref.get();
   if (st.exists && (st.data() || {}).excluded) return { error: 'excluded', code: 409, message: 'Ce prospect est laissé de côté.' };
+  const garde = await gardeImbrication(card, null, days);
+  if (garde.error) return garde;
+  const sI = garde.own ? suiteInfo(card.id, garde.own) : null;
+  const sent = sendHistory(st.exists ? st.data() : null, null);
 
   const name = prospectName(b, null);
   const P = [];
@@ -406,6 +526,23 @@ async function draftOffer(auth, body) {
     (an.objections || []).slice(0, 5).forEach(function (o) { P.push('- Objection : « ' + cap(o.quote, 200) + ' »'); });
     if (an.conseilRelance) P.push('- Conseil de relance : ' + an.conseilRelance);
   }
+  if (sI && sI.envoyes) {
+    P.push('');
+    P.push('CE QU\'IL A DÉJÀ REÇU DE NOTRE PART (séquence d\'e-mails automatique « ' + sI.libelle + ' », ' + (sI.etat === 'terminee' ? 'terminée' : 'arrêtée') + ') — ne répète ni ces angles ni ces objets, apporte autre chose :');
+    sI.objets.forEach(function (o) { P.push('- E-mail : « ' + o + ' »'); });
+    if (sI.douleur) P.push('- Ce qui lui pèse le plus (sa réponse au questionnaire) : ' + sI.douleur);
+    if (sI.choix) P.push('- Dans ces e-mails, il a choisi : ' + sI.choix);
+    if (sI.aCliqueReserver) P.push('- SIGNAL FORT : il a cliqué sur « réserver » dans l\'un de ces e-mails, sans aller au bout. Il est intéressé : facilite-lui le pas.');
+    (sI.reponses || []).forEach(function (r) { if (r.resume) P.push('- Il a répondu : ' + cap(r.resume, 220)); });
+  }
+  if (sent.moduleCount) {
+    P.push('');
+    P.push('RELANCES DÉJÀ ENVOYÉES PAR LE CLOSER (ne pas répéter, changer d\'angle) :');
+    (st.data().sends || []).slice(-3).forEach(function (x) { P.push('- ' + frDay(parisDate(x.at)) + ' : ' + cap(x.emailBody || x.smsText || '', 400)); });
+    P.push('C\'est la relance n° ' + (sent.moduleCount + 1) + ' sur ' + cfg.maxSends + (sent.moduleCount + 1 >= cfg.maxSends ? ' : la dernière. Demande une décision claire, oui ou non, avec élégance.' : '.'));
+  }
+  P.push('');
+  P.push(cfg.lienRdv ? 'LIEN DE RÉSERVATION À PROPOSER (tel quel, une seule fois, dans l\'e-mail et le SMS) : ' + cfg.lienRdv : 'PAS DE LIEN DE RÉSERVATION : le prospect répond avec un créneau.');
   const bundle = await loadLeadBundle(b.leadId);
   if (bundle) { P.push(''); P.push(bundleToText(bundle, { maxCalls: 2, transcriptChars: 3000 })); }
   const instr = String(body.instruction || '').trim().slice(0, 500);
@@ -495,6 +632,9 @@ async function sendOffer(auth, body, me) {
   if ((Array.isArray(lead.communications) ? lead.communications : []).some(function (c) {
     return c && isInbound(c.direction) && Date.parse(c.date || c.createdAt || '') > at;
   })) return fail('replied', 409, 'Ce prospect a écrit depuis le rendez-vous : répondez-lui depuis sa fiche.');
+
+  const garde = await gardeImbrication(card, lead, Math.max(0, Math.floor((Date.now() - at) / 86400000)));
+  if (garde.error) return garde;
 
   const hist = sendHistory(state, got[2].exists ? got[2].data() : null);
   if (hist.count >= cfg.maxSends) return fail('cap', 409, 'Déjà ' + hist.count + ' relances envoyées : plafond atteint.');
