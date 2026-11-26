@@ -41,40 +41,56 @@ function cleanSmsText(raw) {
   return String(raw).replace(/^\s*message\s*:\s*/i, '').trim();
 }
 
-// Idempotence : un même SMS peut arriver via plusieurs webhooks Ringover (ou un
-// éventuel scénario Make résiduel). On déduplique sur providerMessageId :
-//   - si le lead a déjà une communication avec ce providerMessageId → déjà traité
-//   - sinon, si une notif inbox récente porte ce providerMessageId → déjà traité
-// Retourne true si le SMS a déjà été enregistré (donc à ignorer).
-async function alreadyProcessed(msgId, lead, text) {
-  // Doublon par CONTENU (09/10/2026) : le scénario Make peut avoir déjà tracé
-  // ce SMS (sans providerMessageId, préfixe « Message: ») — même texte entrant
-  // reçu il y a moins de 10 min sur la fiche → déjà enregistré.
-  if (lead && Array.isArray(lead.communications) && text) {
-    const norm = t => String(t || '').replace(/^\s*message\s*:\s*/i, '').replace(/\s+/g, ' ').trim().toLowerCase();
-    const k = norm(text);
-    const now = Date.now();
-    if (k && lead.communications.some(c => c && c.type === 'sms' && /^(in|entr)/.test(String(c.direction || '').toLowerCase()) &&
-        norm(c.content) === k && Math.abs(now - (Date.parse(c.date || '') || 0)) < 10 * 60000)) {
-      return true;
-    }
-  }
-  if (!msgId) return false; // sans identifiant fiable, on ne peut pas dédupliquer ici
-  const pid = String(msgId);
+// Idempotence : un même SMS peut arriver deux fois — par un second webhook
+// Ringover (même providerMessageId), ou par le scénario Make, qui le trace sur
+// la fiche via la Cloud Function onWebhookInbox (sans providerMessageId).
+//
+// Trois états (26/11/2026) :
+//   'doublon'     — ce SMS a déjà été traité PAR CETTE ROUTE (même
+//                   providerMessageId sur la fiche ou sur une notification) :
+//                   on sort, rien à refaire.
+//   'fiche_seule' — Make l'a déjà écrit sur la fiche (même texte entrant, à
+//                   moins de 10 min, SANS providerMessageId). Make ne crée ni
+//                   notification ni arrêt de relance : on n'écrit pas la fiche
+//                   une seconde fois, mais la cloche et le reste se font.
+//                   Avant, ce cas sortait comme un doublon complet : quand Make
+//                   passait le premier, la réponse du prospect n'apparaissait
+//                   dans aucune Inbox (cas du 26/11/2026, 08:10).
+//   'nouveau'     — tout est à faire.
+function smsNorm(t) {
+  return String(t || '').replace(/^\s*message\s*:\s*/i, '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function etatSurFiche(msgId, lead, text, nowMs) {
+  const comms = (lead && Array.isArray(lead.communications)) ? lead.communications : [];
+  const pid = msgId ? String(msgId) : '';
+  if (pid && comms.some(c => c && String(c.providerMessageId || '') === pid)) return 'doublon';
+  const k = smsNorm(text);
+  if (!k) return 'nouveau';
+  const now = nowMs || Date.now();
+  const memes = comms.filter(c => c && c.type === 'sms' && /^(in|entr)/.test(String(c.direction || '').toLowerCase()) &&
+    smsNorm(c.content) === k && Math.abs(now - (Date.parse(c.date || '') || 0)) < 10 * 60000);
+  if (!memes.length) return 'nouveau';
+  // Sans identifiant fiable, on ne sait pas distinguer un second webhook d'une
+  // trace de Make : comportement d'avant, doublon complet.
+  if (!pid) return 'doublon';
+  // Trace sans identifiant = écrite par Make. Une trace portant un AUTRE
+  // identifiant est un autre SMS (le prospect a écrit deux fois la même chose).
+  return memes.some(c => !String(c.providerMessageId || '')) ? 'fiche_seule' : 'nouveau';
+}
+
+async function etatSms(msgId, lead, text) {
+  const etat = etatSurFiche(msgId, lead, text);
+  if (etat === 'doublon' || !msgId) return etat;
   try {
-    if (lead && Array.isArray(lead.communications)) {
-      if (lead.communications.some(c => c && String(c.providerMessageId || '') === pid)) {
-        return true;
-      }
-    }
     const dup = await db.collection('inbox_notifications')
-      .where('providerMessageId', '==', pid)
+      .where('providerMessageId', '==', String(msgId))
       .limit(1).get();
-    if (!dup.empty) return true;
+    if (!dup.empty) return 'doublon';
   } catch (e) {
-    console.warn('[sms-inbound] alreadyProcessed check error:', e.message);
+    console.warn('[sms-inbound] etatSms check error:', e.message);
   }
-  return false;
+  return etat;
 }
 
 async function findLead(fromNumber) {
@@ -182,10 +198,14 @@ module.exports = async (req, res) => {
 
     // Idempotence : si ce SMS (providerMessageId) a déjà été enregistré, on sort
     // sans dupliquer ni en base lead ni en notification inbox.
-    if (await alreadyProcessed(msgId, lead, text)) {
+    const etat = await etatSms(msgId, lead, text);
+    if (etat === 'doublon') {
       console.log('[sms-inbound] duplicate ignored, msgId:', String(msgId || ''));
       res.status(200).end();
       return;
+    }
+    if (etat === 'fiche_seule') {
+      console.log('[sms-inbound] déjà sur la fiche (Make) — notification seule, msgId:', String(msgId || ''));
     }
 
     // ── Trouver ownerUid ───────────────────────────────────────────────────
@@ -206,7 +226,7 @@ module.exports = async (req, res) => {
     const tlDate  = smsDate.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
 
     // ── Écrire dans leads ──────────────────────────────────────────────────
-    if (lead) {
+    if (lead && etat !== 'fiche_seule') {
       try {
         await db.collection('leads').doc(lead.id).update({
           communications:   admin.firestore.FieldValue.arrayUnion({
@@ -257,3 +277,6 @@ module.exports = async (req, res) => {
     res.status(200).end(); // toujours 200 pour Ringover
   }
 };
+
+/* Exposé pour les essais : la décision, sans réseau ni base. */
+module.exports._etatSurFiche = etatSurFiche;
