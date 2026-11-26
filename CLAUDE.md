@@ -740,8 +740,13 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
     d'un doublon). Sans `stats-core.js` (script bloqué), l'écriture est refusée (« recharge la page »), jamais repliée en silence.
     (3) Une date reprise garde sa valeur d'origine sur la fiche : `clientSinceTexte` (texte) ou `clientSinceAvant` (map
     `{seconds, nanoseconds}` laissée par l'ancienne fusion) + `clientSinceConvertiLe` ; trace `reprise_client_since_log` (Admin SDK
-    seul). Ne jamais effacer ces champs. Contrôle à blanc du 25/11/2026 sur la base réelle : 4 fiches en texte (1 d'avril, 3 de mai
-    2026), aucune map ; la route temporaire `api/reprise-donnees.js` est dans l'historique git (commit 6798824), pas sur `main`.
+    seul). Ne jamais effacer ces champs. Reprise FAITE le 26/11/2026 sur la base réelle (contrôle à blanc validé par Adrien, écriture
+    après la mise en production) : 4 fiches converties (1 d'avril, 3 de mai 2026), trace
+    `reprise_client_since_log/cs_20261126T061329Z_09a285`, aucune map. Effet, relu après écriture avec le vrai moteur : nombre de
+    closes inchangé dans tous les mois ; avril 2026 + 14 400 € de contracté et de collecté (le second paiement d'une cliente,
+    compté nulle part jusque-là, rejoint son close) ; mai 2026 mêmes totaux, 3 closes datés du jour de leur fiche. Reste une fiche
+    fusionnée à la date illisible (`wb_1096`, non cliente, ignorée partout), laissée telle quelle. La route temporaire
+    `api/reprise-donnees.js` est dans l'historique git (commit 6798824), pas sur `main` ; sa clé Vercel `REPRISE_KEY` est neutralisée.
   - **Plus de données nominatives dans le code (25/11/2026)**. Une page statique est servie à tout le monde, SANS connexion : aucun
     nom, e-mail ou téléphone de client ou de prospect ne s'écrit dans un fichier servi, même en commentaire ou en exemple (exemples :
     `prenom@exemple.com`, `+33600000000`). Retirés : les lignes de commission en dur de `sales-commissions.html` (les 33 lignes des
