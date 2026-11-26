@@ -71,6 +71,18 @@ const DEFAULT_GAP_DAYS = 5;      // écart minimal entre deux relances
 const DEFAULT_MAX_SENDS = 3;     // relances au total par prospect
 // Jamais dans un message, même retapé à la main (règles de contenu Adrien).
 const RE_INTERDIT = /(titan|garantie\s+(de\s+)?30|30\s*jours\s+(satisfait|rembours))/i;
+// Demande d'Adrien du 26/11/2026 : l'IA a écrit « j'ai une meilleure offre à
+// vous proposer » à un prospect à qui l'on avait présenté notre offre d'entrée.
+// Il n'existe AUCUNE autre offre : un message ne promet jamais une offre, une
+// formule ou des conditions différentes de celle présentée en rendez-vous.
+const RE_AUTRE_OFFRE = /((meilleure|autre|nouvelle|seconde|deuxi[èe]me)\s+(offre|formule|proposition|solution)|(offre|formule|solution|accompagnement|version)\s+(plus\s+|mieux\s+)(adapt[ée]e?|accessible|l[ée]g[èe]re?|abordable|[ée]conomique|souple|courte?|petite?|simple)|(offre|formule)\s+(alternative|sp[ée]ciale|sur[- ]mesure|interm[ée]diaire|all[ée]g[ée]e|d[ée]couverte)|tarif\s+(pr[ée]f[ée]rentiel|r[ée]duit|sp[ée]cial)|r[ée]duction\s+(de\s+prix|tarifaire|sur\s+(le|l['’ ])\s*(prix|tarif|montant|offre))|remise\s+(commerciale|exceptionnelle|tarifaire|sp[ée]ciale|de\s+\d|sur\s+(le|l['’ ])\s*(prix|tarif|montant|offre))|rabais|(offre|tarif|prix)\s+promotionnel|en\s+promotion|prix\s+(r[ée]duit|plus\s+bas)|moins\s+cher|geste\s+commercial|conditions\s+(sp[ée]ciales|exceptionnelles|particuli[èe]res))/i;
+function contenuInterdit(t) {
+  const x = String(t || '');
+  if (RE_INTERDIT.test(x)) return 'Le message mentionne l\'offre Titan ou une garantie 30 jours : à retirer.';
+  const m = x.match(RE_AUTRE_OFFRE);
+  if (m) return 'Le message laisse entendre une autre offre, une autre formule ou une remise (« ' + m[0] + ' ») : nous n\'en avons pas. À reformuler.';
+  return null;
+}
 
 const CATEGORIES = {
   a_relancer: 'À relancer',
@@ -86,10 +98,11 @@ const RE_SENSIBLE = /(d[ée]c[èe]s|d[ée]c[ée]d|deuil|maladie|malade|hospitali
 const SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['categorie', 'raison', 'ficheVide', 'emailSubject', 'emailBody', 'sms'],
+  required: ['categorie', 'raison', 'offrePresentee', 'ficheVide', 'emailSubject', 'emailBody', 'sms'],
   properties: {
     categorie: { type: 'string', enum: ['a_relancer', 'rappel_convenu', 'de_cote'] },
     raison: { type: 'string', description: 'Une phrase, pour le closer : pourquoi cette catégorie' },
+    offrePresentee: { type: 'string', enum: ['Business Phénix', 'Elite Phénix', 'inconnue'], description: 'L\'offre présentée au prospect pendant le rendez-vous, d\'après le dossier. « inconnue » si le dossier ne permet pas de le savoir : ne devine pas.' },
     ficheVide: { type: 'boolean', description: 'true si la note du RDV manque ou ne dit rien d\'exploitable' },
     emailSubject: { type: 'string', description: 'Objet court et concret. Vide si categorie = de_cote' },
     emailBody: { type: 'string', description: '3 à 4 paragraphes brefs séparés par une ligne vide. Vide si categorie = de_cote' },
@@ -110,6 +123,23 @@ const DEFAULT_PROMPT = [
   '- Rends le pas facile : un seul appel à l\'action, précis, à faible engagement. S\'il existe des facilités pour démarrer, dis qu\'elles se voient pendant l\'échange, sans les chiffrer.',
   '- S\'il a montré un signal d\'intérêt (clic sur « réserver », question posée), appuie-toi dessus : il y pensait, aide-le à conclure.',
   '- Reste digne : un dirigeant écrit à un dirigeant. Aucune flatterie, aucune pression, aucune culpabilisation. La porte reste ouverte à un non, mais tu écris pour obtenir un oui.',
+  '',
+  'NOS OFFRES — CADRE STRICT, AUCUNE INITIATIVE :',
+  '- Nous n\'avons que les offres décrites dans le contexte Alteore ci-dessus (« NOS OFFRES ET PRIX ») : Business Phénix, notre offre d\'entrée, et Elite Phénix. Il n\'existe RIEN d\'autre : ni offre moins chère, ni version allégée, ni formule intermédiaire, ni conditions spéciales, ni remise, ni bonus.',
+  '- Le prospect a reçu UNE offre pendant son rendez-vous. Retrouve laquelle dans le dossier (note du rendez-vous, analyse du closing, appels) et renseigne offrePresentee. Ton message reste sur CETTE offre, telle qu\'elle lui a été présentée.',
+  '- N\'écris JAMAIS, même de façon voilée, qu\'il existe « une meilleure offre », « une autre offre », « une autre formule », « une formule plus adaptée », « quelque chose de plus accessible », « une nouvelle proposition » ou « des conditions particulières ». C\'est faux, et le closer serait incapable de tenir la promesse.',
+  '- Si tu ne sais pas quelle offre lui a été présentée (offrePresentee = inconnue), parle de « l\'accompagnement » sans le nommer et sans rien décrire de son contenu.',
+  '- Ne décris de l\'offre que ce que le contexte Alteore en dit. N\'invente ni contenu, ni durée, ni modalité.',
+  '- Cohérence avec le profil : Elite Phénix s\'adresse au dirigeant à 20 000 € et plus de chiffre d\'affaires mensuel ; Business Phénix à l\'artisan ou au commerçant plus petit. Si l\'offre présentée te paraît ne pas correspondre au profil, n\'en dis RIEN au prospect : signale-le au closer dans le champ raison, c\'est lui qui décide.',
+  '- Seule exception : une CONSIGNE DU CLOSER explicite dans le dossier, que tu suis à la lettre.',
+  '',
+  'L\'ANTI-VENTE, AVEC PARCIMONIE :',
+  '- Quand la situation le mérite (plusieurs relances sans réponse, hésitation qui dure, dernière relance, prospect qui repousse sans raison précise), tu peux retourner la posture, avec élégance et sans une once de mépris : nous n\'accompagnons que des dirigeants décidés à changer les choses ; beaucoup voient le problème et ne passent jamais à l\'action, et c\'est dommage ; si ce n\'est pas son cas aujourd\'hui, mieux vaut nous le dire simplement.',
+  '- Une ou deux phrases au plus, jamais en ouverture, jamais sur une première relance, jamais avec un prospect en difficulté personnelle ou financière. Le ton reste chaleureux : on constate, on ne juge pas, et la porte reste ouverte.',
+  '',
+  'SI LE CLOSER REPREND LE DOSSIER D\'UN COLLÈGUE (indiqué dans le dossier) :',
+  '- L\'e-mail et le SMS commencent par le dire, simplement : « Bonjour {prénom}, c\'est {prénom du closer}. Je reprends le fil de votre échange avec {prénom du collègue}. »',
+  '- N\'explique pas pourquoi, ne dis pas que le collègue est parti. Ne fais pas comme si le closer avait mené le rendez-vous : il écrit « lors de votre échange avec {prénom du collègue} », jamais « lors de notre rendez-vous ».',
   '',
   'D\'ABORD, classe le prospect :',
   '- a_relancer : offre faite ou rendez-vous non closé, aucune réponse, aucune prochaine étape datée. Relance directe.',
@@ -133,7 +163,6 @@ const DEFAULT_PROMPT = [
   'INTERDITS ABSOLUS :',
   '- Aucun prix, aucune fourchette de prix, aucun montant de l\'offre.',
   '- Jamais de garantie 30 jours. Jamais l\'offre Titan.',
-  '- Si le chiffre d\'affaires mensuel est inférieur à 20 000 €, évoque « une formule plus adaptée à la taille de votre entreprise », sans jamais nommer la formule.',
   '- Alteore (le logiciel) ne fait pas partie de l\'accompagnement : ne le présente pas comme inclus.',
   '- Ne cite jamais une information de santé, familiale ou judiciaire, même si elle figure dans le dossier.',
   '- Aucune adresse postale, aucun numéro de téléphone de l\'entreprise.',
@@ -141,7 +170,7 @@ const DEFAULT_PROMPT = [
   '',
   'FORMAT :',
   '- E-mail : objet court, concret, personnel (jamais « Relance »), puis 3 à 4 paragraphes brefs séparés par une ligne vide. La dernière phrase est l\'appel à l\'action.',
-  '- SMS : 160 caractères au plus si possible, commence par « Bonjour {prénom}, c\'est {prénom du closer} (Adrien & Emily). », donne en une phrase la raison de répondre, et renvoie vers l\'e-mail ou le lien.',
+  '- SMS : 160 caractères au plus si possible (320 si le closer reprend le dossier), commence par « Bonjour {prénom}, c\'est {prénom du closer} (Adrien & Emily). », donne en une phrase la raison de répondre, et renvoie vers l\'e-mail ou le lien.',
 ].join('\n');
 
 function parisDate(ms) { return new Date(ms).toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' }); }
@@ -193,6 +222,8 @@ async function loadConfig() {
     prompt: String(c.prompt || '').trim() || DEFAULT_PROMPT,
     // Lien de réservation à proposer dans les messages (facultatif). Vide :
     // le prospect répond avec un créneau et le closer pose le RDV.
+    // Closer qui reprend les prospects d'un membre parti (slug du roster).
+    repriseSlug: String(c.repriseSlug || '').trim(),
     lienRdv: /^https:\/\//.test(String(c.lienRdv || '')) ? String(c.lienRdv).trim() : '',
   };
 }
@@ -257,10 +288,31 @@ function enCours(ctx, leadId, b, days, ownSuite) {
 }
 
 // Closer du RDV : booking_config/{personId}.firebaseUid, repli outcomeBy.
-function closerResolver() {
+// Un membre est parti s'il est désactivé ou archivé dans _meta/team_members
+// (source de vérité, Admin → Utilisateurs) : jamais de nom en dur.
+function membreParti(m) { return !!m && (m.active === false || !!m.archivedAt); }
+function sansAccent(t) { return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); }
+function prenomDe(m) { return m ? (m.shortName || firstName(m.displayName || m.fullName || '')) : ''; }
+
+async function loadMembers() {
+  try {
+    const s = await db.collection('_meta').doc('team_members').get();
+    const raw = s.exists ? s.data().members : null;
+    return (Array.isArray(raw) ? raw : Object.values(raw || {})).filter(Boolean);
+  } catch (e) { return []; }
+}
+
+/* Renvoie le closer qui PORTE le prospect aujourd'hui :
+   - le closer du RDV s'il est toujours dans l'équipe ;
+   - sinon le repreneur (_config/offer_relances.repriseSlug), avec
+     `reprise: { de }` — c'est lui qui voit la carte, et le message dit
+     « je reprends le fil de votre échange avec … » ;
+   - sans repreneur réglé : uid nul (admins seuls), reprise signalée. */
+function closerResolver(cfg) {
   const cache = {};
+  let members = null;
   return async function (b) {
-    let uid = null; const name = b.personName || b.expertName || null;
+    let uid = null; let name = b.personName || b.expertName || null;
     if (b.personId) {
       if (!(b.personId in cache)) {
         try {
@@ -270,8 +322,19 @@ function closerResolver() {
       }
       uid = cache[b.personId];
     }
-    if (!uid && b.outcomeBy) return { uid: b.outcomeBy, name: name || b.outcomeByName || null };
-    return { uid: uid, name: name };
+    if (!uid && b.outcomeBy) { uid = b.outcomeBy; name = name || b.outcomeByName || null; }
+    if (!members) members = await loadMembers();
+    const fn = sansAccent(firstName(name));
+    // Le NOM porté par le RDV prime : la page d'un membre parti peut avoir été
+    // rattachée depuis au compte de son remplaçant.
+    const m = (fn ? members.find(function (x) { return membreParti(x) && sansAccent(prenomDe(x)) === fn; }) : null) ||
+      (uid ? members.find(function (x) { return x.firebaseUid === uid; }) : null) ||
+      (fn ? members.find(function (x) { return sansAccent(prenomDe(x)) === fn; }) : null);
+    if (!membreParti(m)) return { uid: uid, name: name, reprise: null };
+    const de = prenomDe(m) || firstName(name);
+    const r = cfg && cfg.repriseSlug ? members.find(function (x) { return x.slug === cfg.repriseSlug && !membreParti(x) && x.firebaseUid; }) : null;
+    if (r) return { uid: r.firebaseUid, name: prenomDe(r), reprise: { de: de, fixe: true } };
+    return { uid: null, name: null, reprise: { de: de, fixe: false } };
   };
 }
 
@@ -335,7 +398,7 @@ async function listOffers(auth, opts) {
     else if (String(x.date || '') > String(ref.date || '') && OUTCOMES.indexOf(x.outcome) < 0 && x.outcome !== 'no_show' && x.outcome !== 'annule' && x.outcome !== 'replanifie') later[x.leadId] = later[x.leadId] || 'rdv_plus_recent';
   });
 
-  const resolve = closerResolver();
+  const resolve = closerResolver(cfg);
   const entries = Object.keys(byLead).map(function (k) { return byLead[k]; });
   const out = [];
   const sortis = { client: 0, a_repondu: 0, a_repris_rdv: 0, fiche: 0, bloque: 0, exclu: 0, desinscrit: 0, a_dit_non: 0 };
@@ -399,7 +462,7 @@ async function listOffers(auth, opts) {
       out.push({
         bookingId: e.id, leadId: b.leadId, name: prospectName(b, l), entreprise: l.entreprise || l.company || p.entreprise || '',
         outcome: b.outcome, rdvDate: b.date || '', rdvDateFr: frDay(b.date), days: days,
-        closerName: closer.name || '—', closerUid: closer.uid || null, mine: closer.uid === auth.uid,
+        closerName: closer.name || '—', closerUid: closer.uid || null, mine: closer.uid === auth.uid, reprise: closer.reprise || null,
         typeLabel: b.typeLabel || '', note: cap(String(b.outcomeNote || ''), 600),
         freins: an && an.prospect ? (an.prospect.freins || []).slice(0, 3) : [],
         conseil: an ? cap(String(an.conseilRelance || ''), 300) : '',
@@ -469,7 +532,7 @@ async function loadCard(auth, bookingId) {
   if (!bs.exists) return { error: 'not_found', code: 404 };
   const b = bs.data() || {};
   if (OUTCOMES.indexOf(b.outcome) < 0 || !b.leadId) return { error: 'not_an_open_offer', code: 409 };
-  const closer = await closerResolver()(b);
+  const closer = await closerResolver(await loadConfig())(b);
   if (auth.role !== 'admin' && closer.uid !== auth.uid) return { error: 'not_your_prospect', code: 403 };
   return { id: id, b: b, closer: closer, ref: db.collection(COL).doc(id) };
 }
@@ -492,7 +555,7 @@ async function gardeImbrication(card, lead, days) {
 //  Brouillon IA (à la demande, une carte à la fois)
 // ---------------------------------------------------------------------------
 
-async function draftOffer(auth, body) {
+async function draftOffer(auth, body, me) {
   const card = await loadCard(auth, body.bookingId);
   if (card.error) return card;
   const b = card.b;
@@ -510,7 +573,12 @@ async function draftOffer(auth, body) {
   const name = prospectName(b, null);
   const P = [];
   P.push('DATE DU JOUR : ' + frDay(parisDate(Date.now())));
-  P.push('CLOSER : ' + (firstName(card.closer.name) || '?') + ' (signe de ce prénom)');
+  // Signataire : le closer qui porte le prospect ; à défaut (membre parti sans
+  // repreneur réglé), celui qui clique.
+  const signataire = firstName(card.closer.name) || firstName(me && me.name) || '';
+  if (!signataire) return { error: 'no_signer', code: 409, message: 'Aucun closer pour signer ce message : réglez le repreneur des prospects d\'un membre parti.' };
+  P.push('CLOSER : ' + signataire + ' (signe de ce prénom)');
+  if (card.closer.reprise) P.push('REPRISE DE DOSSIER : ' + signataire + ' reprend ce prospect à la place de ' + card.closer.reprise.de + ', qui a mené le rendez-vous. ' + signataire + ' n\'était pas au rendez-vous.');
   P.push('PROSPECT : ' + name);
   P.push('RENDEZ-VOUS : ' + (frDay(b.date) || '?') + ' — il y a ' + days + ' jours — issue « ' + (b.outcome === 'offre' ? 'offre faite, en attente de réponse' : 'non closé (refus exprimé)') + ' »');
   P.push('NOTE DU RENDEZ-VOUS : ' + (String(b.outcomeNote || '').trim() ? cap(b.outcomeNote, 1200) : '(vide)'));
@@ -548,14 +616,23 @@ async function draftOffer(auth, body) {
   const instr = String(body.instruction || '').trim().slice(0, 500);
   if (instr) { P.push(''); P.push('CONSIGNE DU CLOSER POUR CETTE VERSION : ' + instr); }
 
-  const r = await callClaude({ task: 'offer_followup', system: cfg.prompt, prompt: P.join('\n'), schema: SCHEMA, uid: auth.uid, ref: 'offer:' + card.id, source: 'offer_relances' });
+  let r = await callClaude({ task: 'offer_followup', system: cfg.prompt, prompt: P.join('\n'), schema: SCHEMA, uid: auth.uid, ref: 'offer:' + card.id, source: 'offer_relances' });
   if (!r.ok) throw new Error(r.error);
-  const j = r.json || {};
+  let j = r.json || {};
+  // Contrôle du texte produit : une seconde rédaction si l'IA a quand même
+  // évoqué une autre offre ; au-delà, le brouillon est livré avec une alerte
+  // et l'envoi le refusera tant que la phrase est là.
+  let alerte = contenuInterdit([j.emailSubject, j.emailBody, j.sms].join(' '));
+  if (alerte && !instr) {
+    const r2 = await callClaude({ task: 'offer_followup', system: cfg.prompt, schema: SCHEMA, uid: auth.uid, ref: 'offer:' + card.id, source: 'offer_relances',
+      prompt: P.join('\n') + '\n\nTA PREMIÈRE VERSION A ÉTÉ REFUSÉE : ' + alerte + ' Réécris l\'e-mail et le SMS sans aucune allusion à une autre offre, une autre formule, une remise ou des conditions particulières.' });
+    if (r2.ok && r2.json) { r = r2; j = r2.json; alerte = contenuInterdit([j.emailSubject, j.emailBody, j.sms].join(' ')); }
+  }
   const draft = {
     emailSubject: String(j.emailSubject || '').trim().slice(0, 200),
     emailBody: String(j.emailBody || '').trim().slice(0, 6000),
     sms: String(j.sms || '').trim().slice(0, 640),
-    ficheVide: j.ficheVide === true, generatedAt: Date.now(), model: r.model || null, instruction: instr || null,
+    ficheVide: j.ficheVide === true, offrePresentee: j.offrePresentee || 'inconnue', alerte: alerte || null, signataire: signataire, generatedAt: Date.now(), model: r.model || null, instruction: instr || null,
   };
   const patch = {
     bookingId: card.id, leadId: b.leadId, category: j.categorie, categoryBy: 'ia',
@@ -653,9 +730,8 @@ async function sendOffer(auth, body, me) {
   if (wantEmail && (!subject || !mailBody)) return fail('empty_email', 400, 'L\'objet et le texte de l\'e-mail sont obligatoires.');
   if (wantEmail && email.indexOf('@') < 0) return fail('no_email', 409, 'Ce prospect n\'a pas d\'e-mail.');
   if (wantSms && !smsText) return fail('empty_sms', 400, 'Le SMS est vide.');
-  if (RE_INTERDIT.test((wantEmail ? subject + ' ' + mailBody : '') + ' ' + (wantSms ? smsText : ''))) {
-    return fail('forbidden_content', 400, 'Le message mentionne l\'offre Titan ou une garantie 30 jours : à retirer.');
-  }
+  const interdit = contenuInterdit((wantEmail ? subject + ' ' + mailBody : '') + ' ' + (wantSms ? smsText : ''));
+  if (interdit) return fail('forbidden_content', 400, interdit);
   let toNumber = null, smsFrom = null;
   if (wantSms) {
     if (lead.smsOptedOut === true || lead.smsOptOut === true) return fail('sms_stop', 409, 'Ce prospect a demandé l\'arrêt des SMS.');

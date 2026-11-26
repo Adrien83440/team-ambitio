@@ -202,7 +202,7 @@ function card(x) {
   var id = esc(x.bookingId), d = x.draft, b = !!busy[x.bookingId];
   var h = '<div class="cd" data-id="' + id + '"><div class="cd-h"><div>' +
     '<div class="cd-n"><a href="sales-leads.html?lead=' + encodeURIComponent(x.leadId) + '" target="_blank" rel="noopener">' + esc(x.name) + '</a></div>' +
-    '<div class="cd-m">' + (x.entreprise ? esc(x.entreprise) + ' · ' : '') + esc(x.closerName) + ' · rendez-vous du ' + esc(x.rdvDateFr || x.rdvDate) + ' · il y a ' + x.days + ' jour' + (x.days > 1 ? 's' : '') + '</div>' +
+    '<div class="cd-m">' + (x.entreprise ? esc(x.entreprise) + ' · ' : '') + (x.reprise ? (x.reprise.fixe ? esc(x.closerName) + ' reprend le dossier de ' + esc(x.reprise.de) : 'Dossier de ' + esc(x.reprise.de) + ', sans repreneur') : esc(x.closerName)) + ' · rendez-vous du ' + esc(x.rdvDateFr || x.rdvDate) + ' · il y a ' + x.days + ' jour' + (x.days > 1 ? 's' : '') + '</div>' +
     '</div><div class="sp"></div><span class="tag ' + (x.outcome === 'offre' ? 'of">Offre en attente' : 'nc">Non closé') + '</span></div>';
 
   var tags = '', sq = x.suite;
@@ -248,6 +248,8 @@ function card(x) {
       '<label>Objet de l\'e-mail</label><input class="bi" data-f="emailSubject" value="' + esc(d.emailSubject) + '"/>' +
       '<label>E-mail</label><textarea class="bi" data-f="emailBody" rows="9">' + esc(d.emailBody) + '</textarea>' +
       '<label>SMS <span data-count>' + (d.sms || '').length + ' caractères</span></label><textarea class="bi" data-f="sms" rows="3">' + esc(d.sms) + '</textarea>' +
+      (d.alerte ? '<div class="cd-why" style="border:1px solid rgba(248,113,113,.4);color:#fecaca"><b>À corriger avant l\'envoi :</b> ' + esc(d.alerte) + '</div>' : '') +
+      (d.offrePresentee ? '<div class="cd-x">Offre présentée, d\'après la fiche : <b>' + esc(d.offrePresentee === 'inconnue' ? 'non identifiée — le message parle de « l\'accompagnement » sans le nommer' : d.offrePresentee) + '</b>' + (d.signataire ? ' · signé ' + esc(d.signataire) : '') + '</div>' : '') +
       (d.ficheVide ? '<div class="cd-x">La fiche ne contenait rien d\'exploitable : le message reste ouvert. Complétez la note du rendez-vous pour un message plus précis.</div>' : '') +
       '<div class="cd-a"><input class="bi" data-f="instruction" placeholder="Consigne pour une nouvelle version (facultatif)"/>' +
       '<button type="button" class="bb bb-g" data-act="draft"' + (b ? ' disabled' : '') + '>' + (b ? '⏳ Rédaction…' : '↻ Régénérer') + '</button></div>' +
