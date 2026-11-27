@@ -745,6 +745,10 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
     calculé pour cette période (`K._periode`, `kPret()`, aussi pour les onglets Funnel, Leads, Qualité par pub) ; `lqs-tab.js`
     reconstruit le modèle quand les closes fournis changent ; un changement de période pendant un chargement s'annonce tout de
     suite (`annoncerPeriode`) et le résultat de l'ancienne période n'est jamais affiché sous le libellé de la nouvelle.
+    27/11/2026 : chaque chargement (`refresh`, capacité, Qualité leads) travaille sur une COPIE FIGÉE de la période (`figerPeriode`,
+    `DATA._P` ; `compute`, `computeDispos`, `loadAds`, `loadJournalPeriod` lisent `DATA._P`, jamais `P`) et note la génération
+    `_genPeriode` (+1 dans `setPeriod` ; `S.gen` de `lqs-tab.js`, +1 par `invalidate`) : tout changement de période pendant le
+    chargement, même un aller-retour revenu à la même période, invalide son résultat, et le chargement repart pour la période affichée.
   - **Contrôle de cohérence du funnel** : l'égalité « RDV closés ↔ Closes » est une PARTITION calculée UNE fois dans le moteur
     (`k.coh.egalite`, listes `rdvDeClosesAnnules`, `rdvEnTrop`, `rdvClosesHorsListe`, `closesSansRdv`, `closesRdvHorsPeriode`) ; la page
     l'affiche sans la recalculer. `coh.annules` et `coh.doublonsRdv` ne sont que des listes d'information, jamais des termes de l'égalité.

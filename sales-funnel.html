@@ -4362,7 +4362,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
      admin : lien média buyeuse + API Conversions Meta. */
   function renderAdq() {
     if (!window.AdsQualityTab) { $('#fnTabAdq').innerHTML = '<div class="fn-ig-alert">Module Qualité par pub non chargé (ads-quality-tab.js).</div>'; return; }
-    if (!kPret()) { $('#fnTabAdq').innerHTML = '<div class="fn-loading">Chargement…</div>'; return; }
+    if (!kPret()) { if (window.AdsQualityTab.detach) window.AdsQualityTab.detach(); $('#fnTabAdq').innerHTML = '<div class="fn-loading">Chargement…</div>'; return; }
     window.AdsQualityTab.render($('#fnTabAdq'), window.AdsQualityTab.fromKpis(K, periodLabel()), {
       admin: true, readonly: RO, adminCtx: { db: db, user: currentUser, toast: toast }
     });

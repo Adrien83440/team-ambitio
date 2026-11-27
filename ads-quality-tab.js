@@ -706,6 +706,11 @@
     repaint();
   }
 
-  root.AdsQualityTab = { render: render, fromKpis: fromKpis, fromShare: fromShare, costsOk: costsOk, totalCostsOk: totalCostsOk,
+  /* La page remplace l'onglet (« Chargement… » pendant un changement de
+     période) : plus aucun repaint tardif (réponse des encarts admin) ne doit
+     y réécrire le tableau de l'ancienne période. */
+  function detach() { _el = null; _data = null; }
+
+  root.AdsQualityTab = { render: render, detach: detach, fromKpis: fromKpis, fromShare: fromShare, costsOk: costsOk, totalCostsOk: totalCostsOk,
     totals: totals, lectureUtile: lectureUtile, csvLines: csvLines, CSV_HEAD: CSV_HEAD, COLS: COLS };
 })(typeof window !== 'undefined' ? window : this);
