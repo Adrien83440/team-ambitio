@@ -6,8 +6,10 @@
 //
 // Qui entre (règle Adrien du 26/11/2026) :
 //   - un RDV de vente « non closé » (outcome 'non_close') ;
-//   - une offre faite (outcome 'offre') depuis PLUS DE 7 JOURS sans retour.
-//   Une offre de moins de 7 jours est affichée « trop récente », sans message.
+//   - une offre faite (outcome 'offre') sans retour.
+//   Dans les deux cas à partir de 10 JOURS après le rendez-vous, jamais avant
+//   (demande d'Adrien du 27/11/2026 ; minDays ne descend pas sous 10) : plus tôt,
+//   la carte est affichée « trop récent », sans message.
 //   Sortent seuls : devenu client, a répondu depuis le RDV, a repris RDV,
 //   fiche fusionnée / poubelle / faux numéro, contact bloqué.
 //   Un prospect = une carte : son RDV non closé le plus récent.
@@ -64,7 +66,7 @@ const P = require('./_parcoursRdv');
 
 const COL = 'offer_relances';
 const OUTCOMES = ['offre', 'non_close'];
-const DEFAULT_MIN_DAYS = 7;      // offre : délai avant relance (_config/offer_relances.minDays)
+const DEFAULT_MIN_DAYS = 10;     // délai avant toute relance, offre ou non closé (_config/offer_relances.minDays, jamais moins de 10)
 const DEFAULT_WINDOW_DAYS = 60;  // profondeur de la liste
 const MAX_ITEMS = 300;
 const DEFAULT_GAP_DAYS = 5;      // écart minimal entre deux relances
@@ -172,7 +174,7 @@ const DEFAULT_PROMPT = [
   'FORMAT :',
   '- E-mail : objet court, concret, personnel (jamais « Relance »), puis 3 à 4 paragraphes brefs séparés par une ligne vide. La dernière phrase est l\'appel à l\'action.',
   '- E-mail : le lien de réservation apparaît une seule fois, seul sur sa ligne, juste avant la signature.',
-  '- SMS : court (le lien compte dans la longueur ; 2 SMS au plus, soit 300 caractères), commence par « Bonjour {prénom}, c\'est {prénom du closer} (Adrien & Emily). », donne en une phrase la raison de réserver, puis le lien de réservation écrit tel quel, puis « ou répondez à mon e-mail ».',
+  '- SMS : court (le lien compte dans la longueur ; 2 SMS au plus, soit 300 caractères), commence par « Bonjour {prénom}, c\'est {prénom du closer} (Adrien & Emily). », donne en une phrase la raison de réserver, puis une phrase qui dit que tu viens de lui écrire par e-mail et pourquoi, puis « Vous pouvez réserver un créneau ici : {lien} ou retrouver ce que je vous ai partagé dans votre boîte mail. »',
 ].join('\n');
 
 function parisDate(ms) { return new Date(ms).toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' }); }
@@ -214,7 +216,7 @@ async function loadConfig() {
     c = s.exists ? (s.data() || {}) : {};
   } catch (e) { c = {}; }
   return {
-    minDays: numOr(c.minDays, DEFAULT_MIN_DAYS, 0, 60),
+    minDays: numOr(c.minDays, DEFAULT_MIN_DAYS, DEFAULT_MIN_DAYS, 60),
     gapDays: numOr(c.gapDays, DEFAULT_GAP_DAYS, 0, 60),
     maxSends: numOr(c.maxSends, DEFAULT_MAX_SENDS, 1, 10),
     sendEnabled: c.sendEnabled === true,
@@ -345,9 +347,9 @@ function heuristic(b, l, days, minDays) {
   const hay = note + ' ' + String(l.notes || '').slice(0, 1500);
   const out = { category: 'a_relancer', reason: '', sensible: false };
   if (RE_SENSIBLE.test(hay)) out.sensible = true;
-  if (b.outcome === 'offre' && days < minDays) {
+  if (days < minDays) {
     out.category = 'trop_recent';
-    out.reason = 'Offre faite il y a ' + days + ' jour' + (days > 1 ? 's' : '') + ' : relance possible à partir de ' + minDays + ' jours.';
+    out.reason = (b.outcome === 'offre' ? 'Offre faite' : 'Rendez-vous non closé') + ' il y a ' + days + ' jour' + (days > 1 ? 's' : '') + ' : relance possible à partir de ' + minDays + ' jours.';
     return out;
   }
   const futureFu = (Array.isArray(l.followUps) ? l.followUps : []).some(function (f) {
@@ -557,7 +559,7 @@ async function gardeImbrication(card, lead, days) {
    sinon la consultation de son rendez-vous d'origine (même type, donc même
    closer ou même équipe), rattachée à sa fiche par leadId — aucune donnée
    personnelle dans l'adresse. Un RDV repris par ce lien le sort du module. */
-async function lienDeReservation(cfg, b) {
+async function cibleReservation(cfg, b) {
   if (cfg.lienRdv) return cfg.lienRdv;
   let cle = String(b.type || b.typeId || '');
   try {
@@ -566,6 +568,79 @@ async function lienDeReservation(cfg, b) {
     if (t && t.slug) cle = String(t.slug);
   } catch (e) { /* identifiant brut */ }
   return 'https://team.alteore.com/booking.html?' + (cle ? 'type=' + encodeURIComponent(cle) + '&' : '') + 'leadId=' + encodeURIComponent(String(b.leadId || ''));
+}
+
+/* Lien COURT donné au prospect (demande d'Adrien du 27/11/2026) :
+   https://team.alteore.com/o/{code}, 6 caractères, ouvert par
+   api/offre-lien.js qui compte le clic puis ouvre la prise de RDV. Un code
+   par carte, gardé sur la carte (`lienCode`) et dans `offer_liens/{code}`
+   (Admin SDK seul). La destination est écrite ici, jamais par l'appelant. Au
+   moindre souci, le lien long est rendu : un message part toujours avec un
+   lien qui marche. */
+const BASE_COURT = 'https://team.alteore.com/o/';
+const ALPHABET_CODE = 'abcdefghjkmnpqrstuvwxyz23456789';
+async function lienDeReservation(cfg, b, ref) {
+  const cible = await cibleReservation(cfg, b);
+  if (!ref) return cible;
+  try {
+    const s = await ref.get();
+    const deja = s.exists ? (s.data() || {}).lienCode : null;
+    if (deja && /^[a-z0-9]{6}$/.test(deja)) {
+      await db.collection('offer_liens').doc(deja).set({ url: cible, majA: Date.now() }, { merge: true });
+      return BASE_COURT + deja;
+    }
+    for (let essai = 0; essai < 4; essai++) {
+      const oct = require('crypto').randomBytes(6);
+      let code = '';
+      for (let i = 0; i < 6; i++) code += ALPHABET_CODE[oct[i] % ALPHABET_CODE.length];
+      try {
+        await db.collection('offer_liens').doc(code).create({ bookingId: ref.id, leadId: String(b.leadId || ''), url: cible, clics: 0, creeA: Date.now() });
+      } catch (e) { continue; } // code déjà pris : on en tire un autre
+      await ref.set({ bookingId: ref.id, leadId: b.leadId || null, lienCode: code }, { merge: true });
+      return BASE_COURT + code;
+    }
+  } catch (e) { console.warn('[offer-relances] lien court', ref.id, e && e.message); }
+  return cible;
+}
+
+/* E-mail mis en forme : bandeau, paragraphes, bouton de réservation à la
+   place du lien écrit en clair, signature. Le texte reste celui que le
+   closer a relu ; seule la présentation change. */
+const BANDEAU = 'https://team.alteore.com/media/relances-offres/bandeau.jpg?v=c97debb0';
+function escH(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function htmlRelance(sujet, texte, lien) {
+  const RE_URL = /https?:\/\/[^\s<>"]+/g;
+  const bouton = function (u) {
+    return '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 22px"><tr><td style="background:#2563eb;border-radius:10px">'
+      + '<a href="' + escH(u) + '" style="display:inline-block;padding:14px 26px;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none">Réserver mon créneau</a></td></tr></table>';
+  };
+  let boutonPose = false;
+  const blocs = String(texte || '').split(/\n\s*\n/).map(function (p) { return p.trim(); }).filter(Boolean);
+  const corps = blocs.map(function (p, i) {
+    const urls = p.match(RE_URL) || [];
+    const u = urls.find(function (x) { return lien && x.replace(/[.,;)]+$/, '') === lien; }) || urls[0] || null;
+    if (!u) {
+      // La signature (dernier bloc, court) : en gras sur la première ligne.
+      const lignes = p.split('\n');
+      if (i === blocs.length - 1 && p.length < 90) return '<p style="margin:24px 0 0">' + lignes.map(function (l, k) { return k === 0 ? '<strong>' + escH(l) + '</strong>' : escH(l); }).join('<br>') + '</p>';
+      return '<p style="margin:0 0 16px">' + lignes.map(escH).join('<br>') + '</p>';
+    }
+    const propre = u.replace(/[.,;)]+$/, '');
+    // Le lien devient un bouton ; la phrase qui l'introduit reste, sans l'adresse.
+    const reste = p.replace(u, '').replace(/\s*[:：]\s*$/, '').replace(/[ \t]{2,}/g, ' ').replace(/\s+([.,;])/g, '$1').trim();
+    boutonPose = true;
+    return (reste && !/^(pour\s+)?r[ée]serv(er|ez)\b[^.]{0,60}$/i.test(reste) ? '<p style="margin:0 0 12px">' + reste.split('\n').map(escH).join('<br>') + '</p>' : '') + bouton(propre);
+  }).join('');
+  const fin = (!boutonPose && lien) ? bouton(lien) : '';
+  return '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>' + escH(sujet) + '</title></head>'
+    + '<body style="margin:0;padding:0;background:#f3f4f8"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f8;padding:28px 12px"><tr><td align="center">'
+    + '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;font-family:Helvetica,Arial,sans-serif">'
+    + '<tr><td style="background:#1e3a8a;background-image:linear-gradient(135deg,#1e3a8a 0%,#3b82f6 100%);border-radius:18px 18px 0 0;padding:22px 36px"><div style="font-size:12px;font-weight:700;color:#c7d2fe;letter-spacing:2.5px;text-transform:uppercase">Adrien &amp; Emily</div></td></tr>'
+    + '<tr><td style="background:#ffffff;padding:32px 36px 30px;border-left:1px solid #e5e7eb;border-right:1px solid #e5e7eb"><div style="font-size:16px;line-height:1.7;color:#1f2937">'
+    + '<div style="margin:0 0 24px"><img src="' + BANDEAU + '" alt="On reprend le fil de notre échange" width="528" style="display:block;width:100%;max-width:528px;height:auto;border:0;border-radius:12px"></div>'
+    + corps + fin + '</div></td></tr>'
+    + '<tr><td style="background:#f9fafb;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 18px 18px;padding:18px 36px;text-align:center"><div style="font-size:12px;color:#9ca3af;line-height:1.6">Adrien &amp; Emily · Accompagnement des dirigeants · <a href="https://www.adrienemily.com" style="color:#3b82f6;text-decoration:none">adrienemily.com</a><br>Vous pouvez simplement répondre à cet e-mail.</div></td></tr>'
+    + '</table></td></tr></table></body></html>';
 }
 
 // Le prospect ne peut pas répondre à un SMS : pas d'invitation à le faire, et
@@ -593,7 +668,7 @@ async function draftOffer(auth, body, me) {
   const cfg = await loadConfig();
   const at = tsToMs(b.outcomeAt) || Date.parse((b.date || '') + 'T12:00:00Z') || Date.now();
   const days = Math.max(0, Math.floor((Date.now() - at) / 86400000));
-  if (b.outcome === 'offre' && days < cfg.minDays) return { error: 'too_recent', code: 409, message: 'Offre trop récente : relance possible à partir de ' + cfg.minDays + ' jours.' };
+  if (days < cfg.minDays) return { error: 'too_recent', code: 409, message: 'Rendez-vous trop récent : relance possible à partir de ' + cfg.minDays + ' jours.' };
   const st = await card.ref.get();
   if (st.exists && (st.data() || {}).excluded) return { error: 'excluded', code: 409, message: 'Ce prospect est laissé de côté.' };
   const garde = await gardeImbrication(card, null, days);
@@ -613,6 +688,16 @@ async function draftOffer(auth, body, me) {
   P.push('PROSPECT : ' + name);
   P.push('RENDEZ-VOUS : ' + (frDay(b.date) || '?') + ' — il y a ' + days + ' jours — issue « ' + (b.outcome === 'offre' ? 'offre faite, en attente de réponse' : 'non closé (refus exprimé)') + ' »');
   P.push('NOTE DU RENDEZ-VOUS : ' + (String(b.outcomeNote || '').trim() ? cap(b.outcomeNote, 1200) : '(vide)'));
+  // Ce que la fiche sait déjà de lui : frein repéré après le rendez-vous et
+  // réponse au questionnaire (mot pour mot).
+  try {
+    const ls = await db.collection('leads').doc(String(b.leadId)).get();
+    const L = ls.exists ? (ls.data() || {}) : {};
+    const fp = L.freinPrincipal;
+    if (fp && fp.libelle) P.push('FREIN PRINCIPAL REPÉRÉ APRÈS LE RENDEZ-VOUS : ' + fp.libelle + (fp.citation ? ' — il a dit : « ' + cap(fp.citation, 240) + ' »' : ''));
+    const pr = Suite.profilDe(L);
+    if (pr && pr.citation) P.push('CE QUI LUI PÈSE LE PLUS (sa réponse au questionnaire, mot pour mot) : « ' + cap(pr.citation, 200) + ' »');
+  } catch (e) { /* le dossier ci-dessous suffit */ }
   const an = b.replay && b.replay.analysis;
   if (an) {
     P.push('ANALYSE DE L\'ENREGISTREMENT DU CLOSING :');
@@ -641,7 +726,10 @@ async function draftOffer(auth, body, me) {
     P.push('C\'est la relance n° ' + (sent.moduleCount + 1) + ' sur ' + cfg.maxSends + (sent.moduleCount + 1 >= cfg.maxSends ? ' : la dernière. Demande une décision claire, oui ou non, avec élégance.' : '.'));
   }
   P.push('');
-  const lienRdv = await lienDeReservation(cfg, b);
+  const lienRdv = await lienDeReservation(cfg, b, card.ref);
+  // Ces rappels valent même si un prompt personnalisé est réglé.
+  P.push('APPUIE-TOI SUR LE DOSSIER CI-DESSOUS : le message cite au moins deux éléments précis qui viennent de lui (ses mots, un chiffre qu\'il a donné, son frein, sa réponse au questionnaire). Un message qui pourrait être envoyé à n\'importe qui est refusé.');
+  P.push('SMS, FORME ATTENDUE : « Bonjour {prénom}, c\'est {prénom du closer} (Adrien & Emily). » puis une phrase qui dit que tu viens de lui écrire par e-mail et pourquoi, puis : « Vous pouvez réserver un créneau ici : {lien} ou retrouver ce que je vous ai partagé dans votre boîte mail. » Rien d\'autre.');
   P.push('LIEN DE RÉSERVATION (à écrire tel quel, sans le modifier ni le raccourcir, une seule fois dans l\'e-mail et une seule fois dans le SMS) : ' + lienRdv);
   const bundle = await loadLeadBundle(b.leadId);
   if (bundle) { P.push(''); P.push(bundleToText(bundle, { maxCalls: 2, transcriptChars: 3000 })); }
@@ -663,7 +751,7 @@ async function draftOffer(auth, body, me) {
   let smsOut = String(j.sms || '').trim();
   let mailOut = String(j.emailBody || '').trim();
   if (j.categorie !== 'de_cote') {
-    if (smsOut && smsOut.indexOf(lienRdv) < 0) smsOut = smsOut.replace(/\s*https?:\/\/\S+/g, '').replace(/[\s.]+$/, '') + '. Réservez votre créneau : ' + lienRdv + ' ou répondez à mon e-mail.';
+    if (smsOut && smsOut.indexOf(lienRdv) < 0) smsOut = smsOut.replace(/\s*https?:\/\/\S+/g, '').replace(/[\s.]+$/, '') + '. Vous pouvez réserver un créneau ici : ' + lienRdv + ' ou retrouver ce que je vous ai partagé dans votre boîte mail.';
     if (mailOut && mailOut.indexOf(lienRdv) < 0) mailOut = mailOut.replace(/\n\n(?=[^\n]*\n?[^\n]*$)/, '\n\nPour réserver votre créneau : ' + lienRdv + '\n\n');
     if (mailOut && mailOut.indexOf(lienRdv) < 0) mailOut += '\n\nPour réserver votre créneau : ' + lienRdv;
     if (!alerte) alerte = smsInterdit(smsOut, true);
@@ -745,7 +833,7 @@ async function sendOffer(auth, body, me) {
   if (lead._merged === true) return fail('merged', 409, 'Cette fiche a été fusionnée.');
   if (isClient(lead)) return fail('client', 409, 'Ce prospect est devenu client.');
   const at = tsToMs(b.outcomeAt) || Date.parse((b.date || '') + 'T12:00:00Z') || Date.now();
-  if (b.outcome === 'offre' && Date.now() - at < cfg.minDays * 86400000) return fail('too_recent', 409, 'Offre trop récente : relance possible à partir de ' + cfg.minDays + ' jours.');
+  if (Date.now() - at < cfg.minDays * 86400000) return fail('too_recent', 409, 'Rendez-vous trop récent : relance possible à partir de ' + cfg.minDays + ' jours.');
   if ((Array.isArray(lead.communications) ? lead.communications : []).some(function (c) {
     return c && isInbound(c.direction) && Date.parse(c.date || c.createdAt || '') > at;
   })) return fail('replied', 409, 'Ce prospect a écrit depuis le rendez-vous : répondez-lui depuis sa fiche.');
@@ -765,8 +853,16 @@ async function sendOffer(auth, body, me) {
 
   const d = state.draft || {};
   const subject = String(body.emailSubject != null ? body.emailSubject : d.emailSubject || '').trim().slice(0, 200);
-  const mailBody = String(body.emailBody != null ? body.emailBody : d.emailBody || '').trim().slice(0, 6000);
-  const smsText = String(body.smsText != null ? body.smsText : d.sms || '').trim().slice(0, 640);
+  let mailBody = String(body.emailBody != null ? body.emailBody : d.emailBody || '').trim().slice(0, 6000);
+  let smsText = String(body.smsText != null ? body.smsText : d.sms || '').trim().slice(0, 640);
+  // Un brouillon d'avant le lien court porte encore l'adresse longue : on la
+  // remplace à l'envoi, dans l'e-mail comme dans le SMS.
+  const cibleLongue = await cibleReservation(cfg, b);
+  const lienCourtRdv = await lienDeReservation(cfg, b, card.ref);
+  if (lienCourtRdv !== cibleLongue) {
+    mailBody = mailBody.split(cibleLongue).join(lienCourtRdv);
+    smsText = smsText.split(cibleLongue).join(lienCourtRdv);
+  }
   if (wantEmail && (!subject || !mailBody)) return fail('empty_email', 400, 'L\'objet et le texte de l\'e-mail sont obligatoires.');
   if (wantEmail && email.indexOf('@') < 0) return fail('no_email', 409, 'Ce prospect n\'a pas d\'e-mail.');
   if (wantSms && !smsText) return fail('empty_sms', 400, 'Le SMS est vide.');
@@ -799,7 +895,7 @@ async function sendOffer(auth, body, me) {
   try {
     if (wantEmail) {
       try {
-        await sendLeadEmail(auth, leadId, subject, mailBody, { label: '✉️ Relance d\'offre (e-mail)', flag: 'offerRelance' });
+        await sendLeadEmail(auth, leadId, subject, mailBody, { label: '✉️ Relance d\'offre (e-mail)', flag: 'offerRelance', bodyHtml: htmlRelance(subject, mailBody, lienCourtRdv) });
         rec.email = true; rec.emailSubject = subject; rec.emailBody = mailBody;
       } catch (e) { firstError = 'E-mail non envoyé : ' + (e && e.message ? e.message : e); }
     }
@@ -861,4 +957,4 @@ async function sendOffer(auth, body, me) {
     warning: rec.smsError ? 'E-mail envoyé, mais le SMS a échoué : ' + rec.smsError : null };
 }
 
-module.exports = { listOffers, draftOffer, setOffer, sendOffer, loadConfig, CATEGORIES, DEFAULT_PROMPT };
+module.exports = { listOffers, draftOffer, setOffer, sendOffer, loadConfig, CATEGORIES, DEFAULT_PROMPT, htmlRelance, lienDeReservation };

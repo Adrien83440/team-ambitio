@@ -396,6 +396,17 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   + `audit_log` type `gocardless_rejets`. Aperçu / création manuels dans Synchro (à blanc d'abord). Accès manuel temporaire :
   clé Vercel `REJETS_KEY` (`GET ?key=…[&apply=1]`). Filtre « ❌ Prélèvement rejeté » + badge dans la liste des factures.
   Non couverts : mandats en échec SANS aucun prélèvement (rien à rejeter chez GoCardless) → facture manuelle.
+- **Relances d'offres (26/11/2026, réglages du 27/11/2026)** : `sales-relances-offres.html` + `api/_offerRelances.js` (actions
+  `offers` / `offer_draft` / `offer_set` / `offer_send` de `api/ai-followup.js`) : RDV non closés et offres sans retour, un e-mail et un
+  SMS rédigés par l'IA à la demande, envoyés au clic seulement (`_config/offer_relances.sendEnabled`). Demandes d'Adrien du 27/11 :
+  **jamais avant 10 jours** après le RDV, offre comme non closé (`minDays` ne descend pas sous 10) ; l'IA doit citer au moins deux
+  éléments du dossier (frein repéré après le RDV, réponse au questionnaire, note, analyse du closing) ; l'e-mail part MIS EN FORME
+  (`htmlRelance` : bandeau `media/relances-offres/bandeau.jpg`, texte relu par le closer, lien remplacé par un bouton « Réserver mon
+  créneau ») ; le SMS dit « vous pouvez réserver un créneau ici : {lien} ou retrouver ce que je vous ai partagé dans votre boîte mail »
+  (le prospect ne peut pas répondre à un SMS) ; **lien court de prise de RDV** `https://team.alteore.com/o/{code}` (6 caractères,
+  `lienDeReservation`, code gardé sur la carte `lienCode` et dans `offer_liens/{code}`, Admin SDK seul) ouvert par `api/offre-lien.js`
+  (page relais, clic compté par le navigateur, seule une adresse `https://team.alteore.com/…` est ouverte). Un brouillon d'avant garde
+  l'adresse longue dans son texte : elle est remplacée à l'envoi.
 - **Dialer** : `sales-dialer.html/.css/.js`, `dialer-bridge.js`, `api/dialer-*.js` —
   visible **uniquement** pour les rôles `sales` et `admin`, **jamais** pour `coach`
 - **AlteoForms** : `alteoforms.html` (builder), `alteoforms-render.html` (rendu public),
