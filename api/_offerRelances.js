@@ -425,11 +425,27 @@ async function listOffers(auth, opts) {
       const l = ls.data() || {};
       if (l._merged === true || l.stage === 'poubelle' || l.stage === 'faux_numero') { sortis.fiche++; continue; }
       if (isClient(l) || later[b.leadId] === 'close') { sortis.client++; continue; }
-      if (later[b.leadId]) { sortis.a_repris_rdv++; continue; }
-      const replied = (Array.isArray(l.communications) ? l.communications : []).some(function (c) {
+      // Réaction APRÈS une relance partie de ce module (réponse écrite ou RDV
+      // repris) : le prospect reste visible dans « Ont réagi », sans brouillon
+      // ni envoi. Sans relance de notre part, il sort de la liste comme avant.
+      const premier = st.exists ? ((st.data() || {}).firstSentAt || 0) : 0;
+      let reagi = null;
+      if (later[b.leadId]) {
+        const repris = premier && (bkByLead[b.leadId] || []).some(function (k) {
+          return k.id !== e.id && k.b.status !== 'cancelled' && tsToMs(k.b.createdAt) > premier;
+        });
+        if (!repris) { sortis.a_repris_rdv++; continue; }
+        reagi = { type: 'rdv' };
+      }
+      const entrants = (Array.isArray(l.communications) ? l.communications : []).filter(function (c) {
         return c && isInbound(c.direction) && Date.parse(c.date || c.createdAt || '') > e.at;
       });
-      if (replied) { sortis.a_repondu++; continue; }
+      if (!reagi && entrants.length) {
+        const apres = premier ? entrants.filter(function (c) { return Date.parse(c.date || c.createdAt || '') > premier; }) : [];
+        if (!apres.length) { sortis.a_repondu++; continue; }
+        const der = apres[apres.length - 1];
+        reagi = { type: 'reponse', at: Date.parse(der.date || der.createdAt || '') || null, canal: String(der.type || ''), extrait: cap(String(der.content || der.body || der.text || ''), 400) };
+      }
       // Exclusion définitive, désinscription, « non » répondu à la séquence.
       const own = su.exists ? (su.data() || {}) : null;
       if (ctx.exclus[b.leadId]) { sortis.exclu++; continue; }
@@ -452,6 +468,10 @@ async function listOffers(auth, opts) {
       else if (h.category !== 'trop_recent' && state.category && CATEGORIES[state.category] && state.category !== 'en_sequence') { category = state.category; reason = state.reason || reason; categoryBy = state.categoryBy || 'ia'; }
       const cours = enCours(ctx, b.leadId, b, days, own);
       if (cours && category !== 'de_cote') { category = 'en_sequence'; reason = cours.reason; categoryBy = 'regle'; }
+      if (reagi && category !== 'de_cote') {
+        category = 'ont_reagi'; categoryBy = 'regle';
+        reason = reagi.type === 'rdv' ? 'A repris rendez-vous après votre relance.' : 'A répondu après votre relance : répondez-lui depuis sa fiche.';
+      }
       const sInfo = (cours && cours.info) || (own ? suiteInfo(e.id, own) : null);
       const chaud = !!(sInfo && sInfo.aCliqueReserver);
       if (!cours && sInfo && category !== 'de_cote' && categoryBy === 'regle' && (sInfo.etat === 'terminee' || sInfo.etat === 'arretee')) {
@@ -477,19 +497,58 @@ async function listOffers(auth, opts) {
         dernierEnvoi: lastSend ? { at: lastSend.at, byName: lastSend.byName || null, email: !!lastSend.email, sms: !!lastSend.sms, smsError: lastSend.smsError || null } : null,
         envoiPossible: cfg.sendEnabled || cfg.testLeadIds.indexOf(b.leadId) >= 0,
         draft: state.draft || null,
+        reagi: reagi,
+        // Suivi des envois (complété plus bas : SMS remis ou non, lien ouvert).
+        envois: (state.sends || []).slice(-3).map(function (s) {
+          return { at: s.at, byName: s.byName || null, email: !!s.email, sms: !!s.sms, smsError: s.smsError || null, smsSid: s.smsSid || null, smsEtat: null, smsPourquoi: '' };
+        }),
+        lien: null, _lienCode: state.lienCode || null,
       });
     }
     if (out.length >= MAX_ITEMS) break;
   }
 
-  const order = { a_relancer: 0, rappel_convenu: 1, en_sequence: 2, trop_recent: 3, de_cote: 4 };
+  await completerSuivi(out);
+  const order = { a_relancer: 0, rappel_convenu: 1, ont_reagi: 2, en_sequence: 3, trop_recent: 4, de_cote: 5 };
   out.sort(function (a, b) { return (order[a.category] - order[b.category]) || ((b.chaud ? 1 : 0) - (a.chaud ? 1 : 0)) || (b.days - a.days); });
-  const counts = { a_relancer: 0, rappel_convenu: 0, en_sequence: 0, trop_recent: 0, de_cote: 0 };
+  const counts = { a_relancer: 0, rappel_convenu: 0, ont_reagi: 0, en_sequence: 0, trop_recent: 0, de_cote: 0 };
   out.forEach(function (x) { counts[x.category]++; });
   let stats = null;
   try { stats = await computeStats(auth, all, bkByLead); } catch (e) { console.warn('[offer-relances] stats', e && e.message); }
-  return { ok: true, items: out, counts: counts, categories: CATEGORIES, sortis: sortis, isAdmin: isAdmin, all: all,
+  return { ok: true, items: out, counts: counts, categories: Object.assign({}, CATEGORIES, { ont_reagi: 'Ont réagi' }), sortis: sortis, isAdmin: isAdmin, all: all,
     minDays: cfg.minDays, gapDays: cfg.gapDays, maxSends: cfg.maxSends, days: win, envoi: cfg.sendEnabled, stats: stats };
+}
+
+/* Suivi d'une relance partie : le SMS est-il arrivé (accusé de l'opérateur,
+   sms_delivery/{sid}, écrit par api/twilio-sms-status.js) et le lien de
+   réservation a-t-il été ouvert (offer_liens/{code}, clic compté par le
+   navigateur). Pour l'e-mail, Gmail ne donne aucun accusé : on sait qu'il est
+   parti, pas qu'il a été lu. Lecture seule ; au moindre souci le suivi reste
+   vide et la liste s'affiche quand même. */
+async function completerSuivi(items) {
+  try {
+    const refs = [], cibles = [];
+    items.forEach(function (x) {
+      if (x._lienCode && /^[a-z0-9]{6}$/.test(x._lienCode)) { refs.push(db.collection('offer_liens').doc(x._lienCode)); cibles.push({ x: x }); }
+      (x.envois || []).forEach(function (s) {
+        if (s.sms && s.smsSid) { refs.push(db.collection('sms_delivery').doc(s.smsSid)); cibles.push({ s: s }); }
+      });
+    });
+    for (let i = 0; i < refs.length; i += 100) {
+      const docs = await db.getAll.apply(db, refs.slice(i, i + 100));
+      docs.forEach(function (d, j) {
+        const c = cibles[i + j], v = d.exists ? (d.data() || {}) : null;
+        if (c.x) { if (v) c.x.lien = { clics: v.clics || 0, premierClicA: v.premierClicA || null, dernierClicA: v.dernierClicA || null }; return; }
+        if (!v) return;
+        c.s.smsEtat = v.livre ? 'remis' : (v.echec ? 'echec' : 'en_cours');
+        c.s.smsPourquoi = v.echec ? String(v.explication || '') : '';
+      });
+    }
+  } catch (e) { console.warn('[offer-relances] suivi', e && e.message); }
+  items.forEach(function (x) {
+    delete x._lienCode;
+    (x.envois || []).forEach(function (s) { delete s.smsSid; });
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -804,6 +863,18 @@ async function setOffer(auth, body, me) {
   return { ok: true };
 }
 
+/* Aperçu de l'e-mail tel qu'il partira : la même mise en forme que l'envoi
+   (htmlRelance), sur le texte affiché dans la page. Rien n'est écrit. */
+async function previewOffer(auth, body) {
+  const card = await loadCard(auth, body.bookingId);
+  if (card.error) return card;
+  const st = await card.ref.get();
+  const d = (st.exists && (st.data() || {}).draft) || {};
+  const sujet = String(body.emailSubject != null ? body.emailSubject : d.emailSubject || '').trim().slice(0, 200);
+  const texte = String(body.emailBody != null ? body.emailBody : d.emailBody || '').trim().slice(0, 6000);
+  return { ok: true, html: htmlRelance(sujet, texte, d.lienRdv || null) };
+}
+
 // ---------------------------------------------------------------------------
 //  Envoi (au clic uniquement)
 // ---------------------------------------------------------------------------
@@ -903,7 +974,8 @@ async function sendOffer(auth, body, me) {
     if (wantSms && !firstError) {
       try {
         const client = await getTwilioClient();
-        const msg = await client.messages.create({ from: smsFrom, to: toNumber, body: smsText });
+        // Accusé de l'opérateur (remis / non remis) : lu par le suivi de la page.
+        const msg = await client.messages.create({ from: smsFrom, to: toNumber, body: smsText, statusCallback: 'https://team.alteore.com/api/twilio-sms-status' });
         const nowIso = new Date().toISOString();
         await db.collection('leads').doc(leadId).update({
           communications: admin.firestore.FieldValue.arrayUnion({
@@ -957,4 +1029,4 @@ async function sendOffer(auth, body, me) {
     warning: rec.smsError ? 'E-mail envoyé, mais le SMS a échoué : ' + rec.smsError : null };
 }
 
-module.exports = { listOffers, draftOffer, setOffer, sendOffer, loadConfig, CATEGORIES, DEFAULT_PROMPT, htmlRelance, lienDeReservation };
+module.exports = { listOffers, draftOffer, setOffer, sendOffer, previewOffer, loadConfig, CATEGORIES, DEFAULT_PROMPT, htmlRelance, lienDeReservation };
