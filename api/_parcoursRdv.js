@@ -194,6 +194,32 @@ function lienVisio(b) {
   return brut;
 }
 
+/* Lien COURT pour les SMS : https://team.alteore.com/m/{code} (6 caractères),
+   ouvert par api/meet-link.js comme le lien suivi. Un code par RDV, gardé sur
+   le RDV (`parcoursRdv.lienCourt`) et dans `meet_codes/{code}`. Au moindre
+   souci, on rend le lien d'origine : un SMS part toujours avec un lien qui marche. */
+const ALPHABET_CODE = 'abcdefghjkmnpqrstuvwxyz23456789';
+async function lienCourt(it) {
+  const b = it.data || {};
+  const long = lienVisio(b);
+  if (!long) return long;
+  try {
+    const deja = (b.parcoursRdv || {}).lienCourt;
+    if (deja && /^[a-z0-9]{6}$/.test(deja)) return BASE_URL + '/m/' + deja;
+    for (let essai = 0; essai < 4; essai++) {
+      const oct = require('crypto').randomBytes(6);
+      let code = '';
+      for (let i = 0; i < 6; i++) code += ALPHABET_CODE[oct[i] % ALPHABET_CODE.length];
+      try {
+        await db.collection('meet_codes').doc(code).create({ bookingId: it.id, creeA: Date.now(), source: 'parcours_rdv' });
+      } catch (e) { continue; } // code déjà pris : on en tire un autre
+      await it.ref.set({ parcoursRdv: { lienCourt: code } }, { merge: true });
+      return BASE_URL + '/m/' + code;
+    }
+  } catch (e) { console.warn('[parcours-rdv] lien court', it.id, e && e.message); }
+  return long;
+}
+
 /* ═══ Périmètre ═════════════════════════════════════════════════════════ */
 
 async function lireTypes() {
@@ -990,8 +1016,12 @@ async function executerEtape(etape, it, ctx) {
       : etape === 'sms_h1' ? (v.lien ? (cfg.textes.h1_sms || TEXTES.h1_sms) : (cfg.textes.h1_sms_sans_lien || TEXTES.h1_sms_sans_lien))
       : (cfg.textes.rattrapage_sms || TEXTES.rattrapage_sms);
     manque = variableVide(modele, v) || (telE164(p.telephone || p.tel) ? null : 'telephone');
-    const texte = remplir(modele, v);
-    envoi = function () { return envoyerSms(p.telephone || p.tel, texte, (cfg.sms || {}).expediteur || 'adrienemily'); };
+    // Dans un SMS, le lien est toujours le lien court (créé au moment d'envoyer).
+    const avecLien = modele.indexOf('{{lien}}') >= 0 && !!v.lien;
+    envoi = async function () {
+      const vSms = avecLien ? Object.assign({}, v, { lien: await lienCourt(it) }) : v;
+      return envoyerSms(p.telephone || p.tel, remplir(modele, vSms), (cfg.sms || {}).expediteur || 'adrienemily');
+    };
   } else if (etape === 'wa_veille') {
     const mod = await lireModeleWhatsapp(cfg, ctx.cache);
     if (!mod.ok) { ligne.resultat = 'modele_inutilisable'; ligne.erreur = mod.erreur; return ligne; }

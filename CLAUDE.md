@@ -811,6 +811,7 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   ② SMS court ③ e-mail de valeur si le RDV est à > 36 h ④ WhatsApp `rappel_rdv_closing` la veille 18 h–21 h
   (variables prénom, prénom du CLOSER, heure ; « OUI » → `presenceConfirmed` + `rdv_confirmations` automatiques,
   « déplacer » / réponse ambiguë → alerte setter, `whatsapp-webhook.js` → `surReponseWhatsapp`) ⑤ SMS + lien
+  COURT (`https://team.alteore.com/m/{code}`, 6 caractères, demande d'Adrien du 27/11/2026 : `lienCourt` de `_parcoursRdv.js`, code gardé dans `meet_codes/{code}` et `bookings.parcoursRdv.lienCourt`, ouvert par `api/meet-link.js` ; les e-mails gardent le lien suivi long)
   1 h avant ⑥ rattrapage +5 à +15 min si l'API Meet dit le prospect ABSENT (illisible → rien), SMS + alerte closer
   (cloche `inbox_notifications`). Consultations concernées : `booking_config/_types[].notifications.parcoursRdv`
   — le même drapeau efface les rappels de l'agenda dans les Cloud Functions (`_abParcoursRdvPrend` : confirmation
