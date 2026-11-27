@@ -3029,7 +3029,9 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     }).catch(function (e) {
       console.error('[funnel] instagram', e);
       IG.err = e.message || 'erreur inconnue';
-      IG.loading = false; IG.loaded = true;
+      /* Clé posée aussi en cas d'échec : sinon renderInstagram voit une clé
+         différente et relance la lecture sans fin (27/11/2026). */
+      IG.key = key; IG.loading = false; IG.loaded = true;
     });
   }
 
@@ -3528,7 +3530,9 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     }).catch(function (e) {
       console.error('[funnel] facebook', e);
       FB.err = e.message || 'erreur inconnue';
-      FB.loading = false; FB.loaded = true;
+      /* Clé posée aussi en cas d'échec : sinon renderFacebook voit une clé
+         différente et relance la lecture sans fin (27/11/2026). */
+      FB.key = key; FB.loading = false; FB.loaded = true;
     });
   }
 

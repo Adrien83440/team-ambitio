@@ -260,7 +260,9 @@
        période a changé (S.gen, posé par invalidate) : relancé à sa fin
        (jamais un modèle fait des données d'une période et du contexte d'une
        autre — 27/11/2026). */
-    if (S.loading) { if (S.loadingKey !== dataKey() || S.loadingGen !== S.gen) S.relancer = true; return; }
+    /* render() : le message d'attente annonce la période affichée (S.ctx),
+       pas celle du chargement en cours. */
+    if (S.loading) { if (S.loadingKey !== dataKey() || S.loadingGen !== S.gen) S.relancer = true; render(); return; }
     var key = dataKey(), gen = S.gen;
     S.loading = true; S.err = null; S.relancer = false; S.loadingKey = key; S.loadingGen = gen;
     render();
