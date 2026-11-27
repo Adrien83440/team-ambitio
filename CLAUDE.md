@@ -442,6 +442,16 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   faire / En cours / Repris par toi / Laissé sans réponse) et onglet Reporting (par jour, par passage, par canal). « RDV
   réservés par le lien » = `bookings.landing.attribution.utm_medium == 'setting_ecrit'` (le lien du setting porte ce
   paramètre), comptés le jour de la réservation. Lecture seule : rien ne part de cette page vers Meta.
+  **Réponse dès l'arrivée d'un message (27/11/2026, demande d'Adrien)** : `api/_settingReveil.js` + `api/setting-reveil.js`. Sur un
+  message privé ENTRANT (jamais un écho) journalisé par `instagram-webhook` / `facebook-webhook`, Team appelle l'adresse d'appel d'une
+  tâche Claude sans horaire (`…/v1/claude_code/routines/{tâche}/fire`, jeton en variable Vercel `SETTING_REVEIL_TOKEN`, tâche par défaut
+  dans le code, remplaçable par `SETTING_REVEIL_ROUTINE`). L'appel part SANS contenu : rien du prospect ne sort de Team. Cet appel ouvre
+  une session Claude à part, sans navigateur : elle écrit une ligne « ⚡ Signal de Team » dans le chat du projet Claude, et c'est le
+  coordinateur du projet qui demande le passage léger au fil du setting. `_config/setting_reveil.actif` FAUX par défaut (bouton en haut de
+  `admin-setting-social.html`) ; au plus un appel toutes les `intervalleMin` minutes (5, jamais moins de 2 : la tâche accepte 30 appels
+  par heure) ; `heureDebut` – `heureFin` (9 h – 22 h Paris) ; `plafondJour` (120). Un message arrivé pendant l'intervalle est noté
+  `enAttente` dans `setting_reveil_etat/courant` (Admin SDK seul) et pris par le cron (*/5), qui ne fait rien sans message en attente.
+  Un appel en échec ne fait jamais échouer le webhook. Chaque réveil consomme de l'abonnement Claude d'Adrien.
 - **Dialer** : `sales-dialer.html/.css/.js`, `dialer-bridge.js`, `api/dialer-*.js` —
   visible **uniquement** pour les rôles `sales` et `admin`, **jamais** pour `coach`
 - **AlteoForms** : `alteoforms.html` (builder), `alteoforms-render.html` (rendu public),

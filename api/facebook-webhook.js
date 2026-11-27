@@ -28,6 +28,7 @@
 
 const { db, admin } = require('./_firebaseAdmin');
 const FB = require('./_facebookClient');
+const Reveil = require('./_settingReveil');
 
 function lireCorpsBrut(req) {
   return new Promise((resolve, reject) => {
@@ -136,6 +137,7 @@ async function traiterMessage(ev, creds, rapport) {
     receivedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
   rapport.messages++;
+  if (direction === 'in') rapport.entrants++;   // un prospect a écrit : réveil du setting
 
   /* Le fil est indexé par PSID tant que le cron n'a pas rapproché la
      conversation : lui seul connaît l'identifiant de conversation Meta et
@@ -234,7 +236,7 @@ const handler = async (req, res) => {
   let payload = {};
   try { payload = brut ? JSON.parse(brut) : {}; } catch (_) { payload = {}; }
 
-  const rapport = { commentaires: 0, messages: 0, go: 0, doublons: 0, erreurs: 0 };
+  const rapport = { commentaires: 0, messages: 0, entrants: 0, go: 0, doublons: 0, erreurs: 0 };
   const entries = Array.isArray(payload.entry) ? payload.entry : [];
 
   /* Traitement AVANT la réponse : Vercel tue la fonction dès res.end(), une
@@ -258,6 +260,11 @@ const handler = async (req, res) => {
       catch (e) { rapport.erreurs++; console.error('[facebook-webhook] message', e.message); }
     }
   }
+
+  /* Réveil du setting écrit (api/_settingReveil.js) : seulement si un message
+     privé ENTRANT vient d'être journalisé, éteint par défaut. Attendu AVANT
+     la réponse ; ne jette jamais, plafonné à 8 secondes. */
+  if (rapport.entrants > 0) rapport.reveil = (await Reveil.signaler('messenger')).decision;
 
   /* 200 systématique dès lors que la signature est bonne : un 500 ferait
      rejouer Meta en boucle sur un événement qu'on ne saura pas mieux traiter

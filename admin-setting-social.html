@@ -149,6 +149,7 @@
   </header>
 
   <div id="ssAlerte"></div>
+  <div id="ssReveil"></div>
   <div class="ss-kpis" id="ssKpis"></div>
 
   <nav class="ss-tabs">
@@ -487,6 +488,50 @@ function charger() {
   });
 }
 
+/* ── Réponse dès l'arrivée d'un message (api/setting-reveil.js) ──────────
+   Team prévient l'agent quand un prospect écrit en message privé, au lieu
+   d'attendre le passage horaire. Interrupteur + état, rien d'autre. */
+var RV = null;
+function appelReveil(corps) {
+  return firebase.auth().currentUser.getIdToken().then(function (t) {
+    var o = { headers: { 'Authorization': 'Bearer ' + t } };
+    if (corps) { o.method = 'POST'; o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(corps); }
+    return fetch('/api/setting-reveil', o);
+  }).then(function (r) { return r.json().catch(function () { return { ok: false, error: 'Réponse illisible du serveur (code ' + r.status + ').' }; }); })
+    .catch(function () { return { ok: false, error: 'Erreur réseau.' }; });
+}
+function heureParis(ms) {
+  return new Date(ms).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+function peindreReveil() {
+  var el = $('ssReveil'), j = RV, r, e, h, d, res;
+  if (!j) { el.innerHTML = ''; return; }
+  var boite = 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px solid var(--border2);border-radius:10px;padding:9px 12px;font-size:12.5px;margin-bottom:12px;color:var(--text)';
+  if (!j.ok) { el.innerHTML = '<div style="' + boite + '">⚡ Réponse dès l\'arrivée d\'un message : état illisible (' + esc(erreurTexte(j)) + ').</div>'; return; }
+  r = j.reglages || {}; e = j.etat || {};
+  h = '<div style="' + boite + '"><strong>⚡ Réponse dès l\'arrivée d\'un message : ' + (r.actif ? 'allumée' : 'éteinte') + '</strong>';
+  d = 'de ' + r.heureDebut + ' h à ' + r.heureFin + ' h, au plus un réveil toutes les ' + r.intervalleMin + ' minutes';
+  if (!j.jetonPresent) d = 'jeton absent de Vercel : aucun réveil ne peut partir';
+  else if (r.actif && !j.dansLaPlage) d += ' (hors plage en ce moment)';
+  h += '<span style="color:var(--muted)">' + esc(d) + '</span>';
+  if (e.dernierAppelMs) {
+    res = e.dernierResultat || {};
+    h += '<span style="color:var(--muted)">Dernier réveil : ' + esc(heureParis(e.dernierAppelMs)) + (res.atMs === e.dernierAppelMs && res.ok === false ? ' (en échec, code ' + esc(String(res.code || 0)) + ')' : '') + ' · aujourd\'hui : ' + (Number(e.appelsJour) || 0) + ' réveil(s) pour ' + (Number(e.signauxJour) || 0) + ' message(s) reçu(s)</span>';
+  }
+  if (e.enAttente) h += '<span style="color:var(--muted)">Un message attend le prochain réveil.</span>';
+  h += '<button class="ss-act" type="button" data-reveil="' + (r.actif ? '0' : '1') + '" style="margin-left:auto">' + (r.actif ? 'Éteindre' : 'Allumer') + '</button></div>';
+  el.innerHTML = h;
+}
+function chargerReveil() { return appelReveil(null).then(function (j) { RV = j; peindreReveil(); return j; }); }
+function basculerReveil(actif) {
+  return appelReveil({ actif: actif }).then(function (j) {
+    if (!j.ok) { toast(erreurTexte(j)); return j; }
+    RV = j; peindreReveil();
+    toast(actif ? 'Réponse dès l\'arrivée d\'un message : allumée.' : 'Réponse dès l\'arrivée d\'un message : éteinte.');
+    return j;
+  });
+}
+
 /* Dépôt du journal par l'agent, à la fin d'un passage (session admin de ce
    navigateur, aucune clé). lignes : tableau d'événements du journal ;
    passage : libellé facultatif. Rend la réponse du serveur
@@ -504,8 +549,9 @@ window.SettingJournal = {
 };
 
 document.addEventListener('click', function (ev) {
-  var b = ev.target.closest('[data-tab],[data-canal],[data-fil],[data-retour],[data-aller]');
+  var b = ev.target.closest('[data-tab],[data-canal],[data-fil],[data-retour],[data-aller],[data-reveil]');
   if (!b) return;
+  if (b.hasAttribute('data-reveil')) { b.disabled = true; basculerReveil(b.getAttribute('data-reveil') === '1'); return; }
   if (b.hasAttribute('data-tab')) {
     S.tab = b.getAttribute('data-tab');
     var l = document.querySelectorAll('.ss-tab'), i;
@@ -529,13 +575,14 @@ document.addEventListener('click', function (ev) {
 $('ssCherche').addEventListener('input', function (ev) { S.q = ev.target.value.replace(/^\s+|\s+$/g, ''); peindreListe(); peindreFil(); });
 $('ssFiltre').addEventListener('change', function (ev) { S.filtre = ev.target.value; peindreListe(); peindreFil(); });
 $('ssPeriode').addEventListener('change', function (ev) { S.jours = Number(ev.target.value) || 7; peindre(); });
-$('ssActualiser').addEventListener('click', function () { charger(); });
+$('ssActualiser').addEventListener('click', function () { charger(); chargerReveil(); });
 
 firebase.auth().onAuthStateChanged(function (user) {
   if (!user) { window.location.href = 'login.html'; return; }
   if ((localStorage.getItem('ambitio_role') || '') !== 'admin') { $('lockedView').style.display = ''; return; }
   $('mainView').style.display = '';
   charger();
+  chargerReveil();
 });
 
 })();

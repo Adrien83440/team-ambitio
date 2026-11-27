@@ -39,6 +39,7 @@
 
 const { db, admin } = require('./_firebaseAdmin');
 const IG = require('./_instagramClient');
+const Reveil = require('./_settingReveil');
 
 function lireCorpsBrut(req) {
   return new Promise((resolve, reject) => {
@@ -102,6 +103,7 @@ async function traiterMessage(ev, creds, rapport) {
     receivedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
   rapport.messages++;
+  if (direction === 'in') rapport.entrants++;   // un prospect a écrit : réveil du setting
 
   /* 2. Agrégat de conversation — en transaction : Meta livre les événements
      en parallèle, deux messages simultanés se marcheraient dessus avec un
@@ -290,7 +292,7 @@ module.exports = async (req, res) => {
   let payload = {};
   try { payload = brut ? JSON.parse(brut) : {}; } catch (_) { payload = {}; }
 
-  const rapport = { messages: 0, commentaires: 0, go: 0, doublons: 0, erreurs: 0 };
+  const rapport = { messages: 0, entrants: 0, commentaires: 0, go: 0, doublons: 0, erreurs: 0 };
   const entries = Array.isArray(payload.entry) ? payload.entry : [];
 
   /* Traitement AVANT la réponse : Vercel tue la fonction dès res.end(), une
@@ -315,6 +317,12 @@ module.exports = async (req, res) => {
       catch (e) { rapport.erreurs++; console.error('[instagram-webhook] commentaire', e.message); }
     }
   }
+
+  /* Réveil du setting écrit (api/_settingReveil.js) : seulement si un message
+     privé ENTRANT vient d'être journalisé, éteint par défaut, au plus un
+     appel toutes les 5 minutes. Attendu AVANT la réponse (Vercel tue la
+     fonction ensuite) ; ne jette jamais, plafonné à 8 secondes. */
+  if (rapport.entrants > 0) rapport.reveil = (await Reveil.signaler('instagram_dm')).decision;
 
   /* 200 systématique dès lors que la signature est bonne : un 500 ferait
      rejouer Meta en boucle sur un événement qu'on ne saura pas mieux traiter
