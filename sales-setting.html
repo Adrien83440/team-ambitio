@@ -473,18 +473,12 @@
     if (AF.isDeparted(slug)) return SC.mot('anciens_membres');
     return memberName(slug);
   }
-  /* Membre de l'équipe derrière une fiche d'agenda (booking_config) : par
-     firebaseUid, anciens membres compris (window.TEAM_MEMBERS les garde). */
+  /* Membre de l'équipe derrière une fiche d'agenda (booking_config) : LA
+     règle commune StatsCore.resoudreHote (compte relié AVANT l'égalité
+     personId == slug — fiche reprise), anciens membres compris
+     (window.TEAM_MEMBERS les garde). */
   function resoudrePersonne(personId) {
-    if (!personId) return null;
-    var map = window.TEAM_MEMBERS || {};
-    var p = S.personsMap[personId];
-    if (p && p.firebaseUid) {
-      var ks = Object.keys(map);
-      for (var i = 0; i < ks.length; i++) { var m = map[ks[i]]; if (m && m.firebaseUid === p.firebaseUid) return m.slug || ks[i]; }
-    }
-    if (Object.prototype.hasOwnProperty.call(map, personId)) return personId;
-    return null;
+    return SC.resoudreHote(S.personsMap || {}, window.TEAM_MEMBERS || {})(personId);
   }
   /* Closer d'un RDV — StatsCore.closerDuRdv (validé au close → hôte figé →
      hôte de la fiche d'agenda). Personne d'identifiable : « — ». */

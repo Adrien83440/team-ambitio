@@ -237,14 +237,22 @@
          même règle (FunnelCore.buildCloses) sur les données chargées ici. */
       funnelCloses: Array.isArray(S.ctx.funnelCloses) ? S.ctx.funnelCloses : null
     });
+    /* Ce qui a servi au modèle : show() reconstruit dès que la page fournit
+       d'autres closes / KPI (funnel arrivé après, ou période changée). */
+    S.builtCloses = S.ctx.funnelCloses || null;
+    S.builtKpis = S.ctx.funnelKpis || null;
     if (S.closer && !S.M.closers.some(function (c) { return c.slug === S.closer; })) S.closer = '';
   }
   function load() {
-    if (S.loading) return;
-    S.loading = true; S.err = null;
+    /* Un chargement en cours pour une AUTRE période : relancé à sa fin
+       (jamais un modèle fait des données d'une période et du contexte d'une
+       autre — 27/11/2026). */
+    if (S.loading) { S.relancer = true; return; }
+    S.loading = true; S.err = null; S.relancer = false;
     var key = dataKey();
     render();
     LC.loadAll(S.ctx.db, { P: S.ctx.P, typeMap: S.ctx.typeMap || {}, closerRange: closerRange() }).then(function (D) {
+      if (key !== dataKey()) { S.relancer = true; return; }
       S.D = D;
       S.grid = LC.normalizeGrid(D.gridRaw);
       S.stamp++;
@@ -255,6 +263,7 @@
       S.err = e && e.message ? e.message : 'erreur inconnue';
     }).then(function () {
       S.loading = false;
+      if (S.relancer || key !== dataKey()) { S.relancer = false; S.loadedKey = null; load(); return; }
       render();
     });
   }
@@ -1643,7 +1652,13 @@
     show: function (mount, ctx) {
       S.mount = mount; S.ctx = ctx;
       bind();
-      if (S.loadedKey !== dataKey() || !S.D) load(); else render();
+      if (S.loadedKey !== dataKey() || !S.D) { load(); return; }
+      /* Données déjà chargées pour cette période : si la page fournit
+         d'autres closes ou KPI du Stats funnel que ceux du modèle (funnel
+         calculé après, ou d'une autre période auparavant), le modèle est
+         reconstruit — jamais les closes d'une autre période à l'écran. */
+      if (!S.loading && ((ctx.funnelCloses || null) !== S.builtCloses || (ctx.funnelKpis || null) !== S.builtKpis)) rebuild();
+      render();
     },
     invalidate: function () { S.loadedKey = null; },
     refilter: function (ctx) {

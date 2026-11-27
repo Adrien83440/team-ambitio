@@ -355,25 +355,11 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
     });
     return out;
   }
-  function slugDeUid(uid) {
-    if (!uid) return null;
-    var map = window.TEAM_MEMBERS || {};
-    var keys = Object.keys(map);
-    for (var i = 0; i < keys.length; i++) {
-      var m = map[keys[i]];
-      if (m && (m.firebaseUid === uid || m.uid === uid)) return m.slug || keys[i];
-    }
-    return null;
-  }
-  /* Hôte d'un RDV : fiche d'agenda (personId) → membre relié par son
-     compte ; à défaut un personId qui est lui-même un slug du roster. */
+  /* Hôte d'un RDV : LA règle commune StatsCore.resoudreHote (compte relié à
+     la fiche d'agenda AVANT l'égalité personId == slug — fiche reprise,
+     27/11/2026), sur le roster COMPLET (anciens membres compris). */
   function resoudreAvec(persons) {
-    return function (personId) {
-      if (!personId) return null;
-      var p = (persons || {})[personId];
-      if (p && p.firebaseUid) { var s = slugDeUid(p.firebaseUid); if (s) return s; }
-      return membreConnu(personId) ? personId : null;
-    };
+    return SC.resoudreHote(persons || {}, rosterComplet());
   }
   function moi() {
     try { var m = AF.me(); return (m && m.resolved) ? m.slug : null; } catch (e) { return null; }

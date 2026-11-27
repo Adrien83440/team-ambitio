@@ -459,6 +459,67 @@
     if (typeof resoudrePersonne === 'function') return resoudrePersonne(b.personId, b) || null;
     return null;
   }
+  /* HÔTE D'UNE FICHE D'AGENDA — LA règle du projet (27/11/2026), la seule :
+     Close SB, Global closing, Set NB, Dashboard, Stats funnel, Qualité leads,
+     Pilotage et l'assistant l'appellent ; aucune page ne la recode.
+       ① le COMPTE RELIÉ à la fiche (firebaseUid de booking_config/{personId})
+          → le membre du roster qui porte ce compte ; plusieurs membres pour un
+          même compte : un membre en place prime sur un ancien membre, puis le
+          plus petit `order`, puis le slug (même départage que les appels,
+          FunnelCore.callerIndex) ;
+       ② sinon la fiche dont l'identifiant EST le slug d'un membre ;
+       ③ sinon null (« Non attribué »).
+     Le compte relié passe AVANT l'identifiant : une fiche d'agenda peut être
+     REPRISE par un autre membre (booking_config/elodie, reprise par Anthony
+     le 10/10/2026 pour garder les liens publics) — son identifiant reste le
+     slug de l'ancien membre, son compte est celui du membre qui reçoit les
+     RDV. Les RDV passés de l'ancien membre portent expertSlug (figé sur le
+     RDV, lu avant l'hôte par closerDuRdv) et restent les siens.
+     Un ancien membre reste résolu : c'est l'écran qui le range en « Anciens
+     membres » (rangPersonne).
+     persons = { personId: { firebaseUid } } ; team = roster COMPLET, anciens
+     membres compris (tableau, ou objet { slug: membre }) ; un membre porte
+     son compte dans firebaseUid (ou uid).
+     → function (personId) → slug | null, à passer à closerDuRdv. */
+  function resoudreHote(persons, team) {
+    var bySlug = {}, byUid = {};
+    var list = [];
+    if (Array.isArray(team)) list = team;
+    else if (team && typeof team === 'object') {
+      Object.keys(team).forEach(function (k) {
+        var m = team[k];
+        if (!m || typeof m !== 'object') return;
+        if (m.slug) { list.push(m); return; }
+        var c = { slug: k };
+        Object.keys(m).forEach(function (f) { if (f !== 'slug') c[f] = m[f]; });
+        list.push(c);
+      });
+    }
+    function rangHote(m) {
+      return { parti: estParti(m, m.slug), order: Number(m.order) || 999, slug: String(m.slug) };
+    }
+    function prime(a, b) {
+      var ra = rangHote(a), rb = rangHote(b);
+      if (ra.parti !== rb.parti) return !ra.parti;
+      if (ra.order !== rb.order) return ra.order < rb.order;
+      return ra.slug < rb.slug;
+    }
+    list.forEach(function (m) {
+      if (!m || typeof m !== 'object' || !m.slug) return;
+      if (!bySlug[m.slug]) bySlug[m.slug] = m;
+      var uid = m.firebaseUid || m.uid || null;
+      if (uid && (!byUid[uid] || prime(m, byUid[uid]))) byUid[uid] = m;
+    });
+    var P = persons || {};
+    return function (personId) {
+      if (!personId) return null;
+      var p = Object.prototype.hasOwnProperty.call(P, personId) ? P[personId] : null;
+      var m = p && p.firebaseUid ? byUid[p.firebaseUid] : null;
+      if (m) return m.slug;
+      if (Object.prototype.hasOwnProperty.call(bySlug, personId)) return String(personId);
+      return null;
+    };
+  }
 
   /* Membres partis AVANT que la fiche d'équipe porte le drapeau `departed` :
      la seule liste de prénoms du projet, lue par le navigateur ET par le
@@ -983,7 +1044,7 @@
     vide: vide, ajouter: ajouter, finir: finir, compter: compter, sommer: sommer,
     pct: pct, showUp: showUp, tauxClose: tauxClose, fmtPct: fmtPct, fmtEuro: fmtEuro,
     /* Qui */
-    setterDuRdv: setterDuRdv, closerDuRdv: closerDuRdv,
+    setterDuRdv: setterDuRdv, closerDuRdv: closerDuRdv, resoudreHote: resoudreHote,
     PARTIS_HISTORIQUES: PARTIS_HISTORIQUES, estPartiHistorique: estPartiHistorique, estParti: estParti,
     NON_ATTRIBUE: NON_ATTRIBUE, rangPersonne: rangPersonne,
     /* Téléphone */

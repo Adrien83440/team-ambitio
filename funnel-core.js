@@ -4132,35 +4132,15 @@
       });
     }).catch(function (e) { DATA.personsError = (e && e.message) || 'lecture impossible'; });
   }
-  /* RÉSOLVEUR D'HÔTE (revue D13) — la règle de Close SB / Global closing
-     (sales-closing.html), d'AlteoreFlow.loadPersonsMap et de Qualité leads
-     (lqs-core.js, resoudreLocal) : personId d'une fiche d'agenda → membre du
-     roster dont le slug est ce personId, sinon dont le firebaseUid est celui
-     de la fiche d'agenda. null = inconnu (« Non attribué »). Aucun repli
-     « même prénom ».
-     persons = { personId: { firebaseUid } } ; team = roster (tableau, ou
-     objet { slug: membre }), anciens membres compris : un ancien membre est
-     résolu (son activité reste dans les totaux), c'est l'écran qui le
-     range en « Anciens membres ».
+  /* RÉSOLVEUR D'HÔTE — délègue à LA règle commune StatsCore.resoudreHote
+     (compte relié à la fiche d'agenda AVANT l'égalité personId == slug : la
+     fiche « elodie » est reprise par Anthony depuis le 10/10/2026). Export
+     conservé pour les pages qui l'appellent ; aucune règle ici.
+     persons = { personId: { firebaseUid } } ; team = roster COMPLET (tableau,
+     ou objet { slug: membre }), anciens membres compris.
      → function (personId) → slug | null, à passer à StatsCore.closerDuRdv. */
   function resoudreAvec(persons, team) {
-    var bySlug = {}, byUid = {};
-    var list = Array.isArray(team) ? team : Object.keys(team || {}).map(function (k) {
-      var m = team[k]; if (m && typeof m === 'object' && !m.slug) { var c = {}; Object.keys(m).forEach(function (f) { c[f] = m[f]; }); c.slug = k; return c; } return m;
-    });
-    list.forEach(function (m) {
-      if (!m || !m.slug) return;
-      bySlug[m.slug] = m;
-      if (m.firebaseUid && !byUid[m.firebaseUid]) byUid[m.firebaseUid] = m;
-    });
-    var P = persons || {};
-    return function (personId) {
-      if (!personId) return null;
-      if (bySlug[personId]) return personId;
-      var p = P[personId];
-      var m = p && p.firebaseUid ? byUid[p.firebaseUid] : null;
-      return m ? m.slug : null;
-    };
+    return SC.resoudreHote(persons || {}, team || []);
   }
   /* Le résolveur PAR DÉFAUT d'un chargement loadAll : fiches d'agenda lues
      (DATA.persons) + roster complet (DATA.teamFull) réuni à `team` (liste

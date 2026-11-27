@@ -1245,7 +1245,18 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       typeMap: TYPE_MAP,
       resoudrePersonne: RESOUDRE_HOTE
     });
+    /* Période des DONNÉES (posée au lancement du chargement) — jamais celle
+       de P au moment du calcul : P peut avoir changé pendant le chargement. */
+    K._periode = (DATA && DATA._periode) || null;
   }
+  /* Clé de la période affichée. K n'est montré (onglets Funnel, Leads,
+     Qualité par pub) ni transmis (closes et KPI de Qualité leads) que s'il a
+     été calculé pour CETTE période : jamais les chiffres d'une autre
+     période sous le libellé de celle-ci (27/11/2026). */
+  function periodeCle() {
+    return (P && P.start && P.end) ? (P.start.getTime() + '|' + P.end.getTime()) : '';
+  }
+  function kPret() { return !!K && !!K._periode && K._periode === periodeCle(); }
 
 
   /* ════════════════════════════════════════════════════════════════
@@ -1785,7 +1796,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     return SDF.bookingItem(b, { now: now, classe: b._class, closer: nomDe(SC.closerDuRdv(b, RESOUDRE_HOTE || undefined)) });
   }
   function fdResolve(ref) {
-    if (!K || !SDF) return null;
+    if (!kPret() || !SDF) return null;
     var noLink = window.FUNNEL_READONLY === true;
     var per = ' · ' + periodLabel();
     /* L'état d'un RDV se relit avec le « maintenant » du calcul des
@@ -1971,7 +1982,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
   function renderFunnel() {
     var el = $('#fnTabFunnel');
     if (SDF) SDF.bind(el, fdResolve);
-    if (!K) { el.innerHTML = '<div class="fn-loading">Chargement…</div>'; return; }
+    if (!kPret()) { el.innerHTML = '<div class="fn-loading">Chargement…</div>'; return; }
     var k = K;
     var h = '';
 
@@ -2611,7 +2622,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
 
   function renderLeads() {
     var el = $('#fnTabLeads');
-    if (!K) { el.innerHTML = '<div class="fn-loading">Chargement…</div>'; return; }
+    if (!kPret()) { el.innerHTML = '<div class="fn-loading">Chargement…</div>'; return; }
     var h = '';
     /* Lecture en échec ou plafond atteint : dit ici aussi (la liste est faite
        des mêmes fiches que les Leads de l'onglet Funnel). */
@@ -4296,12 +4307,15 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       toast: toast, user: currentUser,
       teamMembers: window.TEAM_MEMBERS_LIST || [],
       tunnelsMeta: (DATA && DATA.tunnelsMeta) || null,
-      /* Closes du Stats funnel — rapprochés de ceux de Qualité leads (21/11/2026). */
-      funnelCloses: K ? (K.closeRows || []) : null,
+      /* Closes du Stats funnel — rapprochés de ceux de Qualité leads (21/11/2026).
+         Seulement si K a été calculé pour la période AFFICHÉE (27/11/2026) :
+         sinon null, et Qualité leads applique la même règle
+         (FunnelCore.buildCloses) sur ses propres données de la période. */
+      funnelCloses: kPret() ? (K.closeRows || []) : null,
       /* KPI du funnel (25/11/2026) : couverture de la dépense par pub et
          dépense du compte, pour que la vue Marketing masque ses coûts avec
          la MÊME règle et cite la même Dépense pub (lqs-tab.js, adsCoverage). */
-      funnelKpis: K || null
+      funnelKpis: kPret() ? K : null
     };
   }
   function renderLqs() {
@@ -4314,7 +4328,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
      admin : lien média buyeuse + API Conversions Meta. */
   function renderAdq() {
     if (!window.AdsQualityTab) { $('#fnTabAdq').innerHTML = '<div class="fn-ig-alert">Module Qualité par pub non chargé (ads-quality-tab.js).</div>'; return; }
-    if (!K) { $('#fnTabAdq').innerHTML = '<div class="fn-loading">Chargement…</div>'; return; }
+    if (!kPret()) { $('#fnTabAdq').innerHTML = '<div class="fn-loading">Chargement…</div>'; return; }
     window.AdsQualityTab.render($('#fnTabAdq'), window.AdsQualityTab.fromKpis(K, periodLabel()), {
       admin: true, readonly: RO, adminCtx: { db: db, user: currentUser, toast: toast }
     });
@@ -4335,9 +4349,14 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
   }
 
   var _loading = false;
+  /* Période changée PENDANT un chargement : relancé à la fin (avant, le
+     changement était ignoré et l'écran gardait l'ancienne période). */
+  var _relancer = false;
   function refresh() {
-    if (_loading) return;
+    if (_loading) { _relancer = true; return; }
     _loading = true;
+    _relancer = false;
+    var cle = periodeCle();
     adsDraft = {};
     /* L'onglet Instagram a ses propres sources et son propre chargement
        paresseux : changer de période l'invalide, il se rechargera à sa
@@ -4371,6 +4390,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       .then(function (all) {
         var res = all[0];
         DATA = res.DATA;
+        if (DATA) DATA._periode = cle;
         compute();
         computeDispos();
         renderActiveTab();
@@ -4381,7 +4401,10 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
         setSync('err', 'Erreur de chargement');
         toast('Erreur : ' + e.message, true);
       })
-      .then(function () { _loading = false; });
+      .then(function () {
+        _loading = false;
+        if (_relancer || cle !== periodeCle()) refresh();
+      });
   }
 
   function bindUI() {

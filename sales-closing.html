@@ -226,20 +226,12 @@
     var m = rosterMember(slug);
     return m ? (m.shortName || m.displayName || slug) : String(slug);
   }
-  /* personId d'une fiche d'agenda → membre de l'équipe : slug identique,
-     sinon même compte (firebaseUid de la fiche d'agenda). null = inconnu. */
+  /* Hôte d'une fiche d'agenda → membre : LA règle commune
+     StatsCore.resoudreHote (compte relié AVANT l'égalité personId == slug —
+     fiche reprise, 27/11/2026), sur le roster COMPLET (window.TEAM_MEMBERS
+     garde les anciens membres). null = inconnu. */
   function resoudrePersonne(personId) {
-    if (!personId) return null;
-    if (rosterMember(personId)) return personId;
-    var p = S.personsMap[personId];
-    if (!p || !p.firebaseUid) return null;
-    var list = (window.TEAM_MEMBERS_LIST || []).slice();
-    var map = window.TEAM_MEMBERS || {};
-    Object.keys(map).forEach(function (k) { if (map[k]) list.push(map[k]); });
-    for (var i = 0; i < list.length; i++) {
-      if (list[i] && list[i].firebaseUid === p.firebaseUid) return list[i].slug || null;
-    }
-    return null;
+    return SC.resoudreHote(S.personsMap || {}, window.TEAM_MEMBERS || {})(personId);
   }
   /* Seau d'un closer pour un jour : son onglet, sinon « Non attribué » avec
      la raison (référentiel §3). */

@@ -52,6 +52,19 @@
   var DAY = 86400000;
 
   /* ══ OUTILS ═══════════════════════════════════════════════════════════ */
+  /* Roster reçu en tableau ou en objet { slug: membre } → tableau. */
+  function teamListe(t) {
+    if (!t) return [];
+    if (Array.isArray(t)) return t;
+    return Object.keys(t).map(function (k) {
+      var m = t[k];
+      if (!m || typeof m !== 'object') return null;
+      if (m.slug) return m;
+      var c = { slug: k };
+      Object.keys(m).forEach(function (f) { c[f] = m[f]; });
+      return c;
+    }).filter(Boolean);
+  }
   function norm(s) {
     var t = String(s == null ? '' : s);
     if (typeof t.normalize === 'function') t = t.normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -715,9 +728,11 @@
              funnelCloses (facultatif : K.closeRows du Stats funnel — mêmes
                lignes, déjà filtrées tunnel / source ; sinon la liste est
                construite ici par FunnelCore.buildCloses),
+             teamFull (facultatif : roster COMPLET, anciens membres compris,
+               tableau ou objet — pour l'hôte d'un RDV),
              resoudrePersonne (facultatif : personId d'une fiche d'agenda →
-               slug du membre ; sinon fiches d'agenda reliées par slug ou
-               firebaseUid),
+               slug du membre ; sinon StatsCore.resoudreHote sur les fiches
+               d'agenda lues et le roster complet),
              now (facultatif : millisecondes, tests) } */
   function buildModel(D, ctx) {
     var grid = ctx.grid;
@@ -726,11 +741,10 @@
     var TEAM = ctx.teamMembers || [];
     var typeMap = ctx.typeMap || {};
     var stamp = (ctx.gridStamp || 0) + '#' + (++MODEL_SEQ);
-    var bySlug = {}, byUid = {};
+    var bySlug = {};
     TEAM.forEach(function (m) {
       if (!m || !m.slug) return;
       bySlug[m.slug] = m;
-      if (m.firebaseUid) byUid[m.firebaseUid] = m;
     });
     function memberName(slug) { var m = bySlug[slug]; return m ? (m.shortName || m.displayName || slug) : slug; }
     function isDeparted(slug) {
@@ -775,16 +789,11 @@
       o.rangCas = r.cas || (o.closer ? 'onglet' : 'inconnu');
       return o;
     }
-    /* Hôte d'un RDV : fiche d'agenda reliée au membre par son slug ou son
-       compte (firebaseUid) — même règle que Close SB. Le repli « même
-       prénom » est retiré (audit 25/11/2026, EQU-06). */
-    function resoudreLocal(personId) {
-      if (!personId) return null;
-      if (bySlug[personId]) return personId;
-      var p = D.persons && D.persons[personId];
-      var m = p && p.firebaseUid ? byUid[p.firebaseUid] : null;
-      return m ? m.slug : null;
-    }
+    /* Hôte d'un RDV : LA règle commune StatsCore.resoudreHote (compte relié
+       à la fiche d'agenda AVANT l'égalité personId == slug — fiche reprise,
+       27/11/2026), sur le roster COMPLET : liste de la page + ctx.teamFull
+       (anciens membres compris : window.TEAM_MEMBERS, tableau ou objet). */
+    var resoudreLocal = SC.resoudreHote(D.persons || {}, TEAM.concat(teamListe(ctx.teamFull)));
     var resoudre = typeof ctx.resoudrePersonne === 'function' ? ctx.resoudrePersonne : resoudreLocal;
     function closerOfRdv(b) { return b ? SC.closerDuRdv(b, resoudre) : null; }
 

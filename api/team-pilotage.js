@@ -229,14 +229,16 @@ function rdvAgg(list, now) {
   RDV_KEYS.forEach(function (k) { o[k] = a[k] || 0; });
   return o;
 }
-// Résolution d'une fiche d'agenda → membre (StatsCore.closerDuRdv).
+// Résolution d'une fiche d'agenda → membre (StatsCore.closerDuRdv) : LA
+// règle commune StatsCore.resoudreHote (compte relié AVANT l'égalité
+// personId == slug), sur les fiches brutes du roster (anciens membres
+// compris, `order` pour le départage). Un résolveur par lecture des fiches.
 function resoudrePersonneFn(R, persons) {
-  return function (personId) {
-    const p = persons[personId];
-    if (p && p.firebaseUid && R.byUid[p.firebaseUid]) return R.byUid[p.firebaseUid].slug;
-    if (personId && R.bySlug[personId]) return personId;
-    return null;
-  };
+  if (R._hotePersons !== persons || !R._hote) {
+    R._hote = SC.resoudreHote(persons || {}, R.raw || []);
+    R._hotePersons = persons;
+  }
+  return R._hote;
 }
 // « Sets » : RDV du setting réellement créé (un par RDV), hors remplaçant
 // (report, transfert) et doublon supprimé — règle de Set NB.
@@ -342,7 +344,10 @@ async function loadRoster() {
   const snap = await db.collection('_meta').doc('team_members').get();
   const raw = snap.exists ? (snap.data() || {}).members : null;
   const list = Array.isArray(raw) ? raw : Object.values(raw || {});
-  const R = { list: [], bySlug: {}, byUid: {}, byFirst: {}, callIdx: null };
+  const R = { list: [], bySlug: {}, byUid: {}, byFirst: {}, callIdx: null, raw: [] };
+  // Fiches brutes (slug, firebaseUid, order, departed…) : l'hôte d'une fiche
+  // d'agenda (StatsCore.resoudreHote) les lit telles quelles.
+  R.raw = list.filter(function (m) { return m && m.slug; });
   // Auteur d'un appel : L'index du Stats funnel (FunnelCore.callerIndex), sur
   // les mêmes fiches — compte relié, sinon prénom Ringover, anciens membres
   // compris, membre en place prioritaire à prénom égal.

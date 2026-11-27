@@ -159,21 +159,15 @@ const ROLES_SALES = { setter: 1, closer: 1, closer_setter: 1, setter_ecrit: 1 };
 function construireContexte(typeMap, persons, team, avert) {
   persons = persons || {};
   team = team || [];
-  const bySlug = {}, byUid = {};
+  const bySlug = {};
   team.forEach(function (m) {
     if (!m || !m.slug) return;
     bySlug[m.slug] = m;
-    if (m.firebaseUid) byUid[m.firebaseUid] = m;
   });
-  /* personId d'une fiche d'agenda → slug du membre (même slug, sinon même
-     compte firebaseUid). null = inconnu. */
-  function resoudre(personId) {
-    if (!personId) return null;
-    if (bySlug[personId]) return personId;
-    const p = persons[personId];
-    const m = p && p.firebaseUid ? byUid[p.firebaseUid] : null;
-    return m ? m.slug : null;
-  }
+  /* personId d'une fiche d'agenda → slug du membre : LA règle commune
+     StatsCore.resoudreHote (compte relié AVANT l'égalité personId == slug —
+     fiche reprise, 27/11/2026), roster complet. null = inconnu. */
+  const resoudre = SC.resoudreHote(persons, team);
   /* Membre parti : drapeau de la fiche, fiche archivée avec date de fin, ou
      liste historique commune (StatsCore.estParti — la même qu'à l'écran). */
   function parti(slug) { return !!slug && SC.estParti(bySlug[slug] || null, slug); }
