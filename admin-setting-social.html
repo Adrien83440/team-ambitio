@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Setting Insta / FB · Alteore</title>
+<link rel="stylesheet" href="sales.css">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}</script>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   admin-setting-social.html — « Setting Insta / FB » (27/11/2026, admin)
+   Tout ce que fait le setting écrit mené par l'agent sur Instagram et
+   Facebook : réponses aux commentaires, conversations privées, liens de RDV.
+   Lecture seule pour l'équipe. Données : api/setting-journal.js (journal
+   déposé par l'agent à la fin de chaque passage, par cette page).
+   ═══════════════════════════════════════════════════════════════════════ */
+.ss{padding:20px 26px 60px;max-width:1380px;margin:0 auto}
+.ss .sp{flex:1}
+.ss-top{display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.ss-ic{width:44px;height:44px;border-radius:13px;background:linear-gradient(135deg,#2563eb,#c13584);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.ss-top h1{font-family:var(--font-d);font-size:21px;font-weight:800;letter-spacing:-.4px;line-height:1.2}
+.ss-top small{display:block;font-size:12px;color:var(--muted);margin-top:3px}
+.ss-ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-right:36px}
+.ss-sel,.ss-in{padding:8px 10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:9px;color:var(--text);font-family:inherit;font-size:13px;outline:0;box-sizing:border-box}
+.ss-act{padding:8px 14px;border:1px solid var(--border2);border-radius:9px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;background:var(--bg3);color:var(--text);white-space:nowrap}
+.ss-act:hover{border-color:#2563eb}
+.ss-act:disabled{opacity:.5;cursor:default}
+.ss-note{font-size:12.5px;color:var(--muted);margin:0 0 12px;line-height:1.5}
+.ss-alerte{border:1px solid rgba(245,158,11,.5);color:#f59e0b;border-radius:10px;padding:9px 12px;font-size:12.5px;font-weight:600;margin-bottom:12px}
+.ss-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:14px}
+.ss-kpi{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:9px 11px}
+.ss-kpi span{display:block;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700;line-height:1.35}
+.ss-kpi b{font-family:var(--font-d);font-size:20px;font-weight:800}
+.ss-kpi.att b{color:#f59e0b}
+.ss-kpi.ok b{color:#22c55e}
+.ss-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.ss-tab{padding:8px 16px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.ss-tab:hover{color:var(--text)}
+.ss-tab.on{color:var(--text);border-color:rgba(37,99,235,.6);background:rgba(37,99,235,.12)}
+.ss-pane{display:none}
+.ss-pane.on{display:block}
+
+/* Échanges : canaux, liste, fil */
+.ss-canaux{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px}
+.ss-canal{padding:6px 12px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+.ss-canal.on{color:var(--text);border-color:rgba(37,99,235,.6);background:rgba(37,99,235,.12)}
+.ss-canal i{font-style:normal;font-weight:600;margin-left:5px;opacity:.8}
+.ss-box{display:grid;grid-template-columns:minmax(280px,380px) minmax(0,1fr);border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--bg2);height:calc(100vh - 330px);min-height:440px}
+.ss-liste{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--border)}
+.ss-outils{display:flex;gap:8px;padding:10px;border-bottom:1px solid var(--border)}
+.ss-outils .ss-in{flex:1;min-width:0}
+.ss-fils{overflow-y:auto;flex:1}
+.ss-fil{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:10px;width:100%;text-align:left;padding:11px 12px;border:0;border-bottom:1px solid var(--border);background:transparent;color:var(--text);font-family:inherit;cursor:pointer;align-items:start}
+.ss-fil:hover{background:rgba(37,99,235,.07)}
+.ss-fil.on{background:rgba(37,99,235,.16)}
+.ss-av{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:14px;position:relative;flex-shrink:0}
+.ss-av em{position:absolute;right:-3px;bottom:-3px;width:17px;height:17px;border-radius:50%;border:2px solid var(--bg2);display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;font-style:normal;color:#fff}
+.ss-av em.ig{background:#c13584}
+.ss-av em.fb{background:#0866ff}
+.ss-fil-n{font-size:13.5px;font-weight:700;overflow-wrap:anywhere}
+.ss-fil-x{font-size:12.5px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;margin-top:1px}
+.ss-fil-s{font-size:11.5px;color:var(--muted);margin-top:3px}
+.ss-fil-d{display:flex;flex-direction:column;gap:5px;align-items:flex-end}
+.ss-h{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.ss-bad{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid var(--border2);white-space:nowrap;color:var(--muted)}
+.ss-bad.ok{color:#22c55e;border-color:rgba(34,197,94,.5)}
+.ss-bad.att{color:#f59e0b;border-color:rgba(245,158,11,.5)}
+.ss-bad.stop{color:#ef4444;border-color:rgba(239,68,68,.5)}
+.ss-bad.bleu{color:#60a5fa;border-color:rgba(37,99,235,.6)}
+.ss-detail{display:flex;flex-direction:column;min-height:0;min-width:0}
+.ss-dt{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:11px 14px;border-bottom:1px solid var(--border)}
+.ss-dt b{font-size:15px;overflow-wrap:anywhere}
+.ss-dt small{display:block;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.ss-retour{display:none}
+.ss-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px}
+.ss-jour{align-self:center;font-size:11.5px;font-weight:700;color:var(--muted);margin:8px 0 2px}
+.ss-msg{max-width:min(560px,82%);display:flex;flex-direction:column;gap:3px}
+.ss-msg.recu{align-self:flex-start}
+.ss-msg.env{align-self:flex-end;align-items:flex-end}
+.ss-bulle{padding:9px 13px;border-radius:16px;font-size:13.5px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+.ss-msg.recu .ss-bulle{background:var(--bg3);border:1px solid var(--border);border-bottom-left-radius:4px}
+.ss-msg.env .ss-bulle{background:#2563eb;color:#fff;border-bottom-right-radius:4px}
+.ss-msg.env .ss-bulle a{color:#fff}
+.ss-msg.recu .ss-bulle a{color:#60a5fa}
+.ss-msg.env.humain .ss-bulle{background:transparent;color:var(--text);border:1px solid var(--border2)}
+.ss-msg.env.humain .ss-bulle a{color:#60a5fa}
+.ss-leg{font-size:11.5px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.ss-sys{align-self:center;max-width:min(620px,94%);border:1px solid var(--border2);border-radius:10px;padding:8px 12px;font-size:12.5px;text-align:center;overflow-wrap:anywhere;color:var(--muted)}
+.ss-sys b{display:block;color:var(--text)}
+.ss-sys.att{border-color:rgba(245,158,11,.5)}
+.ss-sys.att b{color:#f59e0b}
+.ss-sys.stop{border-color:rgba(239,68,68,.5)}
+.ss-sys.stop b{color:#ef4444}
+.ss-publi{border:1px solid var(--border);border-radius:10px;padding:9px 12px;font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
+.ss-publi b{color:var(--text)}
+.ss-vide{text-align:center;padding:30px 18px;color:var(--muted);font-size:13px;line-height:1.7}
+.ss-pied{padding:8px 14px 10px;font-size:11.5px;color:var(--muted);text-align:center;border-top:1px solid var(--border)}
+
+/* Reporting */
+.ss-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:14px}
+.ss-card h2{font-size:14px;font-weight:800;margin:0 0 3px}
+.ss-card>small{display:block;font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5}
+.ss-scroll{overflow-x:auto}
+.ss-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.ss-table th{text-align:right;color:var(--muted);font-size:11px;font-weight:700;padding:6px 8px;border-bottom:1px solid var(--border2);white-space:nowrap}
+.ss-table td{padding:7px 8px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap}
+.ss-table th:first-child,.ss-table td:first-child{text-align:left}
+.ss-table tr.jour td{font-weight:800;background:var(--bg3)}
+.ss-table tr.tot td{font-weight:800;border-top:1px solid var(--border2)}
+.ss-table td.g{text-align:left;white-space:normal}
+.ss-table a{color:#60a5fa;text-decoration:none;font-weight:700}
+.ss-locked{text-align:center;padding:80px 20px;color:var(--muted);font-size:14px}
+.ss-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:10px 16px;border-radius:10px;font-size:13px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:50;max-width:90vw}
+.ss-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (max-width:860px){
+  .ss{padding:14px 12px 40px}
+  .ss-ctl{margin-right:0}
+  .ss-box{grid-template-columns:1fr;height:calc(100vh - 250px)}
+  .ss-liste{border-right:0}
+  .ss-box.ouvert .ss-liste{display:none}
+  .ss-box:not(.ouvert) .ss-detail{display:none}
+  .ss-retour{display:inline-block}
+  .ss-msg{max-width:90%}
+}
+</style>
+</head>
+<body>
+
+<main class="ss" id="mainView" style="display:none">
+  <header class="ss-top">
+    <div class="ss-ic">📲</div>
+    <div>
+      <h1>Setting Insta / FB</h1>
+      <small id="ssMaj">Chargement…</small>
+    </div>
+    <div class="sp"></div>
+    <div class="ss-ctl">
+      <select class="ss-sel" id="ssPeriode" aria-label="Période">
+        <option value="1">Aujourd'hui</option>
+        <option value="7" selected>7 derniers jours</option>
+        <option value="30">30 derniers jours</option>
+        <option value="60">60 derniers jours</option>
+      </select>
+      <button class="ss-act" type="button" id="ssActualiser">Actualiser</button>
+    </div>
+  </header>
+
+  <div id="ssAlerte"></div>
+  <div class="ss-kpis" id="ssKpis"></div>
+
+  <nav class="ss-tabs">
+    <button class="ss-tab on" type="button" data-tab="echanges">💬 Échanges</button>
+    <button class="ss-tab" type="button" data-tab="reporting">📊 Reporting</button>
+  </nav>
+
+  <section class="ss-pane on" id="paneEchanges">
+    <div class="ss-canaux" id="ssCanaux"></div>
+    <div class="ss-box" id="ssBox">
+      <div class="ss-liste">
+        <div class="ss-outils">
+          <input class="ss-in" id="ssCherche" type="search" placeholder="Chercher un nom ou un mot" aria-label="Chercher un nom ou un mot">
+          <select class="ss-sel" id="ssFiltre" aria-label="Filtrer par état">
+            <option value="">Tous les états</option>
+            <option value="a_voir">À voir par toi</option>
+            <option value="lien">Lien de RDV envoyé</option>
+            <option value="attente">Réponse à faire</option>
+            <option value="cours">En cours</option>
+            <option value="repris">Repris par toi</option>
+            <option value="silence">Laissé sans réponse</option>
+          </select>
+        </div>
+        <div class="ss-fils" id="ssFils"></div>
+      </div>
+      <div class="ss-detail">
+        <div class="ss-dt" id="ssDt"></div>
+        <div class="ss-msgs" id="ssMsgs"></div>
+        <div class="ss-pied">Lecture seule : rien ne part de cette page. Les messages bleus sont ceux envoyés par l'agent, les messages encadrés ceux d'Adrien ou d'Emily.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ss-pane" id="paneReporting"><div id="ssReporting"></div></section>
+</main>
+
+<div class="ss-locked" id="lockedView" style="display:none"><div style="font-size:48px;margin-bottom:12px">🔒</div><div>Module réservé aux administrateurs.</div></div>
+<div class="ss-toast" id="ssToast"></div>
+
+<script src="nav.js"></script>
+<script>
+(function () {
+'use strict';
+
+var API = '/api/setting-journal';
+var CANAUX = {
+  instagram_dm: { nom: 'Instagram', court: 'Message Instagram', reseau: 'ig', prive: true },
+  messenger: { nom: 'Messenger', court: 'Message Messenger', reseau: 'fb', prive: true },
+  instagram_commentaire: { nom: 'Commentaires Instagram', court: 'Commentaire Instagram', reseau: 'ig', prive: false },
+  facebook_commentaire: { nom: 'Commentaires Facebook', court: 'Commentaire Facebook', reseau: 'fb', prive: false }
+};
+var ORDRE = ['messenger', 'instagram_dm', 'facebook_commentaire', 'instagram_commentaire'];
+var PRIVE_DE = { instagram_commentaire: 'instagram_dm', facebook_commentaire: 'messenger' };
+var ENVOIS = { reponse_publique: 'Réponse publique', dm_ouverture: 'Premier message privé', dm_reponse: 'Réponse', dm_relance: 'Relance', lien_rdv_envoye: 'Lien de RDV envoyé' };
+var ETATS = {
+  a_voir: { nom: 'À voir par toi', cls: 'att' },
+  lien: { nom: 'Lien de RDV envoyé', cls: 'ok' },
+  attente: { nom: 'Réponse à faire', cls: 'bleu' },
+  cours: { nom: 'En cours', cls: '' },
+  repris: { nom: 'Repris par toi', cls: 'stop' },
+  silence: { nom: 'Laissé sans réponse', cls: '' }
+};
+var COULEURS = ['#5b6ee1', '#0f8a7e', '#c2578a', '#b3662b', '#6a55c9', '#2e7fb8', '#8a7a1f', '#b0473f'];
+var LIB_RDV = { close: 'Closé', non_close: 'Non closé', offre: 'Offre en attente', no_show: 'No-show', disqualifie: 'Disqualifié', confirmed: 'À venir ou à statuer', pending: 'En attente', cancelled: 'Annulé', rescheduled: 'Replanifié' };
+var S = { evts: [], rdv: [], rdvErreur: null, dernierDepot: null, tronque: false, fils: [], parCle: {}, tab: 'echanges', canal: 'tout', filtre: '', q: '', ouvert: null, jours: 7, charge: false };
+
+function $(id) { return document.getElementById(id); }
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function toast(msg) {
+  var t = $('ssToast');
+  t.textContent = msg;
+  t.className = 'ss-toast show';
+  clearTimeout(t._tm);
+  t._tm = setTimeout(function () { t.className = 'ss-toast'; }, 4500);
+}
+function appel(corps, jours) {
+  return firebase.auth().currentUser.getIdToken().then(function (t) {
+    var o = { headers: { 'Authorization': 'Bearer ' + t } };
+    if (corps) { o.method = 'POST'; o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(corps); }
+    return fetch(API + (corps ? '' : '?jours=' + (jours || 60)), o);
+  }).then(function (r) { return r.json().catch(function () { return { ok: false, error: 'Réponse illisible du serveur (code ' + r.status + ').' }; }); })
+    .catch(function () { return { ok: false, error: 'Erreur réseau.' }; });
+}
+function erreurTexte(j) { return (j && (j.detail || j.error || j.erreur)) || 'Une erreur est survenue.'; }
+
+/* ── Temps (heure de Paris) ──────────────────────────────────────────── */
+function cleJour(ms) { return ms ? new Date(ms).toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' }) : ''; }
+function heure(ms) { return ms ? new Date(ms).toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' }) : ''; }
+function jourLong(ms) { return new Date(ms).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long' }); }
+function jourCourt(ms) { return new Date(ms).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', day: 'numeric', month: 'short' }); }
+function quand(ms) { if (!ms) return ''; return cleJour(ms) === cleJour(Date.now()) ? heure(ms) : jourCourt(ms); }
+function debutPeriode() {
+  if (S.jours === 1) return null;                       // « Aujourd'hui » : comparé par jour de Paris
+  return Date.now() - S.jours * 86400000;
+}
+function dansPeriode(ms) {
+  if (!ms) return false;
+  if (S.jours === 1) return cleJour(ms) === cleJour(Date.now());
+  return ms >= debutPeriode();
+}
+
+/* ── Conversations ───────────────────────────────────────────────────── */
+function initiale(nom) { var m = String(nom || '?').replace(/^[^A-Za-zÀ-ÿ0-9]+/, ''); return (m.charAt(0) || '?').toUpperCase(); }
+function couleur(nom) { var h = 0, s = String(nom || ''), i; for (i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return COULEURS[h % COULEURS.length]; }
+function cleFil(e) {
+  var c = CANAUX[e.canal], p = String(e.personne || 'Inconnu');
+  return (c && !c.prive) ? e.canal + '|' + p + '|' + String(e.publication || '') : e.canal + '|' + p;
+}
+function estHumain(e) { return e.type !== 'recu' && !!e.auteur && !/claude|agent/i.test(e.auteur); }
+
+// Une conversation = une personne sur un canal (et une publication, pour les commentaires).
+function construire() {
+  var map = {}, liste = [], i, e, k;
+  for (i = 0; i < S.evts.length; i++) {
+    e = S.evts[i];
+    if (!e || !e.canal) continue;
+    k = cleFil(e);
+    if (!map[k]) { map[k] = { cle: k, canal: e.canal, personne: e.personne || 'Inconnu', publication: e.publication || '', evts: [] }; liste.push(map[k]); }
+    map[k].evts.push(e);
+  }
+  for (i = 0; i < liste.length; i++) etatDe(liste[i]);
+  liste.sort(function (a, b) { return b.dernier - a.dernier; });
+  S.fils = liste; S.parCle = map;
+}
+function etatDe(f) {
+  var d = f.evts[f.evts.length - 1], repris = false, lien = false, i, e, t = null;
+  f.dernier = d.atMs || 0; f.etape = ''; f.etat = 'cours'; f.visible = false;
+  for (i = 0; i < f.evts.length; i++) {
+    e = f.evts[i];
+    if (e.etape) f.etape = e.etape;
+    if (e.type === 'repris_par_adrien') repris = true;
+    if (e.type === 'lien_rdv_envoye') lien = true;
+    if (dansPeriode(e.atMs)) f.visible = true;
+  }
+  if (repris) f.etat = 'repris';
+  else if (d.type === 'remonte_adrien') f.etat = 'a_voir';
+  else if (lien) f.etat = 'lien';
+  else if (d.type === 'sans_reponse') f.etat = 'silence';
+  else if (d.type === 'recu') f.etat = 'attente';
+  for (i = f.evts.length - 1; i >= 0 && !t; i--) if (f.evts[i].texte || f.evts[i].note) t = f.evts[i];
+  f.extrait = t ? (((ENVOIS[t.type] && t.texte) ? 'Nous : ' : '') + (t.texte || t.note)) : '';
+}
+function filsVisibles() {
+  var q = S.q.toLowerCase(), out = [], i, f, j, txt;
+  for (i = 0; i < S.fils.length; i++) {
+    f = S.fils[i];
+    if (!f.visible) continue;
+    if (S.canal !== 'tout' && f.canal !== S.canal) continue;
+    if (S.filtre && f.etat !== S.filtre) continue;
+    if (q) {
+      txt = f.personne + ' ' + f.publication;
+      for (j = 0; j < f.evts.length; j++) txt += ' ' + (f.evts[j].texte || '') + ' ' + (f.evts[j].note || '');
+      if (txt.toLowerCase().indexOf(q) < 0) continue;
+    }
+    out.push(f);
+  }
+  return out;
+}
+
+/* ── Chiffres ────────────────────────────────────────────────────────── */
+function compteVide() { return { recu: 0, pub: 0, ouv: 0, rep: 0, lien: 0, remonte: 0, silence: 0, repris: 0 }; }
+function compter(c, e) {
+  if (e.type === 'recu') c.recu++;
+  else if (e.type === 'reponse_publique') { if (!estHumain(e)) c.pub++; }
+  else if (e.type === 'dm_ouverture') { if (!estHumain(e)) c.ouv++; }
+  else if (e.type === 'dm_reponse' || e.type === 'dm_relance') { if (!estHumain(e)) c.rep++; }
+  else if (e.type === 'lien_rdv_envoye') c.lien++;
+  else if (e.type === 'remonte_adrien') c.remonte++;
+  else if (e.type === 'sans_reponse') c.silence++;
+  else if (e.type === 'repris_par_adrien') c.repris++;
+}
+function rdvPeriode() {
+  var out = [], i;
+  for (i = 0; i < S.rdv.length; i++) if (dansPeriode(S.rdv[i].creeLeMs)) out.push(S.rdv[i]);
+  return out;
+}
+
+/* ── En-tête et chiffres ─────────────────────────────────────────────── */
+function kpi(l, v, cls) { return '<div class="ss-kpi' + (cls ? ' ' + cls : '') + '"><span>' + esc(l) + '</span><b>' + esc(v) + '</b></div>'; }
+function peindreEntete() {
+  var d = S.dernierDepot, c = compteVide(), i, aVoir = 0, h = '', a = '';
+  $('ssMaj').textContent = d && d.atMs
+    ? 'Dernier dépôt du journal : ' + jourCourt(d.atMs) + ' à ' + heure(d.atMs) + (d.passage ? ' (passage ' + d.passage + ')' : '') + '. Passages à 8 h 30, 12 h 15 et 19 h 30.'
+    : 'Aucun dépôt pour le moment. Le journal arrive à la fin de chaque passage (8 h 30, 12 h 15, 19 h 30).';
+  for (i = 0; i < S.evts.length; i++) if (dansPeriode(S.evts[i].atMs)) compter(c, S.evts[i]);
+  for (i = 0; i < S.fils.length; i++) if (S.fils[i].visible && S.fils[i].etat === 'a_voir') aVoir++;
+  h += kpi('Messages et commentaires reçus', c.recu);
+  h += kpi('Réponses publiques', c.pub);
+  h += kpi('Conversations privées ouvertes', c.ouv);
+  h += kpi('Réponses et relances en privé', c.rep);
+  h += kpi('Liens de RDV envoyés', c.lien);
+  h += kpi('RDV réservés par le lien', S.rdvErreur ? '—' : rdvPeriode().length, 'ok');
+  h += kpi('À voir par toi', aVoir, aVoir ? 'att' : '');
+  $('ssKpis').innerHTML = h;
+  if (S.tronque) a += '<div class="ss-alerte">Le journal dépasse le nombre de lignes affichables : les plus récentes de la période ne sont pas toutes là. Préviens Adrien.</div>';
+  if (S.rdvErreur) a += '<div class="ss-alerte">Les RDV réservés par le lien n\'ont pas pu être lus (' + esc(S.rdvErreur) + '). Les échanges, eux, sont complets.</div>';
+  $('ssAlerte').innerHTML = a;
+}
+
+/* ── Échanges ────────────────────────────────────────────────────────── */
+function avatar(f) {
+  var r = CANAUX[f.canal] ? CANAUX[f.canal].reseau : 'fb';
+  return '<div class="ss-av" style="background:' + couleur(f.personne) + '">' + esc(initiale(f.personne)) + '<em class="' + r + '">' + (r === 'ig' ? 'IG' : 'f') + '</em></div>';
+}
+function puce(etat) { var e = ETATS[etat] || ETATS.cours; return '<span class="ss-bad' + (e.cls ? ' ' + e.cls : '') + '">' + esc(e.nom) + '</span>'; }
+function sousTitre(f) { return (CANAUX[f.canal] ? CANAUX[f.canal].court : f.canal) + (f.etape ? ' · étape : ' + f.etape : ''); }
+function peindreCanaux() {
+  var h = '', i, k, n, total = 0, par = {};
+  for (i = 0; i < S.fils.length; i++) if (S.fils[i].visible) { total++; par[S.fils[i].canal] = (par[S.fils[i].canal] || 0) + 1; }
+  h += '<button class="ss-canal' + (S.canal === 'tout' ? ' on' : '') + '" type="button" data-canal="tout">Tout<i>' + total + '</i></button>';
+  for (i = 0; i < ORDRE.length; i++) {
+    k = ORDRE[i]; n = par[k] || 0;
+    h += '<button class="ss-canal' + (S.canal === k ? ' on' : '') + '" type="button" data-canal="' + k + '">' + esc(CANAUX[k].nom) + '<i>' + n + '</i></button>';
+  }
+  $('ssCanaux').innerHTML = h;
+}
+function peindreListe() {
+  var fils = filsVisibles(), h = '', i, f, trouve = false;
+  for (i = 0; i < fils.length; i++) if (fils[i].cle === S.ouvert) trouve = true;
+  if (!trouve) S.ouvert = fils.length ? fils[0].cle : null;
+  if (!fils.length) {
+    h = '<div class="ss-vide">' + (S.evts.length ? 'Aucun échange ne correspond à cette période et à ces filtres.' : 'Aucun échange pour le moment.<br>Le journal se remplit à la fin de chaque passage.') + '</div>';
+  }
+  for (i = 0; i < fils.length; i++) {
+    f = fils[i];
+    h += '<button class="ss-fil' + (f.cle === S.ouvert ? ' on' : '') + '" type="button" data-fil="' + i + '">' + avatar(f)
+      + '<div><div class="ss-fil-n">' + esc(f.personne) + '</div><div class="ss-fil-x">' + esc(f.extrait) + '</div><div class="ss-fil-s">' + esc(sousTitre(f)) + '</div></div>'
+      + '<div class="ss-fil-d"><span class="ss-h">' + esc(quand(f.dernier)) + '</span>' + puce(f.etat) + '</div></button>';
+  }
+  S._liste = fils;
+  $('ssFils').innerHTML = h;
+}
+function avecLiens(t) {
+  // Le texte est échappé AVANT ; seuls les liens http(s) deviennent cliquables.
+  return esc(t).replace(/https?:\/\/[^\s<]+/g, function (u) { return '<a href="' + u + '" target="_blank" rel="noopener noreferrer">' + u + '</a>'; });
+}
+function sys(cls, titre, texte, h) { return '<div class="ss-sys' + (cls ? ' ' + cls : '') + '"><b>' + esc(titre) + (h ? ' · ' + esc(h) : '') + '</b>' + esc(texte || '') + '</div>'; }
+function peindreFil() {
+  var f = S.ouvert && S.parCle[S.ouvert], h = '', t = '<button class="ss-act ss-retour" type="button" data-retour="1">‹ Retour</button>', i, e, j, jour = '', hr, humain, recu, qui, autre;
+  if (!f) { $('ssDt').innerHTML = t; $('ssMsgs').innerHTML = '<div class="ss-vide">Choisis une conversation dans la liste.</div>'; return; }
+  t += avatar(f) + '<div><b>' + esc(f.personne) + '</b><small>' + esc(sousTitre(f)) + '</small></div><div class="sp"></div>' + puce(f.etat);
+  if (f.publication) h += '<div class="ss-publi"><b>Sous la publication : </b>' + esc(f.publication) + '</div>';
+  for (i = 0; i < f.evts.length; i++) {
+    e = f.evts[i];
+    j = cleJour(e.atMs);
+    if (j && j !== jour) { jour = j; h += '<div class="ss-jour">' + esc(jourLong(e.atMs)) + '</div>'; }
+    hr = heure(e.atMs);
+    humain = estHumain(e);
+    recu = e.type === 'recu';
+    if (recu || ENVOIS[e.type]) {
+      qui = recu ? f.personne : (humain ? e.auteur : 'Agent');
+      h += '<div class="ss-msg ' + (recu ? 'recu' : 'env') + (humain ? ' humain' : '') + '"><div class="ss-bulle">' + avecLiens(e.texte || '(sans texte)') + '</div>'
+        + '<div class="ss-leg">' + esc(qui) + (hr ? ' · ' + esc(hr) : '')
+        + (!recu && !humain ? ' <span class="ss-bad' + (e.type === 'lien_rdv_envoye' ? ' ok' : '') + '">' + esc(ENVOIS[e.type]) + '</span>' : '')
+        + (e.etape ? ' <span>étape : ' + esc(e.etape) + '</span>' : '') + '</div></div>';
+      if (e.note) h += sys('', 'Note', e.note, hr);
+    } else if (e.type === 'remonte_adrien') h += sys('att', 'À voir par toi : l\'agent n\'a pas répondu', e.note || e.texte, hr);
+    else if (e.type === 'sans_reponse') h += sys('', 'Laissé sans réponse', e.note || e.texte, hr);
+    else if (e.type === 'repris_par_adrien') h += sys('stop', 'Repris par toi : l\'agent n\'écrit plus ici', e.note || e.texte, hr);
+    else h += sys('', e.type || 'Événement', e.note || e.texte, hr);
+  }
+  autre = PRIVE_DE[f.canal] && S.parCle[PRIVE_DE[f.canal] + '|' + f.personne];
+  if (autre) h += '<button class="ss-act" type="button" style="align-self:center" data-aller="1">Voir la conversation privée avec ' + esc(f.personne) + '</button>';
+  S._autre = autre ? autre.cle : null;
+  $('ssDt').innerHTML = t;
+  var z = $('ssMsgs'); z.innerHTML = h; z.scrollTop = z.scrollHeight;
+}
+
+/* ── Reporting ───────────────────────────────────────────────────────── */
+function ligne(cls, titre, c, rdvN) {
+  return '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td>' + titre + '</td><td>' + c.recu + '</td><td>' + c.pub + '</td><td>' + c.ouv + '</td><td>' + c.rep + '</td><td>' + c.lien + '</td><td>'
+    + (rdvN == null ? '' : rdvN) + '</td><td>' + c.remonte + '</td><td>' + c.silence + '</td><td>' + c.repris + '</td></tr>';
+}
+function peindreReporting() {
+  var jours = {}, ordre = [], tot = compteVide(), i, e, j, p, k, h = '', lignes = '', rdv = rdvPeriode(), rdvJour = {}, rdvTot = 0, r, lib, parCanal = {}, c;
+  for (i = 0; i < S.evts.length; i++) {
+    e = S.evts[i];
+    if (!dansPeriode(e.atMs)) continue;
+    j = cleJour(e.atMs);
+    if (!jours[j]) { jours[j] = { ms: e.atMs, c: compteVide(), passages: {}, ordreP: [] }; ordre.push(j); }
+    p = e.passage || 'Hors passage';
+    if (!jours[j].passages[p]) { jours[j].passages[p] = compteVide(); jours[j].ordreP.push(p); }
+    compter(jours[j].c, e); compter(jours[j].passages[p], e); compter(tot, e);
+    if (!parCanal[e.canal]) parCanal[e.canal] = compteVide();
+    compter(parCanal[e.canal], e);
+  }
+  for (i = 0; i < rdv.length; i++) { j = cleJour(rdv[i].creeLeMs); rdvJour[j] = (rdvJour[j] || 0) + 1; rdvTot++; }
+  ordre.sort(); ordre.reverse();
+  for (i = 0; i < ordre.length; i++) {
+    j = jours[ordre[i]];
+    lignes += ligne('jour', esc(jourLong(j.ms)), j.c, rdvJour[ordre[i]] || 0);
+    j.ordreP.sort();
+    for (k = 0; k < j.ordreP.length; k++) lignes += ligne('', '&nbsp;&nbsp;Passage ' + esc(j.ordreP[k]), j.passages[j.ordreP[k]], null);
+  }
+  h += '<div class="ss-card"><h2>Activité par jour et par passage</h2><small>Chaque ligne compte ce que l\'agent a lu et envoyé. Les messages écrits par Adrien ou Emily ne sont pas comptés dans les envois. « RDV réservés » = réservations faites avec le lien du setting, comptées le jour où elles ont été prises.</small>';
+  if (!ordre.length) h += '<div class="ss-vide">Aucune activité sur cette période.</div>';
+  else h += '<div class="ss-scroll"><table class="ss-table"><thead><tr><th>Jour</th><th>Reçus</th><th>Réponses publiques</th><th>Privés ouverts</th><th>Réponses et relances</th><th>Liens de RDV</th><th>RDV réservés</th><th>À voir par toi</th><th>Sans réponse</th><th>Repris par toi</th></tr></thead><tbody>'
+    + lignes + ligne('tot', 'Total de la période', tot, S.rdvErreur ? '—' : rdvTot) + '</tbody></table></div>';
+  h += '</div>';
+
+  lignes = '';
+  for (i = 0; i < ORDRE.length; i++) { c = parCanal[ORDRE[i]] || compteVide(); lignes += ligne('', esc(CANAUX[ORDRE[i]].nom), c, null); }
+  h += '<div class="ss-card"><h2>Par canal</h2><small>Même période, mêmes colonnes.</small><div class="ss-scroll"><table class="ss-table"><thead><tr><th>Canal</th><th>Reçus</th><th>Réponses publiques</th><th>Privés ouverts</th><th>Réponses et relances</th><th>Liens de RDV</th><th></th><th>À voir par toi</th><th>Sans réponse</th><th>Repris par toi</th></tr></thead><tbody>' + lignes + '</tbody></table></div></div>';
+
+  h += '<div class="ss-card"><h2>RDV réservés par le lien du setting</h2><small>Réservations dont le lien portait la marque du setting écrit, prises sur la période. Un prospect qui réserve par un autre lien n\'apparaît pas ici.</small>';
+  if (S.rdvErreur) h += '<div class="ss-vide">Lecture impossible pour le moment.</div>';
+  else if (!rdv.length) h += '<div class="ss-vide">Aucun RDV réservé par ce lien sur la période.</div>';
+  else {
+    h += '<div class="ss-scroll"><table class="ss-table"><thead><tr><th>Prospect</th><th>Réservé le</th><th>RDV</th><th>Avec</th><th>Venu de</th><th>État</th></tr></thead><tbody>';
+    for (i = 0; i < rdv.length; i++) {
+      r = rdv[i];
+      lib = LIB_RDV[r.outcome] || LIB_RDV[r.status] || r.outcome || r.status || '';
+      h += '<tr><td class="g">' + (r.leadId ? '<a href="sales-contact.html?id=' + encodeURIComponent(r.leadId) + '">' + esc((r.prenom + ' ' + r.nom).replace(/^\s+|\s+$/g, '') || 'Fiche') + '</a>' : esc((r.prenom + ' ' + r.nom).replace(/^\s+|\s+$/g, '') || '—')) + '</td><td>'
+        + esc(r.creeLeMs ? jourCourt(r.creeLeMs) + ' ' + heure(r.creeLeMs) : '—') + '</td><td>' + esc((r.date || '') + ' ' + (r.time || '')) + '</td><td>' + esc(r.closer || '—') + '</td><td>'
+        + esc(r.source === 'instagram_dm' ? 'Instagram' : r.source === 'facebook_dm' ? 'Messenger' : (r.source || '—')) + '</td><td>' + esc(lib) + '</td></tr>';
+    }
+    h += '</tbody></table></div>';
+  }
+  h += '</div>';
+  $('ssReporting').innerHTML = h;
+}
+
+/* ── Ensemble ────────────────────────────────────────────────────────── */
+function peindre() { construire(); peindreEntete(); peindreCanaux(); peindreListe(); peindreFil(); peindreReporting(); }
+function charger() {
+  $('ssActualiser').disabled = true;
+  return appel(null, 60).then(function (j) {
+    $('ssActualiser').disabled = false;
+    if (!j.ok) { $('ssMaj').textContent = 'Chargement impossible : ' + erreurTexte(j); toast(erreurTexte(j)); return j; }
+    S.evts = j.evenements || []; S.rdv = j.rdv || []; S.rdvErreur = j.rdvErreur || null; S.dernierDepot = j.dernierDepot || null; S.tronque = j.tronque === true; S.charge = true;
+    peindre();
+    return j;
+  });
+}
+
+/* Dépôt du journal par l'agent, à la fin d'un passage (session admin de ce
+   navigateur, aucune clé). lignes : tableau d'événements du journal ;
+   passage : libellé facultatif. Rend la réponse du serveur
+   { ok, recues, nouvelles, dejaLa, refusees }. Déposer deux fois la même
+   ligne ne crée pas de doublon. Maximum 400 lignes par appel. */
+window.SettingJournal = {
+  pret: function () { return !!(firebase.auth().currentUser) && S.charge; },
+  importer: function (lignes, passage) {
+    if (!firebase.auth().currentUser) return Promise.resolve({ ok: false, error: 'Pas de session Team dans ce navigateur.' });
+    return appel({ action: 'import', lignes: lignes, passage: passage || '' }).then(function (j) {
+      if (j.ok) return charger().then(function () { return j; });
+      return j;
+    });
+  }
+};
+
+document.addEventListener('click', function (ev) {
+  var b = ev.target.closest('[data-tab],[data-canal],[data-fil],[data-retour],[data-aller]');
+  if (!b) return;
+  if (b.hasAttribute('data-tab')) {
+    S.tab = b.getAttribute('data-tab');
+    var l = document.querySelectorAll('.ss-tab'), i;
+    for (i = 0; i < l.length; i++) l[i].className = 'ss-tab' + (l[i].getAttribute('data-tab') === S.tab ? ' on' : '');
+    $('paneEchanges').className = 'ss-pane' + (S.tab === 'echanges' ? ' on' : '');
+    $('paneReporting').className = 'ss-pane' + (S.tab === 'reporting' ? ' on' : '');
+  } else if (b.hasAttribute('data-canal')) {
+    S.canal = b.getAttribute('data-canal'); S.ouvert = null;
+    peindreCanaux(); peindreListe(); peindreFil();
+  } else if (b.hasAttribute('data-fil')) {
+    var f = S._liste && S._liste[Number(b.getAttribute('data-fil'))];
+    if (!f) return;
+    S.ouvert = f.cle; peindreListe(); peindreFil(); $('ssBox').className = 'ss-box ouvert';
+  } else if (b.hasAttribute('data-retour')) {
+    $('ssBox').className = 'ss-box';
+  } else if (b.hasAttribute('data-aller') && S._autre) {
+    S.canal = 'tout'; S.filtre = ''; S.q = ''; $('ssFiltre').value = ''; $('ssCherche').value = '';
+    S.ouvert = S._autre; peindreCanaux(); peindreListe(); peindreFil(); $('ssBox').className = 'ss-box ouvert';
+  }
+});
+$('ssCherche').addEventListener('input', function (ev) { S.q = ev.target.value.replace(/^\s+|\s+$/g, ''); peindreListe(); peindreFil(); });
+$('ssFiltre').addEventListener('change', function (ev) { S.filtre = ev.target.value; peindreListe(); peindreFil(); });
+$('ssPeriode').addEventListener('change', function (ev) { S.jours = Number(ev.target.value) || 7; peindre(); });
+$('ssActualiser').addEventListener('click', function () { charger(); });
+
+firebase.auth().onAuthStateChanged(function (user) {
+  if (!user) { window.location.href = 'login.html'; return; }
+  if ((localStorage.getItem('ambitio_role') || '') !== 'admin') { $('lockedView').style.display = ''; return; }
+  $('mainView').style.display = '';
+  charger();
+});
+
+})();
+</script>
+</body>
+</html>

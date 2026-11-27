@@ -431,6 +431,17 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   SMS remis ou non (`sms_delivery/{sid}`, le SMS part désormais avec `statusCallback`), lien ouvert (`offer_liens.clics`) ; pour l'e-mail on
   sait qu'il est parti, jamais s'il a été lu (Gmail ne donne aucun accusé). Catégorie d'affichage « Ont réagi » (`ont_reagi`, jamais écrite) :
   réponse ou RDV repris APRÈS une relance partie du module — sans relance de notre part, le prospect sort de la liste comme avant.
+- **Setting écrit Instagram / Facebook (27/11/2026, demande d'Adrien)** : `admin-setting-social.html` (Marketing → 📲, admin seul)
+  + `api/setting-journal.js`. Le setting écrit est mené par un agent Claude dans Meta Business Suite (navigateur), PAS par l'API
+  Graph : la synchro `ig_*` / `fb_*` ne voit pas de façon fiable ce qui est envoyé. L'agent tient un journal (une ligne par
+  événement : `at`, `passage`, `canal`, `type`, `personne`, `publication`, `texte`, `etape`, `note`, `auteur`) et le dépose à la
+  fin de chaque passage (8 h 30, 12 h 15, 19 h 30) par la page elle-même, `window.SettingJournal.importer(lignes, passage)`,
+  avec la session admin du navigateur : aucune clé. Données Admin SDK seul, aucune règle : `setting_journal/{empreinte}` (AJOUT
+  SEUL, redéposer une ligne ne crée pas de doublon, rien n'est réécrit) et `setting_journal_depots` (trace). Onglet Échanges
+  (conversation = personne + canal, + publication pour un commentaire ; états À voir par toi / Lien de RDV envoyé / Réponse à
+  faire / En cours / Repris par toi / Laissé sans réponse) et onglet Reporting (par jour, par passage, par canal). « RDV
+  réservés par le lien » = `bookings.landing.attribution.utm_medium == 'setting_ecrit'` (le lien du setting porte ce
+  paramètre), comptés le jour de la réservation. Lecture seule : rien ne part de cette page vers Meta.
 - **Dialer** : `sales-dialer.html/.css/.js`, `dialer-bridge.js`, `api/dialer-*.js` —
   visible **uniquement** pour les rôles `sales` et `admin`, **jamais** pour `coach`
 - **AlteoForms** : `alteoforms.html` (builder), `alteoforms-render.html` (rendu public),
