@@ -407,6 +407,13 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   `lienDeReservation`, code gardé sur la carte `lienCode` et dans `offer_liens/{code}`, Admin SDK seul) ouvert par `api/offre-lien.js`
   (page relais, clic compté par le navigateur, seule une adresse `https://team.alteore.com/…` est ouverte). Un brouillon d'avant garde
   l'adresse longue dans son texte : elle est remplacée à l'envoi.
+  **Rédaction (27/11/2026, 2e demande d'Adrien)** : le but est que le prospect REVIENNE sur sa décision, même après un non. Le prompt porte
+  les outils des meilleurs négociateurs (nommer ce qu'il ressent, question à laquelle il répond non, question ouverte, ses propres mots, prix
+  de ne rien faire) et une réponse par objection (trop cher, pas le temps, bilan / début d'année, associé, « je réfléchis »…), sans rien
+  inventer. **Jamais de prix** (on ne sait pas s'il a été annoncé) : garde-fou `RE_PRIX` de `contenuInterdit` (un montant collé à un mot de
+  prix est refusé, les chiffres du prospect restent permis). Lien des témoignages (`lienTemoignages`, par défaut le mur public
+  `temoignages-public.html`) donné dans l'e-mail seulement, si le prospect demande des preuves ou doute ; dans `htmlRelance`, seul le lien
+  de réservation devient le bouton, un autre lien reste un lien.
   **Page en deux colonnes (27/11/2026, demande d'Adrien)** : liste des prospects à gauche (pictogramme d'état `etat(x)` : ✓ envoyé, ▲ à vous
   de décider / SMS non remis, ✎ brouillon prêt, ○ à rédiger, 💬 a réagi ; filtres Tous / À faire / Envoyés, recherche), dossier ouvert à droite
   (dossier + « Suivi des envois » d'un côté, message de l'autre ; onglet « 👁 Aperçu de l'e-mail » = action `offer_preview`, même `htmlRelance`
