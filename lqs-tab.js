@@ -30,7 +30,9 @@
        Closes, Présents, Pitchés, « Prélevé sur la période » pour l'argent
        rentré pendant la période (autre calcul) ;
      · cartes du haut = closes DE LA PÉRIODE (liste unique FunnelCore.
-       buildCloses, la même que le Stats funnel) ; ce qui suit les leads
+       buildCloses, la même que le Stats funnel) et, depuis le 27/11/2026,
+       RDV / Présents / Pitchés DE LA PÉRIODE (RDV datés dans la période,
+       M.rdvPeriode : mêmes chiffres que Global closing) ; ce qui suit les leads
        entrés porte toujours « des leads entrés » ou « Leads … » (unité :
        un lead compte une fois) ;
      · chaque chiffre porte son « i » (StatsCore.info, glossaire commun ;
@@ -51,8 +53,9 @@
      Côté serveur ou sans stats-core.js : chaîne vide. */
   var LOCAL = {
     leads_et_reoptins: ['Leads + ré-optins', 'Nouveaux leads entrés pendant la période, plus les anciens leads qui ont rempli un nouveau formulaire pendant la période. Le Stats funnel affiche ces deux nombres séparément (Leads, puis « + N ré-optins »).'],
-    leads_avec_rdv: ['Leads avec RDV', 'Leads entrés pendant la période qui ont au moins un RDV de vente (Self Booking, Setting ou manuel), à n’importe quelle date jusqu’à aujourd’hui. Un lead compte une fois. Ce n’est pas « RDV pris » du Stats funnel, qui compte les RDV créés pendant la période, anciens leads compris.'],
-    leads_presents: ['Leads présents', 'Leads entrés pendant la période venus à au moins un de leurs RDV (lu sur le dernier RDV de chaque chaîne de report). Un lead compte une fois : ce chiffre ne se compare pas aux Présents du Stats funnel ou de Close SB, qui sont des RDV comptés à leur date.'],
+    leads_avec_rdv: ['Leads avec RDV', 'Leads entrés pendant la période qui ont au moins un RDV de vente (Self Booking, Setting ou manuel), à n’importe quelle date jusqu’à aujourd’hui. Un lead compte une fois. Ce n’est ni la carte RDV au-dessus (RDV datés dans la période, anciens leads compris), ni « RDV pris » du Stats funnel (RDV créés pendant la période).'],
+    leads_presents: ['Leads présents', 'Leads entrés pendant la période venus à au moins un de leurs RDV (lu sur le dernier RDV de chaque chaîne de report), à n’importe quelle date jusqu’à aujourd’hui. Un lead compte une fois : ce chiffre ne se compare pas aux Présents de la carte au-dessus, du Stats funnel ou de Global closing, qui sont des RDV comptés à leur date.'],
+    leads_pitches: ['Leads pitchés', 'Leads entrés pendant la période à qui l’offre a été présentée à au moins un de leurs RDV (résultat Offre, Close ou Non close, lu sur le dernier RDV de chaque chaîne de report), à n’importe quelle date jusqu’à aujourd’hui. Un lead compte une fois : ce chiffre ne se compare pas aux Pitchés de la carte au-dessus, du Stats funnel ou de Global closing, qui sont des RDV comptés à leur date.'],
     taux_close_leads_presents: ['Close / leads présents', 'Closes des leads entrés venus au RDV ÷ leads présents. Calculé par lead : un lead compte une fois, même avec plusieurs RDV. Un close sans RDV enregistré n’y entre pas. Le taux de close par RDV est dans la vue Closers.'],
     taux_close_leads_avec_rdv: ['Close / leads avec RDV', 'Closes des leads entrés qui avaient un RDV ÷ leads avec RDV. Calculé par lead : un lead compte une fois, même avec plusieurs RDV.'],
     taux_close_lead: ['Close / lead', 'Closes des leads entrés ÷ leads (+ ré-optins) de la ligne.'],
@@ -70,7 +73,7 @@
     depense_pub_ligne: ['Dépense par pub', 'Dépense Meta reçue pub par pub (hors taxes), rattachée à la ligne qui porte la pub. Elle peut être inférieure à la dépense du compte (onglet Funnel) : jours pas encore reçus, pubs sans aucun lead, montants corrigés à la main.'],
     cpl_source: ['CPL de la source', 'Dépense de la ligne ÷ leads (+ ré-optins) de la ligne. Total : dépense ÷ leads des seules lignes venues de la pub.'],
     cout_lead_45: ['Coût / lead LQS 4-5', 'Dépense ÷ leads notés LQS 4 ou 5 de la ligne.'],
-    filtre_closer: ['Filtre closer', 'Avec un closer choisi, seuls les leads rattachés à lui (closer de leur close, sinon de leur RDV) sont comptés : le nombre de leads n’est plus celui de la période, les taux par lead entré et les coûts pub ne sont pas calculés. Enlève le filtre pour voir tous les leads.'],
+    filtre_closer: ['Filtre closer', 'Avec un closer choisi, les cartes RDV, Présents, Pitchés, Closes, Contracté et Collecté de la période sont celles de son onglet de Global closing (RDV dont il est le closer, closes dont il est le closer). Le reste (leads, tunnel, tableau par note) ne compte que les leads rattachés à lui (closer de leur close, sinon de leur RDV) : le nombre de leads n’est plus celui de la période, les taux par lead entré et les coûts pub ne sont pas calculés. Enlève le filtre pour voir tous les leads.'],
     mode_periode: ['Closes de la période, par note', 'Dans ce mode, Closes, Contracté et Collecté sont ceux des clients gagnés pendant la période (même liste que le Stats funnel), rangés selon la note du lead, quel que soit son mois d’entrée. Les taux par lead ne sont pas calculés : ces closes ne viennent pas tous des leads entrés pendant la période.'],
     non_calcule_periode: ['Non calculé dans ce mode', 'Les closes de la période ne viennent pas tous des leads entrés pendant la période : un taux par lead mélangerait deux populations.'],
     plage_closers: ['Plage de la vue Closers', 'La plage choisie ici ne change que les tableaux des closers : les cartes de la vue d’ensemble restent sur la période choisie en haut de page.'],
@@ -322,7 +325,9 @@
          jamais un zéro muet (référentiel P7). */
       var errL = S.M.erreursLecture || [];
       if (errL.length) h += '<div class="fn-alert">⚠ <strong>Lecture incomplète</strong>' + I('lecture_incomplete') + '<ul style="margin:6px 0 0 18px;padding:0"><li>' + errL.map(esc).join('</li><li>') + '</li></ul></div>';
-      if (S.closer && S.view !== 'grid') h += '<div class="fn-alert">🎯 <strong>Filtre closer : ' + esc(S.M.memberName(S.closer)) + '.</strong> Seuls les leads rattachés à ce closer (closer de leur close, sinon de leur RDV) sont comptés. Les taux par lead entré et les coûts pub ne sont pas calculés.' + IL('filtre_closer') + '</div>';
+      if (S.closer && S.view !== 'grid') h += '<div class="fn-alert">🎯 <strong>Filtre closer : ' + esc(S.M.memberName(S.closer)) + '.</strong> '
+        + (S.view === 'overview' ? 'RDV, Présents, Pitchés, Closes, Contracté et Collecté de la période = son onglet de Global closing. Pour le reste, ' : '')
+        + (S.view === 'overview' ? 'seuls' : 'Seuls') + ' les leads rattachés à ce closer (closer de leur close, sinon de leur RDV) sont comptés. Les taux par lead entré et les coûts pub ne sont pas calculés.' + IL('filtre_closer') + '</div>';
       if (S.view === 'overview') h += viewOverview();
       else if (S.view === 'quiz') h += viewQuiz();
       else if (S.view === 'mkt') h += viewMarketing();
@@ -335,8 +340,15 @@
 
   /* ══ VUE 1 — VUE D'ENSEMBLE ════════════════════════════════════════════
      Deux lectures, jamais sous le même mot (audit 25/11/2026) :
-       · cartes du haut = CLOSES DE LA PÉRIODE (liste unique, mêmes chiffres
-         que Closes / Contracté / Collecté du Stats funnel) ;
+       · 1re rangée = qualité des leads entrés (Leads + ré-optins, LQS) ;
+       · 2e rangée = CE QUI S'EST PASSÉ PENDANT LA PÉRIODE : RDV / Présents /
+         Pitchés = RDV DATÉS dans la période (M.rdvPeriode, 27/11/2026, choix
+         2a — jamais la plage de la vue Closers), Closes / Contracté /
+         Collecté = liste unique des closes : mêmes chiffres que le Stats
+         funnel et Global closing. Les chiffres des leads entrés (« Leads avec
+         RDV », « Leads présents », « Leads pitchés », « Closes des leads
+         entrés ») n'y sont qu'en sous-ligne, sous leur propre nom : jamais un
+         chiffre de cohorte en tête ;
        · tunnel et tableau par note = LEADS ENTRÉS (« Leads avec RDV »,
          « Leads présents », « Closes des leads entrés ») — un lead compte
          une fois ; en mode « Closes de la période », le tableau range les
@@ -353,13 +365,58 @@
   }
 
   /* Chiffre cliquable → dossiers nominatifs (lqs-dossier.js). kind :
-     leads | booked | present | closed | signed ; note : 0-5 ou 'all'. */
+     leads | booked | present | pitched | closed (leads entrés) | signed
+     (closes de la période) | rdvP | presentsP | pitchesP (RDV datés dans la
+     période, une ligne par RDV) ; note : 0-5 ou 'all'. */
   function drill(n, note, kind) {
     if (!n || !window.LqsDossier) return fNum(n);
     return '<a href="#" class="lq-drill" data-lq-drill="' + kind + '" data-lq-dn="' + note + '" title="Voir les ' + fNum(n) + ' prospects, leurs réponses et leurs visios">' + fNum(n) + '</a>';
   }
-  var DRILL_LBL = { leads: 'Leads + ré-optins', booked: 'Leads avec RDV', present: 'Leads présents au RDV', closed: 'Closes des leads entrés',
-    signed: 'Closes de la période — contracté, collecté, reste à encaisser' };
+  var DRILL_LBL = { leads: 'Leads + ré-optins', booked: 'Leads avec RDV', present: 'Leads présents au RDV', pitched: 'Leads pitchés', closed: 'Closes des leads entrés',
+    signed: 'Closes de la période — contracté, collecté, reste à encaisser',
+    rdvP: 'RDV de la période', presentsP: 'Présents de la période', pitchesP: 'Pitchés de la période' };
+  var RDV_KINDS = { rdvP: 1, presentsP: 1, pitchesP: 1 };
+
+  /* RDV DATÉS dans la période affichée (LqsCore buildModel → M.rdvPeriode,
+     27/11/2026) : jamais la plage de la vue Closers. Filtre closer = l'onglet
+     du closer (rangKey, D10), comme Global closing. Agrégats : LqsCore.byCloser
+     (StatsCore : rdv, présents, pitchés, annulés, no-show, kept, show-up). */
+  function rdvDeLaPeriode() { return S.M && S.M.rdvPeriode ? LC.byCloser(S.M.rdvPeriode, S.closer || '') : null; }
+  /* Ligne de dossier d'UN RDV de la période : la fiche du lead quand elle
+     existe, avec l'état, la date, le closer et le setter de CE RDV ; un RDV
+     sans fiche lead a un dossier réduit. Identifiant = le RDV (un lead à deux
+     RDV comptés a deux lignes) ; ficheId = la fiche, pour le lien. */
+  function rdvRowOf(x) {
+    var base = x.leadRow || null, r = {}, b = x.b || {};
+    if (base) Object.keys(base).forEach(function (k) { r[k] = base[k]; });
+    else {
+      r = { lead: { nom: x.name }, noLead: true, note: null, pts: null, ko: false, detail: [], answers: [], calls: [],
+        entry: null, axes: {}, team: null, closed: false, sourceLabel: 'RDV sans fiche lead' };
+    }
+    r.id = 'rdv_' + (b._id || x.date + '_' + x.name);
+    r.ficheId = base ? base.id : null;
+    r.rdvLigne = true;
+    r.avecRdv = true; r.booked = true;
+    r.rdvId = b._id || null; r.rdvDate = x.date || null; r.rdvEtat = x.etat || null; r.rdvDetail = x.detailRdv || null;
+    r.rdvOutcome = b.outcome || null;
+    r.present = !!x.present;
+    r.bookedBy = x.classe === 'self' ? 'self' : (x.classe === 'setter' ? 'setter' : (x.classe === 'admin' ? 'manuel' : null));
+    r.closer = x.closer || null;
+    r.closerName = x.closer ? nomDe(x.closer) : null;
+    var st = x.classe === 'setter' && SC && SC.setterDuRdv ? SC.setterDuRdv(b, base ? base.lead : null) : null;
+    r.setter = st || null;
+    r.setterName = st ? nomDe(st) : null;
+    return r;
+  }
+  function rdvDrillRows(kind) {
+    var RP = rdvDeLaPeriode();
+    if (!RP) return [];
+    return RP.list.filter(function (x) {
+      if (kind === 'presentsP') return x.present;
+      if (kind === 'pitchesP') return x.pitched;
+      return true;
+    }).map(rdvRowOf);
+  }
   /* Carte cliquable (23/11/2026, demande Vincent : « cliquer sur le
      collecté pour voir le détail ») : ouvre les closes de la période. */
   function drillV(html, n, note) {
@@ -393,20 +450,24 @@
   function noteMatch(note, n) { return note === 'all' || String(n == null ? 0 : n) === String(note); }
   function drillRows(note, kind) {
     if (kind === 'signed') return periodSigned().filter(function (ps) { return noteMatch(note, ps.note); }).map(closeRowOf);
+    if (RDV_KINDS[kind]) return rdvDrillRows(kind);
     return rows().filter(function (r) {
       if (!noteMatch(note, r.note)) return false;
       if (kind === 'booked') return r.avecRdv;
       if (kind === 'present') return r.leadPresent;
+      if (kind === 'pitched') return r.pitched;
       if (kind === 'closed') return r.closed;
       return true;
     });
   }
   function openDrill(note, kind) {
-    var noteTxt = note === 'all' ? (kind === 'signed' ? '' : ' — toutes les notes') : (String(note) === '0' ? ' — non notés' : ' — note LQS ' + note);
+    var rdvK = !!RDV_KINDS[kind];
+    var noteTxt = note === 'all' ? (kind === 'signed' || rdvK ? '' : ' — toutes les notes') : (String(note) === '0' ? ' — non notés' : ' — note LQS ' + note);
     window.LqsDossier.open({
       title: DRILL_LBL[kind] + noteTxt,
-      sub: S.closer ? (kind === 'signed' ? 'closes de ' : 'leads de ') + S.M.memberName(S.closer) : 'toute l\'équipe',
-      periodLabel: S.ctx.periodLabel || '', rows: drillRows(note, kind)
+      sub: S.closer ? (kind === 'signed' ? 'closes de ' : (rdvK ? 'RDV de l\'onglet de ' : 'leads de ')) + S.M.memberName(S.closer) : 'toute l\'équipe',
+      periodLabel: S.ctx.periodLabel || '', rows: drillRows(note, kind),
+      unite: rdvK ? ['RDV', 'RDV'] : null
     });
   }
 
@@ -487,22 +548,22 @@
     var h = '';
     h += help('ℹ️ Comment lire cet onglet', '<p><strong>LQS (Lead Quality Score)</strong> : chaque lead reçoit une note de <strong>1 à 5</strong> calculée <strong>uniquement à partir de ses réponses</strong> (quiz, formulaires) avec le barème de l\'onglet ⚙️ — CA, équipe, contraintes… Aucun jugement humain : c\'est la qualité que le marketing nous envoie.</p>'
       + '<p><strong>MQS (Marketing Quality Score)</strong> : la note d\'une campagne, d\'un adset, d\'une créa ou d\'un canal = qualité des leads qu\'elle amène (60 %, LQS moyen) + ce qu\'ils rapportent (40 % : contracté des leads entrés par lead, comparé à la moyenne ; sans aucun contrat sur la période, taux de leads présents).</p>'
-      + '<p><strong>Les cartes Closes, Contracté et Collecté</strong> comptent les clients gagnés <strong>pendant la période</strong> : la même liste que le Stats funnel, quel que soit le mois d\'entrée du lead. <strong>Le tunnel et le tableau par note</strong> suivent les <strong>leads entrés</strong> pendant la période jusqu\'à aujourd\'hui : « Leads avec RDV », « Leads présents », « Closes des leads entrés » comptent des leads (un lead compte une fois), pas des RDV.</p>'
+      + '<p><strong>La 1re rangée de cartes</strong> juge la qualité des <strong>leads entrés</strong> pendant la période (leads + ré-optins, LQS). <strong>La 2e rangée</strong> dit ce qui s\'est passé <strong>pendant la période</strong>, avec les mêmes chiffres que le Stats funnel et Global closing : <strong>RDV, Présents, Pitchés</strong> = RDV datés dans la période (anciens leads compris, un lead à deux RDV compte deux fois) ; <strong>Closes, Contracté, Collecté</strong> = clients gagnés pendant la période, quel que soit le mois d\'entrée du lead. Sous chaque carte, en petit, le chiffre des leads entrés porte son propre nom (« Leads avec RDV », « Leads présents », « Leads pitchés », « Closes des leads entrés ») : ce sont des leads, un lead compte une fois, à n\'importe quelle date jusqu\'à aujourd\'hui. <strong>Le tunnel et le tableau par note</strong> suivent ces leads entrés.</p>'
       + '<p>Montants HT : <strong>contracté</strong> (valeur du contrat : module Paiements, sinon tarif déclaré au close) et <strong>collecté</strong> (prélèvements réellement passés, à ce jour). Le contracté juge la valeur des leads (parts, « / lead », MQS, contracté ÷ dépense) ; le collecté suit avec le préavis SEPA et les mensualités. Si les 4-5 ne closent pas, c\'est un sujet closing ; si les closers closent bien mais qu\'il n\'y a que des 1-2, c\'est un sujet marketing.</p>'
       + '<p><strong>Réservé aux admins</strong> : la note n\'est affichée nulle part ailleurs, les closers ne la voient pas.</p>');
 
-    /* KPIs — leads entrés */
+    /* 1re rangée — qualité des leads entrés. */
     h += '<div class="fn-grid lq-kpis">';
     if (S.closer) h += kpi(drill(t.leads, 'all', 'leads'), 'Leads de ' + esc(clName) + IL('filtre_closer'), fNum(t.nouveaux) + ' nouveaux + ' + fNum(t.reopt) + ' ré-optins · ' + fNum(t.noted) + ' notés');
     else h += kpi(drill(t.leads, 'all', 'leads'), ML('leads_et_reoptins'), fNum(t.nouveaux) + ' nouveaux leads (= Leads du Stats funnel)' + I('leads') + ' + ' + fNum(t.reopt) + ' ré-optins' + I('reoptins') + '<br>' + fNum(t.noted) + ' notés (' + fPct(t.leads ? t.noted / t.leads * 100 : null) + ')');
     h += kpi(avgBadge(t.avgNote), 'LQS moyen' + IL('lqs'), 'qualité moyenne envoyée par le marketing');
     h += kpi(fPct(t.pct45), ML('lqs_45'), fNum(t.n45) + ' leads · ' + fPct(t.pct45) + ' des leads notés · ' + fPct(t.leads ? t.n45 / t.leads * 100 : null) + ' de tous les leads<br>LQS 1-2 : ' + fPct(t.pct12) + ' des leads notés');
-    if (!S.closer) h += kpi(drill(t.leadsAvecRdv, 'all', 'booked'), ML('leads_avec_rdv'), fPct(t.pctLeadsAvecRdv) + ' des leads');
-    h += kpi(drill(t.leadsPresents, 'all', 'present'), ML('leads_presents'), fPct(t.pctLeadsPresents) + ' des leads avec RDV');
     h += '</div>';
 
-    /* KPIs — closes de la période (liste unique : Closes / Contracté /
-       Collecté du Stats funnel). Les chiffres des leads entrés passent en
+    /* 2e rangée — ce qui s'est passé PENDANT LA PÉRIODE : mêmes chiffres que
+       le Stats funnel et Global closing. RDV / Présents / Pitchés = RDV
+       datés dans la période (M.rdvPeriode) ; Closes / Contracté / Collecté =
+       liste unique des closes. Les chiffres des leads entrés passent en
        sous-ligne, sous leur propre nom. */
     var mh = monthHead();
     var an = annulesPeriode();
@@ -512,6 +573,24 @@
     if (mh.B) off.push('<span class="lq-ob">' + fNum(mh.B) + ' Business</span>');
     if (mh.U && (mh.E || mh.B)) off.push('<span class="lq-muted">' + fNum(mh.U) + ' sans offre</span>');
     h += '<div class="fn-grid lq-kpis">';
+    var RP = rdvDeLaPeriode(), rp = RP ? RP.total : null;
+    if (rp) {
+      var precR = S.closer ? 'Ici : RDV de l\'onglet de ' + clName + ', comme Global closing.' : 'Mêmes chiffres que le Stats funnel et Global closing.';
+      var det = [];
+      if (rp.annules) det.push(fNum(rp.annules) + ' annulé' + (rp.annules > 1 ? 's' : '') + I('annules'));
+      if (rp.noshow) det.push(fNum(rp.noshow) + ' no-show' + I('no_show'));
+      if (rp.aStatuer) det.push(fNum(rp.aStatuer) + ' à statuer' + I('a_statuer'));
+      if (rp.aVenir) det.push(fNum(rp.aVenir) + ' à venir' + I('a_venir'));
+      h += kpi(drill(rp.rdv, 'all', 'rdvP'), MG('rdv', precR),
+        MG('kept') + ' : ' + fNum(rp.kept) + (det.length ? '<br>' + det.join(' · ') : '')
+        + (S.closer ? '' : '<br>' + ML('leads_avec_rdv') + ' : ' + drill(t.leadsAvecRdv, 'all', 'booked') + ' (' + fPct(t.pctLeadsAvecRdv) + ' des leads)'));
+      h += kpi(drill(rp.presents, 'all', 'presentsP'), MG('presents', precR),
+        MG('show_up') + ' : ' + fPct(rp.showUp)
+        + '<br>' + ML('leads_presents') + ' : ' + drill(t.leadsPresents, 'all', 'present') + ' (' + fPct(t.pctLeadsPresents) + ' des leads avec RDV)');
+      h += kpi(drill(rp.pitches, 'all', 'pitchesP'), MG('pitches', precR),
+        MG('taux_pitch') + ' : ' + fPct(rp.tauxPitch) + ' des présents'
+        + '<br>' + ML('leads_pitches') + ' : ' + drill(t.leadsPitches, 'all', 'pitched'));
+    }
     h += kpi(drillV(fNum(mh.n), mh.n), MG('closes', prec),
       (off.length ? off.join(' · ') + '<br>' : '')
       + (mh.sansFiche ? 'dont ' + fNum(mh.sansFiche) + ' sans fiche lead (non notés)<br>' : '')
