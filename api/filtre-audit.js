@@ -291,7 +291,26 @@ module.exports = async function (req, res) {
           const x = presents.filter(function (y) { return y.leadRow && y.leadRow.id === id; })[0];
           if (x && x.leadRow.cohorte && !idsR[id]) entresRangesAilleurs++;
         });
+        /* Personnes de la période (lead ou ré-optin) vues PRÉSENTES dans un RDV
+           de la période rangé ici, mais pas comptées en « leads présents » de
+           ce closer : pourquoi (libellés fixes). */
+        const nonComptes = {}, dejaVu = {};
+        presents.forEach(function (x) {
+          const lr = x.leadRow;
+          if (!lr || !lr.cohorte || dejaVu[lr.id]) return;
+          dejaVu[lr.id] = 1;
+          if (idsR[lr.id] && lr.leadPresent) return;                 /* comptée */
+          const c = x.b && (x.b._createdMs != null ? x.b._createdMs : FC.parseFlexMs(x.b.createdAt));
+          let cause;
+          if (lr.entry != null && c != null && c < lr.entry - JOUR_MS) cause = lr.reopt ? 'rdvPoseAvantLaReinscription' : 'rdvPoseAvantLEntreeDuLead';
+          else if (lr.leadPresent && lr.closer && lr.closer !== cle) cause = 'leadRangeChezUnAutreCloser';
+          else if (lr.leadPresent && !lr.closer) cause = 'leadSansCloserRetenu';
+          else if (!lr.avecRdv) cause = 'rdvNonRetenuPourCeLead';
+          else cause = 'autre';
+          nonComptes[cause] = (nonComptes[cause] || 0) + 1;
+        });
         return {
+          personnesDeLaPeriodePresentesNonComptees: nonComptes,
           closer: cle === '' ? '(toute l\'équipe)' : cle,
           carte: { rdv: B.total.rdv || 0, presents: B.total.presents || 0, pitches: B.total.pitches || 0 },
           controle: presents.length === (B.total.presents || 0) && pitches.length === (B.total.pitches || 0) && B.list.length === (B.total.rdv || 0),
