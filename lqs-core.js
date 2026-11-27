@@ -1109,34 +1109,86 @@
     var periodAnnules = CLp.annules.map(function (row) { var l = leadObjOf(row); return ranger(closeEntry(row, { lead: l, note: l ? scoreLead(l).note : null }), row.day); });
     periodSigned.forEach(function (ps) { noteCloser(ps.closer); });
 
-    /* ── Vue Closers : RDV DATÉS dans la plage (StatsCore) ── */
+    /* ── RDV de vente DATÉS entre deux jours (StatsCore) — UNE fabrique pour
+       la plage de la vue Closers (rdvRows) et la période affichée
+       (rdvPeriode, 27/11/2026). Replanifiés et doublons hors liste, filtres
+       tunnel / source de la page, rangement D10 (ranger). ── */
+    /* Close relié à un RDV (dossier d'une ligne de RDV, 27/11/2026) : la
+       liste unique de la période d'abord (même RDV, même fiche, même e-mail),
+       close annulé compris ; sinon la date client de la fiche (close d'une
+       autre période). null = aucun close connu : l'écran ne conclut rien. */
+    var closeIdx = { b: {}, l: {}, e: {} };
+    function indexer(row, annule) {
+      var v = { row: row, annule: annule };
+      if (row.bookingId && !closeIdx.b[row.bookingId]) closeIdx.b[row.bookingId] = v;
+      if (row.leadId && !closeIdx.l[row.leadId]) closeIdx.l[row.leadId] = v;
+      var em = String((row.lead && row.lead.email) || (String(row.key || '').indexOf('e:') === 0 ? row.key.slice(2) : '')).toLowerCase().trim();
+      if (em && !closeIdx.e[em]) closeIdx.e[em] = v;
+    }
+    CLp.rows.forEach(function (row) { indexer(row, !!(row.rv && row.rv.cancelled)); });
+    CLp.annules.forEach(function (row) { indexer(row, true); });
+    function closeLieAuRdv(b, l) {
+      var em = String((l && l.email) || (b.prospect && b.prospect.email) || '').toLowerCase().trim();
+      var v = (b._id && closeIdx.b[b._id]) || (l && closeIdx.l[l._id]) || (em && closeIdx.e[em]) || null;
+      if (v) return v.annule ? { etat: 'annule', day: v.row.day || null }
+        : { etat: 'gagne', day: v.row.day || null, con: Number(v.row.rv && v.row.rv.con) || 0, paid: Number(v.row.rv && v.row.rv.paid) || 0 };
+      var cs = l ? FC.parseFlexMs(l.clientSince) : null;
+      if (cs != null) return { etat: 'client', day: SC.jourParis(cs) };
+      return null;
+    }
+    function rdvDatesEntre(dS, dE) {
+      var out = [];
+      venteBookings.forEach(function (b) {
+        if (!b.date || b.date < dS || b.date > dE) return;
+        var e = SC.etat(b, now);
+        if (e === 'replanifie' || e === 'doublon') return;   // le remplaçant compte à sa date ; un doublon nulle part
+        var l = b._lead;
+        if (!rdvPasses(b, l)) return;
+        var lr = l ? rowOfLead(l) : null;
+        var slug = closerOfRdv(b);
+        noteCloser(slug);
+        var d = SC.detail(b);
+        out.push(ranger({
+          b: b, now: now, date: b.date, month: monthKey(b.date), closer: slug, closerName: slug ? memberName(slug) : 'Non attribué',
+          classe: b._class, etat: e, detailRdv: d,
+          note: lr ? lr.note : null, team: lr ? lr.team : null, leadRow: lr,
+          cancelled: e === 'annule', noshow: e === 'no_show', present: e === 'present',
+          pitched: d === 'offre' || d === 'close' || d === 'non_close',
+          upcoming: e === 'a_venir', aStatuer: e === 'a_statuer',
+          /* RDV au résultat Close (glossaire rdv_closes) : ce n'est PAS un close
+             — les closes de la vue viennent de la liste unique (closesPlage). */
+          rdvClose: d === 'close', close: d === 'close', cash: 0, con: 0,
+          closeLie: d === 'close' ? closeLieAuRdv(b, l) : null,
+          name: (l && (l.nom || l.email)) || (b.prospect && (b.prospect.nom || b.prospect.email)) || '—',
+          leadId: l ? l._id : null
+        }, b.date));
+      });
+      return out;
+    }
+    /* Lignes de la liste unique des closes → entrées rangées chez le closer
+       du close (row.closer), au mois du close. */
+    function entreesCloses(CL) {
+      return CL.rows.map(function (row) {
+        var l = leadObjOf(row) || (row.leadId ? plageLeads[row.leadId] : null);
+        var note = l ? scoreLead(l).note : null;
+        noteCloser(row.closer);
+        return ranger(closeEntry(row, { lead: l, note: note, month: String(row.day || '').slice(0, 7), offer: offerOfRow(row, l),
+          closerName: row.closer ? memberName(row.closer) : 'Non attribué' }), row.day);
+      });
+    }
+    /* Une liste de RDV porte ses closes et ses règles (byCloser /
+       closerBoard les lisent). */
+    function equiper(list, closes) {
+      list.closesPlage = closes;
+      list.estParti = isDeparted;
+      list.rangCloser = rangCloser;
+      return list;
+    }
+
+    /* ── Vue Closers : RDV DATÉS dans la plage ── */
     var CR = ctx.closerRange || { start: P.start, end: P.end };
     var cS = FC.isoDate(CR.start), cE = FC.isoDate(CR.end);
-    var rdvRows = [];
-    venteBookings.forEach(function (b) {
-      if (!b.date || b.date < cS || b.date > cE) return;
-      var e = SC.etat(b, now);
-      if (e === 'replanifie' || e === 'doublon') return;   // le remplaçant compte à sa date ; un doublon nulle part
-      var l = b._lead;
-      if (!rdvPasses(b, l)) return;
-      var lr = l ? rowOfLead(l) : null;
-      var slug = closerOfRdv(b);
-      noteCloser(slug);
-      var d = SC.detail(b);
-      rdvRows.push(ranger({
-        b: b, now: now, date: b.date, month: monthKey(b.date), closer: slug, closerName: slug ? memberName(slug) : 'Non attribué',
-        classe: b._class, etat: e, detailRdv: d,
-        note: lr ? lr.note : null, team: lr ? lr.team : null, leadRow: lr,
-        cancelled: e === 'annule', noshow: e === 'no_show', present: e === 'present',
-        pitched: d === 'offre' || d === 'close' || d === 'non_close',
-        upcoming: e === 'a_venir', aStatuer: e === 'a_statuer',
-        /* RDV au résultat Close (glossaire rdv_closes) : ce n'est PAS un close
-           — les closes de la vue viennent de la liste unique (closesPlage). */
-        rdvClose: d === 'close', close: d === 'close', cash: 0, con: 0,
-        name: (l && (l.nom || l.email)) || (b.prospect && (b.prospect.nom || b.prospect.email)) || '—',
-        leadId: l ? l._id : null
-      }, b.date));
-    });
+    var rdvRows = rdvDatesEntre(cS, cE);
 
     /* ── Closes de la plage Closers : la même liste unique, bornée à la
        plage, rangée chez le closer du close (row.closer), montants une fois
@@ -1153,16 +1205,16 @@
         resoudrePersonne: resoudre
       });
     }
-    var closesPlage = CLr.rows.map(function (row) {
-      var l = leadObjOf(row) || (row.leadId ? plageLeads[row.leadId] : null);
-      var note = l ? scoreLead(l).note : null;
-      noteCloser(row.closer);
-      return ranger(closeEntry(row, { lead: l, note: note, month: String(row.day || '').slice(0, 7), offer: offerOfRow(row, l),
-        closerName: row.closer ? memberName(row.closer) : 'Non attribué' }), row.day);
-    });
-    rdvRows.closesPlage = closesPlage;
-    rdvRows.estParti = isDeparted;
-    rdvRows.rangCloser = rangCloser;
+    var closesPlage = entreesCloses(CLr);
+    equiper(rdvRows, closesPlage);
+
+    /* ── Vue d'ensemble : RDV DATÉS dans la PÉRIODE affichée (27/11/2026,
+       choix 2a d'Adrien) — cartes RDV / Présents / Pitchés, mêmes chiffres
+       que Global closing et le Stats funnel. Ne dépend JAMAIS de la plage
+       Closers (les RDV datés dans la période sont toujours lus : requête
+       _lqDateP de loadAll). Closes attachés : ceux de la période. ── */
+    var pIso0 = FC.isoDate(P.start), pIso1 = FC.isoDate(P.end);
+    var rdvPeriode = equiper(rdvDatesEntre(pIso0, pIso1), CLr === CLp ? closesPlage : entreesCloses(CLp));
 
     /* ── « Prélevé sur la période » (glossaire preleve_periode) :
        FunnelCore.cashInPeriod — prélèvements DATÉS dans la période, tous
@@ -1210,7 +1262,12 @@
 
     var totPeriode = FC.sumCloses(CLp.rows);
     return {
-      rows: rows, rdvRows: rdvRows, periodPays: periodPays, periodSigned: periodSigned, closers: closers,
+      /* rdvRows = RDV DATÉS dans la plage de la vue Closers ; rdvPeriode =
+         RDV DATÉS dans la période affichée (cartes RDV / Présents / Pitchés
+         de la vue d'ensemble, LqsCore.byCloser(rdvPeriode, slug)). Même
+         format ; chacune porte ses closes (closesPlage), estParti et
+         rangCloser. Plage = période → mêmes agrégats. */
+      rows: rows, rdvRows: rdvRows, rdvPeriode: rdvPeriode, periodPays: periodPays, periodSigned: periodSigned, closers: closers,
       /* Liste unique des closes de la PÉRIODE : comptés (periodSigned),
          annulés, fiches clientes sans vente, écarts de canal, totaux
          FunnelCore.sumCloses (closes, con, paid, pending, reste, panier,

@@ -851,6 +851,15 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   action du setter, quelle que soit la date d'entrée). (4) **Global closing** = `sales-closing.html?vue=global`
   (entrée de menu `sales-global`, `nav.js` distingue les deux adresses) : par closer, Self Booking + RDV du
   setting ; pas de corrections ✎ dans cette vue (elles restent propres à Close SB et Set NB).
+  **27/11/2026 (choix « 2a » d'Adrien, constat : « Leads présents » 8 sous filtre closer quand Global closing disait 18
+  présents)** : Vue d'ensemble de Qualité leads, 2e rangée = la période : cartes **RDV / Présents / Pitchés = RDV DATÉS
+  dans la période** (`M.rdvPeriode` de `lqs-core.js`, même fabrique `rdvDatesEntre` que `M.rdvRows`, agrégée par
+  `LqsCore.byCloser(M.rdvPeriode, slug)` ; ne dépend JAMAIS de la plage de la vue Closers), mêmes chiffres que Global closing
+  (filtre closer = son onglet) et le Stats funnel ; puis Closes / Contracté / Collecté. Cliquables : une ligne par RDV
+  (`rdvRowOf` de `lqs-tab.js`, identifiant = le RDV, `ficheId` pour le lien). « Leads avec RDV », « Leads présents »,
+  « Leads pitchés » (leads entrés) passent en sous-ligne sous leur propre nom. Contrôle à l'écran (carte « Contrôle : mêmes
+  closes… ») : RDV / présents / pitchés ici = `K.tenue` du funnel, seulement sans filtre tunnel / source. Règle : **ne plus
+  jamais mettre en tête un chiffre de cohorte**.
 
 - **Parcours RDV des prospects (24/11/2026, plan « Offres ouvertes et no-show »)** : entre la réservation d'un
   Audit (self-booking OU posé par un setter) et le RDV, UN parcours, un message par moment. Moteur
