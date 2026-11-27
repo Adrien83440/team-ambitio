@@ -1,7 +1,8 @@
 // ============================================================================
 // api/meet-link.js — LIEN MEET SUIVI DES RDV (module Pilotage équipe, 16/10/2026)
 // ----------------------------------------------------------------------------
-// GET  /m/{bookingId}            → page relais qui compte le clic puis ouvre
+// GET  /m/{bookingId}            (ou /m/{code} : lien court des SMS, voir idDuCode)
+//                                → page relais qui compte le clic puis ouvre
 //                                  la visio Google Meet du RDV
 // POST /api/meet-link { id }     → beacon du clic (envoyé par la page relais)
 // (réécriture /m/… déclarée dans vercel.json)
@@ -69,6 +70,17 @@ async function meetLinkOf(id) {
     }
   }
   throw lastErr;
+}
+
+/* Lien COURT des SMS (/m/{code}, 6 caractères) : le code est rangé dans
+   `meet_codes/{code}` = { bookingId } par api/_parcoursRdv.js (Admin SDK
+   seul). Tout autre identifiant est celui du RDV lui-même. */
+const CODE_COURT = /^[a-z0-9]{6}$/;
+async function idDuCode(id) {
+  if (!CODE_COURT.test(id)) return id;
+  const s = await db.collection('meet_codes').doc(id).get();
+  const b = s.exists ? String((s.data() || {}).bookingId || '') : '';
+  return ID_VALIDE.test(b) ? b : id;
 }
 
 function relayPage(id, link) {
@@ -149,11 +161,13 @@ module.exports = async (req, res) => {
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
 
-  const id = String((req.query && req.query.id) || '').trim();
-  if (!ID_VALIDE.test(id)) { res.status(404).send(errorPage()); return; }
+  const recu = String((req.query && req.query.id) || '').trim();
+  if (!ID_VALIDE.test(recu)) { res.status(404).send(errorPage()); return; }
 
   let link = null;
+  let id = recu;
   try {
+    id = await idDuCode(recu);
     link = await meetLinkOf(id);
   } catch (e) {
     console.error('[meet-link] lecture', id, e.message);
