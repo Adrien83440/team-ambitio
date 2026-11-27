@@ -414,19 +414,11 @@
       return map;
     }, function (e) { err.push('fiches d’agenda (le closer d’un close non validé peut manquer) : ' + msgErr(e)); return {}; });
   }
+  /* LA règle commune StatsCore.resoudreHote (27/11/2026) : le compte relié à
+     la fiche d'agenda d'abord, puis l'identifiant de la fiche — sur le roster
+     COMPLET (window.TEAM_MEMBERS garde les anciens membres). Ne pas recoder. */
   function resoudreAvec(persons) {
-    return function (personId) {
-      if (!personId) return null;
-      var map = teamMap(), p = persons[personId];
-      if (p && p.firebaseUid) {
-        var keys = Object.keys(map);
-        for (var i = 0; i < keys.length; i++) {
-          var m = map[keys[i]];
-          if (m && (m.firebaseUid === p.firebaseUid || m.uid === p.firebaseUid)) return m.slug || keys[i];
-        }
-      }
-      return has(map, personId) ? personId : null;
-    };
+    return SC.resoudreHote(persons || {}, teamMap());
   }
 
   /* PARTIE DE L'ANNÉE (D28) : types de RDV, fiches d'agenda, closes de la
