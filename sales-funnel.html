@@ -4371,6 +4371,11 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     if (activeTab === 'instagram') renderInstagram();
     if (window.LqsTab) window.LqsTab.invalidate();
     if (activeTab === 'lqs') renderLqs();
+    /* Leads et Qualité par pub sont nourris par K : déjà à l'écran, ils
+       passent tout de suite en « Chargement… » (kPret() est faux pour la
+       nouvelle période) au lieu de garder les chiffres de l'ancienne. */
+    if (activeTab === 'leads') renderLeads();
+    if (activeTab === 'adq') renderAdq();
     fbInvalidate();
     if (activeTab === 'facebook') renderFacebook();
     setSync('', 'Chargement ' + periodLabel() + '…');

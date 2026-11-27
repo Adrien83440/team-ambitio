@@ -44,7 +44,10 @@
 //     StatsCore.etat), comptés par MOIS et par closer (ligne de
 //     StatsCore.rangPersonne, options de api/_aiTools.js, vue closer, jour =
 //     date du RDV) sous l'ANCIENNE et la NOUVELLE règle ; RDV qui changent
-//     de ligne, détail { de, vers, n, parVoie } ; décompte par fiche d'agenda
+//     de libellé (changent = changentDeLigne + changentDePrecision ;
+//     quittentNonAttribue / entrentNonAttribue = RDV qui quittent / rejoignent
+//     la LIGNE d'écran « Non attribué », dont « Anciens membres » n'est qu'une
+//     précision), détail { de, vers, n, parVoie } ; décompte par fiche d'agenda
 //     × présence de expertSlug × présence de closeData.closerSlug.
 // ============================================================================
 'use strict';
@@ -213,7 +216,10 @@ async function contexte(avecTypes) {
   /* Ligne d'un slug dans la vue closer (StatsCore.rangPersonne, options de
      api/_aiTools.js) : prénom du membre, « Anciens membres », ou
      « Non attribué » (avec sa précision quand elle nomme un membre). */
-  function ligne(slug, jourIso) {
+  /* rangement() rend aussi la LIGNE d'écran : « Anciens membres » et les
+     précisions ne sont qu'un détail de la ligne « Non attribué » (comme
+     dans Global closing et api/_aiTools.js parCloser). */
+  function rangement(slug, jourIso) {
     const s = slug && (bySlug[slug] || parti(slug)) ? slug : null;
     const rg = SC.rangPersonne(s, jourIso || null, {
       parti: parti,
@@ -221,13 +227,17 @@ async function contexte(avecTypes) {
       prenom: prenom,
       debut: debut,
     });
-    if (rg.key !== SC.NON_ATTRIBUE) return prenom(rg.key) || 'Non attribué';
-    if (rg.cas === 'ancien') return 'Anciens membres';
-    return rg.precision ? 'Non attribué · ' + rg.precision : 'Non attribué';
+    if (rg.key !== SC.NON_ATTRIBUE) {
+      const p = prenom(rg.key) || 'Non attribué';
+      return { libelle: p, ligneEcran: p };
+    }
+    const lib = rg.cas === 'ancien' ? 'Anciens membres' : (rg.precision ? 'Non attribué · ' + rg.precision : 'Non attribué');
+    return { libelle: lib, ligneEcran: 'Non attribué' };
   }
+  function ligne(slug, jourIso) { return rangement(slug, jourIso).libelle; }
   return {
     team: team, persons: DATA.persons || {}, typeMap: typeMap, bySlug: bySlug, parti: parti, prenom: prenom,
-    ongletCloser: ongletCloser, ligne: ligne,
+    ongletCloser: ongletCloser, ligne: ligne, rangement: rangement,
     ancienne: resoudreAncienne(DATA.persons || {}, team),
     nouvelle: resoudreNouvelle(DATA.persons || {}, team),
     locale: resoudreNouvelleLocale(DATA.persons || {}, team),
@@ -329,7 +339,7 @@ async function jobRdv(q) {
   const now = Date.now();
   const mois = {}, fiches = {};
   const hors = { lus: docs.length, horsVente: 0, replanifies: 0, doublons: 0, sansDate: 0, dateNonConforme: 0 };
-  const total = { rdv: 0, changent: 0 };
+  const total = { rdv: 0, changent: 0, quittentNonAttribue: 0, entrentNonAttribue: 0, changentDeLigne: 0, changentDePrecision: 0 };
   const detailTotal = {};
   docs.forEach(function (doc) {
     const b = doc.data() || {};
@@ -346,13 +356,20 @@ async function jobRdv(q) {
     if (e === 'replanifie') { hors.replanifies++; return; }
 
     const m = b.date.slice(0, 7);
-    const M = mois[m] || (mois[m] = { rdv: 0, ancienne: {}, nouvelle: {}, changent: 0, detail: {} });
+    const M = mois[m] || (mois[m] = { rdv: 0, ancienne: {}, nouvelle: {}, changent: 0, quittentNonAttribue: 0, entrentNonAttribue: 0, changentDeLigne: 0, changentDePrecision: 0, detail: {} });
     const sA = SC.closerDuRdv(b, C.ancienne), sN = SC.closerDuRdv(b, C.nouvelle);
-    const lA = C.ligne(sA, b.date), lN = C.ligne(sN, b.date);
+    const rA = C.rangement(sA, b.date), rN = C.rangement(sN, b.date);
+    const lA = rA.libelle, lN = rN.libelle;
     M.rdv++; total.rdv++;
     inc(M.ancienne, lA); inc(M.nouvelle, lN);
     if (lA !== lN) {
       M.changent++; total.changent++;
+      /* changent = changentDeLigne + changentDePrecision. */
+      if (rA.ligneEcran !== rN.ligneEcran) {
+        M.changentDeLigne++; total.changentDeLigne++;
+        if (rA.ligneEcran === 'Non attribué') { M.quittentNonAttribue++; total.quittentNonAttribue++; }
+        else if (rN.ligneEcran === 'Non attribué') { M.entrentNonAttribue++; total.entrentNonAttribue++; }
+      } else { M.changentDePrecision++; total.changentDePrecision++; }
       const k = lA + '\u0000' + lN;
       [M.detail, detailTotal].forEach(function (D) {
         const g = D[k] || (D[k] = { de: lA, vers: lN, n: 0, parVoie: { closeData: 0, expertSlug: 0, fiche: 0 } });
@@ -377,12 +394,16 @@ async function jobRdv(q) {
   const parMois = {};
   Object.keys(mois).sort().forEach(function (k) {
     const M = mois[k];
-    parMois[k] = { rdv: M.rdv, ancienne: M.ancienne, nouvelle: M.nouvelle, changent: M.changent, detail: trierDetail(M.detail) };
+    parMois[k] = { rdv: M.rdv, ancienne: M.ancienne, nouvelle: M.nouvelle, changent: M.changent,
+      quittentNonAttribue: M.quittentNonAttribue, entrentNonAttribue: M.entrentNonAttribue,
+      changentDeLigne: M.changentDeLigne, changentDePrecision: M.changentDePrecision, detail: trierDetail(M.detail) };
   });
   return { code: 200, corps: {
     ok: true, mode: 'lecture', plage: { from: q.from, to: q.to, jours: jours }, regleNouvelle: regleNouvelle(),
     ecartsCopieLocale: ecartsCopie(C), avertissements: avert, tronque: tronque, lecture: hors,
-    total: { rdv: total.rdv, changent: total.changent, detail: trierDetail(detailTotal) },
+    total: { rdv: total.rdv, changent: total.changent, quittentNonAttribue: total.quittentNonAttribue,
+      entrentNonAttribue: total.entrentNonAttribue, changentDeLigne: total.changentDeLigne,
+      changentDePrecision: total.changentDePrecision, detail: trierDetail(detailTotal) },
     parMois: parMois, parFiche: fiches,
   } };
 }
