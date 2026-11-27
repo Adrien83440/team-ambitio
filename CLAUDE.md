@@ -407,6 +407,23 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   `lienDeReservation`, code gardé sur la carte `lienCode` et dans `offer_liens/{code}`, Admin SDK seul) ouvert par `api/offre-lien.js`
   (page relais, clic compté par le navigateur, seule une adresse `https://team.alteore.com/…` est ouverte). Un brouillon d'avant garde
   l'adresse longue dans son texte : elle est remplacée à l'envoi.
+  **Rédaction (27/11/2026, 2e demande d'Adrien)** : le but est que le prospect REVIENNE sur sa décision, même après un non. Le prompt porte
+  les outils des meilleurs négociateurs (nommer ce qu'il ressent, question à laquelle il répond non, question ouverte, ses propres mots, prix
+  de ne rien faire) et une réponse par objection (trop cher, pas le temps, bilan / début d'année, associé, « je réfléchis »…), sans rien
+  inventer. **Jamais de prix** (on ne sait pas s'il a été annoncé) : garde-fou `RE_PRIX` de `contenuInterdit` (un montant collé à un mot de
+  prix est refusé, les chiffres du prospect restent permis). Lien des témoignages (`lienTemoignages`, par défaut le mur public
+  `temoignages-public.html`) donné dans l'e-mail seulement, si le prospect demande des preuves ou doute ; dans `htmlRelance`, seul le lien
+  de réservation devient le bouton, un autre lien reste un lien.
+  **Envoi automatique (27/11/2026, demande d'Adrien)** : `api/_offerRelancesAuto.js`, cron `api/offer-relances-auto.js` (2 passages par
+  heure, 9 h – 19 h Paris, hors dimanche et fériés). Il réutilise `listOffers` / `draftOffer` / `sendOffer` (tous leurs refus valent).
+  Décisions d'Adrien : partent seuls les CAS NETS (« À relancer », note présente, ni sensible, ni reclassé par l'IA, ni message signalé, ni
+  dossier trop mince) — le reste est noté `auto.etat: 'a_la_main'` + motif et reste au closer ; jamais pendant la séquence d'après-RDV
+  (offre : J+10 ; non closé : à la fin de sa séquence) ; 2e relance sans réponse à 30 jours du RDV et 20 jours au moins après la 1re, jamais
+  de 3e ; une relance faite à la main compte ; stock lissé (`plafondJour` 10, du RDV le plus récent au plus ancien, 3 par passage). Réglages
+  `_config/offer_relances.auto` (`actif` faux par défaut, `modeTest` VRAI par défaut = À BLANC : l'automate rédige et note `a_blanc`, rien ne
+  part, le texte relu partira tel quel en réel ; réel = « PRODUCTION »). L'automate ne dépend pas de `sendEnabled` (interrupteur des envois
+  manuels) ; `me._auto` n'est posé que côté serveur. Traces : `offer_relances/{id}.auto`, `sends[].auto`, compteur
+  `offer_relances_auto/{AAAA-MM-JJ}` (Admin SDK seul). Réglage et simulation par la route (`?dry=1`, `action=reglage`, admin ou clé du chantier).
   **Page en deux colonnes (27/11/2026, demande d'Adrien)** : liste des prospects à gauche (pictogramme d'état `etat(x)` : ✓ envoyé, ▲ à vous
   de décider / SMS non remis, ✎ brouillon prêt, ○ à rédiger, 💬 a réagi ; filtres Tous / À faire / Envoyés, recherche), dossier ouvert à droite
   (dossier + « Suivi des envois » d'un côté, message de l'autre ; onglet « 👁 Aperçu de l'e-mail » = action `offer_preview`, même `htmlRelance`

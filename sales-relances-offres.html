@@ -157,6 +157,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
     <select class="bi" id="fDays"><option value="30">30 jours</option><option value="60" selected>60 jours</option><option value="90">90 jours</option><option value="180">6 mois</option></select>
   </div>
   <div class="ro-ban" id="ban" style="display:none"><b>L'envoi n'est pas encore activé.</b> Vous pouvez faire rédiger, relire, modifier et mettre de côté. Seules les fiches de test peuvent recevoir un message.</div>
+  <div class="ro-ban" id="autoBan" style="display:none"></div>
   <div class="ro-st" id="stats" style="display:none"></div>
   <div class="cats" id="cats"></div>
   <div class="ro-out" id="out"></div>
@@ -167,7 +168,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
         <div class="chips" id="chips"></div>
       </div>
       <div class="lst-b" id="rows"><div class="empty">Chargement…</div></div>
-      <div class="lst-f"><i>✓ envoyé</i><i>▲ à vous de décider</i><i>✎ brouillon prêt</i><i>○ à rédiger</i><i>💬 a réagi</i></div>
+      <div class="lst-f"><i>✓ envoyé</i><i>▲ à vous de décider</i><i>✎ brouillon prêt</i><i>○ à rédiger</i><i>💬 a réagi</i><i>🤖 automatique</i></div>
     </div>
     <div class="det" id="list"></div>
   </div>
@@ -238,6 +239,7 @@ function plur(n, mot) { return n + ' ' + mot + (n > 1 ? 's' : ''); }
 // le SMS est remis ou non (accusé de l'opérateur).
 function envoiTexte(s) {
   var p = [];
+  if (s.auto) p.push('<span class="no">🤖 envoi automatique</span>');
   if (s.email) p.push('<span class="ok">E-mail parti</span>');
   if (s.sms) {
     if (s.smsEtat === 'remis') p.push('<span class="ok">SMS remis</span>');
@@ -248,6 +250,11 @@ function envoiTexte(s) {
   if (s.smsError) p.push('<span class="wr">SMS non parti</span>');
   return p.join(' · ');
 }
+// La note de l'automate ne vaut que pour la relance à venir (1re ou 2e).
+function autoPour(x) {
+  var a = x.auto;
+  return a && a.relance === (x.dejaRelance || 0) + 1 ? a : null;
+}
 function dernier(x) { return x.envois && x.envois.length ? x.envois[x.envois.length - 1] : null; }
 
 // L'état d'un prospect, en un pictogramme et une ligne (liste de gauche et en-tête du dossier).
@@ -255,6 +262,9 @@ function etat(x) {
   var d = x.draft, l = dernier(x), t;
   if (x.category === 'ont_reagi') return { k: 'rp', i: '💬', t: x.reagi && x.reagi.type === 'rdv' ? 'A repris rendez-vous' : 'A répondu' };
   if (x.category === 'de_cote') return { k: 'no', i: '–', t: 'Laissé de côté' };
+  var au2 = x.dejaRelance ? autoPour(x) : null;
+  if (au2 && au2.etat === 'a_la_main') return { k: 'wr', i: '▲', t: '2e relance, à vous : ' + (au2.motif || '') };
+  if (au2 && au2.etat === 'a_blanc' && d && d.emailBody) return { k: 'br', i: '🤖', t: 'À blanc : la 2e relance serait partie seule le ' + fr(au2.at) };
   if (x.dejaRelance) {
     t = 'Envoyé' + (x.derniereRelanceAt ? ' le ' + fr(x.derniereRelanceAt) : '');
     if (l && (l.smsError || l.smsEtat === 'echec')) return { k: 'wr', i: '▲', t: t + ' · SMS non ' + (l.smsError ? 'parti' : 'remis') };
@@ -263,6 +273,9 @@ function etat(x) {
     return { k: 'ok', i: '✓', t: t };
   }
   if (x.sensible) return { k: 'wr', i: '▲', t: 'Situation sensible : à vous de décider' };
+  var au = autoPour(x);
+  if (au && au.etat === 'a_la_main') return { k: 'wr', i: '▲', t: 'À vous : ' + (au.motif || 'l\'automate ne l\'envoie pas seul') };
+  if (au && au.etat === 'a_blanc' && d && d.emailBody) return { k: 'br', i: '🤖', t: 'À blanc : serait parti seul le ' + fr(au.at) };
   if (d && d.alerte) return { k: 'wr', i: '▲', t: 'Message à corriger avant l\'envoi' };
   if (x.category === 'en_sequence') return { k: 'sq', i: '↻', t: 'Reçoit nos e-mails automatiques' };
   if (x.category === 'trop_recent') return { k: 'no', i: '⏳', t: 'Trop récent' };
@@ -290,6 +303,13 @@ function renderCats() {
   $('out').textContent = parts.length ? 'Sortis de la liste : ' + parts.join(' · ') + '.' : '';
   $('sub').textContent = 'Rendez-vous non closés et offres sans retour, à partir de ' + data.minDays + ' jours après le rendez-vous';
   $('ban').style.display = data.envoi ? 'none' : '';
+  var A = data.auto, ab = $('autoBan');
+  if (A && A.actif) {
+    ab.style.display = '';
+    ab.innerHTML = A.modeTest
+      ? '<b>🤖 Envoi automatique à blanc.</b> Rien ne part. L\'automate rédige les relances qu\'il enverrait seul (' + A.plafondJour + ' par jour au plus) : elles portent le repère 🤖 dans la liste. Relisez-les, corrigez-les si besoin : en réel, c\'est ce texte qui partira.'
+      : '<b>🤖 Envoi automatique en réel.</b> Les cas nets partent seuls, e-mail et SMS (' + A.plafondJour + ' par jour au plus), puis une seconde fois ' + A.secondeRdvJours + ' jours après le rendez-vous sans réponse. Les ▲ restent à vous.';
+  } else ab.style.display = 'none';
   var st = data.stats;
   if (st && st.prospects) {
     $('stats').style.display = '';
