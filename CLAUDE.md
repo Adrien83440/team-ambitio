@@ -574,8 +574,8 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   visite `tunnel_visits` (`vid` de session). Une même campagne Meta peut mener à deux quiz : ne
   jamais attribuer une campagne à une page sans les utm de `tunnel_stats_daily.sources`.
 
-  **Dossiers par prospect + export PDF (13/11/2026)** : `lqs-dossier.js`. Dans la vue d'ensemble, les
-  chiffres Leads / RDV pris / Présents / Closes (par note et total) sont cliquables → liste NOMINATIVE,
+  **Dossiers par prospect + export PDF (13/11/2026)** : `lqs-dossier.js`. Les chiffres
+  des tableaux par note (vue d'ensemble et suivi des leads inscrits, par note et total) sont cliquables → liste NOMINATIVE,
   chaque nom se déplie : questionnaire complet (`LqsCore.questionnaireOf`), points LQS, issue (closé,
   offre, signé, encaissé), appels de vente (`row.calls`) avec résumé, analyse IA et transcription de la
   visio Meet, lue à la demande par `GET /api/replay-closing?action=get` (admin ; `replay_transcript`
@@ -842,17 +842,15 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   client, sinon création du paiement. Carte « Rapprochement avec le Stats funnel » (`funnelCheckHtml`,
   `ctx.funnelCloses` = `K.closeRows`) : chaque écart nommé. Dossiers : closer, setter et date du RDV visibles
   sans déplier (`whoHtml`, `row.setterName`).
-  **Vérifié sur novembre 2026 (22/11/2026, contrôle temporaire retiré)** : Qualité leads suit PAR DÉFAUT les
-  leads ENTRÉS sur la période (`cashMode: 'cohorte'`) — un lead entré en octobre et signé en novembre n'y est
-  pas, d'où 5 closes / 34 000 € contre 6 / 40 000 € au funnel ; les cartes Closes et Signé affichent donc aussi
-  le chiffre « sur la période » et celui du Stats funnel (`twoLens`, `funnelTot`). Set NB : onglets libellés
+  **Vérifié sur novembre 2026 (22/11/2026, contrôle temporaire retiré)** : le suivi des leads ENTRÉS sur la
+  période (aujourd'hui en tête de la vue Marketing, voir 27/11/2026) ne compte pas un lead entré en octobre et
+  signé en novembre, d'où 5 closes / 34 000 € contre 6 / 40 000 € au funnel. Set NB : onglets libellés
   « Setting » ; sous chaque « RDV NB », « dont N posés avant la période, N de remplacement » (`rdvOrigin`) —
   ex. réel : 4 sets et 6 RDV NB = 4 + 1 posé en octobre + 1 RDV de remplacement.
   **23/11/2026 (3e retour Vincent, re-vérifié sur les données réelles : calcul juste, 6 closes / 40 000 € des deux
   côtés)** : les cartes Closes / Signé / Encaissé de Qualité leads affichent TOUJOURS les closes SIGNÉS sur la
-  période (`monthHead` = `periodSigned`), donc les mêmes chiffres que Closes / Contracté / Collecté du funnel ;
-  le chiffre « leads entrés sur la période » passe en sous-ligne, le tableau par note reste sur les leads entrés
-  et le dit. Ne plus jamais mettre en tête un chiffre de cohorte à côté d'un funnel qui compte la période.
+  période (`monthHead` = `periodSigned`), donc les mêmes chiffres que Closes / Contracté / Collecté du funnel.
+  Ne plus jamais mettre en tête un chiffre de cohorte à côté d'un funnel qui compte la période.
   `stats-drill.js` : fenêtre OPAQUE en thème clair (`--bg2` y est translucide). Set NB : « reporté à une nouvelle
   date » remplace « de remplacement ».
   **4e retour Vincent (23/11/2026)** : (1) Funnel — sous chaque carte des deux lignes du héro, la part Self
@@ -865,14 +863,29 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   (entrée de menu `sales-global`, `nav.js` distingue les deux adresses) : par closer, Self Booking + RDV du
   setting ; pas de corrections ✎ dans cette vue (elles restent propres à Close SB et Set NB).
   **27/11/2026 (choix « 2a » d'Adrien, constat : « Leads présents » 8 sous filtre closer quand Global closing disait 18
-  présents)** : Vue d'ensemble de Qualité leads, 2e rangée = la période : cartes **RDV / Présents / Pitchés = RDV DATÉS
+  présents)** : Vue d'ensemble de Qualité leads : cartes **RDV / Présents / Pitchés = RDV DATÉS
   dans la période** (`M.rdvPeriode` de `lqs-core.js`, même fabrique `rdvDatesEntre` que `M.rdvRows`, agrégée par
   `LqsCore.byCloser(M.rdvPeriode, slug)` ; ne dépend JAMAIS de la plage de la vue Closers), mêmes chiffres que Global closing
   (filtre closer = son onglet) et le Stats funnel ; puis Closes / Contracté / Collecté. Cliquables : une ligne par RDV
-  (`rdvRowOf` de `lqs-tab.js`, identifiant = le RDV, `ficheId` pour le lien). « Leads avec RDV », « Leads présents »,
-  « Leads pitchés » (leads entrés) passent en sous-ligne sous leur propre nom. Contrôle à l'écran (carte « Contrôle : mêmes
+  (`rdvRowOf` de `lqs-tab.js`, identifiant = le RDV, `ficheId` pour le lien). Contrôle à l'écran (carte « Contrôle : mêmes
   closes… ») : RDV / présents / pitchés ici = `K.tenue` du funnel, seulement sans filtre tunnel / source. Règle : **ne plus
   jamais mettre en tête un chiffre de cohorte**.
+  **27/11/2026 (décision « 1a 2a » d'Adrien : « le nombre de présents qu'elle a eus en call, par score du lead, sur le mois
+  du RDV »)** — PRIME sur les phrases plus anciennes de ce module : la Vue d'ensemble de Qualité leads se lit ENTIÈREMENT au
+  mois du RDV, rangée selon le score LQS du lead, quel que soit son mois d'inscription. Source unique
+  `LqsCore.byCloser(M.rdvPeriode, slug)` (`rdvDeLaPeriode()` de `lqs-tab.js`) ; on compte des RDV (un prospect vu deux fois
+  compte deux fois) ; total = Global closing (onglet Équipe ou du closer) et, pour toute l'équipe sans filtre tunnel / source,
+  le Stats funnel. Écran : cartes RDV → Présents → Pitchés → Closes → Contracté → Collecté (plus aucune sous-ligne de leads
+  entrés) ; UNE carte « Score moyen des présents » (`LqsCore.scoreDesPresents`, en nombres) + « Leads reçus sur la période »
+  (toute l'équipe seulement) ; tableau « Score du lead → RDV, présents, pitchés, closes » (lignes 5 → 1, « Non noté », Total ;
+  chaque case ouvre sa liste : `rdvP` / `presentsP` / `pitchesP` filtrés par note, `closesP` lu sur `RP.closes`, entrées de
+  closes portant `leadRow`) ; contrôle avec le Stats funnel APRÈS le tableau, sans aucun chiffre d'équipe sous filtre closer.
+  Un close peut être rangé sous une autre note que son RDV (fiche du paiement ≠ fiche du RDV) : nommé sous le tableau, règle
+  inchangée. Le suivi des LEADS INSCRITS (tunnel, phrases clés, tableau par note des leads entrés, alignement) est déplacé tel
+  quel en tête de la vue 📣 Marketing (`leadsInscritsHtml`, toute l'équipe seulement). Le bouton `cashMode` (« Résultats des
+  leads entrés » / « Closes de la période ») et la carte « Prélevé sur la période » ont quitté l'onglet (le Prélevé reste au
+  Stats funnel). Aucun chiffre des vues Quiz, Marketing (hors ce bloc), Closers, Leads notés, Barème ne change. Glossaire :
+  `non_note`, `score_presents` ajoutés, `filtre_closer` réécrit, `mode_periode` / `non_calcule_periode` retirés.
 
 - **Parcours RDV des prospects (24/11/2026, plan « Offres ouvertes et no-show »)** : entre la réservation d'un
   Audit (self-booking OU posé par un setter) et le RDV, UN parcours, un message par moment. Moteur
