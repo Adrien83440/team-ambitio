@@ -507,7 +507,9 @@
     (PC.annules || []).forEach(function (a) { named.push(esc(a.name || '—') + ' — close annulé (' + esc(a.reason || 'annulé') + '), retiré des closes, du contracté et du collecté'); });
     (PC.ecartsCanal || []).forEach(function (r) { named.push(esc(r.name || '—') + ' — écart de canal : compté ' + (r.sb ? 'Self Booking' : 'Setting (NB)') + ' (canal du RDV), la réponse du closer dit l\'inverse'); });
     (PC.sansSignal || []).forEach(function (x) { named.push(esc(x.name || '—') + ' — fiche marquée cliente sans vente enregistrée : non comptée'); });
+    var rc = rdvCheck();
     var body = '<div class="fn-stage-note" style="font-size:12.5px;line-height:1.7">'
+      + rc.html
       + 'Closes de la période ici : <strong>' + fNum(here.length) + '</strong> · ' + fEur(hCon) + ' contractés · ' + fEur(hPaid) + ' collectés.'
       + (fc ? ' Stats funnel : <strong>' + fNum(fN) + '</strong> · ' + fEur(fCon) + ' contractés · ' + fEur(fPaid) + ' collectés.' : '')
       + (fc ? (same ? ' ✅ Même liste de clients, mêmes montants.' : '<ul style="margin:6px 0 0 18px;padding:0"><li>' + lines.join('</li><li>') + '</li></ul>') : '')
@@ -517,7 +519,36 @@
       + (S.closer ? ' Contrôle fait sur toute l\'équipe : le filtre closer ne s\'y applique pas.' : '')
       + (named.length ? '<div style="margin-top:6px"><strong>À savoir</strong>' + I('closes_annules') + I('ecart_canal') + I('clientes_sans_vente') + '<ul style="margin:4px 0 0 18px;padding:0"><li>' + named.join('</li><li>') + '</li></ul></div>' : '')
       + '</div>';
-    return card((fc && !same ? '🔎' : '✅') + ' Contrôle : mêmes closes que le Stats funnel', 'liste unique des closes, montants HT du module Paiements', body);
+    return card(((fc && !same) || rc.ecart ? '🔎' : '✅') + ' Contrôle : mêmes closes que le Stats funnel', 'liste unique des closes, montants HT du module Paiements ; RDV datés dans la période', body);
+  }
+
+  /* Contrôle « RDV de la période » (27/11/2026) : RDV / Présents / Pitchés
+     de la vue d'ensemble (toute l'équipe) rapprochés de ceux du Stats funnel
+     (K.tenue, fourni seulement quand K est calculé pour la période
+     affichée). Même périmètre SANS filtre : RDV de vente datés dans la
+     période, mêmes états (StatsCore). Sous un filtre tunnel / source, le
+     rattachement d'un RDV à une fiche diffère (le Stats funnel ne connaît
+     que les fiches qu'il a lues, cet onglet lit la fiche de chaque RDV) :
+     pas de comparaison, jamais une fausse alerte. */
+  function filtresActifs() {
+    var c = S.ctx || {};
+    return !!((c.tunnelFilter && c.tunnelFilter !== 'all') || c.sourceFilter === 'youtube' || c.sourceFilter === 'other');
+  }
+  function rdvCheck() {
+    if (!S.M || !S.M.rdvPeriode) return { html: '', ecart: false };
+    var a = LC.byCloser(S.M.rdvPeriode, '').total;
+    var K = S.ctx && S.ctx.funnelKpis, T = K && K.tenue;
+    var txt = 'RDV de la période ici (toute l\'équipe) : <strong>' + fNum(a.rdv) + ' RDV · ' + fNum(a.presents) + ' présents · ' + fNum(a.pitches) + ' pitchés</strong>.';
+    if (!T) return { html: txt + ' Ouvre l\'onglet Funnel pour les comparer au Stats funnel.<br>', ecart: false };
+    if (filtresActifs()) return { html: txt + ' Comparaison avec le Stats funnel faite sans filtre tunnel / source seulement (sous un filtre, les deux onglets ne rattachent pas un RDV à une fiche de la même façon).<br>', ecart: false };
+    txt += ' Stats funnel : <strong>' + fNum(T.rdv) + ' RDV · ' + fNum(T.presents) + ' présents · ' + fNum(T.pitches) + ' pitchés</strong>.';
+    var ecarts = [];
+    if (T.rdv !== a.rdv) ecarts.push('RDV : ' + fNum(a.rdv) + ' ici, ' + fNum(T.rdv) + ' au Stats funnel');
+    if (T.presents !== a.presents) ecarts.push('présents : ' + fNum(a.presents) + ' ici, ' + fNum(T.presents) + ' au Stats funnel');
+    if (T.pitches !== a.pitches) ecarts.push('pitchés : ' + fNum(a.pitches) + ' ici, ' + fNum(T.pitches) + ' au Stats funnel');
+    if (!ecarts.length) return { html: txt + ' ✅ Mêmes chiffres.<br>', ecart: false };
+    return { html: txt + '<ul style="margin:6px 0 0 18px;padding:0"><li>' + ecarts.join('</li><li>')
+      + '</li></ul>Les deux onglets lisent les mêmes RDV avec les mêmes règles : un écart vient d\'un RDV créé, déplacé ou statué entre les deux lectures. Recharge la page.<br>', ecart: true };
   }
 
   /* Closes de la période (liste unique) : nombre, contracté, collecté à ce

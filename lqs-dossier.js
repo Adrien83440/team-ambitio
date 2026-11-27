@@ -93,6 +93,9 @@
      depuis la carte Closes), close annulé, déjà client, puis l'état du RDV
      retenu (r.rdvEtat / r.rdvDetail, lu sur le dernier RDV de la chaîne). */
   function statusOf(r) {
+    /* Ligne d'UN RDV (cartes RDV / Présents / Pitchés de la période,
+       27/11/2026) : l'état de CE RDV d'abord, l'issue du prospect ensuite. */
+    if (r.rdvLigne) return rdvStatus(r);
     if (r.closed) return { k: 'won', t: '✅ Close — ' + offerLbl(r.offer) + ' · ' + montants(r)
       + (r.closeSansRdv ? ' · sans RDV enregistré' : '') + (r.sansPaiement ? ' · sans paiement' : '') };
     if (r.closeCancelled) return { k: 'lost', t: '↩️ Close annulé' };
@@ -119,6 +122,23 @@
     if (e === 'no_show') return { k: 'lost', t: '👻 No-show' };
     if (e === 'annule') return { k: 'lost', t: 'RDV annulé' };
     return { k: 'wait', t: etatMot(e, d) };
+  }
+
+  function rdvStatus(r) {
+    var e = r.rdvEtat || null, d = r.rdvDetail || null;
+    var won = r.closed ? ' · ✅ client gagné' : '';
+    if (e === 'present') {
+      if (d === 'close') return { k: r.closed ? 'won' : 'wait', t: 'RDV au résultat Close' + (r.closed ? ' · ✅ client gagné' : ', client non enregistré') };
+      if (d === 'offre') return { k: 'wait', t: '📨 Présent — offre en attente' + won };
+      if (d === 'non_close') return { k: 'lost', t: '❌ Présent — non close (offre refusée)' + won };
+      if (d === 'disqualifie') return { k: 'lost', t: '🚫 Présent — disqualifié' + won };
+      return { k: 'wait', t: 'Présent (sans détail) — résultat à saisir' + won };
+    }
+    if (e === 'a_venir') return { k: 'wait', t: '🗓 RDV à venir' + won };
+    if (e === 'a_statuer') return { k: 'wait', t: 'RDV passé, à statuer' + won };
+    if (e === 'no_show') return { k: 'lost', t: '👻 No-show' + won };
+    if (e === 'annule') return { k: 'lost', t: 'RDV annulé' + won };
+    return { k: 'wait', t: (e ? etatMot(e, d) : '—') + won };
   }
 
   /* ══ TRANSCRIPTIONS ═══════════════════════════════════════════════════
@@ -423,7 +443,7 @@
     var open = !!O.open[r.id];
     return '<div class="lqd-lead' + (open ? ' open' : '') + '" data-lqd-lead="' + esc(r.id) + '">'
       + '<div class="lqd-lead-h" data-lqd-toggle="' + esc(r.id) + '"><span class="lqd-caret">' + (open ? '▾' : '▸') + '</span>' + headHtml(r, i)
-      + (r.noLead ? '<span class="lqd-link lqd-muted" title="Aucune fiche lead reliée à ce close">sans fiche</span>' : '<a class="lqd-link" href="sales-contact.html?id=' + encodeURIComponent(r.id) + '" target="_blank" rel="noopener" title="Ouvrir la fiche">fiche ↗</a>') + '</div>'
+      + (r.noLead ? '<span class="lqd-link lqd-muted" title="Aucune fiche lead reliée">sans fiche</span>' : '<a class="lqd-link" href="sales-contact.html?id=' + encodeURIComponent(r.ficheId || r.id) + '" target="_blank" rel="noopener" title="Ouvrir la fiche">fiche ↗</a>') + '</div>'
       + (open ? '<div class="lqd-lead-b">' + bodyHtml(r) + '</div>' : '') + '</div>';
   }
   function refreshLead(r) {
@@ -453,9 +473,16 @@
       O.busy = false;
       print(O.opts.title + ' — ' + (O.opts.periodLabel || ''), coverHtml(O.opts.title, [
         'Période : ' + (O.opts.periodLabel || '—') + (O.opts.sub ? ' · ' + O.opts.sub : ''),
-        rows.length + ' prospect' + (rows.length > 1 ? 's' : '') + ' · exporté le ' + fDay(Date.now())
+        uniteDe(O.opts, rows.length) + ' · exporté le ' + fDay(Date.now())
       ]) + dossiersHtml(rows));
     });
+  }
+  /* « 3 prospects » ; opts.unite = [singulier, pluriel] pour une liste
+     qui n'est pas une liste de prospects (une ligne par RDV : un prospect à
+     deux RDV y figure deux fois). */
+  function uniteDe(opts, n) {
+    var u = (opts && opts.unite) || ['prospect', 'prospects'];
+    return n + ' ' + (n > 1 ? u[1] : u[0]);
   }
   function open(opts) {
     close();
@@ -464,9 +491,10 @@
     el.className = 'lqd-overlay';
     O = { el: el, opts: opts, rows: rows, open: {}, busy: false };
     var nTr = 0;
-    if (!readOnly()) rows.forEach(function (r) { nTr += readyCalls(r).length; });
+    var vuTr = {};   // un appel compté une fois (un prospect peut avoir deux lignes)
+    if (!readOnly()) rows.forEach(function (r) { readyCalls(r).forEach(function (c) { if (!vuTr[c.id]) { vuTr[c.id] = 1; nTr++; } }); });
     var h = '<div class="lqd-panel"><div class="lqd-top"><div><div class="lqd-title">' + esc(opts.title) + '</div>'
-      + '<div class="lqd-sub">' + rows.length + ' prospect' + (rows.length > 1 ? 's' : '') + ' · ' + nTr + ' transcription' + (nTr > 1 ? 's' : '') + ' de visio disponible' + (nTr > 1 ? 's' : '')
+      + '<div class="lqd-sub">' + uniteDe(opts, rows.length) + ' · ' + nTr + ' transcription' + (nTr > 1 ? 's' : '') + ' de visio disponible' + (nTr > 1 ? 's' : '')
       + (opts.periodLabel ? ' · ' + esc(opts.periodLabel) : '') + (opts.sub ? ' · ' + esc(opts.sub) : '') + '</div></div>'
       + '<div class="lqd-actions"><span class="lqd-muted" data-lqd-status></span>'
       + '<button class="fn-btn" data-lqd-all>▾ Tout déplier</button>'
