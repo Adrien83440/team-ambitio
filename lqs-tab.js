@@ -370,7 +370,10 @@
      période, une ligne par RDV) ; note : 0-5 ou 'all'. */
   function drill(n, note, kind) {
     if (!n || !window.LqsDossier) return fNum(n);
-    return '<a href="#" class="lq-drill" data-lq-drill="' + kind + '" data-lq-dn="' + note + '" title="Voir les ' + fNum(n) + ' prospects, leurs réponses et leurs visios">' + fNum(n) + '</a>';
+    /* Liste de RDV (une ligne par RDV : un prospect peut y figurer deux
+       fois) ou liste de prospects : l'infobulle dit ce que compte le chiffre. */
+    var quoi = RDV_KINDS[kind] ? fNum(n) + ' RDV, leurs prospects, leurs réponses et leurs visios' : fNum(n) + ' prospects, leurs réponses et leurs visios';
+    return '<a href="#" class="lq-drill" data-lq-drill="' + kind + '" data-lq-dn="' + note + '" title="Voir les ' + quoi + '">' + fNum(n) + '</a>';
   }
   var DRILL_LBL = { leads: 'Leads + ré-optins', booked: 'Leads avec RDV', present: 'Leads présents au RDV', pitched: 'Leads pitchés', closed: 'Closes des leads entrés',
     signed: 'Closes de la période — contracté, collecté, reste à encaisser',
