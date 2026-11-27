@@ -917,7 +917,13 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
   /* Bornes de période : début / fin de jour à l'heure de PARIS, construites
      par funnel-core.js (FC.periodMonth / periodDay / periodPreset /
      periodCustom) — plus de new Date(y, m, 1) à l'heure de l'appareil. */
+  /* Génération de la période : +1 à CHAQUE changement de période (27/11/2026).
+     Un chargement lancé à la génération g n'est affiché que si elle vaut
+     encore g à son arrivée : un aller-retour (octobre → septembre → octobre)
+     pendant le chargement l'invalide, même revenu à la même période. */
+  var _genPeriode = 0;
   function setPeriod(np) {
+    _genPeriode++;
     P.mode = np.mode; P.start = np.start; P.end = np.end;
     if (np.y != null) { P.y = np.y; P.m = np.m; }
     P.day = np.day || null;
@@ -979,9 +985,11 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
 
   /* Rechargements partiels après une sauvegarde — délégués au cœur partagé,
      signatures inchangées pour les appelants de cette page. */
-  function loadAds()          { return FC.loadAds(db, P, DATA); }
+  /* Rechargements partiels (après une saisie) : sur la période des données
+     déjà chargées (DATA._P), jamais sur P qui a pu changer entre-temps. */
+  function loadAds()          { return FC.loadAds(db, (DATA && DATA._P) || P, DATA); }
   function loadFunnelCosts()  { return FC.loadFunnelCosts(db, DATA); }
-  function loadJournalPeriod(){ return FC.loadJournalPeriod(db, P, DATA); }
+  function loadJournalPeriod(){ return FC.loadJournalPeriod(db, (DATA && DATA._P) || P, DATA); }
   function effectiveCosts(mKey) { return FC.effectiveCosts(DATA.costs, mKey); }
 
   function loadTargets() {
@@ -1112,10 +1120,14 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
   /* Chargement complet de la section, en parallèle du reste du funnel.
      Une erreur ici ne doit JAMAIS empêcher le funnel de s'afficher : elle est
      stockée et rendue dans la section, le reste de la page est intact. */
-  function loadDispos() {
+  function loadDispos(per) {
+    per = per || P;
     DISPO.ready = false;
     DISPO.err = null;
     DISPO.year = null;
+    /* Période des jours chargés : computeDispos ne calcule que si c'est
+       celle des données du funnel (DATA._P). */
+    DISPO.daysCle = cleDe(per);
     /* Garde-fou : si dispo-core.js n'a pas été servi (cache, 404, blocage
        réseau), la section le dit et le funnel continue de s'afficher. Sans
        ça, le premier appel à DC.* lèverait avant même la promesse et
@@ -1125,7 +1137,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       DISPO.err = 'dispo-core.js n\'a pas été chargé';
       return Promise.resolve();
     }
-    DISPO.days = DC.eachDay(isoDate(P.start), isoDate(P.end));
+    DISPO.days = DC.eachDay(isoDate(per.start), isoDate(per.end));
     return loadDispoConfig()
       .then(function () {
         if (!DISPO.targets.length) return null;
@@ -1141,9 +1153,15 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
   function computeDispos() {
     DISPO.rows = [];
     DISPO.totals = null;
+    /* Période des données du funnel (copie figée du chargement accepté).
+       Jours chargés pour une autre période (chargement en cours, cumul de
+       l'année demandé entre-temps) : rien n'est calculé, la section reste
+       « Chargement de la capacité… » (27/11/2026). */
+    var per = (DATA && DATA._P) || P;
+    if (DISPO.daysCle !== cleDe(per)) { DISPO.ready = false; return; }
     DISPO.ready = true;
     if (DISPO.err || !DC || !DISPO.targets.length) return;
-    var sIso = isoDate(P.start), eIso = isoDate(P.end);
+    var sIso = isoDate(per.start), eIso = isoDate(per.end);
     /* DATA.bookings contient les RDV de la fenêtre de DATE et ceux de la
        fenêtre de CRÉATION : on refiltre sur la date pour ne compter que ce
        qui occupe vraiment un créneau de la période. Tous statuts — c'est
@@ -1238,7 +1256,10 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     RESOUDRE_HOTE = FC.resoudrePersonneDe(DATA, window.TEAM_MEMBERS_LIST || []);
     K = FC.computeKpis({
       DATA: DATA,
-      P: P,
+      /* Période du chargement qui a produit DATA (copie figée), pas P :
+         un changement de tunnel pendant un chargement recalcule K sur les
+         données de LEUR période. */
+      P: (DATA && DATA._P) || P,
       tunnelFilter: tunnelFilter,
       sourceFilter: sourceFilter,
       teamMembers: window.TEAM_MEMBERS_LIST || [],
@@ -1253,8 +1274,20 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
      Qualité par pub) ni transmis (closes et KPI de Qualité leads) que s'il a
      été calculé pour CETTE période : jamais les chiffres d'une autre
      période sous le libellé de celle-ci (27/11/2026). */
-  function periodeCle() {
-    return (P && P.start && P.end) ? (P.start.getTime() + '|' + P.end.getTime()) : '';
+  function cleDe(p) {
+    return (p && p.start && p.end) ? (p.start.getTime() + '|' + p.end.getTime()) : '';
+  }
+  function periodeCle() { return cleDe(P); }
+  /* Copie FIGÉE de la période (objet neuf, dates neuves), prise au lancement
+     d'un chargement : P est modifié EN PLACE par setPeriod et les chargeurs
+     le relisent après leurs attentes — sans copie, un chargement lancé pour
+     une période en lisait une autre à mi-course (27/11/2026). */
+  function figerPeriode(p) {
+    return {
+      mode: p.mode, y: p.y, m: p.m, day: p.day || null,
+      start: p.start ? new Date(p.start.getTime()) : null,
+      end: p.end ? new Date(p.end.getTime()) : null
+    };
   }
   function kPret() { return !!K && !!K._periode && K._periode === periodeCle(); }
 
@@ -2795,6 +2828,7 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
 
   function renderAds() {
     var el = $('#fnTabAds');
+    if (periodIsCalendarMonth() && !kPret()) { el.innerHTML = '<div class="fn-loading">Chargement…</div>'; return; }
     if (!periodIsCalendarMonth()) {
       el.innerHTML = '<div class="fn-stage"><div class="fn-stage-title">💶 Données Ads</div><div class="fn-stage-note" style="margin-top:8px">La grille de saisie s\'affiche à la maille <strong>mois calendaire</strong>. Sélectionne « Mois » dans la barre de période.</div></div>';
       return;
@@ -4357,7 +4391,11 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
      place par setPeriod et Qualité leads lit ce même objet : sans cela, la
      barre de période et le libellé annonçaient encore l'ancienne période
      pendant que des chiffres de la nouvelle arrivaient (27/11/2026). */
-  function annoncerPeriode() {
+  /* relance = vrai pour le chargement relancé en interne à la fin d'un
+     chargement invalidé : la période a déjà été annoncée (et les onglets à
+     chargement propre invalidés) par le refresh() de l'utilisateur ; les
+     invalider une seconde fois relancerait leurs chargements pour rien. */
+  function annoncerPeriode(relance) {
     adsDraft = {};
     /* L'onglet Instagram a ses propres sources et son propre chargement
        paresseux : changer de période l'invalide, il se rechargera à sa
@@ -4368,27 +4406,39 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
        re-rendu ne doit pas dépendre du succès de `FC.loadAll` — sinon une
        erreur sur le funnel fige l'onglet Instagram sur la période
        précédente, sans le dire. */
-    igInvalidate();
-    if (activeTab === 'instagram') renderInstagram();
-    if (window.LqsTab) window.LqsTab.invalidate();
-    if (activeTab === 'lqs') renderLqs();
+    if (!relance) {
+      igInvalidate();
+      if (activeTab === 'instagram') renderInstagram();
+      if (window.LqsTab) window.LqsTab.invalidate();
+      if (activeTab === 'lqs') renderLqs();
+    }
     /* Leads et Qualité par pub sont nourris par K : déjà à l'écran, ils
        passent tout de suite en « Chargement… » (kPret() est faux pour la
        nouvelle période) au lieu de garder les chiffres de l'ancienne. */
     if (activeTab === 'leads') renderLeads();
     if (activeTab === 'adq') renderAdq();
-    fbInvalidate();
-    if (activeTab === 'facebook') renderFacebook();
+    /* Données Ads : grille nourrie par DATA.ads, même règle (27/11/2026). */
+    if (activeTab === 'ads') renderAds();
+    if (!relance) {
+      fbInvalidate();
+      if (activeTab === 'facebook') renderFacebook();
+    }
     setSync('', 'Chargement ' + periodLabel() + '…');
     updateToolbar();
     $('#fnTabFunnel').innerHTML = '<div class="fn-loading">Chargement du funnel — ' + esc(periodLabel()) + '…</div>';
   }
-  function refresh() {
-    annoncerPeriode();
+  function refresh(relance) {
+    annoncerPeriode(relance === true);
     if (_loading) { _relancer = true; return; }
     _loading = true;
     _relancer = false;
-    var cle = periodeCle();
+    /* Ce chargement travaille sur une COPIE FIGÉE de la période et note sa
+       génération : son résultat n'est affiché que si aucune période n'a été
+       choisie pendant qu'il tournait (27/11/2026). */
+    var per = figerPeriode(P);
+    var cle = cleDe(per);
+    var gen = _genPeriode;
+    function perime() { return gen !== _genPeriode || cle !== periodeCle(); }
     var t0 = Date.now();
     /* Tout le pipeline de chargement vit dans funnel-core.js — strictement
        le même que celui qu'exécute l'API agence. */
@@ -4397,17 +4447,17 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
        n'échoue jamais — elle range son erreur dans DISPO.err pour que la
        section l'affiche sans emporter le reste de la page. */
     Promise.all([
-      FC.loadAll(db, { P: P, typeMap: TYPE_MAP, teamMembers: window.TEAM_MEMBERS_LIST || [] }),
-      loadDispos()
+      FC.loadAll(db, { P: per, typeMap: TYPE_MAP, teamMembers: window.TEAM_MEMBERS_LIST || [] }),
+      loadDispos(per)
     ])
       .then(function (all) {
-        /* Période changée pendant ce chargement : son résultat est celui de
-           l'ANCIENNE période. On ne l'affiche pas sous le libellé de la
-           nouvelle ; le chargement repart (plus bas). */
-        if (cle !== periodeCle()) return;
+        /* Période changée pendant ce chargement — même revenue à la même
+           valeur (aller-retour) : son résultat n'est pas affiché ; le
+           chargement repart pour la période affichée (plus bas). */
+        if (perime()) return;
         var res = all[0];
         DATA = res.DATA;
-        if (DATA) DATA._periode = cle;
+        if (DATA) { DATA._periode = cle; DATA._P = per; }
         compute();
         computeDispos();
         renderActiveTab();
@@ -4415,12 +4465,13 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       })
       .catch(function (e) {
         console.error('[funnel] refresh', e);
+        if (perime()) return;
         setSync('err', 'Erreur de chargement');
         toast('Erreur : ' + e.message, true);
       })
       .then(function () {
         _loading = false;
-        if (_relancer || cle !== periodeCle()) refresh();
+        if (_relancer || perime()) refresh(true);
       });
   }
 
