@@ -64,8 +64,7 @@
     taux_close_lead: ['Close / lead', 'Closes des leads entrés ÷ leads (+ ré-optins) de la ligne.'],
     close_sans_rdv_enregistre: ['Sans RDV enregistré', 'Client gagné directement depuis sa fiche ou repéré par le module Paiements, sans RDV de vente à son nom. Il compte dans les closes, ni dans les leads avec RDV ni dans les leads présents.'],
     deja_client: ['Déjà client', 'Lead réinscrit pendant la période qui était déjà client avant son entrée. Ce n’est pas un close des leads entrés.'],
-    contracte_cohorte: ['Contracté des leads entrés', 'Valeur hors taxes des contrats des closes des leads entrés (leads entrés pendant la période et devenus clients depuis, à n’importe quelle date). Différent du Contracté des cartes du haut, qui suit les clients gagnés pendant la période.'],
-    collecte_cohorte: ['Collecté des leads entrés', 'Ce qui a déjà été prélevé, jusqu’à aujourd’hui, sur les closes des leads entrés (hors taxes).'],
+    contracte_cohorte: ['Contracté des leads entrés', 'Valeur hors taxes des contrats des closes des leads entrés (leads entrés pendant la période et devenus clients depuis, à n’importe quelle date). Différent du Contracté (clients gagnés pendant la période).'],
     contracte_par_lead: ['Contracté / lead', 'Contracté des leads entrés ÷ nombre de leads de la ligne : la valeur moyenne d’un lead.'],
     part_contracte: ['Part du contracté', 'Part de la ligne dans le contracté total du tableau.'],
     lqs: ['LQS', 'Lead Quality Score : note de 1 à 5 calculée uniquement à partir des réponses du lead (quiz, formulaires) avec le barème de l’onglet ⚙️. Ce n’est ni la note équipe ★, ni le CA déclaré.'],
@@ -486,7 +485,9 @@
     var closesK = kind === 'signed' || kind === 'closesP';
     var noteTxt = note === 'all' ? (closesK || rdvK ? '' : ' — toutes les notes') : (String(note) === '0' ? ' — non notés' : ' — note LQS ' + note);
     window.LqsDossier.open({
-      title: DRILL_LBL[kind] + noteTxt,
+      /* Depuis la carte « Leads reçus sur la période » (seul lien « leads »
+         de la Vue d'ensemble) : la liste porte le nom de la carte. */
+      title: (kind === 'leads' && note === 'all' && S.view === 'overview') ? 'Leads reçus sur la période' : DRILL_LBL[kind] + noteTxt,
       sub: S.closer ? (closesK ? 'closes de ' : (rdvK ? 'RDV de l\'onglet de ' : 'leads de ')) + S.M.memberName(S.closer) : 'toute l\'équipe',
       periodLabel: S.ctx.periodLabel || '', rows: drillRows(note, kind),
       unite: rdvK ? ['RDV', 'RDV'] : null
@@ -617,7 +618,9 @@
     var h = '';
     h += help('ℹ️ Comment lire cet onglet', '<p><strong>LQS (Lead Quality Score)</strong> : chaque lead reçoit une note de <strong>1 à 5</strong> calculée <strong>uniquement à partir de ses réponses</strong> (quiz, formulaires) avec le barème de l\'onglet ⚙️ — CA, équipe, contraintes… Aucun jugement humain : c\'est la qualité que le marketing nous envoie.</p>'
       + '<p><strong>Tout ici se lit sur la période affichée, au jour du RDV</strong> : <strong>RDV, Présents, Pitchés</strong> = RDV datés dans la période, quel que soit le jour où le prospect s\'est inscrit (un prospect vu deux fois compte deux fois, comme Global closing) ; <strong>Closes, Contracté, Collecté</strong> = clients gagnés pendant la période. Le tableau range ces RDV et ces closes selon le <strong>score du lead</strong> (sa note LQS). Le total est celui de Global closing (onglet Équipe ou onglet du closer) ; pour toute l\'équipe, aussi celui du Stats funnel (sans filtre tunnel / source).</p>'
-      + '<p>Seule la carte <strong>Leads reçus sur la période</strong> compte des inscriptions : nouveaux leads et ré-optins entrés pendant la période. Ce que deviennent ces leads inscrits (tunnel, résultats par note, MQS) est dans l\'onglet <strong>📣 Marketing (MQS)</strong>.</p>'
+      + (S.closer
+        ? '<p>Les inscriptions (leads reçus, tunnel, résultats par note, MQS) ne se rangent pas par closer : elles se lisent sans filtre closer, sur la carte <strong>Leads reçus sur la période</strong> et dans l\'onglet <strong>📣 Marketing (MQS)</strong>.</p>'
+        : '<p>Seule la carte <strong>Leads reçus sur la période</strong> compte des inscriptions : nouveaux leads et ré-optins entrés pendant la période. Ce que deviennent ces leads inscrits (tunnel, résultats par note, MQS) est dans l\'onglet <strong>📣 Marketing (MQS)</strong>.</p>')
       + '<p>Montants HT : <strong>contracté</strong> (valeur du contrat : module Paiements, sinon tarif déclaré au close) et <strong>collecté</strong> (prélèvements réellement passés, à ce jour). Si les 4-5 ne closent pas, c\'est un sujet closing ; si les closers closent bien mais qu\'il n\'y a que des 1-2, c\'est un sujet marketing.</p>'
       + '<p><strong>Réservé aux admins</strong> : la note n\'est affichée nulle part ailleurs, les closers ne la voient pas.</p>');
 
@@ -674,8 +677,8 @@
       + ' · dont ' + fNum(sc.n45) + ' en LQS 4-5');
     if (!S.closer) {
       var t = LC.byNote(S.M.rows || [], S.M.periodPays || [], S.M.periodSigned || []).total;
-      h += kpi(drill(t.leads, 'all', 'leads'), 'Leads reçus sur la période' + I('leads_et_reoptins', 'Ici : inscrits pendant la période, toute l\'équipe.'),
-        fNum(t.nouveaux) + ' nouveaux' + I('leads') + ' + ' + fNum(t.reopt) + ' ré-optins' + I('reoptins') + ' · LQS moyen ' + (ok(t.avgNote) ? fDec(t.avgNote, 2) : '—'));
+      h += kpi(drill(t.leads, 'all', 'leads'), 'Leads reçus sur la période' + I('leads_et_reoptins', 'Leads reçus sur la période = leads + ré-optins inscrits pendant la période, toute l\'équipe.'),
+        fNum(t.nouveaux) + ' ' + plur(t.nouveaux, 'nouveau', 'nouveaux') + I('leads') + ' + ' + fNum(t.reopt) + ' ' + plur(t.reopt, 'ré-optin', 'ré-optins') + I('reoptins') + ' · LQS moyen ' + (ok(t.avgNote) ? fDec(t.avgNote, 2) : '—'));
     }
     h += '</div>';
 
