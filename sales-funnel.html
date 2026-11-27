@@ -4352,11 +4352,12 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
   /* Période changée PENDANT un chargement : relancé à la fin (avant, le
      changement était ignoré et l'écran gardait l'ancienne période). */
   var _relancer = false;
-  function refresh() {
-    if (_loading) { _relancer = true; return; }
-    _loading = true;
-    _relancer = false;
-    var cle = periodeCle();
+  /* Ce qui s'affiche TOUT DE SUITE au changement de période, même si un
+     chargement du funnel est déjà en cours. La période P est modifiée en
+     place par setPeriod et Qualité leads lit ce même objet : sans cela, la
+     barre de période et le libellé annonçaient encore l'ancienne période
+     pendant que des chiffres de la nouvelle arrivaient (27/11/2026). */
+  function annoncerPeriode() {
     adsDraft = {};
     /* L'onglet Instagram a ses propres sources et son propre chargement
        paresseux : changer de période l'invalide, il se rechargera à sa
@@ -4381,6 +4382,13 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
     setSync('', 'Chargement ' + periodLabel() + '…');
     updateToolbar();
     $('#fnTabFunnel').innerHTML = '<div class="fn-loading">Chargement du funnel — ' + esc(periodLabel()) + '…</div>';
+  }
+  function refresh() {
+    annoncerPeriode();
+    if (_loading) { _relancer = true; return; }
+    _loading = true;
+    _relancer = false;
+    var cle = periodeCle();
     var t0 = Date.now();
     /* Tout le pipeline de chargement vit dans funnel-core.js — strictement
        le même que celui qu'exécute l'API agence. */
@@ -4393,6 +4401,10 @@ body.fn-ro .fn-ro-badge { display:inline-block; margin-left:6px; }
       loadDispos()
     ])
       .then(function (all) {
+        /* Période changée pendant ce chargement : son résultat est celui de
+           l'ANCIENNE période. On ne l'affiche pas sous le libellé de la
+           nouvelle ; le chargement repart (plus bas). */
+        if (cle !== periodeCle()) return;
         var res = all[0];
         DATA = res.DATA;
         if (DATA) DATA._periode = cle;

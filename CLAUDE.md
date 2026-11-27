@@ -720,11 +720,13 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
     `order` > slug), puis `personId == slug`, sinon null ; roster COMPLET (anciens membres compris). Cas réel : `booking_config/elodie`
     est reprise par Anthony depuis le 10/10/2026 → ses RDV sans closer vont à Anthony ; ceux qui portent `expertSlug: 'elodie'`
     restent « Anciens membres ». Close SB, Global closing, Set NB, Dashboard, Stats funnel, Qualité leads, Pilotage et l'assistant
-    l'appellent (`FunnelCore.resoudreAvec` / `resoudrePersonneDe` délèguent) : ne jamais la recoder dans une page. Reste une copie
-    dans `sales-projections.html` (`resoudreAvec` : même ordre, mais à compte porté par deux membres elle garde le premier trouvé
-    au lieu du départage ci-dessus ; à rebrancher : `return SC.resoudreHote(persons || {}, teamMap());`). Qualité leads ne montre que les closes de la période
-    AFFICHÉE : `sales-funnel.html` ne transmet K (closes, KPI) que s'il a été calculé pour cette période (`K._periode`, `kPret()`,
-    aussi pour les onglets Funnel, Leads, Qualité par pub) ; `lqs-tab.js` reconstruit le modèle quand les closes fournis changent.
+    l'appellent, Projections aussi (`FunnelCore.resoudreAvec` / `resoudrePersonneDe` délèguent) : ne jamais la recoder dans une page.
+    Avant, sept copies ne suivaient pas le même ordre : 81 RDV d'Anthony (45 d'octobre, 36 de novembre 2026) tombaient en « Anciens
+    membres » sur Close SB, Global closing, Qualité leads, Dashboard, Stats funnel et l'assistant (mesuré sur la base réelle).
+    Qualité leads ne montre que les closes de la période AFFICHÉE : `sales-funnel.html` ne transmet K (closes, KPI) que s'il a été
+    calculé pour cette période (`K._periode`, `kPret()`, aussi pour les onglets Funnel, Leads, Qualité par pub) ; `lqs-tab.js`
+    reconstruit le modèle quand les closes fournis changent ; un changement de période pendant un chargement s'annonce tout de
+    suite (`annoncerPeriode`) et le résultat de l'ancienne période n'est jamais affiché sous le libellé de la nouvelle.
   - **Contrôle de cohérence du funnel** : l'égalité « RDV closés ↔ Closes » est une PARTITION calculée UNE fois dans le moteur
     (`k.coh.egalite`, listes `rdvDeClosesAnnules`, `rdvEnTrop`, `rdvClosesHorsListe`, `closesSansRdv`, `closesRdvHorsPeriode`) ; la page
     l'affiche sans la recalculer. `coh.annules` et `coh.doublonsRdv` ne sont que des listes d'information, jamais des termes de l'égalité.
