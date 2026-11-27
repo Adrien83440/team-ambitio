@@ -15,8 +15,8 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
 <style>
 /* ═══════════════════════════════════════════════════════════════════════
    sales-relances-offres.html — Relances d'offres (26/11/2026)
-   Rendez-vous non closés, et offres faites depuis plus de 7 jours sans
-   retour. L'IA classe et rédige un e-mail + un SMS par prospect, à la
+   Rendez-vous non closés et offres sans retour, à partir de 10 jours après
+   le rendez-vous (jamais avant). L'IA classe et rédige un e-mail + un SMS par prospect, à la
    demande ; le closer relit, modifie, met de côté.
    Imbriqué avec ce qui écrit déjà au prospect : tant qu'il reçoit la
    séquence automatique d'après-RDV ou une campagne de relance, la carte est
@@ -102,7 +102,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
 <div class="ro" id="mainView" style="display:none">
   <div class="ro-top">
     <div class="ro-ic">📨</div>
-    <div><h1>Relances d'offres</h1><small id="sub">Rendez-vous non closés, et offres sans retour depuis plus de 7 jours</small></div>
+    <div><h1>Relances d'offres</h1><small id="sub">Rendez-vous non closés et offres sans retour, à partir de 10 jours après le rendez-vous</small></div>
     <div class="sp"></div>
     <select class="bi" id="fAll" style="display:none"><option value="1">Toute l'équipe</option><option value="0">Mes prospects</option></select>
     <select class="bi" id="fDays"><option value="30">30 jours</option><option value="60" selected>60 jours</option><option value="90">90 jours</option><option value="180">6 mois</option></select>
@@ -129,7 +129,7 @@ var CAT_HINT = {
   a_relancer: 'Aucune réponse, aucune étape datée',
   rappel_convenu: 'Transformer « on se rappelle » en date',
   en_sequence: 'Reçoit déjà nos e-mails automatiques',
-  trop_recent: 'Offre de moins de 7 jours',
+  trop_recent: 'Rendez-vous de moins de 10 jours',
   de_cote: 'Aucun message'
 };
 
@@ -164,7 +164,7 @@ function recount() {
 function renderCats() {
   var h = '';
   ['a_relancer', 'rappel_convenu', 'en_sequence', 'trop_recent', 'de_cote'].forEach(function (k) {
-    var hint = k === 'trop_recent' ? 'Offre de moins de ' + data.minDays + ' jours' : CAT_HINT[k];
+    var hint = k === 'trop_recent' ? 'Rendez-vous de moins de ' + data.minDays + ' jours' : CAT_HINT[k];
     h += '<button type="button" class="cat' + (cur === k ? ' on' : '') + '" data-cat="' + k + '"><div class="n">' + (data.counts[k] || 0) + '</div>' +
          '<div class="l">' + esc(data.categories[k]) + '</div><div class="s">' + esc(hint) + '</div></button>';
   });
@@ -179,7 +179,7 @@ function renderCats() {
   if (s.bloque) parts.push(s.bloque + ' bloqués');
   if (s.fiche) parts.push(s.fiche + ' fiches écartées (fusion, poubelle, introuvable)');
   $('out').textContent = parts.length ? 'Sortis de la liste : ' + parts.join(' · ') + '.' : '';
-  $('sub').textContent = 'Rendez-vous non closés, et offres sans retour depuis plus de ' + data.minDays + ' jours';
+  $('sub').textContent = 'Rendez-vous non closés et offres sans retour, à partir de ' + data.minDays + ' jours après le rendez-vous';
   $('ban').style.display = data.envoi ? 'none' : '';
   var st = data.stats;
   if (st && st.prospects) {
@@ -250,7 +250,7 @@ function card(x) {
       '<label>SMS <span data-count>' + (d.sms || '').length + ' caractères</span></label><textarea class="bi" data-f="sms" rows="3">' + esc(d.sms) + '</textarea>' +
       (d.alerte ? '<div class="cd-why" style="border:1px solid rgba(248,113,113,.4);color:#fecaca"><b>À corriger avant l\'envoi :</b> ' + esc(d.alerte) + '</div>' : '') +
       (d.offrePresentee ? '<div class="cd-x">Offre présentée, d\'après la fiche : <b>' + esc(d.offrePresentee === 'inconnue' ? 'non identifiée — le message parle de « l\'accompagnement » sans le nommer' : d.offrePresentee) + '</b>' + (d.signataire ? ' · signé ' + esc(d.signataire) : '') + '</div>' : '') +
-      (d.lienRdv ? '<div class="cd-x">Lien de réservation proposé : ' + esc(d.lienRdv) + ' — le prospect ne peut pas répondre par SMS, le lien doit y rester.</div>' : '') +
+      (d.lienRdv ? '<div class="cd-x">Lien de réservation proposé : ' + esc(d.lienRdv) + ' — le prospect ne peut pas répondre par SMS, le lien doit y rester. L\'e-mail part mis en forme : bandeau, puis votre texte, et ce lien devient un bouton « Réserver mon créneau ».</div>' : '') +
       (d.ficheVide ? '<div class="cd-x">La fiche ne contenait rien d\'exploitable : le message reste ouvert. Complétez la note du rendez-vous pour un message plus précis.</div>' : '') +
       '<div class="cd-a"><input class="bi" data-f="instruction" placeholder="Consigne pour une nouvelle version (facultatif)"/>' +
       '<button type="button" class="bb bb-g" data-act="draft"' + (b ? ' disabled' : '') + '>' + (b ? '⏳ Rédaction…' : '↻ Régénérer') + '</button></div>' +

@@ -36,7 +36,8 @@ async function memberOf(uid) {
  * @param {string} leadId
  * @param {string} subject
  * @param {string} bodyText texte brut, paragraphes séparés par une ligne vide
- * @param {Object} [opts] { label: libellé timeline, flag: champ booléen posé sur la communication }
+ * @param {Object} [opts] { label: libellé timeline, flag: champ booléen posé sur la communication,
+ *                          bodyHtml: version mise en forme (à défaut, le texte en paragraphes) }
  */
 async function sendLeadEmail(auth, leadId, subject, bodyText, opts) {
   opts = opts || {};
@@ -48,7 +49,7 @@ async function sendLeadEmail(auth, leadId, subject, bodyText, opts) {
   if (!to || to.indexOf('@') < 0) throw new Error('Email du prospect manquant');
   const cfg = await getAiConfig();
   const accountKey = cfg.followupEmailAccount || 'strategie';
-  const r = await sendEmailFromAccount({ accountKey: accountKey, to: to, subject: subject, bodyHtml: textToHtml(bodyText), bodyText: bodyText });
+  const r = await sendEmailFromAccount({ accountKey: accountKey, to: to, subject: subject, bodyHtml: opts.bodyHtml || textToHtml(bodyText), bodyText: bodyText });
   if (!r || !r.ok) throw new Error((r && r.error) || 'Envoi email impossible');
   const me = await memberOf(auth.uid);
   const nowIso = new Date().toISOString();
