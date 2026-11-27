@@ -66,6 +66,7 @@ const P = require('./_parcoursRdv');
 
 const COL = 'offer_relances';
 const OUTCOMES = ['offre', 'non_close'];
+const LIEN_TEMOIGNAGES = 'https://team.alteore.com/temoignages-public.html';
 const DEFAULT_MIN_DAYS = 10;     // délai avant toute relance, offre ou non closé (_config/offer_relances.minDays, jamais moins de 10)
 const DEFAULT_WINDOW_DAYS = 60;  // profondeur de la liste
 const MAX_ITEMS = 300;
@@ -78,8 +79,15 @@ const RE_INTERDIT = /(titan|garantie\s+(de\s+)?30|30\s*jours\s+(satisfait|rembou
 // Il n'existe AUCUNE autre offre : un message ne promet jamais une offre, une
 // formule ou des conditions différentes de celle présentée en rendez-vous.
 const RE_AUTRE_OFFRE = /((meilleure|autre|nouvelle|seconde|deuxi[èe]me)\s+(offre|formule|proposition|solution)|(offre|formule|solution|accompagnement|version)\s+(plus\s+|mieux\s+)(adapt[ée]e?|accessible|l[ée]g[èe]re?|abordable|[ée]conomique|souple|courte?|petite?|simple)|(offre|formule)\s+(alternative|sp[ée]ciale|sur[- ]mesure|interm[ée]diaire|all[ée]g[ée]e|d[ée]couverte)|tarif\s+(pr[ée]f[ée]rentiel|r[ée]duit|sp[ée]cial)|r[ée]duction\s+(de\s+prix|tarifaire|sur\s+(le|l['’ ])\s*(prix|tarif|montant|offre))|remise\s+(commerciale|exceptionnelle|tarifaire|sp[ée]ciale|de\s+\d|sur\s+(le|l['’ ])\s*(prix|tarif|montant|offre))|rabais|(offre|tarif|prix)\s+promotionnel|en\s+promotion|prix\s+(r[ée]duit|plus\s+bas)|moins\s+cher|geste\s+commercial|conditions\s+(sp[ée]ciales|exceptionnelles|particuli[èe]res))/i;
+// Demande d'Adrien du 27/11/2026 : jamais de prix dans une relance, on ne sait
+// pas si le prix a été annoncé au rendez-vous. Un montant collé à un mot de
+// prix est refusé ; un chiffre du prospect (son chiffre d'affaires) reste permis.
+const MOT_PRIX = '(prix|tarifs?|co[uû]t\\s+de\\s+l[\'’ ]\\s*(accompagnement|offre|programme)|investissement|mensualit[ée]s?|paiement\\s+en|facilit[ée]s?\\s+de\\s+paiement)';
+const MONTANT = '\\d[\\d\\s.,]*\\s?(€|euros?|k€|k\\b)';
+const RE_PRIX = new RegExp('(' + MOT_PRIX + '[^.\\n]{0,50}' + MONTANT + '|' + MONTANT + '[^.\\n]{0,25}(par\\s+mois|/\\s?mois|mensuels?)[^.\\n]{0,40}(accompagnement|offre|programme))', 'i');
 function contenuInterdit(t) {
   const x = String(t || '');
+  if (RE_PRIX.test(x)) return 'Le message donne un prix ou un montant de l\'offre : jamais de prix dans une relance.';
   if (RE_INTERDIT.test(x)) return 'Le message mentionne l\'offre Titan ou une garantie 30 jours : à retirer.';
   const m = x.match(RE_AUTRE_OFFRE);
   if (m) return 'Le message laisse entendre une autre offre, une autre formule ou une remise (« ' + m[0] + ' ») : nous n\'en avons pas. À reformuler.';
@@ -124,7 +132,28 @@ const DEFAULT_PROMPT = [
   '- Réponds à SON frein, celui du dossier, par un élément nouveau : une précision, une façon de démarrer, ce que l\'échange va régler. Ne rejoue pas l\'argumentaire du rendez-vous.',
   '- Rends le pas facile : un seul appel à l\'action, précis, à faible engagement. S\'il existe des facilités pour démarrer, dis qu\'elles se voient pendant l\'échange, sans les chiffrer.',
   '- S\'il a montré un signal d\'intérêt (clic sur « réserver », question posée), appuie-toi dessus : il y pensait, aide-le à conclure.',
-  '- Reste digne : un dirigeant écrit à un dirigeant. Aucune flatterie, aucune pression, aucune culpabilisation. La porte reste ouverte à un non, mais tu écris pour obtenir un oui.',
+  '- Reste digne : un dirigeant écrit à un dirigeant. Aucune flatterie, aucune culpabilisation, aucun mensonge. Tu écris pour obtenir un oui, y compris de quelqu\'un qui a dit non.',
+  '',
+  'TES OUTILS DE PERSUASION (ceux des meilleurs négociateurs et vendeurs ; un ou deux par message, jamais en les nommant) :',
+  '- Nommer ce qu\'il ressent avant d\'argumenter : « On dirait que… », « J\'ai l\'impression que… ». Quelqu\'un qui se sent compris écoute la suite.',
+  '- Dire toi-même ce qu\'il pense de nous avant qu\'il ne le pense : « Vous vous dites sans doute que je reviens vers vous pour vendre. » Cela désamorce.',
+  '- La question à laquelle il est facile de répondre non : « Avez-vous renoncé à [son objectif, avec ses mots] ? » Un non le remet en mouvement.',
+  '- La question ouverte qui le fait réfléchir : « Qu\'est-ce qui devrait être vrai pour que ce soit le bon moment ? », « Comment comptez-vous régler [son problème] d\'ici là ? »',
+  '- Reprendre ses propres mots, à l\'identique : on ne contredit pas ce qu\'on a dit soi-même.',
+  '- Le prix de ne rien faire : ce que la situation lui coûte chaque mois qui passe, avec SES chiffres. On agit plus pour ne pas perdre que pour gagner.',
+  '- La preuve par d\'autres dirigeants : uniquement par le lien des témoignages fourni, jamais par un résultat que tu inventerais.',
+  '- Donner avant de demander : une idée utile, précise, tirée de son dossier, qu\'il peut appliquer seul.',
+  '',
+  'RÉPONDRE À SON OBJECTION (celle du dossier ; ne la nie pas, accueille-la, puis retourne-la) :',
+  '- « C\'est trop cher » : ne cite AUCUN montant et ne discute pas le prix. Compare à ce que le problème lui coûte déjà, avec ses chiffres ; dis que la façon de démarrer se voit pendant l\'échange.',
+  '- « Je n\'ai pas le temps » : c\'est le symptôme, pas la raison. Tant que tout repose sur lui, le temps ne reviendra pas seul.',
+  '- « J\'attends mon bilan », « on verra en début d\'année », « ce n\'est pas le moment » : le bilan constate, il ne corrige rien. Chaque mois d\'attente est un mois aux mêmes chiffres. Qu\'est-ce qui sera différent à cette date ?',
+  '- « Je dois en parler à mon associé, à mon conjoint, à mon comptable » : propose de refaire le point à trois, lors de l\'échange.',
+  '- « Je vais réfléchir » : demande, avec respect, sur quoi porte la réflexion. Une question précise se règle en un échange.',
+  '- « J\'ai déjà été accompagné, cela n\'a rien donné » : reconnais-le, demande ce qui a manqué, et propose d\'en parler.',
+  '- « Je vais le faire seul » : c\'est possible. Depuis combien de temps y pense-t-il, et qu\'est-ce qui a changé depuis ?',
+  '- « Non », sans raison donnée : respecte le non, et pose une seule question qui rouvre la discussion.',
+  '- Il demande des preuves, des avis, des exemples de clients, ou doute du résultat : donne le LIEN DES TÉMOIGNAGES, dans l\'e-mail seulement, sur sa propre ligne, en plus du lien de réservation.',
   '',
   'NOS OFFRES — CADRE STRICT, AUCUNE INITIATIVE :',
   '- Nous n\'avons que les offres décrites dans le contexte Alteore ci-dessus (« NOS OFFRES ET PRIX ») : Business Phénix, notre offre d\'entrée, et Elite Phénix. Il n\'existe RIEN d\'autre : ni offre moins chère, ni version allégée, ni formule intermédiaire, ni conditions spéciales, ni remise, ni bonus.',
@@ -151,7 +180,7 @@ const DEFAULT_PROMPT = [
   '',
   'SELON LA SITUATION :',
   '- Offre en attente : rappelle la date du rendez-vous et ce qu\'il voulait régler, nomme le frein s\'il est connu, propose l\'échange pour décider.',
-  '- Rendez-vous non closé : ne discute pas son refus et ne le nie pas. Reviens par un angle différent de celui du rendez-vous, lié à son frein ou à ce qui a pu changer depuis, et propose l\'échange pour refaire le point.',
+  '- Rendez-vous non closé : ne nie pas son refus, accueille-le, puis réponds à son objection par un angle différent de celui du rendez-vous. Le but est qu\'il revienne sur sa décision : propose l\'échange pour refaire le point.',
   '- Rappel convenu : rappelle ce qui avait été convenu, propose deux dates précises en semaine (jour et quantième), postérieures à la date du jour.',
   '- Dernière relance : dis-le simplement, et demande une réponse claire, oui ou non, pour ne pas le relancer inutilement.',
   '- S\'il a déjà reçu nos e-mails automatiques ou une relance, n\'en reprends ni l\'angle ni les formules : ce message doit sonner comme écrit pour lui seul, par son closer.',
@@ -160,11 +189,11 @@ const DEFAULT_PROMPT = [
   '- Vouvoiement, ton direct et respectueux, phrases courtes. Aucun emoji.',
   '- Signé du prénom du closer, suivi de « équipe Adrien & Emily ».',
   '- N\'utilise QUE des faits présents dans le dossier. N\'invente rien : ni chiffre, ni résultat client, ni promesse. Si le dossier est vide ou ne dit rien d\'exploitable, écris un message ouvert qui demande quelle question lui reste avant de décider, et mets ficheVide à true.',
-  '- Une seule demande par message : réserver son créneau par le lien fourni. Dans l\'e-mail, il peut aussi simplement répondre.',
+  '- Une seule demande par message : réserver son créneau par le lien fourni. Dans l\'e-mail, il peut aussi simplement répondre. Le lien des témoignages n\'est pas une demande : c\'est une preuve, à ne donner que si le dossier le justifie.',
   '- LE PROSPECT NE PEUT PAS RÉPONDRE À UN SMS (expéditeur sans numéro). N\'écris jamais « répondez à ce SMS », « répondez-moi » ou « dites-moi » dans le SMS. Le SMS donne le lien de réservation, et rappelle qu\'il peut répondre à l\'e-mail.',
   '',
   'INTERDITS ABSOLUS :',
-  '- Aucun prix, aucune fourchette de prix, aucun montant de l\'offre.',
+  '- Aucun prix, aucune fourchette de prix, aucun montant de l\'offre, aucune mensualité : nous ne savons pas si le prix lui a été annoncé. Même s\'il a dit que c\'était trop cher.',
   '- Jamais de garantie 30 jours. Jamais l\'offre Titan.',
   '- Alteore (le logiciel) ne fait pas partie de l\'accompagnement : ne le présente pas comme inclus.',
   '- Ne cite jamais une information de santé, familiale ou judiciaire, même si elle figure dans le dossier.',
@@ -229,6 +258,14 @@ async function loadConfig() {
     // Closer qui reprend les prospects d'un membre parti (slug du roster).
     repriseSlug: String(c.repriseSlug || '').trim(),
     lienRdv: /^https:\/\//.test(String(c.lienRdv || '')) ? String(c.lienRdv).trim() : '',
+    // Envoi automatique (api/_offerRelancesAuto.js). Éteint par défaut ; allumé,
+    // il tourne À BLANC tant que modeTest n'est pas explicitement faux.
+    auto: (function (a) {
+      return { actif: a.actif === true, modeTest: a.modeTest !== false, plafondJour: numOr(a.plafondJour, 10, 1, 50),
+        secondeJours: numOr(a.secondeJours, 20, 10, 60), secondeRdvJours: numOr(a.secondeRdvJours, 30, 20, 90), depuis: a.depuis || null };
+    })(c.auto && typeof c.auto === 'object' ? c.auto : {}),
+    // Mur public des témoignages, donné au prospect qui demande des preuves.
+    lienTemoignages: /^https:\/\//.test(String(c.lienTemoignages || '')) ? String(c.lienTemoignages).trim() : LIEN_TEMOIGNAGES,
   };
 }
 
@@ -497,10 +534,10 @@ async function listOffers(auth, opts) {
         dernierEnvoi: lastSend ? { at: lastSend.at, byName: lastSend.byName || null, email: !!lastSend.email, sms: !!lastSend.sms, smsError: lastSend.smsError || null } : null,
         envoiPossible: cfg.sendEnabled || cfg.testLeadIds.indexOf(b.leadId) >= 0,
         draft: state.draft || null,
-        reagi: reagi,
+        reagi: reagi, auto: state.auto || null,
         // Suivi des envois (complété plus bas : SMS remis ou non, lien ouvert).
         envois: (state.sends || []).slice(-3).map(function (s) {
-          return { at: s.at, byName: s.byName || null, email: !!s.email, sms: !!s.sms, smsError: s.smsError || null, smsSid: s.smsSid || null, smsEtat: null, smsPourquoi: '' };
+          return { at: s.at, byName: s.byName || null, email: !!s.email, sms: !!s.sms, auto: s.auto === true, smsError: s.smsError || null, smsSid: s.smsSid || null, smsEtat: null, smsPourquoi: '' };
         }),
         lien: null, _lienCode: state.lienCode || null,
       });
@@ -516,7 +553,8 @@ async function listOffers(auth, opts) {
   let stats = null;
   try { stats = await computeStats(auth, all, bkByLead); } catch (e) { console.warn('[offer-relances] stats', e && e.message); }
   return { ok: true, items: out, counts: counts, categories: Object.assign({}, CATEGORIES, { ont_reagi: 'Ont réagi' }), sortis: sortis, isAdmin: isAdmin, all: all,
-    minDays: cfg.minDays, gapDays: cfg.gapDays, maxSends: cfg.maxSends, days: win, envoi: cfg.sendEnabled, stats: stats };
+    minDays: cfg.minDays, gapDays: cfg.gapDays, maxSends: cfg.maxSends, days: win, envoi: cfg.sendEnabled, stats: stats,
+    auto: { actif: cfg.auto.actif, modeTest: cfg.auto.modeTest, plafondJour: cfg.auto.plafondJour, secondeRdvJours: cfg.auto.secondeRdvJours } };
 }
 
 /* Suivi d'une relance partie : le SMS est-il arrivé (accusé de l'opérateur,
@@ -677,7 +715,17 @@ function htmlRelance(sujet, texte, lien) {
   const blocs = String(texte || '').split(/\n\s*\n/).map(function (p) { return p.trim(); }).filter(Boolean);
   const corps = blocs.map(function (p, i) {
     const urls = p.match(RE_URL) || [];
-    const u = urls.find(function (x) { return lien && x.replace(/[.,;)]+$/, '') === lien; }) || urls[0] || null;
+    const u = urls.find(function (x) { return lien && x.replace(/[.,;)]+$/, '') === lien; }) || (lien ? null : urls[0]) || null;
+    if (!u && urls.length) {
+      // Un autre lien (témoignages) : il reste un lien, jamais le bouton de réservation.
+      const html = p.split('\n').map(function (l) {
+        return escH(l).replace(/https?:\/\/[^\s<>"]+/g, function (a) {
+          const net = a.replace(/[.,;)]+$/, ''), queue = a.slice(net.length);
+          return '<a href="' + net + '" style="color:#2563eb;font-weight:700">' + (/temoignage/i.test(net) ? 'Voir les témoignages de nos clients' : net) + '</a>' + queue;
+        });
+      }).join('<br>');
+      return '<p style="margin:0 0 16px">' + html + '</p>';
+    }
     if (!u) {
       // La signature (dernier bloc, court) : en gras sur la première ligne.
       const lignes = p.split('\n');
@@ -787,6 +835,9 @@ async function draftOffer(auth, body, me) {
   P.push('');
   const lienRdv = await lienDeReservation(cfg, b, card.ref);
   // Ces rappels valent même si un prompt personnalisé est réglé.
+  P.push('LIEN DES TÉMOIGNAGES (à donner tel quel, dans l\'e-mail seulement et sur sa propre ligne, UNIQUEMENT s\'il a demandé des preuves, des avis ou des exemples de clients, ou s\'il doute du résultat) : ' + cfg.lienTemoignages);
+  P.push('JAMAIS DE PRIX : aucun montant de l\'offre, aucune mensualité, même s\'il a dit que c\'était trop cher. Nous ne savons pas si le prix lui a été annoncé.');
+  P.push('BUT : qu\'il revienne sur sa décision et nous rejoigne. Réponds à son objection par un contre-argument tiré de son dossier, avec les principes des meilleurs négociateurs (nommer ce qu\'il ressent, question à laquelle il répond non, question ouverte, ses propres mots, prix de ne rien faire), sans rien inventer.');
   P.push('APPUIE-TOI SUR LE DOSSIER CI-DESSOUS : le message cite au moins deux éléments précis qui viennent de lui (ses mots, un chiffre qu\'il a donné, son frein, sa réponse au questionnaire). Un message qui pourrait être envoyé à n\'importe qui est refusé.');
   P.push('SMS, FORME ATTENDUE : « Bonjour {prénom}, c\'est {prénom du closer} (Adrien & Emily). » puis une phrase qui dit que tu viens de lui écrire par e-mail et pourquoi, puis : « Vous pouvez réserver un créneau ici : {lien} ou retrouver ce que je vous ai partagé dans votre boîte mail. » Rien d\'autre.');
   P.push('LIEN DE RÉSERVATION (à écrire tel quel, sans le modifier ni le raccourcir, une seule fois dans l\'e-mail et une seule fois dans le SMS) : ' + lienRdv);
@@ -892,7 +943,10 @@ async function sendOffer(auth, body, me) {
   if (!wantEmail && !wantSms) return fail('no_channel', 400, 'Choisissez l\'e-mail, le SMS ou les deux.');
 
   const cfg = await loadConfig();
-  if (!cfg.sendEnabled && cfg.testLeadIds.indexOf(leadId) < 0) {
+  // `me._auto` n'est posé que par l'automate (côté serveur, jamais par une requête).
+  const parAutomate = !!(me && me._auto === true);
+  if (parAutomate && !(cfg.auto.actif && cfg.auto.modeTest === false)) return fail('auto_off', 409, 'Envoi automatique éteint ou à blanc.');
+  if (!parAutomate && !cfg.sendEnabled && cfg.testLeadIds.indexOf(leadId) < 0) {
     return fail('send_disabled', 409, 'L\'envoi n\'est pas encore activé (hors fiche de test).');
   }
   const got = await db.getAll(db.collection('leads').doc(leadId), card.ref, db.collection('ai_followups').doc(card.id));
@@ -961,7 +1015,8 @@ async function sendOffer(auth, body, me) {
   if (!locked) return fail('busy', 409, 'Un envoi est déjà en cours pour ce prospect.');
 
   const now = Date.now();
-  const rec = { at: now, by: auth.uid, byName: (me && me.name) || auth.email || null, email: false, sms: false };
+  const rec = { at: now, by: auth.uid, byName: parAutomate ? 'Envoi automatique' : ((me && me.name) || auth.email || null), email: false, sms: false };
+  if (parAutomate) rec.auto = true;
   let firstError = null;
   try {
     if (wantEmail) {
