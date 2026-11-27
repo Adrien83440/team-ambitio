@@ -715,6 +715,16 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
     Ligne d'un appel dans une vue par personne = `FunnelCore.ligneAppel(who, jour)` : un appel daté d'AVANT l'arrivée du membre
     (`startDate`) va en « Non attribué », précision « Prénom (avant son arrivée) », sur tous les écrans. À prénom égal, l'auteur est le
     même partout (membre en place, puis plus petit `order`, puis clé).
+  - **Hôte d'un RDV : UNE règle (27/11/2026)** — `StatsCore.resoudreHote(persons, team)` (fiche d'agenda `booking_config/{personId}`
+    → membre) : le COMPTE RELIÉ à la fiche (`firebaseUid`) d'abord (à compte égal, membre en place > ancien membre > plus petit
+    `order` > slug), puis `personId == slug`, sinon null ; roster COMPLET (anciens membres compris). Cas réel : `booking_config/elodie`
+    est reprise par Anthony depuis le 10/10/2026 → ses RDV sans closer vont à Anthony ; ceux qui portent `expertSlug: 'elodie'`
+    restent « Anciens membres ». Close SB, Global closing, Set NB, Dashboard, Stats funnel, Qualité leads, Pilotage et l'assistant
+    l'appellent (`FunnelCore.resoudreAvec` / `resoudrePersonneDe` délèguent) : ne jamais la recoder dans une page. Reste une copie
+    dans `sales-projections.html` (`resoudreAvec` : même ordre, mais à compte porté par deux membres elle garde le premier trouvé
+    au lieu du départage ci-dessus ; à rebrancher : `return SC.resoudreHote(persons || {}, teamMap());`). Qualité leads ne montre que les closes de la période
+    AFFICHÉE : `sales-funnel.html` ne transmet K (closes, KPI) que s'il a été calculé pour cette période (`K._periode`, `kPret()`,
+    aussi pour les onglets Funnel, Leads, Qualité par pub) ; `lqs-tab.js` reconstruit le modèle quand les closes fournis changent.
   - **Contrôle de cohérence du funnel** : l'égalité « RDV closés ↔ Closes » est une PARTITION calculée UNE fois dans le moteur
     (`k.coh.egalite`, listes `rdvDeClosesAnnules`, `rdvEnTrop`, `rdvClosesHorsListe`, `closesSansRdv`, `closesRdvHorsPeriode`) ; la page
     l'affiche sans la recalculer. `coh.annules` et `coh.doublonsRdv` ne sont que des listes d'information, jamais des termes de l'égalité.

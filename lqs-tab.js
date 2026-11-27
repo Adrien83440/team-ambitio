@@ -247,9 +247,9 @@
     /* Un chargement en cours pour une AUTRE période : relancé à sa fin
        (jamais un modèle fait des données d'une période et du contexte d'une
        autre — 27/11/2026). */
-    if (S.loading) { S.relancer = true; return; }
-    S.loading = true; S.err = null; S.relancer = false;
+    if (S.loading) { if (S.loadingKey !== dataKey()) S.relancer = true; return; }
     var key = dataKey();
+    S.loading = true; S.err = null; S.relancer = false; S.loadingKey = key;
     render();
     LC.loadAll(S.ctx.db, { P: S.ctx.P, typeMap: S.ctx.typeMap || {}, closerRange: closerRange() }).then(function (D) {
       if (key !== dataKey()) { S.relancer = true; return; }

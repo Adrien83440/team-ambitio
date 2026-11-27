@@ -57,6 +57,7 @@ const Core = require('../funnel-core.js');
 const MAX_JOURS = 93;
 const MAX_RDV = 20000;            /* plafond de lecture des RDV de la plage */
 const RE_JOUR = /^\d{4}-\d{2}-\d{2}$/;
+const RE_MOIS_DEBUT = /^\d{4}-\d{2}/;
 /* Champs d'un RDV lus (rien d'autre ne quitte la base) : classe, état,
    closer. Aucun champ prospect. */
 const CHAMPS_RDV = ['date', 'time', 'duration', 'type', 'source', 'isCoaching', 'skipLeadCreation', 'clientId',
@@ -189,6 +190,7 @@ async function contexte(avecTypes) {
   const r = await Promise.all(prom);
   const team = r[0] || [];
   if (team._erreur) return { erreur: 'équipe illisible' };
+  if (!team.length) return { erreur: 'équipe vide (_meta/team_members absent ou sans membres)' };
   if (DATA.personsError) return { erreur: 'fiches d\'agenda illisibles' };
   const typeMap = avecTypes ? (r[2] || {}) : {};
   const bySlug = {};
@@ -315,6 +317,7 @@ async function jobRdv(q) {
   if (C.erreur) return { code: 503, corps: { ok: false, erreur: C.erreur } };
   const avert = [];
   if (!Object.keys(C.typeMap).length) avert.push('table des types de RDV vide ou illisible : la classe Self Booking / Setting peut être fausse');
+  if (!Object.keys(C.persons).length) avert.push('aucune fiche d\'agenda : l\'hôte d\'un RDV ne peut pas être résolu');
 
   const qr = db.collection('bookings').where('date', '>=', q.from).where('date', '<=', q.to);
   const snap = await qr.select.apply(qr, CHAMPS_RDV).limit(MAX_RDV + 1).get();
@@ -325,12 +328,17 @@ async function jobRdv(q) {
 
   const now = Date.now();
   const mois = {}, fiches = {};
-  const hors = { lus: docs.length, horsVente: 0, replanifies: 0, doublons: 0, sansDate: 0 };
+  const hors = { lus: docs.length, horsVente: 0, replanifies: 0, doublons: 0, sansDate: 0, dateNonConforme: 0 };
   const total = { rdv: 0, changent: 0 };
   const detailTotal = {};
   docs.forEach(function (doc) {
     const b = doc.data() || {};
-    if (typeof b.date !== 'string' || !RE_JOUR.test(b.date)) { hors.sansDate++; return; }
+    /* Comme les écrans (api/_aiTools.js) : toute date TEXTE ramenée par la
+       requête compte, rangée au mois de ses 7 premiers caractères ; seules
+       les dates qui ne sont pas du texte sont écartées. Une date texte non
+       réduite à AAAA-MM-JJ est comptée et signalée (lecture.dateNonConforme). */
+    if (typeof b.date !== 'string' || !RE_MOIS_DEBUT.test(b.date)) { hors.sansDate++; return; }
+    if (!RE_JOUR.test(b.date)) hors.dateNonConforme++;
     const cls = SC.classifyBooking(b, C.typeMap);
     if (!SC.estRdvVente(cls)) { hors.horsVente++; return; }
     const e = SC.etat(b, now);
@@ -361,6 +369,8 @@ async function jobRdv(q) {
     inc(FM, combo);
   });
 
+  if (hors.sansDate) avert.push(hors.sansDate + ' RDV sans date texte écartés (ni comptés par les écrans)');
+  if (hors.dateNonConforme) avert.push(hors.dateNonConforme + ' RDV à date texte non réduite à AAAA-MM-JJ : comptés comme le font les écrans');
   function trierDetail(D) {
     return Object.keys(D).map(function (k) { return D[k]; }).sort(function (a, b) { return b.n - a.n || (a.de < b.de ? -1 : 1); });
   }
