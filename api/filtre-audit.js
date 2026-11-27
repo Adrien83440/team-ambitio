@@ -233,8 +233,74 @@ module.exports = async function (req, res) {
       return {
         funnel: { rdv: t.rdv || 0, presents: t.presents || 0, pitches: t.pitches || 0 },
         qualiteLeads: { rdv: tq.rdv || 0, presents: tq.presents || 0, pitches: tq.pitches || 0 },
-        F: F, Q: Q, bQ: bQ
+        F: F, Q: Q, bQ: bQ,
+        pont: (tunnel === 'all' && source === 'all') ? pontParCloser(M) : null
       };
+    }
+
+    /* ── Pont par closer, SANS filtre (27/11/2026) : de quoi sont faits les
+       « Présents » de la carte (RDV DATÉS dans la période, rangés dans
+       l'onglet du closer comme Global closing) à côté de « Leads présents »
+       (leads ENTRÉS pendant la période, un lead compte une fois). Compteurs
+       seulement ; les clés sont les onglets de l'équipe. ── */
+    function pontParCloser(M) {
+      const rdv = M.rdvPeriode || [], rows = M.rows || [];
+      const NA = SC.NON_ATTRIBUE || '_na';
+      const cles = { '': 1 };
+      rdv.forEach(function (x) { cles[x.rangKey != null ? x.rangKey : (x.closer || NA)] = 1; });
+      function origine(x) {
+        const lr = x.leadRow;
+        if (!lr) return 'sansFicheLead';
+        if (lr.cohorte) return lr.reopt ? 'reoptinDeLaPeriode' : 'leadEntrePendantLaPeriode';
+        if (lr.entry == null) return 'ficheSansDateEntree';
+        return lr.entry < pS ? 'ficheEntreeAvantLaPeriode' : 'ficheHorsLeadsEntres';
+      }
+      function ventiler(list) {
+        const o = {}, vus = {}, mois = {};
+        list.forEach(function (x) {
+          const k = origine(x);
+          const a = o[k] = o[k] || { rdv: 0, prospects: 0 };
+          a.rdv++;
+          const id = x.leadRow ? 'l:' + x.leadRow.id : 'b:' + (x.b && x.b._id);
+          if (!vus[id]) { vus[id] = 1; a.prospects++; }
+          if (k === 'ficheEntreeAvantLaPeriode') {
+            const m = SC.jourParis(x.leadRow.entry).slice(0, 7);
+            mois[m] = (mois[m] || 0) + 1;
+          }
+        });
+        return { total: list.length, prospectsDistincts: Object.keys(vus).length, parOrigine: o, moisEntreeDesFichesAnciennes: mois };
+      }
+      return Object.keys(cles).sort().map(function (cle) {
+        const B = LC.byCloser(rdv, cle);
+        const presents = B.list.filter(function (x) { return x.present; });
+        const pitches = B.list.filter(function (x) { return x.pitched; });
+        /* Leads entrés rangés chez ce closer : la règle de l'écran
+           (lqs-tab.js rows() : r.closer === closer choisi). */
+        const R = cle === '' ? rows : rows.filter(function (r) { return r.closer === cle; });
+        const t = LC.byNote(R, [], []).total;
+        /* Recoupement : les « leads présents » se retrouvent-ils parmi les
+           RDV présents de la période rangés chez ce closer ? */
+        const idsPresents = {};
+        presents.forEach(function (x) { if (x.leadRow) idsPresents[x.leadRow.id] = 1; });
+        let dansLesRdv = 0, ailleurs = 0;
+        R.forEach(function (r) { if (!r.leadPresent) return; if (idsPresents[r.id]) dansLesRdv++; else ailleurs++; });
+        const idsR = {};
+        R.forEach(function (r) { idsR[r.id] = 1; });
+        let entresRangesAilleurs = 0;
+        Object.keys(idsPresents).forEach(function (id) {
+          const x = presents.filter(function (y) { return y.leadRow && y.leadRow.id === id; })[0];
+          if (x && x.leadRow.cohorte && !idsR[id]) entresRangesAilleurs++;
+        });
+        return {
+          closer: cle === '' ? '(toute l\'équipe)' : cle,
+          carte: { rdv: B.total.rdv || 0, presents: B.total.presents || 0, pitches: B.total.pitches || 0 },
+          controle: presents.length === (B.total.presents || 0) && pitches.length === (B.total.pitches || 0) && B.list.length === (B.total.rdv || 0),
+          rdv: ventiler(B.list), presents: ventiler(presents), pitches: ventiler(pitches),
+          leadsEntres: { leads: t.leads || 0, avecRdv: t.leadsAvecRdv || 0, presents: t.leadsPresents || 0, pitches: t.leadsPitches || 0 },
+          recoupementLeadsPresents: { vusDansLesRdvPresentsDeLaPeriode: dansLesRdv, presentsAUnAutreRdv: ailleurs,
+            leadsEntresPresentsIciMaisRangesChezUnAutreCloser: entresRangesAilleurs }
+        };
+      });
     }
     function ids(list) {
       const s = new Set();
@@ -329,9 +395,12 @@ module.exports = async function (req, res) {
     const listeTunnels = Array.from(tunnels).sort();
 
     const filtres = [{ t: 'all', s: 'all' }];
-    listeTunnels.forEach(function (t) { filtres.push({ t: t, s: 'all' }); });
-    SOURCES.forEach(function (s) { filtres.push({ t: 'all', s: s }); });
-    listeTunnels.forEach(function (t) { SOURCES.forEach(function (s) { filtres.push({ t: t, s: s }); }); });
+    /* ?seul=pont : le pont par closer seulement (un calcul, sans filtre). */
+    if (q.seul !== 'pont') {
+      listeTunnels.forEach(function (t) { filtres.push({ t: t, s: 'all' }); });
+      SOURCES.forEach(function (s) { filtres.push({ t: 'all', s: s }); });
+      listeTunnels.forEach(function (t) { SOURCES.forEach(function (s) { filtres.push({ t: t, s: s }); }); });
+    }
 
     const sorties = filtres.map(function (f) {
       const R = (f.t === 'all' && f.s === 'all') ? base : calculer(f.t, f.s);
@@ -380,6 +449,7 @@ module.exports = async function (req, res) {
       },
       tunnels: listeTunnels,
       exposition: expo,
+      pontParCloser: base.pont,
       filtres: sorties,
       causesConnues: CAUSES
     };
