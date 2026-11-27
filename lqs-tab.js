@@ -101,7 +101,7 @@
   var S = {
     mount: null, ctx: null, D: null, M: null,
     grid: null, draft: null, stamp: 1,
-    loadedKey: null, loading: false, err: null, bound: false,
+    loadedKey: null, loading: false, err: null, bound: false, gen: 0,
     view: 'overview', closer: '', cashMode: 'cohorte', axis: 'campaign',
     crMode: 'period', leadsNote: 'all', leadsQ: '', leadsLimit: 150,
     openQ: {}, openLead: {}, openDetail: {}, quizVer: '', quizCompare: false, quizLatest: true, formsOpen: false, saving: false,
@@ -246,16 +246,29 @@
     S.builtKpis = S.ctx.funnelKpis || null;
     if (S.closer && !S.M.closers.some(function (c) { return c.slug === S.closer; })) S.closer = '';
   }
+  /* Copie FIGÉE de la période (objet neuf, dates neuves) : S.ctx.P est le P
+     de la page, modifié EN PLACE à chaque changement de période, et
+     LqsCore.loadAll le relit après ses attentes (27/11/2026). */
+  function figer(P) {
+    return {
+      mode: P.mode, y: P.y, m: P.m, day: P.day || null,
+      start: new Date(P.start.getTime()), end: new Date(P.end.getTime())
+    };
+  }
   function load() {
-    /* Un chargement en cours pour une AUTRE période : relancé à sa fin
+    /* Un chargement en cours pour une AUTRE période, ou pendant lequel la
+       période a changé (S.gen, posé par invalidate) : relancé à sa fin
        (jamais un modèle fait des données d'une période et du contexte d'une
        autre — 27/11/2026). */
-    if (S.loading) { if (S.loadingKey !== dataKey()) S.relancer = true; return; }
-    var key = dataKey();
-    S.loading = true; S.err = null; S.relancer = false; S.loadingKey = key;
+    if (S.loading) { if (S.loadingKey !== dataKey() || S.loadingGen !== S.gen) S.relancer = true; return; }
+    var key = dataKey(), gen = S.gen;
+    S.loading = true; S.err = null; S.relancer = false; S.loadingKey = key; S.loadingGen = gen;
     render();
-    LC.loadAll(S.ctx.db, { P: S.ctx.P, typeMap: S.ctx.typeMap || {}, closerRange: closerRange() }).then(function (D) {
-      if (key !== dataKey()) { S.relancer = true; return; }
+    /* Génération : un changement de période pendant ce chargement (même un
+       aller-retour revenu à la même période) invalide son résultat. */
+    function perime() { return gen !== S.gen || key !== dataKey(); }
+    LC.loadAll(S.ctx.db, { P: figer(S.ctx.P), typeMap: S.ctx.typeMap || {}, closerRange: closerRange() }).then(function (D) {
+      if (perime()) { S.relancer = true; return; }
       S.D = D;
       S.grid = LC.normalizeGrid(D.gridRaw);
       S.stamp++;
@@ -263,10 +276,11 @@
       rebuild();
     }).catch(function (e) {
       if (window.console) console.error('[lqs] chargement', e);
+      if (perime()) { S.relancer = true; return; }
       S.err = e && e.message ? e.message : 'erreur inconnue';
     }).then(function () {
       S.loading = false;
-      if (S.relancer || key !== dataKey()) { S.relancer = false; S.loadedKey = null; load(); return; }
+      if (S.relancer || perime()) { S.relancer = false; S.loadedKey = null; load(); return; }
       render();
     });
   }
@@ -1784,7 +1798,9 @@
       if (!S.loading && ((ctx.funnelCloses || null) !== S.builtCloses || (ctx.funnelKpis || null) !== S.builtKpis)) rebuild();
       render();
     },
-    invalidate: function () { S.loadedKey = null; },
+    /* Appelé par la page à chaque période choisie : +1 génération (un
+       chargement en cours ne sera pas affiché, 27/11/2026). */
+    invalidate: function () { S.loadedKey = null; S.gen++; },
     refilter: function (ctx) {
       S.ctx = ctx;
       if (S.D && !S.loading) { rebuild(); render(); }
