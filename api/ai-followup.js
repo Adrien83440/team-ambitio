@@ -319,10 +319,11 @@ module.exports = async function (req, res) {
       return;
     }
 
-    if (body.action === 'offers' || body.action === 'offer_draft' || body.action === 'offer_set' || body.action === 'offer_send') {
+    if (body.action === 'offers' || body.action === 'offer_draft' || body.action === 'offer_set' || body.action === 'offer_send' || body.action === 'offer_preview') {
       let out;
       if (body.action === 'offers') out = await offerRelances.listOffers(auth, { days: body.days, all: body.all });
       else if (body.action === 'offer_draft') out = await offerRelances.draftOffer(auth, body, await memberOf(auth.uid));
+      else if (body.action === 'offer_preview') out = await offerRelances.previewOffer(auth, body);
       else if (body.action === 'offer_send') out = await offerRelances.sendOffer(auth, body, await memberOf(auth.uid));
       else out = await offerRelances.setOffer(auth, body, await memberOf(auth.uid));
       if (out && out.error) { res.status(out.code || 400).json({ ok: false, error: out.error, message: out.message || null }); return; }

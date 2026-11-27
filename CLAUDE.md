@@ -407,6 +407,13 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   `lienDeReservation`, code gardé sur la carte `lienCode` et dans `offer_liens/{code}`, Admin SDK seul) ouvert par `api/offre-lien.js`
   (page relais, clic compté par le navigateur, seule une adresse `https://team.alteore.com/…` est ouverte). Un brouillon d'avant garde
   l'adresse longue dans son texte : elle est remplacée à l'envoi.
+  **Page en deux colonnes (27/11/2026, demande d'Adrien)** : liste des prospects à gauche (pictogramme d'état `etat(x)` : ✓ envoyé, ▲ à vous
+  de décider / SMS non remis, ✎ brouillon prêt, ○ à rédiger, 💬 a réagi ; filtres Tous / À faire / Envoyés, recherche), dossier ouvert à droite
+  (dossier + « Suivi des envois » d'un côté, message de l'autre ; onglet « 👁 Aperçu de l'e-mail » = action `offer_preview`, même `htmlRelance`
+  que l'envoi, rien d'écrit ; résumé et transcription de l'appel lus à la demande par `replay-closing?action=get`). Suivi (`completerSuivi`) :
+  SMS remis ou non (`sms_delivery/{sid}`, le SMS part désormais avec `statusCallback`), lien ouvert (`offer_liens.clics`) ; pour l'e-mail on
+  sait qu'il est parti, jamais s'il a été lu (Gmail ne donne aucun accusé). Catégorie d'affichage « Ont réagi » (`ont_reagi`, jamais écrite) :
+  réponse ou RDV repris APRÈS une relance partie du module — sans relance de notre part, le prospect sort de la liste comme avant.
 - **Dialer** : `sales-dialer.html/.css/.js`, `dialer-bridge.js`, `api/dialer-*.js` —
   visible **uniquement** pour les rôles `sales` et `admin`, **jamais** pour `coach`
 - **AlteoForms** : `alteoforms.html` (builder), `alteoforms-render.html` (rendu public),
