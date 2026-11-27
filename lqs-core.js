@@ -1172,7 +1172,10 @@
         var l = leadObjOf(row) || (row.leadId ? plageLeads[row.leadId] : null);
         var note = l ? scoreLead(l).note : null;
         noteCloser(row.closer);
-        return ranger(closeEntry(row, { lead: l, note: note, month: String(row.day || '').slice(0, 7), offer: offerOfRow(row, l),
+        /* leadRow (27/11/2026) : la fiche du lead, pour que le dossier d'un
+           close ouvert depuis le tableau par score de la vue d'ensemble garde
+           son questionnaire ; null = close sans fiche (dossier réduit). */
+        return ranger(closeEntry(row, { lead: l, leadRow: l ? rowOfLead(l) : null, note: note, month: String(row.day || '').slice(0, 7), offer: offerOfRow(row, l),
           closerName: row.closer ? memberName(row.closer) : 'Non attribué' }), row.day);
       });
     }
@@ -1212,7 +1215,10 @@
        choix 2a d'Adrien) — cartes RDV / Présents / Pitchés, mêmes chiffres
        que Global closing et le Stats funnel. Ne dépend JAMAIS de la plage
        Closers (les RDV datés dans la période sont toujours lus : requête
-       _lqDateP de loadAll). Closes attachés : ceux de la période. ── */
+       _lqDateP de loadAll). Closes attachés : ceux de la période.
+       Depuis la décision 1a 2a du 27/11/2026, TOUTE la vue d'ensemble se lit
+       là-dessus : cartes, carte de score (scoreDesPresents) et tableau par
+       score du lead (byCloser(rdvPeriode, slug).byNote). ── */
     var pIso0 = FC.isoDate(P.start), pIso1 = FC.isoDate(P.end);
     var rdvPeriode = equiper(rdvDatesEntre(pIso0, pIso1), CLr === CLp ? closesPlage : entreesCloses(CLp));
 
@@ -1638,6 +1644,29 @@
     var mList = Object.keys(months).sort().map(function (k) { var a = finRdv(months[k]); a.month = k; return a; });
     NOTE_KEYS.forEach(function (k) { finRdv(notes[k]); });
     return { months: mList, byNote: notes, total: finRdv(tot), list: list, closes: cl };
+  }
+  /* scoreDesPresents(bc) — carte « Score moyen des présents » de la vue
+     d'ensemble (27/11/2026, décision 1a 2a d'Adrien : la vue d'ensemble se
+     lit au mois du RDV, rangée selon le score du lead). bc = byCloser(...) :
+     on ne lit QUE son tableau par note, la carte est donc cohérente avec le
+     tableau par construction. avg = moyenne des notes LQS des RDV présents
+     notés ; les présents non notés (« Non noté ») n'y entrent pas. Parts
+     null (« — ») sans présent noté, jamais NaN. */
+  function scoreDesPresents(bc) {
+    var o = { presents: 0, noted: 0, nonNotes: 0, sum: 0, n45: 0, n12: 0 };
+    var bn = (bc && bc.byNote) || {};
+    NOTE_KEYS.forEach(function (k) {
+      var p = (bn[k] && bn[k].presents) || 0;
+      o.presents += p;
+      if (!k) { o.nonNotes += p; return; }
+      o.noted += p; o.sum += k * p;
+      if (k >= 4) o.n45 += p;
+      if (k <= 2) o.n12 += p;
+    });
+    o.avg = o.noted ? o.sum / o.noted : null;
+    o.pct45 = o.noted ? o.n45 / o.noted * 100 : null;
+    o.pct12 = o.noted ? o.n12 / o.noted * 100 : null;
+    return o;
   }
   /* closerBoard(rdvRows, memberName[, closes, estParti]) — une ligne par
      closer qui a un onglet, plus UNE ligne « Non attribué » (slug null,
@@ -2789,7 +2818,7 @@
     extractAnswers: extractAnswers, questionnaireOf: questionnaireOf, defaultPoints: defaultPoints,
     normalizeGrid: normalizeGrid, ruleFor: ruleFor, noteFromPoints: noteFromPoints, scoreAnswers: scoreAnswers,
     loadAll: loadAll, buildModel: buildModel,
-    byNote: byNote, byAnswer: byAnswer, byAxis: byAxis, byCloser: byCloser, closerBoard: closerBoard,
+    byNote: byNote, byAnswer: byAnswer, byAxis: byAxis, byCloser: byCloser, scoreDesPresents: scoreDesPresents, closerBoard: closerBoard,
     suggestPoints: suggestPoints, suggestBasis: suggestBasis, recoPoints: recoPoints, calibrateThresholds: calibrateThresholds,
     quizVersions: quizVersions, buildQuizView: buildQuizView, versionMeta: versionMeta, OLD_QUIZ_KEY: OLD_KEY, FAMILY_PREFIX: FAM, familyOfKey: familyOfKey, mqsOf: mqsOf, buildQuizFunnel: buildQuizFunnel, insights: insights,
     newAgg: newAgg, offerOf: offerOf, addLeadRow: addLeadRow, fin: fin, isoDay: isoDay,
