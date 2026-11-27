@@ -124,11 +124,23 @@
     return { k: 'wait', t: etatMot(e, d) };
   }
 
+  /* RDV au résultat Close : son close dans la liste unique (r.closeLie,
+     LqsCore : même RDV, même fiche ou même e-mail), sinon la date client de
+     la fiche ; sans rien de connu, aucune conclusion sur le client. */
+  function rdvCloseStatus(r) {
+    var c = r.closeLie || null;
+    if (c && c.etat === 'gagne') return { k: 'won', t: 'RDV au résultat Close · ✅ close du ' + fIso(c.day) + ' — ' + fEur(c.con) + ' contracté, ' + fEur(c.paid) + ' collecté' };
+    if (c && c.etat === 'annule') return { k: 'lost', t: 'RDV au résultat Close · ↩️ close annulé' };
+    if (c && c.etat === 'client') return { k: 'won', t: 'RDV au résultat Close · ✅ client depuis le ' + fIso(c.day) + ' (close hors de la période)' };
+    if (r.closeCancelled) return { k: 'lost', t: 'RDV au résultat Close · ↩️ close annulé' };
+    if (r.closed) return { k: 'won', t: 'RDV au résultat Close · ✅ client gagné' };
+    return { k: 'wait', t: 'RDV au résultat Close — aucun close relié à ce RDV dans la liste des closes de la période' };
+  }
   function rdvStatus(r) {
     var e = r.rdvEtat || null, d = r.rdvDetail || null;
     var won = r.closed ? ' · ✅ client gagné' : '';
     if (e === 'present') {
-      if (d === 'close') return { k: r.closed ? 'won' : 'wait', t: 'RDV au résultat Close' + (r.closed ? ' · ✅ client gagné' : ', client non enregistré') };
+      if (d === 'close') return rdvCloseStatus(r);
       if (d === 'offre') return { k: 'wait', t: '📨 Présent — offre en attente' + won };
       if (d === 'non_close') return { k: 'lost', t: '❌ Présent — non close (offre refusée)' + won };
       if (d === 'disqualifie') return { k: 'lost', t: '🚫 Présent — disqualifié' + won };
@@ -268,7 +280,7 @@
     var h = '<div class="lqd-meta">' + [l.email ? esc(l.email) : '', l.telephone ? esc(l.telephone) : '', r.entry != null ? 'entré le ' + fDay(r.entry) : '',
       r.sourceLabel ? 'source : ' + esc(r.sourceLabel) : '', r.axes && r.axes.creative && r.axes.creative.label ? 'pub : ' + esc(r.axes.creative.label) : '',
       r.closerName ? 'closer : ' + esc(r.closerName) : '', r.setterName ? 'setter : ' + esc(r.setterName) : '', r.team != null ? 'note équipe ★ ' + r.team : ''].filter(Boolean).join(' · ') + '</div>';
-    if (r.noLead) h += '<div class="lqd-muted">Aucune fiche lead reliée à ce close : pas de questionnaire, donc pas de note LQS.</div>';
+    if (r.noLead) h += '<div class="lqd-muted">Aucune fiche lead reliée à ce ' + (r.rdvLigne ? 'RDV' : 'close') + ' : pas de questionnaire, donc pas de note LQS.</div>';
     h += visiteurHtml(r);
     var q = LC.questionnaireOf(l);
     h += '<div class="lqd-h3">📝 Questionnaire rempli</div>';

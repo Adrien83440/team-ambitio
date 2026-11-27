@@ -1113,6 +1113,29 @@
        la plage de la vue Closers (rdvRows) et la période affichée
        (rdvPeriode, 27/11/2026). Replanifiés et doublons hors liste, filtres
        tunnel / source de la page, rangement D10 (ranger). ── */
+    /* Close relié à un RDV (dossier d'une ligne de RDV, 27/11/2026) : la
+       liste unique de la période d'abord (même RDV, même fiche, même e-mail),
+       close annulé compris ; sinon la date client de la fiche (close d'une
+       autre période). null = aucun close connu : l'écran ne conclut rien. */
+    var closeIdx = { b: {}, l: {}, e: {} };
+    function indexer(row, annule) {
+      var v = { row: row, annule: annule };
+      if (row.bookingId && !closeIdx.b[row.bookingId]) closeIdx.b[row.bookingId] = v;
+      if (row.leadId && !closeIdx.l[row.leadId]) closeIdx.l[row.leadId] = v;
+      var em = String((row.lead && row.lead.email) || (String(row.key || '').indexOf('e:') === 0 ? row.key.slice(2) : '')).toLowerCase().trim();
+      if (em && !closeIdx.e[em]) closeIdx.e[em] = v;
+    }
+    CLp.rows.forEach(function (row) { indexer(row, !!(row.rv && row.rv.cancelled)); });
+    CLp.annules.forEach(function (row) { indexer(row, true); });
+    function closeLieAuRdv(b, l) {
+      var em = String((l && l.email) || (b.prospect && b.prospect.email) || '').toLowerCase().trim();
+      var v = (b._id && closeIdx.b[b._id]) || (l && closeIdx.l[l._id]) || (em && closeIdx.e[em]) || null;
+      if (v) return v.annule ? { etat: 'annule', day: v.row.day || null }
+        : { etat: 'gagne', day: v.row.day || null, con: Number(v.row.rv && v.row.rv.con) || 0, paid: Number(v.row.rv && v.row.rv.paid) || 0 };
+      var cs = l ? FC.parseFlexMs(l.clientSince) : null;
+      if (cs != null) return { etat: 'client', day: SC.jourParis(cs) };
+      return null;
+    }
     function rdvDatesEntre(dS, dE) {
       var out = [];
       venteBookings.forEach(function (b) {
@@ -1135,6 +1158,7 @@
           /* RDV au résultat Close (glossaire rdv_closes) : ce n'est PAS un close
              — les closes de la vue viennent de la liste unique (closesPlage). */
           rdvClose: d === 'close', close: d === 'close', cash: 0, con: 0,
+          closeLie: d === 'close' ? closeLieAuRdv(b, l) : null,
           name: (l && (l.nom || l.email)) || (b.prospect && (b.prospect.nom || b.prospect.email)) || '—',
           leadId: l ? l._id : null
         }, b.date));
