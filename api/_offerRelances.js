@@ -258,6 +258,12 @@ async function loadConfig() {
     // Closer qui reprend les prospects d'un membre parti (slug du roster).
     repriseSlug: String(c.repriseSlug || '').trim(),
     lienRdv: /^https:\/\//.test(String(c.lienRdv || '')) ? String(c.lienRdv).trim() : '',
+    // Envoi automatique (api/_offerRelancesAuto.js). Éteint par défaut ; allumé,
+    // il tourne À BLANC tant que modeTest n'est pas explicitement faux.
+    auto: (function (a) {
+      return { actif: a.actif === true, modeTest: a.modeTest !== false, plafondJour: numOr(a.plafondJour, 10, 1, 50),
+        secondeJours: numOr(a.secondeJours, 20, 10, 60), secondeRdvJours: numOr(a.secondeRdvJours, 30, 20, 90), depuis: a.depuis || null };
+    })(c.auto && typeof c.auto === 'object' ? c.auto : {}),
     // Mur public des témoignages, donné au prospect qui demande des preuves.
     lienTemoignages: /^https:\/\//.test(String(c.lienTemoignages || '')) ? String(c.lienTemoignages).trim() : LIEN_TEMOIGNAGES,
   };
@@ -528,10 +534,10 @@ async function listOffers(auth, opts) {
         dernierEnvoi: lastSend ? { at: lastSend.at, byName: lastSend.byName || null, email: !!lastSend.email, sms: !!lastSend.sms, smsError: lastSend.smsError || null } : null,
         envoiPossible: cfg.sendEnabled || cfg.testLeadIds.indexOf(b.leadId) >= 0,
         draft: state.draft || null,
-        reagi: reagi,
+        reagi: reagi, auto: state.auto || null,
         // Suivi des envois (complété plus bas : SMS remis ou non, lien ouvert).
         envois: (state.sends || []).slice(-3).map(function (s) {
-          return { at: s.at, byName: s.byName || null, email: !!s.email, sms: !!s.sms, smsError: s.smsError || null, smsSid: s.smsSid || null, smsEtat: null, smsPourquoi: '' };
+          return { at: s.at, byName: s.byName || null, email: !!s.email, sms: !!s.sms, auto: s.auto === true, smsError: s.smsError || null, smsSid: s.smsSid || null, smsEtat: null, smsPourquoi: '' };
         }),
         lien: null, _lienCode: state.lienCode || null,
       });
@@ -547,7 +553,8 @@ async function listOffers(auth, opts) {
   let stats = null;
   try { stats = await computeStats(auth, all, bkByLead); } catch (e) { console.warn('[offer-relances] stats', e && e.message); }
   return { ok: true, items: out, counts: counts, categories: Object.assign({}, CATEGORIES, { ont_reagi: 'Ont réagi' }), sortis: sortis, isAdmin: isAdmin, all: all,
-    minDays: cfg.minDays, gapDays: cfg.gapDays, maxSends: cfg.maxSends, days: win, envoi: cfg.sendEnabled, stats: stats };
+    minDays: cfg.minDays, gapDays: cfg.gapDays, maxSends: cfg.maxSends, days: win, envoi: cfg.sendEnabled, stats: stats,
+    auto: { actif: cfg.auto.actif, modeTest: cfg.auto.modeTest, plafondJour: cfg.auto.plafondJour, secondeRdvJours: cfg.auto.secondeRdvJours } };
 }
 
 /* Suivi d'une relance partie : le SMS est-il arrivé (accusé de l'opérateur,
@@ -936,7 +943,10 @@ async function sendOffer(auth, body, me) {
   if (!wantEmail && !wantSms) return fail('no_channel', 400, 'Choisissez l\'e-mail, le SMS ou les deux.');
 
   const cfg = await loadConfig();
-  if (!cfg.sendEnabled && cfg.testLeadIds.indexOf(leadId) < 0) {
+  // `me._auto` n'est posé que par l'automate (côté serveur, jamais par une requête).
+  const parAutomate = !!(me && me._auto === true);
+  if (parAutomate && !(cfg.auto.actif && cfg.auto.modeTest === false)) return fail('auto_off', 409, 'Envoi automatique éteint ou à blanc.');
+  if (!parAutomate && !cfg.sendEnabled && cfg.testLeadIds.indexOf(leadId) < 0) {
     return fail('send_disabled', 409, 'L\'envoi n\'est pas encore activé (hors fiche de test).');
   }
   const got = await db.getAll(db.collection('leads').doc(leadId), card.ref, db.collection('ai_followups').doc(card.id));
@@ -1005,7 +1015,8 @@ async function sendOffer(auth, body, me) {
   if (!locked) return fail('busy', 409, 'Un envoi est déjà en cours pour ce prospect.');
 
   const now = Date.now();
-  const rec = { at: now, by: auth.uid, byName: (me && me.name) || auth.email || null, email: false, sms: false };
+  const rec = { at: now, by: auth.uid, byName: parAutomate ? 'Envoi automatique' : ((me && me.name) || auth.email || null), email: false, sms: false };
+  if (parAutomate) rec.auto = true;
   let firstError = null;
   try {
     if (wantEmail) {
