@@ -448,7 +448,7 @@ Pour relier un membre à un compte Auth, utiliser le champ `firebaseUid`.
   dans le code, remplaçable par `SETTING_REVEIL_ROUTINE`). L'appel part SANS contenu : rien du prospect ne sort de Team. Cet appel ouvre
   une session Claude à part, sans navigateur : elle écrit une ligne « ⚡ Signal de Team » dans le chat du projet Claude, et c'est le
   coordinateur du projet qui demande le passage léger au fil du setting. `_config/setting_reveil.actif` FAUX par défaut (bouton en haut de
-  `admin-setting-social.html`) ; au plus un appel toutes les `intervalleMin` minutes (5, jamais moins de 2 : la tâche accepte 30 appels
+  `admin-setting-social.html`) ; au plus un appel toutes les `intervalleMin` minutes (10 depuis le 28/11/2026, choix d'Adrien pour le coût ; jamais moins de 2 : la tâche accepte 30 appels
   par heure) ; `heureDebut` – `heureFin` (9 h – 22 h Paris) ; `plafondJour` (120). Un message arrivé pendant l'intervalle est noté
   `enAttente` dans `setting_reveil_etat/courant` (Admin SDK seul) et pris par le cron (*/5), qui ne fait rien sans message en attente.
   Un appel en échec ne fait jamais échouer le webhook. Chaque réveil consomme de l'abonnement Claude d'Adrien.

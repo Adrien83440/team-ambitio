@@ -14,7 +14,7 @@
 //
 // GARDE-FOUS
 //   · `_config/setting_reveil.actif` FAUX par défaut : rien ne part.
-//   · Au plus UN appel toutes les `intervalleMin` minutes (5 par défaut, jamais
+//   · Au plus UN appel toutes les `intervalleMin` minutes (10 par défaut, jamais
 //     moins de 2 : la tâche accepte 30 appels par heure). Un message arrivé
 //     entre-temps est noté « en attente » et pris par le cron
 //     api/setting-reveil.js dès que l'intervalle est écoulé.
@@ -43,7 +43,7 @@
 const { db } = require('./_firebaseAdmin');
 
 const TACHE_DEFAUT = 'trig_01J3HiqciSg5kAMTZHqibR2C';   // identifiant de tâche, pas un secret
-const DEFAUTS = { actif: false, intervalleMin: 5, heureDebut: 9, heureFin: 22, plafondJour: 120 };
+const DEFAUTS = { actif: false, intervalleMin: 10, heureDebut: 9, heureFin: 22, plafondJour: 120 };
 const DELAI_APPEL_MS = 8000;
 
 function refConfig() { return db.collection('_config').doc('setting_reveil'); }
